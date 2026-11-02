@@ -1,6 +1,20 @@
 {
   "survivors": [
     {
+      "file": "data/src/domain/errors.ts",
+      "start": {
+        "line": 10,
+        "column": 17
+      },
+      "end": {
+        "line": 10,
+        "column": 28
+      },
+      "mutator": "StringLiteral",
+      "original": "'DataError'",
+      "replacement": "\"\""
+    },
+    {
       "file": "data/src/infrastructure/in-memory.ts",
       "start": {
         "line": 14,
@@ -265,6 +279,90 @@
       "mutator": "StringLiteral",
       "original": "'ROLLBACK'",
       "replacement": "\"\""
+    },
+    {
+      "file": "data/src/infrastructure/sql-store.ts",
+      "start": {
+        "line": 18,
+        "column": 37
+      },
+      "end": {
+        "line": 18,
+        "column": 52
+      },
+      "mutator": "Regex",
+      "original": "/^[0-9A-Z]{5}$/",
+      "replacement": "/[0-9A-Z]{5}$/"
+    },
+    {
+      "file": "data/src/infrastructure/sql-store.ts",
+      "start": {
+        "line": 18,
+        "column": 37
+      },
+      "end": {
+        "line": 18,
+        "column": 52
+      },
+      "mutator": "Regex",
+      "original": "/^[0-9A-Z]{5}$/",
+      "replacement": "/^[0-9A-Z]{5}/"
+    },
+    {
+      "file": "data/src/infrastructure/sql-store.ts",
+      "start": {
+        "line": 24,
+        "column": 30
+      },
+      "end": {
+        "line": 24,
+        "column": 55
+      },
+      "mutator": "Regex",
+      "original": "/^[a-z][a-z0-9.-]*\\.sql$/",
+      "replacement": "/[a-z][a-z0-9.-]*\\.sql$/"
+    },
+    {
+      "file": "data/src/infrastructure/sql-store.ts",
+      "start": {
+        "line": 24,
+        "column": 30
+      },
+      "end": {
+        "line": 24,
+        "column": 55
+      },
+      "mutator": "Regex",
+      "original": "/^[a-z][a-z0-9.-]*\\.sql$/",
+      "replacement": "/^[a-z][a-z0-9.-]*\\.sql/"
+    },
+    {
+      "file": "data/src/infrastructure/sql-store.ts",
+      "start": {
+        "line": 26,
+        "column": 40
+      },
+      "end": {
+        "line": 26,
+        "column": 59
+      },
+      "mutator": "Regex",
+      "original": "/^[a-z_]+(:json)?$/",
+      "replacement": "/[a-z_]+(:json)?$/"
+    },
+    {
+      "file": "data/src/infrastructure/sql-store.ts",
+      "start": {
+        "line": 26,
+        "column": 40
+      },
+      "end": {
+        "line": 26,
+        "column": 59
+      },
+      "mutator": "Regex",
+      "original": "/^[a-z_]+(:json)?$/",
+      "replacement": "/^[a-z_]+(:json)?/"
     },
     {
       "file": "data/src/infrastructure/sql-store.ts",
@@ -596,11 +694,81 @@
       },
       "end": {
         "line": 41,
+        "column": 93
+      },
+      "mutator": "ConditionalExpression",
+      "original": "process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href",
+      "replacement": "false"
+    },
+    {
+      "file": "data/src/main.ts",
+      "start": {
+        "line": 41,
+        "column": 5
+      },
+      "end": {
+        "line": 41,
         "column": 34
       },
       "mutator": "ConditionalExpression",
       "original": "process.argv[1] !== undefined",
       "replacement": "true"
+    },
+    {
+      "file": "data/src/main.ts",
+      "start": {
+        "line": 41,
+        "column": 5
+      },
+      "end": {
+        "line": 41,
+        "column": 93
+      },
+      "mutator": "ConditionalExpression",
+      "original": "process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href",
+      "replacement": "true"
+    },
+    {
+      "file": "data/src/main.ts",
+      "start": {
+        "line": 41,
+        "column": 5
+      },
+      "end": {
+        "line": 41,
+        "column": 34
+      },
+      "mutator": "EqualityOperator",
+      "original": "process.argv[1] !== undefined",
+      "replacement": "process.argv[1] === undefined"
+    },
+    {
+      "file": "data/src/main.ts",
+      "start": {
+        "line": 41,
+        "column": 38
+      },
+      "end": {
+        "line": 41,
+        "column": 93
+      },
+      "mutator": "ConditionalExpression",
+      "original": "import.meta.url === pathToFileURL(process.argv[1]).href",
+      "replacement": "true"
+    },
+    {
+      "file": "data/src/main.ts",
+      "start": {
+        "line": 41,
+        "column": 38
+      },
+      "end": {
+        "line": 41,
+        "column": 93
+      },
+      "mutator": "EqualityOperator",
+      "original": "import.meta.url === pathToFileURL(process.argv[1]).href",
+      "replacement": "import.meta.url !== pathToFileURL(process.argv[1]).href"
     },
     {
       "file": "data/src/main.ts",
@@ -1870,6 +2038,34 @@
       },
       "end": {
         "line": 67,
+        "column": 93
+      },
+      "mutator": "ConditionalExpression",
+      "original": "process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href",
+      "replacement": "false"
+    },
+    {
+      "file": "gateway/src/main.ts",
+      "start": {
+        "line": 67,
+        "column": 5
+      },
+      "end": {
+        "line": 67,
+        "column": 34
+      },
+      "mutator": "ConditionalExpression",
+      "original": "process.argv[1] !== undefined",
+      "replacement": "true"
+    },
+    {
+      "file": "gateway/src/main.ts",
+      "start": {
+        "line": 67,
+        "column": 5
+      },
+      "end": {
+        "line": 67,
         "column": 34
       },
       "mutator": "EqualityOperator",
@@ -3051,6 +3247,202 @@
       "mutator": "StringLiteral",
       "original": "`status ${status} requires an error`",
       "replacement": "``"
+    },
+    {
+      "file": "packages/contracts/src/tools.ts",
+      "start": {
+        "line": 35,
+        "column": 39
+      },
+      "end": {
+        "line": 35,
+        "column": 49
+      },
+      "mutator": "ArrayDeclaration",
+      "original": "['memory']",
+      "replacement": "[]"
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 67,
+        "column": 3
+      },
+      "end": {
+        "line": 67,
+        "column": 9
+      },
+      "mutator": "StringLiteral",
+      "original": "'host'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 68,
+        "column": 3
+      },
+      "end": {
+        "line": 68,
+        "column": 15
+      },
+      "mutator": "StringLiteral",
+      "original": "'connection'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 69,
+        "column": 3
+      },
+      "end": {
+        "line": 69,
+        "column": 15
+      },
+      "mutator": "StringLiteral",
+      "original": "'keep-alive'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 70,
+        "column": 3
+      },
+      "end": {
+        "line": 70,
+        "column": 24
+      },
+      "mutator": "StringLiteral",
+      "original": "'proxy-authorization'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 71,
+        "column": 3
+      },
+      "end": {
+        "line": 71,
+        "column": 21
+      },
+      "mutator": "StringLiteral",
+      "original": "'proxy-connection'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 72,
+        "column": 3
+      },
+      "end": {
+        "line": 72,
+        "column": 7
+      },
+      "mutator": "StringLiteral",
+      "original": "'te'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 73,
+        "column": 3
+      },
+      "end": {
+        "line": 73,
+        "column": 12
+      },
+      "mutator": "StringLiteral",
+      "original": "'trailer'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 74,
+        "column": 3
+      },
+      "end": {
+        "line": 74,
+        "column": 22
+      },
+      "mutator": "StringLiteral",
+      "original": "'transfer-encoding'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 75,
+        "column": 3
+      },
+      "end": {
+        "line": 75,
+        "column": 12
+      },
+      "mutator": "StringLiteral",
+      "original": "'upgrade'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 76,
+        "column": 3
+      },
+      "end": {
+        "line": 76,
+        "column": 18
+      },
+      "mutator": "StringLiteral",
+      "original": "'authorization'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 78,
+        "column": 3
+      },
+      "end": {
+        "line": 78,
+        "column": 20
+      },
+      "mutator": "StringLiteral",
+      "original": "'accept-encoding'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 80,
+        "column": 28
+      },
+      "end": {
+        "line": 80,
+        "column": 43
+      },
+      "mutator": "ArithmeticOperator",
+      "original": "4 * 1024 * 1024",
+      "replacement": "4 * 1024 / 1024"
+    },
+    {
+      "file": "packages/sandbox/src/auth-proxy.ts",
+      "start": {
+        "line": 80,
+        "column": 28
+      },
+      "end": {
+        "line": 80,
+        "column": 36
+      },
+      "mutator": "ArithmeticOperator",
+      "original": "4 * 1024",
+      "replacement": "4 / 1024"
     },
     {
       "file": "packages/sandbox/src/auth-proxy.ts",
@@ -4931,6 +5323,48 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
+        "line": 21,
+        "column": 28
+      },
+      "end": {
+        "line": 21,
+        "column": 45
+      },
+      "mutator": "MethodExpression",
+      "original": "z.string().min(1)",
+      "replacement": "z.string().max(1)"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 39,
+        "column": 23
+      },
+      "end": {
+        "line": 39,
+        "column": 80
+      },
+      "mutator": "Regex",
+      "original": "/^(ANTHROPIC_.*|CLAUDE_CONFIG_DIR|CLAUDE_CODE_OAUTH.*)$/i",
+      "replacement": "/^(ANTHROPIC_.*|CLAUDE_CONFIG_DIR|CLAUDE_CODE_OAUTH.*)/i"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 45,
+        "column": 60
+      },
+      "end": {
+        "line": 45,
+        "column": 80
+      },
+      "mutator": "StringLiteral",
+      "original": "'variable interdite'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
         "line": 48,
         "column": 11
       },
@@ -4941,6 +5375,20 @@
       "mutator": "ArrayDeclaration",
       "original": "[z.string(), z.number(), z.boolean(), z.null(), z.array(Json), z.record(z.string(), Json)]",
       "replacement": "[]"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 58,
+        "column": 33
+      },
+      "end": {
+        "line": 58,
+        "column": 84
+      },
+      "mutator": "Regex",
+      "original": "/^(NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i",
+      "replacement": "/^(NO_PROXY|HTTPS_PROXY|ALL_PROXY|NODE_OPTIONS)$/i"
     },
     {
       "file": "packages/sandbox/src/profile.ts",
@@ -5039,6 +5487,34 @@
       "mutator": "StringLiteral",
       "original": "`${name} : valeur fournie par le lanceur seulement`",
       "replacement": "``"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 89,
+        "column": 22
+      },
+      "end": {
+        "line": 89,
+        "column": 41
+      },
+      "mutator": "Regex",
+      "original": "/^[a-z][a-z0-9-]*$/",
+      "replacement": "/[a-z][a-z0-9-]*$/"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 89,
+        "column": 22
+      },
+      "end": {
+        "line": 89,
+        "column": 41
+      },
+      "mutator": "Regex",
+      "original": "/^[a-z][a-z0-9-]*$/",
+      "replacement": "/^[a-z][a-z0-9-]*/"
     },
     {
       "file": "packages/sandbox/src/profile.ts",
@@ -5239,6 +5715,48 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
+        "line": 85,
+        "column": 46
+      },
+      "end": {
+        "line": 93,
+        "column": 2
+      },
+      "mutator": "BlockStatement",
+      "original": "{\n  let dir = dirname(path);\n  while (basename(dir) !== 'node_modules') {\n    const parent = dirname(dir);\n    if (parent === dir) return dirname(path);\n    dir = parent;\n  }\n  return dir;\n}",
+      "replacement": "{}"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 87,
+        "column": 10
+      },
+      "end": {
+        "line": 87,
+        "column": 42
+      },
+      "mutator": "EqualityOperator",
+      "original": "basename(dir) !== 'node_modules'",
+      "replacement": "basename(dir) === 'node_modules'"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 89,
+        "column": 9
+      },
+      "end": {
+        "line": 89,
+        "column": 23
+      },
+      "mutator": "EqualityOperator",
+      "original": "parent === dir",
+      "replacement": "parent !== dir"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
         "line": 97,
         "column": 7
       },
@@ -5319,6 +5837,34 @@
       "mutator": "StringLiteral",
       "original": "`chemin de confiance absent : ${path}`",
       "replacement": "``"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 124,
+        "column": 20
+      },
+      "end": {
+        "line": 124,
+        "column": 94
+      },
+      "mutator": "MethodExpression",
+      "original": "settings.filesystem.allowWrite.some((root) => root.startsWith(`${real}/`))",
+      "replacement": "settings.filesystem.allowWrite.every(root => root.startsWith(`${real}/`))"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 140,
+        "column": 14
+      },
+      "end": {
+        "line": 140,
+        "column": 38
+      },
+      "mutator": "ArrayDeclaration",
+      "original": "['pipe', 'pipe', 'pipe']",
+      "replacement": "[]"
     },
     {
       "file": "packages/sandbox/src/srt-runner.ts",
@@ -5715,6 +6261,34 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
+        "line": 198,
+        "column": 22
+      },
+      "end": {
+        "line": 198,
+        "column": 37
+      },
+      "mutator": "ObjectLiteral",
+      "original": "{ mode: 0o700 }",
+      "replacement": "{}"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 199,
+        "column": 25
+      },
+      "end": {
+        "line": 199,
+        "column": 40
+      },
+      "mutator": "ObjectLiteral",
+      "original": "{ mode: 0o700 }",
+      "replacement": "{}"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
         "line": 217,
         "column": 13
       },
@@ -5757,6 +6331,20 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
+        "line": 265,
+        "column": 24
+      },
+      "end": {
+        "line": 265,
+        "column": 35
+      },
+      "mutator": "StringLiteral",
+      "original": "'127.0.0.1'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
         "line": 276,
         "column": 56
       },
@@ -5794,6 +6382,20 @@
       },
       "mutator": "StringLiteral",
       "original": "'canari sans verdict : srt absent ou en échec'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 295,
+        "column": 28
+      },
+      "end": {
+        "line": 295,
+        "column": 37
+      },
+      "mutator": "StringLiteral",
+      "original": "'SIGKILL'",
       "replacement": "\"\""
     },
     {
@@ -5981,6 +6583,34 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
+        "line": 334,
+        "column": 11
+      },
+      "end": {
+        "line": 334,
+        "column": 46
+      },
+      "mutator": "ConditionalExpression",
+      "original": "output.length < CANARY_OUTPUT_LIMIT",
+      "replacement": "true"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 337,
+        "column": 30
+      },
+      "end": {
+        "line": 337,
+        "column": 67
+      },
+      "mutator": "ArrowFunction",
+      "original": "() => killGroup(child.pid, 'SIGKILL')",
+      "replacement": "() => undefined"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
         "line": 337,
         "column": 57
       },
@@ -5995,6 +6625,20 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
+        "line": 339,
+        "column": 7
+      },
+      "end": {
+        "line": 339,
+        "column": 27
+      },
+      "mutator": "CallExpression",
+      "original": "clearTimeout(timer);",
+      "replacement": ";"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
         "line": 340,
         "column": 28
       },
@@ -6004,6 +6648,20 @@
       },
       "mutator": "StringLiteral",
       "original": "'SIGKILL'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 343,
+        "column": 16
+      },
+      "end": {
+        "line": 343,
+        "column": 23
+      },
+      "mutator": "StringLiteral",
+      "original": "'error'",
       "replacement": "\"\""
     },
     {
@@ -6075,6 +6733,20 @@
       "mutator": "StringLiteral",
       "original": "'aucun .git au-dessus du répertoire de travail'",
       "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/worktree.ts",
+      "start": {
+        "line": 39,
+        "column": 19
+      },
+      "end": {
+        "line": 39,
+        "column": 35
+      },
+      "mutator": "Regex",
+      "original": "/^gitdir: (.+)$/",
+      "replacement": "/gitdir: (.+)$/"
     },
     {
       "file": "packages/sandbox/src/worktree.ts",
@@ -7881,6 +8553,20 @@
       "mutator": "ConditionalExpression",
       "original": "process.argv[1] !== undefined",
       "replacement": "true"
+    },
+    {
+      "file": "services/memory/src/main.ts",
+      "start": {
+        "line": 58,
+        "column": 5
+      },
+      "end": {
+        "line": 58,
+        "column": 34
+      },
+      "mutator": "EqualityOperator",
+      "original": "process.argv[1] !== undefined",
+      "replacement": "process.argv[1] === undefined"
     },
     {
       "file": "services/memory/src/main.ts",
