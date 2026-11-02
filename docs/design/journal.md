@@ -612,3 +612,13 @@ Fixtures (dans `tools/test-gate/fixtures/`, rejouées à chaque run, local et CI
 
 **Trois piliers.** Recherche : mesure ci-dessus, reproductibilité à prouver par deux runs complets du même commit à un worker. SSDLC : pas de nouvelle surface, le workflow n'a ni secret ni entrée externe. Opérationnel : sans objet, aucune donnée sensible.
 
+## 18. Clé dans un log de CI, incident
+
+**Fait.** Une clé a été écrite dans un log de CI. L'incident a bien eu lieu, il est déclaré par le propriétaire. Ni la valeur de la clé ni le lien du run ne figurent ici.
+
+**Traitement.** Le propriétaire a nettoyé la clé et le log du CI.
+
+**Pourquoi cette entrée.** La raison d'une décision doit être écrite. Le journal décrivait les défenses contre ce risque (aucun secret dans une sandbox ni dans un log, D13, §15), sans l'incident lui-même.
+
+**À compléter par le propriétaire.** Date, type de clé, workflow concerné, durée d'exposition, lien exact avec D13. Rien de cela n'est déduit ici.
+
