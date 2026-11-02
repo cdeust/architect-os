@@ -74,6 +74,11 @@ Feature: Test gate domain functions, observed directly
     Then the gate perimeter judged files are "src/a.mjs, src/z.mjs"
     And the gate perimeter files are "src/a.mjs, src/z.mjs"
 
+  Scenario: the retired files join the files of the perimeter in order, not the judged files
+    When the gate computes the perimeter of the changes "src/m.mjs:1" with the retired files "src/a.mjs, src/z.mjs"
+    Then the gate perimeter judged files are "src/m.mjs"
+    And the gate perimeter files are "src/a.mjs, src/m.mjs, src/z.mjs"
+
   Scenario: only the changed lines count
     Given a gate perimeter over "src/m.mjs" with changed lines "src/m.mjs:1"
     When the gate judges the mutation report:

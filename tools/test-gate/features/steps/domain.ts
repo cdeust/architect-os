@@ -82,6 +82,13 @@ When('the gate computes the perimeter of the changes {string}', function (change
   this.state['perimeter'] = perimeterOf(layout, list(changes).map(change), []);
 });
 
+When(
+  'the gate computes the perimeter of the changes {string} with the retired files {string}',
+  function (changes: string, retired: string) {
+    this.state['perimeter'] = perimeterOf(layout, list(changes).map(change), list(retired));
+  },
+);
+
 Then('the gate perimeter changed files are {string}', function (expected: string) {
   assert.deepEqual([...(this.state['perimeter'] as Perimeter).changedLines.keys()], list(expected));
 });
