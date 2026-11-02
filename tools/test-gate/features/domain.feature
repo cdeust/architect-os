@@ -40,6 +40,30 @@ Feature: Test gate domain functions, observed directly
       x.mjs: 1,2,3,4,5,6,7,8,9,10,11,12
       """
 
+  Scenario: a hunk that replaces twelve lines by twelve lists the twelve new lines
+    When the gate parses the unified diff:
+      """
+      diff --git a/x.mjs b/x.mjs
+      @@ -10,12 +10,12 @@
+      """
+    Then the gate parsed diff is:
+      """
+      x.mjs: 10,11,12,13,14,15,16,17,18,19,20,21
+      """
+
+  Scenario: a line that continues after the file header is not a header, its hunks stay with the previous file
+    When the gate parses the unified diff:
+      """
+      diff --git a/y.mjs b/y.mjs
+      @@ -1 +1 @@
+      diff --git a/x b/x extra
+      @@ -5 +5 @@
+      """
+    Then the gate parsed diff is:
+      """
+      y.mjs: 1,5
+      """
+
   Scenario Outline: the component of <path> among <components> is <component>
     Then the gate component of "<path>" among the components "<components>" is "<component>"
 
