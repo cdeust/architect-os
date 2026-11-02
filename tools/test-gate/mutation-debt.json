@@ -1,20 +1,6 @@
 {
   "survivors": [
     {
-      "file": "data/src/domain/errors.ts",
-      "start": {
-        "line": 10,
-        "column": 17
-      },
-      "end": {
-        "line": 10,
-        "column": 28
-      },
-      "mutator": "StringLiteral",
-      "original": "'DataError'",
-      "replacement": "\"\""
-    },
-    {
       "file": "data/src/infrastructure/in-memory.ts",
       "start": {
         "line": 14,
@@ -708,20 +694,6 @@
       },
       "end": {
         "line": 41,
-        "column": 34
-      },
-      "mutator": "ConditionalExpression",
-      "original": "process.argv[1] !== undefined",
-      "replacement": "true"
-    },
-    {
-      "file": "data/src/main.ts",
-      "start": {
-        "line": 41,
-        "column": 5
-      },
-      "end": {
-        "line": 41,
         "column": 93
       },
       "mutator": "ConditionalExpression",
@@ -738,9 +710,37 @@
         "line": 41,
         "column": 34
       },
+      "mutator": "ConditionalExpression",
+      "original": "process.argv[1] !== undefined",
+      "replacement": "true"
+    },
+    {
+      "file": "data/src/main.ts",
+      "start": {
+        "line": 41,
+        "column": 5
+      },
+      "end": {
+        "line": 41,
+        "column": 34
+      },
       "mutator": "EqualityOperator",
       "original": "process.argv[1] !== undefined",
       "replacement": "process.argv[1] === undefined"
+    },
+    {
+      "file": "data/src/main.ts",
+      "start": {
+        "line": 41,
+        "column": 5
+      },
+      "end": {
+        "line": 41,
+        "column": 93
+      },
+      "mutator": "LogicalOperator",
+      "original": "process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href",
+      "replacement": "process.argv[1] !== undefined || import.meta.url === pathToFileURL(process.argv[1]).href"
     },
     {
       "file": "data/src/main.ts",
@@ -3167,6 +3167,48 @@
     {
       "file": "packages/contracts/src/result.ts",
       "start": {
+        "line": 13,
+        "column": 3
+      },
+      "end": {
+        "line": 13,
+        "column": 19
+      },
+      "mutator": "StringLiteral",
+      "original": "'WORKER_TIMEOUT'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/contracts/src/result.ts",
+      "start": {
+        "line": 15,
+        "column": 3
+      },
+      "end": {
+        "line": 15,
+        "column": 21
+      },
+      "mutator": "StringLiteral",
+      "original": "'DATA_UNAVAILABLE'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/contracts/src/result.ts",
+      "start": {
+        "line": 16,
+        "column": 3
+      },
+      "end": {
+        "line": 16,
+        "column": 13
+      },
+      "mutator": "StringLiteral",
+      "original": "'INTERNAL'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/contracts/src/result.ts",
+      "start": {
         "line": 67,
         "column": 51
       },
@@ -3289,6 +3331,20 @@
       "mutator": "ArrayDeclaration",
       "original": "['memory']",
       "replacement": "[]"
+    },
+    {
+      "file": "packages/contracts/src/tools.ts",
+      "start": {
+        "line": 35,
+        "column": 40
+      },
+      "end": {
+        "line": 35,
+        "column": 48
+      },
+      "mutator": "StringLiteral",
+      "original": "'memory'",
+      "replacement": "\"\""
     },
     {
       "file": "packages/sandbox/src/auth-proxy.ts",
@@ -5435,6 +5491,48 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
+        "line": 41,
+        "column": 14
+      },
+      "end": {
+        "line": 41,
+        "column": 40
+      },
+      "mutator": "Regex",
+      "original": "/^[A-Za-z_][A-Za-z0-9_]*$/",
+      "replacement": "/[A-Za-z_][A-Za-z0-9_]*$/"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 41,
+        "column": 14
+      },
+      "end": {
+        "line": 41,
+        "column": 40
+      },
+      "mutator": "Regex",
+      "original": "/^[A-Za-z_][A-Za-z0-9_]*$/",
+      "replacement": "/^[A-Za-z_][A-Za-z0-9_]*/"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 45,
+        "column": 49
+      },
+      "end": {
+        "line": 45,
+        "column": 82
+      },
+      "mutator": "ObjectLiteral",
+      "original": "{ message: 'variable interdite' }",
+      "replacement": "{}"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
         "line": 45,
         "column": 60
       },
@@ -5470,9 +5568,37 @@
         "line": 58,
         "column": 95
       },
+      "mutator": "ConditionalExpression",
+      "original": "!NAME.test(name) || /^(NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i.test(name)",
+      "replacement": "false"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 58,
+        "column": 13
+      },
+      "end": {
+        "line": 58,
+        "column": 95
+      },
       "mutator": "LogicalOperator",
       "original": "!NAME.test(name) || /^(NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i.test(name)",
       "replacement": "!NAME.test(name) && /^(NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i.test(name)"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 58,
+        "column": 33
+      },
+      "end": {
+        "line": 58,
+        "column": 84
+      },
+      "mutator": "Regex",
+      "original": "/^(NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i",
+      "replacement": "/(NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i"
     },
     {
       "file": "packages/sandbox/src/profile.ts",
@@ -5632,6 +5758,20 @@
       "file": "packages/sandbox/src/profile.ts",
       "start": {
         "line": 92,
+        "column": 7
+      },
+      "end": {
+        "line": 92,
+        "column": 31
+      },
+      "mutator": "ConditionalExpression",
+      "original": "!PROFILE_NAME.test(name)",
+      "replacement": "false"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 92,
         "column": 75
       },
       "end": {
@@ -5646,6 +5786,20 @@
       "file": "packages/sandbox/src/profile.ts",
       "start": {
         "line": 94,
+        "column": 7
+      },
+      "end": {
+        "line": 94,
+        "column": 24
+      },
+      "mutator": "ConditionalExpression",
+      "original": "!existsSync(file)",
+      "replacement": "false"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 94,
         "column": 68
       },
       "end": {
@@ -5655,6 +5809,20 @@
       "mutator": "StringLiteral",
       "original": "`profil inconnu : ${name}`",
       "replacement": "``"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 97,
+        "column": 41
+      },
+      "end": {
+        "line": 97,
+        "column": 47
+      },
+      "mutator": "StringLiteral",
+      "original": "'utf8'",
+      "replacement": "\"\""
     },
     {
       "file": "packages/sandbox/src/profile.ts",
@@ -5743,6 +5911,48 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
+        "line": 119,
+        "column": 7
+      },
+      "end": {
+        "line": 119,
+        "column": 32
+      },
+      "mutator": "ConditionalExpression",
+      "original": "typeof value === 'string'",
+      "replacement": "false"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 119,
+        "column": 24
+      },
+      "end": {
+        "line": 119,
+        "column": 32
+      },
+      "mutator": "StringLiteral",
+      "original": "'string'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 120,
+        "column": 7
+      },
+      "end": {
+        "line": 120,
+        "column": 27
+      },
+      "mutator": "ConditionalExpression",
+      "original": "Array.isArray(value)",
+      "replacement": "false"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
         "line": 120,
         "column": 46
       },
@@ -5757,6 +5967,20 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
+        "line": 121,
+        "column": 7
+      },
+      "end": {
+        "line": 121,
+        "column": 21
+      },
+      "mutator": "ConditionalExpression",
+      "original": "value !== null",
+      "replacement": "true"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
         "line": 132,
         "column": 55
       },
@@ -5767,6 +5991,20 @@
       "mutator": "StringLiteral",
       "original": "'PROFILE_INVALID'",
       "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 141,
+        "column": 61
+      },
+      "end": {
+        "line": 141,
+        "column": 87
+      },
+      "mutator": "ArrowFunction",
+      "original": "(d) => substitute(d, vars)",
+      "replacement": "() => undefined"
     },
     {
       "file": "packages/sandbox/src/profile.ts",
@@ -5827,6 +6065,20 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
+        "line": 76,
+        "column": 18
+      },
+      "end": {
+        "line": 76,
+        "column": 22
+      },
+      "mutator": "UnaryOperator",
+      "original": "-pid",
+      "replacement": "+pid"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
         "line": 85,
         "column": 46
       },
@@ -5865,6 +6117,34 @@
       "mutator": "EqualityOperator",
       "original": "basename(dir) !== 'node_modules'",
       "replacement": "basename(dir) === 'node_modules'"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 87,
+        "column": 28
+      },
+      "end": {
+        "line": 87,
+        "column": 42
+      },
+      "mutator": "StringLiteral",
+      "original": "'node_modules'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 89,
+        "column": 9
+      },
+      "end": {
+        "line": 89,
+        "column": 23
+      },
+      "mutator": "ConditionalExpression",
+      "original": "parent === dir",
+      "replacement": "true"
     },
     {
       "file": "packages/sandbox/src/srt-runner.ts",
@@ -5912,6 +6192,20 @@
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
         "line": 100,
+        "column": 9
+      },
+      "end": {
+        "line": 102,
+        "column": 44
+      },
+      "mutator": "MethodExpression",
+      "original": "(path ?? '')\n          .split(delimiter)\n          .filter((dir) => isAbsolute(dir))",
+      "replacement": "(path ?? '').split(delimiter)"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 100,
         "column": 18
       },
       "end": {
@@ -5921,6 +6215,34 @@
       "mutator": "StringLiteral",
       "original": "''",
       "replacement": "\"Stryker was here!\""
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 106,
+        "column": 7
+      },
+      "end": {
+        "line": 106,
+        "column": 45
+      },
+      "mutator": "CallExpression",
+      "original": "accessSync(candidate, constants.X_OK);",
+      "replacement": ";"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 107,
+        "column": 11
+      },
+      "end": {
+        "line": 107,
+        "column": 39
+      },
+      "mutator": "ConditionalExpression",
+      "original": "statSync(candidate).isFile()",
+      "replacement": "true"
     },
     {
       "file": "packages/sandbox/src/srt-runner.ts",
@@ -5977,6 +6299,48 @@
       "mutator": "MethodExpression",
       "original": "settings.filesystem.allowWrite.some((root) => root.startsWith(`${real}/`))",
       "replacement": "settings.filesystem.allowWrite.every(root => root.startsWith(`${real}/`))"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 124,
+        "column": 56
+      },
+      "end": {
+        "line": 124,
+        "column": 93
+      },
+      "mutator": "ArrowFunction",
+      "original": "(root) => root.startsWith(`${real}/`)",
+      "replacement": "() => undefined"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 124,
+        "column": 66
+      },
+      "end": {
+        "line": 124,
+        "column": 93
+      },
+      "mutator": "MethodExpression",
+      "original": "root.startsWith(`${real}/`)",
+      "replacement": "root.endsWith(`${real}/`)"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 139,
+        "column": 14
+      },
+      "end": {
+        "line": 139,
+        "column": 19
+      },
+      "mutator": "BooleanLiteral",
+      "original": "false",
+      "replacement": "true"
     },
     {
       "file": "packages/sandbox/src/srt-runner.ts",
@@ -6387,20 +6751,6 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 194,
-        "column": 58
-      },
-      "end": {
-        "line": 194,
-        "column": 72
-      },
-      "mutator": "StringLiteral",
-      "original": "'aos-sandbox-'",
-      "replacement": "\"\""
-    },
-    {
-      "file": "packages/sandbox/src/srt-runner.ts",
-      "start": {
         "line": 198,
         "column": 22
       },
@@ -6429,6 +6779,90 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
+        "line": 209,
+        "column": 68
+      },
+      "end": {
+        "line": 212,
+        "column": 8
+      },
+      "mutator": "BlockStatement",
+      "original": "{\n        mkdirSync(dirname(file), { recursive: true, mode: 0o700 });\n        writeFileSync(file, `${JSON.stringify(content, null, 2)}\\n`, { mode: 0o600 });\n      }",
+      "replacement": "{}"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 211,
+        "column": 29
+      },
+      "end": {
+        "line": 211,
+        "column": 68
+      },
+      "mutator": "StringLiteral",
+      "original": "`${JSON.stringify(content, null, 2)}\\n`",
+      "replacement": "``"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 211,
+        "column": 70
+      },
+      "end": {
+        "line": 211,
+        "column": 85
+      },
+      "mutator": "ObjectLiteral",
+      "original": "{ mode: 0o600 }",
+      "replacement": "{}"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 216,
+        "column": 9
+      },
+      "end": {
+        "line": 216,
+        "column": 39
+      },
+      "mutator": "ConditionalExpression",
+      "original": "profile.env.unset.length === 0",
+      "replacement": "false"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 216,
+        "column": 9
+      },
+      "end": {
+        "line": 216,
+        "column": 39
+      },
+      "mutator": "ConditionalExpression",
+      "original": "profile.env.unset.length === 0",
+      "replacement": "true"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 216,
+        "column": 9
+      },
+      "end": {
+        "line": 216,
+        "column": 39
+      },
+      "mutator": "EqualityOperator",
+      "original": "profile.env.unset.length === 0",
+      "replacement": "profile.env.unset.length !== 0"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
         "line": 217,
         "column": 13
       },
@@ -6443,6 +6877,62 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
+        "line": 218,
+        "column": 13
+      },
+      "end": {
+        "line": 218,
+        "column": 100
+      },
+      "mutator": "ArrayDeclaration",
+      "original": "[resolveExecutable('env', env['PATH']), ...profile.env.unset.flatMap((n) => ['-u', n])]",
+      "replacement": "[]"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 218,
+        "column": 89
+      },
+      "end": {
+        "line": 218,
+        "column": 98
+      },
+      "mutator": "ArrayDeclaration",
+      "original": "['-u', n]",
+      "replacement": "[]"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 220,
+        "column": 85
+      },
+      "end": {
+        "line": 220,
+        "column": 100
+      },
+      "mutator": "ObjectLiteral",
+      "original": "{ mode: 0o400 }",
+      "replacement": "{}"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 230,
+        "column": 39
+      },
+      "end": {
+        "line": 230,
+        "column": 62
+      },
+      "mutator": "ArrayDeclaration",
+      "original": "[nodeModulesOf(srtCli)]",
+      "replacement": "[]"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
         "line": 240,
         "column": 45
       },
@@ -6453,6 +6943,48 @@
       "mutator": "BooleanLiteral",
       "original": "true",
       "replacement": "false"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 255,
+        "column": 41
+      },
+      "end": {
+        "line": 255,
+        "column": 56
+      },
+      "mutator": "ObjectLiteral",
+      "original": "{ mode: 0o600 }",
+      "replacement": "{}"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 261,
+        "column": 57
+      },
+      "end": {
+        "line": 261,
+        "column": 72
+      },
+      "mutator": "ObjectLiteral",
+      "original": "{ mode: 0o400 }",
+      "replacement": "{}"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 262,
+        "column": 33
+      },
+      "end": {
+        "line": 262,
+        "column": 61
+      },
+      "mutator": "ArrowFunction",
+      "original": "(socket) => socket.destroy()",
+      "replacement": "() => undefined"
     },
     {
       "file": "packages/sandbox/src/srt-runner.ts",
@@ -6527,6 +7059,48 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
+        "line": 283,
+        "column": 11
+      },
+      "end": {
+        "line": 283,
+        "column": 36
+      },
+      "mutator": "ConditionalExpression",
+      "original": "verdict.read !== 'denied'",
+      "replacement": "false"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 283,
+        "column": 11
+      },
+      "end": {
+        "line": 283,
+        "column": 68
+      },
+      "mutator": "LogicalOperator",
+      "original": "verdict.read !== 'denied' || verdict.connect !== 'denied'",
+      "replacement": "verdict.read !== 'denied' && verdict.connect !== 'denied'"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 283,
+        "column": 40
+      },
+      "end": {
+        "line": 283,
+        "column": 68
+      },
+      "mutator": "ConditionalExpression",
+      "original": "verdict.connect !== 'denied'",
+      "replacement": "false"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
         "line": 285,
         "column": 15
       },
@@ -6537,6 +7111,20 @@
       "mutator": "BlockStatement",
       "original": "{\n      server.close();\n    }",
       "replacement": "{}"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 286,
+        "column": 7
+      },
+      "end": {
+        "line": 286,
+        "column": 22
+      },
+      "mutator": "CallExpression",
+      "original": "server.close();",
+      "replacement": ";"
     },
     {
       "file": "packages/sandbox/src/srt-runner.ts",
@@ -6723,6 +7311,34 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
+        "line": 328,
+        "column": 14
+      },
+      "end": {
+        "line": 328,
+        "column": 38
+      },
+      "mutator": "ArrayDeclaration",
+      "original": "['pipe', 'pipe', 'pipe']",
+      "replacement": "[]"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 330,
+        "column": 20
+      },
+      "end": {
+        "line": 330,
+        "column": 27
+      },
+      "mutator": "StringLiteral",
+      "original": "'error'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
         "line": 331,
         "column": 5
       },
@@ -6747,6 +7363,34 @@
       "mutator": "ConditionalExpression",
       "original": "output.length < CANARY_OUTPUT_LIMIT",
       "replacement": "true"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 334,
+        "column": 11
+      },
+      "end": {
+        "line": 334,
+        "column": 46
+      },
+      "mutator": "EqualityOperator",
+      "original": "output.length < CANARY_OUTPUT_LIMIT",
+      "replacement": "output.length <= CANARY_OUTPUT_LIMIT"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 336,
+        "column": 5
+      },
+      "end": {
+        "line": 336,
+        "column": 27
+      },
+      "mutator": "CallExpression",
+      "original": "child.stderr.resume();",
+      "replacement": ";"
     },
     {
       "file": "packages/sandbox/src/srt-runner.ts",
@@ -6817,6 +7461,48 @@
       "mutator": "StringLiteral",
       "original": "'error'",
       "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/tool.ts",
+      "start": {
+        "line": 15,
+        "column": 33
+      },
+      "end": {
+        "line": 15,
+        "column": 42
+      },
+      "mutator": "Regex",
+      "original": "/^https$/",
+      "replacement": "/^https/"
+    },
+    {
+      "file": "packages/sandbox/src/tool.ts",
+      "start": {
+        "line": 15,
+        "column": 33
+      },
+      "end": {
+        "line": 15,
+        "column": 42
+      },
+      "mutator": "Regex",
+      "original": "/^https$/",
+      "replacement": "/https$/"
+    },
+    {
+      "file": "packages/sandbox/src/tool.ts",
+      "start": {
+        "line": 16,
+        "column": 13
+      },
+      "end": {
+        "line": 16,
+        "column": 62
+      },
+      "mutator": "MethodExpression",
+      "original": "z.array(z.string().min(2).startsWith('^')).min(1)",
+      "replacement": "z.array(z.string().min(2).startsWith('^')).max(1)"
     },
     {
       "file": "packages/sandbox/src/tool.ts",
@@ -6900,7 +7586,35 @@
       },
       "mutator": "Regex",
       "original": "/^gitdir: (.+)$/",
+      "replacement": "/^gitdir: (.+)/"
+    },
+    {
+      "file": "packages/sandbox/src/worktree.ts",
+      "start": {
+        "line": 39,
+        "column": 19
+      },
+      "end": {
+        "line": 39,
+        "column": 35
+      },
+      "mutator": "Regex",
+      "original": "/^gitdir: (.+)$/",
       "replacement": "/gitdir: (.+)$/"
+    },
+    {
+      "file": "packages/sandbox/src/worktree.ts",
+      "start": {
+        "line": 40,
+        "column": 7
+      },
+      "end": {
+        "line": 40,
+        "column": 23
+      },
+      "mutator": "ConditionalExpression",
+      "original": "pointer === null",
+      "replacement": "false"
     },
     {
       "file": "packages/sandbox/src/worktree.ts",
@@ -7657,6 +8371,20 @@
       "mutator": "StringLiteral",
       "original": "`cannot start worker container: ${String(error)}`",
       "replacement": "``"
+    },
+    {
+      "file": "services/memory/src/infrastructure/docker-runner.ts",
+      "start": {
+        "line": 90,
+        "column": 35
+      },
+      "end": {
+        "line": 110,
+        "column": 5
+      },
+      "mutator": "ArrowFunction",
+      "original": "(command, args, stdin, timeoutMs) =>\n  new Promise((resolve, reject) => {\n    const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });\n    let stdout = '';\n    let stderr = '';\n    const timer = setTimeout(() => {\n      child.kill('SIGKILL');\n      reject(timeoutError(timeoutMs));\n    }, timeoutMs);\n    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString('utf8')));\n    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));\n    child.on('error', (error) => {\n      clearTimeout(timer);\n      reject(error);\n    });\n    child.on('close', (code) => {\n      clearTimeout(timer);\n      resolve({ exitCode: code ?? 1, stdout, stderr });\n    });\n    child.stdin.end(stdin);\n  })",
+      "replacement": "() => undefined"
     },
     {
       "file": "services/memory/src/infrastructure/docker-runner.ts",
@@ -11185,6 +11913,20 @@
       "mutator": "StringLiteral",
       "original": "'agent produced no result message'",
       "replacement": "\"\""
+    },
+    {
+      "file": "tools/test-gate/src/domain/mutation.ts",
+      "start": {
+        "line": 142,
+        "column": 9
+      },
+      "end": {
+        "line": 142,
+        "column": 30
+      },
+      "mutator": "ConditionalExpression",
+      "original": "changed !== undefined",
+      "replacement": "true"
     }
   ]
 }
