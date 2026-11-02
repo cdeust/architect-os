@@ -17,10 +17,10 @@ export default {
   // Option `cucumber.profile`: node_modules/@stryker-mutator/cucumber-runner/dist/src-generated/cucumber-runner-options.d.ts.
   cucumber: { profile: 'mutation' },
   coverageAnalysis: 'perTest',
-  // Explicit, not the default (CPU count - 1): every test-runner worker may start its own disposable PostgreSQL
-  // (features/support/postgres.ts), each holding one SysV shared memory segment, and macOS allows only
-  // kern.sysv.shmmni=32. Four workers keep that bounded even when Stryker kills and restarts them.
-  concurrency: 4,
+  // One worker. The suite is not built to run in parallel: the workers share one sandbox and the machine (fixed ports of
+  // the main.ts, files, PostgreSQL), so with several of them the status of a mutant depended on who collided with whom,
+  // and the same commit gave different survivors from one run to the next. A verdict must be reproducible.
+  concurrency: 1,
   mutate: plan.mutate,
   reporters: ['json', 'clear-text', 'progress'],
   jsonReporter: { fileName: 'reports/mutation/mutation.json' },
