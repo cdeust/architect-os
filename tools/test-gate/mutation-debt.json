@@ -3153,6 +3153,20 @@
     {
       "file": "packages/contracts/src/result.ts",
       "start": {
+        "line": 11,
+        "column": 3
+      },
+      "end": {
+        "line": 11,
+        "column": 23
+      },
+      "mutator": "StringLiteral",
+      "original": "'WORKER_UNAVAILABLE'",
+      "replacement": "\"\""
+    },
+    {
+      "file": "packages/contracts/src/result.ts",
+      "start": {
         "line": 67,
         "column": 51
       },
@@ -3247,6 +3261,20 @@
       "mutator": "StringLiteral",
       "original": "`status ${status} requires an error`",
       "replacement": "``"
+    },
+    {
+      "file": "packages/contracts/src/run.ts",
+      "start": {
+        "line": 3,
+        "column": 57
+      },
+      "end": {
+        "line": 3,
+        "column": 78
+      },
+      "mutator": "StringLiteral",
+      "original": "'needs_clarification'",
+      "replacement": "\"\""
     },
     {
       "file": "packages/contracts/src/tools.ts",
@@ -5337,6 +5365,62 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
+        "line": 38,
+        "column": 3
+      },
+      "end": {
+        "line": 38,
+        "column": 100
+      },
+      "mutator": "Regex",
+      "original": "/^(ANTHROPIC_.*|CLAUDE_CONFIG_DIR|CLAUDE_CODE_.*|NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i",
+      "replacement": "/(ANTHROPIC_.*|CLAUDE_CONFIG_DIR|CLAUDE_CODE_.*|NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 38,
+        "column": 3
+      },
+      "end": {
+        "line": 38,
+        "column": 100
+      },
+      "mutator": "Regex",
+      "original": "/^(ANTHROPIC_.*|CLAUDE_CONFIG_DIR|CLAUDE_CODE_.*|NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i",
+      "replacement": "/^(ANTHROPIC_.*|CLAUDE_CONFIG_DIR|CLAUDE_CODE_.*|NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)/i"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 38,
+        "column": 3
+      },
+      "end": {
+        "line": 38,
+        "column": 100
+      },
+      "mutator": "Regex",
+      "original": "/^(ANTHROPIC_.*|CLAUDE_CONFIG_DIR|CLAUDE_CODE_.*|NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i",
+      "replacement": "/^(ANTHROPIC_.*|CLAUDE_CONFIG_DIR|CLAUDE_CODE_.*|NO_PROXY|HTTPS_PROXY|ALL_PROXY|NODE_OPTIONS)$/i"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 39,
+        "column": 23
+      },
+      "end": {
+        "line": 39,
+        "column": 80
+      },
+      "mutator": "Regex",
+      "original": "/^(ANTHROPIC_.*|CLAUDE_CONFIG_DIR|CLAUDE_CODE_OAUTH.*)$/i",
+      "replacement": "/(ANTHROPIC_.*|CLAUDE_CONFIG_DIR|CLAUDE_CODE_OAUTH.*)$/i"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
         "line": 39,
         "column": 23
       },
@@ -5375,6 +5459,34 @@
       "mutator": "ArrayDeclaration",
       "original": "[z.string(), z.number(), z.boolean(), z.null(), z.array(Json), z.record(z.string(), Json)]",
       "replacement": "[]"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 58,
+        "column": 13
+      },
+      "end": {
+        "line": 58,
+        "column": 95
+      },
+      "mutator": "LogicalOperator",
+      "original": "!NAME.test(name) || /^(NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i.test(name)",
+      "replacement": "!NAME.test(name) && /^(NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i.test(name)"
+    },
+    {
+      "file": "packages/sandbox/src/profile.ts",
+      "start": {
+        "line": 58,
+        "column": 33
+      },
+      "end": {
+        "line": 58,
+        "column": 84
+      },
+      "mutator": "Regex",
+      "original": "/^(NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)$/i",
+      "replacement": "/^(NO_PROXY|HTTPS?_PROXY|ALL_PROXY|NODE_OPTIONS)/i"
     },
     {
       "file": "packages/sandbox/src/profile.ts",
@@ -5736,6 +5848,20 @@
         "line": 87,
         "column": 42
       },
+      "mutator": "ConditionalExpression",
+      "original": "basename(dir) !== 'node_modules'",
+      "replacement": "false"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 87,
+        "column": 10
+      },
+      "end": {
+        "line": 87,
+        "column": 42
+      },
       "mutator": "EqualityOperator",
       "original": "basename(dir) !== 'node_modules'",
       "replacement": "basename(dir) === 'node_modules'"
@@ -5865,6 +5991,20 @@
       "mutator": "ArrayDeclaration",
       "original": "['pipe', 'pipe', 'pipe']",
       "replacement": "[]"
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 142,
+        "column": 20
+      },
+      "end": {
+        "line": 142,
+        "column": 27
+      },
+      "mutator": "StringLiteral",
+      "original": "'error'",
+      "replacement": "\"\""
     },
     {
       "file": "packages/sandbox/src/srt-runner.ts",
@@ -6383,6 +6523,20 @@
       "mutator": "StringLiteral",
       "original": "'canari sans verdict : srt absent ou en échec'",
       "replacement": "\"\""
+    },
+    {
+      "file": "packages/sandbox/src/srt-runner.ts",
+      "start": {
+        "line": 285,
+        "column": 15
+      },
+      "end": {
+        "line": 287,
+        "column": 6
+      },
+      "mutator": "BlockStatement",
+      "original": "{\n      server.close();\n    }",
+      "replacement": "{}"
     },
     {
       "file": "packages/sandbox/src/srt-runner.ts",
