@@ -614,7 +614,7 @@ Fixtures (dans `tools/test-gate/fixtures/`, rejouées à chaque run, local et CI
 
 ## 18. Clé API dans un log de CI, incident, vers le 19 octobre 2026
 
-**Fait.** Une clé API a été visible dans un log de CI pendant 5 minutes. C'était avant l'architecture d'architect-os, pendant des essais de GitHub Actions avec un conteneur Docker. Date approximative : environ 15 jours avant le 3 novembre 2026. Déclaré par le propriétaire. Ni la valeur de la clé ni le lien du run ne figurent ici.
+**Fait.** Le CI a affiché en clair, dans son log, la clé API décodée depuis les secrets GitHub : elle a été visible pendant 5 minutes, ce qui la compromet de fait. C'était avant l'architecture d'architect-os, pendant des essais de GitHub Actions avec un conteneur Docker. Date approximative : environ 15 jours avant le 3 novembre 2026. Déclaré par le propriétaire. Ni la valeur de la clé ni le lien du run ne figurent ici.
 
 **Traitement.** Le propriétaire a révoqué la clé et supprimé le log du CI.
 
