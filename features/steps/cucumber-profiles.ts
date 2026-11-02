@@ -55,12 +55,16 @@ function assertCoversGate(profile: Profile): void {
   assert.deepEqual(missing, [], 'feature files of the gate outside the profile paths');
 }
 
+/** Areas that execute no production line in-process: they cannot detect a mutant (cucumber.mjs says why). */
+const NOT_MUTATION_AREAS = ['repository', 'arch'];
+
 function assertMutationScope(base: Profile, mutation: Profile): void {
   const { paths: _basePaths, ...baseRest } = base;
   const { paths: _mutationPaths, ...mutationRest } = mutation;
   assert.deepEqual(mutationRest, baseRest, 'the mutation profile differs from the default beyond its paths');
   for (const file of gateFeatureFiles()) {
-    const expected = covers(base, file) && !file.startsWith('features/repository/');
+    const expected =
+      covers(base, file) && !NOT_MUTATION_AREAS.some((area) => file.startsWith(`features/${area}/`));
     assert.equal(covers(mutation, file), expected, `mutation profile scope of ${file}`);
   }
 }
@@ -98,14 +102,16 @@ Then('its mutation profile differs from the default profile only by its paths', 
 });
 
 Then(
-  'its mutation profile covers every feature file of the default profile except those of features\\/repository',
+  'its mutation profile covers every feature file of the default profile except those of features\\/repository and features\\/arch',
   function () {
     const { default: base, mutation } = profiles(this);
     assertMutationScope(base, mutation);
-    assert.ok(
-      gateFeatureFiles().some((file) => file.startsWith('features/repository/')),
-      'features/repository is empty',
-    );
+    for (const area of NOT_MUTATION_AREAS) {
+      assert.ok(
+        gateFeatureFiles().some((file) => file.startsWith(`features/${area}/`)),
+        `features/${area} is empty`,
+      );
+    }
   },
 );
 
@@ -120,6 +126,12 @@ Then('a default profile with tags is rejected', function () {
 
 Then('a default profile with a name filter is rejected', function () {
   assert.throws(() => assertPlainScope({ ...profiles(this).default, name: ['a scenario'] }));
+});
+
+Then('a mutation profile that brings features\\/arch back is rejected', function () {
+  const { default: base, mutation } = profiles(this);
+  const broken = { ...mutation, paths: [...mutation.paths, 'features/arch/**/*.feature'] };
+  assert.throws(() => assertMutationScope(base, broken));
 });
 
 Then('a mutation profile that also drops features\\/integration is rejected', function () {

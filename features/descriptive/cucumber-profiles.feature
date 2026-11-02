@@ -1,17 +1,22 @@
 Feature: Cucumber profiles
   cucumber.mjs has the default profile, which `npm test` and the gate count, and the `mutation` profile, which only
   Stryker uses (docs/design/platform-v3-srt.md §7). The mutation run leaves out features/repository (typecheck and
-  format run tsc and prettier in child processes and kill no mutant); nothing else may differ.
+  format run tsc and prettier in child processes and kill no mutant) and features/arch (dependency-cruiser in a child
+  process, on fixture files that the workers of the shared sandbox collide on: false kills); nothing else may differ.
 
   Scenario: the default profile is a plain scope that covers every feature of the gate
     Given the committed cucumber configuration
     Then its default profile has no tags, no name, retry 0 and strict
     And its default profile covers every feature file of the gate
 
-  Scenario: the mutation profile differs from the default only by excluding features/repository
+  Scenario: the mutation profile differs from the default only by excluding features/repository and features/arch
     Given the committed cucumber configuration
     Then its mutation profile differs from the default profile only by its paths
-    And its mutation profile covers every feature file of the default profile except those of features/repository
+    And its mutation profile covers every feature file of the default profile except those of features/repository and features/arch
+
+  Scenario: a mutation profile that brings features/arch back is rejected
+    Given the committed cucumber configuration
+    Then a mutation profile that brings features/arch back is rejected
 
   Scenario: Stryker uses the mutation profile
     Given the committed Stryker configuration
