@@ -618,4 +618,4 @@ Fixtures (dans `tools/test-gate/fixtures/`, rejouées à chaque run, local et CI
 
 **Traitement.** Le propriétaire a révoqué la clé et supprimé le log du CI.
 
-**Pourquoi cette entrée.** La raison d'une décision doit être écrite. Le journal décrivait les défenses contre ce risque (aucun secret dans une sandbox ni dans un log, D13, §15), sans l'incident lui-même. L'incident précède ces décisions ; le lien exact avec D13 reste à préciser par le propriétaire.
+**Pourquoi cette entrée.** La raison d'une décision doit être écrite. Le journal décrivait les défenses contre ce risque (aucun secret dans une sandbox ni dans un log, D13, §15), sans l'incident lui-même. D13 et la règle « aucun secret dans une sandbox ni dans un log » découlent de cet incident.
