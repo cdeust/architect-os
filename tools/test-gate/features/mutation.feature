@@ -1,7 +1,6 @@
 Feature: Test gate, rule 5: no surviving mutant in the perimeter
-  The perimeter holds (a) the mutants of production files whose location meets a line changed since the first
-  parent, and (b) the mutants covered (coveredBy, Stryker perTest coverage) by a test of a changed .feature, of a
-  component whose step definitions or support changed, or by any test when root step definitions changed.
+  The perimeter holds the mutants of production files whose location meets a line changed since the first parent.
+  A changed test extends nothing: the full run off the path of a change sees what it stops killing.
   Survived, NoCoverage and Pending are red; Killed and Timeout pass; CompileError and RuntimeError are reported,
   not red; Ignored passes only under a justified next-line directive. The mutation fixtures derive from a real
   Stryker 10.1.1 report of tools/test-gate/fixtures/suite/src/math.mjs (fixtures/README.md).
@@ -326,133 +325,30 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     Then the gate verdict is green
     And the gate report has the line "- fichiers du périmètre : 0"
 
-  Scenario: a changed .feature extends the perimeter to the mutants its tests cover (coveredBy), static ones included
-    Given the gate repository holds "src/math.mjs" of the mutation fixture "covered-by-feature"
-    And the gate repository file "specs/second.feature" reads:
-      """
-      Feature: Second green fixture
-        Its first parent had this description.
-
-        Scenario: another passing scenario
-          Given a passing step
-          And a step with value 3
-      """
-    And the gate first parent is committed
-    And the gate repository holds the fixture specs "green.feature, second.feature"
-    And the gate head is committed
-    And the gate mutation report is the fixture "covered-by-feature"
-    When the gate checks the "linux" job
-    Then the gate verdict is red
-    And the gate violations are:
-      """
-      5: src/math.mjs:7 ConditionalExpression #3 : Survived
-      5: src/math.mjs:7 ConditionalExpression #4 : Survived
-      """
-
-  Scenario: changed step definitions of a component extend the perimeter to the tests of that component
-    Given the gate repository holds "src/math.mjs" of the mutation fixture "covered-by-feature"
-    And the gate repository holds "mod/a/src/a.mjs" of the mutation fixture "covered-by-feature"
-    And the gate repository file "mod/a/specs/steps/steps.mjs" reads:
-      """
-      export const version = 1;
-      """
-    And the gate first parent is committed
-    And the gate repository file "mod/a/specs/steps/steps.mjs" reads:
-      """
-      export const version = 2;
-      """
-    And the gate head is committed
-    And the gate mutation report is the fixture "covered-by-feature"
-    When the gate checks the "linux" job
-    Then the gate verdict is red
-    And the gate violations are:
-      """
-      5: mod/a/src/a.mjs:1 ArithmeticOperator #7 : Survived
-      5: src/math.mjs:7 ConditionalExpression #4 : Survived
-      """
-
-  Scenario: a changed .feature and changed step definitions of a component add up
-    Given the gate repository holds "src/math.mjs" of the mutation fixture "covered-by-feature"
-    And the gate repository holds "mod/a/src/a.mjs" of the mutation fixture "covered-by-feature"
+  Scenario: a changed .feature extends nothing: the perimeter stays empty
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
     And the gate repository holds the fixture specs "green.feature"
     And the gate first parent is committed
     And the gate repository holds the fixture specs "green.feature, second.feature"
-    And the gate repository file "mod/a/specs/steps/steps.mjs" reads:
-      """
-      export const version = 2;
-      """
     And the gate head is committed
-    And the gate mutation report is the fixture "covered-by-feature"
     When the gate checks the "linux" job
-    Then the gate violations of rule 5 are:
+    Then the gate report has the line "- fichiers du périmètre : 0"
+    And the gate violations of rule 5 are:
       """
-      5: mod/a/src/a.mjs:1 ArithmeticOperator #7 : Survived
-      5: src/math.mjs:7 ConditionalExpression #3 : Survived
-      5: src/math.mjs:7 ConditionalExpression #4 : Survived
       """
 
-  Scenario: changed root step definitions extend the perimeter to every test
-    Given the gate repository holds "src/math.mjs" of the mutation fixture "covered-by-feature"
-    And the gate repository holds "mod/a/src/a.mjs" of the mutation fixture "covered-by-feature"
+  Scenario: changed step definitions extend nothing: the perimeter stays empty
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
     And the gate repository file "specs/steps/steps.mjs" reads:
       """
       export const version = 1;
       """
     And the gate first parent is committed
-    And the gate repository file "specs/steps/steps.mjs" is removed
-    And the gate head is committed
-    And the gate mutation report is the fixture "covered-by-feature"
-    When the gate checks the "linux" job
-    Then the gate verdict is red
-    And the gate violations are:
-      """
-      5: mod/a/src/a.mjs:1 ArithmeticOperator #7 : Survived
-      5: src/math.mjs:3 ArithmeticOperator #1 : Survived
-      5: src/math.mjs:7 ConditionalExpression #3 : Survived
-      5: src/math.mjs:7 ConditionalExpression #4 : Survived
-      """
-    And the gate report has the line "- mutants du périmètre : 7"
-
-  Scenario: without coveredBy in the report, a changed root .feature takes every mutant of the repository, flagged
-    Given the gate repository holds "src/math.mjs" of the mutation fixture "no-coverage-data"
-    And the gate repository holds "mod/a/src/a.mjs" of the mutation fixture "no-coverage-data"
-    And the gate repository file "specs/second.feature" reads:
-      """
-      Feature: Second green fixture
-        Its first parent had this description.
-
-        Scenario: another passing scenario
-          Given a passing step
-          And a step with value 3
-      """
-    And the gate first parent is committed
-    And the gate repository holds the fixture specs "green.feature, second.feature"
-    And the gate head is committed
-    And the gate mutation report is the fixture "no-coverage-data"
-    When the gate checks the "linux" job
-    Then the gate verdict is red
-    And the gate violations are:
-      """
-      5: mod/a/src/a.mjs:1 ArithmeticOperator #7 : Survived
-      5: src/math.mjs:3 ArithmeticOperator #1 : Survived
-      5: src/math.mjs:7 ConditionalExpression #3 : Survived
-      5: src/math.mjs:7 ConditionalExpression #4 : Survived
-      """
-    And the gate report has the line "- couverture par test absente du rapport : (b) = tous les mutants des composants touchés"
-
-  Scenario: without coveredBy in the report, changed step definitions of a component take every mutant of it
-    Given the gate repository holds "src/math.mjs" of the mutation fixture "no-coverage-data"
-    And the gate repository holds "mod/a/src/a.mjs" of the mutation fixture "no-coverage-data"
-    And the gate first parent is committed
-    And the gate repository file "mod/a/specs/steps/steps.mjs" reads:
+    And the gate repository file "specs/steps/steps.mjs" reads:
       """
       export const version = 2;
       """
     And the gate head is committed
-    And the gate mutation report is the fixture "no-coverage-data"
     When the gate checks the "linux" job
-    Then the gate verdict is red
-    And the gate violations are:
-      """
-      5: mod/a/src/a.mjs:1 ArithmeticOperator #7 : Survived
-      """
+    Then the gate verdict is green
+    And the gate report has the line "- fichiers du périmètre : 0"

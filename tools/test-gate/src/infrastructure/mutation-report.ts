@@ -4,8 +4,7 @@ import type { MutationReport } from '../domain/mutation.js';
 import type { ReadFailure } from '../domain/violation.js';
 import { parseJson } from './json.js';
 
-// The fields the gate reads of a Stryker JSON report: MutationTestResult, FileResult, MutantResult, Location and
-// TestFile in node_modules/mutation-testing-report-schema/dist/src-generated/schema.d.ts. Other fields are ignored.
+// The fields the gate reads of a Stryker JSON report: MutationTestResult, FileResult, MutantResult, and Location in node_modules/mutation-testing-report-schema/dist/src-generated/schema.d.ts. Other fields are ignored.
 const STATUSES = [
   'Killed',
   'Survived',
@@ -32,8 +31,6 @@ const ReportSchema = z.object({
             status: z.enum(STATUSES),
             replacement: z.string(),
             location: z.object({ start: Position, end: Position }),
-            coveredBy: z.array(z.string()).optional(),
-            static: z.boolean().optional(),
           }),
         ),
       })
@@ -46,7 +43,6 @@ const ReportSchema = z.object({
         { error: 'un mutant sort du texte de son fichier' },
       ),
   ),
-  testFiles: z.record(z.string(), z.object({ tests: z.array(z.object({ id: z.string() })) })),
   config: z.object({ mutate: z.array(z.string()) }),
 });
 
@@ -54,7 +50,7 @@ const ReportSchema = z.object({
 export function parseMutationReport(text: string): MutationReport | ReadFailure {
   const parsed = parseJson(ReportSchema, text);
   if ('failure' in parsed) return parsed;
-  const { files, testFiles, config } = parsed;
+  const { files, config } = parsed;
   return {
     files: new Map(
       Object.entries(files).map(([path, file]) => [
@@ -70,14 +66,9 @@ export function parseMutationReport(text: string): MutationReport | ReadFailure 
             endLine: mutant.location.end.line,
             endColumn: mutant.location.end.column,
             replacement: mutant.replacement,
-            coveredBy: mutant.coveredBy ?? null,
-            static: mutant.static ?? false,
           })),
         },
       ]),
-    ),
-    testFiles: new Map(
-      Object.entries(testFiles).flatMap(([path, file]) => file.tests.map((test) => [test.id, path] as const)),
     ),
     mutate: config.mutate,
   };

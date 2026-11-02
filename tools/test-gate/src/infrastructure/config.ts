@@ -12,8 +12,6 @@ const Path = z.string().min(1);
 export const GateConfigSchema = z.strictObject({
   production: FileSet,
   features: FileSet,
-  stepDefinitions: z.array(Glob).min(1),
-  components: z.array(Glob),
   jobs: z.record(Glob, z.strictObject({ features: z.array(Glob).min(1), mutation: z.boolean() })),
   /** The mutation debt registry (rule 6), relative to the repository root. */
   debt: Path,

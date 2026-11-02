@@ -4,8 +4,6 @@
     "include": ["specs/**/*.feature", "mod/*/specs/**/*.feature"],
     "exclude": ["**/node_modules/**"]
   },
-  "stepDefinitions": ["specs/steps/**/*.mjs", "mod/*/specs/steps/**/*.mjs"],
-  "components": ["mod/*"],
   "jobs": {
     "linux": { "features": ["**/*.feature"], "mutation": true },
     "macos": { "features": ["specs/sandbox/**/*.feature"], "mutation": false }

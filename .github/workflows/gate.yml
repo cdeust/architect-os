@@ -1,4 +1,4 @@
-# The CI gate (docs/design/platform-v3-srt.md §7): plan, Gherkin suite, Stryker on the perimeter, verdict.
+# The CI gate (docs/design/platform-v3-srt.md §7): plan, Gherkin suite, Stryker on the changed lines, verdict.
 # No secret, no cache. The token is the automatic one, restricted to contents: read and actions: read.
 name: gate
 

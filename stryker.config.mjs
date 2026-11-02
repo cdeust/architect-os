@@ -3,7 +3,7 @@
 // node_modules/@stryker-mutator/cucumber-runner/dist/src-generated/cucumber-runner-options.d.ts.
 // `mutate` comes from reports/gate-plan.json, written by `test-gate plan` (the perimeter of rule 5); a
 // `--mutate` on the command line overrides it. The runner reads cucumber.mjs (profile `mutation`, below): every
-// feature but features/repository runs in the dry run, so `coveredBy` (perTest coverage) is known for every mutant.
+// feature but features/repository and features/arch runs in the dry run; perTest coverage runs only the tests of a mutant.
 import { existsSync, readFileSync } from 'node:fs';
 
 const PLAN = 'reports/gate-plan.json';

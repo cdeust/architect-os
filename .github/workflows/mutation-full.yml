@@ -1,0 +1,81 @@
+# The full mutation run (docs/design/platform-v3-srt.md §7), off the path of a change: gate.yml mutates the changed lines
+# only, in minutes. This run mutates all the production code on one worker and sees what a changed test stopped killing.
+# Red: the survivors differ from tools/test-gate/mutation-debt.json. The reports carry the registry this run computed.
+# No secret, no cache.
+name: mutation-full
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+  push:
+    branches:
+      # TEMPORARY, for the proof of this file only: schedule and workflow_dispatch need it on the default branch.
+      - sentinel/mutation-full
+
+permissions:
+  contents: read
+
+jobs:
+  mutation-full:
+    name: mutation-full
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bubblewrap socat ripgrep
+          bwrap --version
+
+      - name: Host requirement - allow unprivileged user namespaces with capabilities (E-07, R-13)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: PostgreSQL 17 (PGDG) with pgvector
+        run: |
+          sudo apt-get install -y --no-install-recommends postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends postgresql-17 postgresql-17-pgvector
+          echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
+
+      - name: Install (lockfile, scripts disabled)
+        run: npm ci --ignore-scripts
+
+      - name: Plan - all the production files of gate.json
+        run: |
+          mkdir -p reports
+          node -e '
+            const { readFileSync, writeFileSync } = require("node:fs");
+            const { include, exclude } = JSON.parse(readFileSync("tools/test-gate/gate.json", "utf8")).production;
+            const mutate = [...include, ...exclude.map((glob) => `!${glob}`)];
+            writeFileSync("reports/gate-plan.json", JSON.stringify({ mutate }));
+          '
+
+      - name: Stryker
+        run: npx stryker run
+
+      - name: Survivors against the registry
+        run: |
+          cp tools/test-gate/mutation-debt.json reports/mutation-debt.committed.json
+          rm tools/test-gate/mutation-debt.json
+          node --import tsx tools/test-gate/src/main.ts debt
+          cp tools/test-gate/mutation-debt.json reports/mutation-debt.computed.json
+          git diff --stat --exit-code -- tools/test-gate/mutation-debt.json
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mutation-full-reports
+          path: reports/
+          if-no-files-found: warn

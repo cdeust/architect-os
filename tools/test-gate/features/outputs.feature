@@ -25,9 +25,8 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
       { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs"] }
       """
 
-  Scenario: an added .feature plans every production file, coveredBy narrows the perimeter afterwards
+  Scenario: an added .feature plans no mutation
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
-    And the gate repository holds "mod/a/src/a.mjs" of the mutation fixture "covered-by-feature"
     And the gate repository holds the fixture specs "green.feature"
     And the gate first parent is committed
     And the gate repository holds the fixture specs "green.feature, second.feature"
@@ -35,7 +34,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["mod/a/src/a.mjs", "src/math.mjs"] }
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": [] }
       """
 
   Scenario: the macos job plans no mutation

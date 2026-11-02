@@ -61,8 +61,6 @@ Feature: Test gate, rules 1 and 3: unique identities, executed set equal to the 
       {
         "production": { "include": ["src/**/*.mjs"], "exclude": [] },
         "features": { "include": ["specs/green.feature"], "exclude": [] },
-        "stepDefinitions": ["specs/steps/**/*.mjs"],
-        "components": [],
         "jobs": { "linux": { "features": ["**/*.feature"], "mutation": true } },
         "debt": "mutation-debt.json",
         "reports": {

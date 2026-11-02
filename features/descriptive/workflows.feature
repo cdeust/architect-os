@@ -15,6 +15,7 @@ Feature: GitHub workflows
       | claude-code-review.yml |
       | claude.yml             |
       | gate.yml               |
+      | mutation-full.yml               |
 
   Scenario: gate.yml follows the rules of the CI gate
     Given the committed workflow "gate.yml"

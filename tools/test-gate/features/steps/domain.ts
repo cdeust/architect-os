@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { countRule, type Count } from '../../src/domain/count.js';
 import type { DebtInput } from '../../src/domain/debt.js';
 import { parseUnifiedDiff, type ChangedFile } from '../../src/domain/diff.js';
-import { componentOf, type Layout } from '../../src/domain/layout.js';
+import type { Layout } from '../../src/domain/layout.js';
 import {
   judgeMutation,
   perimeterOf,
@@ -68,14 +68,6 @@ Then('the gate parsed diff is:', function (expected: string) {
   assert.deepEqual(lines, expected.split('\n'));
 });
 
-Then(
-  'the gate component of {string} among the components {string} is {string}',
-  function (path: string, components: string, expected: string) {
-    const found = componentOf({ ...layout, components: list(components) }, path);
-    assert.equal(found, expected === 'none' ? null : expected);
-  },
-);
-
 /** `src/a.mjs:1,2` -> a ChangedFile; no line after the colon is a file with no added line. */
 const change = (spec: string): ChangedFile => {
   const [path, lines = ''] = spec.split(':');
@@ -86,23 +78,12 @@ const change = (spec: string): ChangedFile => {
   };
 };
 
-When(
-  'the gate computes the perimeter of the changes {string} over the production files {string}',
-  function (changes: string, production: string) {
-    this.state['perimeter'] = perimeterOf(layout, list(changes).map(change), list(production), []);
-  },
-);
+When('the gate computes the perimeter of the changes {string}', function (changes: string) {
+  this.state['perimeter'] = perimeterOf(layout, list(changes).map(change), []);
+});
 
 Then('the gate perimeter changed files are {string}', function (expected: string) {
   assert.deepEqual([...(this.state['perimeter'] as Perimeter).changedLines.keys()], list(expected));
-});
-
-Then('the gate perimeter test scopes are {string}', function (expected: string) {
-  assert.deepEqual((this.state['perimeter'] as Perimeter).scopes, list(expected));
-});
-
-Then('the gate perimeter fallback files are {string}', function (expected: string) {
-  assert.deepEqual((this.state['perimeter'] as Perimeter).fallbackFiles, list(expected));
 });
 
 Then('the gate perimeter judged files are {string}', function (expected: string) {
@@ -114,8 +95,8 @@ Then('the gate perimeter files are {string}', function (expected: string) {
 });
 
 Given(
-  'a gate perimeter over {string} with test scopes {string}, changed lines {string} and fallback files {string}',
-  function (files: string, scopes: string, changed: string, fallback: string) {
+  'a gate perimeter over {string} with changed lines {string}',
+  function (files: string, changed: string) {
     const changedLines = new Map<string, ReadonlySet<number>>();
     for (const spec of list(changed)) {
       const { path, lines } = change(spec);
@@ -123,8 +104,6 @@ Given(
     }
     const perimeter: Perimeter = {
       changedLines,
-      scopes: list(scopes),
-      fallbackFiles: list(fallback),
       judged: list(files),
       files: list(files),
     };
@@ -134,7 +113,6 @@ Given(
 
 interface ReportFixture {
   mutate: string[];
-  testFiles: Record<string, string>;
   files: Record<string, { source: string[]; mutants: MutantRecord[] }>;
 }
 
@@ -144,7 +122,6 @@ When('the gate judges the mutation report:', function (text: string) {
     this.state['perimeter'] as Perimeter,
     {
       mutate: fixture.mutate,
-      testFiles: new Map(Object.entries(fixture.testFiles)),
       files: new Map(
         Object.entries(fixture.files).map(([path, file]) => [
           path,
@@ -162,10 +139,6 @@ Then('the gate judged mutants are {string}', function (expected: string) {
     judgement.mutants.map(({ mutant }) => mutant.id),
     list(expected),
   );
-});
-
-Then('the gate judgement uses the coverage fallback: {string}', function (expected: string) {
-  assert.equal((this.state['judgement'] as MutationJudgement).coverageFallback, expected === 'yes');
 });
 
 Then('the gate judgement violations are:', function (expected: string) {

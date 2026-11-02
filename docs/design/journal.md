@@ -592,3 +592,23 @@ Fixtures (dans `tools/test-gate/fixtures/`, rejouées à chaque run, local et CI
 7. Fuite de segments SysV sous Stryker sur macOS (rejeu sur l'hôte, dernière ligne) : cause à établir.
 
 **Restes nommés.** Base lue dans l'artefact d'un run vert de `main` : au premier push sur `main` après fusion. `platform-v3-srt.md` dit encore « 119 cas » (§8, 1a) et ne mentionne pas l'extension du périmètre de mutation : à amender selon la décision 1. Head de la branche après le journal : `9a40e32`, run [41140470950](https://github.com/cdeust/architect-os/actions/runs/41140470950), vert (diff de documentation, périmètre vide).
+
+## 17. Gate Linux rouge à chaque run, 2 novembre 2026
+
+**Symptôme.** `gate-linux` rouge sur `feat/gate-1a` : règle 6, entrées ajoutées au registre, à chaque régénération (739, puis 788, puis 799 entrées). Runs complets de 20 à 40 minutes.
+
+**Mesure (12 runs complets déjà archivés, un seul commit par échantillon).** 95 mutants passent de `Survived` à un autre statut d'un run à l'autre. 77 mutants n'ont jamais été tués que par la garde d'architecture, qui n'exécute aucune ligne de production : faux tués, donc vrais survivants cachés.
+
+**Causes.**
+1. Quatre workers Stryker dans un seul répertoire : les fixtures `zz-fixture-*` de `features/arch` et les ports fixes des `main.ts` (`EADDRINUSE` sur 8082) entrent en collision. Le statut d'un mutant dépend du voisin.
+2. Le registre était fait de l'union des survivants vus : méthode qui suit le bruit, refusée à juste titre par la règle 6.
+3. Tout commit touchant un `.feature` ou un step faisait muter toute la production (17 des 30 derniers commits).
+
+**Décisions.** Un seul worker (`stryker.config.mjs`). `features/arch` hors du profil de mutation. Périmètre de la porte réduit aux lignes de production modifiées, décision du propriétaire ; `scopes`, `fallbackFiles`, `coverageFallback`, `componentOf`, `stepDefinitions` et `components` retirés. Run complet hors PR : `mutation-full.yml`, rouge si les survivants diffèrent du registre.
+
+**Risque accepté.** Un test affaibli sans toucher au code n'est plus vu à la PR, seulement au run complet suivant.
+
+**Erreurs à garder.** J'ai multiplié les branches sentinelles (28 sur le dépôt) et enchaîné des correctifs sur une prémisse fausse, que les survivants étaient stables, avant que le propriétaire signale que le parallélisme lui-même était le problème. Désormais : une branche, un écrivain.
+
+**Trois piliers.** Recherche : mesure ci-dessus, reproductibilité à prouver par deux runs complets du même commit à un worker. SSDLC : pas de nouvelle surface, le workflow n'a ni secret ni entrée externe. Opérationnel : sans objet, aucune donnée sensible.
+

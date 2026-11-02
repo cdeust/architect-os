@@ -49,7 +49,6 @@ indexes and `testFiles` maps them to their `.feature`. The committed reports kee
 | `missing-file.json`        | No file, `config.mutate` empty.                                                                                               |
 | `no-mutant.json`           | No file, `src/math.mjs` in `config.mutate`.                                                                                   |
 | `covered-by-feature.json`  | #0 without `coveredBy`, #1 covered by `green.feature` (no `static` field), #3 by both features, #4 static; `mod/a/src/a.mjs`. |
-| `no-coverage-data.json`    | `covered-by-feature` without any `coveredBy` (a run without perTest coverage).                                                |
 | `unsorted.json`            | For `debt`, see below.                                                                                                        |
 | `partial-line.json`        | From `survivor`: #9 added (synthetic, no real Stryker report holds it), `BlockStatement` Survived, 2:27 to 3:11.              |
 

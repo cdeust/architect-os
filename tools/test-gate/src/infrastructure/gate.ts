@@ -60,7 +60,7 @@ function mutationScope(
 ) {
   const debt = readDebt(config.debt, workspace, repository, firstParent);
   const production = workspace.glob(config.production);
-  return { debt, perimeter: perimeterOf(config, changes, production, retiredFiles(debt, production)) };
+  return { debt, perimeter: perimeterOf(config, changes, retiredFiles(debt, production)) };
 }
 
 function gate(

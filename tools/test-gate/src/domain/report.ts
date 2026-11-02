@@ -33,9 +33,6 @@ function mutationLines(verdict: Verdict): string[] {
     `- fichiers du périmètre : ${mutation.perimeter.judged.length}`,
     `- mutants du périmètre : ${mutation.mutants.length}`,
     ...[...statuses].sort().map(([status, n]) => `  - ${status} : ${n}`),
-    ...(mutation.coverageFallback
-      ? ['- couverture par test absente du rapport : (b) = tous les mutants des composants touchés']
-      : []),
     '- mutants invalides (signalés, pas rouges) :',
     ...list(mutation.invalid).map((line) => `  ${line}`),
   ];

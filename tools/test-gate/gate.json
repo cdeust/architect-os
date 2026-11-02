@@ -14,15 +14,6 @@
     "include": ["features/**/*.feature", "*/features/**/*.feature", "*/*/features/**/*.feature"],
     "exclude": ["**/node_modules/**"]
   },
-  "stepDefinitions": [
-    "features/steps/**/*.ts",
-    "features/support/**/*.ts",
-    "*/features/steps/**/*.ts",
-    "*/features/support/**/*.ts",
-    "*/*/features/steps/**/*.ts",
-    "*/*/features/support/**/*.ts"
-  ],
-  "components": ["packages/*", "data", "gateway", "services/*", "tools/*"],
   "jobs": {
     "linux": { "features": ["**/*.feature"], "mutation": true },
     "macos": { "features": ["features/sandbox/**/*.feature"], "mutation": false }

@@ -23,8 +23,6 @@ Feature: Test gate configuration and command line
       | production            | absent      | hors schéma : ✖ Invalid input: expected object, received undefined   → at production |
       | production.include    | []          | hors schéma : ✖ Too small: expected array to have >=1 items   → at production.include |
       | features.exclude      | absent      | hors schéma : ✖ Invalid input: expected array, received undefined   → at features.exclude |
-      | stepDefinitions       | []          | hors schéma : ✖ Too small: expected array to have >=1 items   → at stepDefinitions |
-      | components            | "packages"  | hors schéma : ✖ Invalid input: expected array, received string   → at components |
       | jobs.linux.mutation   | "yes"       | hors schéma : ✖ Invalid input: expected boolean, received string   → at jobs.linux.mutation |
       | jobs.linux.features   | [""]        | hors schéma : ✖ Too small: expected string to have >=1 characters   → at jobs.linux.features[0] |
       | jobs.linux.tags       | "@fast"     | hors schéma : ✖ Unrecognized key: "tags"   → at jobs.linux |
