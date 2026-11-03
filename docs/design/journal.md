@@ -606,6 +606,10 @@ Fixtures (dans `tools/test-gate/fixtures/`, rejouées à chaque run, local et CI
 
 **Décisions.** Un seul worker (`stryker.config.mjs`). `features/arch` hors du profil de mutation. Périmètre de la porte réduit aux lignes de production modifiées, décision du propriétaire ; `scopes`, `fallbackFiles`, `coverageFallback`, `componentOf`, `stepDefinitions` et `components` retirés. Run complet hors PR : `mutation-full.yml`, rouge si les survivants diffèrent du registre.
 
+**Preuve de reproductibilité.** Deux runs complets à un worker, 78 et 80 minutes : [41535542626](https://github.com/cdeust/architect-os/actions/runs/41535542626) (`96b7cb7`) et [41546674390](https://github.com/cdeust/architect-os/actions/runs/41546674390) (`43a582c`, vert). Sur 3 136 mutants, mêmes identités et un seul statut différent : le `.sort()` de `perimeterOf`, passé de `Survived` à `Killed` par le scénario ajouté entre les deux commits. Registre : 852 entrées, identiques à celles calculées par le second run. Stryker n'était pas en cause.
+
+**Durées de la porte.** 1 min 10 sans code de production ; 15 min sur 3 fichiers (270 mutants mutés, 19 jugés), car Stryker mute le fichier entier.
+
 **Risque accepté.** Un test affaibli sans toucher au code n'est plus vu à la PR, seulement au run complet suivant.
 
 **Erreurs à garder.** J'ai multiplié les branches sentinelles (28 sur le dépôt) et enchaîné des correctifs sur une prémisse fausse, que les survivants étaient stables, avant que le propriétaire signale que le parallélisme lui-même était le problème. Désormais : une branche, un écrivain.

@@ -8,10 +8,6 @@ on:
   schedule:
     - cron: '0 3 * * 1'
   workflow_dispatch:
-  push:
-    branches:
-      # TEMPORARY, for the proof of this file only: schedule and workflow_dispatch need it on the default branch.
-      - sentinel/mutation-full
 
 permissions:
   contents: read
