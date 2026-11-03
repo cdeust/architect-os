@@ -623,3 +623,38 @@ Fixtures (dans `tools/test-gate/fixtures/`, rejouées à chaque run, local et CI
 **Traitement.** Le propriétaire a révoqué la clé et supprimé le log du CI.
 
 **Pourquoi cette entrée.** La raison d'une décision doit être écrite. Le journal décrivait les défenses contre ce risque (aucun secret dans une sandbox ni dans un log, D13, §15), sans l'incident lui-même. D13 et la règle « aucun secret dans une sandbox ni dans un log » découlent de cet incident.
+
+## 19. Proxy d'authentification : politique du corps, mutants tués, outil de code sorti de son point d'entrée, 3 novembre 2026
+
+**Fait.** Le proxy lit le corps entier et répond 403 (`refused_by_policy` au journal d'usage) à un champ racine hors de `authProxy.policy` de `code.json`, à un outil typé côté serveur, à une image ou un document dont la source n'est pas dans le corps, à un corps au-delà de 64 Mio. Une liste de domaines accorde des capacités : par `api.anthropic.com`, ces champs feraient lire au modèle des données hors de portée de la sandbox. Commit `978bb20`, porte verte en local puis en CI : [41616405663](https://github.com/cdeust/architect-os/actions/runs/41616405663), Linux 8 min 52, macOS 32 s.
+
+**Mutation, fichiers entiers.**
+
+| Fichier | Tués | Délai | Ignorés justifiés | RuntimeError | Survivants, sans couverture |
+|---|---|---|---|---|---|
+| `auth-proxy.ts` | 233 | 31 | 5 | 6 | 0 |
+| `request-policy.ts` | 80 | 0 | 0 | 0 | 0 |
+| `tool.ts` | 26 | 0 | 1 | 0 | 0 |
+| `code-tool.ts` | 39 | 2 | 0 | 3 | 0 |
+| `code.ts` | aucun mutant | | | | |
+
+Chaque mutant ignoré porte sa raison d'équivalence sur la ligne précédente. Les RuntimeError sont détectés par un plantage, pas par une assertion : signalés, pas rouges.
+
+**Défauts trouvés en tuant les mutants.**
+1. Un journal d'usage impossible à écrire faisait planter le proxy après la réponse. Il est désormais créé au démarrage (dossier 700, fichier 600) ; une ligne qui ne s'écrit plus révoque le jeton de session.
+2. Un `message_start` sans message laissait une clé `model` vide dans l'usage.
+3. Des branches mortes : la vérification `typeof` des sources, le `else res.destroy()` d'une erreur de requête après la réponse (Node la signale sur la réponse), des `?? ''` sur des valeurs toujours définies.
+
+**`code.ts`.** Son `main()` n'était exécuté par aucun test (47 mutants sans couverture). Toute retouche de son corps rendait la porte rouge : le mutant qui vide le bloc couvre la ligne changée. La logique est passée dans `code-tool.ts`, testée avec un lanceur et un proxy factices ; `code.ts` est une affectation à `process.exitCode`, sans mutant. Lancé pour de vrai sur le chemin d'échec de l'identifiant (trousseau introuvable), il écrit l'erreur typée et sort avec 2 sans attendre. Le lancement complet reste le premier lancement réel du propriétaire.
+
+**Registre.** 852 → 713 entrées, aucune ajoutée : `auth-proxy.ts` 86, `code.ts` 49, `tool.ts` 4. L'identité d'une entrée porte sa position : modifier un fichier endetté oblige à tuer ses survivants décalés, comme le prévoit le §17.
+
+**Décisions du propriétaire, même jour.**
+- Outils : ceux d'Anthropic et de la communauté craftsmanship TypeScript et npm, en versions exactes. crapper, dryer et jscpd ne sont pas retenus. À intégrer : ESLint avec typescript-eslint (`complexity`), c8, fast-check.
+- `tools/test-gate` sera remplacé par les fonctions natives de Stryker (`mutate` par lignes, `thresholds.break`, directives `// Stryker disable`) et de Cucumber (`strict`, `retry: 0`). Seul le compte des scénarios exécutés contre la base (règles 1 à 4) est gardé, en formatter Cucumber.
+- Mutualiser n'est pas importer entre composants : le code commun (hôte HTTP, aides des steps, erreurs) ira dans des paquets partagés.
+- Les plugins `security-guidance` et `claude-security` sont activés pour le dépôt (`002a7a8`).
+
+**`--bare`.** La documentation de Claude Code annonce que `--bare` deviendra le mode par défaut de `-p`. Mesure sur Claude Code 2.1.314, faux amont local, aucune clé réelle : sous `--bare`, un hook n'est exécuté ni s'il vient d'un plugin chargé par `--plugin-dir`, ni s'il est déclaré dans `--settings` ; `permissions.deny` passé par `--settings` est appliqué. Le garde du builder, un hook, disparaîtrait sans bruit. Prévu : lancement explicite en `--bare` avec toutes les entrées déclarées dans `code.json`, règles du garde en `permissions.deny`, jeton de session en `x-api-key` par `apiKeyHelper`, et la sonde rejouable au banc.
+
+**Trois piliers.** Recherche : mesures ci-dessus, porte rejouée en local puis en CI. SSDLC : surface réduite (politique du corps, journal qui échoue fermé), aucune directive sans justification. Opérationnel : sans objet, aucune donnée sensible.
