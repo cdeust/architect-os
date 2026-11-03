@@ -21,7 +21,7 @@ import { refusalOf, type RequestPolicy } from './request-policy.js';
  * La sandbox ne connaît qu'un jeton de session aléatoire, refusé hors de la session (401) ; seules les routes
  * listées passent, en POST (403 sinon), avec un corps admis par la politique (`request-policy.ts`, 403 sinon), vers
  * l'amont fixe, avec l'`Authorization` remplacé. Une ligne d'`usage` par réponse (modèle, tokens, horodatage), sans
- * contenu ; un journal d'usage qui ne s'écrit plus révoque le jeton de session.
+ * contenu ; un journal d'usage qui ne s'écrit plus arrête le proxy (503, cause nommée).
  *
  * Pas de renouvellement OAuth ici : le jeton de rafraîchissement tourne à chaque usage, et le renouveler hors de
  * Claude Code sur l'hôte invaliderait la connexion de l'hôte. Le proxy relit le trousseau quand le jeton
@@ -229,14 +229,16 @@ export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthPro
   const { usageLog } = options;
   if (usageLog !== undefined) openUsageLog(usageLog);
   let revoked = false;
+  // La cause qui arrête le proxy, dite à chaque appelant authentifié ; null tant qu'il sert.
+  let stopped: string | null = null;
 
-  // Sans journal d'usage, plus de requête : une ligne qui ne s'écrit plus révoque le jeton de session.
+  // Sans journal d'usage, plus de requête : une ligne qui ne s'écrit plus arrête le proxy.
   const log = (record: UsageRecord) => {
     if (usageLog === undefined) return;
     try {
       appendFileSync(usageLog, `${JSON.stringify(record)}\n`);
     } catch {
-      revoked = true;
+      stopped = 'usage log unwritable: the auth proxy refuses every request until it restarts';
     }
   };
   const forward: Relay = { upstream: new URL(options.upstream), betas: options.betas, log };
@@ -244,6 +246,7 @@ export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthPro
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
     if (revoked || !sameSecret(String(req.headers['authorization']), `Bearer ${options.sessionToken}`))
       return fail(res, 401, 'authentication_error', 'session token required');
+    if (stopped !== null) return fail(res, 503, 'api_error', stopped);
     const path = String(req.url);
     if (req.method !== 'POST' || !routes.some((r) => r.test(path)))
       return fail(res, 403, 'permission_error', 'route refused by the auth proxy');

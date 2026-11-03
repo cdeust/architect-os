@@ -641,7 +641,7 @@ Fixtures (dans `tools/test-gate/fixtures/`, rejouées à chaque run, local et CI
 Chaque mutant ignoré porte sa raison d'équivalence sur la ligne précédente. Les RuntimeError sont détectés par un plantage, pas par une assertion : signalés, pas rouges.
 
 **Défauts trouvés en tuant les mutants.**
-1. Un journal d'usage impossible à écrire faisait planter le proxy après la réponse. Il est désormais créé au démarrage (dossier 700, fichier 600) ; une ligne qui ne s'écrit plus révoque le jeton de session.
+1. Un journal d'usage impossible à écrire faisait planter le proxy après la réponse. Il est désormais créé au démarrage (dossier 700, fichier 600) ; une ligne qui ne s'écrit plus arrête le proxy. Correction demandée par le propriétaire ensuite : la sandbox recevait « 401 session token required », qui cachait la cause ; elle reçoit 503 avec la cause, le jeton faux restant 401.
 2. Un `message_start` sans message laissait une clé `model` vide dans l'usage.
 3. Des branches mortes : la vérification `typeof` des sources, le `else res.destroy()` d'une erreur de requête après la réponse (Node la signale sur la réponse), des `?? ''` sur des valeurs toujours définies.
 

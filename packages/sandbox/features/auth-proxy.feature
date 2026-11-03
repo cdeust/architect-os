@@ -234,9 +234,16 @@ Feature: Auth proxy (host side, fake upstream, fake credential)
   Scenario: a usage log that cannot be created refuses to start the proxy
     Then starting a proxy whose usage log is under a file fails
 
-  Scenario: a usage log that can no longer be written revokes the session token
+  Scenario: a usage log that can no longer be written stops the proxy, which says so
     Given the usage log can no longer be written
     When I POST through the proxy "/v1/messages" with the body '{}'
     Then the proxy response status is 200
     When I POST through the proxy "/v1/messages" with the body '{}'
+    Then the proxy response status is 503
+    And the proxy response body is exactly:
+      """
+      {"type":"error","error":{"type":"api_error","message":"usage log unwritable: the auth proxy refuses every request until it restarts"}}
+      """
+    And the upstream received 1 request
+    When I POST through the proxy "/v1/messages" with the body '{}' and the session token "wrong"
     Then the proxy response status is 401
