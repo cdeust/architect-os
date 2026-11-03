@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { timingSafeEqual } from 'node:crypto';
+import { once } from 'node:events';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import {
   createServer,
@@ -12,13 +13,15 @@ import {
 import { request as httpsRequest } from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { dirname } from 'node:path';
+import { refusalOf, type RequestPolicy } from './request-policy.js';
 
 /**
  * Proxy d'authentification de l'outil 1a.0, natif, hors sandbox, sur 127.0.0.1. Seul détenteur de l'identifiant
  * Claude de l'hôte : il le lit à la demande (trousseau), le garde en mémoire, ne l'écrit ni ne le journalise jamais.
  * La sandbox ne connaît qu'un jeton de session aléatoire, refusé hors de la session (401) ; seules les routes
- * listées passent, en POST (403 sinon), vers l'amont fixe, avec l'`Authorization` remplacé. Une ligne d'`usage`
- * par réponse (modèle, tokens, horodatage), sans contenu.
+ * listées passent, en POST (403 sinon), avec un corps admis par la politique (`request-policy.ts`, 403 sinon), vers
+ * l'amont fixe, avec l'`Authorization` remplacé. Une ligne d'`usage` par réponse (modèle, tokens, horodatage), sans
+ * contenu ; un journal d'usage qui ne s'écrit plus révoque le jeton de session.
  *
  * Pas de renouvellement OAuth ici : le jeton de rafraîchissement tourne à chaque usage, et le renouveler hors de
  * Claude Code sur l'hôte invaliderait la connexion de l'hôte. Le proxy relit le trousseau quand le jeton
@@ -39,6 +42,7 @@ export interface AuthProxyOptions {
   readonly credential: CredentialSource;
   /** Valeurs `anthropic-beta` exigées par l'identifiant (OAuth). */
   readonly betas: readonly string[];
+  readonly policy: RequestPolicy;
   readonly usageLog?: string;
 }
 
@@ -77,7 +81,6 @@ const HOP_BY_HOP = new Set([
   'x-api-key',
   'accept-encoding',
 ]);
-const USAGE_BUFFER_LIMIT = 4 * 1024 * 1024;
 
 const sameSecret = (a: string, b: string): boolean => {
   const x = Buffer.from(a);
@@ -85,15 +88,40 @@ const sameSecret = (a: string, b: string): boolean => {
   return x.length === y.length && timingSafeEqual(x, y);
 };
 
+/** Le corps entier, ou null au-delà de la limite ; au-delà, la suite est lue sans être gardée. */
+async function readBody(req: IncomingMessage, limit: number): Promise<Buffer | null> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req as AsyncIterable<Buffer>) {
+    size += chunk.length;
+    // Stryker disable next-line ConditionalExpression: équivalent: seule la mémoire gardée diffère, un corps au-delà de la limite donne null de toute façon.
+    if (size <= limit) chunks.push(chunk);
+  }
+  return size > limit ? null : Buffer.concat(chunks);
+}
+
+/** Le corps admis par la politique, ou la raison du refus. */
+async function admit(
+  req: IncomingMessage,
+  policy: RequestPolicy,
+): Promise<{ body: Buffer } | { refusal: string }> {
+  const body = await readBody(req, policy.maxBodyBytes);
+  if (body === null) return { refusal: 'body too large' };
+  const refusal = refusalOf(body.toString('utf8'), policy);
+  return refusal === null ? { body } : { refusal };
+}
+
 const fail = (res: ServerResponse, status: number, type: string, message: string): void => {
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ type: 'error', error: { type, message } }));
 };
 
+/** Les en-têtes d'un sens à l'autre, sans ceux d'un saut (`HOP_BY_HOP`). */
+const withoutHopByHop = (headers: IncomingHttpHeaders): OutgoingHttpHeaders =>
+  Object.fromEntries(Object.entries(headers).filter(([name]) => !HOP_BY_HOP.has(name)));
+
 function forwardHeaders(headers: IncomingHttpHeaders, token: string, betas: readonly string[]) {
-  const out: OutgoingHttpHeaders = {};
-  for (const [name, value] of Object.entries(headers))
-    if (value !== undefined && !HOP_BY_HOP.has(name)) out[name] = value;
+  const out = withoutHopByHop(headers);
   const present = String(headers['anthropic-beta'] ?? '')
     .split(',')
     .map((b) => b.trim())
@@ -104,6 +132,9 @@ function forwardHeaders(headers: IncomingHttpHeaders, token: string, betas: read
   out['accept-encoding'] = 'identity';
   return out;
 }
+
+/** Le modèle d'une réponse, s'il est une chaîne. */
+const modelOf = (model: unknown): { model?: string } => (typeof model === 'string' ? { model } : {});
 
 /** Extrait modèle et tokens d'une réponse JSON ou SSE de l'API Messages ; jamais le contenu. */
 export function usageOf(contentType: string, body: string): Omit<UsageRecord, 'at' | 'status'> {
@@ -125,22 +156,22 @@ export function usageOf(contentType: string, body: string): Omit<UsageRecord, 'a
         if (!line.startsWith('data:')) continue;
         const event = JSON.parse(line.slice(5)) as {
           type?: string;
-          message?: { model?: string; usage?: Record<string, unknown> };
+          message?: { model?: unknown; usage?: Record<string, unknown> };
           usage?: Record<string, unknown>;
         };
         if (event.type === 'message_start')
-          record = { ...record, model: event.message?.model, ...pick(event.message?.usage) };
+          record = { ...record, ...modelOf(event.message?.model), ...pick(event.message?.usage) };
         if (event.type === 'message_delta') record = { ...record, ...pick(event.usage) };
       }
       return record;
     }
     const json = JSON.parse(body) as {
-      model?: string;
+      model?: unknown;
       usage?: Record<string, unknown>;
       error?: { type?: unknown };
     };
     return {
-      ...(json.model ? { model: json.model } : {}),
+      ...modelOf(json.model),
       ...(typeof json.error?.type === 'string' ? { error_type: json.error.type } : {}),
       ...pick(json.usage),
     };
@@ -149,72 +180,98 @@ export function usageOf(contentType: string, body: string): Omit<UsageRecord, 'a
   }
 }
 
+/** Crée le journal d'usage, privé (dossier 700, fichier 600) : un journal impossible à créer empêche le démarrage. */
+function openUsageLog(path: string): void {
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  appendFileSync(path, '', { mode: 0o600 });
+}
+
+/** Ce que le relais d'une requête admise partage avec le proxy. */
+interface Relay {
+  readonly upstream: URL;
+  readonly betas: readonly string[];
+  readonly log: (record: UsageRecord) => void;
+}
+
+/** Relaie une requête admise vers l'amont et rend sa réponse au client, en flux ; une ligne d'usage à la fin. */
+function relay(relay: Relay, req: IncomingMessage, res: ServerResponse, body: Buffer, token: string): void {
+  const path = String(req.url);
+  const send = relay.upstream.protocol === 'https:' ? httpsRequest : httpRequest;
+  const outgoing = send(
+    new URL(path, relay.upstream),
+    { method: 'POST', headers: forwardHeaders(req.headers, token, relay.betas) },
+    (up) => {
+      res.writeHead(up.statusCode ?? 502, withoutHopByHop(up.headers));
+      let answer = '';
+      up.on('data', (chunk: Buffer) => {
+        answer += chunk.toString('utf8');
+        res.write(chunk);
+      });
+      up.on('end', () => {
+        res.end();
+        relay.log({
+          at: new Date().toISOString(),
+          status: up.statusCode ?? 0,
+          route: path.split('?')[0],
+          ...usageOf(String(up.headers['content-type']), answer),
+        });
+      });
+      up.on('error', () => res.destroy());
+    },
+  );
+  // Avant la réponse seulement : passé ses en-têtes, Node signale une coupure sur `up`, pas sur la requête.
+  outgoing.on('error', () => fail(res, 502, 'api_error', 'upstream unreachable'));
+  outgoing.end(body);
+}
+
 export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthProxy> {
-  const upstream = new URL(options.upstream);
   const routes = options.routes.map((r) => new RegExp(r));
-  const send = upstream.protocol === 'https:' ? httpsRequest : httpRequest;
+  const { usageLog } = options;
+  if (usageLog !== undefined) openUsageLog(usageLog);
   let revoked = false;
 
+  // Sans journal d'usage, plus de requête : une ligne qui ne s'écrit plus révoque le jeton de session.
   const log = (record: UsageRecord) => {
-    if (options.usageLog === undefined) return;
-    mkdirSync(dirname(options.usageLog), { recursive: true, mode: 0o700 });
-    appendFileSync(options.usageLog, `${JSON.stringify(record)}\n`, { mode: 0o600 });
+    if (usageLog === undefined) return;
+    try {
+      appendFileSync(usageLog, `${JSON.stringify(record)}\n`);
+    } catch {
+      revoked = true;
+    }
   };
+  const forward: Relay = { upstream: new URL(options.upstream), betas: options.betas, log };
 
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
-    const presented = String(req.headers['authorization'] ?? '');
-    if (revoked || !sameSecret(presented, `Bearer ${options.sessionToken}`))
+    if (revoked || !sameSecret(String(req.headers['authorization']), `Bearer ${options.sessionToken}`))
       return fail(res, 401, 'authentication_error', 'session token required');
-    const path = req.url ?? '/';
+    const path = String(req.url);
     if (req.method !== 'POST' || !routes.some((r) => r.test(path)))
       return fail(res, 403, 'permission_error', 'route refused by the auth proxy');
+    const admitted = await admit(req, options.policy);
+    if ('refusal' in admitted) {
+      log({
+        at: new Date().toISOString(),
+        status: 403,
+        route: path.split('?')[0],
+        error_type: 'refused_by_policy',
+      });
+      return fail(res, 403, 'permission_error', `refused by the auth proxy: ${admitted.refusal}`);
+    }
     let credential: Credential;
     try {
       credential = await options.credential();
     } catch {
       return fail(res, 503, 'api_error', 'host credential unavailable: sign in with claude on the host');
     }
-    const outgoing = send(
-      new URL(path, upstream),
-      { method: 'POST', headers: forwardHeaders(req.headers, credential.accessToken, options.betas) },
-      (up) => {
-        const headers: OutgoingHttpHeaders = {};
-        for (const [name, value] of Object.entries(up.headers))
-          if (value !== undefined && !HOP_BY_HOP.has(name)) headers[name] = value;
-        res.writeHead(up.statusCode ?? 502, headers);
-        let body = '';
-        up.on('data', (chunk: Buffer) => {
-          if (body.length < USAGE_BUFFER_LIMIT) body += chunk.toString('utf8');
-          res.write(chunk);
-        });
-        up.on('end', () => {
-          res.end();
-          log({
-            at: new Date().toISOString(),
-            status: up.statusCode ?? 0,
-            route: path.split('?')[0] ?? path,
-            ...usageOf(String(up.headers['content-type'] ?? ''), body),
-          });
-        });
-        up.on('error', () => res.destroy());
-      },
-    );
-    outgoing.on('error', () => {
-      if (!res.headersSent) fail(res, 502, 'api_error', 'upstream unreachable');
-      else res.destroy();
-    });
-    req.pipe(outgoing);
+    relay(forward, req, res, admitted.body, credential.accessToken);
   };
 
   const server = createServer((req, res) => {
-    handle(req, res).catch(() => {
-      if (!res.headersSent) fail(res, 500, 'api_error', 'auth proxy error');
-    });
+    // Stryker disable next-line ArrowFunction,StringLiteral,BlockStatement: équivalent: seule la lecture du corps rejette ici, quand le client a interrompu sa requête ; il ne lit plus la réponse.
+    handle(req, res).catch(() => fail(res, 500, 'api_error', 'auth proxy error'));
   });
-  await new Promise<void>((done, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', done);
-  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
   return {
     port: (server.address() as AddressInfo).port,
     revoke: () => {
@@ -233,10 +290,14 @@ export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthPro
  * `{ claudeAiOauth: { accessToken, expiresAt } }`. Relu quand l'expiration approche ; rien n'est écrit.
  * Une erreur ne porte jamais la sortie de la commande.
  */
-export function commandCredential(argv: readonly string[], marginMs = 60_000): CredentialSource {
+export function commandCredential(
+  argv: readonly string[],
+  marginMs = 60_000,
+  now: () => number = Date.now,
+): CredentialSource {
   let cached: Credential | undefined;
   const fresh = (c: Credential | undefined): c is Credential =>
-    c !== undefined && (c.expiresAt === undefined || c.expiresAt - Date.now() > marginMs);
+    c !== undefined && (c.expiresAt === undefined || c.expiresAt - now() > marginMs);
   const read = () =>
     new Promise<Credential>((done, reject) => {
       const [command, ...args] = argv;

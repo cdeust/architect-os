@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { loadTool, parseTool, type Tool } from '../../src/tool.js';
+import type { AuthProxyOptions, CredentialSource } from '../../src/auth-proxy.js';
+import { authProxyOptions, loadTool, parseTool, type Tool } from '../../src/tool.js';
 import { PKG, ROOT, Then, When, stored } from './helpers.js';
 
 const committed = (): Record<string, any> =>
@@ -12,8 +14,46 @@ const DEFECTS: Record<string, (t: Record<string, any>) => unknown> = {
   'a misspelt key': (t) => (t['plugins'] = []),
   'an empty command': (t) => (t['command'] = []),
   'a plain-http upstream': (t) => (t['authProxy']['upstream'] = 'http://api.anthropic.com'),
+  'an xhttps upstream': (t) => (t['authProxy']['upstream'] = 'xhttps://api.anthropic.com'),
+  'an httpsx upstream': (t) => (t['authProxy']['upstream'] = 'httpsx://api.anthropic.com'),
   'an unanchored route': (t) => (t['authProxy']['routes'] = ['/v1/messages']),
+  'no body field': (t) => (t['authProxy']['policy']['bodyFields'] = []),
+  'a zero body size limit': (t) => (t['authProxy']['policy']['maxBodyBytes'] = 0),
+  'a fractional body size': (t) => (t['authProxy']['policy']['maxBodyBytes'] = 1.5),
 };
+
+const credentialSource: CredentialSource = async () => ({ accessToken: 'unused' });
+
+When('I build the auth proxy options with the session token {string}', function (sessionToken: string) {
+  this.state['options'] = authProxyOptions(stored<Tool>(this, 'tool'), sessionToken, credentialSource);
+});
+
+Then('the auth proxy options carry the upstream, routes, betas and policy of code.json', function () {
+  const { upstream, routes, betas, policy } = stored<AuthProxyOptions>(this, 'options');
+  const { authProxy } = committed();
+  assert.deepEqual(
+    { upstream, routes, betas, policy },
+    {
+      upstream: authProxy['upstream'],
+      routes: authProxy['routes'],
+      betas: authProxy['betas'],
+      policy: authProxy['policy'],
+    },
+  );
+});
+
+Then(
+  'the auth proxy options carry the session token {string} and the given credential source',
+  function (token: string) {
+    const options = stored<AuthProxyOptions>(this, 'options');
+    assert.equal(options.sessionToken, token);
+    assert.equal(options.credential, credentialSource);
+  },
+);
+
+Then('the auth proxy usage log is {string} under the home directory', function (path: string) {
+  assert.equal(stored<AuthProxyOptions>(this, 'options').usageLog, join(homedir(), path));
+});
 
 When('I load the committed code.json', function () {
   this.state['tool'] = loadTool(join(PKG, 'code.json'));
@@ -46,6 +86,16 @@ When('I break a copy of the committed code.json with {}', function (defect: stri
   const broken = committed();
   breakIt(broken);
   this.state['broken'] = broken;
+});
+
+When('I change a copy of the committed code.json to have two routes', function () {
+  const changed = committed();
+  changed['authProxy']['routes'] = ['^/v1/messages$', '^/v1/messages/count_tokens$'];
+  this.state['changed'] = changed;
+});
+
+Then('parsing the changed code.json succeeds', function () {
+  assert.doesNotThrow(() => parseTool(stored(this, 'changed')));
 });
 
 Then('parsing the broken code.json fails', function () {

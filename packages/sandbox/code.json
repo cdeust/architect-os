@@ -7,6 +7,24 @@
     "upstream": "https://api.anthropic.com",
     "routes": ["^/v1/messages(/count_tokens)?(\\?[^#]*)?$"],
     "betas": ["oauth-2025-04-20"],
+    "policy": {
+      "bodyFields": [
+        "context_management",
+        "max_tokens",
+        "messages",
+        "metadata",
+        "model",
+        "output_config",
+        "stop_sequences",
+        "stream",
+        "system",
+        "temperature",
+        "thinking",
+        "tool_choice",
+        "tools"
+      ],
+      "maxBodyBytes": 67108864
+    },
     "credentialCommand": [
       "/usr/bin/security",
       "find-generic-password",

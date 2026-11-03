@@ -9,6 +9,10 @@ When('I read the usage of an {string} body {string}', function (contentType: str
   this.state['usage'] = usageOf(contentType, body);
 });
 
+When('I read the usage of a server-sent-events body:', function (body: string) {
+  this.state['usage'] = usageOf('text/event-stream', body);
+});
+
 Then('the usage is {string}', function (json: string) {
   assert.deepEqual(stored(this, 'usage'), JSON.parse(json));
 });
@@ -86,4 +90,41 @@ Then('the credential command ran {int} time(s)', function (times: number) {
 
 Then('reading the credential is refused with {string}', async function (pattern: string) {
   await assert.rejects(stored<CredentialSource>(this, 'source')(), messageMatches(pattern));
+});
+
+Given('a credential command that prints the JSON {string}', function (json: string) {
+  this.state['source'] = commandCredential(script(this, `console.log(${JSON.stringify(json)});`));
+});
+
+Then('reading the credential gives {string}', async function (json: string) {
+  assert.deepEqual(await stored<CredentialSource>(this, 'source')(), JSON.parse(json));
+});
+
+Given('a credential command with no argv', function () {
+  this.state['source'] = commandCredential([]);
+});
+
+Given('a credential command that prints a valid credential padded to {int} bytes', function (size: number) {
+  const json = JSON.stringify({ claudeAiOauth: { accessToken: 'a' } });
+  const padded = json + ' '.repeat(size - json.length);
+  this.state['source'] = commandCredential(script(this, `process.stdout.write(${JSON.stringify(padded)});`));
+});
+
+Given(
+  'a credential command that prints the access token {string} expiring at {int} ms, read with the clock at {int} ms',
+  function (token: string, expiresAt: number, now: number) {
+    const argv = script(
+      this,
+      `console.log(JSON.stringify({ claudeAiOauth: { accessToken: ${JSON.stringify(token)}, expiresAt: ${expiresAt} } }));`,
+    );
+    this.state['source'] = commandCredential(argv, 60_000, () => now);
+  },
+);
+
+Then('reading the credential is refused', async function () {
+  await assert.rejects(stored<CredentialSource>(this, 'source')(), messageMatches('expired'));
+});
+
+Then('reading the credential is accepted', async function () {
+  await assert.doesNotReject(stored<CredentialSource>(this, 'source')());
 });
