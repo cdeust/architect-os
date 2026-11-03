@@ -80,3 +80,31 @@ Then('the committed .claude\\/settings.json is valid JSON with permission rule l
     settings,
   );
 });
+
+/** Project settings: the plugins every session in this repository runs with. */
+const PluginsSchema = z.object({ enabledPlugins: z.record(z.string(), z.boolean()) });
+const SECURITY_PLUGINS = [
+  'security-guidance@claude-plugins-official',
+  'claude-security@claude-plugins-official',
+];
+
+function assertSecurityPlugins(settings: unknown): void {
+  const { enabledPlugins } = PluginsSchema.parse(settings);
+  for (const plugin of SECURITY_PLUGINS)
+    assert.equal(enabledPlugins[plugin], true, `${plugin} is not enabled`);
+}
+
+const committedSettings = (): unknown =>
+  JSON.parse(readFileSync(join(ROOT, '.claude/settings.json'), 'utf8')) as unknown;
+
+Then('the committed .claude\\/settings.json enables {string}', function (plugin: string) {
+  assert.ok(SECURITY_PLUGINS.includes(plugin), `${plugin} is not a security plugin of the guard`);
+  assertSecurityPlugins(committedSettings());
+});
+
+Then('a .claude\\/settings.json that turns {string} off is rejected', function (plugin: string) {
+  const settings = PluginsSchema.parse(committedSettings());
+  assert.throws(() =>
+    assertSecurityPlugins({ ...settings, enabledPlugins: { ...settings.enabledPlugins, [plugin]: false } }),
+  );
+});

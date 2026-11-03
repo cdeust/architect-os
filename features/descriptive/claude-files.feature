@@ -30,3 +30,8 @@ Feature: .claude descriptive files
 
   Scenario: .claude/settings.json stays valid JSON with permission rule lists
     Then the committed .claude/settings.json is valid JSON with permission rule lists
+
+  Scenario: .claude/settings.json enables the security plugins of the official marketplace
+    Then the committed .claude/settings.json enables "security-guidance@claude-plugins-official"
+    And the committed .claude/settings.json enables "claude-security@claude-plugins-official"
+    And a .claude/settings.json that turns "claude-security@claude-plugins-official" off is rejected

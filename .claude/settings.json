@@ -1,5 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enabledPlugins": {
+    "security-guidance@claude-plugins-official": true,
+    "claude-security@claude-plugins-official": true
+  },
   "permissions": {
     "allow": ["Bash(npm run *)", "Bash(npm test)", "Bash(npx cucumber-js *)"],
     "deny": [
