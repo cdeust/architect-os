@@ -9,3 +9,4 @@ bench
 docs/communication/deck
 /.stryker-tmp
 /reports
+.claude/skills/ub-mode
