@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync, symlinkSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import type { MutantRecord } from '../../src/domain/mutation.js';
 import {
@@ -269,10 +268,22 @@ Then('the replay runner left no file descriptor open', function () {
   assert.equal(this.state['descriptors'], 0);
 });
 
-/** The `ps` state of a process: '' once it is gone, `Z…` for a zombie, dead and not yet reaped by its new parent. */
+/**
+ * The state of a process: '' once it is gone, `Z` for a zombie (dead, not yet reaped by its new parent). Linux:
+ * /proc/<pid>/stat, whose third field is the state (proc(5)); elsewhere kill(pid, 0), which ends with ESRCH once the
+ * process is reaped. No command is launched: process launching lives behind the port (.dependency-cruiser.cjs).
+ */
 const stateOf = (pid: number): string => {
+  if (existsSync('/proc')) {
+    try {
+      return readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1]?.charAt(0) ?? '';
+    } catch {
+      return '';
+    }
+  }
   try {
-    return execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' }).trim();
+    process.kill(pid, 0);
+    return 'S';
   } catch {
     return '';
   }
