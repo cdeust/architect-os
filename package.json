@@ -26,7 +26,9 @@
     "lint": "npm run format:check --silent && npm run typecheck --silent",
     "check": "npm test",
     "gate": "sh tools/test-gate/gate.sh",
-    "baseline:pilot": "node --import tsx baseline/run.ts"
+    "baseline:pilot": "node --import tsx baseline/run.ts",
+    "baseline:campaign": "BASELINE_REPEATS=3 node --import tsx baseline/run.ts",
+    "baseline:analyze": "node --import tsx baseline/analyze.ts"
   },
   "devDependencies": {
     "@cucumber/cucumber": "12.9.0",

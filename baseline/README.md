@@ -1,6 +1,6 @@
 # Baseline de coût
 
-Brique 0 de `docs/design/platform-v3-srt.md` : mesurer, sur de vraies tâches, ce que coûte une session de code selon la façon dont Claude Code est lancé. Le pilote en cours compare trois configurations ; la campagne complète attend la décision du propriétaire sur le volume.
+Brique 0 de `docs/design/platform-v3-srt.md` : mesurer, sur de vraies tâches, ce que coûte une session de code selon la façon dont Claude Code est lancé. Trois configurations, vingt tâches ; le pilote (une session par cellule) puis la campagne (trois répétitions, 180 sessions) sont consignés au journal, §22 et §23.
 
 | Configuration | Lancement                                                                                                                                                          |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -18,10 +18,12 @@ Les trois reçoivent le même modèle, la même consigne, `--permission-mode acc
 
 ```bash
 npm run baseline:pilot
+npm run baseline:campaign
+npm run baseline:analyze -- baseline/results/campaign-<date>.jsonl
 ```
 
 `BASELINE_DRY=1` prépare et vérifie chaque copie sans lancer de session ; `BASELINE_TASKS` et `BASELINE_CONFIGS` restreignent le run. Les sessions consomment le forfait du propriétaire ; le coût publié est `total_cost_usd` de `claude -p --output-format json`, au tarif public. Chaque session écrit une ligne dans `results/pilot-<date>.jsonl` (usage, coût, tours, durées, résolution, diff, texte final) ; `results/pilot-<date>.usage.jsonl` est le journal d'usage du proxy pour `host-bare`.
 
 ## Propreté des cibles
 
-Les dépôts sont clonés en miroir dans un dossier temporaire ; chaque session travaille dans un clone local de ce miroir, dans un worktree `.claude/worktrees/bench`, jamais poussé. Les références distantes (`git ls-remote`) sont relevées avant et comparées après ; le résultat est la dernière ligne du fichier de résultats (`remotesUntouched`).
+Les dépôts sont clonés en miroir dans un dossier temporaire ; chaque session travaille dans un clone local de ce miroir, dans un worktree `.claude/worktrees/bench`, jamais poussé. Les branches et les tags distants (`git ls-remote --heads --tags`) sont relevés avant et comparés après ; la dernière ligne du fichier de résultats dit s'ils sont intacts (`remotesUntouched`) et nomme chaque référence qui a changé (`remoteChanges`), pour distinguer un push venu d'ailleurs. L'`origin` des copies est le cache local, et les sessions ne peuvent lancer que la commande de test.

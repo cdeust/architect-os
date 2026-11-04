@@ -746,3 +746,29 @@ Lecture prudente : l'écart `host` / `host-bare` vient du contexte chargé à ch
 **Reste.** Le volume de la campagne, au propriétaire ; 17 tâches de plus, construites de la même façon ; les intervalles de confiance ; le texte de la publication, soumis au propriétaire avant toute publication.
 
 **Trois piliers.** Recherche : tâches épinglées par commit, préconditions vérifiées avant chaque session, une commande (`npm run baseline:pilot`), échecs conservés. SSDLC : cibles jamais poussées, références distantes comparées avant et après (intactes) ; `host` et `host-bare` tournent sur l'hôte avec la seule commande de test autorisée, `srt` dans la sandbox. Opérationnel : aucune donnée privée, cibles publiques seulement ; aucune clé réelle hors du trousseau du propriétaire.
+
+## 23. Baseline de coût, campagne, 4 novembre 2026
+
+**Décision du propriétaire.** Campagne complète : 20 tâches, 3 configurations, 3 répétitions, 180 sessions.
+
+**Fait.** 17 tâches ajoutées aux 3 du pilote, sur six dépôts publics du propriétaire (`Cortex` 4, `zetetic-team-subagents` 4, `cortex-viz` 3, `claude-mods` 3, `session-optimizer` 3, `ai-architect-mcp-spec` 3 ; Python et TypeScript). Les défauts viennent de `baseline/find-defects.ts`, qui essaie des mutations d'une ligne (comparaison, opérateur booléen, constante) et ne garde que celles qui cassent de un à cinq tests ; le choix parmi les candidats est fait à la main, de préférence des bornes et des décalages d'un. Deux candidats écartés à l'essai à blanc : leur ligne existait deux fois dans le fichier. Dépendances des dépôts Python avec lockfile installées à la préparation par `uv sync --frozen --python-preference only-system` (l'interpréteur géré x86_64 de uv ne s'exécute pas sur cet hôte) ; les sessions lancent `.venv/bin/python -m pytest`, sans réseau. Le cache ne récupère que les commits épinglés, à profondeur 1 : le miroir complet de `Cortex` coûtait plus de dix minutes par run. Le contrôle des dépôts distants ne lit plus que les branches et les tags : `refs/pull/*` change à chaque revue de pull request.
+
+**Résultats** (`baseline/results/campaign-2026-11-04T12-34-42-853Z.jsonl`, analyse `baseline/results/campaign-2026-11-04T12-34-42-853Z.md` par `baseline/analyze.ts`). Claude Code 2.1.318, `claude-sonnet-5-5`.
+
+| Configuration | Résolues | Coût moyen par session | Tokens d'entrée moyens | Écriture de cache moyenne |
+|---|---|---|---|---|
+| `host` | 60 / 60 | 0,1917 $ | 169 300 | 42 138 |
+| `host-bare` | 60 / 60 | 0,0280 $ | 31 929 | 5 591 |
+| `srt` | 60 / 60 | 0,0321 $ | 41 628 | 6 117 |
+
+Rapports appariés par tâche, moyenne et intervalle à 95 % par bootstrap sur les 20 tâches (10 000 tirages, graine fixe) : `host-bare` / `host` 0,146 (0,123 à 0,173) ; `srt` / `host` 0,166 (0,131 à 0,212) ; `srt` / `host-bare` 1,108 (1,021 à 1,213). Aucun fichier de test modifié, aucune session non résolue. Coût total de la campagne : 15,11 $ au tarif public.
+
+**Lecture.** L'économie vient du contexte chargé à chaque session par la configuration habituelle (plugins, serveurs MCP, hooks, mémoire : environ 42 000 tokens écrits en cache par session, contre 6 000), donc de `--bare` et des entrées explicites, que tout utilisateur peut obtenir sans srt. srt coûte environ 11 % de plus que l'hôte en `--bare`. Une partie vient de l'environnement isolé : sous srt, un test de `session-optimizer` (`test_readme_test_the_guard_snippet_fires_block_on_first_and_second_run`) échoue, faute du `/tmp` et du `HOME` de l'hôte, et l'agent passe des tours à l'investiguer (jusqu'à 29 tours, contre 8 à 12 ailleurs) ; le contrôle, lui, tourne sur l'hôte.
+
+**Dépôts distants.** Quatre branches de `Cortex` ont changé pendant la campagne (`main`, `ci/claude-mentions-review-fixes`, `fix/343-outcome-task-verifier`, `fix/683-groomer-degrade-paths`) : trois commits de sessions `claude` et un merge du propriétaire sur GitHub, sans rapport avec les tâches. Les copies du banc n'ont jamais eu GitHub pour `origin`, et les sessions n'avaient le droit de lancer que la commande de test.
+
+**Limites.** Un seul modèle et une seule version de Claude Code ; des défauts d'une ligne, injectés, avec leurs tests nommés, plus faciles qu'une vraie issue ; la configuration `host` est celle du propriétaire, et l'économie dépend de ce qu'une configuration charge ; coût au tarif public, alors que les sessions passent par le forfait du propriétaire.
+
+**Reste.** Le texte de la publication, soumis au propriétaire ; rien n'est publié avant son accord.
+
+**Trois piliers.** Recherche : 180 sessions, intervalles de confiance, données et analyse versionnées, une commande par étape (`npm run baseline:campaign`, puis `npm run baseline:analyze -- <fichier>`). SSDLC : cibles jamais poussées, changements distants nommés et attribués. Opérationnel : dépôts publics seulement, aucune clé réelle hors du trousseau.
