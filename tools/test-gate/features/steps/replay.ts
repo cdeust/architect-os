@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import type { MutantRecord } from '../../src/domain/mutation.js';
@@ -268,9 +269,23 @@ Then('the replay runner left no file descriptor open', function () {
   assert.equal(this.state['descriptors'], 0);
 });
 
-Then('the child process left behind is gone', function () {
+/** The `ps` state of a process: '' once it is gone, `Z…` for a zombie, dead and not yet reaped by its new parent. */
+const stateOf = (pid: number): string => {
+  try {
+    return execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' }).trim();
+  } catch {
+    return '';
+  }
+};
+
+Then('the child process left behind is gone', async function () {
   const pid = Number(repository(this).read('orphan.pid'));
-  assert.throws(() => process.kill(pid, 0), /ESRCH/);
+  let state = stateOf(pid);
+  for (let tries = 0; tries < 30 && state !== '' && !state.startsWith('Z'); tries++) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    state = stateOf(pid);
+  }
+  assert.ok(state === '' || state.startsWith('Z'), `process ${pid} still running: ${state}`);
 });
 
 Then('the replay runner measured the run, within its wall time', function () {
