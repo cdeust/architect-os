@@ -19,25 +19,29 @@ client --> proxy --> gateway --> services/memory --> worker (container)
 
 The architecture is enforced, not just described: `npm run arch` fails on a wrong layer import, a cross-component import, `pg` outside `data/src/infrastructure`, the agent SDK outside a worker, the MCP SDK outside presentation/infrastructure, or a cycle.
 
-## Cost baseline: 180 measured sessions
+## Cost baseline: the fixed cost of a session's context, on short fix tasks
 
-What does a coding session cost depending on how Claude Code is launched, and what does isolation cost? Three configurations, with the same model (`claude-sonnet-5-5`), Claude Code version (2.1.318), prompt, permission mode and single allowed command:
+**What this measures, and what it does not.** It measures the cost a launch configuration adds to every session, on short tasks: one-line defects whose failing tests are named in the prompt, solved in a median of 4 to 8 turns depending on the configuration (29 at most) and about 25 seconds (13 to 46 seconds for 80 % of them). On sessions that short, the context loaded at start dominates the bill. It does **not** measure the cost of a real working session: on a long session of many turns, that fixed part is diluted and the gap between configurations is expected to shrink, by an amount not measured here. Every task was solved in every configuration (180 / 180), so these tasks cannot tell whether a configuration solves harder work less well. And srt is an isolation layer, not a saving: what it adds is the protection of the host, at a measured price.
+
+Three configurations, with the same model (`claude-sonnet-5-5`), Claude Code version (2.1.318), prompt, permission mode and single allowed command:
 
 - **host**: Claude Code as the owner uses it every day, with plugins, MCP servers, hooks and memory;
 - **host-bare**: the same Claude Code with `--bare`, every input explicit, no sandbox;
-- **srt**: the code tool of this repository (`packages/sandbox`): `--bare` inside the srt sandbox, the model reached through a local proxy that alone holds the credential.
+- **srt**: the code tool of this repository (`packages/sandbox`): `--bare` inside the srt sandbox, the model reached through a local proxy that alone holds the credential. The session cannot read the host's keys or keychain, reach anything but the proxy, or write outside its worktree.
 
 Twenty tasks on six public repositories of the owner (Python and TypeScript). Each injects a one-line defect into a disposable copy of a pinned commit and asks to make the named tests pass again without touching them; the check is verified to pass at the commit and fail with the defect before every session, and runs again on the host after it. Three repetitions per task and configuration. Cost is `total_cost_usd` of `claude -p --output-format json`, at public prices. The target repositories are never pushed; their branches and tags are compared before and after.
 
-| Configuration | Solved  | Mean cost per session | Mean input tokens |
-| ------------- | ------- | --------------------- | ----------------- |
-| host          | 60 / 60 | $0.192                | 169,300           |
-| host-bare     | 60 / 60 | $0.028                | 31,900            |
-| srt           | 60 / 60 | $0.032                | 41,600            |
+| Configuration | Solved  | Mean cost per session | Mean input tokens | Cache written per session | Mean turns |
+| ------------- | ------- | --------------------- | ----------------- | ------------------------- | ---------- |
+| host          | 60 / 60 | $0.192                | 169,300           | 42,100                    | 4.5        |
+| host-bare     | 60 / 60 | $0.028                | 31,900            | 5,600                     | 7.8        |
+| srt           | 60 / 60 | $0.032                | 41,600            | 6,100                     | 8.4        |
 
-Cost ratios paired by task, mean and 95 % interval (bootstrap over the 20 tasks): host-bare / host **0.146** (0.123 to 0.173); srt / host **0.166** (0.131 to 0.212), about 83 % less; srt / host-bare **1.108** (1.021 to 1.213), about 11 % more. Every session solved its task without modifying a test.
+Cost ratios paired by task, mean and 95 % interval (bootstrap over the 20 tasks), **for these short sessions**: host-bare / host **0.146** (0.123 to 0.173); srt / host **0.166** (0.131 to 0.212); srt / host-bare **1.108** (1.021 to 1.213).
 
-**The saving does not come from srt.** It comes from the context the usual configuration loads at every session: about 42,000 tokens written to the cache, against 6,000 with `--bare`. Anyone gets it with `--bare`, without a sandbox. **Isolation costs about 11 %**: a little more context and a few more turns, partly because a test that depends on the host's `/tmp` and `HOME` fails inside the sandbox and the agent spends turns on it. **Limits**: one model and one version; one-line defects with named tests, easier than a real issue; one usual configuration, the owner's, so the saving depends on what a configuration loads; public prices, while the sessions ran on the owner's subscription.
+**Reading.** The gap between host and the two others comes from the context the usual configuration loads at every session: about 42,000 tokens written to the cache, against 6,000 with `--bare`. It comes from `--bare`, not from srt, and anyone gets it without a sandbox. Isolation costs about 11 % on these sessions: a little more context and a few more turns, partly because a test that depends on the host's `/tmp` and `HOME` fails inside the sandbox and the agent spends turns on it. `--bare` declares only Bash, Edit and Read to the model, and its sessions take more turns (7.8 against 4.5); whether that costs quality on harder work is not tested here.
+
+**Limits.** One model and one version; one-line defects with named tests, easier than a real issue; one usual configuration, the owner's, so the gap depends on what a configuration loads; public prices, while the sessions ran on the owner's subscription. A cost study of real work needs real issues from the repositories' history, over several files and without named tests, a cost split into a fixed part and a part per turn, and tasks hard enough that not every session succeeds.
 
 Everything is in `baseline/`: tasks, harness, defect generator, raw data and analysis, and the experiment log with its failures (`docs/design/journal.md`, §22 and §23). The campaign cost $15.11 at public prices.
 
