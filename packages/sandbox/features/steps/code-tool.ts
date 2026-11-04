@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -18,6 +18,7 @@ import { SandboxError, type SandboxExit, type SandboxRequest } from '../../src/p
 import { SrtSandboxRunner } from '../../src/srt-runner.js';
 import { loadTool } from '../../src/tool.js';
 import { Given, PKG, ROOT, Then, When, stored, type SandboxWorld } from './helpers.js';
+import { named } from './worktree.js';
 
 /** What the fakes of one code tool session saw. */
 interface Session {
@@ -29,12 +30,14 @@ interface Session {
   proxyOptions?: AuthProxyOptions;
   stdout: string;
   stderr: string;
+  /** What the worktree's system prompt file resolves to. */
+  prompt: string | null;
   outcome?: { code: number } | { error: unknown };
 }
 const session = (world: SandboxWorld) => stored<Session>(world, 'codeTool');
 
-const PLUGINS = [join(ROOT, 'plugins', 'builder-guard')];
 const tool = () => loadTool(join(PKG, 'code.json'));
+const PROMPT = '/work/CLAUDE.md';
 
 Given(
   'a code tool session with the session token {string} and the arguments {string}',
@@ -42,7 +45,7 @@ Given(
     const events: string[] = [];
     const stdout = new PassThrough();
     const stderr = new PassThrough();
-    const s: Session = { events, stdout: '', stderr: '', deps: undefined as never };
+    const s: Session = { events, stdout: '', stderr: '', prompt: PROMPT, deps: undefined as never };
     stdout.on('data', (chunk: Buffer) => (s.stdout += chunk.toString()));
     stderr.on('data', (chunk: Buffer) => (s.stderr += chunk.toString()));
     const proxy: AuthProxy = {
@@ -66,7 +69,7 @@ Given(
     };
     s.deps = {
       tool: tool(),
-      plugins: PLUGINS,
+      systemPrompt: () => s.prompt,
       credential: async () => ({ accessToken: 'host' }),
       startProxy: async (options) => {
         s.proxyOptions = options;
@@ -178,21 +181,32 @@ Then(
   },
 );
 
-const commandOf = (args: string) => [
-  'claude',
-  ...PLUGINS.flatMap((dir) => ['--plugin-dir', dir]),
+const commandOf = (args: string, prompt: string | null = PROMPT) => [
+  ...tool().command,
+  ...(prompt === null ? [] : ['--append-system-prompt-file', prompt]),
   ...args.split(' '),
 ];
 
+Given('the worktree has no system prompt file', function () {
+  session(this).prompt = null;
+});
+
 Then(
-  'the sandbox ran the profile {string} in {string} with claude, the plugin directories of code.json and {string}',
+  'the sandbox ran the profile {string} in {string} with the command of code.json, the system prompt and {string}',
   function (profile: string, cwd: string, args: string) {
     assert.deepEqual(session(this).started, { profile, cwd, command: commandOf(args) });
   },
 );
 
 Then(
-  'the sandbox ran in the terminal with claude, the plugin directories of code.json and {string}',
+  'the sandbox ran the command of code.json and {string}, without a system prompt',
+  function (args: string) {
+    assert.deepEqual(session(this).started?.command, commandOf(args, null));
+  },
+);
+
+Then(
+  'the sandbox ran in the terminal with the command of code.json, the system prompt and {string}',
   function (args: string) {
     const s = session(this);
     assert.equal(s.started, undefined);
@@ -297,13 +311,32 @@ Then(
   },
 );
 
+Then('the dependencies load the tool of code.json', function () {
+  assert.deepEqual(deps(this).tool, tool());
+});
+
+Given('a process with INIT_CWD in {string} of the worktree {string}', function (dir: string, name: string) {
+  this.state['process'] = fakeProcess(
+    { INIT_CWD: join(named(this, name).worktree, dir) },
+    '/elsewhere',
+    'node',
+  );
+});
+
+Given('the worktree {string} holds the file {string}', function (name: string, file: string) {
+  writeFileSync(join(named(this, name).worktree, file), '# instructions\n');
+});
+
 Then(
-  'the dependencies load the tool of code.json and its plugin directories under the repository',
-  function () {
-    assert.deepEqual(deps(this).tool, tool());
-    assert.deepEqual(deps(this).plugins, PLUGINS);
+  'the system prompt of the dependencies is {string} of the worktree {string}',
+  function (file: string, name: string) {
+    assert.equal(deps(this).systemPrompt(), join(named(this, name).worktree, file));
   },
 );
+
+Then('the system prompt of the dependencies is none', function () {
+  assert.equal(deps(this).systemPrompt(), null);
+});
 
 Then('the dependencies start the auth proxy of auth-proxy.ts', function () {
   assert.equal(deps(this).startProxy, startAuthProxy);
@@ -337,7 +370,7 @@ Then(
   function (k1: string, v1: string, k2: string, v2: string) {
     const proc = stored<CodeProcess>(this, 'process');
     const variables = { [k1]: v1, [k2]: v2 };
-    const { srtCli, ...rest } = srtOptions(proc, PLUGINS, variables);
+    const { srtCli, ...rest } = srtOptions(proc, variables);
     // Resolved as node resolves the package: under the Stryker sandbox, node_modules is a link to the real one.
     assert.ok(
       srtCli.endsWith(join('node_modules', '@anthropic-ai', 'sandbox-runtime', 'dist', 'cli.js')),
@@ -351,7 +384,7 @@ Then(
       tmpRoot: tmpdir(),
       home: homedir(),
       hostEnv: proc.env,
-      trusted: [PKG, join(ROOT, 'package.json'), ...PLUGINS],
+      trusted: [PKG, join(ROOT, 'package.json')],
       variables,
     });
   },

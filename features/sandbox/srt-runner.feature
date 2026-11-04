@@ -43,3 +43,13 @@ Feature: SandboxRunner contract on the real srt adapter
     Given an srt runner over a throwaway git repository that trusts a launcher file inside the worktree
     When I try to start profile "builder" with command "cat"
     Then it is refused with "ISOLATION_UNAVAILABLE: chemin de confiance inscriptible"
+
+  Scenario: srt adapter resolves the profile variables in the arguments of the command: ${config} is the session folder
+    Given an srt runner over a throwaway git repository
+    When I start profile "builder" with command "test -d ${config}", close its input, drain its output and wait for it to end
+    Then it exits with code 0
+
+  Scenario: srt adapter refuses an argument with an unknown variable
+    Given an srt runner over a throwaway git repository
+    When I try to start profile "builder" with command "echo ${nope}"
+    Then it is refused with "PROFILE_INVALID: variable inconnue"

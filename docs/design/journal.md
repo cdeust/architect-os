@@ -693,3 +693,28 @@ Trouvé en chemin :
 **Limites.** Un mutant `NoCoverage` n'est pas rejoué, aucun scénario n'étant nommé ; son statut est déjà rouge ou au registre, et le canari prouve que l'outil sait le reconnaître. Dans le rejeu du rejeu lui-même, un mutant qui désactive le kill du groupe laisse son run imbriqué tourner jusqu'à la fin de sa fixture (60 s au plus). L'équivalence par propriété (fast-check) est prévue à l'étape qui ajoute fast-check.
 
 **Trois piliers.** Recherche : chaque verdict est rejoué et consigné, la porte se relance en une commande (`npm run gate`), les quatre runs sont dans ce journal. SSDLC : aucun composant tiers n'est cru sur parole ; le canari, le témoin et le nouveau témoin sont les contrôles négatifs. Opérationnel : sans objet, aucune donnée sensible.
+
+## 21. L'outil de code passe à `claude --bare`, 4 novembre 2026
+
+**Décision du propriétaire.** `--bare` devient la norme : la plateforme s'y adapte, chaque entrée de Claude Code est passée explicitement. Priorité donnée à `--bare` et à la CI.
+
+**Fait.**
+- `code.json` : `claude --bare --settings ${config}/settings.json --strict-mcp-config`, et `systemPromptFile: "CLAUDE.md"`, passé par `--append-system-prompt-file` s'il existe à la racine du worktree visé (sous `--bare`, Claude Code ne lit plus le CLAUDE.md du projet). L'adaptateur srt résout les variables du profil dans les arguments de la commande ; une variable inconnue est refusée (`PROFILE_INVALID`).
+- Profil `builder` : `ANTHROPIC_API_KEY=${sessionToken}` remplace `CLAUDE_CODE_OAUTH_TOKEN` (sous `--bare`, seuls `ANTHROPIC_API_KEY` et `apiKeyHelper` authentifient) ; `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` retire le jeton de l'environnement des commandes lancées par Claude Code. Le `settings.json` de la session, que la sandbox ne peut pas écrire, porte les règles `permissions.deny` : `git push`, `git config`, `security`, lecture et écriture des fichiers de secrets et de `~/.claude`, écriture de `.git/hooks` et `.git/config`.
+- Proxy d'authentification : le jeton de session est lu dans `x-api-key` ; un `Authorization: Bearer` de la sandbox est refusé (401). L'identifiant de l'hôte reste en `Authorization` vers l'amont, et le jeton de session n'y part jamais.
+- Plugin `builder-guard` retiré, avec ses 51 scénarios : sous `--bare`, ses hooks ne tournent pas (mesuré le 3 novembre, §19). Ses refus sont les règles ci-dessus. La marketplace reste, sans plugin (`claude plugin validate` : valide, avec un avertissement).
+
+**Mesuré.** `npm --prefix bench run bench:bare` lance le Claude Code de l'hôte avec la commande de `code.json` et le `settings.json` du profil, contre un faux amont local, sans srt ni clé réelle. Sur Claude Code 2.1.314 :
+
+| Fait | Résultat |
+|---|---|
+| Jeton de session en `x-api-key`, aucun `Authorization` | oui, 2 requêtes sur 2 |
+| CLAUDE.md du worktree dans le prompt système | oui |
+| `git push origin probe` refusé par `Bash(git push *)` | oui (« Permission to use Bash with command git push origin probe has been denied. ») |
+| Outils déclarés au modèle | Bash, Edit, Read |
+
+Témoin négatif : sans la règle `Bash(git push *)`, la sonde voit le push accepté et sort en 1. Sous `--bare`, `--tools Bash,Read,Edit,Write,Glob,Grep` ne change pas la liste (toujours Bash, Edit, Read) : l'outil crée ses fichiers par Bash ou Edit, et aucun `--tools` n'est déclaré, faute d'effet. Claude Code appelle aussi `GET /api/hello` au démarrage : le proxy le refuse (403), sans effet sur la session.
+
+**Reste.** Le premier lancement réel, avec l'identifiant de l'hôte et srt, est celui du propriétaire. La sonde ne passe pas par srt : la frontière reste prouvée par le canari de srt et le banc 1b.0.
+
+**Trois piliers.** Recherche : la sonde se rejoue en une commande, avec son témoin négatif. SSDLC : jeton de session seul dans la sandbox, retiré des sous-processus ; règles de refus dans un fichier que la sandbox ne peut pas écrire ; srt reste la frontière. Opérationnel : aucune donnée sensible, aucune clé réelle dans la sonde.

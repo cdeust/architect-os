@@ -3,6 +3,7 @@
 // d'authentification, hors sandbox, détient l'identifiant ; la sandbox reçoit un jeton de session aléatoire, révoqué
 // à la fin.
 import { randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -19,6 +20,7 @@ import {
 import { SandboxError, type SandboxExit, type SandboxRequest, type SandboxRunner } from './port.js';
 import { SrtSandboxRunner, standardStreamsAreTerminals, type SrtRunnerOptions } from './srt-runner.js';
 import { authProxyOptions, loadTool, type Tool } from './tool.js';
+import { resolveWorktree } from './worktree.js';
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = resolve(PKG, '..', '..');
@@ -30,8 +32,8 @@ export interface CodeToolRunner extends SandboxRunner {
 
 export interface CodeToolDependencies {
   readonly tool: Tool;
-  /** Répertoires des plugins chargés par `--plugin-dir`, absolus. */
-  readonly plugins: readonly string[];
+  /** Le fichier de prompt système de `code.json` dans le worktree visé, absolu, ou null s'il n'existe pas. */
+  readonly systemPrompt: () => string | null;
   readonly credential: CredentialSource;
   readonly startProxy: (options: AuthProxyOptions) => Promise<AuthProxy>;
   /** Le lanceur, pour les variables du proxy (port, jeton de session). */
@@ -60,10 +62,15 @@ export async function runCodeTool(deps: CodeToolDependencies): Promise<number> {
   const proxy = await deps.startProxy(authProxyOptions(deps.tool, sessionToken, deps.credential));
   try {
     const runner = deps.runner({ authProxyPort: String(proxy.port), sessionToken });
+    const prompt = deps.systemPrompt();
     const request: SandboxRequest = {
       profile: deps.tool.profile,
       cwd: deps.cwd,
-      command: [...deps.tool.command, ...deps.plugins.flatMap((dir) => ['--plugin-dir', dir]), ...deps.argv],
+      command: [
+        ...deps.tool.command,
+        ...(prompt === null ? [] : ['--append-system-prompt-file', prompt]),
+        ...deps.argv,
+      ],
     };
     const exit = deps.terminal ? await runner.runInTerminal(request) : await piped(runner, request, deps);
     return exit.code ?? 1;
@@ -96,12 +103,8 @@ export interface CodeProcess {
   readonly stderr: Writable;
 }
 
-/** Les options de l'adaptateur srt : profils, srt épinglé et canari du paquet ; code du lanceur et plugins de confiance. */
-export function srtOptions(
-  proc: CodeProcess,
-  plugins: readonly string[],
-  variables: Readonly<Record<string, string>>,
-): SrtRunnerOptions {
+/** Les options de l'adaptateur srt : profils, srt épinglé et canari du paquet ; code du lanceur de confiance. */
+export function srtOptions(proc: CodeProcess, variables: Readonly<Record<string, string>>): SrtRunnerOptions {
   return {
     profilesDir: join(PKG, 'profiles'),
     srtCli: createRequire(import.meta.url).resolve('@anthropic-ai/sandbox-runtime/dist/cli.js'),
@@ -110,29 +113,32 @@ export function srtOptions(
     tmpRoot: tmpdir(),
     home: homedir(),
     hostEnv: proc.env,
-    trusted: [PKG, join(ROOT, 'package.json'), ...plugins],
+    trusted: [PKG, join(ROOT, 'package.json')],
     variables,
   };
 }
 
 /**
  * Les dépendances réelles : `code.json`, l'identifiant du trousseau, le proxy d'`auth-proxy.ts`, l'adaptateur srt.
- * Le worktree visé est INIT_CWD, fixé par npm, sinon le répertoire courant.
+ * Le worktree visé est INIT_CWD, fixé par npm, sinon le répertoire courant ; son prompt système est lu à la racine.
  */
 export function processDependencies(
   proc: CodeProcess,
   isTerminalFd: (fd: number) => boolean = isatty,
 ): CodeToolDependencies {
   const tool = loadTool(join(PKG, 'code.json'));
-  const plugins = tool.pluginDirs.map((dir) => resolve(ROOT, dir));
+  const cwd = proc.env['INIT_CWD'] ?? proc.cwd();
   return {
     tool,
-    plugins,
+    systemPrompt: () => {
+      const file = join(resolveWorktree(cwd).worktree, tool.systemPromptFile);
+      return existsSync(file) ? file : null;
+    },
     credential: commandCredential(tool.authProxy.credentialCommand),
     startProxy: startAuthProxy,
-    runner: (variables) => new SrtSandboxRunner(srtOptions(proc, plugins, variables)),
+    runner: (variables) => new SrtSandboxRunner(srtOptions(proc, variables)),
     sessionToken: () => randomBytes(32).toString('hex'),
-    cwd: proc.env['INIT_CWD'] ?? proc.cwd(),
+    cwd,
     argv: proc.argv.slice(2),
     terminal: standardStreamsAreTerminals(isTerminalFd),
     stdin: proc.stdin,

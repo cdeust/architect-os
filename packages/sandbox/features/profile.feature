@@ -43,17 +43,18 @@ Feature: Builder profile template
       | NO_PROXY |
       | no_proxy |
 
-  Scenario: reaches the model only through the host auth proxy, with a session token and its own config dir
+  Scenario: reaches the model only through the host auth proxy, with a session token as API key and its own config dir and deny rules
     When I load the committed builder profile
     Then the profile allows the network domains exactly:
       | 127.0.0.1:${authProxyPort} |
       | registry.npmjs.org         |
     And the profile sets the variables:
-      | ANTHROPIC_BASE_URL      | http://127.0.0.1:${authProxyPort} |
-      | CLAUDE_CODE_OAUTH_TOKEN | ${sessionToken}                   |
-      | CLAUDE_CONFIG_DIR       | ${config}                         |
+      | ANTHROPIC_BASE_URL               | http://127.0.0.1:${authProxyPort} |
+      | ANTHROPIC_API_KEY                | ${sessionToken}                   |
+      | CLAUDE_CODE_SUBPROCESS_ENV_SCRUB | 1                                 |
+      | CLAUDE_CONFIG_DIR                | ${config}                         |
     When I resolve the profile with the test variables
-    Then the resolved file "/t/aos/config/settings.json" equals '{"sandbox":{"enabled":false}}'
+    Then the resolved file "/t/aos/config/settings.json" equals '{"sandbox":{"enabled":false},"permissions":{"deny":["Bash(git push *)","Bash(git config *)","Bash(security *)","Read(//h/.ssh/**)","Edit(//h/.ssh/**)","Read(//h/.aws/**)","Edit(//h/.aws/**)","Read(//h/.gnupg/**)","Edit(//h/.gnupg/**)","Read(//h/.config/gh/**)","Edit(//h/.config/gh/**)","Read(//h/.npmrc)","Edit(//h/.npmrc)","Read(//h/.netrc)","Edit(//h/.netrc)","Read(//h/.claude/**)","Edit(//h/.claude/**)","Read(//h/.claude.json)","Edit(//h/.claude.json)","Read(//h/Library/Keychains/**)","Edit(//h/Library/Keychains/**)","Edit(//r/.git/hooks/**)","Edit(//r/.git/config)"]}}'
     And the resolved file "/t/aos/config/.claude.json" contains '{"projects":{"/r":{"hasTrustDialogAccepted":true},"/r/.claude/worktrees/w":{"hasTrustDialogAccepted":true}}}'
 
   Scenario: never makes the user settings, ~/.claude.json, plugins or the main repo writable
@@ -144,5 +145,6 @@ Feature: Builder profile template
       | CLAUDE_CODE_TMPDIR      | /t/aos/tmp                        |
       | CLAUDE_CONFIG_DIR       | /t/aos/config                     |
       | ANTHROPIC_BASE_URL      | http://127.0.0.1:4321             |
-      | CLAUDE_CODE_OAUTH_TOKEN | session-token                     |
+      | ANTHROPIC_API_KEY       | session-token                     |
+      | CLAUDE_CODE_SUBPROCESS_ENV_SCRUB | 1                        |
       | npm_config_cache        | /h/.cache/npm                     |

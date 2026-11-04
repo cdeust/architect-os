@@ -185,7 +185,7 @@ When(
   'I try to start profile {string} with command {string}',
   async function (profile: string, command: string) {
     await attempt(this, () =>
-      runner(this).start({ profile, cwd: stored<string>(this, 'cwd'), command: [command] }),
+      runner(this).start({ profile, cwd: stored<string>(this, 'cwd'), command: command.split(' ') }),
     );
   },
 );
@@ -195,7 +195,7 @@ When(
   async function (profile: string, command: string) {
     const srt = stored<SrtSandboxRunner>(this, 'srt');
     await attempt(this, () =>
-      srt.runInTerminal({ profile, cwd: stored<string>(this, 'cwd'), command: [command] }),
+      srt.runInTerminal({ profile, cwd: stored<string>(this, 'cwd'), command: command.split(' ') }),
     );
   },
 );
@@ -207,7 +207,11 @@ Then('it is refused with {string}', function (pattern: string) {
 });
 
 When('I start profile {string} with command {string}', async function (profile: string, command: string) {
-  const started = await runner(this).start({ profile, cwd: stored<string>(this, 'cwd'), command: [command] });
+  const started = await runner(this).start({
+    profile,
+    cwd: stored<string>(this, 'cwd'),
+    command: command.split(' '),
+  });
   this.state['sandbox'] = started;
   this.state['output'] = readAll(started);
 });
@@ -247,8 +251,9 @@ When(
     const started = await runner(this).start({
       profile,
       cwd: stored<string>(this, 'cwd'),
-      command: [command],
+      command: command.split(' '),
     });
+    this.state['sandbox'] = started;
     started.stdin.end();
     started.stdout.resume();
     await started.exited;

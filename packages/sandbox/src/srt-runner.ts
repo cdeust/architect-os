@@ -20,7 +20,14 @@ import {
   type SandboxRequest,
   type SandboxRunner,
 } from './port.js';
-import { closedEnv, isWritable, loadTemplate, resolveProfile, type SrtSettings } from './profile.js';
+import {
+  closedEnv,
+  isWritable,
+  loadTemplate,
+  resolveProfile,
+  substitute,
+  type SrtSettings,
+} from './profile.js';
 import { resolveWorktree } from './worktree.js';
 
 /**
@@ -197,7 +204,7 @@ export class SrtSandboxRunner implements SandboxRunner {
       const config = join(dir, 'config');
       mkdirSync(tmp, { mode: 0o700 });
       mkdirSync(config, { mode: 0o700 });
-      const profile = resolveProfile(template, {
+      const vars = {
         ...o.variables,
         home: realpathSync(o.home),
         repo: wt.repo,
@@ -205,7 +212,8 @@ export class SrtSandboxRunner implements SandboxRunner {
         worktreeName: wt.worktreeName,
         tmp,
         config,
-      });
+      };
+      const profile = resolveProfile(template, vars);
       for (const [file, content] of Object.entries(profile.files)) {
         mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
         writeFileSync(file, `${JSON.stringify(content, null, 2)}\n`, { mode: 0o600 });
@@ -231,7 +239,16 @@ export class SrtSandboxRunner implements SandboxRunner {
       const cwd = realpathSync(resolve(request.cwd));
       await this.canary(profile.settings, srtCli, dir, cwd, env);
       return {
-        argv: [srtCli, '--settings', settingsFile, '--', ...unset, executable, ...args],
+        // Les arguments portent les variables du profil : `--settings ${config}/settings.json` pour Claude Code.
+        argv: [
+          srtCli,
+          '--settings',
+          settingsFile,
+          '--',
+          ...unset,
+          executable,
+          ...args.map((a) => substitute(a, vars)),
+        ],
         cwd,
         env,
         dir,

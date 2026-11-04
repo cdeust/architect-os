@@ -6,7 +6,6 @@
     { "path": "../packages/contracts" },
     { "path": "../data" },
     { "path": "../gateway" },
-    { "path": "../services/memory" },
-    { "path": "../plugins/builder-guard" }
+    { "path": "../services/memory" }
   ]
 }

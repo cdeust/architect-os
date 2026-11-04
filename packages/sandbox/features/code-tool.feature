@@ -6,7 +6,7 @@ Feature: the code tool of 1a.0, composed from code.json (host side, fake runner,
     Given a code tool session with the session token "tok" and the arguments "-p hello"
     When I run the code tool with "piped text" on stdin
     Then the code tool exits with 0
-    And the sandbox ran the profile "builder" in "/work" with claude, the plugin directories of code.json and "-p hello"
+    And the sandbox ran the profile "builder" in "/work" with the command of code.json, the system prompt and "-p hello"
     And the runner was given the proxy port "4321" and the session token "tok"
     And the code tool stdout is "piped text"
     And the code tool stderr is "sandbox stderr"
@@ -19,8 +19,23 @@ Feature: the code tool of 1a.0, composed from code.json (host side, fake runner,
     And the session has a terminal, where the sandbox exits by a signal
     When I run the code tool
     Then the code tool exits with 1
-    And the sandbox ran in the terminal with claude, the plugin directories of code.json and "-c"
+    And the sandbox ran in the terminal with the command of code.json, the system prompt and "-c"
     And the proxy was revoked then closed
+
+  Scenario: a worktree without its system prompt file runs the command of code.json without one
+    Given a code tool session with the session token "tok" and the arguments "-p hi"
+    And the worktree has no system prompt file
+    When I run the code tool with "hi" on stdin
+    Then the code tool exits with 0
+    And the sandbox ran the command of code.json and "-p hi", without a system prompt
+
+  Scenario: the system prompt file is read at the root of the worktree of INIT_CWD, when it exists
+    Given a hand-written git layout for the linked worktree "w"
+    And a process with INIT_CWD in "src" of the worktree "w"
+    When I build the process dependencies with stdout not a terminal
+    Then the system prompt of the dependencies is none
+    Given the worktree "w" holds the file "CLAUDE.md"
+    Then the system prompt of the dependencies is "CLAUDE.md" of the worktree "w"
 
   Scenario: a piped sandbox that exits by a signal gives 1
     Given a code tool session with the session token "tok" and the arguments "-p x"
@@ -47,7 +62,7 @@ Feature: the code tool of 1a.0, composed from code.json (host side, fake runner,
     Given a process with INIT_CWD "/target", the cwd "/elsewhere" and the arguments "node code.ts -p x"
     When I build the process dependencies with standard streams that are terminals
     Then the dependencies run in "/target" with the arguments "-p x" in a terminal
-    And the dependencies load the tool of code.json and its plugin directories under the repository
+    And the dependencies load the tool of code.json
     And the dependencies start the auth proxy of auth-proxy.ts
     And the dependencies give a fresh 64-hex session token each time
     And the dependencies build an srt runner for the variables "authProxyPort" "1" and "sessionToken" "t"

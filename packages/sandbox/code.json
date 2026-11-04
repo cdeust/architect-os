@@ -1,8 +1,8 @@
 {
-  "description": "Outil de code isolé de la brique 1a.0 : `srt --settings <profil résolu> claude`, plugin de protection chargé pour la session, modèle joint par le proxy d'authentification de l'hôte. Aucun secret dans la sandbox.",
+  "description": "Outil de code isolé de la brique 1a.0 : `srt --settings <profil résolu> claude --bare`, chaque entrée de Claude Code déclarée ici ou dans le profil (réglages de la session par --settings, aucun serveur MCP, CLAUDE.md du worktree en prompt système), modèle joint par le proxy d'authentification de l'hôte. Aucun secret dans la sandbox.",
   "profile": "builder",
-  "command": ["claude"],
-  "pluginDirs": ["plugins/builder-guard"],
+  "command": ["claude", "--bare", "--settings", "${config}/settings.json", "--strict-mcp-config"],
+  "systemPromptFile": "CLAUDE.md",
   "authProxy": {
     "upstream": "https://api.anthropic.com",
     "routes": ["^/v1/messages(/count_tokens)?(\\?[^#]*)?$"],

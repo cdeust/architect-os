@@ -18,7 +18,7 @@ import { refusalOf, type RequestPolicy } from './request-policy.js';
 /**
  * Proxy d'authentification de l'outil 1a.0, natif, hors sandbox, sur 127.0.0.1. Seul détenteur de l'identifiant
  * Claude de l'hôte : il le lit à la demande (trousseau), le garde en mémoire, ne l'écrit ni ne le journalise jamais.
- * La sandbox ne connaît qu'un jeton de session aléatoire, refusé hors de la session (401) ; seules les routes
+ * La sandbox ne connaît qu'un jeton de session aléatoire, présenté en `x-api-key`, refusé hors de la session (401) ; seules les routes
  * listées passent, en POST (403 sinon), avec un corps admis par la politique (`request-policy.ts`, 403 sinon), vers
  * l'amont fixe, avec l'`Authorization` remplacé. Une ligne d'`usage` par réponse (modèle, tokens, horodatage), sans
  * contenu ; un journal d'usage qui ne s'écrit plus arrête le proxy (503, cause nommée).
@@ -244,7 +244,8 @@ export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthPro
   const forward: Relay = { upstream: new URL(options.upstream), betas: options.betas, log };
 
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
-    if (revoked || !sameSecret(String(req.headers['authorization']), `Bearer ${options.sessionToken}`))
+    // Claude Code sous --bare n'envoie qu'une clé d'API, dans x-api-key : c'est là que la session présente son jeton.
+    if (revoked || !sameSecret(String(req.headers['x-api-key']), options.sessionToken))
       return fail(res, 401, 'authentication_error', 'session token required');
     if (stopped !== null) return fail(res, 503, 'api_error', stopped);
     const path = String(req.url);

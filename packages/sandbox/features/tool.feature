@@ -1,12 +1,11 @@
 Feature: code.json, the descriptive file of the 1a.0 tool
 
-  Scenario: loads against the strict schema: builder profile, claude, builder-guard plugin
+  Scenario: loads against the strict schema: builder profile, claude --bare with every input explicit
     When I load the committed code.json
     Then the tool profile is "builder"
-    And the tool command is exactly "claude"
-    And the tool plugin directories are exactly "plugins/builder-guard"
+    And the tool command is exactly "claude --bare --settings ${config}/settings.json --strict-mcp-config"
+    And the tool system prompt file is "CLAUDE.md"
     And the tool auth proxy upstream is "https://api.anthropic.com"
-    And the plugin manifest of the first plugin directory exists in the repository
 
   Scenario: the auth proxy options are those of code.json, the usage log under the home directory
     When I load the committed code.json
@@ -34,3 +33,6 @@ Feature: code.json, the descriptive file of the 1a.0 tool
       | no body field          |
       | a zero body size limit |
       | a fractional body size |
+      | an absolute system prompt file |
+      | a system prompt file outside the worktree |
+      | an empty system prompt file |

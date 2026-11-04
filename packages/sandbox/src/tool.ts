@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { isAbsolute } from 'node:path';
 import { z } from 'zod';
 import type { AuthProxyOptions, CredentialSource } from './auth-proxy.js';
 
@@ -10,8 +11,16 @@ export const ToolSchema = z.strictObject({
   profile: z.string().min(1),
   /** argv de base ; les arguments de l'appelant suivent. */
   command: z.array(z.string().min(1)).min(1),
-  /** Plugins chargés pour la session par `--plugin-dir`, relatifs à la racine du checkout du lanceur. */
-  pluginDirs: z.array(z.string().min(1)),
+  /**
+   * Fichier du worktree visé, relatif à sa racine, passé par `--append-system-prompt-file` s'il existe : sous `--bare`,
+   * Claude Code ne lit plus le CLAUDE.md du projet de lui-même.
+   */
+  systemPromptFile: z
+    .string()
+    .min(1)
+    .refine((file) => !isAbsolute(file) && !file.split('/').includes('..'), {
+      message: 'chemin relatif à la racine du worktree, sans ..',
+    }),
   /** Proxy d'authentification de l'hôte (`auth-proxy.ts`). */
   authProxy: z.strictObject({
     upstream: z.url({ protocol: /^https$/ }),

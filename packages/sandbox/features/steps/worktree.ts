@@ -36,7 +36,7 @@ function layouts(world: SandboxWorld): Layouts {
   }
   return world.state['layouts'] as Layouts;
 }
-const named = (world: SandboxWorld, name: string): Layout => {
+export const named = (world: SandboxWorld, name: string): Layout => {
   const found = layouts(world).byName[name];
   assert.ok(found, `no layout named "${name}"`);
   return found;

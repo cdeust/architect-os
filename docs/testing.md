@@ -45,7 +45,7 @@ Brick 1a replaced vitest. One vitest `it` became one `Scenario`, one `it.each` r
 | root (`features/`)   |     68 |      68 | `descriptive/builder-guard` 51, `descriptive/claude-files` 6, `infra/compose` 6, `integration/end-to-end` 3, `arch/guard` 2          |
 | **Total migrated**   |    224 |     224 |                                                                                                                                      |
 
-Added after the migration: `tools/test-gate` 99 (`configuration` 20, `count` 9, `diff` 2, `mutation` 37, `outcome` 14, `outputs` 10, `sets` 7), the Postgres watchdog 1 (`infra/postgres-watchdog`), `features/sandbox/srt-runner` 5 (real srt; the old `runIf(darwin)` suite), and `features/repository` 2 (typecheck, format). The suite holds 326 pickles.
+Added after the migration: `tools/test-gate` 99 (`configuration` 20, `count` 9, `diff` 2, `mutation` 37, `outcome` 14, `outputs` 10, `sets` 7), the Postgres watchdog 1 (`infra/postgres-watchdog`), `features/sandbox/srt-runner` 5 (real srt; the old `runIf(darwin)` suite), and `features/repository` 2 (typecheck, format). The suite holds 326 pickles. On 4 November 2026 the move to `claude --bare` removed `descriptive/builder-guard` (51): under `--bare` no hook runs, and its rules became `permissions.deny` of the session settings (`packages/sandbox/profiles/builder.json`).
 
 ## `@postgres`: a disposable database
 

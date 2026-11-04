@@ -170,7 +170,7 @@ When('I POST through the proxy with the raw headers:', async function (table: Da
         port: running(s).port,
         path: '/v1/messages',
         method: 'POST',
-        headers: { authorization: `Bearer ${s.token}`, ...headers },
+        headers: { 'x-api-key': s.token, ...headers },
       },
       (res) => {
         let text = '';
@@ -204,8 +204,7 @@ async function send(
 ): Promise<void> {
   const s = scenario(world);
   const headers: Record<string, string> = {};
-  if (token !== null)
-    Object.assign(headers, { authorization: `Bearer ${token}`, 'content-type': 'application/json' });
+  if (token !== null) Object.assign(headers, { 'x-api-key': token, 'content-type': 'application/json' });
   const res = await fetch(`http://127.0.0.1:${running(s).port}${path}`, {
     method: 'POST',
     ...init,
@@ -242,6 +241,14 @@ When(
   'I POST through the proxy {string} with the body {string} and no authorization',
   async function (path: string, body: string) {
     await send(this, path, { body, headers: {} }, null);
+  },
+);
+
+When(
+  'I POST through the proxy {string} with the body {string} and the session token as a bearer authorization',
+  async function (path: string, body: string) {
+    const headers = { authorization: `Bearer ${scenario(this).token}` };
+    await send(this, path, { body, headers }, null);
   },
 );
 
@@ -372,7 +379,7 @@ When(
     const res = await fetch(`http://127.0.0.1:${running(s).port}${path}`, {
       method: 'POST',
       body,
-      headers: { authorization: `Bearer ${s.token}` },
+      headers: { 'x-api-key': s.token },
     });
     this.state['cut'] = await res.text().then(
       () => false,
@@ -392,7 +399,7 @@ When(
     this.state['inFlight'] = fetch(`http://127.0.0.1:${running(s).port}${path}`, {
       method: 'POST',
       body,
-      headers: { authorization: `Bearer ${s.token}` },
+      headers: { 'x-api-key': s.token },
     }).then(
       (res) => res.text().then(() => 'answered'),
       () => 'cut',

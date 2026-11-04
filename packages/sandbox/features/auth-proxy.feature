@@ -5,10 +5,9 @@ Feature: Auth proxy (host side, fake upstream, fake credential)
     Given a fake upstream answering with a server-sent-events stream that carries a usage
     And an auth proxy over that upstream with the session token "session-token-for-tests" and the host credential "host-credential"
 
-  Scenario: relays POST /v1/messages with the host credential in place of the session token
+  Scenario: relays POST /v1/messages with the host credential in place of the session token, which never goes upstream
     When I POST through the proxy "/v1/messages?beta=true" with the body '{"model":"m"}' and the headers:
-      | anthropic-beta | x-1  |
-      | x-api-key      | leak |
+      | anthropic-beta | x-1 |
     Then the proxy response status is 200
     And the proxy response body is the upstream stream
     And the upstream received 1 request
@@ -30,10 +29,12 @@ Feature: Auth proxy (host side, fake upstream, fake credential)
     And the usage log does not contain "host-credential"
     And the usage log does not contain "session-token-for-tests"
 
-  Scenario: refuses without the session token (401), and forwards nothing
+  Scenario: refuses without the session token in x-api-key (401), and forwards nothing
     When I POST through the proxy "/v1/messages" with the body '{}' and the session token "wrong"
     Then the proxy response status is 401
     When I POST through the proxy "/v1/messages" with the body '{}' and no authorization
+    Then the proxy response status is 401
+    When I POST through the proxy "/v1/messages" with the body '{}' and the session token as a bearer authorization
     Then the proxy response status is 401
     And the upstream received no request
 

@@ -1,5 +1,5 @@
 {
-  "description": "Profil builder de la brique 1a.0 (docs/design/platform-v3-srt.md, §8 ; journal, §14 et §15). Aucun secret ne franchit la frontière : Claude Code tourne avec un dossier de configuration propre à la sandbox et un jeton de session, et ne joint le modèle que par le proxy d'authentification de l'hôte. Variables : ${home}, ${repo}, ${worktree}, ${worktreeName}, ${tmp} et ${config} (adaptateur), ${authProxyPort} et ${sessionToken} (lanceur).",
+  "description": "Profil builder de la brique 1a.0 (docs/design/platform-v3-srt.md, §8 ; journal, §14 et §15). Aucun secret ne franchit la frontière : Claude Code tourne en --bare avec un dossier de configuration propre à la sandbox, son fichier de réglages passé par --settings (règles permissions.deny, couche de réduction derrière srt) et un jeton de session en ANTHROPIC_API_KEY, et ne joint le modèle que par le proxy d'authentification de l'hôte. Variables : ${home}, ${repo}, ${worktree}, ${worktreeName}, ${tmp} et ${config} (adaptateur), ${authProxyPort} et ${sessionToken} (lanceur).",
   "srt": {
     "network": {
       "allowedDomains": ["127.0.0.1:${authProxyPort}", "registry.npmjs.org"],
@@ -59,20 +59,54 @@
       "CLAUDE_CODE_TMPDIR": "${tmp}",
       "CLAUDE_CONFIG_DIR": "${config}",
       "ANTHROPIC_BASE_URL": "http://127.0.0.1:${authProxyPort}",
-      "CLAUDE_CODE_OAUTH_TOKEN": "${sessionToken}",
+      "ANTHROPIC_API_KEY": "${sessionToken}",
+      "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1",
       "npm_config_cache": "${home}/.cache/npm"
     },
     "unset": ["NO_PROXY", "no_proxy"]
   },
   "files": {
     "${config}/settings.json": {
-      "sandbox": { "enabled": false }
+      "sandbox": {
+        "enabled": false
+      },
+      "permissions": {
+        "deny": [
+          "Bash(git push *)",
+          "Bash(git config *)",
+          "Bash(security *)",
+          "Read(/${home}/.ssh/**)",
+          "Edit(/${home}/.ssh/**)",
+          "Read(/${home}/.aws/**)",
+          "Edit(/${home}/.aws/**)",
+          "Read(/${home}/.gnupg/**)",
+          "Edit(/${home}/.gnupg/**)",
+          "Read(/${home}/.config/gh/**)",
+          "Edit(/${home}/.config/gh/**)",
+          "Read(/${home}/.npmrc)",
+          "Edit(/${home}/.npmrc)",
+          "Read(/${home}/.netrc)",
+          "Edit(/${home}/.netrc)",
+          "Read(/${home}/.claude/**)",
+          "Edit(/${home}/.claude/**)",
+          "Read(/${home}/.claude.json)",
+          "Edit(/${home}/.claude.json)",
+          "Read(/${home}/Library/Keychains/**)",
+          "Edit(/${home}/Library/Keychains/**)",
+          "Edit(/${repo}/.git/hooks/**)",
+          "Edit(/${repo}/.git/config)"
+        ]
+      }
     },
     "${config}/.claude.json": {
       "hasCompletedOnboarding": true,
       "projects": {
-        "${repo}": { "hasTrustDialogAccepted": true },
-        "${worktree}": { "hasTrustDialogAccepted": true }
+        "${repo}": {
+          "hasTrustDialogAccepted": true
+        },
+        "${worktree}": {
+          "hasTrustDialogAccepted": true
+        }
       }
     }
   }

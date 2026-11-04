@@ -31,7 +31,7 @@ export const SrtSettingsSchema = z.strictObject({
 export type SrtSettings = z.infer<typeof SrtSettingsSchema>;
 
 /** Variables jamais copiées depuis l'hôte : clé ou jeton, répertoire de configuration, proxy (srt fixe le sien),
- * injection de code dans node. Les noms sensibles (`ANTHROPIC_*`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN`)
+ * injection de code dans node. Les noms sensibles (`ANTHROPIC_*` dont `ANTHROPIC_API_KEY`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN`)
  * ne peuvent être posés par `set` que depuis des variables du lanceur (jeton de session, port du proxy, dossier de
  * configuration propre à la sandbox), jamais par une valeur écrite dans le fichier. */
 const FORBIDDEN_PASS =
@@ -107,7 +107,8 @@ export function parseTemplate(raw: unknown, name = 'gabarit'): ProfileTemplate {
   return parsed.data;
 }
 
-function substitute(value: string, vars: ProfileVariables): string {
+/** Une chaîne aux variables résolues ; une variable inconnue est refusée (PROFILE_INVALID). */
+export function substitute(value: string, vars: ProfileVariables): string {
   return value.replace(/\$\{([A-Za-z]+)\}/g, (_, key: string) => {
     const resolved = vars[key];
     if (resolved === undefined) throw new SandboxError('PROFILE_INVALID', `variable inconnue : \${${key}}`);

@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { AuthProxyOptions, CredentialSource } from '../../src/auth-proxy.js';
 import { authProxyOptions, loadTool, parseTool, type Tool } from '../../src/tool.js';
-import { PKG, ROOT, Then, When, stored } from './helpers.js';
+import { PKG, Then, When, stored } from './helpers.js';
 
 const committed = (): Record<string, any> =>
   JSON.parse(readFileSync(join(PKG, 'code.json'), 'utf8')) as Record<string, any>;
@@ -20,6 +20,9 @@ const DEFECTS: Record<string, (t: Record<string, any>) => unknown> = {
   'no body field': (t) => (t['authProxy']['policy']['bodyFields'] = []),
   'a zero body size limit': (t) => (t['authProxy']['policy']['maxBodyBytes'] = 0),
   'a fractional body size': (t) => (t['authProxy']['policy']['maxBodyBytes'] = 1.5),
+  'an absolute system prompt file': (t) => (t['systemPromptFile'] = '/etc/CLAUDE.md'),
+  'a system prompt file outside the worktree': (t) => (t['systemPromptFile'] = 'docs/../../CLAUDE.md'),
+  'an empty system prompt file': (t) => (t['systemPromptFile'] = ''),
 };
 
 const credentialSource: CredentialSource = async () => ({ accessToken: 'unused' });
@@ -64,20 +67,15 @@ Then('the tool profile is {string}', function (profile: string) {
 });
 
 Then('the tool command is exactly {string}', function (command: string) {
-  assert.deepEqual(stored<Tool>(this, 'tool').command, [command]);
+  assert.deepEqual(stored<Tool>(this, 'tool').command, command.split(' '));
 });
 
-Then('the tool plugin directories are exactly {string}', function (dir: string) {
-  assert.deepEqual(stored<Tool>(this, 'tool').pluginDirs, [dir]);
+Then('the tool system prompt file is {string}', function (file: string) {
+  assert.equal(stored<Tool>(this, 'tool').systemPromptFile, file);
 });
 
 Then('the tool auth proxy upstream is {string}', function (upstream: string) {
   assert.equal(stored<Tool>(this, 'tool').authProxy.upstream, upstream);
-});
-
-Then('the plugin manifest of the first plugin directory exists in the repository', function () {
-  const dir = stored<Tool>(this, 'tool').pluginDirs[0] as string;
-  assert.doesNotThrow(() => readFileSync(join(ROOT, dir, '.claude-plugin', 'plugin.json')));
 });
 
 When('I break a copy of the committed code.json with {}', function (defect: string) {
