@@ -36,3 +36,12 @@ Feature: code.json, the descriptive file of the 1a.0 tool
       | an absolute system prompt file |
       | a system prompt file outside the worktree |
       | an empty system prompt file |
+
+  Scenario Outline: a system prompt file outside the worktree is refused by name: <defect>
+    When I break a copy of the committed code.json with <defect>
+    Then parsing the broken code.json fails with the message "chemin relatif à la racine du worktree, sans .."
+
+    Examples:
+      | defect                                    |
+      | an absolute system prompt file            |
+      | a system prompt file outside the worktree |

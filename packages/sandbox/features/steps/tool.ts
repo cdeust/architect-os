@@ -99,3 +99,10 @@ Then('parsing the changed code.json succeeds', function () {
 Then('parsing the broken code.json fails', function () {
   assert.throws(() => parseTool(stored(this, 'broken')));
 });
+
+Then('parsing the broken code.json fails with the message {string}', function (message: string) {
+  assert.throws(
+    () => parseTool(stored(this, 'broken')),
+    (error: unknown) => error instanceof Error && error.message.includes(`"message": "${message}"`),
+  );
+});
