@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
+import { createServer } from 'node:net';
 import { PassThrough } from 'node:stream';
 import { runtimeOf, serve, start, type MemoryRuntime, type Started } from '../../src/main.js';
 import { Given, Then, When, slot, type MemoryWorld } from './helpers.js';
@@ -36,6 +37,8 @@ class MainScenario {
   failure: Error | undefined;
   started: Started[] = [];
   logs: string[] = [];
+  /** The free MCP port handed to a second start. */
+  freePort = 0;
   dir = '';
   outcome: { stdout: string } | { error: { code?: string; message: string } } | undefined;
   served: { code: number; stderr: string; runtime?: MemoryRuntime; logged?: string } | undefined;
@@ -221,6 +224,38 @@ When('I start a second memory service on the same MCP port', async function () {
   } catch (error) {
     scenario(this).failure = error as Error;
   }
+});
+
+/** Listens on a port, then closes it: resolves with whether the port could be taken. */
+const takes = (port: number) =>
+  new Promise<boolean>((done) => {
+    const server = createServer();
+    server.once('error', () => done(false));
+    server.listen(port, () => server.close(() => done(true)));
+  });
+
+/** A port free at this instant: the system's choice for port 0, released at once. */
+const freePort = () =>
+  new Promise<number>((done) => {
+    const server = createServer();
+    server.listen(0, () => {
+      const { port } = server.address() as { port: number };
+      server.close(() => done(port));
+    });
+  });
+
+When('I start a second memory service on a free MCP port and the same internal port', async function () {
+  const s = scenario(this);
+  s.freePort = await freePort();
+  try {
+    await startOn(this, { ...freeRuntime(), port: s.freePort, internalPort: first(this).ports[1] });
+  } catch (error) {
+    s.failure = error as Error;
+  }
+});
+
+Then('the MCP port of the second start is free again', async function () {
+  assert.equal(await takes(scenario(this).freePort), true);
 });
 
 Then('the second start fails with {string}', function (code: string) {

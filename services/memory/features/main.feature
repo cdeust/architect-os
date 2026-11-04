@@ -51,10 +51,16 @@ Feature: the composition root of the memory service
       | 1048576 | read whole                      |
       | 1048577 | refused with WORKER_OUTPUT_INVALID |
 
-  Scenario: a port in use refuses the start and closes the host that did listen
+  Scenario: an MCP port in use refuses the start
     When I start the memory service on free ports
     And I start a second memory service on the same MCP port
     Then the second start fails with "EADDRINUSE"
+
+  Scenario: an internal port in use refuses the start and closes the MCP host that did listen
+    When I start the memory service on free ports
+    And I start a second memory service on a free MCP port and the same internal port
+    Then the second start fails with "EADDRINUSE"
+    And the MCP port of the second start is free again
 
   Scenario: serve reports a runtime it cannot read and gives exit code 1
     When I serve memory with the test environment without DATA_URL
