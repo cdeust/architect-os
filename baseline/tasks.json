@@ -1,5 +1,5 @@
 {
-  "description": "Pilot of the cost baseline (docs/design/platform-v3-srt.md, brick 0). Each task injects a known defect into a disposable checkout of a public repository of the owner, pinned by commit, and asks to make the named failing tests pass without touching the tests. `check` passes on the pinned commit and fails with the defect.",
+  "description": "Tasks of the cost baseline (docs/design/platform-v3-srt.md, brick 0). Each task injects a known defect into a disposable checkout of a public repository of the owner, pinned by commit, and asks to make the named failing tests pass without touching the tests. `check` passes on the pinned commit and fails with the defect.",
   "model": "claude-sonnet-5-5",
   "timeoutMs": 900000,
   "tasks": [
@@ -77,6 +77,472 @@
         "packages/core/src/__tests__/domain.test.ts"
       ],
       "allow": "Bash(npx vitest *)"
+    },
+    {
+      "id": "cortex-string-distance-row-bound",
+      "repo": "https://github.com/cdeust/Cortex.git",
+      "commit": "fdfe189ed60f77d6d6e15383b069a6c05c9c6c53",
+      "setup": [
+        [
+          "uv",
+          "sync",
+          "--frozen",
+          "--quiet",
+          "--extra",
+          "dev",
+          "--python",
+          "python3",
+          "--python-preference",
+          "only-system"
+        ]
+      ],
+      "defect": {
+        "file": "mcp_server/shared/string_distance.py",
+        "from": "    for i in range(1, len1 + 1):",
+        "to": "    for i in range(1, len1 + 2):"
+      },
+      "failing": [
+        "tests_py/shared/test_string_distance.py::TestOsaDistance::test_single_substitution",
+        "tests_py/shared/test_string_distance.py::TestOsaDistance::test_adjacent_transposition",
+        "tests_py/shared/test_string_distance.py::TestOsaDistance::test_classic_levenshtein"
+      ],
+      "check": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests_py/shared/test_string_distance.py"
+      ],
+      "allow": "Bash(.venv/bin/python -m pytest *)"
+    },
+    {
+      "id": "cortex-winkler-prefix",
+      "repo": "https://github.com/cdeust/Cortex.git",
+      "commit": "fdfe189ed60f77d6d6e15383b069a6c05c9c6c53",
+      "setup": [
+        [
+          "uv",
+          "sync",
+          "--frozen",
+          "--quiet",
+          "--extra",
+          "dev",
+          "--python",
+          "python3",
+          "--python-preference",
+          "only-system"
+        ]
+      ],
+      "defect": {
+        "file": "mcp_server/shared/string_distance.py",
+        "from": "        if prefix == _WINKLER_MAX_PREFIX:",
+        "to": "        if prefix != _WINKLER_MAX_PREFIX:"
+      },
+      "failing": [
+        "tests_py/shared/test_string_distance.py::TestJaroWinkler::test_canonical_values",
+        "tests_py/shared/test_string_distance.py::TestJaroWinkler::test_prefix_capped_at_four"
+      ],
+      "check": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests_py/shared/test_string_distance.py"
+      ],
+      "allow": "Bash(.venv/bin/python -m pytest *)"
+    },
+    {
+      "id": "cortex-minhash-band-rows",
+      "repo": "https://github.com/cdeust/Cortex.git",
+      "commit": "fdfe189ed60f77d6d6e15383b069a6c05c9c6c53",
+      "setup": [
+        [
+          "uv",
+          "sync",
+          "--frozen",
+          "--quiet",
+          "--extra",
+          "dev",
+          "--python",
+          "python3",
+          "--python-preference",
+          "only-system"
+        ]
+      ],
+      "defect": {
+        "file": "mcp_server/shared/minhash.py",
+        "from": "        for r in range(1, num_perm // b + 1):",
+        "to": "        for r in range(1, num_perm // b + 2):"
+      },
+      "failing": [
+        "tests_py/shared/test_minhash.py::TestLshParams::test_bands_times_rows_within_perm",
+        "tests_py/shared/test_minhash.py::TestMinHashLSH::test_does_not_block_unrelated"
+      ],
+      "check": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests_py/shared/test_minhash.py"
+      ],
+      "allow": "Bash(.venv/bin/python -m pytest *)"
+    },
+    {
+      "id": "cortex-minhash-jaccard",
+      "repo": "https://github.com/cdeust/Cortex.git",
+      "commit": "fdfe189ed60f77d6d6e15383b069a6c05c9c6c53",
+      "setup": [
+        [
+          "uv",
+          "sync",
+          "--frozen",
+          "--quiet",
+          "--extra",
+          "dev",
+          "--python",
+          "python3",
+          "--python-preference",
+          "only-system"
+        ]
+      ],
+      "defect": {
+        "file": "mcp_server/shared/minhash.py",
+        "from": "            float(np.count_nonzero(self.hashvalues == other.hashvalues)) / self.num_perm",
+        "to": "            float(np.count_nonzero(self.hashvalues != other.hashvalues)) / self.num_perm"
+      },
+      "failing": [
+        "tests_py/shared/test_minhash.py::TestMinHash::test_identical_sets_estimate_one",
+        "tests_py/shared/test_minhash.py::TestMinHash::test_disjoint_sets_estimate_zero",
+        "tests_py/shared/test_minhash.py::TestMinHash::test_near_duplicate_high_estimate"
+      ],
+      "check": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests_py/shared/test_minhash.py"
+      ],
+      "allow": "Bash(.venv/bin/python -m pytest *)"
+    },
+    {
+      "id": "viz-diff-line-cap",
+      "repo": "https://github.com/cdeust/cortex-viz.git",
+      "commit": "e9c1a312a6025a9c3eae13eb76b679c8f2312961",
+      "setup": [
+        [
+          "uv",
+          "sync",
+          "--frozen",
+          "--quiet",
+          "--all-extras",
+          "--python",
+          "python3",
+          "--python-preference",
+          "only-system"
+        ]
+      ],
+      "defect": {
+        "file": "cortex_viz/server/git_diff_engine.py",
+        "from": "        if len(lines) >= _MAX_LINES:",
+        "to": "        if len(lines) > _MAX_LINES:"
+      },
+      "failing": ["tests/test_file_diff.py::test_parse_unified_truncates"],
+      "check": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_git_diff_engine.py",
+        "tests/test_file_diff.py"
+      ],
+      "allow": "Bash(.venv/bin/python -m pytest *)"
+    },
+    {
+      "id": "viz-absolute-name",
+      "repo": "https://github.com/cdeust/cortex-viz.git",
+      "commit": "e9c1a312a6025a9c3eae13eb76b679c8f2312961",
+      "setup": [
+        [
+          "uv",
+          "sync",
+          "--frozen",
+          "--quiet",
+          "--all-extras",
+          "--python",
+          "python3",
+          "--python-preference",
+          "only-system"
+        ]
+      ],
+      "defect": {
+        "file": "cortex_viz/server/http_file_diff.py",
+        "from": "    if expanded.startswith(\"/\"):",
+        "to": "    if expanded.endswith(\"/\"):"
+      },
+      "failing": [
+        "tests/test_file_diff.py::test_serve_file_diff_resolves_absolute_path_and_delegates_to_the_engine",
+        "tests/test_git_diff_engine.py::test_resolve_name_absolute_path_passthrough"
+      ],
+      "check": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_file_diff.py"
+      ],
+      "allow": "Bash(.venv/bin/python -m pytest *)"
+    },
+    {
+      "id": "viz-file-target",
+      "repo": "https://github.com/cdeust/cortex-viz.git",
+      "commit": "e9c1a312a6025a9c3eae13eb76b679c8f2312961",
+      "setup": [
+        [
+          "uv",
+          "sync",
+          "--frozen",
+          "--quiet",
+          "--all-extras",
+          "--python",
+          "python3",
+          "--python-preference",
+          "only-system"
+        ]
+      ],
+      "defect": {
+        "file": "cortex_viz/core/activity_paths.py",
+        "from": "    if not target_id or not target_id.startswith(\"file:\"):",
+        "to": "    if not target_id and not target_id.startswith(\"file:\"):"
+      },
+      "failing": [
+        "tests/test_activity_paths.py::test_is_canonical_file_target_id_rejects_legacy_raw_path_shape"
+      ],
+      "check": [
+        ".venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_activity_paths.py"
+      ],
+      "allow": "Bash(.venv/bin/python -m pytest *)"
+    },
+    {
+      "id": "mods-resume-failed-step",
+      "repo": "https://github.com/cdeust/claude-mods.git",
+      "commit": "a2c774fb88bf75d9744d25a87c410448449aef65",
+      "setup": [],
+      "defect": {
+        "file": "scripts/ci_codex_review_resume.py",
+        "from": "        and failed[0] in names",
+        "to": "        or failed[0] in names"
+      },
+      "failing": [
+        "scripts/tests/test_ci_codex_review_resume.py::ResumePolicyTests::test_review_permission_or_validation_failure_is_not_retried",
+        "scripts/tests/test_ci_codex_review_resume.py::ResumePolicyTests::test_unrelated_merge_failure_and_findings_seen_by_fix_are_not_retried"
+      ],
+      "check": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "scripts/tests/test_ci_codex_review_resume.py"
+      ],
+      "allow": "Bash(python3 -m pytest *)"
+    },
+    {
+      "id": "mods-reaction-marks",
+      "repo": "https://github.com/cdeust/claude-mods.git",
+      "commit": "a2c774fb88bf75d9744d25a87c410448449aef65",
+      "setup": [],
+      "defect": {
+        "file": "scripts/ci_codex_review_reaction.py",
+        "from": "    if \"eyes\" in marks or \"+1\" not in marks or marks[\"+1\"] < finished:",
+        "to": "    if \"eyes\" in marks or \"+1\" in marks or marks[\"+1\"] < finished:"
+      },
+      "failing": [
+        "scripts/tests/test_ci_codex_review_reaction.py::ReactionVerdictTests::test_a_repository_without_one_slash_is_a_protocol_error",
+        "scripts/tests/test_ci_codex_review_reaction.py::ReactionVerdictTests::test_a_thread_resolved_by_the_owner_does_not_block",
+        "scripts/tests/test_ci_codex_review_reaction.py::ReactionVerdictTests::test_reaction_verdict_only_replaces_a_missing_receipt"
+      ],
+      "check": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "scripts/tests/test_ci_codex_review_reaction.py"
+      ],
+      "allow": "Bash(python3 -m pytest *)"
+    },
+    {
+      "id": "spec-verdict-minimum",
+      "repo": "https://github.com/cdeust/ai-architect-mcp-spec.git",
+      "commit": "87a9a10dd59a3c0fcff821c90ff52f0ac40d3295",
+      "setup": [["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"]],
+      "defect": {
+        "file": "packages/core/src/domain/verdict.ts",
+        "from": "  if (verdicts.length < 5) return false;",
+        "to": "  if (verdicts.length <= 5) return false;"
+      },
+      "failing": ["isDistributionSuspicious returns true for 100% PASS at cluster size >= 5"],
+      "check": ["npx", "vitest", "run", "packages/core/src/__tests__/domain.test.ts"],
+      "allow": "Bash(npx vitest *)"
+    },
+    {
+      "id": "spec-verdict-pass-rate",
+      "repo": "https://github.com/cdeust/ai-architect-mcp-spec.git",
+      "commit": "87a9a10dd59a3c0fcff821c90ff52f0ac40d3295",
+      "setup": [["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"]],
+      "defect": {
+        "file": "packages/core/src/domain/verdict.ts",
+        "from": "  return passRate >= 1.0;",
+        "to": "  return passRate > 1.0;"
+      },
+      "failing": ["isDistributionSuspicious returns true for 100% PASS at cluster size >= 5"],
+      "check": ["npx", "vitest", "run", "packages/core/src/__tests__/domain.test.ts"],
+      "allow": "Bash(npx vitest *)"
+    },
+    {
+      "id": "zetetic-usage-context",
+      "repo": "https://github.com/cdeust/zetetic-team-subagents.git",
+      "commit": "f9e50c2edc04a9296db48d2d0feb2d6a11b21bbc",
+      "setup": [],
+      "defect": {
+        "file": "tools/transcript_scan.py",
+        "from": "    if ctx <= 0:",
+        "to": "    if ctx < 0:"
+      },
+      "failing": [
+        "tests/test_transcript_scan.py::test_usage_line_returns_none_for_a_non_usage_line[{\"message\":"
+      ],
+      "check": ["python3", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_transcript_scan.py"],
+      "allow": "Bash(python3 -m pytest *)"
+    },
+    {
+      "id": "zetetic-default-port",
+      "repo": "https://github.com/cdeust/zetetic-team-subagents.git",
+      "commit": "f9e50c2edc04a9296db48d2d0feb2d6a11b21bbc",
+      "setup": [],
+      "defect": {
+        "file": "tools/manifest_gate.py",
+        "from": "    if parts.port is not None and str(parts.port) != DEFAULT_PORTS.get(scheme):",
+        "to": "    if parts.port is not None and str(parts.port) == DEFAULT_PORTS.get(scheme):"
+      },
+      "failing": [
+        "tests/test_manifest_gate.py::test_normalize_url_drops_http_default_port",
+        "tests/test_manifest_gate.py::test_normalize_url_drops_https_default_port",
+        "tests/test_manifest_gate.py::test_normalize_url_keeps_non_default_port",
+        "tests/test_manifest_gate.py::test_normalize_url_same_url_with_and_without_default_port_are_equal",
+        "tests/test_manifest_gate.py::test_classify_normalizes_manifest_for_comparison"
+      ],
+      "check": ["python3", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_manifest_gate.py"],
+      "allow": "Bash(python3 -m pytest *)"
+    },
+    {
+      "id": "session-optimizer-offset",
+      "repo": "https://github.com/cdeust/session-optimizer.git",
+      "commit": "9dac774ec94c5ac15490d1d126722238fe6619f7",
+      "setup": [],
+      "defect": {
+        "file": "plugins/context-guard/hooks/usage_reader.py",
+        "from": "    return 0 if since_offset > size else since_offset",
+        "to": "    return 0 if since_offset >= size else since_offset"
+      },
+      "failing": [
+        "tests/test_context_guard_hooks.py::test_has_activity_since_offset_equal_size_is_false_even_with_earlier_tool_use",
+        "tests/test_context_guard_hooks.py::test_read_last_usage_and_activity_dispatch_to_codex"
+      ],
+      "check": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_context_guard_hooks.py"
+      ],
+      "allow": "Bash(python3 -m pytest *)"
+    },
+    {
+      "id": "session-optimizer-scan-cap",
+      "repo": "https://github.com/cdeust/session-optimizer.git",
+      "commit": "9dac774ec94c5ac15490d1d126722238fe6619f7",
+      "setup": [],
+      "defect": {
+        "file": "plugins/context-guard/hooks/usage_reader.py",
+        "from": "    return result.reason == \"cap\"  # clean EOF with no hit -> False",
+        "to": "    return result.reason != \"cap\"  # clean EOF with no hit -> False"
+      },
+      "failing": [
+        "tests/test_context_guard_hooks.py::test_has_activity_since_and_line_has_tool_use",
+        "tests/test_context_guard_hooks.py::test_has_activity_since_fails_open_when_the_scan_cap_is_hit_before_eof",
+        "tests/test_context_guard_hooks.py::test_guard_main_codex_skips_when_no_activity_since_last_fire"
+      ],
+      "check": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_context_guard_hooks.py"
+      ],
+      "allow": "Bash(python3 -m pytest *)"
+    },
+    {
+      "id": "mods-resume-conclusion",
+      "repo": "https://github.com/cdeust/claude-mods.git",
+      "commit": "a2c774fb88bf75d9744d25a87c410448449aef65",
+      "setup": [],
+      "defect": {
+        "file": "scripts/ci_codex_review_resume.py",
+        "from": "        or job.get(\"conclusion\") not in (\"success\", \"failure\", \"skipped\")",
+        "to": "        and job.get(\"conclusion\") not in (\"success\", \"failure\", \"skipped\")"
+      },
+      "failing": [
+        "scripts/tests/test_ci_codex_review_resume.py::ResumePolicyTests::test_missing_or_cancelled_test_evidence_does_not_resume_repair"
+      ],
+      "check": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "scripts/tests/test_ci_codex_review_resume.py"
+      ],
+      "allow": "Bash(python3 -m pytest *)"
+    },
+    {
+      "id": "zetetic-warn-silenced",
+      "repo": "https://github.com/cdeust/zetetic-team-subagents.git",
+      "commit": "f9e50c2edc04a9296db48d2d0feb2d6a11b21bbc",
+      "setup": [],
+      "defect": {
+        "file": "tools/redaction_gate.py",
+        "from": "    return os.environ.get(WARN_ENV, \"on\").lower() == \"off\"",
+        "to": "    return os.environ.get(WARN_ENV, \"on\").lower() != \"off\""
+      },
+      "failing": ["tests/test_redaction_gate.py::test_warn_silenced"],
+      "check": ["python3", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_redaction_gate.py"],
+      "allow": "Bash(python3 -m pytest *)"
     }
   ]
 }

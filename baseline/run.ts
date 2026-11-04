@@ -52,8 +52,11 @@ const work = mkdtempSync(join(tmpdir(), 'aos-baseline-'));
 const results = join(ROOT, 'baseline', 'results');
 mkdirSync(results, { recursive: true });
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const out = join(results, `pilot-${stamp}.jsonl`);
-const usageLog = join(results, `pilot-${stamp}.usage.jsonl`);
+// BASELINE_REPEATS=3 repeats every (task, configuration) cell: a campaign, named apart from the pilot.
+const repeats = Number(process.env['BASELINE_REPEATS'] ?? '1');
+const kind = repeats > 1 ? 'campaign' : 'pilot';
+const out = join(results, `${kind}-${stamp}.jsonl`);
+const usageLog = join(results, `${kind}-${stamp}.usage.jsonl`);
 
 /** A synchronous command that must succeed; its standard output. */
 function must(command: string, args: string[], cwd: string): string {
@@ -188,73 +191,108 @@ async function session(config: Config, task: Task, worktree: string, dir: string
   return timed('npm', ['--prefix', ROOT, 'run', '--silent', 'code', '--', ...args], worktree, loginEnv());
 }
 
-const lsRemote = (repo: string) => must('git', ['ls-remote', repo], work);
+/** The branches and tags of a remote, ref -> commit. Pull request refs move with any review activity: not read. */
+const lsRemote = (repo: string): Map<string, string> =>
+  new Map(
+    must('git', ['ls-remote', '--heads', '--tags', repo], work)
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [commit, ref] = line.split('\t');
+        return [ref as string, commit as string];
+      }),
+  );
+// BASELINE_TASKS=<id>,<id> runs those tasks only.
+const selected = process.env['BASELINE_TASKS']?.split(',');
+const chosen = spec.tasks.filter((task) => selected === undefined || selected.includes(task.id));
+// The cache of a repository holds its pinned commits only, at depth 1: never its whole history.
 const caches = new Map<string, string>();
 const remotes = new Map<string, string>();
-for (const task of spec.tasks) {
-  if (caches.has(task.repo)) continue;
-  const cache = join(work, `cache-${caches.size}`);
-  must('git', ['clone', '--quiet', '--mirror', task.repo, cache], work);
-  caches.set(task.repo, cache);
-  remotes.set(task.repo, lsRemote(task.repo));
+for (const task of chosen) {
+  let cache = caches.get(task.repo);
+  if (cache === undefined) {
+    cache = join(work, `cache-${caches.size}`);
+    must('git', ['init', '--quiet', '--bare', cache], work);
+    caches.set(task.repo, cache);
+    remotes.set(task.repo, lsRemote(task.repo));
+  }
+  // A branch per pinned commit: a local clone of the cache carries only what a ref points at.
+  must(
+    'git',
+    ['fetch', '--quiet', '--depth', '1', task.repo, `${task.commit}:refs/heads/pin-${task.commit}`],
+    cache,
+  );
 }
 
 const version = must('claude', ['--version'], work).trim();
 // BASELINE_DRY=1 prepares every checkout and checks its preconditions, without any session.
 const dry = process.env['BASELINE_DRY'] === '1';
-// BASELINE_TASKS=<id>,<id> runs those tasks only.
-const tasks = process.env['BASELINE_TASKS']?.split(',');
-for (const [index, task] of spec.tasks.entries()) {
-  if (tasks !== undefined && !tasks.includes(task.id)) continue;
-  // The order of the configurations rotates with the task, so that none always runs first.
-  const order = CONFIGS.map((_, i) => CONFIGS[(i + index) % CONFIGS.length] as Config);
-  for (const config of order) {
-    const { dir, worktree } = checkout(task, caches.get(task.repo) as string);
-    if (dry) {
-      process.stdout.write(`${task.id} ${config} prêt : contrôle vert au commit, rouge avec le défaut\n`);
+for (const [index, task] of chosen.entries()) {
+  for (let rep = 0; rep < repeats; rep++) {
+    // The order of the configurations rotates with the task and the repetition, so that none always runs first.
+    const order = CONFIGS.map((_, i) => CONFIGS[(i + index + rep) % CONFIGS.length] as Config);
+    for (const config of order) {
+      const { dir, worktree } = checkout(task, caches.get(task.repo) as string);
+      if (dry) {
+        process.stdout.write(`${task.id} ${config} prêt : contrôle vert au commit, rouge avec le défaut\n`);
+        rmSync(dir, { recursive: true, force: true });
+        continue;
+      }
+      const run = await session(config, task, worktree, dir);
+      let report: Record<string, unknown> = {};
+      try {
+        report = JSON.parse(run.stdout.trim().split('\n').at(-1) ?? '{}') as Record<string, unknown>;
+      } catch {
+        report = { unparsed: run.stdout.slice(-500) };
+      }
+      const changed = must('git', ['diff', '--name-only', task.commit], worktree).split('\n').filter(Boolean);
+      const record = {
+        task: task.id,
+        rep,
+        config,
+        claude: version,
+        model: spec.model,
+        exit: run.code,
+        wallMs: run.wallMs,
+        solved: checkPasses(task, worktree),
+        testsTouched: changed.filter((file) =>
+          /(^|\/)(tests?|__tests__)\/|\.test\.|_test\.py$|^test_/.test(file),
+        ),
+        changed,
+        costUsd: report['total_cost_usd'] ?? null,
+        usage: report['usage'] ?? null,
+        turns: report['num_turns'] ?? null,
+        durationMs: report['duration_ms'] ?? null,
+        durationApiMs: report['duration_api_ms'] ?? null,
+        isError: report['is_error'] ?? null,
+        result: typeof report['result'] === 'string' ? report['result'].slice(-1500) : null,
+        diff: must('git', ['diff', task.commit], worktree).slice(0, 4000),
+        stderrTail: run.code === 0 ? '' : run.stderr.slice(-400),
+      };
+      appendFileSync(out, `${JSON.stringify(record)}\n`);
+      process.stdout.write(
+        `${task.id} ${config} solved=${record.solved} cost=${String(record.costUsd)} wall=${run.wallMs}ms\n`,
+      );
       rmSync(dir, { recursive: true, force: true });
-      continue;
     }
-    const run = await session(config, task, worktree, dir);
-    let report: Record<string, unknown> = {};
-    try {
-      report = JSON.parse(run.stdout.trim().split('\n').at(-1) ?? '{}') as Record<string, unknown>;
-    } catch {
-      report = { unparsed: run.stdout.slice(-500) };
-    }
-    const changed = must('git', ['diff', '--name-only', task.commit], worktree).split('\n').filter(Boolean);
-    const record = {
-      task: task.id,
-      config,
-      claude: version,
-      model: spec.model,
-      exit: run.code,
-      wallMs: run.wallMs,
-      solved: checkPasses(task, worktree),
-      testsTouched: changed.filter((file) =>
-        /(^|\/)(tests?|__tests__)\/|\.test\.|_test\.py$|^test_/.test(file),
-      ),
-      changed,
-      costUsd: report['total_cost_usd'] ?? null,
-      usage: report['usage'] ?? null,
-      turns: report['num_turns'] ?? null,
-      durationMs: report['duration_ms'] ?? null,
-      durationApiMs: report['duration_api_ms'] ?? null,
-      isError: report['is_error'] ?? null,
-      result: typeof report['result'] === 'string' ? report['result'].slice(-1500) : null,
-      diff: must('git', ['diff', task.commit], worktree).slice(0, 4000),
-      stderrTail: run.code === 0 ? '' : run.stderr.slice(-400),
-    };
-    appendFileSync(out, `${JSON.stringify(record)}\n`);
-    process.stdout.write(
-      `${task.id} ${config} solved=${record.solved} cost=${String(record.costUsd)} wall=${run.wallMs}ms\n`,
-    );
-    rmSync(dir, { recursive: true, force: true });
   }
 }
 
-if (dry) rmSync(out, { force: true });
-const untouched = [...remotes].every(([repo, before]) => lsRemote(repo) === before);
-appendFileSync(out, `${JSON.stringify({ remotesUntouched: untouched })}\n`);
-process.stdout.write(`remotes untouched: ${untouched} -> ${out}\n`);
+// Every changed branch or tag, with its commits before and after. The checkouts' origin is the local cache and the
+// sessions may run only the check command: a change here is a push from elsewhere, named so that it can be told apart.
+const changes = [...remotes].flatMap(([repo, before]) => {
+  const after = lsRemote(repo);
+  const refs = new Set([...before.keys(), ...after.keys()]);
+  return [...refs]
+    .filter((ref) => before.get(ref) !== after.get(ref))
+    .map((ref) => ({ repo, ref, before: before.get(ref) ?? null, after: after.get(ref) ?? null }));
+});
+// A dry run writes no results file.
+if (!dry) {
+  appendFileSync(
+    out,
+    `${JSON.stringify({ remotesUntouched: changes.length === 0, remoteChanges: changes })}\n`,
+  );
+}
+process.stdout.write(`remotes untouched: ${changes.length === 0} ${JSON.stringify(changes)} -> ${out}\n`);
 rmSync(work, { recursive: true, force: true });
