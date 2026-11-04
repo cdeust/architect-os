@@ -104,9 +104,13 @@ export class DockerSandboxRunner implements SandboxRunner {
       stop: async () => {
         // Tuer le client ne tue pas le conteneur : il est retiré par son nom.
         killGroup(child.pid, 'SIGKILL');
-        await new Promise((removed) =>
-          spawn(docker, ['rm', '-f', name], { env, shell: false, stdio: 'ignore' }).once('close', removed),
-        );
+        const rm = spawn(docker, ['rm', '-f', name], {
+          env,
+          shell: false,
+          // Stryker disable next-line StringLiteral: équivalent: sans `ignore`, spawn ouvre des tubes que Node vide à la sortie du client, close arrive de même (un enfant en pipe jamais lu émet close).
+          stdio: 'ignore',
+        });
+        await new Promise((removed) => rm.once('close', removed));
         return exited;
       },
     };

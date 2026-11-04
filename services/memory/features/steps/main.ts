@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
+import { createServer as createHttpServer, type Server } from 'node:http';
 import { createServer } from 'node:net';
 import { PassThrough } from 'node:stream';
 import { runtimeOf, serve, start, type MemoryRuntime, type Started } from '../../src/main.js';
@@ -37,6 +38,10 @@ class MainScenario {
   failure: Error | undefined;
   started: Started[] = [];
   logs: string[] = [];
+  /** The operations a fake data component received, path and body. */
+  dataCalls: { path: string; body: unknown }[] = [];
+  /** The answer of the internal tools host of a started service. */
+  answer: number | undefined;
   /** The free MCP port handed to a second start. */
   freePort = 0;
   dir = '';
@@ -116,6 +121,53 @@ async function startOn(world: MemoryWorld, runtime: MemoryRuntime): Promise<Star
 }
 
 const freeRuntime = (): MemoryRuntime => runtimeOf({ ...ENV, PORT: '0', INTERNAL_PORT: '0' });
+
+/** A fake data component on a free port: records each operation and answers it with an empty list. */
+async function fakeData(world: MemoryWorld): Promise<string> {
+  const s = scenario(world);
+  const server: Server = createHttpServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk: Buffer) => (body += chunk.toString('utf8')));
+    req.on('end', () => {
+      s.dataCalls.push({ path: req.url ?? '', body: JSON.parse(body) as unknown });
+      res.writeHead(200, { 'content-type': 'application/json' }).end('[]');
+    });
+  });
+  await new Promise<void>((listening) => server.listen(0, '127.0.0.1', listening));
+  world.cleanups.push(() => new Promise<void>((closed) => server.close(() => closed())));
+  return `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+}
+
+When('I start the memory service on free ports over a fake data component', async function () {
+  await startOn(this, { ...freeRuntime(), dataUrl: await fakeData(this) });
+});
+
+When(
+  'I post {string} to the internal tool {string} of the started service',
+  async function (body: string, tool: string) {
+    const res = await fetch(`http://127.0.0.1:${first(this).ports[1]}/internal/${tool}`, {
+      method: 'POST',
+      body,
+    });
+    await res.text();
+    scenario(this).answer = res.status;
+  },
+);
+
+Then(
+  'the fake data component received {string} with the query {string}, and the internal tool answered {int}',
+  function (path: string, query: string, status: number) {
+    const s = scenario(this);
+    assert.deepEqual(
+      [
+        s.dataCalls.map((call) => call.path),
+        (s.dataCalls[0]?.body as { query?: string } | undefined)?.query,
+        s.answer,
+      ],
+      [[path], query, status],
+    );
+  },
+);
 
 When('I start the memory service on free ports', async function () {
   await startOn(this, freeRuntime());

@@ -34,6 +34,11 @@ Feature: the composition root of the memory service
     When I close the memory service
     Then the memory MCP host no longer answers
 
+  Scenario: the internal tools host reaches the data component of the runtime
+    When I start the memory service on free ports over a fake data component
+    And I post '{"query":"q","limit":1}' to the internal tool "memory_search" of the started service
+    Then the fake data component received "/v1/ops/memory.search" with the query "q", and the internal tool answered 200
+
   Scenario: the worker runs through the Docker adapter with the runtime's options
     When I start the memory service on free ports
     And the memory worker runner runs a recall request through the fake docker client
