@@ -31,7 +31,7 @@ See the zone table in [architecture.md](architecture.md). `app`, `exec` and `dat
 
 ## Worker containers
 
-Started by `DockerContainerRunner` (`services/memory/src/infrastructure/docker-runner.ts`), one container per execution, input as one JSON document on stdin, output as one JSON document on stdout:
+Started through the `SandboxRunner` port: `SandboxContainerRunner` (`services/memory/src/infrastructure/sandbox-container-runner.ts`) asks the Docker adapter of `packages/sandbox` (`docker-runner.ts`) for one container per execution, writes the input as one JSON document on stdin and reads the output as one JSON document on stdout, at most 1 MiB on stdout and on stderr (beyond, `WORKER_OUTPUT_INVALID` and the container is removed). The container is named `aos-sandbox-<uuid>`; stopping it kills the client's process group and runs `docker rm -f` on that name:
 
 ```
 docker run --rm -i --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop ALL

@@ -68,7 +68,7 @@ Every descriptive file has a scenario that loads the committed file, checks it a
 - `pg` only in `data/src/infrastructure`. SQL only in `data/sql/` and `data/migrations/`, executed only by `data/src/infrastructure`. No DB access anywhere else. Data exposes typed operations, never free-form SQL.
 - `@anthropic-ai/claude-agent-sdk` only in `services/*/worker`.
 - `@modelcontextprotocol/sdk` only in `presentation` and `infrastructure` of `gateway` and `services/*`, and in their `features/` (step definitions).
-- `node:child_process` only in `packages/sandbox`, with two named exceptions in `.dependency-cruiser.cjs`: `services/memory/src/infrastructure/docker-runner.ts` (until brick 1b.1) and `tools/test-gate/src/infrastructure/git.ts` (the one file through which the gate runs git). `@anthropic-ai/sandbox-runtime` only in `packages/sandbox`, no exception.
+- `node:child_process` only in `packages/sandbox`, the `SandboxRunner` port through which every process is launched (component infrastructure may import it), with two named exceptions in `.dependency-cruiser.cjs`: `tools/test-gate/src/infrastructure/git.ts` (the one file through which the gate runs git) and `tools/test-gate/src/infrastructure/replay.ts` (the one through which it replays mutation verdicts). `@anthropic-ai/sandbox-runtime` only in `packages/sandbox`, no exception.
 - No import cycles.
 - The gateway and the proxy contain no business logic: the gateway runs no agent and touches no data.
 

@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readCapped } from '../../src/capped.js';
 import { InMemorySandboxRunner } from '../../src/in-memory.js';
 import type { Sandbox, SandboxExit, SandboxRunner } from '../../src/port.js';
 import {
@@ -265,4 +266,118 @@ Then('no per-sandbox folder is left in the temporary directory', function () {
   const after = execFileSync('ls', [tmpdir()], { encoding: 'utf8' });
   const leftovers = after.split('\n').filter((f) => f.startsWith('aos-sandbox-') && !before.includes(f));
   assert.deepEqual(leftovers, []);
+});
+
+// --- canary.feature and spawn.feature (features/sandbox): real srt, a lying canary, a hostile child ---
+
+Given('an srt runner over a throwaway git repository whose canary prints {string}', function (line: string) {
+  useSrt(this, (repo) => {
+    // Outside the worktree, which the sandbox may write: a trusted path must not be writable by it.
+    const probe = join(repo.root, 'lying-canary.mjs');
+    writeFileSync(probe, `process.stdout.write(${JSON.stringify(`${line}\n`)});\n`);
+    return { canaryProbe: probe };
+  });
+});
+
+/** Hostile scripts run by node inside the sandbox, one argv each: no shell, no quoting. */
+const HOSTILE: Record<string, string> = {
+  'a descendant that ignores SIGTERM': [
+    "const { spawn } = require('node:child_process');",
+    // Bounded: a mutant that kills only the group leader leaves it for a minute, not forever.
+    "const child = spawn(process.execPath, ['-e', 'process.on(\"SIGTERM\", () => {}); setTimeout(() => {}, 60000)'], { stdio: 'ignore' });",
+    "process.stdout.write(child.pid + '\\n');",
+    "process.on('SIGTERM', () => {});",
+    'setInterval(() => {}, 1000);',
+  ].join(' '),
+  'five megabytes on stdout, then wait':
+    "process.stdout.write('x'.repeat(5 * 1024 * 1024)); setInterval(() => {}, 1000);",
+  'exit at once': 'process.exit(0);',
+};
+
+When(
+  'I start profile {string} with the hostile script {string}',
+  async function (profile: string, name: string) {
+    const script = HOSTILE[name];
+    assert.ok(script !== undefined, `no hostile script named "${name}"`);
+    const started = await runner(this).start({
+      profile,
+      cwd: stored<string>(this, 'cwd'),
+      command: ['node', '-e', script],
+    });
+    this.state['sandbox'] = started;
+  },
+);
+
+When('I read the pid the hostile script printed, then stop the sandbox', async function () {
+  const s = sandbox(this);
+  const line = await new Promise<string>((done) => {
+    let text = '';
+    s.stdout.on('data', (chunk: Buffer) => {
+      text += chunk.toString('utf8');
+      if (text.includes('\n')) done(text.split('\n')[0] as string);
+    });
+  });
+  this.state['descendant'] = Number(line);
+  await s.stop();
+});
+
+/**
+ * The state of a process: '' once gone, `Z` for a zombie, dead and not yet reaped by its new parent. Linux:
+ * /proc/<pid>/stat (proc(5)); elsewhere kill(pid, 0), which ends with ESRCH once the process is reaped.
+ */
+const stateOf = (pid: number): string => {
+  if (existsSync('/proc')) {
+    try {
+      return readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1]?.charAt(0) ?? '';
+    } catch {
+      return '';
+    }
+  }
+  try {
+    process.kill(pid, 0);
+    return 'S';
+  } catch {
+    return '';
+  }
+};
+
+Then('the descendant is gone', async function () {
+  const pid = stored<number>(this, 'descendant');
+  assert.ok(Number.isInteger(pid) && pid > 0, `no pid read: ${pid}`);
+  let state = stateOf(pid);
+  for (let tries = 0; tries < 30 && state !== '' && state !== 'Z'; tries++) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    state = stateOf(pid);
+  }
+  assert.ok(state === '' || state === 'Z', `descendant ${pid} still running: ${state}`);
+});
+
+When(
+  'I read its stdout capped at {int} bytes, then stop the sandbox on refusal',
+  async function (bound: number) {
+    const s = sandbox(this);
+    this.state['cappedRefusal'] = await readCapped(s.stdout, bound).then(
+      () => null,
+      async (error: Error) => {
+        this.state['stoppedExit'] = await s.stop();
+        return error;
+      },
+    );
+  },
+);
+
+Then('the capped read of the sandbox is refused with {string}', function (message: string) {
+  assert.equal(stored<Error | null>(this, 'cappedRefusal')?.message, message);
+});
+
+Then('the stopped sandbox has exited', function () {
+  assert.ok(this.state['stoppedExit'] !== undefined, 'the sandbox was not stopped');
+});
+
+When('I write two megabytes on its stdin and wait for it to end', async function () {
+  const s = sandbox(this);
+  s.stdout.resume();
+  s.stderr.resume();
+  s.stdin.end('y'.repeat(2 * 1024 * 1024));
+  await s.exited;
 });

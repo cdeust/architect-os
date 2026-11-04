@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { timeoutError, type ContainerRunner } from '../../src/domain/ports.js';
-import { DockerContainerRunner, type Exec } from '../../src/infrastructure/docker-runner.js';
+import { PassThrough } from 'node:stream';
+import type { Sandbox, SandboxExit, SandboxRequest, SandboxRunner } from '@architect-os/sandbox';
+import type { ContainerRunner } from '../../src/domain/ports.js';
+import { SandboxContainerRunner } from '../../src/infrastructure/sandbox-container-runner.js';
 import { InProcessContainerRunner } from '../../src/infrastructure/in-process-runner.js';
 import {
   Given,
@@ -15,22 +17,62 @@ import {
   type MemoryWorld,
 } from './helpers.js';
 
-const CONFIG = {
-  image: 'worker:test',
-  network: 'exec',
-  memory: '256m',
-  pidsLimit: 64,
-  env: { INTERNAL_TOOLS_URL: 'http://memory:8083' },
-};
-
 const LIMITS = { max_turns: 1, max_budget_usd: 0.1 };
+
+/** What the scripted port does: print, then exit; or never finish; or refuse to start. */
+type Script =
+  | { readonly kind: 'print'; readonly stdout: string; readonly stderr: string; readonly exitCode: number }
+  | { readonly kind: 'hang' }
+  | { readonly kind: 'refuse'; readonly message: string };
+
+/** A fake SandboxRunner port: records the request, stdin and stops; plays its script on its streams. */
+class ScriptedPort implements SandboxRunner {
+  request: SandboxRequest | undefined;
+  stdin = '';
+  stopped = false;
+
+  constructor(private readonly script: Script) {}
+
+  async start(request: SandboxRequest): Promise<Sandbox> {
+    if (this.script.kind === 'refuse') throw new Error(this.script.message);
+    this.request = request;
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    stdin.on('data', (chunk: Buffer) => (this.stdin += chunk.toString('utf8')));
+    let finish: (exit: SandboxExit) => void = () => undefined;
+    const exited = new Promise<SandboxExit>((done) => (finish = done));
+    const script = this.script;
+    if (script.kind === 'print') {
+      stdin.on('end', () => {
+        stdout.end(script.stdout);
+        stderr.end(script.stderr);
+        finish({ code: script.exitCode, signal: null });
+      });
+    }
+    return {
+      stdin,
+      stdout,
+      stderr,
+      exited,
+      stop: async () => {
+        this.stopped = true;
+        stdout.destroy();
+        stderr.destroy();
+        finish({ code: null, signal: 'SIGKILL' });
+        return exited;
+      },
+    };
+  }
+}
+
+const sandboxRunner = (port: ScriptedPort, maxOutputBytes = 1_000_000) =>
+  new SandboxContainerRunner(port, { profile: 'memory-worker', cwd: '/work', maxOutputBytes });
 
 class RunnerScenario {
   runner: ContainerRunner | undefined;
+  port: ScriptedPort | undefined;
   outcome: Attempt | undefined;
-  args: string[] = [];
-  calls: string[][] = [];
-  stdin = '';
 }
 
 const scenario = (world: MemoryWorld) => slot(world, 'runners', () => new RunnerScenario());
@@ -43,8 +85,9 @@ Given(
     const s = scenario(this);
     if (adapter === 'in-process') {
       s.runner = new InProcessContainerRunner(async () => ({ stdout, exitCode }));
-    } else if (adapter === 'docker (fake exec)') {
-      s.runner = new DockerContainerRunner(CONFIG, async () => ({ stdout, exitCode, stderr: '' }));
+    } else if (adapter === 'sandbox (fake port)') {
+      s.port = new ScriptedPort({ kind: 'print', stdout, stderr: '', exitCode });
+      s.runner = sandboxRunner(s.port);
     } else {
       assert.fail(`unknown ContainerRunner adapter: ${adapter}`);
     }
@@ -55,13 +98,33 @@ Given('the {string} container runner whose worker never finishes', function (ada
   const s = scenario(this);
   if (adapter === 'in-process') {
     s.runner = new InProcessContainerRunner(() => new Promise(() => undefined));
-  } else if (adapter === 'docker (fake exec)') {
-    s.runner = new DockerContainerRunner(CONFIG, async (_c, _a, _s, timeoutMs) => {
-      throw timeoutError(timeoutMs);
-    });
+  } else if (adapter === 'sandbox (fake port)') {
+    s.port = new ScriptedPort({ kind: 'hang' });
+    s.runner = sandboxRunner(s.port);
   } else {
     assert.fail(`unknown ContainerRunner adapter: ${adapter}`);
   }
+});
+
+Given(
+  'the sandbox container runner whose worker writes {int} bytes on {word}, bounded at {int}',
+  function (bytes: number, stream: string, bound: number) {
+    const s = scenario(this);
+    const text = 'x'.repeat(bytes);
+    s.port = new ScriptedPort({
+      kind: 'print',
+      stdout: stream === 'stdout' ? text : '{}',
+      stderr: stream === 'stderr' ? text : '',
+      exitCode: 0,
+    });
+    s.runner = sandboxRunner(s.port, bound);
+  },
+);
+
+Given('the sandbox container runner whose port refuses to start with {string}', function (message: string) {
+  const s = scenario(this);
+  s.port = new ScriptedPort({ kind: 'refuse', message });
+  s.runner = sandboxRunner(s.port);
 });
 
 When(
@@ -97,87 +160,31 @@ Then('the container runner is rejected with code {string}', function (code: stri
   refusedWith(scenario(this).outcome, code);
 });
 
-// --- DockerContainerRunner isolation flags ---
+// --- the sandbox adapter and its port ---
 
-Given('the docker runner arguments of the test configuration', function () {
-  scenario(this).args = new DockerContainerRunner(CONFIG).args();
-});
-
-Then('the docker arguments include {string}', function (flag: string) {
-  assert.ok(scenario(this).args.includes(flag), `${flag} is not in the docker arguments`);
-});
-
-Then('the docker argument after {string} is {string}', function (flag: string, value: string) {
-  const { args } = scenario(this);
-  assert.equal(args[args.indexOf(flag) + 1], value);
-});
-
-Then('the last docker argument is {string}', function (value: string) {
-  assert.equal(scenario(this).args.at(-1), value);
-});
-
-Then('the forwarded docker environment is {string}', function (expected: string) {
-  const { args } = scenario(this);
-  assert.deepEqual(
-    args.filter((_, i) => args[i - 1] === '--env'),
-    JSON.parse(expected),
-  );
-});
-
-// --- DockerContainerRunner execution ---
-
-Given('a docker runner whose exec records its calls and times out on run', function () {
-  const s = scenario(this);
-  const exec: Exec = async (_c, args) => {
-    s.calls.push(args);
-    if (args[0] === 'run') throw timeoutError(5);
-    return { exitCode: 0, stdout: '', stderr: '' };
-  };
-  s.runner = new DockerContainerRunner(CONFIG, exec);
-});
-
-Given('a docker runner whose exec records its stdin and succeeds', function () {
-  const s = scenario(this);
-  const exec: Exec = async (_c, _a, input) => {
-    s.stdin = input;
-    return { exitCode: 0, stdout: '{}', stderr: '' };
-  };
-  s.runner = new DockerContainerRunner(CONFIG, exec);
-});
-
-Given('a docker runner whose exec fails with {string}', function (message: string) {
-  scenario(this).runner = new DockerContainerRunner(CONFIG, async () => {
-    throw new Error(message);
-  });
-});
-
-When(
-  'the docker runner runs a request for run {string} with a timeout of {int} ms',
-  async function (runId: string, timeoutMs: number) {
-    const s = scenario(this);
-    const runner = required(s.runner, 'a docker runner');
-    s.outcome = await attempt(() =>
-      runner.run({ input: { run_id: runId, tool: 't', input: 1, limits: LIMITS }, timeoutMs }),
-    );
-  },
-);
-
-Then('the docker runner is rejected with code {string}', function (code: string) {
-  refusedWith(scenario(this).outcome, code);
-});
+const port = (world: MemoryWorld) => required(scenario(world).port, 'a fake port');
 
 Then(
-  'docker call number {int} includes {string} and {string}',
-  function (n: number, first: string, second: string) {
-    const call = scenario(this).calls[n - 1];
-    assert.ok(call?.includes(first) && call.includes(second), `call ${n} lacks ${first} ${second}: ${call}`);
+  'the fake port was asked for the profile {string} in {string} with an empty argv',
+  function (profile: string, cwd: string) {
+    assert.deepEqual(port(this).request, { profile, cwd, command: [] });
   },
 );
 
-Then('docker call number {int} is {string}', function (n: number, expected: string) {
-  assert.deepEqual(scenario(this).calls[n - 1], JSON.parse(expected));
+Then('the fake port received on stdin {string}', function (stdin: string) {
+  assert.equal(port(this).stdin, stdin);
 });
 
-Then('the docker worker stdin matches {string}', function (expected: string) {
-  assertMatches(JSON.parse(scenario(this).stdin), JSON.parse(expected));
+Then('the fake port was stopped', function () {
+  assert.equal(port(this).stopped, true);
+});
+
+Then('the fake port was not stopped', function () {
+  assert.equal(port(this).stopped, false);
+});
+
+Then('the container runner returned {int} bytes of stdout', function (bytes: number) {
+  const { outcome } = scenario(this);
+  assert.ok(outcome && !outcome.failed, 'the runner must have returned');
+  assert.equal((outcome.value as { stdout: string }).stdout.length, bytes);
 });

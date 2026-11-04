@@ -34,7 +34,12 @@ export interface SandboxRunner {
 }
 
 export type SandboxErrorCode =
-  'ISOLATION_UNAVAILABLE' | 'PROFILE_INVALID' | 'NOT_A_WORKTREE' | 'COMMAND_NOT_FOUND' | 'TERMINAL_REQUIRED';
+  | 'ISOLATION_UNAVAILABLE'
+  | 'PROFILE_INVALID'
+  | 'NOT_A_WORKTREE'
+  | 'COMMAND_NOT_FOUND'
+  | 'TERMINAL_REQUIRED'
+  | 'OUTPUT_TOO_LARGE';
 
 /** Refus nommé : aucun repli, aucune exécution hors sandbox. */
 export class SandboxError extends Error {

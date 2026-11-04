@@ -3,7 +3,8 @@ import { IntentService } from './application/intent-service.js';
 import { InternalToolService } from './application/internal-tools.js';
 import type { ContainerRunner, DataPort, RunRegistry, WorkerLimits } from './domain/ports.js';
 import { HttpDataClient } from './infrastructure/data-client.js';
-import { DockerContainerRunner } from './infrastructure/docker-runner.js';
+import { DockerSandboxRunner } from '@architect-os/sandbox';
+import { SandboxContainerRunner } from './infrastructure/sandbox-container-runner.js';
 import { createHttpHost } from './presentation/http-host.js';
 import { createInternalToolsHost } from './presentation/internal-http.js';
 import { createMemoryServer } from './presentation/mcp-server.js';
@@ -28,6 +29,9 @@ export function compose(deps: MemoryDependencies) {
   };
 }
 
+/** Most bytes read from a worker's stdout or stderr: far above a Result of the contract, far below a heap. */
+const WORKER_MAX_OUTPUT_BYTES = 1024 * 1024;
+
 function required(name: string): string {
   const value = process.env[name];
   if (value === undefined || value === '') throw new Error(`${name} is required`);
@@ -36,7 +40,9 @@ function required(name: string): string {
 
 async function main(): Promise<void> {
   const dataClient = new HttpDataClient(required('DATA_URL'));
-  const runner = new DockerContainerRunner({
+  // The worker's sandbox: the Docker adapter of the port, until memory runs under srt (brick 1b.5).
+  const sandboxes = new DockerSandboxRunner({
+    profile: 'memory-worker',
     image: required('WORKER_IMAGE'),
     network: required('WORKER_NETWORK'),
     memory: process.env['WORKER_MEMORY'] ?? '512m',
@@ -45,6 +51,11 @@ async function main(): Promise<void> {
       INTERNAL_TOOLS_URL: required('INTERNAL_TOOLS_URL'),
       ANTHROPIC_BASE_URL: required('BROKER_URL'),
     },
+  });
+  const runner = new SandboxContainerRunner(sandboxes, {
+    profile: 'memory-worker',
+    cwd: process.cwd(),
+    maxOutputBytes: WORKER_MAX_OUTPUT_BYTES,
   });
   const app = compose({ registry: dataClient, data: dataClient, runner, limits: DEFAULT_LIMITS });
   const port = Number(process.env['PORT'] ?? 8081);

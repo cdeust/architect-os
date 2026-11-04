@@ -45,7 +45,7 @@ Le dossier de configuration est recréé à chaque lancement : aucun historique 
 
 Refus sans repli : srt absent, canari qui lit son fichier secret ou joint le port de l'hôte, chemin de confiance inscriptible, répertoire hors d'un worktree lié, identifiant de l'hôte illisible (`ISOLATION_UNAVAILABLE`, `NOT_A_WORKTREE`).
 
-L'adaptateur Docker n'est pas écrit : le poste supporte srt, et le port est prêt pour lui (§6, au premier hôte qui en a besoin).
+L'adaptateur Docker (`src/docker-runner.ts`) sert seulement là où srt n'est pas supporté, choisi par configuration, jamais par détection ni bascule : il reprend sans extension les options durcies de l'ancien runner de memory (lecture seule, aucune capacité, pas d'élévation, utilisateur non root, réseau d'exécution seul, mémoire et PID bornés), lance le client Docker dans son propre groupe de processus avec un environnement fermé, et à l'arrêt tue ce groupe et retire le conteneur par son nom. Sa preuve d'équivalence sur un vrai démon s'écrit au premier hôte réel qui en a besoin (§6). Toute sortie lue d'une sandbox passe par `readCapped` (`src/capped.ts`) : au-delà du plafond, `OUTPUT_TOO_LARGE`, et l'appelant arrête la sandbox.
 
 ## Risques acceptés (document, §4.2)
 

@@ -4,6 +4,8 @@
  */
 const COMPONENT = '^(gateway|services/[^/]+|data|tools/[^/]+)/';
 const CONTRACTS = '^packages/contracts/';
+// The single place that launches processes (platform-v3-srt.md, §6): adapters reach it through its port.
+const SANDBOX = '^packages/sandbox/';
 const LOCAL_TYPES = ['local', 'aliased', 'aliased-tsconfig', 'aliased-subpath-import', 'aliased-workspace'];
 
 /** @type {import('dependency-cruiser').IConfiguration} */
@@ -33,11 +35,12 @@ module.exports = {
     {
       name: 'infrastructure-imports-domain-application',
       comment:
-        'infrastructure adapters implement domain ports; they do not reach presentation or the composition root.',
+        'infrastructure adapters implement domain ports; they do not reach presentation or the composition root. ' +
+        'They may reach packages/sandbox, the SandboxRunner port through which every process is launched.',
       severity: 'error',
       from: { path: `${COMPONENT}src/infrastructure/` },
       to: {
-        pathNot: [`^$1/src/(domain|application|infrastructure)/`, CONTRACTS],
+        pathNot: [`^$1/src/(domain|application|infrastructure)/`, CONTRACTS, SANDBOX],
         dependencyTypes: LOCAL_TYPES,
       },
     },
@@ -102,15 +105,13 @@ module.exports = {
       name: 'child-process-only-in-sandbox',
       comment:
         'Process launching lives behind the SandboxRunner port (docs/design/platform-v3-srt.md, §6). Named exceptions: ' +
-        'services/memory/src/infrastructure/docker-runner.ts, which moves behind the port in brick 1b.1; ' +
         'tools/test-gate/src/infrastructure/git.ts, the single file through which the CI gate runs git (§7); ' +
         'tools/test-gate/src/infrastructure/replay.ts, the single file through which it runs cucumber-js to replay ' +
         'the verdicts of the mutation tool (rule 7).',
       severity: 'error',
       from: {
         pathNot: [
-          '^packages/sandbox/',
-          '^services/memory/src/infrastructure/docker-runner\\.ts$',
+          SANDBOX,
           '^tools/test-gate/src/infrastructure/git\\.ts$',
           '^tools/test-gate/src/infrastructure/replay\\.ts$',
         ],

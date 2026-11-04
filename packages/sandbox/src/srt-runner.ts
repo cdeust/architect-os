@@ -28,6 +28,7 @@ import {
   substitute,
   type SrtSettings,
 } from './profile.js';
+import { killGroup } from './process-group.js';
 import { resolveWorktree } from './worktree.js';
 
 /**
@@ -76,15 +77,6 @@ const STOP_GRACE_MS = 2000;
 /** Vrai si les descripteurs 0, 1 et 2 sont tous trois des terminaux selon `isTerminalFd` (défaut : `isatty` réel). */
 export const standardStreamsAreTerminals = (isTerminalFd: (fd: number) => boolean = isatty): boolean =>
   [0, 1, 2].every((fd) => isTerminalFd(fd));
-
-const killGroup = (pid: number | undefined, signal: NodeJS.Signals): void => {
-  if (pid === undefined) return;
-  try {
-    process.kill(-pid, signal);
-  } catch {
-    /* groupe déjà disparu */
-  }
-};
 
 const unavailable = (message: string): SandboxError => new SandboxError('ISOLATION_UNAVAILABLE', message);
 

@@ -36,7 +36,10 @@ export interface DataPort {
 /** A failure an adapter reports with the Result error code it stands for (worker timeout, data down, ...). */
 export class ServiceError extends Error {
   constructor(
-    readonly code: Extract<ErrorCode, 'WORKER_TIMEOUT' | 'WORKER_UNAVAILABLE' | 'DATA_UNAVAILABLE'>,
+    readonly code: Extract<
+      ErrorCode,
+      'WORKER_TIMEOUT' | 'WORKER_UNAVAILABLE' | 'WORKER_OUTPUT_INVALID' | 'DATA_UNAVAILABLE'
+    >,
     message: string,
   ) {
     super(message);

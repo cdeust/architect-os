@@ -245,13 +245,13 @@ Un seul port, dans `packages/sandbox`, appelé par la seule gateway. C'est le li
 - `detached` et `kill(-pgid)`, jamais `kill` sur `srt` seul, qui laisse des descendants (10 sur 11 sous Linux) [T-06].
 - `stdin.on('error')`, `maxBufferSize` et plafond d'octets sur toute sortie lue : l'hôte tombait sans [E-02, E-03].
 
-Garde : `child_process` et `@anthropic-ai/sandbox-runtime` ne s'importent que dans `packages/sandbox`, règle dependency-cruiser et fixture. [à prouver : 1b]
+Garde : `child_process` et `@anthropic-ai/sandbox-runtime` ne s'importent que dans `packages/sandbox`, règle dependency-cruiser et fixture ; l'infrastructure d'un composant peut importer le port, son domaine et son application non (prouvé : `features/arch/guard.feature`, brique 1b.1).
 
 **Adaptateurs.** srt par défaut. Docker seulement là où srt n'est pas supporté, par un champ de configuration explicite, jamais par détection ni bascule. `services/memory/src/infrastructure/docker-runner.ts` existe, avec ses options durcies : il passe derrière le port, sans s'étendre. Sa socket n'est montée dans aucun conteneur. Sa preuve d'équivalence (joindre le broker sans réseau, arrêt par `docker rm -f`) s'écrit au premier hôte réel qui en a besoin, et Podman ensuite par les mêmes options.
 
 **srt non supporté** : ni macOS avec `sandbox-exec`, ni Linux x64/arm64 avec `bwrap`, `socat`, `ripgrep` et des espaces de noms utilisateur ; `kernel.apparmor_restrict_unprivileged_userns=1` sans profil AppArmor ; conteneur sans espaces de noms utilisateur [E-07] ; root sans `CAP_SETFCAP`.
 
-**Canari, léger.** Au démarrage, une sandbox doit échouer à lire un fichier hors `allowRead` et à joindre une adresse hors allowlist. Tout autre résultat : `ISOLATION_UNAVAILABLE`, refus de démarrer, aucun repli. [à prouver : `canary.feature`, 1b]
+**Canari, léger.** Au démarrage, une sandbox doit échouer à lire un fichier hors `allowRead` et à joindre une adresse hors allowlist. Tout autre résultat : `ISOLATION_UNAVAILABLE`, refus de démarrer, aucun repli (prouvé : `features/sandbox/canary.feature`, brique 1b.1).
 
 **Montée de srt.** Le banc se rejoue à chaque montée de version et le rapport se compare au précédent, dans les deux sens, par OS (T-54). Un test d'évasion réussi que srt ne corrige pas, ou un abandon de srt, rouvre le choix : options et test de pérennité au journal.
 

@@ -772,3 +772,20 @@ Rapports appariés par tâche, moyenne et intervalle à 95 % par bootstrap sur l
 **Reste.** Le texte de la publication, soumis au propriétaire ; rien n'est publié avant son accord.
 
 **Trois piliers.** Recherche : 180 sessions, intervalles de confiance, données et analyse versionnées, une commande par étape (`npm run baseline:campaign`, puis `npm run baseline:analyze -- <fichier>`). SSDLC : cibles jamais poussées, changements distants nommés et attribués. Opérationnel : dépôts publics seulement, aucune clé réelle hors du trousseau.
+
+## 24. Brique 1b.1 : le lancement passe tout entier par le port, sorties bornées, 4 novembre 2026
+
+**Décision du propriétaire.** Revenir à l'architecture : une seule brique livrée pour le quota employé, c'est insuffisant. `gate-macos` reste dans la porte : les autres PR y sont passées.
+
+**Fait.**
+- `packages/sandbox/src/docker-runner.ts` : adaptateur Docker du port `SandboxRunner`, options durcies de l'ancien runner de memory reprises sans extension ; un seul profil servi (`PROFILE_INVALID` sinon) ; client Docker en liste fermée d'environnement, `detached`, trois tubes ; client absent = `COMMAND_NOT_FOUND` ; conteneur `aos-sandbox-<uuid>`, et à l'arrêt groupe du client tué puis `docker rm -f` sur ce nom.
+- `packages/sandbox/src/capped.ts` : `readCapped`, toute sortie lue d'une sandbox, au plus N octets, au-delà `OUTPUT_TOO_LARGE` et flux détruit ; décodage UTF-8 une fois le texte entier.
+- `killGroup` sorti dans `process-group.ts`, partagé par les adaptateurs srt et Docker.
+- `services/memory` : `SandboxContainerRunner` remplace `docker-runner.ts`. Il ne lance plus aucun processus : il demande au port, écrit l'entrée sur stdin, lit stdout et stderr bornés à 1 Mio (au-delà, `WORKER_OUTPUT_INVALID`, code de contrat existant), arrête la sandbox au délai ou au dépassement ; un port qui refuse de démarrer donne `WORKER_UNAVAILABLE`.
+- Garde : l'exception `docker-runner.ts` de `child-process-only-in-sandbox` est retirée ; l'infrastructure d'un composant peut importer `packages/sandbox`, son domaine et son application non (deux fixtures ajoutées). `@architect-os/sandbox` est résolu vers ses sources comme `contracts` : sans quoi les scénarios dépendaient d'un `dist/` non versionné.
+
+**Prouvé** (vrais processus, Linux et macOS en CI pour `features/sandbox`) : `canary.feature`, le vrai canari laisse démarrer, un canari qui dit la lecture permise, la connexion permise, ou rien, refuse le démarrage ; `spawn.feature`, un descendant qui ignore SIGTERM meurt avec sa sandbox, une sortie de 5 Mio est refusée au-delà de 1 Mio et la sandbox arrêtée, un enfant qui ferme stdin aussitôt ne fait pas tomber l'hôte qui y écrit 2 Mio. Témoin négatif du descendant, à la main : avec `kill(pid)` au lieu de `kill(-pid)`, le scénario échoue (« still running: S ») ; le descendant de la fixture est borné à 60 s pour qu'un tel mutant ne laisse pas de processus éternel. Adaptateur Docker sur un faux client exécutable : arguments durcis, refus de profil, client absent, entrée et sortie, code de sortie, environnement fermé, nom et retrait à l'arrêt. Le démon Docker réel reste à l'hôte qui en aura besoin (§6).
+
+**Reste de 1b.** 1b.2 broker (jetons par task, usage au registre), 1b.3 `data` en MCP, 1b.4 gateway, 1b.5 memory sous srt, 1b.6 retrait de compose ; la sortie de 1b est `escape.feature` sur Linux et macOS.
+
+**Trois piliers.** Recherche : chaque propriété a son scénario sur de vrais processus, et son témoin négatif pour la plus critique. SSDLC (STRIDE de la brique) : déni de service par une sortie sans borne, fermé par `readCapped` ; élévation par un descendant qui survit, fermée par le groupe tué ; fuite par un canari faussement vert, fermée par le refus sans repli ; aucune dépendance ajoutée. Opérationnel : sans objet, aucune donnée sensible.

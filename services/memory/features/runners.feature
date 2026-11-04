@@ -1,5 +1,7 @@
 Feature: ContainerRunner adapters
-  Every ContainerRunner adapter satisfies one contract; the Docker runner also pins its isolation flags.
+  Every ContainerRunner adapter satisfies one contract. The sandbox adapter runs the worker through the SandboxRunner
+  port of packages/sandbox (here a scripted fake port): it writes the input on stdin, reads a bounded output, and
+  stops the sandbox on a timeout or an output beyond the bound. It launches no process itself.
 
   Scenario Outline: ContainerRunner contract: returns the worker stdout and exit code
     Given the "<adapter>" container runner whose worker prints '{"a":1}' and exits with 0
@@ -9,7 +11,7 @@ Feature: ContainerRunner adapters
     Examples:
       | adapter            |
       | in-process         |
-      | docker (fake exec) |
+      | sandbox (fake port) |
 
   Scenario Outline: ContainerRunner contract: reports a non-zero exit code without throwing
     Given the "<adapter>" container runner whose worker prints '' and exits with 3
@@ -19,7 +21,7 @@ Feature: ContainerRunner adapters
     Examples:
       | adapter            |
       | in-process         |
-      | docker (fake exec) |
+      | sandbox (fake port) |
 
   Scenario Outline: ContainerRunner contract: rejects with WORKER_TIMEOUT when the worker exceeds the timeout
     Given the "<adapter>" container runner whose worker never finishes
@@ -29,37 +31,38 @@ Feature: ContainerRunner adapters
     Examples:
       | adapter            |
       | in-process         |
-      | docker (fake exec) |
+      | sandbox (fake port) |
 
-  Scenario: DockerContainerRunner uses a read-only filesystem, no capabilities, no privilege escalation and a non-root user
-    Given the docker runner arguments of the test configuration
-    Then the docker arguments include "--read-only"
-    And the docker arguments include "--cap-drop"
-    And the docker arguments include "ALL"
-    And the docker arguments include "--security-opt"
-    And the docker arguments include "no-new-privileges"
-    And the docker argument after "--user" is "10001:10001"
+  Scenario: the sandbox runner starts the configured profile in the configured directory, input on stdin
+    Given the "sandbox (fake port)" container runner whose worker prints '{}' and exits with 0
+    When the container runner runs a recall request with a timeout of 50 ms
+    Then the fake port was asked for the profile "memory-worker" in "/work" with an empty argv
+    And the fake port received on stdin '{"run_id":"r1","tool":"recall","input":{"query":"q"},"limits":{"max_turns":1,"max_budget_usd":0.1}}'
+    And the fake port was not stopped
 
-  Scenario: DockerContainerRunner joins only the configured exec network and ends with the image
-    Given the docker runner arguments of the test configuration
-    Then the docker argument after "--network" is "exec"
-    And the last docker argument is "worker:test"
+  Scenario: a worker that never finishes is stopped at the timeout
+    Given the "sandbox (fake port)" container runner whose worker never finishes
+    When the container runner runs a recall request with a timeout of 50 ms
+    Then the fake port was stopped
 
-  Scenario: DockerContainerRunner forwards only the configured environment
-    Given the docker runner arguments of the test configuration
-    Then the forwarded docker environment is '["INTERNAL_TOOLS_URL=http://memory:8083"]'
+  Scenario Outline: an output beyond the bound is refused and the worker stopped: <stream>
+    Given the sandbox container runner whose worker writes <bytes> bytes on <stream>, bounded at 1000
+    When the container runner runs a recall request with a timeout of 1000 ms
+    Then the container runner is rejected with code "WORKER_OUTPUT_INVALID"
+    And the fake port was stopped
 
-  Scenario: DockerContainerRunner names the container after the run and removes it when the worker times out
-    Given a docker runner whose exec records its calls and times out on run
-    When the docker runner runs a request for run "run/42" with a timeout of 5 ms
-    Then the docker runner is rejected with code "WORKER_TIMEOUT"
-    And docker call number 1 includes "--name" and "agentic-worker-run-42"
-    And docker call number 2 is '["rm","-f","agentic-worker-run-42"]'
+    Examples:
+      | stream | bytes |
+      | stdout | 1001  |
+      | stderr | 1001  |
 
-  Scenario: DockerContainerRunner sends the worker input on stdin and maps a spawn failure to WORKER_UNAVAILABLE
-    Given a docker runner whose exec records its stdin and succeeds
-    When the docker runner runs a request for run "r" with a timeout of 10 ms
-    Then the docker worker stdin matches '{"run_id":"r","tool":"t","input":1}'
-    Given a docker runner whose exec fails with 'docker: not found'
-    When the docker runner runs a request for run "r" with a timeout of 10 ms
-    Then the docker runner is rejected with code "WORKER_UNAVAILABLE"
+  Scenario: an output at the bound is read whole
+    Given the sandbox container runner whose worker writes 1000 bytes on stdout, bounded at 1000
+    When the container runner runs a recall request with a timeout of 1000 ms
+    Then the container runner returned 1000 bytes of stdout
+    And the fake port was not stopped
+
+  Scenario: a port that refuses to start is WORKER_UNAVAILABLE
+    Given the sandbox container runner whose port refuses to start with "ISOLATION_UNAVAILABLE: canari"
+    When the container runner runs a recall request with a timeout of 50 ms
+    Then the container runner is rejected with code "WORKER_UNAVAILABLE"
