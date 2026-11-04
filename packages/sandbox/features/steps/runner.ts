@@ -1,6 +1,15 @@
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -279,13 +288,24 @@ Given('an srt runner over a throwaway git repository whose canary prints {string
   });
 });
 
-/** Hostile scripts run by node inside the sandbox, one argv each: no shell, no quoting. */
+/**
+ * The token of the descendant of a scenario, in its argv: under Linux the sandbox has its own pid namespace, so the
+ * pid it prints means nothing on the host (it once named a kernel thread there); the token does, in each /proc/<pid>/cmdline.
+ */
+export const descendantToken = (world: SandboxWorld): string => {
+  world.state['descendantToken'] ??= `aos-descendant-${randomUUID()}`;
+  return world.state['descendantToken'] as string;
+};
+
+/** Hostile scripts run by node inside the sandbox, one argv each, the token after them: no shell, no quoting. */
 const HOSTILE: Record<string, string> = {
   'a descendant that ignores SIGTERM': [
     "const { spawn } = require('node:child_process');",
     // Bounded: a mutant that kills only the group leader leaves it for a minute, not forever.
-    "const child = spawn(process.execPath, ['-e', 'process.on(\"SIGTERM\", () => {}); setTimeout(() => {}, 60000)'], { stdio: 'ignore' });",
-    "process.stdout.write(child.pid + '\\n');",
+    // The token (process.argv[1] under -e) is passed on: the descendant is found by it from the host (see below).
+    "const child = spawn(process.execPath, ['-e', 'process.on(\"SIGTERM\", () => {}); process.stdout.write(\"ready\"); setTimeout(() => {}, 60000)', process.argv[1]], { stdio: ['ignore', 'pipe', 'ignore'] });",
+    // The pid is printed once the descendant ignores SIGTERM: before, any signal would kill it and prove nothing.
+    "child.stdout.once('data', () => process.stdout.write(child.pid + '\\n'));",
     "process.on('SIGTERM', () => {});",
     'setInterval(() => {}, 1000);',
   ].join(' '),
@@ -302,7 +322,7 @@ When(
     const started = await runner(this).start({
       profile,
       cwd: stored<string>(this, 'cwd'),
-      command: ['node', '-e', script],
+      command: ['node', '-e', script, descendantToken(this)],
     });
     this.state['sandbox'] = started;
   },
@@ -317,39 +337,46 @@ When('I read the pid the hostile script printed, then stop the sandbox', async f
       if (text.includes('\n')) done(text.split('\n')[0] as string);
     });
   });
-  this.state['descendant'] = Number(line);
+  this.state['descendant'] = { pid: Number(line), token: descendantToken(this) };
   await s.stop();
 });
 
 /**
- * The state of a process: '' once gone, `Z` for a zombie, dead and not yet reaped by its new parent. Linux:
- * /proc/<pid>/stat (proc(5)); elsewhere kill(pid, 0), which ends with ESRCH once the process is reaped.
+ * The live processes of a descendant, as `pid state`; a zombie (`Z`), dead and not yet reaped, is not live. Linux:
+ * every /proc/<pid> whose cmdline holds the token (proc(5)), whatever the pid namespace it was started in. Elsewhere
+ * (macOS, no pid namespace): its pid, by kill(pid, 0), which ends with ESRCH once the process is reaped.
  */
-const stateOf = (pid: number): string => {
-  if (existsSync('/proc')) {
+const liveOf = ({ pid, token }: { pid: number; token: string }): string[] => {
+  if (!existsSync('/proc')) {
     try {
-      return readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1]?.charAt(0) ?? '';
+      process.kill(pid, 0);
+      return [`${pid} S`];
     } catch {
-      return '';
+      return [];
     }
   }
-  try {
-    process.kill(pid, 0);
-    return 'S';
-  } catch {
-    return '';
+  const live: string[] = [];
+  for (const entry of readdirSync('/proc').filter((name) => /^\d+$/.test(name))) {
+    try {
+      if (!readFileSync(`/proc/${entry}/cmdline`, 'utf8').split('\0').includes(token)) continue;
+      const state = readFileSync(`/proc/${entry}/stat`, 'utf8').split(') ')[1]?.charAt(0) ?? '';
+      if (state !== 'Z') live.push(`${entry} ${state}`);
+    } catch {
+      /* gone while read */
+    }
   }
+  return live;
 };
 
 Then('the descendant is gone', async function () {
-  const pid = stored<number>(this, 'descendant');
-  assert.ok(Number.isInteger(pid) && pid > 0, `no pid read: ${pid}`);
-  let state = stateOf(pid);
-  for (let tries = 0; tries < 30 && state !== '' && state !== 'Z'; tries++) {
+  const descendant = stored<{ pid: number; token: string }>(this, 'descendant');
+  assert.ok(Number.isInteger(descendant.pid) && descendant.pid > 0, `no pid read: ${descendant.pid}`);
+  let live = liveOf(descendant);
+  for (let tries = 0; tries < 30 && live.length > 0; tries++) {
     await new Promise((resolve) => setTimeout(resolve, 100));
-    state = stateOf(pid);
+    live = liveOf(descendant);
   }
-  assert.ok(state === '' || state === 'Z', `descendant ${pid} still running: ${state}`);
+  assert.deepEqual(live, [], `descendant ${descendant.token} still running`);
 });
 
 When(

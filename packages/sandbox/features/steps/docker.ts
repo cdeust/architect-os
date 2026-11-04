@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { DockerSandboxRunner, dockerArgs, type DockerRunnerOptions } from '../../src/docker-runner.js';
 import type { Sandbox, SandboxExit } from '../../src/port.js';
 import { Given, Then, When, stored, type SandboxWorld } from './helpers.js';
+import { descendantToken } from './runner.js';
 
 const OPTIONS: DockerRunnerOptions = {
   profile: 'memory-worker',
@@ -31,7 +32,8 @@ if (args.includes('hang')) { process.stdout.write('started\\n'); setInterval(() 
 else if (args.includes('close-stdin')) { process.stdin.destroy(); setTimeout(() => process.exit(0), 200); }
 else if (args.includes('orphan') || args.includes('orphan-exit')) {
   // The pid is printed once the descendant ignores SIGTERM: before, any signal would kill it and prove nothing.
-  const child = require('node:child_process').spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); process.stdout.write("ready"); setTimeout(() => {}, 60000)'], { stdio: ['ignore', 'pipe', 'ignore'] });
+  // Its last argv is the token of the request (the argv after the image): found by it from the host.
+  const child = require('node:child_process').spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); process.stdout.write("ready"); setTimeout(() => {}, 60000)', args.at(-1)], { stdio: ['ignore', 'pipe', 'ignore'] });
   child.stdout.once('data', () => {
     process.stdout.write(child.pid + '\\n');
     if (args.includes('orphan-exit')) process.exit(0);
@@ -214,8 +216,13 @@ const imageRunner = (world: SandboxWorld, image: string) => {
   );
 };
 
+/** Starts one image; the argv after it is the token of a descendant, `descendantToken` of the world. */
 const startImage = (world: SandboxWorld, image: string) =>
-  imageRunner(world, image).start({ profile: OPTIONS.profile, cwd: tmpdir(), command: [] });
+  imageRunner(world, image).start({
+    profile: OPTIONS.profile,
+    cwd: tmpdir(),
+    command: [descendantToken(world)],
+  });
 
 const firstLine = (sandbox: Sandbox) =>
   new Promise<string>((read) => {
@@ -230,7 +237,7 @@ When(
   'I start the Docker image {string}, read the pid it printed and stop it',
   async function (image: string) {
     const sandbox = await startImage(this, image);
-    this.state['descendant'] = Number(await firstLine(sandbox));
+    this.state['descendant'] = { pid: Number(await firstLine(sandbox)), token: descendantToken(this) };
     await sandbox.stop();
   },
 );
@@ -240,7 +247,7 @@ When(
   async function (image: string) {
     const sandbox = await startImage(this, image);
     const [pid] = await Promise.all([firstLine(sandbox), sandbox.exited]);
-    this.state['descendant'] = Number(pid);
+    this.state['descendant'] = { pid: Number(pid), token: descendantToken(this) };
   },
 );
 
