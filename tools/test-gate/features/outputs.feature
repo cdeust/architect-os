@@ -149,6 +149,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
       | canary         | mutate                             |
       | src/math.mjs   | ["src/math.mjs"]                   |
       | canary/a.mjs   | ["canary/a.mjs", "src/math.mjs:3-3"] |
+      | zz/c.mjs       | ["src/math.mjs:3-3", "zz/c.mjs"]     |
 
   Scenario: the macos job plans no canary
     Given the gate head is committed

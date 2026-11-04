@@ -71,6 +71,7 @@
         "enabled": false
       },
       "permissions": {
+        "allow": ["Edit(/${worktree}/**)"],
         "deny": [
           "Bash(git push *)",
           "Bash(git config *)",
@@ -94,7 +95,8 @@
           "Read(/${home}/Library/Keychains/**)",
           "Edit(/${home}/Library/Keychains/**)",
           "Edit(/${repo}/.git/hooks/**)",
-          "Edit(/${repo}/.git/config)"
+          "Edit(/${repo}/.git/config)",
+          "Edit(/${worktree}/.claude/**)"
         ]
       }
     },

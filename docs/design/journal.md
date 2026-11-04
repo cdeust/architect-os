@@ -720,3 +720,29 @@ Témoin négatif : sans la règle `Bash(git push *)`, la sonde voit le push acce
 **Reste.** Le premier lancement réel, avec l'identifiant de l'hôte et srt, est celui du propriétaire. La sonde ne passe pas par srt : la frontière reste prouvée par le canari de srt et le banc 1b.0.
 
 **Trois piliers.** Recherche : la sonde se rejoue en une commande, avec son témoin négatif. SSDLC : jeton de session seul dans la sandbox, retiré des sous-processus ; règles de refus dans un fichier que la sandbox ne peut pas écrire ; srt reste la frontière. Opérationnel : aucune donnée sensible, aucune clé réelle dans la sonde.
+
+## 22. Baseline de coût, pilote, 4 novembre 2026
+
+**Décisions du propriétaire.** Une publication publique compare les coûts avec et sans srt, sur un vrai jeu de tâches ; trois configurations (`host`, `host-bare`, `srt`, `baseline/README.md`) pour séparer l'effet de `--bare` de celui de srt ; cibles : les dépôts publics actifs du compte, laissés intacts ; pilote d'abord, volume fixé ensuite ; publication dans ce dépôt, après accord sur le texte final.
+
+**Fait.** `baseline/tasks.json` : trois tâches de correction de défaut, une par dépôt et deux langages (`session-optimizer` et `zetetic-team-subagents` en Python, `ai-architect-mcp-spec` en TypeScript), chacune avec un défaut injecté dont le contrôle passe au commit épinglé et échoue avec le défaut, vérifié avant chaque session (essai à blanc : 9 préparations sur 9). `baseline/run.ts` : une session par tâche et par configuration, ordre des configurations tourné d'une tâche à l'autre, modèle `claude-sonnet-5-5` pour toutes, Claude Code 2.1.314.
+
+**Trouvé en chemin.**
+1. Lancement `srt` du banc : `node --import tsx` cherchait `tsx` depuis la cible ; le banc passe par `npm --prefix <lanceur> run code`, le lancement documenté.
+2. `host-bare` échouait sur les trois tâches : l'agent trouvait la cause, puis Claude Code refusait l'écriture. Le worktree visé vit sous `<repo>/.claude/worktrees/<w>`, et Claude Code protège les chemins qui contiennent `.claude/`, même en `acceptEdits` ; la configuration habituelle du propriétaire l'autorise, les réglages de la session n'avaient que des refus. Défaut réel de l'outil de code, pas du banc : il n'aurait pu éditer aucun fichier. Le profil `builder` autorise désormais `Edit(/${worktree}/**)` et refuse `Edit(/${worktree}/.claude/**)`, le refus l'emportant.
+
+**Résultats du pilote** (`baseline/results/pilot-2026-11-04T07-53-28-654Z.jsonl`, une session par cellule, n = 1 : aucune conclusion statistique).
+
+| Configuration | Résolues | Coût des 3 tâches | Coût moyen | Tokens d'entrée (cache compris) | Écriture de cache par session |
+|---|---|---|---|---|---|
+| `host` | 3 / 3 | 0,584 $ | 0,195 $ | 540 414 | 42 155 à 43 064 |
+| `host-bare` | 3 / 3 | 0,101 $ | 0,034 $ | 122 158 | 6 267 à 7 538 |
+| `srt` | 3 / 3 | 0,128 $ | 0,043 $ | 184 872 | 4 529 à 12 065 |
+
+Lecture prudente : l'écart `host` / `host-bare` vient du contexte chargé à chaque session (environ 42 000 tokens écrits en cache contre 7 000), donc de `--bare` et des entrées explicites, pas de srt. L'écart `host-bare` / `srt` (0,034 $ contre 0,043 $) tient surtout à une session (`session-optimizer`, 16 tours contre 11) : avec une session par cellule, il est dans le bruit. Les sessions `host` portent aussi les hooks et serveurs MCP du propriétaire, qui écrivent hors du banc.
+
+**Coût du pilote.** 9 sessions retenues pour 0,81 $ au tarif public. Avant elles, 11 sessions d'essai pour 0,75 $ : 3 `host` résolues avec l'ancien banc, 4 `host-bare` refusées en écriture puis 1 de vérification, et 3 `srt` arrêtées avant tout appel au modèle ; elles restent dans `baseline/results/` comme journal. Projection pour la campagne de la conception (20 tâches, 3 configurations, 3 répétitions, 180 sessions) : environ 16 $ au tarif public et 2 h 30 de sessions, au coût moyen mesuré.
+
+**Reste.** Le volume de la campagne, au propriétaire ; 17 tâches de plus, construites de la même façon ; les intervalles de confiance ; le texte de la publication, soumis au propriétaire avant toute publication.
+
+**Trois piliers.** Recherche : tâches épinglées par commit, préconditions vérifiées avant chaque session, une commande (`npm run baseline:pilot`), échecs conservés. SSDLC : cibles jamais poussées, références distantes comparées avant et après (intactes) ; `host` et `host-bare` tournent sur l'hôte avec la seule commande de test autorisée, `srt` dans la sandbox. Opérationnel : aucune donnée privée, cibles publiques seulement ; aucune clé réelle hors du trousseau du propriétaire.

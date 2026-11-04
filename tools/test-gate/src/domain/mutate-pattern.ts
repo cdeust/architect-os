@@ -5,7 +5,8 @@ import { matchesGlob } from 'node:path';
 // (node_modules/@stryker-mutator/core/dist/src/fs/mutate-pattern-constants.js, MUTATION_RANGE_REGEX). Stryker
 // generates only the mutants whose location lies inside a range, and unites the ranges of one file.
 
-const RANGE = /^(.*?):(\d+)(?::\d+)?-(\d+)(?::\d+)?$/;
+// No `^`: exec tries index 0 first, where the lazy path group absorbs any prefix, so a match always starts there.
+const RANGE = /(.*?):(\d+)(?::\d+)?-(\d+)(?::\d+)?$/;
 
 /** One pattern per run of consecutive lines: `file:first-last`, whole lines. */
 export function rangePatterns(file: string, lines: ReadonlySet<number>): string[] {
@@ -23,12 +24,12 @@ export function rangePatterns(file: string, lines: ReadonlySet<number>): string[
 
 /**
  * Whether the run mutated lines `start` to `end` of `file`: a pattern names the whole file (its path or a glob), or a
- * range of the file contains them. Exclusions are not read: the gate never mutates what it excludes.
+ * range of the file contains them. An exclusion `!…` names no file: path.matchesGlob does not negate.
  */
 export function mutatedAt(mutate: readonly string[], file: string, start: number, end: number): boolean {
   return mutate.some((pattern) => {
     const range = RANGE.exec(pattern);
-    if (range === null) return !pattern.startsWith('!') && (pattern === file || matchesGlob(file, pattern));
+    if (range === null) return pattern === file || matchesGlob(file, pattern);
     return range[1] === file && Number(range[2]) <= start && end <= Number(range[3]);
   });
 }
@@ -37,6 +38,6 @@ export function mutatedAt(mutate: readonly string[], file: string, start: number
 export function mentioned(mutate: readonly string[], file: string): boolean {
   return mutate.some((pattern) => {
     const path = RANGE.exec(pattern)?.[1] ?? pattern;
-    return !pattern.startsWith('!') && (path === file || matchesGlob(file, path));
+    return path === file || matchesGlob(file, path);
   });
 }

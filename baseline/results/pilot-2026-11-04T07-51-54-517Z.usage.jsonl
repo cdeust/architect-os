@@ -1,0 +1,11 @@
+{"at":"2026-11-04T07:52:31.332Z","status":200,"route":"/v1/messages","model":"claude-sonnet-5-5","input_tokens":4,"output_tokens":109,"cache_read_input_tokens":1495,"cache_creation_input_tokens":350}
+{"at":"2026-11-04T07:52:35.727Z","status":200,"route":"/v1/messages","model":"claude-sonnet-5-5","input_tokens":2,"output_tokens":122,"cache_read_input_tokens":1845,"cache_creation_input_tokens":1127}
+{"at":"2026-11-04T07:52:36.905Z","status":200,"route":"/v1/messages","model":"claude-sonnet-5-5","input_tokens":2,"output_tokens":95,"cache_read_input_tokens":2972,"cache_creation_input_tokens":149}
+{"at":"2026-11-04T07:52:38.172Z","status":200,"route":"/v1/messages","model":"claude-sonnet-5-5","input_tokens":2,"output_tokens":94,"cache_read_input_tokens":3121,"cache_creation_input_tokens":825}
+{"at":"2026-11-04T07:52:39.521Z","status":200,"route":"/v1/messages","model":"claude-sonnet-5-5","input_tokens":2,"output_tokens":90,"cache_read_input_tokens":3946,"cache_creation_input_tokens":129}
+{"at":"2026-11-04T07:52:40.670Z","status":200,"route":"/v1/messages","model":"claude-sonnet-5-5","input_tokens":2,"output_tokens":77,"cache_read_input_tokens":4075,"cache_creation_input_tokens":293}
+{"at":"2026-11-04T07:52:41.950Z","status":200,"route":"/v1/messages","model":"claude-sonnet-5-5","input_tokens":2,"output_tokens":97,"cache_read_input_tokens":4368,"cache_creation_input_tokens":2072}
+{"at":"2026-11-04T07:52:44.639Z","status":200,"route":"/v1/messages","model":"claude-sonnet-5-5","input_tokens":2,"output_tokens":266,"cache_read_input_tokens":6440,"cache_creation_input_tokens":913}
+{"at":"2026-11-04T07:52:46.435Z","status":200,"route":"/v1/messages","model":"claude-sonnet-5-5","input_tokens":2,"output_tokens":220,"cache_read_input_tokens":7353,"cache_creation_input_tokens":425}
+{"at":"2026-11-04T07:52:47.748Z","status":200,"route":"/v1/messages","model":"claude-sonnet-5-5","input_tokens":2,"output_tokens":122,"cache_read_input_tokens":7778,"cache_creation_input_tokens":340}
+{"at":"2026-11-04T07:52:59.979Z","status":200,"route":"/v1/messages","model":"claude-sonnet-5-5","input_tokens":2,"output_tokens":219,"cache_read_input_tokens":8118,"cache_creation_input_tokens":148}

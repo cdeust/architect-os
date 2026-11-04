@@ -25,7 +25,8 @@
     "arch": "depcruise --config .dependency-cruiser.cjs packages data gateway services tools",
     "lint": "npm run format:check --silent && npm run typecheck --silent",
     "check": "npm test",
-    "gate": "sh tools/test-gate/gate.sh"
+    "gate": "sh tools/test-gate/gate.sh",
+    "baseline:pilot": "node --import tsx baseline/run.ts"
   },
   "devDependencies": {
     "@cucumber/cucumber": "12.9.0",

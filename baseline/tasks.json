@@ -1,0 +1,82 @@
+{
+  "description": "Pilot of the cost baseline (docs/design/platform-v3-srt.md, brick 0). Each task injects a known defect into a disposable checkout of a public repository of the owner, pinned by commit, and asks to make the named failing tests pass without touching the tests. `check` passes on the pinned commit and fails with the defect.",
+  "model": "claude-sonnet-5-5",
+  "timeoutMs": 900000,
+  "tasks": [
+    {
+      "id": "session-optimizer-thresholds",
+      "repo": "https://github.com/cdeust/session-optimizer.git",
+      "commit": "9dac774ec94c5ac15490d1d126722238fe6619f7",
+      "setup": [],
+      "defect": {
+        "file": "plugins/context-guard/hooks/thresholds.py",
+        "from": "            if entry[\"match\"] in mid:",
+        "to": "            if entry[\"match\"] == mid:"
+      },
+      "failing": [
+        "tests/test_context_guard_hooks.py::test_threshold_config_and_fallback",
+        "tests/test_codex_subagent_tracking.py::test_old_threshold_config_keeps_new_astra_default_and_explicit_override"
+      ],
+      "check": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_context_guard_hooks.py",
+        "tests/test_statusline_layout.py",
+        "tests/test_codex_subagent_tracking.py"
+      ],
+      "allow": "Bash(python3 -m pytest *)"
+    },
+    {
+      "id": "zetetic-checkpoint-summary",
+      "repo": "https://github.com/cdeust/zetetic-team-subagents.git",
+      "commit": "f9e50c2edc04a9296db48d2d0feb2d6a11b21bbc",
+      "setup": [],
+      "defect": {
+        "file": "tools/checkpoint_summary.py",
+        "from": "    return bool(text) and not text.startswith(\"<\") and not text.startswith(\"Caveat:\")",
+        "to": "    return bool(text) and not text.startswith(\"Caveat:\")"
+      },
+      "failing": [
+        "tests/test_checkpoint_summary.py::test_summarize_measures_every_field",
+        "tests/test_checkpoint_summary.py::test_hook_writes_the_checkpoint_with_the_measured_fields"
+      ],
+      "check": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_checkpoint_summary.py"
+      ],
+      "allow": "Bash(python3 -m pytest *)"
+    },
+    {
+      "id": "mcp-spec-affected-symbols",
+      "repo": "https://github.com/cdeust/ai-architect-mcp-spec.git",
+      "commit": "87a9a10dd59a3c0fcff821c90ff52f0ac40d3295",
+      "setup": [["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"]],
+      "defect": {
+        "file": "packages/core/src/domain/affected-symbols.ts",
+        "from": "    scope_claims: filterValid(obj.scope_claims, ScopeClaimSchema),",
+        "to": "    scope_claims: filterValid(obj.affected_symbols, ScopeClaimSchema),"
+      },
+      "failing": [
+        "packages/core/src/__tests__/affected-symbols.test.ts > parses a well-formed block",
+        "packages/core/src/__tests__/affected-symbols.test.ts > drops scope_claims with an unrecognized kind"
+      ],
+      "check": [
+        "npx",
+        "vitest",
+        "run",
+        "packages/core/src/__tests__/affected-symbols.test.ts",
+        "packages/core/src/__tests__/domain.test.ts"
+      ],
+      "allow": "Bash(npx vitest *)"
+    }
+  ]
+}
