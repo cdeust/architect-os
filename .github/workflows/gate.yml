@@ -92,7 +92,8 @@ jobs:
 
   gate-macos:
     name: gate-macos
-    runs-on: macos-latest
+    # Pinned image: macos-latest moves without notice. The green runs of 2026-11-04 ran macos-26-arm64 (macOS 26.6.2).
+    runs-on: macos-26
     timeout-minutes: 60
     steps:
       - name: Checkout
