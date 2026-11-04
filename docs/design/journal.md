@@ -658,3 +658,38 @@ Chaque mutant ignoré porte sa raison d'équivalence sur la ligne précédente. 
 **`--bare`.** La documentation de Claude Code annonce que `--bare` deviendra le mode par défaut de `-p`. Mesure sur Claude Code 2.1.314, faux amont local, aucune clé réelle : sous `--bare`, un hook n'est exécuté ni s'il vient d'un plugin chargé par `--plugin-dir`, ni s'il est déclaré dans `--settings` ; `permissions.deny` passé par `--settings` est appliqué. Le garde du builder, un hook, disparaîtrait sans bruit. Prévu : lancement explicite en `--bare` avec toutes les entrées déclarées dans `code.json`, règles du garde en `permissions.deny`, jeton de session en `x-api-key` par `apiKeyHelper`, et la sonde rejouable au banc.
 
 **Trois piliers.** Recherche : mesures ci-dessus, porte rejouée en local puis en CI. SSDLC : surface réduite (politique du corps, journal qui échoue fermé), aucune directive sans justification. Opérationnel : sans objet, aucune donnée sensible.
+
+## 20. Règle 7 : la porte vérifie l'outil de mutation, 3 et 4 novembre 2026
+
+**Question du propriétaire.** « Comment on peut avoir une gate de mutation testing si on peut pas faire confiance à l'outil pour identifier et tuer les mutants ? » Le score d'un outil sur lui-même (Stryker 79,8 %, mutator 100 %) mesure ses tests, pas la justesse de ses verdicts sur notre code : le 3 novembre, mutator a déclaré 18 mutants sur 18 tués avec une commande de test cassée. Décision : la porte ne croit plus l'outil, elle vérifie chacun de ses verdicts. Stryker reste le générateur (80 mutants sur `request-policy.ts` contre 18 pour mutator). Pas de second générateur : le seul indépendant disponible est en Python, refusé pour le dépôt. La CI rejoue les fichiers modifiés ; le run hebdomadaire rejoue tous les mutants (décision du propriétaire). Le propriétaire juge qu'Anthropic serait plus stricte encore : chaque relâchement de la première proposition a été retiré (périmètre seul en CI, Timeout accepté, mutants sans verdict tolérés, équivalence sur simple commentaire).
+
+**Fait.**
+- Canari (`gate.json` `canary`, `tools/test-gate/canary/canary.ts`, `features/canary.feature`), muté à chaque run avec mutation. Statuts relevés sur un vrai run de Stryker 10.1.1 avant de les figer : `sum` et `greet` 4 Killed, `twice` 2 Survived, `thrice` 2 NoCoverage. La portée d'une fonction est le mutant BlockStatement de son corps. Exclu de la production : ni la règle 5 ni le registre de la règle 6 ne le lisent.
+- `test-gate replay [--all]`, entre Stryker et `check` : chaque mutant écrit dans l'arbre, `cucumber-js --profile replay <feature>:<ligne>` lancé directement, fichier réécrit. Le profil `replay` n'a ni chemins ni formats : Cucumber ajoute ceux de la ligne de commande à ceux du profil (`merge_configurations.js`, `ADDITIVE_ARRAYS`), et un premier essai avec le profil `mutation` relançait toute la suite et écrasait `reports/cucumber.ndjson`. Un run ciblé prend 0,7 s.
+- Règle de jugement (§7 de `platform-v3-srt.md`) : détection = témoin propre sur l'original et run du mutant qui n'est pas un passage propre ; survie = passage propre sur le mutant. Une détection qui ne repose pas sur un step `FAILED` exige un nouveau témoin juste après. Si les tueurs nommés d'un `Killed` passent, ses scénarios couvrants décident. Tout run avec témoin est borné à trois fois le témoin plus dix secondes.
+- Règle 7 dans `check` : canari, puis enregistrement du rejeu lié au rapport par SHA-256. `CompileError` est rouge par la règle 5.
+
+**Témoins négatifs, sur le canari réel.** Un survivant déclaré tué : divergence. Un tué déclaré survivant : divergence, et canari rouge. Profil Cucumber inexistant (commande cassée, le cas de mutator) : les 6 verdicts divergent, aucun kill confirmé.
+
+**Quatre runs complets en local, chacun corrigeant ce que le précédent a trouvé.**
+
+| Run | Mutants | Stryker | Survivants hors canari | Rejeu | Divergences |
+|---|---|---|---|---|---|
+| 1 | 1 023 | 110 min | 35 | 511 verdicts, 77 min | 1 |
+| 2 | 1 075 | 126 min | 6 | arrêté | |
+| 3 | 1 072 | 122 min | 3 | arrêté | |
+| 4 | 1 067 | 119 min | 2 | 599 verdicts, 71 min | 9 |
+
+Trouvé en chemin :
+1. Run 1, `replay.ts` #986 : `performance.now() - started` muté en `+ started`, classé Timeout par Stryker. Dans son worker, qui tourne depuis longtemps, la somme dépasse le délai ; dans un processus neuf, `performance.now()` part de zéro et le mutant passe. Le rejeu le déclare survivant, à raison ; un scénario le tue désormais.
+2. Runs 1 et 2 : les scénarios d'un run tué au délai lui survivaient (processus orphelins à 100 % CPU, de parent 1). Chaque run est désormais chef de son groupe de processus, tué en entier à sa fin, et le délai est celui de `spawn` (`timeout`, `killSignal`) au lieu d'une minuterie à annuler. Un scénario le prouve : l'enfant laissé derrière est mort après le run, et aucun descripteur de fichier ne reste ouvert.
+3. Run 2 : des runs plafonnés à 600 s faisaient durer le rejeu des heures ; tout run avec témoin est désormais borné par celui-ci.
+4. Run 3 : 107 mutants statiques rejoués contre toute la suite, 2 minutes chacun ; un kill se prouve par ses tueurs nommés.
+5. Run 4 : 9 divergences sur 599 ont montré une règle trop étroite, pas des mutants vivants : 7 kills par délai, 1 mutant qui empêche Cucumber de charger la suite, 1 tueur nommé qui passe dans un processus neuf. D'où la règle de détection ci-dessus, avec le nouveau témoin pour qu'elle ne soit jamais plus laxiste que la précédente.
+6. Registre de dette : 713 → 712 entrées, l'entrée `mutation.ts` `changed !== undefined` est payée (le mutant est tué dans `inPerimeter`).
+
+**Coût.** `gate-linux` passe à 360 min, limite d'un runner hébergé, pour un changement qui réécrit un module entier : en local, Stryker et le rejeu prennent ensemble environ 3 h 10. Le premier run de ce commit en CI est la vraie mesure ; au-delà de 360 min il n'y aurait plus de marge, et la branche ne se réécrit pas pour scinder le changement. `mutation-full.yml` passe aussi à 360 min ; sa durée sera mesurée à son premier passage hebdomadaire.
+
+**Limites.** Un mutant `NoCoverage` n'est pas rejoué, aucun scénario n'étant nommé ; son statut est déjà rouge ou au registre, et le canari prouve que l'outil sait le reconnaître. Dans le rejeu du rejeu lui-même, un mutant qui désactive le kill du groupe laisse son run imbriqué tourner jusqu'à la fin de sa fixture (60 s au plus). L'équivalence par propriété (fast-check) est prévue à l'étape qui ajoute fast-check.
+
+**Trois piliers.** Recherche : chaque verdict est rejoué et consigné, la porte se relance en une commande (`npm run gate`), les quatre runs sont dans ce journal. SSDLC : aucun composant tiers n'est cru sur parole ; le canari, le témoin et le nouveau témoin sont les contrôles négatifs. Opérationnel : sans objet, aucune donnée sensible.

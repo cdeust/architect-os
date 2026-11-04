@@ -15,10 +15,31 @@
     "exclude": ["**/node_modules/**"]
   },
   "jobs": {
-    "linux": { "features": ["**/*.feature"], "mutation": true },
-    "macos": { "features": ["features/sandbox/**/*.feature"], "mutation": false }
+    "linux": {
+      "features": ["**/*.feature"],
+      "mutation": true
+    },
+    "macos": {
+      "features": ["features/sandbox/**/*.feature"],
+      "mutation": false
+    }
   },
   "debt": "tools/test-gate/mutation-debt.json",
+  "canary": {
+    "file": "tools/test-gate/canary/canary.ts",
+    "functions": {
+      "sum": "Killed",
+      "greet": "Killed",
+      "twice": "Survived",
+      "thrice": "NoCoverage"
+    }
+  },
+  "replay": {
+    "profile": "replay",
+    "record": "reports/mutation/replay.json",
+    "work": "reports/replay",
+    "limitMs": 600000
+  },
   "reports": {
     "cucumber": "reports/cucumber.ndjson",
     "mutation": "reports/mutation/mutation.json",

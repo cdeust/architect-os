@@ -110,12 +110,12 @@ export class GateRepository {
     return text.replaceAll('<head>', this.rev('HEAD')).replaceAll('<parent>', parent);
   }
 
-  run(
+  async run(
     args: readonly string[],
     env: NodeJS.ProcessEnv = { GITHUB_STEP_SUMMARY: this.path('summary.md') },
-  ): void {
+  ): Promise<void> {
     let output = '';
-    this.exitCode = runGate(['node', 'main.ts', ...args], this.dir, env, {
+    this.exitCode = await runGate(['node', 'main.ts', ...args], this.dir, env, {
       write: (text: string) => (output += text),
     });
     this.output = output;
@@ -175,14 +175,14 @@ Given('the gate configuration is absent', function () {
 });
 
 When('the gate checks the {string} job', function (job: string) {
-  repository(this).run(['check', '--job', job]);
+  return repository(this).run(['check', '--job', job]);
 });
 
 When(
   'the gate checks the {string} job with the step summary {string}',
   function (job: string, summary: string) {
     const env: NodeJS.ProcessEnv = summary === 'empty' ? { GITHUB_STEP_SUMMARY: '' } : {};
-    repository(this).run(['check', '--job', job], env);
+    return repository(this).run(['check', '--job', job], env);
   },
 );
 
@@ -191,19 +191,19 @@ Then('no GitHub step summary is written', function () {
 });
 
 When('the gate checks with the default job', function () {
-  repository(this).run(['check']);
+  return repository(this).run(['check']);
 });
 
 When('the gate plans the {string} job', function (job: string) {
-  repository(this).run(['plan', '--job', job]);
+  return repository(this).run(['plan', '--job', job]);
 });
 
 When('the gate plans with the default job', function () {
-  repository(this).run(['plan']);
+  return repository(this).run(['plan']);
 });
 
 When('the gate runs with the arguments {string}', function (args: string) {
-  repository(this).run(args === '' ? [] : args.split(' '));
+  return repository(this).run(args === '' ? [] : args.split(' '));
 });
 
 Then('the gate exits with {int}', function (code: number) {

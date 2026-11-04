@@ -8,9 +8,28 @@ Feature: Test gate configuration and command line
     And the fixture gate configuration loads against its schema
     And the committed gate job "linux" counts "**/*.feature" with mutation "on"
     And the committed gate job "macos" counts "features/sandbox/**/*.feature" with mutation "off"
+    And the committed gate configuration declares the rule 7 controls:
+      """
+      {
+        "canary": {
+          "file": "tools/test-gate/canary/canary.ts",
+          "functions": { "sum": "Killed", "greet": "Killed", "twice": "Survived", "thrice": "NoCoverage" }
+        },
+        "replay": {
+          "profile": "replay",
+          "record": "reports/mutation/replay.json",
+          "work": "reports/replay",
+          "limitMs": 600000
+        }
+      }
+      """
 
   Scenario: a job may count several feature globs
     Then a copy of the committed gate configuration with "jobs.macos.features" set to '["features/sandbox/**/*.feature", "features/macos/**/*.feature"]' loads
+
+  Scenario: rule 7 is optional in a configuration
+    Then a copy of the committed gate configuration with "canary" set to 'absent' loads
+    And a copy of the committed gate configuration with "replay" set to 'absent' loads
 
   Scenario Outline: a broken copy of the committed configuration is rejected: <path> = <value>
     Then a copy of the committed gate configuration with "<path>" set to '<value>' is rejected with:
@@ -28,6 +47,16 @@ Feature: Test gate configuration and command line
       | jobs.linux.tags       | "@fast"     | hors schéma : ✖ Unrecognized key: "tags"   → at jobs.linux |
       | reports.plan          | ""          | hors schéma : ✖ Too small: expected string to have >=1 characters   → at reports.plan |
       | name                  | "smoke"     | hors schéma : ✖ Unrecognized key: "name" |
+      | canary.file           | ""          | hors schéma : ✖ Too small: expected string to have >=1 characters   → at canary.file |
+      | canary.functions.sum  | "Timeout"   | hors schéma : ✖ Invalid option: expected one of "Killed"\|"Survived"\|"NoCoverage"   → at canary.functions.sum |
+      | canary.functions      | {"": "Killed"} | hors schéma : ✖ Invalid key in record   → at canary.functions. |
+      | canary.extra          | 1           | hors schéma : ✖ Unrecognized key: "extra"   → at canary |
+      | replay.profile        | ""          | hors schéma : ✖ Too small: expected string to have >=1 characters   → at replay.profile |
+      | replay.record         | ""          | hors schéma : ✖ Too small: expected string to have >=1 characters   → at replay.record |
+      | replay.work           | ""          | hors schéma : ✖ Too small: expected string to have >=1 characters   → at replay.work |
+      | replay.limitMs        | 0           | hors schéma : ✖ Too small: expected number to be >0   → at replay.limitMs |
+      | replay.limitMs        | 1.5         | hors schéma : ✖ Invalid input: expected int, received number   → at replay.limitMs |
+      | replay.extra          | 1           | hors schéma : ✖ Unrecognized key: "extra"   → at replay |
 
   Scenario: a configuration that is not JSON is refused by the command line
     Given a gate repository
@@ -71,7 +100,7 @@ Feature: Test gate configuration and command line
     Then the gate exits with 1
     And the gate output is:
       """
-      porte de test : usage : test-gate plan|check [--job <nom>] | debt
+      porte de test : usage : test-gate plan|check [--job <nom>] | debt | replay [--all]
       """
 
     Examples:
@@ -81,3 +110,5 @@ Feature: Test gate configuration and command line
       | check --jobs linux       |
       | check --job              |
       | plan --job linux extra   |
+      | replay --some            |
+      | replay --all extra       |

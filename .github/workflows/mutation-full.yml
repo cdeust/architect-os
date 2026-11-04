@@ -1,6 +1,7 @@
 # The full mutation run (docs/design/platform-v3-srt.md §7), off the path of a change: gate.yml mutates the changed lines
-# only, in minutes. This run mutates all the production code on one worker and sees what a changed test stopped killing.
-# Red: the survivors differ from tools/test-gate/mutation-debt.json. The reports carry the registry this run computed.
+# only, in minutes. This run mutates all the production code and the canary on one worker and sees what a changed test
+# stopped killing. Red: the replay contradicts a verdict of Stryker or the canary (rule 7), or the survivors differ
+# from tools/test-gate/mutation-debt.json. The reports carry the replay record and the registry this run computed.
 # No secret, no cache.
 name: mutation-full
 
@@ -16,7 +17,7 @@ jobs:
   mutation-full:
     name: mutation-full
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -47,20 +48,25 @@ jobs:
       - name: Install (lockfile, scripts disabled)
         run: npm ci --ignore-scripts
 
-      - name: Plan - all the production files of gate.json
+      - name: Plan - all the production files of gate.json, and its canary
         run: |
           mkdir -p reports
           node -e '
             const { readFileSync, writeFileSync } = require("node:fs");
-            const { include, exclude } = JSON.parse(readFileSync("tools/test-gate/gate.json", "utf8")).production;
-            const mutate = [...include, ...exclude.map((glob) => `!${glob}`)];
+            const config = JSON.parse(readFileSync("tools/test-gate/gate.json", "utf8"));
+            const { include, exclude } = config.production;
+            const mutate = [...include, config.canary.file, ...exclude.map((glob) => `!${glob}`)];
             writeFileSync("reports/gate-plan.json", JSON.stringify({ mutate }));
           '
 
       - name: Stryker
         run: npx stryker run
 
+      - name: Replay every verdict (rule 7)
+        run: node --import tsx tools/test-gate/src/main.ts replay --all
+
       - name: Survivors against the registry
+        if: success() || failure()
         run: |
           cp tools/test-gate/mutation-debt.json reports/mutation-debt.committed.json
           rm tools/test-gate/mutation-debt.json

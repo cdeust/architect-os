@@ -40,7 +40,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       - mutants du périmètre : 5
         - Killed : 4
         - Survived : 1
-      - mutants invalides (signalés, pas rouges) :
+      - mutants sans verdict (rouges) :
         - aucun
       """
 
@@ -376,6 +376,44 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       """
       { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs"] }
       """
+
+  Scenario: a changed file that also loses an entry is planned whole, not by its changed lines
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 3 changed
+    And the gate debt registry is the fixture "survivor"
+    And the gate first parent is committed
+    And the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate debt registry is the fixture "empty"
+    And the gate head is committed
+    When the gate plans the "linux" job
+    Then the gate plan is:
+      """
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs"] }
+      """
+
+  Scenario Outline: an entry is judged only where the run mutated its lines: <mutate>
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 3 changed
+    And the gate debt registry is the fixture "survivor"
+    And the gate first parent is committed
+    And the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate head is committed
+    And the gate mutation report is the fixture "survivor"
+    And the gate mutation report keeps only the mutants "1"
+    And the gate mutation report mutated "<mutate>"
+    When the gate checks the "linux" job
+    Then the gate violations of rule 6 are:
+      """
+      <violation>
+      """
+
+    Examples:
+      | mutate                    | violation                                                                                                                   |
+      | src/math.mjs:3-3          |                                                                                                                             |
+      | src/math.mjs:3-3, src/math.mjs:7-7 | 6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : introuvable (code supprimé ou déplacé), à retirer dans la même PR |
+      | src/**/*.mjs              | 6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : introuvable (code supprimé ou déplacé), à retirer dans la même PR |
+      | src/math.mjs:6-7          | 6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : introuvable (code supprimé ou déplacé), à retirer dans la même PR |
+      | src/math.mjs:7-8          | 6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : introuvable (code supprimé ou déplacé), à retirer dans la même PR |
+      | src/math.mjs:8-9          |                                                                                                                             |
+      | !src/math.mjs             |                                                                                                                             |
 
   Scenario: the plan holds the file of the removed entry only, not the other file that the registry still holds
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
@@ -771,6 +809,19 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       """
     And the gate repository file "mutation-debt.json" is the fixture "debt/unsorted.json"
 
+  Scenario: debt writes the survivors of production files only: the canary keeps its survivors out of the registry
+    Given the gate debt registry is absent
+    And the gate mutation report is the fixture "unsorted"
+    And the file "src/math.mjs" of the gate mutation report is renamed "canary/math.mjs"
+    When the gate runs with the arguments "debt"
+    Then the gate exits with 0
+    And the gate output is:
+      """
+      registre de dette écrit : mutation-debt.json
+      - mod : 1
+      - total : 1
+      """
+
   Scenario: debt does not regenerate an existing registry
     Given the gate debt registry is the fixture "survivor"
     And the gate mutation report is the fixture "unsorted"
@@ -813,7 +864,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     Then the gate exits with 1
     And the gate output is:
       """
-      porte de test : usage : test-gate plan|check [--job <nom>] | debt
+      porte de test : usage : test-gate plan|check [--job <nom>] | debt | replay [--all]
       """
     And the gate repository holds no file "mutation-debt.json"
 

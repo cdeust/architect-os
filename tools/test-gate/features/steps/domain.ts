@@ -113,6 +113,7 @@ Given(
       changedLines,
       judged: list(files),
       files: list(files),
+      retired: [],
     };
     this.state['perimeter'] = perimeter;
   },
@@ -129,6 +130,7 @@ When('the gate judges the mutation report:', function (text: string) {
     this.state['perimeter'] as Perimeter,
     {
       mutate: fixture.mutate,
+      tests: new Map(),
       files: new Map(
         Object.entries(fixture.files).map(([path, file]) => [
           path,

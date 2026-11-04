@@ -8,7 +8,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     And the gate repository holds the fixture specs "green.feature, second.feature"
     And the gate cucumber report is the fixture "green"
 
-  Scenario: a changed production line plans that file only
+  Scenario: a changed production line plans that line of that file only, as a Stryker mutation range
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 3 changed
     And the gate repository holds "mod/a/src/a.mjs" of the mutation fixture "covered-by-feature"
     And the gate first parent is committed
@@ -18,11 +18,11 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     Then the gate exits with 0
     And the gate output is:
       """
-      plan linux : 1 fichier(s) à muter -> reports/gate-plan.json
+      plan linux : 1 motif(s) à muter -> reports/gate-plan.json
       """
     And the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs"] }
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs:3-3"] }
       """
 
   Scenario: an added .feature plans no mutation
@@ -44,7 +44,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "macos" job
     Then the gate output is:
       """
-      plan macos : 0 fichier(s) à muter -> reports/gate-plan.json
+      plan macos : 0 motif(s) à muter -> reports/gate-plan.json
       """
     And the gate plan is:
       """
@@ -57,7 +57,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": null, "mutate": ["src/math.mjs"] }
+      { "job": "linux", "head": "<head>", "firstParent": null, "mutate": ["src/math.mjs:1-9"] }
       """
 
   Scenario: a green check writes the base of the next run, the step summary and prints the report
@@ -127,5 +127,58 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": null, "mutate": ["src/math.mjs"] }
+      { "job": "linux", "head": "<head>", "firstParent": null, "mutate": ["src/math.mjs:1-9"] }
+      """
+
+  Scenario Outline: the canary is planned in every job with mutation, once, among the sorted files: <canary>
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 3 changed
+    And the gate first parent is committed
+    And the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate head is committed
+    And the gate configuration declares the canary "<canary>" with:
+      """
+      { "sum": "Killed" }
+      """
+    When the gate plans the "linux" job
+    Then the gate plan is:
+      """
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": <mutate> }
+      """
+
+    Examples:
+      | canary         | mutate                             |
+      | src/math.mjs   | ["src/math.mjs"]                   |
+      | canary/a.mjs   | ["canary/a.mjs", "src/math.mjs:3-3"] |
+
+  Scenario: the macos job plans no canary
+    Given the gate head is committed
+    And the gate configuration declares the canary "canary/a.mjs" with:
+      """
+      { "sum": "Killed" }
+      """
+    When the gate plans the "macos" job
+    Then the gate plan is:
+      """
+      { "job": "macos", "head": "<head>", "firstParent": null, "mutate": [] }
+      """
+
+  Scenario: each run of consecutive changed lines is one range
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate first parent is committed
+    And the gate repository file "src/math.mjs" reads:
+      """
+      // Production file of the fixture suite: the mutation fixtures are reports of Stryker runs on it.
+      export function sum(a, b) {
+        return a - b;
+      }
+
+      export function isPositive(n) {
+        return n >= 1;
+      }
+      """
+    And the gate head is committed
+    When the gate plans the "linux" job
+    Then the gate plan is:
+      """
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs:3-3", "src/math.mjs:7-7"] }
       """

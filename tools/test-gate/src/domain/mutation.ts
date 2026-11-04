@@ -8,6 +8,7 @@ import {
 } from './debt.js';
 import type { ChangedFile } from './diff.js';
 import { isProduction, type Layout } from './layout.js';
+import { mentioned, rangePatterns } from './mutate-pattern.js';
 import type { ReadFailure, Violation } from './violation.js';
 
 export interface Perimeter {
@@ -20,6 +21,20 @@ export interface Perimeter {
    * so that rule 6 can prove their removal. Only rule 6 reads the mutants of the latter.
    */
   readonly files: readonly string[];
+  /** The files of the entries the registry lost: mutated whole, so that rule 6 sees every mutant of them. */
+  readonly retired: readonly string[];
+}
+
+/**
+ * The `mutate` patterns of a run: the changed lines of each judged file as ranges, so that a change mutates its own
+ * code only, and `whole` (the files of retired debt entries, the canary) whole. Sorted, distinct.
+ */
+export function mutatePatterns(perimeter: Perimeter, whole: readonly string[]): string[] {
+  const entire = new Set([...perimeter.retired, ...whole]);
+  const ranges = [...perimeter.changedLines]
+    .filter(([file]) => !entire.has(file))
+    .flatMap(([file, lines]) => rangePatterns(file, lines));
+  return [...new Set([...entire, ...ranges])].sort();
 }
 
 /**
@@ -39,7 +54,7 @@ export function perimeterOf(
     }
   }
   const judged = [...changedLines.keys()].sort();
-  return { changedLines, judged, files: [...new Set([...judged, ...retired])].sort() };
+  return { changedLines, judged, files: [...new Set([...judged, ...retired])].sort(), retired };
 }
 
 /** What the gate keeps of a Stryker JSON report (mutation-testing-report-schema). */
@@ -55,12 +70,19 @@ export interface MutantRecord {
   readonly endColumn: number;
   /** The code of the mutant. */
   readonly replacement: string;
+  /** Module-level code: Stryker runs every test against it, whatever `coveredBy` says. */
+  readonly static: boolean;
+  /** Test ids (keys of MutationReport.tests). */
+  readonly killedBy: readonly string[];
+  readonly coveredBy: readonly string[];
 }
 
 export interface MutationReport {
   readonly files: ReadonlyMap<string, { readonly source: string; readonly mutants: readonly MutantRecord[] }>;
   /** config.mutate of the run: a file listed there but absent from `files` was mutated and had no mutant. */
   readonly mutate: readonly string[];
+  /** Every test of the run, by id: `<feature>:<line>`. */
+  readonly tests: ReadonlyMap<string, string>;
 }
 
 export interface JudgedMutant {
@@ -80,7 +102,8 @@ export interface MutationJudgement {
 const RED = new Set(['Survived', 'NoCoverage', 'Pending']);
 /** The red statuses the mutation debt registry can accept; Pending is always red. */
 const DEBT = new Set(['Survived', 'NoCoverage']);
-const INVALID = new Set(['CompileError', 'RuntimeError']);
+/** A mutant the tool could not compile has no verdict. RuntimeError is a detection the replay decides (rule 7). */
+const INVALID = new Set(['CompileError']);
 const DIRECTIVE = 'Stryker disable';
 const NEXT_LINE = `// ${DIRECTIVE} next-line `;
 const EQUIVALENT = ': équivalent: ';
@@ -98,7 +121,13 @@ export function justifiedMutators(line: string): readonly string[] | null {
   return text.slice(NEXT_LINE.length, at).split(',');
 }
 
-function label(file: string, mutant: MutantRecord): string {
+/** A mutant of a judged file whose location meets one of its changed lines. */
+export function inPerimeter(perimeter: Perimeter, file: string, mutant: MutantRecord): boolean {
+  const changed = perimeter.changedLines.get(file);
+  return changed !== undefined && [...changed].some((n) => n >= mutant.startLine && n <= mutant.endLine);
+}
+
+export function label(file: string, mutant: MutantRecord): string {
   return `${file}:${mutant.startLine} ${mutant.mutatorName} #${mutant.id}`;
 }
 
@@ -127,7 +156,8 @@ export function judgeMutation(
   for (const file of perimeter.judged) {
     const result = report.files.get(file);
     if (result === undefined) {
-      if (!report.mutate.includes(file)) add(`${file} : fichier du périmètre absent du rapport de mutation`);
+      if (!mentioned(report.mutate, file))
+        add(`${file} : fichier du périmètre absent du rapport de mutation`);
       continue;
     }
     const lines = result.source.split('\n');
@@ -137,10 +167,7 @@ export function judgeMutation(
       }
     });
     for (const mutant of result.mutants) {
-      const changed = perimeter.changedLines.get(file);
-      const byLine =
-        changed !== undefined && [...changed].some((n) => n >= mutant.startLine && n <= mutant.endLine);
-      if (!byLine) continue;
+      if (!inPerimeter(perimeter, file, mutant)) continue;
       mutants.push({ file, mutant });
       const justification = justifiedMutators(String(lines[mutant.startLine - 2]));
       if (RED.has(mutant.status)) {
@@ -148,7 +175,11 @@ export function judgeMutation(
           accepted++;
         else add(`${label(file, mutant)} : ${mutant.status}`);
       }
-      if (INVALID.has(mutant.status)) invalid.push(`${label(file, mutant)} : ${mutant.status}`);
+      // A mutant the tool could not evaluate has no verdict: the gate cannot conclude on its line.
+      if (INVALID.has(mutant.status)) {
+        invalid.push(`${label(file, mutant)} : ${mutant.status}`);
+        add(`${label(file, mutant)} : ${mutant.status}, mutant sans verdict`);
+      }
       if (mutant.status === 'Ignored' && justification?.includes(mutant.mutatorName) !== true) {
         add(`${label(file, mutant)} : Ignored sans justification « équivalent » sur la ligne précédente`);
       }

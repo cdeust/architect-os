@@ -9967,20 +9967,6 @@
       "mutator": "StringLiteral",
       "original": "'agent produced no result message'",
       "replacement": "\"\""
-    },
-    {
-      "file": "tools/test-gate/src/domain/mutation.ts",
-      "start": {
-        "line": 142,
-        "column": 9
-      },
-      "end": {
-        "line": 142,
-        "column": 30
-      },
-      "mutator": "ConditionalExpression",
-      "original": "changed !== undefined",
-      "replacement": "true"
     }
   ]
 }

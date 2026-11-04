@@ -67,3 +67,9 @@ Then('the gate changes against the first parent are:', function (text: string) {
   );
   assert.deepEqual(lines, text.split('\n'));
 });
+
+Then('the committed gate configuration declares the rule 7 controls:', function (text: string) {
+  const config = parseGateConfig(readFileSync(COMMITTED, 'utf8'));
+  assert.ok(!('failure' in config));
+  assert.deepEqual({ canary: config.canary, replay: config.replay }, JSON.parse(text));
+});

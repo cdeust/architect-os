@@ -44,3 +44,9 @@ export const mutation = {
     ...COMPONENTS.map((c) => `${c}/features/**/*.feature`),
   ],
 };
+
+// The replay profile is used only by `test-gate replay` (tools/test-gate/src/infrastructure/replay.ts), which names the
+// scenarios of one mutant as `<feature>:<line>` and its own `--format message:<file>`. Cucumber adds the paths and
+// formats of the command line to those of the profile (lib/configuration/merge_configurations.js: ADDITIVE_ARRAYS), so
+// this profile has none: with the default ones, a replay would run the whole suite and overwrite reports/cucumber.ndjson.
+export const replay = { import: config.import, retry: 0, strict: true };

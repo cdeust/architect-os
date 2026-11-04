@@ -1,3 +1,4 @@
+import { mutatedAt } from './mutate-pattern.js';
 import type { ReadFailure, Violation } from './violation.js';
 
 /** A position of the Stryker report: line and column both start at one, the end column is exclusive. */
@@ -198,8 +199,9 @@ export function judgeDebt(
   const removed = removedEntries(input);
   // The report as the checks below read it; none when it is unreadable (rule 5 says so, nothing is judged on it).
   const readable = 'failure' in report ? null : report;
-  // A file the report speaks of: it has mutants, or it was mutated (config.mutate) and had none.
-  const covered = (found: DebtReport, file: string) => found.files.has(file) || found.mutate.includes(file);
+  // An entry the run mutated: its lines lie in a pattern of config.mutate (a whole file, a glob, or a range).
+  const covered = (found: DebtReport, entry: DebtEntry) =>
+    mutatedAt(found.mutate, entry.file, entry.start.line, entry.end.line);
   // The identities of the mutants of one file of the report whose status passes `keep`.
   const identitiesOf = (found: DebtReport, file: string, keep: (status: string) => boolean): Set<string> => {
     const result = found.files.get(file);
@@ -213,7 +215,7 @@ export function judgeDebt(
   for (const entry of removed) {
     if (!present.has(entry.file) || readable === null) continue;
     const id = debtIdentity(entry);
-    if (!covered(readable, entry.file))
+    if (!covered(readable, entry))
       add(`${id} : retrait non prouvé, le fichier n'est pas dans le rapport de mutation`);
     else if (identitiesOf(readable, entry.file, (status) => NOT_KILLED.has(status)).has(id)) {
       add(`${id} : retrait refusé, le survivant existe toujours`);
@@ -223,7 +225,7 @@ export function judgeDebt(
   for (const entry of entries) {
     const id = debtIdentity(entry);
     if (!present.has(entry.file)) add(`${id} : fichier absent, entrée à retirer dans la même PR`);
-    else if (readable !== null && covered(readable, entry.file)) {
+    else if (readable !== null && covered(readable, entry)) {
       if (!identitiesOf(readable, entry.file, () => true).has(id)) {
         add(`${id} : introuvable (code supprimé ou déplacé), à retirer dans la même PR`);
       } else if (!identitiesOf(readable, entry.file, (status) => NOT_KILLED.has(status)).has(id)) {

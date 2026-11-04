@@ -40,6 +40,6 @@ export class Workspace {
   }
 
   remove(path: string): void {
-    rmSync(resolve(this.root, path), { force: true });
+    rmSync(resolve(this.root, path), { force: true, recursive: true });
   }
 }

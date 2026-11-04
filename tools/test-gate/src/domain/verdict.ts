@@ -1,3 +1,4 @@
+import { canaryViolations, type Canary } from './canary.js';
 import { countRule, type BaseInput, type Count } from './count.js';
 import type { DebtInput } from './debt.js';
 import { judgeMutation, type MutationJudgement, type MutationReport, type Perimeter } from './mutation.js';
@@ -8,6 +9,7 @@ import {
   type CucumberRun,
   type StaticSet,
 } from './run.js';
+import { replayViolations, type ReplayRecord } from './replay.js';
 import type { ReadFailure, Violation } from './violation.js';
 
 export interface GateInputs {
@@ -23,7 +25,40 @@ export interface GateInputs {
     readonly perimeter: Perimeter;
     readonly report: MutationReport | ReadFailure;
     readonly debt: DebtInput;
+    /** Rule 7: the canary of gate.json, the replay record, the SHA-256 of the mutation report text. */
+    readonly control: {
+      readonly canary: Canary | null;
+      /** null when gate.json declares no replay; `record` null when the file is absent. */
+      readonly replay: { readonly record: ReplayRecord | ReadFailure | null } | null;
+      /** null when the mutation report is absent. */
+      readonly reportHash: string | null;
+    } | null;
   } | null;
+}
+
+/** Rule 7, when gate.json declares it: the canary, then the replay of the perimeter and canary verdicts. */
+function controlViolations(
+  mutation: NonNullable<GateInputs['mutation']>,
+  judgement: MutationJudgement,
+): Violation[] {
+  const { control, report } = mutation;
+  if (control === null) return [];
+  if ('failure' in report) return [{ rule: 7, text: 'rapport de mutation illisible : ni canari ni rejeu' }];
+  const { canary } = control;
+  const canaryMutants = [...report.files]
+    .filter(([file]) => file === canary?.file)
+    .flatMap(([file, result]) => result.mutants.map((mutant) => ({ file, mutant })));
+  return [
+    ...(canary === null ? [] : canaryViolations(canary, report)),
+    ...(control.replay === null
+      ? []
+      : replayViolations(
+          [...canaryMutants, ...judgement.mutants],
+          control.replay.record,
+          // A readable report has a text, hence a hash.
+          control.reportHash as string,
+        )),
+  ];
 }
 
 export interface Verdict {
@@ -54,10 +89,12 @@ export function evaluate(inputs: GateInputs): Verdict {
     executed: executed.length,
     base: inputs.base,
   });
-  const mutation =
-    inputs.mutation === null
-      ? null
-      : judgeMutation(inputs.mutation.perimeter, inputs.mutation.report, inputs.mutation.debt);
+  let mutation: MutationJudgement | null = null;
+  let control: Violation[] = [];
+  if (inputs.mutation !== null) {
+    mutation = judgeMutation(inputs.mutation.perimeter, inputs.mutation.report, inputs.mutation.debt);
+    control = controlViolations(inputs.mutation, mutation);
+  }
   const violations = [
     ...duplicateIdentities(inputs.staticNow),
     ...readFailure,
@@ -65,6 +102,7 @@ export function evaluate(inputs: GateInputs): Verdict {
     ...setViolations(executed, inputs.staticNow),
     ...count.violations,
     ...(mutation?.violations ?? []),
+    ...control,
   ];
   return {
     job: inputs.job,

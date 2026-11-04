@@ -9,6 +9,7 @@ const RULES: readonly (readonly [RuleNumber, string])[] = [
   [4, 'Règle 4, exécutés = base + ajoutés − supprimés'],
   [5, 'Règle 5, mutation'],
   [6, 'Règle 6, dette de mutation'],
+  [7, "Règle 7, contrôle de l'outil de mutation (canari, rejeu des verdicts)"],
 ];
 
 function list(items: readonly string[], none = '- aucun'): string[] {
@@ -33,7 +34,7 @@ function mutationLines(verdict: Verdict): string[] {
     `- fichiers du périmètre : ${mutation.perimeter.judged.length}`,
     `- mutants du périmètre : ${mutation.mutants.length}`,
     ...[...statuses].sort().map(([status, n]) => `  - ${status} : ${n}`),
-    '- mutants invalides (signalés, pas rouges) :',
+    '- mutants sans verdict (rouges) :',
     ...list(mutation.invalid).map((line) => `  ${line}`),
   ];
 }

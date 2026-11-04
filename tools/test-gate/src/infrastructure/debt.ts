@@ -1,4 +1,5 @@
 import { debtEntries, renderGenerated, type DebtInput, type DebtRegistry } from '../domain/debt.js';
+import { isProduction } from '../domain/layout.js';
 import type { ReadFailure } from '../domain/violation.js';
 import { z } from 'zod';
 import type { GateConfig } from './config.js';
@@ -63,7 +64,8 @@ export function generateDebt(config: GateConfig, workspace: Workspace): { summar
   const text = workspace.read(config.reports.mutation);
   const report = text === null ? { failure: `${config.reports.mutation} absent` } : parseMutationReport(text);
   if ('failure' in report) return { failure: `rapport de mutation illisible : ${report.failure}` };
-  const survivors = debtEntries(report);
+  // Production files only: the canary of rule 7 is mutated in the same run and keeps its survivors on purpose.
+  const survivors = debtEntries(report).filter((entry) => isProduction(config, entry.file));
   workspace.write(config.debt, jsonText({ survivors }));
   return { summary: renderGenerated(config.debt, survivors) };
 }

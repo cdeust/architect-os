@@ -31,6 +31,10 @@ const ReportSchema = z.object({
             status: z.enum(STATUSES),
             replacement: z.string(),
             location: z.object({ start: Position, end: Position }),
+            // Absent fields mean none (the schema marks them optional): no test killed or covered it, not static.
+            static: z.boolean().optional(),
+            killedBy: z.array(z.string()).optional(),
+            coveredBy: z.array(z.string()).optional(),
           }),
         ),
       })
@@ -43,6 +47,13 @@ const ReportSchema = z.object({
         { error: 'un mutant sort du texte de son fichier' },
       ),
   ),
+  // The tests of the run: `test-gate replay` runs them again by `<feature>:<line>`.
+  testFiles: z
+    .record(
+      z.string(),
+      z.object({ tests: z.array(z.object({ id: z.string(), location: z.object({ start: Position }) })) }),
+    )
+    .optional(),
   config: z.object({ mutate: z.array(z.string()) }),
 });
 
@@ -50,8 +61,13 @@ const ReportSchema = z.object({
 export function parseMutationReport(text: string): MutationReport | ReadFailure {
   const parsed = parseJson(ReportSchema, text);
   if ('failure' in parsed) return parsed;
-  const { files, config } = parsed;
+  const { files, config, testFiles } = parsed;
   return {
+    tests: new Map(
+      Object.entries(testFiles ?? {}).flatMap(([path, file]) =>
+        file.tests.map(({ id, location }): [string, string] => [id, `${path}:${location.start.line}`]),
+      ),
+    ),
     files: new Map(
       Object.entries(files).map(([path, file]) => [
         path,
@@ -66,6 +82,9 @@ export function parseMutationReport(text: string): MutationReport | ReadFailure 
             endLine: mutant.location.end.line,
             endColumn: mutant.location.end.column,
             replacement: mutant.replacement,
+            static: mutant.static ?? false,
+            killedBy: mutant.killedBy ?? [],
+            coveredBy: mutant.coveredBy ?? [],
           })),
         },
       ]),

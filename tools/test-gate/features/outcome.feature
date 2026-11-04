@@ -73,11 +73,15 @@ Feature: Test gate, rule 2: one attempt, at least one step, every step PASSED
 
       - aucune
 
+      ### Règle 7, contrôle de l'outil de mutation (canari, rejeu des verdicts)
+
+      - aucune
+
       ## Mutation
 
       - fichiers du périmètre : 0
       - mutants du périmètre : 0
-      - mutants invalides (signalés, pas rouges) :
+      - mutants sans verdict (rouges) :
         - aucun
       """
 

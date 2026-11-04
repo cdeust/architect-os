@@ -1,8 +1,8 @@
 Feature: Test gate, rule 5: no surviving mutant in the perimeter
   The perimeter holds the mutants of production files whose location meets a line changed since the first parent.
   A changed test extends nothing: the full run off the path of a change sees what it stops killing.
-  Survived, NoCoverage and Pending are red; Killed and Timeout pass; CompileError and RuntimeError are reported,
-  not red; Ignored passes only under a justified next-line directive. The mutation fixtures derive from a real
+  Survived, NoCoverage and Pending are red; Killed, Timeout and RuntimeError pass (rule 7 replays them);
+  CompileError has no verdict and is red; Ignored passes only under a justified next-line directive. The mutation fixtures derive from a real
   Stryker 10.1.1 report of tools/test-gate/fixtures/suite/src/math.mjs (fixtures/README.md).
 
   Background:
@@ -30,7 +30,7 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
       - mutants du périmètre : 5
         - Killed : 4
         - Survived : 1
-      - mutants invalides (signalés, pas rouges) :
+      - mutants sans verdict (rouges) :
         - aucun
       """
 
@@ -49,7 +49,7 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
       - fichiers du périmètre : 1
       - mutants du périmètre : 2
         - Killed : 2
-      - mutants invalides (signalés, pas rouges) :
+      - mutants sans verdict (rouges) :
         - aucun
       """
 
@@ -89,7 +89,7 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
       | Timeout    | green   |                                                                                                            |
       | Ignored    | red     | 5: src/math.mjs:7 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente |
 
-  Scenario Outline: an invalid mutant in the perimeter is reported, not red: <status>
+  Scenario Outline: a mutant the tool could not compile, in the perimeter, is red: <status>
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 7 changed
     And the gate first parent is committed
     And the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
@@ -97,7 +97,11 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     And the gate mutation report is the fixture "survivor"
     And mutant "5" of the gate mutation report has the status "<status>"
     When the gate checks the "linux" job
-    Then the gate verdict is green
+    Then the gate verdict is red
+    And the gate violations are:
+      """
+      5: src/math.mjs:7 EqualityOperator #5 : <status>, mutant sans verdict
+      """
     And the gate mutation section reads:
       """
       ## Mutation
@@ -106,14 +110,34 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
       - mutants du périmètre : 5
         - <first>
         - <second>
-      - mutants invalides (signalés, pas rouges) :
+      - mutants sans verdict (rouges) :
         - src/math.mjs:7 EqualityOperator #5 : <status>
       """
 
     Examples:
-      | status       | first            | second           |
-      | CompileError | CompileError : 1 | Killed : 4       |
-      | RuntimeError | Killed : 4       | RuntimeError : 1 |
+      | status       | first            | second     |
+      | CompileError | CompileError : 1 | Killed : 4 |
+
+  Scenario: a RuntimeError mutant in the perimeter is not red by rule 5: the replay of rule 7 decides
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 7 changed
+    And the gate first parent is committed
+    And the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate head is committed
+    And the gate mutation report is the fixture "survivor"
+    And mutant "5" of the gate mutation report has the status "RuntimeError"
+    When the gate checks the "linux" job
+    Then the gate verdict is green
+    And the gate mutation section reads:
+      """
+      ## Mutation
+
+      - fichiers du périmètre : 1
+      - mutants du périmètre : 5
+        - Killed : 4
+        - RuntimeError : 1
+      - mutants sans verdict (rouges) :
+        - aucun
+      """
 
   Scenario: a Stryker disable all directive in a production file of the perimeter is red, and so is every mutant it hides
     Given the gate repository holds "src/math.mjs" of the mutation fixture "disable-all" with line 8 changed
