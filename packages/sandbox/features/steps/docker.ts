@@ -16,9 +16,10 @@ const OPTIONS: DockerRunnerOptions = {
 };
 
 /**
- * A fake docker client: appends its argv and its environment's names to calls.jsonl in DOCKER_CONFIG, then for
+ * A fake docker client, in a directory whose name holds a space (a shell would split its path): appends its argv and its environment's names to calls.jsonl in DOCKER_CONFIG, then for
  * `run` echoes stdin to stdout and exits with 7, unless the image is `hang`: it prints `started` once its call is
- * recorded, then never ends.
+ * recorded, then never ends; `close-stdin` closes its stdin at once and exits; `orphan` starts a descendant in its
+ * group that ignores SIGTERM (bounded to a minute), prints its pid once the descendant is ready, and waits; `orphan-exit` the same, then exits.
  */
 const FAKE_DOCKER = `#!${process.execPath}
 const { appendFileSync } = require('node:fs');
@@ -27,6 +28,16 @@ const args = process.argv.slice(2);
 appendFileSync(join(process.env.DOCKER_CONFIG, 'calls.jsonl'), JSON.stringify({ args, env: Object.keys(process.env).sort() }) + '\\n');
 if (args[0] !== 'run') process.exit(0);
 if (args.includes('hang')) { process.stdout.write('started\\n'); setInterval(() => {}, 1000); }
+else if (args.includes('close-stdin')) { process.stdin.destroy(); setTimeout(() => process.exit(0), 200); }
+else if (args.includes('orphan') || args.includes('orphan-exit')) {
+  // The pid is printed once the descendant ignores SIGTERM: before, any signal would kill it and prove nothing.
+  const child = require('node:child_process').spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); process.stdout.write("ready"); setTimeout(() => {}, 60000)'], { stdio: ['ignore', 'pipe', 'ignore'] });
+  child.stdout.once('data', () => {
+    process.stdout.write(child.pid + '\\n');
+    if (args.includes('orphan-exit')) process.exit(0);
+  });
+  setInterval(() => {}, 1000);
+}
 else {
   let input = '';
   process.stdin.on('data', (chunk) => (input += chunk));
@@ -35,7 +46,7 @@ else {
 `;
 
 function fakeClient(world: SandboxWorld): string {
-  const dir = mkdtempSync(join(tmpdir(), 'aos-docker-'));
+  const dir = mkdtempSync(join(tmpdir(), 'aos docker-'));
   world.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
   const client = join(dir, 'docker');
   writeFileSync(client, FAKE_DOCKER);
@@ -89,6 +100,8 @@ Given('a Docker sandbox runner with the fake docker client', function () {
       PATH: process.env['PATH'],
       HOME: process.env['HOME'],
       DOCKER_CONFIG: stored<string>(this, 'dockerDir'),
+      DOCKER_HOST: 'unix:///run/test.sock',
+      DOCKER_CONTEXT: 'test',
       SECRET: 's',
     },
   );
@@ -179,4 +192,68 @@ Then('the fake docker client was asked to remove the container it ran', function
   const run = all.find((call) => call.args[0] === 'run');
   const name = run?.args[run.args.indexOf('--name') + 1];
   assert.deepEqual(all.find((call) => call.args[0] === 'rm')?.args, ['rm', '-f', name]);
+});
+
+Then(
+  'the fake docker client removed the container with only the environment {string}',
+  function (names: string) {
+    const rm = calls(this).find((call) => call.args[0] === 'rm');
+    assert.deepEqual(
+      rm?.env.filter((name) => !name.startsWith('__CF') && name !== 'XPC_SERVICE_NAME'),
+      names.split(', '),
+    );
+  },
+);
+
+/** A runner of the fake client for one image, over the inherited PATH, HOME and DOCKER_CONFIG only. */
+const imageRunner = (world: SandboxWorld, image: string) => {
+  const dir = stored<string>(world, 'dockerDir');
+  return new DockerSandboxRunner(
+    { ...OPTIONS, image, docker: join(dir, 'docker') },
+    { PATH: process.env['PATH'], HOME: process.env['HOME'], DOCKER_CONFIG: dir },
+  );
+};
+
+const startImage = (world: SandboxWorld, image: string) =>
+  imageRunner(world, image).start({ profile: OPTIONS.profile, cwd: tmpdir(), command: [] });
+
+const firstLine = (sandbox: Sandbox) =>
+  new Promise<string>((read) => {
+    let text = '';
+    sandbox.stdout.on('data', (chunk: Buffer) => {
+      text += chunk.toString('utf8');
+      if (text.includes('\n')) read(text.split('\n')[0] as string);
+    });
+  });
+
+When(
+  'I start the Docker image {string}, read the pid it printed and stop it',
+  async function (image: string) {
+    const sandbox = await startImage(this, image);
+    this.state['descendant'] = Number(await firstLine(sandbox));
+    await sandbox.stop();
+  },
+);
+
+When(
+  'I start the Docker image {string}, read the pid it printed and wait for its exit',
+  async function (image: string) {
+    const sandbox = await startImage(this, image);
+    const [pid] = await Promise.all([firstLine(sandbox), sandbox.exited]);
+    this.state['descendant'] = Number(pid);
+  },
+);
+
+When(
+  'I start the Docker image {string} and write {int} bytes on its stdin',
+  async function (image: string, bytes: number) {
+    const sandbox = await startImage(this, image);
+    sandbox.stdout.resume();
+    sandbox.stdin.write('x'.repeat(bytes));
+    this.state['exit'] = await sandbox.exited;
+  },
+);
+
+Then('the Docker sandbox exited with {int}', function (code: number) {
+  assert.equal(stored<SandboxExit>(this, 'exit').code, code);
 });

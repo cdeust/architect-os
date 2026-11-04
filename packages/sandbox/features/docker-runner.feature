@@ -27,10 +27,26 @@ Feature: the Docker adapter of the SandboxRunner port
     When I start the Docker profile "memory-worker", send "ping" and wait for the end
     Then the Docker sandbox printed "ping" and exited with 7
     And the fake docker client was run with a container named "aos-sandbox-" and a UUID
-    And the fake docker client saw only the environment "DOCKER_CONFIG, HOME, PATH"
+    And the fake docker client saw only the environment "DOCKER_CONFIG, DOCKER_CONTEXT, DOCKER_HOST, HOME, PATH"
 
   Scenario: stop kills the client and removes the container by its name
     Given a Docker sandbox runner with the fake docker client
     When I start the Docker profile "memory-worker" with the image "hang" and stop it
     Then the Docker sandbox exited by the signal "SIGKILL"
     And the fake docker client was asked to remove the container it ran
+    And the fake docker client removed the container with only the environment "DOCKER_CONFIG, HOME, PATH"
+
+  Scenario: a descendant of the client that ignores SIGTERM dies when the sandbox is stopped
+    Given a Docker sandbox runner with the fake docker client
+    When I start the Docker image "orphan", read the pid it printed and stop it
+    Then the descendant is gone
+
+  Scenario: a descendant of the client that ignores SIGTERM dies when the client exits
+    Given a Docker sandbox runner with the fake docker client
+    When I start the Docker image "orphan-exit", read the pid it printed and wait for its exit
+    Then the descendant is gone
+
+  Scenario: a client that closes its stdin at once does not bring the host down while it writes
+    Given a Docker sandbox runner with the fake docker client
+    When I start the Docker image "close-stdin" and write 2097152 bytes on its stdin
+    Then the Docker sandbox exited with 0

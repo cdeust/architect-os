@@ -39,6 +39,7 @@ Feature: ContainerRunner adapters
     Then the fake port was asked for the profile "memory-worker" in "/work" with an empty argv
     And the fake port received on stdin '{"run_id":"r1","tool":"recall","input":{"query":"q"},"limits":{"max_turns":1,"max_budget_usd":0.1}}'
     And the fake port was not stopped
+    And the run left no timer behind
 
   Scenario: a worker that never finishes is stopped at the timeout
     Given the "sandbox (fake port)" container runner whose worker never finishes
@@ -49,7 +50,9 @@ Feature: ContainerRunner adapters
     Given the sandbox container runner whose worker writes <bytes> bytes on <stream>, bounded at 1000
     When the container runner runs a recall request with a timeout of 1000 ms
     Then the container runner is rejected with code "WORKER_OUTPUT_INVALID"
+    And the container runner is rejected with the message "worker output refused: OUTPUT_TOO_LARGE: sortie au-delà de 1000 octets"
     And the fake port was stopped
+    And the run left no timer behind
 
     Examples:
       | stream | bytes |
@@ -66,3 +69,16 @@ Feature: ContainerRunner adapters
     Given the sandbox container runner whose port refuses to start with "ISOLATION_UNAVAILABLE: canari"
     When the container runner runs a recall request with a timeout of 50 ms
     Then the container runner is rejected with code "WORKER_UNAVAILABLE"
+    And the container runner is rejected with the message "cannot start worker: Error: ISOLATION_UNAVAILABLE: canari"
+
+  Scenario Outline: any other failure of the output passes through unchanged and stops the worker: <error>
+    Given the sandbox container runner whose port fails its stdout with "<error>"
+    When the container runner runs a recall request with a timeout of 1000 ms
+    Then the container runner is rejected with code "<code>"
+    And the fake port was stopped
+    And the run left no timer behind
+
+    Examples:
+      | error                                 | code                  |
+      | a sandbox error ISOLATION_UNAVAILABLE | ISOLATION_UNAVAILABLE |
+      | a plain error coded OUTPUT_TOO_LARGE  | OUTPUT_TOO_LARGE      |

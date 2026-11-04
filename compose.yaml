@@ -39,7 +39,7 @@ services:
     build:
       context: .
       args:
-        ENTRY: services/memory/dist/src/main.js
+        ENTRY: services/memory/dist/src/serve.js
     environment:
       PORT: '8081'
       INTERNAL_PORT: '8083'

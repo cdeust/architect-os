@@ -74,17 +74,13 @@ export class DockerSandboxRunner implements SandboxRunner {
     }
     const docker = this.options.docker ?? 'docker';
     const name = `aos-sandbox-${randomUUID()}`;
-    const env = Object.fromEntries(
-      CLIENT_ENV.flatMap((key) =>
-        this.hostEnv[key] === undefined ? [] : [[key, this.hostEnv[key] as string]],
-      ),
-    );
-    // stdio : trois tubes, sans paramètre (§6) ; detached, pour tuer le groupe entier.
+    // Une variable absente de l'hôte reste indéfinie : spawn n'en transmet aucune (normalizeSpawnArguments).
+    const env = Object.fromEntries(CLIENT_ENV.map((key) => [key, this.hostEnv[key]]));
+    // stdio : les trois tubes par défaut, sans paramètre (§6) ; detached, pour tuer le groupe entier.
     const child = spawn(docker, dockerArgs(this.options, name, request.command), {
       env,
       detached: true,
       shell: false,
-      stdio: ['pipe', 'pipe', 'pipe'],
     });
     await new Promise<void>((started, failed) => {
       child.once('spawn', started);

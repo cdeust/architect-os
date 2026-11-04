@@ -46,7 +46,7 @@ Each component has `src/domain`, `src/application`, `src/infrastructure`, `src/p
 - `application` imports `domain`. Use cases, constructor-injected ports.
 - `infrastructure` imports `domain` and `application`. **Adapters**, with an in-memory adapter for every port.
 - `presentation` imports `application`. MCP or HTTP translation only.
-- `src/main.ts` is the only place that builds objects. No service locator, no global singleton, nothing imports `main.ts`.
+- `src/main.ts` is the only place that builds objects. No service locator, no global singleton, nothing imports `main.ts` but its tests and, where there is one, the process entry `src/serve.ts`, which only hands it `process.env` and `process.stderr` and sets the exit code.
 - No import between components. They talk over the network; the only shared code is `@architect-os/contracts`.
 
 ## Descriptive files before code

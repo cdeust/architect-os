@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
-import type { Sandbox, SandboxExit, SandboxRequest, SandboxRunner } from '@architect-os/sandbox';
+import {
+  SandboxError,
+  type Sandbox,
+  type SandboxExit,
+  type SandboxRequest,
+  type SandboxRunner,
+} from '@architect-os/sandbox';
 import type { ContainerRunner } from '../../src/domain/ports.js';
 import { SandboxContainerRunner } from '../../src/infrastructure/sandbox-container-runner.js';
 import { InProcessContainerRunner } from '../../src/infrastructure/in-process-runner.js';
@@ -19,11 +25,12 @@ import {
 
 const LIMITS = { max_turns: 1, max_budget_usd: 0.1 };
 
-/** What the scripted port does: print, then exit; or never finish; or refuse to start. */
+/** What the scripted port does: print, then exit; or never finish; or refuse to start; or fail its stdout. */
 type Script =
   | { readonly kind: 'print'; readonly stdout: string; readonly stderr: string; readonly exitCode: number }
   | { readonly kind: 'hang' }
-  | { readonly kind: 'refuse'; readonly message: string };
+  | { readonly kind: 'refuse'; readonly message: string }
+  | { readonly kind: 'fail-stdout'; readonly error: Error };
 
 /** A fake SandboxRunner port: records the request, stdin and stops; plays its script on its streams. */
 class ScriptedPort implements SandboxRunner {
@@ -43,6 +50,9 @@ class ScriptedPort implements SandboxRunner {
     let finish: (exit: SandboxExit) => void = () => undefined;
     const exited = new Promise<SandboxExit>((done) => (finish = done));
     const script = this.script;
+    if (script.kind === 'fail-stdout') {
+      stdin.on('end', () => stdout.destroy(script.error));
+    }
     if (script.kind === 'print') {
       stdin.on('end', () => {
         stdout.end(script.stdout);
@@ -73,7 +83,11 @@ class RunnerScenario {
   runner: ContainerRunner | undefined;
   port: ScriptedPort | undefined;
   outcome: Attempt | undefined;
+  /** The active timers of the process before and after the run. */
+  timers: [number, number] = [0, 0];
 }
+
+const activeTimers = () => process.getActiveResourcesInfo().filter((kind) => kind === 'Timeout').length;
 
 const scenario = (world: MemoryWorld) => slot(world, 'runners', () => new RunnerScenario());
 
@@ -132,12 +146,16 @@ When(
   async function (timeoutMs: number) {
     const s = scenario(this);
     const runner = required(s.runner, 'a container runner');
+    // Counted once cucumber has armed the timeout of this step, after its first await.
+    await new Promise((settled) => setImmediate(settled));
+    const before = activeTimers();
     s.outcome = await attempt(() =>
       runner.run({
         input: { run_id: 'r1', tool: 'recall', input: { query: 'q' }, limits: LIMITS },
         timeoutMs,
       }),
     );
+    s.timers = [before, activeTimers()];
   },
 );
 
@@ -187,4 +205,30 @@ Then('the container runner returned {int} bytes of stdout', function (bytes: num
   const { outcome } = scenario(this);
   assert.ok(outcome && !outcome.failed, 'the runner must have returned');
   assert.equal((outcome.value as { stdout: string }).stdout.length, bytes);
+});
+
+/** The errors a port's stdout can fail with, by name. */
+const STDOUT_ERRORS: Record<string, () => Error> = {
+  'a sandbox error ISOLATION_UNAVAILABLE': () => new SandboxError('ISOLATION_UNAVAILABLE', 'canari'),
+  'a plain error coded OUTPUT_TOO_LARGE': () =>
+    Object.assign(new Error('not from readCapped'), { code: 'OUTPUT_TOO_LARGE' }),
+};
+
+Given('the sandbox container runner whose port fails its stdout with {string}', function (name: string) {
+  const make = STDOUT_ERRORS[name];
+  assert.ok(make !== undefined, `no stdout error named "${name}"`);
+  const s = scenario(this);
+  s.port = new ScriptedPort({ kind: 'fail-stdout', error: make() });
+  s.runner = sandboxRunner(s.port);
+});
+
+Then('the container runner is rejected with the message {string}', function (message: string) {
+  const { outcome } = scenario(this);
+  assert.ok(outcome?.failed, 'the runner must have been rejected');
+  assert.equal((outcome.error as Error).message, message);
+});
+
+Then('the run left no timer behind', function () {
+  const [before, after] = scenario(this).timers;
+  assert.equal(after, before);
 });
