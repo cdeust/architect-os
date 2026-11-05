@@ -19,6 +19,7 @@ Given('the {word} data store', async function (adapter: string) {
     const connection = connectPostgres(this.databaseUrl);
     this.cleanups.push(() => connection.end());
     await migrate(connection, MIGRATIONS_DIR);
+    this.state['connection'] = connection;
     data.executor = new SqlDataStore(connection, loadStatementTable(SQL_DIR));
   } else {
     assert.fail(`unknown data store adapter: ${adapter}`);
@@ -75,12 +76,23 @@ Then('the answer matches {string}', function (expected: string) {
   assertMatches(data.answer, json(data, expected));
 });
 
+Then('the answer matches:', function (expected: string) {
+  const data = scenario(this);
+  assertMatches(data.answer, json(data, expected));
+});
+
 Then('the answer has a string field {string}', function (field: string) {
   assert.equal(typeof (scenario(this).answer as Record<string, unknown>)[field], 'string');
 });
 
 Then('the answer has the field {string}', function (field: string) {
   assert.ok(Object.hasOwn(scenario(this).answer as object, field));
+});
+
+Then('item {int} of the answer has no field {string}', function (index: number, field: string) {
+  const item = (scenario(this).answer as Record<string, unknown>[])[index];
+  assert.ok(item !== undefined, `no item ${index}`);
+  assert.equal(Object.hasOwn(item, field), false, `item ${index} has ${field}`);
 });
 
 Then('the answer has {int} items', function (count: number) {

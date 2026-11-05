@@ -34,6 +34,8 @@ Feature: Architecture guard (dependency-cruiser)
       | modules/broker/src/main-fixture/zz-fixture-mcp.ts       | import '@modelcontextprotocol/sdk/server/stdio.js';       | mcp-sdk-only-in-presentation-and-infrastructure |
       | modules/broker/src/application/zz-fixture-cross.ts      | import '../../../../services/memory/src/domain/ports.js'; | no-import-between-components                  |
       | modules/broker/src/infrastructure/zz-fixture-spawn.ts   | import 'node:child_process';                              | child-process-only-in-sandbox                 |
+      | data/src/domain/zz-fixture-mcp.ts                       | import '@modelcontextprotocol/sdk/server/mcp.js';         | mcp-sdk-only-in-presentation-and-infrastructure |
+      | data/src/application/zz-fixture-mcp.ts                  | import '@modelcontextprotocol/sdk/server/stdio.js';       | mcp-sdk-only-in-presentation-and-infrastructure |
       | data/src/domain/zz-fixture-cycle-a.ts                   | import './zz-fixture-cycle-b.js';\nexport const a = 1;    | no-circular                                   |
       | data/src/domain/zz-fixture-cycle-b.ts                   | import './zz-fixture-cycle-a.js';\nexport const b = 1;    | no-circular                                   |
     When the architecture guard runs

@@ -24,18 +24,18 @@ client -> proxy -> gateway -> services/<name> -> worker (container, exec network
                                    +-> data -> postgres (pgvector)
 ```
 
-| Dir                   | Role                                                                                                                             |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `proxy/`              | Caddyfile. Only exposed component: `/mcp` to the gateway, `/healthz`.                                                            |
-| `gateway/`            | The single MCP server for clients. Auth, tool catalogue, routing per tool, quotas, audit. Nothing else.                          |
-| `services/memory/`    | Intent tools `recall` / `remember`. `src/` is the MCP service, `worker/` is the agent image.                                     |
-| `data/`               | Only component that imports `pg`. Typed operations served from `sql/` by one executor; migrations.                               |
-| `packages/contracts/` | Only shared package: `Result<T>`, `Run`, `RunEvent`, zod schemas of tools and data operations. No logic.                         |
-| `packages/sandbox/`   | `SandboxRunner` port, srt adapter, builder profile template, host auth proxy and its relay, `npm run code` (brick 1a.0).         |
-| `modules/broker/`     | The broker (1b.2): sole holder of the API key, task tokens granted and revoked by MCP on its stdio, one usage record per answer. |
-| `tools/test-gate/`    | The CI gate (`npm run gate`). Layers `domain`, `infrastructure`, composition root `src/main.ts`.                                 |
-| `features/`           | End-to-end and cross-cutting scenarios (`integration`, `arch`, `descriptive`, `infra`, `repository`, `sandbox`).                 |
-| `bench/`              | Outside production: nothing in production imports it, the gate neither counts nor mutates it (DC-8). No dependency-cruiser rule. |
+| Dir                   | Role                                                                                                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `proxy/`              | Caddyfile. Only exposed component: `/mcp` to the gateway, `/healthz`.                                                                                                                |
+| `gateway/`            | The single MCP server for clients. Auth, tool catalogue, routing per tool, quotas, audit. Nothing else.                                                                              |
+| `services/memory/`    | Intent tools `recall` / `remember`. `src/` is the MCP service, `worker/` is the agent image.                                                                                         |
+| `data/`               | Only component that imports `pg`. Typed operations served from `sql/` by one executor, over HTTP and as MCP tools generated from `DATA_OPS` (`src/serve-mcp.ts`, stdio); migrations. |
+| `packages/contracts/` | Only shared package: `Result<T>`, `Run`, `RunEvent`, zod schemas of tools and data operations. No logic.                                                                             |
+| `packages/sandbox/`   | `SandboxRunner` port, srt adapter, builder profile template, host auth proxy and its relay, `npm run code` (brick 1a.0).                                                             |
+| `modules/broker/`     | The broker (1b.2): sole holder of the API key, task tokens granted and revoked by MCP on its stdio, one usage record per answer.                                                     |
+| `tools/test-gate/`    | The CI gate (`npm run gate`). Layers `domain`, `infrastructure`, composition root `src/main.ts`.                                                                                     |
+| `features/`           | End-to-end and cross-cutting scenarios (`integration`, `arch`, `descriptive`, `infra`, `repository`, `sandbox`).                                                                     |
+| `bench/`              | Outside production: nothing in production imports it, the gate neither counts nor mutates it (DC-8). No dependency-cruiser rule.                                                     |
 
 Details: `docs/architecture.md`, `docs/infrastructure.md`, `docs/design.md`, `docs/agents.md`, `docs/testing.md`.
 
@@ -68,7 +68,7 @@ Every descriptive file has a scenario that loads the committed file, checks it a
 
 - `pg` only in `data/src/infrastructure`. SQL only in `data/sql/` and `data/migrations/`, executed only by `data/src/infrastructure`. No DB access anywhere else. Data exposes typed operations, never free-form SQL.
 - `@anthropic-ai/claude-agent-sdk` only in `services/*/worker`.
-- `@modelcontextprotocol/sdk` only in `presentation` and `infrastructure` of `gateway` and `services/*`, and in their `features/` (step definitions).
+- `@modelcontextprotocol/sdk` only in `presentation` and `infrastructure` of `gateway`, `services/*`, `modules/*` and `data`, and in their `features/` (step definitions).
 - `node:child_process` only in `packages/sandbox`, the `SandboxRunner` port through which every process is launched (component infrastructure may import it), with two named exceptions in `.dependency-cruiser.cjs`: `tools/test-gate/src/infrastructure/git.ts` (the one file through which the gate runs git) and `tools/test-gate/src/infrastructure/replay.ts` (the one through which it replays mutation verdicts). `@anthropic-ai/sandbox-runtime` only in `packages/sandbox`, no exception.
 - No import cycles.
 - The gateway and the proxy contain no business logic: the gateway runs no agent and touches no data.
@@ -90,7 +90,7 @@ Common bricks need no new TypeScript:
 
 - Intent tool: its zod schemas and owner in `TOOLS` (`packages/contracts/src/tools.ts`) and `services/<owner>/worker/prompts/<tool>.md`. The gateway catalogue, the gateway route and the service registration are derived.
 - Internal tool: one entry in `INTERNAL_TOOLS` (`packages/contracts/src/data-ops.ts`) naming the data operation it is a view of.
-- Data operation: its schemas in `DATA_OPS`, `data/sql/<op>.sql`, a row in `data/sql/operations.json`, and, for the in-memory store, one handler in `data/src/infrastructure/in-memory.ts`. The shared `DataStore` contract runs on both stores.
+- Data operation: its schemas and the tables it writes (`writes`, checked against its SQL when the statement table loads) in `DATA_OPS`, `data/sql/<op>.sql`, a row in `data/sql/operations.json`, and, for the in-memory store, one handler in `data/src/infrastructure/in-memory.ts`. The shared `DataStore` contract runs on both stores.
 
 ## Conventions
 

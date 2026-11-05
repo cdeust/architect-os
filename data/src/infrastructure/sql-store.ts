@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DATA_OP_NAMES, type DataOpInput, type DataOpName } from '@architect-os/contracts';
+import { DATA_OP_NAMES, DATA_OPS, type DataOpInput, type DataOpName } from '@architect-os/contracts';
 import { z } from 'zod';
 import { DataError } from '../domain/errors.js';
 import type { DataStore } from '../domain/ports.js';
@@ -37,8 +37,22 @@ export interface StatementTable {
 }
 
 /**
- * Loads sql/operations.json and the SQL files it names, and rejects a table that does not serve
- * exactly the contract operations or whose parameter list does not match the placeholders of its SQL.
+ * The tables a statement writes: the target of each INSERT INTO, UPDATE, DELETE FROM, TRUNCATE and MERGE INTO, comments
+ * removed. `FOR UPDATE` (a row lock) and `DO UPDATE SET` (the update of an upsert, on the table of its INSERT) name
+ * no table.
+ */
+export function writtenTables(sql: string): string[] {
+  const code = sql.replace(/--[^\n]*/g, '');
+  const targets = code.matchAll(
+    /(?<!\b(?:FOR|DO|KEY)\s+)\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?|MERGE\s+INTO)\s+(?:ONLY\s+)?([A-Za-z_][\w.]*)/gi,
+  );
+  return [...new Set([...targets].map((m) => (m[1] ?? '').toLowerCase()))].sort();
+}
+
+/**
+ * Loads sql/operations.json and the SQL files it names, and rejects a table that does not serve exactly the contract
+ * operations, whose parameter list does not match the placeholders of its SQL, or whose SQL for an operation writes
+ * other tables than the `writes` that operation declares in DATA_OPS.
  */
 export function loadStatementTable(directory: string): StatementTable {
   const table = TableSchema.parse(JSON.parse(readFileSync(join(directory, 'operations.json'), 'utf8')));
@@ -56,6 +70,11 @@ export function loadStatementTable(directory: string): StatementTable {
     const forOp = statements.filter((s) => s.op === op);
     if (forOp.length === 0 || forOp.at(-1)?.when !== undefined) {
       throw new Error(`operation ${op} needs a statement without "when" as its last entry`);
+    }
+    const written = [...new Set(forOp.flatMap((s) => writtenTables(s.text)))].sort().join(', ');
+    const declared = [...DATA_OPS[op].writes].sort().join(', ');
+    if (written !== declared) {
+      throw new Error(`operation ${op} writes [${written}] but declares [${declared}] in DATA_OPS`);
     }
   }
   return { errors: table.errors, statements };

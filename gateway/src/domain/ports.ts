@@ -1,3 +1,5 @@
+import type { UsageAppendInput } from '@architect-os/contracts';
+
 /** What the caller presented to prove who they are (a bearer token, when there is one). */
 export interface Presented {
   token?: string | undefined;
@@ -46,4 +48,36 @@ export interface ServiceClient {
 
 export interface Clock {
   now(): Date;
+}
+
+/** A task token the gateway granted the broker: the task it spends for, and the call that granted it. */
+export interface TaskGrant {
+  token: string;
+  task: string;
+  parent?: string | undefined;
+}
+
+/** Port: the broker, child of the gateway on stdio (docs/design/platform-v3-srt.md, §2, Broker). */
+export interface BrokerControl {
+  grant(grant: TaskGrant): Promise<void>;
+  /** Makes the token worth nothing: the broker answers 401 to it from then on. */
+  revoke(token: string): Promise<void>;
+}
+
+/** What data did with one usage record: kept it, or refused it while answering (the record is not kept). */
+export type AppendOutcome = 'stored' | 'refused';
+
+/**
+ * Port: the registry of usage records, data, child of the gateway on stdio. `append` rejects with GatewayError
+ * SERVICE_UNAVAILABLE when the `tools/call` fails or data cannot reach its store.
+ */
+export interface UsageSink {
+  append(record: UsageAppendInput): Promise<AppendOutcome>;
+  /** Whether data answers an operation on its store again. */
+  available(): Promise<boolean>;
+}
+
+/** Port: run work later, once. A scenario runs it at will; production, after the delay. */
+export interface Scheduler {
+  after(ms: number, work: () => void): void;
 }

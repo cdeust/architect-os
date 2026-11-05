@@ -42,3 +42,24 @@ Feature: Data operations
     When I execute "memory.insert" with the input '{"content":"hello world"}'
     And I execute "memory.search" with the input '{"query":"hello"}'
     Then the answer has 1 items
+
+  Scenario Outline: refuses a usage record <defect> with INVALID_INPUT
+    Given data operations over an in-memory store
+    When I execute "usage.append" with the input '<input>' and it is refused
+    Then the failure code is "INVALID_INPUT"
+
+    Examples:
+      | defect                     | input                                                                                              |
+      | without a layer            | {"at":"2026-11-05T10:00:00.000Z","task":"t1","status":200}                                         |
+      | of an unknown layer        | {"at":"2026-11-05T10:00:00.000Z","layer":"worker","task":"t1","status":200}                        |
+      | with negative tokens       | {"at":"2026-11-05T10:00:00.000Z","layer":"broker","task":"t1","status":200,"input_tokens":-1}      |
+      | with a field of content    | {"at":"2026-11-05T10:00:00.000Z","layer":"broker","task":"t1","status":200,"content":"x"}          |
+
+  Scenario: bounds the groups of an aggregate: at most 1000, 100 by default
+    Given data operations over an in-memory store
+    When I execute "usage.aggregate" with the input '{"limit":1001}' and it is refused
+    Then the failure code is "INVALID_INPUT"
+    When I execute "usage.aggregate" with the input '{"limit":0}' and it is refused
+    Then the failure code is "INVALID_INPUT"
+    When I execute "usage.aggregate" with the input '{"limit":1000}'
+    Then the answer has 0 items

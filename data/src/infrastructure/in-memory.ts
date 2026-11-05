@@ -1,10 +1,33 @@
 import { randomUUID } from 'node:crypto';
-import type { DataOpInput, DataOpName, MemoryItem, Run, RunEvent } from '@architect-os/contracts';
+import type {
+  DataOpInput,
+  DataOpName,
+  MemoryItem,
+  Run,
+  RunEvent,
+  UsageAggregateRow,
+  UsageAppendInput,
+} from '@architect-os/contracts';
 import { DataError } from '../domain/errors.js';
 import type { DataStore } from '../domain/ports.js';
 
 interface StoredMemory extends MemoryItem {
   embedding?: number[] | undefined;
+}
+
+const TOKEN_FIELDS = [
+  'input_tokens',
+  'output_tokens',
+  'cache_read_input_tokens',
+  'cache_creation_input_tokens',
+] as const;
+
+/** Bytewise order, absent first: the ORDER BY ... COLLATE "C" NULLS FIRST of sql/usage.aggregate.sql. */
+function byteOrder(a: string | undefined, b: string | undefined): number {
+  if (a === b) return 0;
+  if (a === undefined) return -1;
+  if (b === undefined) return 1;
+  return Buffer.compare(Buffer.from(a), Buffer.from(b));
 }
 
 function cosine(a: number[], b: number[]): number {
@@ -26,6 +49,8 @@ export class InMemoryDataStore implements DataStore {
   private readonly runs = new Map<string, Run>();
   private readonly eventLog = new Map<string, RunEvent[]>();
   private readonly memories: StoredMemory[] = [];
+  /** Append-only: no handler changes or removes a record (migrations/0004_usage_records.sql on Postgres). */
+  private readonly usage: UsageAppendInput[] = [];
 
   private run(runId: string): Run {
     const run = this.runs.get(runId);
@@ -71,6 +96,35 @@ export class InMemoryDataStore implements DataStore {
           scored.push({ ...item, score: 1 });
       }
       return scored.sort((a, b) => b.score - a.score).slice(0, limit);
+    },
+    'usage.append': (record) => {
+      this.usage.push({ ...record });
+      return { id: randomUUID() };
+    },
+    'usage.aggregate': ({ task, limit }) => {
+      const groups = new Map<string, UsageAggregateRow>();
+      for (const record of this.usage) {
+        if (task !== undefined && record.task !== task) continue;
+        const key = JSON.stringify([record.task, record.layer, record.model ?? null]);
+        const group = groups.get(key) ?? {
+          task: record.task,
+          layer: record.layer,
+          ...(record.model === undefined ? {} : { model: record.model }),
+          requests: 0,
+          input_tokens: 0,
+          output_tokens: 0,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+        };
+        group.requests += 1;
+        for (const field of TOKEN_FIELDS) group[field] += record[field] ?? 0;
+        groups.set(key, group);
+      }
+      return [...groups.values()]
+        .sort(
+          (a, b) => byteOrder(a.task, b.task) || byteOrder(a.layer, b.layer) || byteOrder(a.model, b.model),
+        )
+        .slice(0, limit);
     },
   };
 

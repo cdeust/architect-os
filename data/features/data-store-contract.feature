@@ -119,3 +119,39 @@ Feature: DataStore contract
     Examples:
       | adapter  |
       | postgres |
+
+  Scenario Outline: keeps usage records and sums them per task, layer and model, absent tokens counting 0
+    Given the <adapter> data store
+    When I execute "usage.append" with the input '{"at":"2026-11-05T10:00:00.000Z","layer":"broker","task":"t1","parent":"c1","status":200,"route":"/v1/messages","model":"m1","input_tokens":10,"output_tokens":5,"cache_read_input_tokens":2,"cache_creation_input_tokens":1}'
+    Then the answer has a string field "id"
+    When I execute "usage.append" with the input '{"at":"2026-11-05T10:00:01.000Z","layer":"broker","task":"t1","status":200,"model":"m1","input_tokens":1,"output_tokens":1}'
+    And I execute "usage.append" with the input '{"at":"2026-11-05T10:00:02.000Z","layer":"client","task":"t1","status":200,"model":"m1","input_tokens":100}'
+    And I execute "usage.append" with the input '{"at":"2026-11-05T10:00:03.000Z","layer":"broker","task":"t1","status":400,"error_type":"invalid_request_error"}'
+    And I execute "usage.append" with the input '{"at":"2026-11-05T10:00:04.000Z","layer":"broker","task":"t2","status":200,"model":"m2","output_tokens":7}'
+    And I execute "usage.aggregate" with the input '{}'
+    Then the answer matches:
+      """
+      [
+        {"task":"t1","layer":"broker","requests":1,"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},
+        {"task":"t1","layer":"broker","model":"m1","requests":2,"input_tokens":11,"output_tokens":6,"cache_read_input_tokens":2,"cache_creation_input_tokens":1},
+        {"task":"t1","layer":"client","model":"m1","requests":1,"input_tokens":100,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},
+        {"task":"t2","layer":"broker","model":"m2","requests":1,"input_tokens":0,"output_tokens":7,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}
+      ]
+      """
+    And item 0 of the answer has no field "model"
+    When I execute "usage.aggregate" with the input '{"task":"t2"}'
+    Then the answer matches '[{"task":"t2","layer":"broker","model":"m2","requests":1}]'
+    When I execute "usage.aggregate" with the input '{"limit":2}'
+    Then the answer has 2 items
+    When I execute "usage.aggregate" with the input '{"task":"t3"}'
+    Then the answer has 0 items
+
+    @in-memory
+    Examples:
+      | adapter   |
+      | in-memory |
+
+    @postgres
+    Examples:
+      | adapter  |
+      | postgres |

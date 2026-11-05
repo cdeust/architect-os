@@ -3,7 +3,7 @@ Feature: SQL store, statement table and migrations
 
   Scenario: loads the committed table: every contract operation has a statement and its SQL file
     When I load the committed statement table
-    Then the table has 7 distinct operations
+    Then the table has 9 distinct operations
     And every statement of the table has a non-empty text
 
   Scenario Outline: rejects a table with <defect>
@@ -18,6 +18,26 @@ Feature: SQL store, statement table and migrations
       | an unknown field                               | operations.json | add the unknown field cache            |
       | a SQL file that does not exist                 | operations.json | point the first statement at nope.sql  |
       | not JSON                                       | operations.json | replace the content by an opening brace |
+      | a statement writing a table it does not declare | runs.get.sql    | append a delete of the runs            |
+      | a declared table its statement does not write   | usage.append.sql | select the 12 parameters instead       |
+
+  Scenario Outline: reads the tables a statement writes: <statement>
+    Then the statement "<statement>" writes "<tables>"
+
+    Examples:
+      | statement                                                   | tables                    |
+      | SELECT id FROM runs WHERE id = $1 FOR UPDATE                |                           |
+      | SELECT id FROM runs FOR NO KEY UPDATE                       |                           |
+      | INSERT INTO runs (id) VALUES ($1) ON CONFLICT DO UPDATE SET id = $1 | runs              |
+      | -- UPDATE runs\nSELECT 1                                    |                           |
+      | update Runs set status = $1                                 | runs                      |
+      | DELETE FROM memory.memories WHERE id = $1                   | memory.memories           |
+      | TRUNCATE TABLE ONLY run_events                              | run_events                |
+      | MERGE INTO usage_records USING runs ON true WHEN MATCHED THEN DO NOTHING | usage_records |
+      | WITH x AS (UPDATE runs SET a = 1 RETURNING id) INSERT INTO run_events SELECT id FROM x | run_events, runs |
+
+  Scenario: the usage records are written by usage.append only
+    Then only the operation "usage.append" writes the table "usage_records"
 
   Scenario: binds every value as a parameter, never into the SQL text
     Given a SQL data store over a recording executor answering the run row
@@ -54,6 +74,16 @@ Feature: SQL store, statement table and migrations
 
   Scenario: applies each versioned migration once, in order
     When I migrate twice from the committed migrations directory with an in-memory ledger
-    Then the first migration applies "0001_runs.sql, 0002_memory.sql, 0003_runs_immutable.sql"
+    Then the first migration applies "0001_runs.sql, 0002_memory.sql, 0003_runs_immutable.sql, 0004_usage_records.sql"
     And the second migration applies nothing
     And the migration statements include "CREATE EXTENSION IF NOT EXISTS vector"
+
+  @postgres
+  Scenario: a usage record cannot be changed nor removed: UPDATE, DELETE and TRUNCATE are refused by the database
+    Given the postgres data store
+    When I execute "usage.append" with the input '{"at":"2026-11-05T10:00:00.000Z","layer":"broker","task":"t1","status":200,"model":"m1","input_tokens":3}'
+    Then the database refuses "UPDATE usage_records SET input_tokens = 0" with SQLSTATE "55000"
+    And the database refuses "DELETE FROM usage_records" with SQLSTATE "55000"
+    And the database refuses "TRUNCATE usage_records" with SQLSTATE "55000"
+    When I execute "usage.aggregate" with the input '{}'
+    Then the answer matches '[{"task":"t1","layer":"broker","model":"m1","requests":1,"input_tokens":3}]'

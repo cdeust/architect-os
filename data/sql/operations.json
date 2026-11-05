@@ -22,8 +22,18 @@
       "params": ["run_id", "status", "result:json"],
       "returns": "row"
     },
-    { "op": "runs.get", "file": "runs.get.sql", "params": ["run_id"], "returns": "row" },
-    { "op": "runs.events", "file": "runs.events.sql", "params": ["run_id"], "returns": "value" },
+    {
+      "op": "runs.get",
+      "file": "runs.get.sql",
+      "params": ["run_id"],
+      "returns": "row"
+    },
+    {
+      "op": "runs.events",
+      "file": "runs.events.sql",
+      "params": ["run_id"],
+      "returns": "value"
+    },
     {
       "op": "memory.insert",
       "file": "memory.insert.sql",
@@ -41,6 +51,31 @@
       "op": "memory.search",
       "file": "memory.search-text.sql",
       "params": ["query", "limit"],
+      "returns": "rows"
+    },
+    {
+      "op": "usage.append",
+      "file": "usage.append.sql",
+      "params": [
+        "at",
+        "layer",
+        "task",
+        "parent",
+        "status",
+        "route",
+        "error_type",
+        "model",
+        "input_tokens",
+        "output_tokens",
+        "cache_read_input_tokens",
+        "cache_creation_input_tokens"
+      ],
+      "returns": "row"
+    },
+    {
+      "op": "usage.aggregate",
+      "file": "usage.aggregate.sql",
+      "params": ["task", "limit"],
       "returns": "rows"
     }
   ]

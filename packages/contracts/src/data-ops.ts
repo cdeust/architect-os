@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { RunEventSchema, RunEventTypeSchema, RunSchema, RunStatusSchema } from './run.js';
 import { MemoryItemSchema } from './tools.js';
+import { UsageRecordSchema } from './broker.js';
 
 /** Dimension of the pgvector column declared in data/migrations/0002_memory.sql. */
 export const EMBEDDING_DIMENSION = 384;
@@ -37,15 +38,65 @@ export const MemorySearchInputSchema = z.object({
   limit: z.number().int().min(1).max(50).default(5),
 });
 
+/**
+ * The layer a usage record measures (docs/design/platform-v3-srt.md, §2, Mesure du coût): `broker`, what passes through
+ * the broker, stamped by the gateway that forwards its records; `client`, the context tokens of the client, from the M1
+ * hook of brick 1c. M2 sums both.
+ */
+export const UsageLayerSchema = z.enum(['broker', 'client']);
+export type UsageLayer = z.infer<typeof UsageLayerSchema>;
+
+/** One usage record as the registry keeps it: the record of the broker and its layer. Append-only. */
+export const UsageAppendInputSchema = UsageRecordSchema.extend({ layer: UsageLayerSchema });
+export type UsageAppendInput = z.infer<typeof UsageAppendInputSchema>;
+
+/** The sums of M2, per task, layer and model, for one task or all, bounded in rows like every read. */
+export const UsageAggregateInputSchema = z.strictObject({
+  task: UsageRecordSchema.shape.task.optional(),
+  limit: z.number().int().min(1).max(1000).default(100),
+});
+const Sum = z.number().int().nonnegative();
+/** One group of M2. `model` is absent for the answers that named none (an error before the model was known). */
+export const UsageAggregateRowSchema = z.strictObject({
+  task: z.string(),
+  layer: UsageLayerSchema,
+  model: z.string().optional(),
+  requests: Sum,
+  input_tokens: Sum,
+  output_tokens: Sum,
+  cache_read_input_tokens: Sum,
+  cache_creation_input_tokens: Sum,
+});
+export type UsageAggregateRow = z.infer<typeof UsageAggregateRowSchema>;
+
+/**
+ * Every operation declares the tables it writes (`writes`), schema-qualified when not in `public`. data/sql is checked
+ * against it when the statement table loads (data/src/infrastructure/sql-store.ts), and the gateway refuses at each
+ * operation a table outside the `writes_tables` of the calling module (§3, brick 1b.4).
+ */
 export const DATA_OPS = {
-  'runs.create': { input: RunsCreateInputSchema, output: RunSchema },
-  'runs.appendEvent': { input: RunsAppendEventInputSchema, output: RunEventSchema },
-  'runs.complete': { input: RunsCompleteInputSchema, output: RunSchema },
-  'runs.get': { input: RunsGetInputSchema, output: RunSchema },
-  'runs.events': { input: RunsEventsInputSchema, output: z.array(RunEventSchema) },
-  'memory.insert': { input: MemoryInsertInputSchema, output: z.object({ id: z.string() }) },
-  'memory.search': { input: MemorySearchInputSchema, output: z.array(MemoryItemSchema) },
-} as const;
+  'runs.create': { input: RunsCreateInputSchema, output: RunSchema, writes: ['runs'] },
+  'runs.appendEvent': { input: RunsAppendEventInputSchema, output: RunEventSchema, writes: ['run_events'] },
+  'runs.complete': { input: RunsCompleteInputSchema, output: RunSchema, writes: ['runs'] },
+  'runs.get': { input: RunsGetInputSchema, output: RunSchema, writes: [] },
+  'runs.events': { input: RunsEventsInputSchema, output: z.array(RunEventSchema), writes: [] },
+  'memory.insert': {
+    input: MemoryInsertInputSchema,
+    output: z.object({ id: z.string() }),
+    writes: ['memory.memories'],
+  },
+  'memory.search': { input: MemorySearchInputSchema, output: z.array(MemoryItemSchema), writes: [] },
+  'usage.append': {
+    input: UsageAppendInputSchema,
+    output: z.object({ id: z.string() }),
+    writes: ['usage_records'],
+  },
+  'usage.aggregate': {
+    input: UsageAggregateInputSchema,
+    output: z.array(UsageAggregateRowSchema),
+    writes: [],
+  },
+} as const satisfies Record<string, { input: z.ZodType; output: z.ZodType; writes: readonly string[] }>;
 export type DataOpName = keyof typeof DATA_OPS;
 export type DataOpInput<Op extends DataOpName> = z.output<(typeof DATA_OPS)[Op]['input']>;
 export const DATA_OP_NAMES = Object.keys(DATA_OPS) as DataOpName[];

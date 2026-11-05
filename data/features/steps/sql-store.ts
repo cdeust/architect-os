@@ -3,7 +3,13 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { migrate } from '../../src/infrastructure/migrate.js';
-import { loadStatementTable, SqlDataStore, type SqlExecutor } from '../../src/infrastructure/sql-store.js';
+import { DATA_OP_NAMES, DATA_OPS } from '@architect-os/contracts';
+import {
+  loadStatementTable,
+  SqlDataStore,
+  writtenTables,
+  type SqlExecutor,
+} from '../../src/infrastructure/sql-store.js';
 import { MIGRATIONS_DIR, SQL_DIR } from '../../src/main.js';
 import { Given, RecordingExecutor, Then, When, scenario } from './helpers.js';
 
@@ -22,6 +28,9 @@ const REWRITES: Record<string, (source: string) => string> = {
   'add the unknown field cache': editTable((t) => void (t.statements[0]!['cache'] = true)),
   'point the first statement at nope.sql': editTable((t) => void (t.statements[0]!['file'] = 'nope.sql')),
   'replace the content by an opening brace': () => '{',
+  'append a delete of the runs': (source) => `${source};\nDELETE FROM runs WHERE false`,
+  'select the 12 parameters instead': () =>
+    `SELECT ${Array.from({ length: 12 }, (_, i) => `${i + 1}`).join(', ')} AS id`,
 };
 
 const RUN_ROW = {
@@ -66,6 +75,29 @@ When('I copy the sql directory and rewrite {string} as {string}', function (file
 Then('loading the statement table from the copy fails', function () {
   assert.throws(() => loadStatementTable(this.state['brokenDir'] as string));
 });
+
+Then('the statement {string} writes {string}', function (statement: string, tables: string) {
+  assert.equal(writtenTables(statement.replaceAll('\\n', '\n')).join(', '), tables);
+});
+
+Then('only the operation {string} writes the table {string}', function (op: string, table: string) {
+  const writers = DATA_OP_NAMES.filter((name) =>
+    (DATA_OPS[name].writes as readonly string[]).includes(table),
+  );
+  assert.deepEqual(writers, [op]);
+});
+
+Then(
+  'the database refuses {string} with SQLSTATE {string}',
+  async function (statement: string, sqlstate: string) {
+    const connection = this.state['connection'] as SqlExecutor | undefined;
+    assert.ok(connection, 'the postgres data store must be given first');
+    await assert.rejects(
+      connection.query(statement, []),
+      (error: { code?: string }) => error.code === sqlstate,
+    );
+  },
+);
 
 // --- SqlDataStore without a database ---
 
