@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { DATA_OP_NAMES } from '@architect-os/contracts';
-import { composeInMemory } from '../../src/main.js';
-import { Given, Then, When, assertMatches, scenario, text } from './helpers.js';
+import { composeInMemory, serveHttp } from '../../src/main.js';
+import { Given, Then, When, assertMatches, scenario, text, type DataWorld } from './helpers.js';
 
 Given('the data HTTP API over an in-memory store', async function () {
   const server = composeInMemory().createServer();
@@ -49,3 +49,27 @@ Then(
     }
   },
 );
+
+Given('the HTTP entry of data served with PORT {int} and no DATABASE_URL', async function (port: number) {
+  const lines: string[] = [];
+  const server = await serveHttp({ PORT: String(port) }, (line) => lines.push(line));
+  this.cleanups.push(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  const listening = (server.address() as AddressInfo).port;
+  this.state['httpEntry'] = { lines, port: listening };
+  scenario(this).baseUrl = `http://127.0.0.1:${listening}`;
+});
+
+const entry = (world: DataWorld) => world.state['httpEntry'] as { lines: string[]; port: number };
+
+Then('the HTTP entry logged {string}', function (line: string) {
+  assert.ok(entry(this).lines.includes(line), entry(this).lines.join('\n'));
+});
+
+Then('the HTTP entry logged that it listens on its port, not on 8082', function () {
+  const { lines, port } = entry(this);
+  assert.notEqual(port, 8082);
+  assert.ok(lines.includes(`data listening on :${port}`), lines.join('\n'));
+});

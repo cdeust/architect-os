@@ -28,3 +28,10 @@ Feature: Data HTTP API
     And I POST '{"run_id":"$run","status":"ok","result":null}' to "/v1/ops/runs.complete"
     And I POST '{"run_id":"$run","status":"ok","result":null}' to "/v1/ops/runs.complete"
     Then the response status is 409
+
+  Scenario: the HTTP entry of data listens on PORT and says so
+    Given the HTTP entry of data served with PORT 0 and no DATABASE_URL
+    When I GET "/healthz"
+    Then the response status is 200
+    And the HTTP entry logged "DATABASE_URL is not set: using the in-memory backend (non-persistent)."
+    And the HTTP entry logged that it listens on its port, not on 8082

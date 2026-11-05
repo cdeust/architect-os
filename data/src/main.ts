@@ -1,4 +1,6 @@
 import { once } from 'node:events';
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { Readable, Writable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DataOperations } from './application/operations.js';
@@ -69,16 +71,21 @@ export async function serveStdio(
   return 0;
 }
 
-async function main(): Promise<void> {
-  const port = Number(process.env['PORT'] ?? 8082);
-  const { store } = await openStore(process.env, (line) => console.warn(line));
-  compose(store)
-    .createServer()
-    .listen(port, () => console.warn(`data listening on :${port}`));
+/** The HTTP API of data on `PORT` (8082 by default), until compose is retired (brick 1b.6). Resolves once it listens. */
+export async function serveHttp(
+  env: Readonly<Record<string, string | undefined>>,
+  log: (line: string) => void,
+): Promise<Server> {
+  const { store } = await openStore(env, log);
+  const server = compose(store).createServer();
+  server.listen(Number(env['PORT'] ?? 8082));
+  await once(server, 'listening');
+  log(`data listening on :${(server.address() as AddressInfo).port}`);
+  return server;
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((error: unknown) => {
+  serveHttp(process.env, console.warn).catch((error: unknown) => {
     console.error(error);
     process.exit(1);
   });

@@ -46,7 +46,7 @@ export function writtenTables(sql: string): string[] {
   const targets = code.matchAll(
     /(?<!\b(?:FOR|DO|KEY)\s+)\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?|MERGE\s+INTO)\s+(?:ONLY\s+)?([A-Za-z_][\w.]*)/gi,
   );
-  return [...new Set([...targets].map((m) => (m[1] ?? '').toLowerCase()))].sort();
+  return [...new Set([...targets].map((m) => String(m[1]).toLowerCase()))].sort();
 }
 
 /**
