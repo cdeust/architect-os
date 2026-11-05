@@ -903,10 +903,18 @@ Rapports appariés par tâche, moyenne et intervalle à 95 % par bootstrap sur l
   - `gateway/features/usage-forwarder.feature` : couche posée, refus, panne, sonde, réémission, écritures concurrentes (chaque jeton révoqué une seule fois), task retirée puis rouverte pendant la réémission, autre erreur pas prise pour une panne, autre logger non transmis ;
   - `data/features` : agrégation sur les deux stores, Postgres compris ; UPDATE, DELETE et TRUNCATE refusés par la base (55000) ; tables écrites lues dans neuf formes de SQL ; une écriture non déclarée et une déclaration non écrite, refusées au chargement ; serveur MCP (liste exacte, refus nommés, `INTERNAL` sans fuite, stdio, Postgres réel).
 - Témoin négatif à la main : sans la révocation de `down()`, le scénario de bout en bout échoue (« not within 2 s: a 401 of the broker »).
-- Gate :
-  - chaque commit a passé son gate local ;
-  - le gate porte sur les lignes d'un seul commit (le diff contre le premier parent). Toute la brique est donc passée en un seul gate, dans un worktree jetable avec un commit squashé `ef3e19e..` : 293 mutants dans le périmètre, 275 tués, 10 en délai dépassé, 7 en erreur d'exécution, 1 ignoré, aucun survivant ; règles 5, 6 et 7 sans violation ;
-  - la règle 2 y était rouge sur le format d'un fichier de steps, corrigé ; le gate du commit de correction est vert.
+- Gate, commit par commit (le gate ne juge que le diff d'un commit contre son premier parent) :
+  - `8e30c4b` : rouge, 19 survivants (dont les 2 du canari, attendus) ;
+  - `3996b9d` : jamais passé seul (ma redirection pointait vers un chemin invalide, `npm run gate` n'a pas tourné) ;
+  - `c844dc3` : vert ;
+  - `f281d5a` : jugé seulement dans le gate de toute la brique ci-dessous ;
+  - `61518f7` (format) : vert, 767 scénarios ;
+  - ce commit du journal : documentation seule.
+- Toute la brique en un seul gate, dans un worktree jetable avec un commit squashé de `ef3e19e` à `f281d5a` :
+  - mutation : 293 mutants dans le périmètre, 275 tués, 10 en délai dépassé, 7 en erreur d'exécution, 1 ignoré, aucun survivant ; règles 5, 6 et 7 sans violation ;
+  - règle 2 rouge : un fichier de steps n'était pas formaté, corrigé par `61518f7`.
+- Aucun run squashé n'a encore donné un verdict tout vert après la correction de format. L'argument, et non un run : `61518f7` ne change que le format d'un fichier de steps, sans aucune ligne de production, et ne peut donc pas changer un verdict de Stryker ; son propre gate est vert.
+- Ce que la CI prouvera : `gate.yml` compare la tête au premier parent. Elle ne jugera donc que le dernier commit, du texte, et ne prouve rien de la brique : d'où le gate squashé local. Le run complet hebdomadaire `mutation-full.yml` mute tout le code de production : un survivant absent du registre de dette, par exemple l’un des 31 retirés par cette brique s’il revenait, le rend rouge.
 - Rouges rencontrés en route, corrigés à la cause :
   - 17 survivants (messages non vérifiés, refus de `data` repéré par l'ordre des clés de son JSON, tri, couche `client`, enregistrement reçu entre le retour de `data` et la sonde, stdin déjà lu) ;
   - règle 6 : la dette décalée par du code ajouté au-dessus. Le nouveau code passe après les lignes à dette ; les adaptateurs d'usage de la gateway vont dans `in-memory-usage.ts` ; les entrées de l'ancien `main()` HTTP sont retirées, son code n'existant plus ; la dette `exclude(['running'])` est payée par un scénario ;
