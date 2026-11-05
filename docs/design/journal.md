@@ -871,3 +871,56 @@ Rapports appariés par tâche, moyenne et intervalle à 95 % par bootstrap sur l
   - risque restant, accepté et atténué : du code fusionné sur `main` s'exécute avec la clé. Il passe d'abord la revue et le gate, et la limite de dépense de l'espace de travail borne le coût.
   - Dépendances : aucune nouvelle, actions épinglées par SHA.
 - Opérationnel : moindre privilège (environnement restreint à `main`, une seule clé d'essai) ; aucune clé lue par l'agent.
+
+## 27. Brique 1b.3 : `data` en MCP, tables écrites déclarées, usage en append-only, relais de la gateway, 5 novembre 2026
+
+**Fait.**
+- Contrats (`packages/contracts/src/data-ops.ts`) :
+  - chaque opération de `DATA_OPS` déclare les tables qu'elle écrit (`writes`) ;
+  - deux opérations : `usage.append` (l'enregistrement du broker plus sa couche, `broker` ou `client`) et `usage.aggregate` (M2 : sommes par task, couche et modèle, 1 000 groupes au plus, 100 par défaut).
+- `data` :
+  - migration `0004_usage_records.sql`, en append-only : un UPDATE ou un DELETE d'une ligne, ou un TRUNCATE de la table, lève 55000 ;
+  - `usage.append.sql` et `usage.aggregate.sql`. Un compte de tokens absent vaut 0, l'ordre est bytewise (`COLLATE "C"`, comme le store en mémoire) et les sommes sont en float8, car pg rend un bigint en chaîne ;
+  - le chargeur de `operations.json` compare les tables que le SQL de chaque opération écrit (INSERT, UPDATE, DELETE, TRUNCATE, MERGE, commentaires retirés, `FOR UPDATE` et `DO UPDATE` exclus) à sa déclaration, et refuse un écart ;
+  - serveur MCP généré depuis `DATA_OPS` (`src/presentation/mcp-server.ts`) : un tool par opération, sans aucun tool qui prenne du SQL. Un refus rend son code nommé ; une panne du store rend `INTERNAL`, sans son message ;
+  - entrée stdio `src/serve-mcp.ts` (`serveStdio`) : MCP seul sur stdout, journal sur stderr, 0 à la fin du stdin, 1 si le store ne s'ouvre pas ;
+  - l'API HTTP reste jusqu'au retrait de compose (1b.6). Son processus passe dans `src/serve-http.ts`, sans logique, et compose le lance ; `serveHttp` est couvert.
+- Gateway :
+  - ports `BrokerControl`, `UsageSink` et `Scheduler`, chacun avec son adaptateur en mémoire ;
+  - cas d'usage `UsageForwarder` : chaque enregistrement du broker est écrit avec la couche `broker`. Quand une écriture trouve `data` indisponible, la gateway retire les jetons de toutes les tasks, perd les enregistrements reçus entre-temps (R-9) et sonde `data` à intervalle fixe ; à son retour, elle réémet les jetons des tasks encore ouvertes. Une task ouverte pendant la panne reçoit son jeton au retour ; une task retirée n'est jamais réémise ;
+  - adaptateurs MCP `McpUsageSink` et `McpBrokerControl`, plus `onUsage` (seul le logger `usage` passe) et `TimerScheduler`.
+  - Le lancement des enfants et le câblage dans `gateway/src/main.ts` restent à 1b.4.
+- Garde : le SDK MCP est permis dans la présentation et l'infrastructure de `data`, avec deux fixtures qui le refusent dans son domaine et son application.
+
+**Décisions.**
+- La couche est posée par l'écrivain, pas par le broker : la gateway pose `broker` ; `client` viendra du hook M1 de 1c. Le contrat du broker reste inchangé.
+- `data` est indisponible quand le `tools/call` échoue (transport fermé) ou quand il rend `INTERNAL` (store injoignable). Un autre refus est une réponse : l'enregistrement est refusé et `data` reste disponible.
+- La sonde du retour de `data` est une lecture de son store (`usage.aggregate`, 1 groupe), parce qu'un ping de la session MCP ne prouverait pas que Postgres répond.
+
+**Prouvé.**
+- Scénarios :
+  - `features/integration/usage.feature`, de bout en bout : vrai broker, vrai serveur MCP de `data`, relais de la gateway et faux amont. Un appel laisse un enregistrement par réponse, sommé par task, couche et modèle. `data` absent : l'appel suivant reçoit 401 et l'enregistrement est perdu. Au retour de `data`, le jeton dépense à nouveau. Les contrats des ports `UsageSink` et `BrokerControl` passent sur leurs deux adaptateurs ;
+  - `gateway/features/usage-forwarder.feature` : couche posée, refus, panne, sonde, réémission, écritures concurrentes (chaque jeton révoqué une seule fois), task retirée puis rouverte pendant la réémission, autre erreur pas prise pour une panne, autre logger non transmis ;
+  - `data/features` : agrégation sur les deux stores, Postgres compris ; UPDATE, DELETE et TRUNCATE refusés par la base (55000) ; tables écrites lues dans neuf formes de SQL ; une écriture non déclarée et une déclaration non écrite, refusées au chargement ; serveur MCP (liste exacte, refus nommés, `INTERNAL` sans fuite, stdio, Postgres réel).
+- Témoin négatif à la main : sans la révocation de `down()`, le scénario de bout en bout échoue (« not within 2 s: a 401 of the broker »).
+- Gate :
+  - chaque commit a passé son gate local ;
+  - le gate porte sur les lignes d'un seul commit (le diff contre le premier parent). Toute la brique est donc passée en un seul gate, dans un worktree jetable avec un commit squashé `ef3e19e..` : 293 mutants dans le périmètre, 275 tués, 10 en délai dépassé, 7 en erreur d'exécution, 1 ignoré, aucun survivant ; règles 5, 6 et 7 sans violation ;
+  - la règle 2 y était rouge sur le format d'un fichier de steps, corrigé ; le gate du commit de correction est vert.
+- Rouges rencontrés en route, corrigés à la cause :
+  - 17 survivants (messages non vérifiés, refus de `data` repéré par l'ordre des clés de son JSON, tri, couche `client`, enregistrement reçu entre le retour de `data` et la sonde, stdin déjà lu) ;
+  - règle 6 : la dette décalée par du code ajouté au-dessus. Le nouveau code passe après les lignes à dette ; les adaptateurs d'usage de la gateway vont dans `in-memory-usage.ts` ; les entrées de l'ancien `main()` HTTP sont retirées, son code n'existant plus ; la dette `exclude(['running'])` est payée par un scénario ;
+  - règle 7 : 14 « tués » de Stryker démentis par le rejeu (les `\s+` du lecteur de tables, la comparaison des tables, la fin du pool). Chacun a désormais un scénario qui le tue, vérifié à la main (12 sur 12) ;
+  - mon propre défaut : un `| tail` dans la commande de commit masquait un contrôle de format en échec.
+
+**Trois piliers.**
+- Recherche : chaque propriété de la ligne 1b.3 a son scénario, et chaque barrière son témoin négatif (copie cassée refusée, mutant tué, révocation retirée à la main).
+- SSDLC (STRIDE de la brique) :
+  - falsification : registre en append-only par la base ; tables écrites déclarées et vérifiées au chargement. Le refus à l'opération par `writes_tables` vient en 1b.4 ;
+  - répudiation : aucun chemin UPDATE ni DELETE vers `usage_records`, et seul `usage.append` l'écrit (scénario) ;
+  - fuite : un enregistrement ne porte ni contenu, ni clé, ni jeton (schéma strict, refus d'un champ `content`) ; une panne du store rend `INTERNAL` sans le message de la base ;
+  - déni de service : agrégat borné à 1 000 groupes ; sonde à intervalle fixe ; `data` absent coupe la dépense (401) au lieu de la laisser sans trace ;
+  - usurpation et élévation : un jeton réémis garde sa task et son parent ; une task retirée n'est jamais réémise.
+  - Limite connue : une écriture cachée dans une fonction SQL échappe à la lecture des tables. Les droits de base par module de la brique 4 la ferment.
+  - Dépendances : `@modelcontextprotocol/sdk` 1.32.2 ajouté à `data`, même version épinglée que la gateway et le broker ; lockfile à jour.
+- Opérationnel : aucun secret lu ni écrit ; IRB sans objet, aucune donnée humaine (des comptes de tokens).
