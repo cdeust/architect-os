@@ -842,3 +842,32 @@ Rapports appariés par tâche, moyenne et intervalle à 95 % par bootstrap sur l
   - R-11 : un relais dont le puits d'usage refuse s'arrête.
   - Dépendances : aucune ajoutée hors des versions déjà épinglées.
 - Opérationnel : aucun secret dans la porte (`gate.yml` sans secret), ni dans un journal, ni dans le dépôt ; la clé d'essai du propriétaire n'a pas été lue.
+
+## 26. T-04R sans commande manuelle : un workflow sur main, la clé dans un environnement restreint à main, 5 novembre 2026
+
+**Demande du propriétaire.** Éviter les commandes manuelles pour l'appel réel du broker.
+
+**Fait.**
+- `.github/workflows/broker-live.yml` se déclenche par un push sur `main` qui touche le broker, chaque semaine, ou à la main, et jamais sur une pull request. Il a la permission `contents: read`, et son job ne tourne que si `github.ref` vaut `refs/heads/main`, dans l'environnement `broker-live`.
+- Le secret `ANTHROPIC_TEST_KEY` n'entre que dans l'env d'une étape. Cette étape l'écrit avec `umask 077` dans un fichier temporaire du runner. `npm run broker:live` le lit, puis le fichier est retiré, même en cas d'échec. Sans le secret, le job échoue avec un message qui dit au propriétaire quoi créer.
+- `features/descriptive/workflows.feature` :
+  - le workflow est dans la liste commune : actions épinglées, `npm ci` sans scripts, checkout sans identifiants ;
+  - ses règles sont vérifiées ;
+  - sept copies cassées sont refusées : déclencheur `pull_request`, autre branche, sans environnement, sans condition `main`, permissions élargies, secret dans une ligne `run`, second secret ;
+  - aucun autre workflow ne nomme l'environnement ni le secret.
+
+  La suite passe à 700 scénarios verts.
+- `docs/infrastructure.md`, `CLAUDE.md` et `platform-v3-srt.md` §2 le disent.
+
+**Au propriétaire, une fois.** Créer l'environnement GitHub `broker-live`, avec une règle de branches de déploiement qui n'autorise que `main`. Y mettre le secret `ANTHROPIC_TEST_KEY`, une clé d'essai d'un espace de travail dont la limite de dépense est basse.
+
+**Pas encore prouvé.** Le premier verdict réel de T-04R. GitHub n'exécute ce workflow que sur `main`, et `workflow_dispatch` ne vaut qu'une fois le fichier sur la branche par défaut : le verdict vient à la fusion de cette branche, et il sera consigné ici.
+
+**Trois piliers.**
+- Recherche : la règle du workflow a son scénario, et chacune de ses barrières un témoin négatif, une copie cassée refusée.
+- SSDLC (STRIDE) :
+  - fuite : le secret n'est jamais dans une PR, un fork, une autre branche ou une ligne `run` ; GitHub le masque dans les journaux ; le fichier est en 0600 puis retiré ;
+  - élévation : `contents: read` seulement ;
+  - risque restant, accepté et atténué : du code fusionné sur `main` s'exécute avec la clé. Il passe d'abord la revue et le gate, et la limite de dépense de l'espace de travail borne le coût.
+  - Dépendances : aucune nouvelle, actions épinglées par SHA.
+- Opérationnel : moindre privilège (environnement restreint à `main`, une seule clé d'essai) ; aucune clé lue par l'agent.

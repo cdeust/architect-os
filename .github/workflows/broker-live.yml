@@ -1,0 +1,70 @@
+# T-04R (docs/design/platform-v3-srt.md §2, Broker): the real call of the broker with a test key, so that no owner
+# command is needed. Off the path of a change: gate.yml holds no secret (§7) and a pull request never reaches this file.
+# The key is the secret ANTHROPIC_TEST_KEY of the environment broker-live, created by the owner with a deployment
+# branch policy that allows main only; the job also runs on refs/heads/main only. The key is written to a 0600 file
+# of the runner's temporary directory, read by the broker alone (as modules/broker/broker.json reads its own), and
+# removed at the end. Cost: four requests of one token or less to the smallest model.
+name: broker-live
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - modules/broker/**
+      - packages/sandbox/src/**
+      - packages/contracts/src/**
+      - package-lock.json
+      - .nvmrc
+      - .github/workflows/broker-live.yml
+  # Weekly, so that a change of the upstream is seen without a change of the repository.
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: broker-live
+  cancel-in-progress: false
+
+jobs:
+  broker-live:
+    name: broker-live
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: broker-live
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install (lockfile, scripts disabled)
+        run: npm ci --ignore-scripts
+
+      - name: Key file, 0600, from the secret of the environment
+        env:
+          ANTHROPIC_TEST_KEY: ${{ secrets.ANTHROPIC_TEST_KEY }}
+        run: |
+          umask 077
+          if [ -z "$ANTHROPIC_TEST_KEY" ]; then
+            echo "the environment broker-live has no secret ANTHROPIC_TEST_KEY: the owner creates it (docs/infrastructure.md)"
+            exit 1
+          fi
+          printf '%s' "$ANTHROPIC_TEST_KEY" > "$RUNNER_TEMP/anthropic-test-key"
+          echo "ANTHROPIC_TEST_KEY_FILE=$RUNNER_TEMP/anthropic-test-key" >> "$GITHUB_ENV"
+
+      - name: T-04R, the broker against api.anthropic.com
+        run: npm run broker:live
+
+      - name: Remove the key file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/anthropic-test-key"

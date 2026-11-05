@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { z } from 'zod';
@@ -14,11 +14,20 @@ const StepSchema = z.object({
   uses: z.string().optional(),
   run: z.string().optional(),
   with: z.record(z.string(), z.unknown()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
 });
 const WorkflowSchema = z.object({
   on: z.union([z.string(), z.array(z.string()), z.record(z.string(), z.unknown())]),
   permissions: z.record(z.string(), z.string()).optional(),
-  jobs: z.record(z.string(), z.object({ name: z.string().optional(), steps: z.array(StepSchema) })),
+  jobs: z.record(
+    z.string(),
+    z.object({
+      name: z.string().optional(),
+      if: z.string().optional(),
+      environment: z.string().optional(),
+      steps: z.array(StepSchema),
+    }),
+  ),
 });
 type Workflow = z.infer<typeof WorkflowSchema>;
 
@@ -76,6 +85,35 @@ function assertGate(text: string): void {
   }
 }
 
+/** The environment that holds the test key of T-04R, and its one secret (docs/infrastructure.md, Secrets broker). */
+const LIVE_ENVIRONMENT = 'broker-live';
+const LIVE_SECRET = '${{ secrets.ANTHROPIC_TEST_KEY }}';
+
+/**
+ * broker-live.yml: the only workflow with a secret of the broker. It runs on main only (push, schedule, dispatch; never
+ * a pull request), with contents: read, in the environment whose branch policy the owner restricts to main, and the
+ * secret enters one step by its env, never a run line or an action input.
+ */
+function assertLive(text: string): void {
+  const doc = workflow(text);
+  assert.ok(typeof doc.on === 'object' && !Array.isArray(doc.on), 'on is a mapping');
+  for (const trigger of Object.keys(doc.on)) {
+    assert.ok(['push', 'schedule', 'workflow_dispatch'].includes(trigger), `trigger refused: ${trigger}`);
+  }
+  assert.deepEqual((doc.on['push'] as { branches?: unknown } | undefined)?.branches, ['main']);
+  assert.deepEqual(doc.permissions, { contents: 'read' });
+  assert.deepEqual(Object.keys(doc.jobs), ['broker-live']);
+  const job = doc.jobs['broker-live'];
+  assert.equal(job?.environment, LIVE_ENVIRONMENT);
+  assert.equal(job?.if, "github.ref == 'refs/heads/main'");
+  const secrets = (job?.steps ?? []).flatMap((step) => {
+    assert.ok(!(step.run ?? '').includes('secrets.'), 'a secret in a run line');
+    assert.ok(!JSON.stringify(step.with ?? {}).includes('secrets.'), 'a secret in an action input');
+    return Object.values(step.env ?? {}).filter((value) => value.includes('secrets.'));
+  });
+  assert.deepEqual(secrets, [LIVE_SECRET]);
+}
+
 Given('the committed workflow {string}', function (name: string) {
   const path = `.github/workflows/${name}`;
   this.state['workflow'] = { path, text: readFileSync(join(ROOT, path), 'utf8') } satisfies Loaded;
@@ -97,6 +135,42 @@ Then('every checkout in it has persist-credentials false', function () {
 
 Then('it satisfies the gate workflow rules', function () {
   assertGate(text(this));
+});
+
+Then('it satisfies the live workflow rules', function () {
+  assertLive(text(this));
+});
+
+const LIVE_BREAKS: Record<string, (yaml: string) => string> = {
+  'triggered by pull_request': (yaml) => yaml.replace(/^on:\n/m, 'on:\n  pull_request:\n'),
+  'pushed from another branch': (yaml) => yaml.replace('      - main\n', '      - main\n      - feat/x\n'),
+  'without its environment': (yaml) => yaml.replace('    environment: broker-live\n', ''),
+  'without its main-only condition': (yaml) => yaml.replace("    if: github.ref == 'refs/heads/main'\n", ''),
+  'with broader permissions': (yaml) => yaml.replace('  contents: read\n', '  contents: write\n'),
+  'with the secret in a run line': (yaml) =>
+    yaml.replace('run: npm run broker:live', () => `run: echo "${LIVE_SECRET}" && npm run broker:live`),
+  'with another secret': (yaml) =>
+    yaml.replace(`ANTHROPIC_TEST_KEY: ${LIVE_SECRET}\n`, () => {
+      return `ANTHROPIC_TEST_KEY: ${LIVE_SECRET}\n          OTHER: ${LIVE_SECRET.replace('ANTHROPIC_TEST_KEY', 'OTHER')}\n`;
+    }),
+};
+
+Then('a live workflow {} is rejected', function (kind: string) {
+  const breakIt = LIVE_BREAKS[kind];
+  assert.ok(breakIt !== undefined, `no broken live workflow named "${kind}"`);
+  const broken = breakIt(text(this));
+  assert.notEqual(broken, text(this));
+  assert.throws(() => assertLive(broken));
+});
+
+Then('no other workflow names the environment or the secret of broker-live', function () {
+  const dir = join(ROOT, '.github/workflows');
+  const others = readdirSync(dir).filter(
+    (file) =>
+      file !== 'broker-live.yml' &&
+      /\b(broker-live|ANTHROPIC_TEST_KEY)\b/.test(readFileSync(join(dir, file), 'utf8')),
+  );
+  assert.deepEqual(others, []);
 });
 
 Then('a workflow with an unpinned action is rejected', function () {
