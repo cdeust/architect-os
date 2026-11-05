@@ -29,6 +29,7 @@ const REWRITES: Record<string, (source: string) => string> = {
   'point the first statement at nope.sql': editTable((t) => void (t.statements[0]!['file'] = 'nope.sql')),
   'replace the content by an opening brace': () => '{',
   'append a delete of the runs': (source) => `${source};\nDELETE FROM runs WHERE false`,
+  'insert into runs instead': (source) => source.replace('INSERT INTO usage_records', 'INSERT INTO runs'),
   'select the 12 parameters instead': () =>
     `SELECT ${Array.from({ length: 12 }, (_, i) => `$${i + 1}`).join(', ')} AS id`,
 };
@@ -72,7 +73,7 @@ When('I copy the sql directory and rewrite {string} as {string}', function (file
   this.state['brokenDir'] = dir;
 });
 
-Then('loading the statement table from the copy fails with {string}', function (message: string) {
+Then('loading the statement table from the copy fails saying {}', function (message: string) {
   assert.throws(() => loadStatementTable(this.state['brokenDir'] as string), { message });
 });
 

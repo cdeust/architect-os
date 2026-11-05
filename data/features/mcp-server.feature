@@ -72,3 +72,4 @@ Feature: Data MCP server (docs/design/platform-v3-srt.md, brick 1b.3)
     And the data process wrote "data: migrations applied: [0001_runs.sql, 0002_memory.sql, 0003_runs_immutable.sql, 0004_usage_records.sql]" on its stderr
     When the stdin of the data process ends
     Then the data process ends with 0
+    And no connection of the data process to the database of the scenario is left

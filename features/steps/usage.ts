@@ -9,7 +9,7 @@ import { InMemoryDataStore } from '../../data/src/infrastructure/in-memory.js';
 import { createDataMcpServer } from '../../data/src/presentation/mcp-server.js';
 import { UsageForwarder } from '../../gateway/src/application/usage-forwarder.js';
 import type { AppendOutcome, BrokerControl, UsageSink } from '../../gateway/src/domain/ports.js';
-import { InMemoryBrokerControl, InMemoryUsageSink } from '../../gateway/src/infrastructure/in-memory.js';
+import { InMemoryBrokerControl, InMemoryUsageSink } from '../../gateway/src/infrastructure/in-memory-usage.js';
 import {
   McpBrokerControl,
   McpUsageSink,

@@ -1,37 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  DataOpInput,
-  DataOpName,
-  MemoryItem,
-  Run,
-  RunEvent,
-  UsageAggregateRow,
-  UsageAppendInput,
-} from '@architect-os/contracts';
+import type { DataOpInput, DataOpName, MemoryItem, Run, RunEvent } from '@architect-os/contracts';
 import { DataError } from '../domain/errors.js';
 import type { DataStore } from '../domain/ports.js';
 
 interface StoredMemory extends MemoryItem {
   embedding?: number[] | undefined;
 }
-
-const TOKEN_FIELDS = [
-  'input_tokens',
-  'output_tokens',
-  'cache_read_input_tokens',
-  'cache_creation_input_tokens',
-] as const;
-
-/**
- * The sort key of a value: the ORDER BY ... COLLATE "C" NULLS FIRST of sql/usage.aggregate.sql. An absent value is the
- * empty key; a present one is its UTF-8 bytes after the byte 1, so that it sorts after the absent one, an empty string
- * included, and bytewise among the others.
- */
-const sortKey = (value: string | undefined): Buffer =>
-  value === undefined ? Buffer.alloc(0) : Buffer.from(`\u0001${value}`);
-
-const byteOrder = (a: string | undefined, b: string | undefined): number =>
-  Buffer.compare(sortKey(a), sortKey(b));
 
 function cosine(a: number[], b: number[]): number {
   let dot = 0;
@@ -52,8 +26,6 @@ export class InMemoryDataStore implements DataStore {
   private readonly runs = new Map<string, Run>();
   private readonly eventLog = new Map<string, RunEvent[]>();
   private readonly memories: StoredMemory[] = [];
-  /** Append-only: no handler changes or removes a record (migrations/0004_usage_records.sql on Postgres). */
-  private readonly usage: UsageAppendInput[] = [];
 
   private run(runId: string): Run {
     const run = this.runs.get(runId);
@@ -105,7 +77,7 @@ export class InMemoryDataStore implements DataStore {
       return { id: randomUUID() };
     },
     'usage.aggregate': ({ task, limit }) => {
-      const groups = new Map<string, UsageAggregateRow>();
+      const groups = new Map<string, UsageGroup>();
       for (const record of this.usage) {
         if (task !== undefined && record.task !== task) continue;
         const key = JSON.stringify([record.task, record.layer, record.model ?? null]);
@@ -131,6 +103,9 @@ export class InMemoryDataStore implements DataStore {
     },
   };
 
+  /** Append-only: no handler changes or removes a record (migrations/0004_usage_records.sql on Postgres). */
+  private readonly usage: DataOpInput<'usage.append'>[] = [];
+
   async execute<Op extends DataOpName>(op: Op, input: DataOpInput<Op>): Promise<unknown> {
     return (this.handlers[op] as (input: DataOpInput<Op>) => unknown)(input);
   }
@@ -139,3 +114,25 @@ export class InMemoryDataStore implements DataStore {
 function now(): string {
   return new Date().toISOString();
 }
+
+const TOKEN_FIELDS = [
+  'input_tokens',
+  'output_tokens',
+  'cache_read_input_tokens',
+  'cache_creation_input_tokens',
+] as const;
+
+/** One group of usage.aggregate, as UsageAggregateRowSchema of the contracts gives it. */
+type UsageGroup = Pick<DataOpInput<'usage.append'>, 'task' | 'layer' | 'model'> &
+  Record<(typeof TOKEN_FIELDS)[number] | 'requests', number>;
+
+/**
+ * The sort key of a value: the ORDER BY ... COLLATE "C" NULLS FIRST of sql/usage.aggregate.sql. An absent value is the
+ * empty key; a present one is its UTF-8 bytes after the byte 1, so that it sorts after the absent one, an empty string
+ * included, and bytewise among the others.
+ */
+const sortKey = (value: string | undefined): Buffer =>
+  value === undefined ? Buffer.alloc(0) : Buffer.from(`\u0001${value}`);
+
+const byteOrder = (a: string | undefined, b: string | undefined): number =>
+  Buffer.compare(sortKey(a), sortKey(b));

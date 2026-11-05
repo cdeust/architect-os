@@ -9,6 +9,7 @@ import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { DATA_OP_NAMES } from '@architect-os/contracts';
 import { DataOperations } from '../../src/application/operations.js';
 import { InMemoryDataStore } from '../../src/infrastructure/in-memory.js';
+import { connectPostgres } from '../../src/infrastructure/pg-pool.js';
 import { serveStdio } from '../../src/main.js';
 import { createDataMcpServer } from '../../src/presentation/mcp-server.js';
 import { Given, Then, When, assertMatches, json, scenario, type DataWorld } from './helpers.js';
@@ -240,4 +241,22 @@ Then('the data process wrote nothing on its stdout', function () {
 Then('the data process wrote {string} on its stderr', function (fragment: string) {
   const text = started(this).stderr.join('');
   assert.ok(text.includes(fragment), `stderr: ${text}`);
+});
+
+Then('no connection of the data process to the database of the scenario is left', async function () {
+  const probe = connectPostgres(this.databaseUrl);
+  try {
+    // A backend ends shortly after its client closes: up to 2 s.
+    for (let waited = 0; ; waited += 20) {
+      const { rows } = await probe.query(
+        'SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()',
+        [],
+      );
+      if (rows[0]?.['n'] === 0) return;
+      assert.ok(waited < 2000, `${String(rows[0]?.['n'])} connection(s) left`);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  } finally {
+    await probe.end();
+  }
 });

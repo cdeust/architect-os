@@ -74,3 +74,10 @@ Feature: Data operations
       | layer  |
       | broker |
       | client |
+
+  Scenario: refuses to complete a run with the status running
+    Given data operations over an in-memory store
+    When I execute "runs.create" with the input '{"service":"memory","tool":"recall","input":{}}'
+    And I keep the answer id as "run"
+    And I execute "runs.complete" with the input '{"run_id":"$run","status":"running","result":null}' and it is refused
+    Then the failure code is "INVALID_INPUT"

@@ -21,12 +21,13 @@ Feature: SQL store, statement table and migrations
 
   Scenario Outline: rejects a table whose SQL writes other tables than its operation declares: <defect>
     When I copy the sql directory and rewrite "<file>" as "<rewrite>"
-    Then loading the statement table from the copy fails with "<message>"
+    Then loading the statement table from the copy fails saying <message>
 
     Examples:
       | defect                                          | file             | rewrite                          | message                                                             |
-      | a statement writing a table it does not declare | runs.get.sql     | append a delete of the runs      | operation runs.get writes [runs] but declares [] in DATA_OPS        |
-      | a declared table its statement does not write   | usage.append.sql | select the 12 parameters instead | operation usage.append writes [] but declares [usage_records] in DATA_OPS |
+      | a statement writing a table it does not declare | runs.get.sql     | append a delete of the runs      | operation runs.get writes ["runs"] but declares [] in DATA_OPS |
+      | a declared table its statement does not write   | usage.append.sql | select the 12 parameters instead | operation usage.append writes [] but declares ["usage_records"] in DATA_OPS |
+      | a statement writing another table than it declares | usage.append.sql | insert into runs instead | operation usage.append writes ["runs"] but declares ["usage_records"] in DATA_OPS |
 
   Scenario Outline: reads the tables a statement writes: <statement>
     Then the statement "<statement>" writes "<tables>"
@@ -41,7 +42,17 @@ Feature: SQL store, statement table and migrations
       | DELETE FROM memory.memories WHERE id = $1                   | memory.memories           |
       | TRUNCATE TABLE ONLY run_events                              | run_events                |
       | MERGE INTO usage_records USING runs ON true WHEN MATCHED THEN DO NOTHING | usage_records |
-      | WITH x AS (UPDATE runs SET a = 1 RETURNING id) INSERT INTO run_events SELECT id FROM x | run_events, runs |
+      | WITH x AS (UPDATE runs SET a = 1 RETURNING id) INSERT INTO run_events SELECT id FROM x | runs, run_events |
+      | UPDATE-- the table\nruns SET a = 1                          | runs                      |
+      | SELECT id FROM runs FOR  UPDATE OF runs                     |                           |
+      | INSERT  INTO runs VALUES (1)                                | runs                      |
+      | DELETE  FROM runs                                           | runs                      |
+      | TRUNCATE runs                                               | runs                      |
+      | TRUNCATE  TABLE runs                                        | runs                      |
+      | TRUNCATE ONLY  runs                                         | runs                      |
+      | MERGE  INTO runs USING x ON true WHEN MATCHED THEN DO NOTHING | runs                    |
+      | UPDATE  runs SET a = 1                                      | runs                      |
+      | INSERT INTO runs SELECT 1; INSERT INTO runs SELECT 2        | runs                      |
 
   Scenario: the usage records are written by usage.append only
     Then only the operation "usage.append" writes the table "usage_records"

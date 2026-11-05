@@ -8,7 +8,7 @@ import {
   InMemoryBrokerControl,
   InMemoryUsageSink,
   ManualScheduler,
-} from '../../src/infrastructure/in-memory.js';
+} from '../../src/infrastructure/in-memory-usage.js';
 import { onUsage } from '../../src/infrastructure/usage-adapters.js';
 import { Given, Then, When, assertMatches, type GatewayWorld } from './helpers.js';
 

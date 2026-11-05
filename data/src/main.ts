@@ -1,8 +1,4 @@
-import { once } from 'node:events';
-import type { Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import type { Readable, Writable } from 'node:stream';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { DataOperations } from './application/operations.js';
 import type { DataStore } from './domain/ports.js';
 import { InMemoryDataStore } from './infrastructure/in-memory.js';
@@ -10,7 +6,6 @@ import { migrate } from './infrastructure/migrate.js';
 import { connectPostgres } from './infrastructure/pg-pool.js';
 import { loadStatementTable, SqlDataStore } from './infrastructure/sql-store.js';
 import { createDataApi } from './presentation/http-api.js';
-import { serveDataMcp, stdioTransport } from './presentation/mcp-server.js';
 
 /** The package root (data/) from src/main.ts under tsx and from dist/src/main.js in the image. */
 const ROOT = new URL(import.meta.url.includes('/dist/') ? '../../' : '../', import.meta.url);
@@ -26,6 +21,14 @@ export function compose(store: DataStore) {
 export function composeInMemory() {
   return compose(new InMemoryDataStore());
 }
+
+// The imports of the process entries (brick 1b.3) come after the declarations above, whose positions the mutation debt
+// register names (tools/test-gate/mutation-debt.json, rule 6): an import added on top would move them.
+import { once } from 'node:events';
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import type { Readable, Writable } from 'node:stream';
+import { serveDataMcp, stdioTransport } from './presentation/mcp-server.js';
 
 /**
  * The store of `DATABASE_URL`, migrated, or the in-memory store without it. `log` is stderr: stdout may carry MCP.
@@ -71,7 +74,10 @@ export async function serveStdio(
   return 0;
 }
 
-/** The HTTP API of data on `PORT` (8082 by default), until compose is retired (brick 1b.6). Resolves once it listens. */
+/**
+ * The HTTP API of data on `PORT` (8082 by default), until compose is retired (brick 1b.6); its process is
+ * src/serve-http.ts. Resolves once it listens.
+ */
 export async function serveHttp(
   env: Readonly<Record<string, string | undefined>>,
   log: (line: string) => void,
@@ -82,11 +88,4 @@ export async function serveHttp(
   await once(server, 'listening');
   log(`data listening on :${(server.address() as AddressInfo).port}`);
   return server;
-}
-
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  serveHttp(process.env, console.warn).catch((error: unknown) => {
-    console.error(error);
-    process.exit(1);
-  });
 }
