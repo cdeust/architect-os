@@ -31,14 +31,15 @@ client -> proxy -> gateway -> services/<name> -> worker (container, exec network
 | `services/memory/`    | Intent tools `recall` / `remember`. `src/` is the MCP service, `worker/` is the agent image.                                     |
 | `data/`               | Only component that imports `pg`. Typed operations served from `sql/` by one executor; migrations.                               |
 | `packages/contracts/` | Only shared package: `Result<T>`, `Run`, `RunEvent`, zod schemas of tools and data operations. No logic.                         |
-| `packages/sandbox/`   | `SandboxRunner` port, srt adapter, builder profile template, host auth proxy, `npm run code` (brick 1a.0).                       |
+| `packages/sandbox/`   | `SandboxRunner` port, srt adapter, builder profile template, host auth proxy and its relay, `npm run code` (brick 1a.0).         |
+| `modules/broker/`     | The broker (1b.2): sole holder of the API key, task tokens granted and revoked by MCP on its stdio, one usage record per answer. |
 | `tools/test-gate/`    | The CI gate (`npm run gate`). Layers `domain`, `infrastructure`, composition root `src/main.ts`.                                 |
 | `features/`           | End-to-end and cross-cutting scenarios (`integration`, `arch`, `descriptive`, `infra`, `repository`, `sandbox`).                 |
 | `bench/`              | Outside production: nothing in production imports it, the gate neither counts nor mutates it (DC-8). No dependency-cruiser rule. |
 
 Details: `docs/architecture.md`, `docs/infrastructure.md`, `docs/design.md`, `docs/agents.md`, `docs/testing.md`.
 
-## Layers (gateway, services/*, data)
+## Layers (gateway, services/_, modules/_, data)
 
 Each component has `src/domain`, `src/application`, `src/infrastructure`, `src/presentation`, `features/`, and one composition root `src/main.ts`.
 
@@ -97,7 +98,7 @@ Common bricks need no new TypeScript:
 - Dependencies are pinned to exact versions; verify with `npm view <pkg> version`; commit `package-lock.json`.
 - Never invent an SDK API: read the published `.d.ts` under `node_modules/<pkg>` and cite the file in the comment.
 - Failures are values: a tool call returns `Result` with `status: 'failed'` and a named `error.code`; do not throw across a service boundary.
-- Secrets go through the secrets broker only (brick 1a.0: the host auth proxy of `packages/sandbox` alone holds the owner's Claude credential; the sandbox gets a session token). Never put an API key, token or password in a worker container, an image, the repository, a log or a test.
+- Secrets go through the secrets broker only (brick 1a.0: the host auth proxy of `packages/sandbox` alone holds the owner's Claude credential; the sandbox gets a session token. Brick 1b.2: `modules/broker` alone holds the API key, in a 0600 file; a worker gets a task token). `gate.yml` holds no secret: the real call of the broker (T-04R) is `npm run broker:live`, a command of the owner with a test key. Never put an API key, token or password in a worker container, an image, the repository, a log or a test.
 - Never compare a branch to `main` (no merge-base, no branch tip comparison, no update-branch) in CI, scripts or tools. Review the PR diff as GitHub presents it. One written exception: the gate (`tools/test-gate`) diffs the working tree against the first parent `HEAD^1` (in a PR, the first parent of GitHub's merge commit, i.e. the PR diff as GitHub presents it; on `main`, the previous commit) to derive added and removed pickles, the changed lines and the `.feature` diff. No merge-base, no branch tip, no update-branch.
 - Commits: imperative subject, no attribution trailer.
 

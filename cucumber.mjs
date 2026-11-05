@@ -7,7 +7,7 @@ import { register } from 'tsx/esm/api';
 process.env['TSX_TSCONFIG_PATH'] ??= new URL('./features/tsconfig.json', import.meta.url).pathname;
 register();
 
-const COMPONENTS = ['packages/*', 'data', 'gateway', 'services/*', 'tools/*'];
+const COMPONENTS = ['packages/*', 'data', 'gateway', 'services/*', 'modules/*', 'tools/*'];
 
 const config = {
   paths: ['features/**/*.feature', ...COMPONENTS.map((c) => `${c}/features/**/*.feature`)],
@@ -50,3 +50,13 @@ export const mutation = {
 // formats of the command line to those of the profile (lib/configuration/merge_configurations.js: ADDITIVE_ARRAYS), so
 // this profile has none: with the default ones, a replay would run the whole suite and overwrite reports/cucumber.ndjson.
 export const replay = { import: config.import, retry: 0, strict: true };
+
+// The live profile is a command of the owner, `npm run broker:live`, never the gate nor `npm test`: its one scenario
+// spends on the real upstream with the owner's test key (T-04R), and gate.yml holds no secret (platform-v3-srt.md §7).
+// modules/broker/live is outside every path above, so no other profile counts it.
+export const live = {
+  ...config,
+  paths: ['modules/broker/live/**/*.feature'],
+  import: [...config.import, 'modules/broker/live/steps/**/*.ts'],
+  format: ['progress'],
+};

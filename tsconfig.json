@@ -17,6 +17,9 @@
       "path": "services/memory"
     },
     {
+      "path": "modules/broker"
+    },
+    {
       "path": "tools/test-gate"
     },
     {

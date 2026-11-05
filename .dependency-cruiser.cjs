@@ -1,8 +1,8 @@
 /**
  * Architecture guard (npm run arch). Rules mirror docs/architecture.md and CLAUDE.md.
- * Component = gateway | services/<name> | data | tools/<name>. Layers live in <component>/src/{domain,application,infrastructure,presentation}.
+ * Component = gateway | services/<name> | modules/<name> | data | tools/<name>. Layers live in <component>/src/{domain,application,infrastructure,presentation}.
  */
-const COMPONENT = '^(gateway|services/[^/]+|data|tools/[^/]+)/';
+const COMPONENT = '^(gateway|services/[^/]+|modules/[^/]+|data|tools/[^/]+)/';
 const CONTRACTS = '^packages/contracts/';
 // The single place that launches processes (platform-v3-srt.md, §6): adapters reach it through its port.
 const SANDBOX = '^packages/sandbox/';
@@ -96,9 +96,12 @@ module.exports = {
     {
       name: 'mcp-sdk-only-in-presentation-and-infrastructure',
       comment:
-        'The MCP SDK is allowed in presentation/infrastructure of gateway and services (and in their step definitions).',
+        'The MCP SDK is allowed in presentation/infrastructure of gateway, services and modules (and in their step ' +
+        'definitions).',
       severity: 'error',
-      from: { pathNot: '^(gateway|services/[^/]+)/(src/(presentation|infrastructure)|features)/' },
+      from: {
+        pathNot: '^(gateway|services/[^/]+|modules/[^/]+)/(src/(presentation|infrastructure)|features)/',
+      },
       to: { path: '(^|/)node_modules/@modelcontextprotocol/sdk(/|$)' },
     },
     {
@@ -131,7 +134,7 @@ module.exports = {
     doNotFollow: { path: 'node_modules' },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.base.json' },
-    exclude: { path: '^(packages/[^/]+|data|gateway|services/[^/]+|tools/[^/]+)/dist/' },
+    exclude: { path: '^(packages/[^/]+|data|gateway|services/[^/]+|modules/[^/]+|tools/[^/]+)/dist/' },
     enhancedResolveOptions: { exportsFields: ['exports'], conditionNames: ['import', 'node', 'default'] },
   },
 };

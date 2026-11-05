@@ -14,6 +14,7 @@
     "data",
     "gateway",
     "services/memory",
+    "modules/broker",
     "tools/test-gate"
   ],
   "scripts": {
@@ -22,10 +23,11 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "cucumber-js",
-    "arch": "depcruise --config .dependency-cruiser.cjs packages data gateway services tools",
+    "arch": "depcruise --config .dependency-cruiser.cjs packages data gateway services modules tools",
     "lint": "npm run format:check --silent && npm run typecheck --silent",
     "check": "npm test",
     "gate": "sh tools/test-gate/gate.sh",
+    "broker:live": "cucumber-js --profile live",
     "baseline:pilot": "node --import tsx baseline/run.ts",
     "baseline:campaign": "BASELINE_REPEATS=3 node --import tsx baseline/run.ts",
     "baseline:analyze": "node --import tsx baseline/analyze.ts"

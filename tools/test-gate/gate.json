@@ -6,6 +6,7 @@
       "gateway/src/**/*.ts",
       "services/*/src/**/*.ts",
       "services/*/worker/**/*.ts",
+      "modules/*/src/**/*.ts",
       "tools/*/src/**/*.ts"
     ],
     "exclude": ["**/features/**", "**/node_modules/**", "**/dist/**", "**/*.d.ts"]

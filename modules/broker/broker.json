@@ -1,0 +1,26 @@
+{
+  "description": "Broker de la brique 1b.2 (docs/design/platform-v3-srt.md, §2, Broker) : seul détenteur de la clé API Anthropic, lue dans un fichier 0600 de son uid ; un jeton par task, accordé et retiré par la gateway sur son stdio ; POST /v1/messages seul, vers le seul amont, clé en x-api-key, corps inchangé et admis par la même politique que l'outil de 1a.0 ; un enregistrement d'usage par réponse, remonté à la gateway.",
+  "upstream": "https://api.anthropic.com",
+  "routes": ["^/v1/messages(/count_tokens)?(\\?[^#]*)?$"],
+  "betas": [],
+  "policy": {
+    "bodyFields": [
+      "context_management",
+      "max_tokens",
+      "messages",
+      "metadata",
+      "model",
+      "output_config",
+      "stop_sequences",
+      "stream",
+      "system",
+      "temperature",
+      "thinking",
+      "tool_choice",
+      "tools"
+    ],
+    "maxBodyBytes": 67108864
+  },
+  "port": 8084,
+  "keyFile": "${home}/.config/architect-os/broker/anthropic-key"
+}

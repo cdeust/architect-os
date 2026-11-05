@@ -34,6 +34,42 @@ export interface Credential {
 }
 export type CredentialSource = () => Promise<Credential>;
 
+/** What a key presented in `x-api-key` is worth: the task it spends for and the call that granted it, if any. */
+export interface Grant {
+  readonly task?: string;
+  readonly parent?: string;
+}
+
+/**
+ * The relay shared by the proxy of 1a.0 and the broker of 1b.2 (docs/design/platform-v3-srt.md, §2, Broker): the
+ * caller presents a key in `x-api-key`, `authorize` resolves it (401 otherwise); only the listed routes pass, in POST
+ * (403 otherwise), with a body the policy admits (403 otherwise), to the fixed upstream, with the credential in place
+ * of the key. One usage record per answered request, handed to `onUsage` with the grant; a record it cannot take (it
+ * throws) stops the relay: 503 with that cause, to every authorized caller, until restart.
+ */
+export interface RelayOptions {
+  readonly upstream: string;
+  /** Regular expressions on the path and the query; POST only. */
+  readonly routes: readonly string[];
+  /** `anthropic-beta` values the credential needs (OAuth). */
+  readonly betas: readonly string[];
+  readonly policy: RequestPolicy;
+  readonly credential: CredentialSource;
+  /** Where the credential goes upstream: an OAuth token as a bearer (1a.0), an API key in `x-api-key` (broker). */
+  readonly scheme: 'bearer' | 'x-api-key';
+  /** The message of the 503 when the credential cannot be read; it never carries the cause. */
+  readonly credentialUnavailable: string;
+  readonly authorize: (key: string) => Grant | null;
+  readonly onUsage: (record: UsageRecord) => void;
+  /** The port on 127.0.0.1; 0, the default, is a free one. */
+  readonly port?: number;
+}
+
+export interface Relay {
+  readonly port: number;
+  close(): Promise<void>;
+}
+
 export interface AuthProxyOptions {
   readonly upstream: string;
   /** Expressions régulières sur le chemin et la requête ; méthode POST seulement. */
@@ -56,6 +92,9 @@ export interface AuthProxy {
 export interface UsageRecord {
   at: string;
   status: number;
+  /** The task and the granting call of the key, for the broker; none for the session of 1a.0. */
+  task?: string;
+  parent?: string;
   /** Chemin de la route relayée, sans requête. */
   route?: string;
   /** `error.type` d'une réponse en erreur ; jamais le message. */
@@ -120,7 +159,18 @@ const fail = (res: ServerResponse, status: number, type: string, message: string
 const withoutHopByHop = (headers: IncomingHttpHeaders): OutgoingHttpHeaders =>
   Object.fromEntries(Object.entries(headers).filter(([name]) => !HOP_BY_HOP.has(name)));
 
-function forwardHeaders(headers: IncomingHttpHeaders, token: string, betas: readonly string[]) {
+/** Where the upstream reads the credential, per scheme: one entry per scheme, none by default. */
+const CREDENTIAL_HEADER: Record<RelayOptions['scheme'], (token: string) => readonly [string, string]> = {
+  bearer: (token) => ['authorization', `Bearer ${token}`],
+  'x-api-key': (token) => ['x-api-key', token],
+};
+
+function forwardHeaders(
+  headers: IncomingHttpHeaders,
+  token: string,
+  betas: readonly string[],
+  scheme: RelayOptions['scheme'],
+) {
   const out = withoutHopByHop(headers);
   const present = String(headers['anthropic-beta'] ?? '')
     .split(',')
@@ -128,7 +178,8 @@ function forwardHeaders(headers: IncomingHttpHeaders, token: string, betas: read
     .filter(Boolean);
   const merged = [...present, ...betas.filter((b) => !present.includes(b))];
   if (merged.length > 0) out['anthropic-beta'] = merged.join(',');
-  out['authorization'] = `Bearer ${token}`;
+  const [name, value] = CREDENTIAL_HEADER[scheme](token);
+  out[name] = value;
   out['accept-encoding'] = 'identity';
   return out;
 }
@@ -187,19 +238,27 @@ function openUsageLog(path: string): void {
 }
 
 /** Ce que le relais d'une requête admise partage avec le proxy. */
-interface Relay {
+interface Forward {
   readonly upstream: URL;
   readonly betas: readonly string[];
+  readonly scheme: RelayOptions['scheme'];
   readonly log: (record: UsageRecord) => void;
 }
 
 /** Relaie une requête admise vers l'amont et rend sa réponse au client, en flux ; une ligne d'usage à la fin. */
-function relay(relay: Relay, req: IncomingMessage, res: ServerResponse, body: Buffer, token: string): void {
+function relay(
+  relay: Forward,
+  grant: Grant,
+  req: IncomingMessage,
+  res: ServerResponse,
+  body: Buffer,
+  token: string,
+): void {
   const path = String(req.url);
   const send = relay.upstream.protocol === 'https:' ? httpsRequest : httpRequest;
   const outgoing = send(
     new URL(path, relay.upstream),
-    { method: 'POST', headers: forwardHeaders(req.headers, token, relay.betas) },
+    { method: 'POST', headers: forwardHeaders(req.headers, token, relay.betas, relay.scheme) },
     (up) => {
       res.writeHead(up.statusCode ?? 502, withoutHopByHop(up.headers));
       let answer = '';
@@ -212,6 +271,7 @@ function relay(relay: Relay, req: IncomingMessage, res: ServerResponse, body: Bu
         relay.log({
           at: new Date().toISOString(),
           status: up.statusCode ?? 0,
+          ...grant,
           route: path.split('?')[0],
           ...usageOf(String(up.headers['content-type']), answer),
         });
@@ -224,29 +284,30 @@ function relay(relay: Relay, req: IncomingMessage, res: ServerResponse, body: Bu
   outgoing.end(body);
 }
 
-export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthProxy> {
+export async function startRelay(options: RelayOptions): Promise<Relay> {
   const routes = options.routes.map((r) => new RegExp(r));
-  const { usageLog } = options;
-  if (usageLog !== undefined) openUsageLog(usageLog);
-  let revoked = false;
-  // La cause qui arrête le proxy, dite à chaque appelant authentifié ; null tant qu'il sert.
+  // La cause qui arrête le relais, dite à chaque appelant autorisé ; null tant qu'il sert.
   let stopped: string | null = null;
-
-  // Sans journal d'usage, plus de requête : une ligne qui ne s'écrit plus arrête le proxy.
+  // Un enregistrement que le puits ne prend plus arrête le relais : aucune dépense sans sa mesure.
   const log = (record: UsageRecord) => {
-    if (usageLog === undefined) return;
     try {
-      appendFileSync(usageLog, `${JSON.stringify(record)}\n`);
-    } catch {
-      stopped = 'usage log unwritable: the auth proxy refuses every request until it restarts';
+      options.onUsage(record);
+    } catch (error) {
+      stopped = (error as Error).message;
     }
   };
-  const forward: Relay = { upstream: new URL(options.upstream), betas: options.betas, log };
+  const forward: Forward = {
+    upstream: new URL(options.upstream),
+    betas: options.betas,
+    scheme: options.scheme,
+    log,
+  };
 
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
-    // Claude Code sous --bare n'envoie qu'une clé d'API, dans x-api-key : c'est là que la session présente son jeton.
-    if (revoked || !sameSecret(String(req.headers['x-api-key']), options.sessionToken))
-      return fail(res, 401, 'authentication_error', 'session token required');
+    // Claude Code sous --bare n'envoie qu'une clé d'API, dans x-api-key : c'est là que l'appelant présente son jeton.
+    const key = req.headers['x-api-key'];
+    const grant = typeof key === 'string' ? options.authorize(key) : null;
+    if (grant === null) return fail(res, 401, 'authentication_error', 'session token required');
     if (stopped !== null) return fail(res, 503, 'api_error', stopped);
     const path = String(req.url);
     if (req.method !== 'POST' || !routes.some((r) => r.test(path)))
@@ -256,6 +317,7 @@ export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthPro
       log({
         at: new Date().toISOString(),
         status: 403,
+        ...grant,
         route: path.split('?')[0],
         error_type: 'refused_by_policy',
       });
@@ -265,27 +327,57 @@ export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthPro
     try {
       credential = await options.credential();
     } catch {
-      return fail(res, 503, 'api_error', 'host credential unavailable: sign in with claude on the host');
+      return fail(res, 503, 'api_error', options.credentialUnavailable);
     }
-    relay(forward, req, res, admitted.body, credential.accessToken);
+    relay(forward, grant, req, res, admitted.body, credential.accessToken);
   };
 
   const server = createServer((req, res) => {
     // Stryker disable next-line ArrowFunction,StringLiteral,BlockStatement: équivalent: seule la lecture du corps rejette ici, quand le client a interrompu sa requête ; il ne lit plus la réponse.
     handle(req, res).catch(() => fail(res, 500, 'api_error', 'auth proxy error'));
   });
-  server.listen(0, '127.0.0.1');
+  server.listen(options.port ?? 0, '127.0.0.1');
+  // events.once rejects when the emitter emits 'error' first (node:events): a port already taken rejects here.
   await once(server, 'listening');
   return {
     port: (server.address() as AddressInfo).port,
-    revoke: () => {
-      revoked = true;
-    },
     close: () =>
       new Promise<void>((done) => {
         server.closeAllConnections();
         server.close(() => done());
       }),
+  };
+}
+
+/** Le proxy de 1a.0 : un seul jeton de session, révocable, l'identifiant OAuth de l'hôte, un journal d'usage. */
+export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthProxy> {
+  const { usageLog } = options;
+  if (usageLog !== undefined) openUsageLog(usageLog);
+  let revoked = false;
+  const relay = await startRelay({
+    upstream: options.upstream,
+    routes: options.routes,
+    betas: options.betas,
+    policy: options.policy,
+    credential: options.credential,
+    scheme: 'bearer',
+    credentialUnavailable: 'host credential unavailable: sign in with claude on the host',
+    authorize: (key) => (!revoked && sameSecret(key, options.sessionToken) ? {} : null),
+    onUsage: (record) => {
+      if (usageLog === undefined) return;
+      try {
+        appendFileSync(usageLog, `${JSON.stringify(record)}\n`);
+      } catch {
+        throw new Error('usage log unwritable: the auth proxy refuses every request until it restarts');
+      }
+    },
+  });
+  return {
+    port: relay.port,
+    revoke: () => {
+      revoked = true;
+    },
+    close: () => relay.close(),
   };
 }
 

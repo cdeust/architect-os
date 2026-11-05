@@ -8,7 +8,7 @@ import { Given, ROOT, Then, When, stored } from './helpers.js';
 // DataTable.hashes(): node_modules/@cucumber/cucumber/lib/index.d.ts re-exports it from @cucumber/cucumber/lib/models/data_table.d.ts.
 
 const DEPCRUISE = join(ROOT, 'node_modules', 'dependency-cruiser', 'bin', 'dependency-cruiser.mjs');
-const TARGETS = ['packages', 'data', 'gateway', 'services', 'tools'];
+const TARGETS = ['packages', 'data', 'gateway', 'services', 'modules', 'tools'];
 const FIXTURE_PREFIX = 'zz-fixture-';
 const GUARD_TIMEOUT_MS = 120_000;
 

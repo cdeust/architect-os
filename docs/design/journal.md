@@ -799,3 +799,46 @@ Rapports appariés par tâche, moyenne et intervalle à 95 % par bootstrap sur l
 **Reste de 1b.** 1b.2 broker (jetons par task, usage au registre), 1b.3 `data` en MCP, 1b.4 gateway, 1b.5 memory sous srt, 1b.6 retrait de compose ; la sortie de 1b est `escape.feature` sur Linux et macOS.
 
 **Trois piliers.** Recherche : chaque propriété a son scénario sur de vrais processus, et son témoin négatif pour la plus critique. SSDLC (STRIDE de la brique) : déni de service par une sortie sans borne, fermé par `readCapped` ; élévation par un descendant qui survit, fermée par le groupe tué ; fuite par un canari faussement vert, fermée par le refus sans repli ; aucune dépendance ajoutée. Opérationnel : sans objet, aucune donnée sensible.
+
+## 25. Brique 1b.2 : le broker, jetons par task, clé dans son seul fichier, usage par réponse, 5 novembre 2026
+
+**Fait.**
+- `modules/broker` : un nouveau composant aux mêmes couches. Domaine : `TokenTable` (un jeton accordé une seule fois, retiré, résolu). Application : `BrokerService`. Infrastructure : `readKeyFile` (fichier régulier, mode 0600 ou plus strict, une seule clé, relu à chaque requête, erreur qui nomme le fichier et jamais son contenu), `broker.json` validé par schéma (amont https, routes ancrées, port 1024 à 65535), relais. Présentation : serveur MCP stdio, outils `token_grant` et `token_revoke`, et usage remonté par `notifications/message`, logger `usage`. Racine : `start` et `serve`, qui finit quand son stdin finit.
+- `packages/sandbox/src/auth-proxy.ts` : le relais de 1a.0 devient `startRelay`, partagé. Il prend une autorisation par clé présentée (`Grant {task, parent}`) et un schéma de transmission (`bearer` pour 1a.0, `x-api-key` pour le broker), et l'enregistrement porte task et parent. L'API de 1a.0 est inchangée et ses 90 scénarios restent verts.
+- `packages/contracts/src/broker.ts` : schémas des outils, jeton `^[A-Za-z0-9_-]{32,128}$`, `UsageRecordSchema` strict.
+- Garde : `modules/<nom>` est un composant ; le SDK MCP n'y est permis qu'en présentation et en infrastructure ; cinq fixtures.
+- T-04R : profil cucumber `live` (`npm run broker:live`), hors de tout chemin compté, avec la clé lue dans le fichier que nomme `ANTHROPIC_TEST_KEY_FILE`.
+
+**Gate Linux local sur `ee66cf0` : règle 5 rouge, 14 survivants.** Corrigés à la cause :
+- Le relais transmettait `x-api-key` par un `else` : un schéma vide valait `x-api-key`. Il passe par une table, une entrée par schéma, et un schéma inconnu échoue.
+- La course `'error'` contre `'listening'` était redondante, puisque `events.once` rejette déjà sur `'error'`. Elle est retirée, et le port pris donne toujours `EADDRINUSE`.
+- Le code `TOKEN_TAKEN` n'était lu par personne : la classe devient `TokenTaken`, et son message est vérifié.
+- Scénarios ajoutés :
+  - le nom et la version du serveur vus par la gateway ;
+  - un jeton précédé ou suivi d'un signe, refusé ;
+  - un schéma `xhttps` ou `httpsx`, refusé ;
+  - une bêta vide refusée, une bêta nommée acceptée ;
+  - un fichier de clé terminé par un saut de ligne, accepté ;
+  - un stdin qui finit pendant le démarrage : `serve` rend 0 et libère le port.
+- Une directive : l'encodage de `readFileSync` dans `loadBrokerConfig` est équivalent, car sans encodage `readFileSync` rend un Buffer que `JSON.parse` lit en UTF-8 (vérifié à la main).
+
+**Prouvé.**
+- Les 691 scénarios de la suite sont verts, ainsi que typecheck, arch et prettier.
+- Chaque survivant a été appliqué à la main, et chacun fait échouer au moins un scénario (11 sur 11) : `trim` (1 échec), `readableEnded` (1), nom (2) et version (2) du serveur, ancres du jeton (1 et 1), ancres du schéma d'amont (1 et 1), bêta `max(1)` (2), schéma vide (8), message du refus (2).
+- Gate local complet après correction : Linux vert, règles 1 à 7 sans violation, 178 mutants dans le périmètre (165 tués, 5 en délai dépassé, 7 en erreur d’exécution, aucun survivant) ; macOS vert. La CI suit au push.
+- T-04R :
+  - sans fichier de clé, le scénario échoue avec un message explicite ;
+  - avec une clé factice, il atteint `api.anthropic.com` et reçoit 401, ce qui prouve le chemin réseau ;
+  - l'appel réel avec une clé d'essai est la commande du propriétaire, et son résultat sera consigné ici.
+
+**Trois piliers.**
+- Recherche : chaque propriété du broker a son scénario, et chaque mutant survivant son témoin négatif à la main.
+- SSDLC (STRIDE de la brique) :
+  - usurpation : sans jeton accordé, `401` ;
+  - falsification : seul `POST /v1/messages*` passe, vers le seul amont, et la politique de 1a.0 s'applique ;
+  - répudiation : un enregistrement par réponse, avec sa task et son parent ;
+  - fuite : la clé ne quitte que son fichier 0600, aucune réponse ne la reflète, et un fichier ouvert à d'autres coupe la dépense (503) ;
+  - élévation : un jeton n'est accordé qu'une fois, si bien que le coût d'une task ne se déplace pas.
+  - R-11 : un relais dont le puits d'usage refuse s'arrête.
+  - Dépendances : aucune ajoutée hors des versions déjà épinglées.
+- Opérationnel : aucun secret dans la porte (`gate.yml` sans secret), ni dans un journal, ni dans le dépôt ; la clé d'essai du propriétaire n'a pas été lue.
