@@ -1,6 +1,7 @@
 {
   "errors": {
     "23503": "NOT_FOUND",
+    "23505": "INVALID_OPERATION",
     "55000": "INVALID_OPERATION"
   },
   "statements": [
@@ -77,6 +78,24 @@
       "file": "usage.aggregate.sql",
       "params": ["task", "limit"],
       "returns": "rows"
+    },
+    {
+      "op": "tasks.open",
+      "file": "tasks.open.sql",
+      "params": ["task", "client", "profile", "deadline_at"],
+      "returns": "row"
+    },
+    {
+      "op": "tasks.end",
+      "file": "tasks.end.sql",
+      "params": ["task", "ending"],
+      "returns": "row"
+    },
+    {
+      "op": "tasks.get",
+      "file": "tasks.get.sql",
+      "params": ["task"],
+      "returns": "row"
     }
   ]
 }

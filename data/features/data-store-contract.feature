@@ -159,3 +159,36 @@ Feature: DataStore contract
     Examples:
       | adapter  |
       | postgres |
+
+  Scenario Outline: opens a task, ends it once with its reason, and knows no other
+    Given the <adapter> data store
+    When I execute "tasks.open" with the input '{"task":"task-1","client":"cli","profile":"local","deadline_at":"2026-11-06T10:00:00.000Z"}'
+    Then the answer matches '{"task":"task-1","client":"cli","profile":"local","deadline_at":"2026-11-06T10:00:00.000Z"}'
+    And the answer has a string field "opened_at"
+    And the answer has no field "ending"
+    And the answer holds to the output schema of "tasks.open"
+    When I execute "tasks.open" with the input '{"task":"task-1","client":"other","profile":"local","deadline_at":"2026-11-06T10:00:00.000Z"}' and it is refused
+    Then the failure matches '{"code":"INVALID_OPERATION","message":"tasks.open: invalid operation"}'
+    When I execute "tasks.end" with the input '{"task":"task-1","ending":"deadline"}'
+    Then the answer matches '{"task":"task-1","ending":"deadline"}'
+    And the answer has a string field "ended_at"
+    And the answer holds to the output schema of "tasks.end"
+    When I execute "tasks.end" with the input '{"task":"task-1","ending":"completed"}' and it is refused
+    Then the failure matches '{"code":"INVALID_OPERATION","message":"tasks.end: invalid operation"}'
+    When I execute "tasks.get" with the input '{"task":"task-1"}'
+    Then the answer matches '{"task":"task-1","client":"cli","ending":"deadline"}'
+    And the answer holds to the output schema of "tasks.get"
+    When I execute "tasks.get" with the input '{"task":"task-2"}' and it is refused
+    Then the failure matches '{"code":"NOT_FOUND","message":"tasks.get: no such record"}'
+    When I execute "tasks.end" with the input '{"task":"task-2","ending":"error"}' and it is refused
+    Then the failure matches '{"code":"NOT_FOUND","message":"tasks.end: no such record"}'
+
+    @in-memory
+    Examples:
+      | adapter   |
+      | in-memory |
+
+    @postgres
+    Examples:
+      | adapter  |
+      | postgres |

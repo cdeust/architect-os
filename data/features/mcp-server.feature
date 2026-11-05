@@ -36,6 +36,33 @@ Feature: Data MCP server (docs/design/platform-v3-srt.md, brick 1b.3)
     When the client calls "sql" with '{"text":"select 1"}'
     Then the MCP call is refused without a code
 
+  Scenario Outline: a task opened over MCP ends with its reason: <ending>
+    Given an MCP client of the data MCP server over an in-memory store
+    When the client calls "tasks.open" with '{"task":"t1","client":"cli","profile":"local","deadline_at":"2026-11-06T10:00:00.000Z"}'
+    Then the MCP answer matches '{"task":"t1","client":"cli","profile":"local"}'
+    When the client calls "tasks.end" with '{"task":"t1","ending":"<ending>"}'
+    Then the MCP answer matches '{"task":"t1","ending":"<ending>"}'
+
+    Examples:
+      | ending    |
+      | completed |
+      | deadline  |
+      | max_calls |
+      | cancelled |
+      | error     |
+
+  Scenario Outline: the input schema of the tasks refuses <defect>
+    Given an MCP client of the data MCP server over an in-memory store
+    When the client calls "<op>" with '<input>'
+    Then the MCP call is refused by the input schema
+
+    Examples:
+      | defect                 | op         | input                                                                                    |
+      | an empty client        | tasks.open | {"task":"t1","client":"","profile":"local","deadline_at":"2026-11-06T10:00:00.000Z"}     |
+      | an empty profile       | tasks.open | {"task":"t1","client":"cli","profile":"","deadline_at":"2026-11-06T10:00:00.000Z"}       |
+      | a deadline not a date  | tasks.open | {"task":"t1","client":"cli","profile":"local","deadline_at":"tomorrow"}                  |
+      | an unknown reason      | tasks.end  | {"task":"t1","ending":"timeout"}                                                         |
+
   Scenario: a failure of the store answers INTERNAL, without its message
     Given an MCP client of the data MCP server over a store that fails with "password=hunter2 at db.internal"
     When the client calls "runs.get" with '{"run_id":"00000000-0000-4000-8000-000000000000"}'
@@ -69,7 +96,7 @@ Feature: Data MCP server (docs/design/platform-v3-srt.md, brick 1b.3)
     And the client calls "usage.append" with '{"at":"2026-11-05T10:00:01.000Z","layer":"broker","task":"t1","status":200,"model":"m1","input_tokens":6}'
     And the client calls "usage.aggregate" with '{"task":"t1"}'
     Then the MCP answer matches '[{"task":"t1","layer":"broker","model":"m1","requests":2,"input_tokens":10}]'
-    And the data process wrote "data: migrations applied: [0001_runs.sql, 0002_memory.sql, 0003_runs_immutable.sql, 0004_usage_records.sql]" on its stderr
+    And the data process wrote "data: migrations applied: [0001_runs.sql, 0002_memory.sql, 0003_runs_immutable.sql, 0004_usage_records.sql, 0005_tasks.sql]" on its stderr
     When the stdin of the data process ends
     Then the data process ends with 0
     And no connection of the data process to the database of the scenario is left

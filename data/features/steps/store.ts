@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { DATA_OPS, type DataOpName } from '@architect-os/contracts';
 import { DataOperations } from '../../src/application/operations.js';
 import { InMemoryDataStore } from '../../src/infrastructure/in-memory.js';
 import { migrate } from '../../src/infrastructure/migrate.js';
@@ -89,6 +90,10 @@ Then('the answer has the field {string}', function (field: string) {
   assert.ok(Object.hasOwn(scenario(this).answer as object, field));
 });
 
+Then('the answer has no field {string}', function (field: string) {
+  assert.equal(Object.hasOwn(scenario(this).answer as object, field), false);
+});
+
 Then('item {int} of the answer has no field {string}', function (index: number, field: string) {
   const item = (scenario(this).answer as Record<string, unknown>[])[index];
   assert.ok(item !== undefined, `no item ${index}`);
@@ -118,6 +123,11 @@ Then('the answer lists events {string}', function (events: string) {
     answer.map((e) => `${e.seq} ${e.type}`),
     events.split(', '),
   );
+});
+
+Then('the answer holds to the output schema of {string}', function (op: string) {
+  const parsed = DATA_OPS[op as DataOpName].output.safeParse(scenario(this).answer);
+  assert.ok(parsed.success, parsed.success ? '' : parsed.error.message);
 });
 
 // --- a refused operation ---

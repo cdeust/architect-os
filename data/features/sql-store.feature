@@ -3,7 +3,7 @@ Feature: SQL store, statement table and migrations
 
   Scenario: loads the committed table: every contract operation has a statement and its SQL file
     When I load the committed statement table
-    Then the table has 9 distinct operations
+    Then the table has 12 distinct operations
     And every statement of the table has a non-empty text
 
   Scenario Outline: rejects a table with <defect>
@@ -92,7 +92,7 @@ Feature: SQL store, statement table and migrations
 
   Scenario: applies each versioned migration once, in order
     When I migrate twice from the committed migrations directory with an in-memory ledger
-    Then the first migration applies "0001_runs.sql, 0002_memory.sql, 0003_runs_immutable.sql, 0004_usage_records.sql"
+    Then the first migration applies "0001_runs.sql, 0002_memory.sql, 0003_runs_immutable.sql, 0004_usage_records.sql, 0005_tasks.sql"
     And the second migration applies nothing
     And the migration statements include "CREATE EXTENSION IF NOT EXISTS vector"
 
@@ -105,3 +105,13 @@ Feature: SQL store, statement table and migrations
     And the database refuses "TRUNCATE usage_records" with SQLSTATE "55000"
     When I execute "usage.aggregate" with the input '{}'
     Then the answer matches '[{"task":"t1","layer":"broker","model":"m1","requests":1,"input_tokens":3}]'
+
+  @postgres
+  Scenario: an ended task cannot change, an open task can only end, and no task is removed
+    Given the postgres data store
+    When I execute "tasks.open" with the input '{"task":"t1","client":"cli","profile":"p","deadline_at":"2026-11-06T10:00:00.000Z"}'
+    Then the database refuses "UPDATE tasks SET deadline_at = now()" with SQLSTATE "55000"
+    And the database refuses "UPDATE tasks SET client = 'x'" with SQLSTATE "55000"
+    And the database refuses "DELETE FROM tasks" with SQLSTATE "55000"
+    When I execute "tasks.end" with the input '{"task":"t1","ending":"cancelled"}'
+    Then the database refuses "UPDATE tasks SET ending = 'completed'" with SQLSTATE "55000"

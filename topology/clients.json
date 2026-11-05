@@ -1,0 +1,15 @@
+{
+  "profiles": [
+    {
+      "name": "owner",
+      "modules": [],
+      "model": "sonnet",
+      "effort": "medium",
+      "mode": "execute",
+      "max_duration_ms": 1800000,
+      "max_calls": 200,
+      "max_depth": 4,
+      "owner": true
+    }
+  ]
+}

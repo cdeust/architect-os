@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { IdSchema } from './ids.js';
 
 /**
  * The broker of 1b.2 (docs/design/platform-v3-srt.md, §2, Broker), as its client the gateway sees it: two tools on its
@@ -7,9 +8,6 @@ import { z } from 'zod';
 
 /** A task token: random, url-safe, at least 32 characters, so that it cannot be guessed by joining the port. */
 export const BrokerTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/);
-
-/** An identifier of the registry (task, call): printable, bounded. */
-const IdSchema = z.string().regex(/^[\x21-\x7e]{1,200}$/);
 
 export const BROKER_TOOLS = {
   token_grant: {

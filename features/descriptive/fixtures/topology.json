@@ -1,0 +1,119 @@
+{
+  "catalog": {
+    "modules": [
+      {
+        "name": "memory-recall",
+        "version": "1.2.0",
+        "domain": "memory",
+        "owner": "cortex",
+        "tools": [
+          {
+            "name": "recall",
+            "description": "Typed recall, filtered in SQL, reranked by judge",
+            "input_schema": "./schemas/recall.in.json",
+            "output_schema": "./schemas/recall.out.json",
+            "kind": "workflow",
+            "stable": true,
+            "max_result_tokens": 600,
+            "validator": "schema",
+            "annotations": { "readOnlyHint": true }
+          }
+        ],
+        "agent": null,
+        "egress": "none",
+        "writes_tables": [],
+        "reads_domains": ["memory"],
+        "calls_allowed": ["judge"],
+        "timeout_ms": 5000
+      },
+      {
+        "name": "judge",
+        "version": "0.1.0",
+        "domain": "judge",
+        "owner": "platform",
+        "tools": [
+          {
+            "name": "grade",
+            "description": "Grades candidates",
+            "input_schema": "./schemas/grade.in.json",
+            "kind": "workflow",
+            "max_result_tokens": 300,
+            "validator": "schema"
+          }
+        ],
+        "agent": null,
+        "egress": "none",
+        "writes_tables": [],
+        "reads_domains": [],
+        "calls_allowed": [],
+        "timeout_ms": 2000
+      },
+      {
+        "name": "memory-write",
+        "version": "1.0.0",
+        "domain": "memory",
+        "owner": "cortex",
+        "tools": [
+          {
+            "name": "remember",
+            "description": "Stores one memory",
+            "input_schema": "./schemas/remember.in.json",
+            "kind": "data",
+            "max_result_tokens": 100,
+            "validator": "schema"
+          }
+        ],
+        "agent": null,
+        "egress": "none",
+        "writes_tables": ["memory.memories"],
+        "reads_domains": ["memory"],
+        "calls_allowed": [],
+        "timeout_ms": 3000
+      },
+      {
+        "name": "scout",
+        "version": "0.1.0",
+        "domain": "scout",
+        "owner": "platform",
+        "tools": [
+          {
+            "name": "explore",
+            "description": "Explores a codebase",
+            "input_schema": "./schemas/explore.in.json",
+            "kind": "agent",
+            "max_result_tokens": 1000,
+            "validator": "citations"
+          }
+        ],
+        "agent": { "profile": "scout", "model_min": "sonnet", "max_turns": 8, "timeout_ms": 120000 },
+        "egress": ["docs.example.org"],
+        "writes_tables": [],
+        "reads_domains": [],
+        "calls_allowed": ["memory-recall"],
+        "timeout_ms": 120000
+      }
+    ]
+  },
+  "servers": {
+    "mcpServers": {
+      "memory-recall": { "command": "node", "args": ["modules/memory-recall/dist/src/serve.js"] },
+      "judge": { "type": "stdio", "command": "node", "args": ["modules/judge/dist/src/serve.js"] },
+      "memory-write": { "command": "node", "args": ["modules/memory-write/dist/src/serve.js"] },
+      "scout": { "command": "node", "args": ["modules/scout/dist/src/serve.js"] }
+    }
+  },
+  "clients": {
+    "profiles": [
+      {
+        "name": "local",
+        "modules": ["memory-recall", "scout"],
+        "model": "sonnet",
+        "effort": "medium",
+        "mode": "execute",
+        "max_duration_ms": 600000,
+        "max_calls": 50,
+        "max_depth": 3
+      }
+    ]
+  }
+}

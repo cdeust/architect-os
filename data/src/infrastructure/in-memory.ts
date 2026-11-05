@@ -101,10 +101,33 @@ export class InMemoryDataStore implements DataStore {
         )
         .slice(0, limit);
     },
+    'tasks.open': ({ task, client, profile, deadline_at }) => {
+      if (this.tasks.has(task)) throw new DataError('INVALID_OPERATION', 'tasks.open: invalid operation');
+      const record: TaskRecord = { task, client, profile, opened_at: now(), deadline_at };
+      this.tasks.set(task, record);
+      return { ...record };
+    },
+    'tasks.end': ({ task, ending }) => {
+      const record = this.task('tasks.end', task);
+      if (record.ending !== undefined)
+        throw new DataError('INVALID_OPERATION', 'tasks.end: invalid operation');
+      const ended: TaskRecord = { ...record, ended_at: now(), ending };
+      this.tasks.set(task, ended);
+      return { ...ended };
+    },
+    'tasks.get': ({ task }) => ({ ...this.task('tasks.get', task) }),
   };
 
   /** Append-only: no handler changes or removes a record (migrations/0004_usage_records.sql on Postgres). */
   private readonly usage: DataOpInput<'usage.append'>[] = [];
+  /** A task ends once (migrations/0005_tasks.sql on Postgres). */
+  private readonly tasks = new Map<string, TaskRecord>();
+
+  private task(op: string, task: string): TaskRecord {
+    const record = this.tasks.get(task);
+    if (record === undefined) throw new DataError('NOT_FOUND', `${op}: no such record`);
+    return record;
+  }
 
   async execute<Op extends DataOpName>(op: Op, input: DataOpInput<Op>): Promise<unknown> {
     return (this.handlers[op] as (input: DataOpInput<Op>) => unknown)(input);
@@ -136,3 +159,6 @@ const sortKey = (value: string | undefined): Buffer =>
 
 const byteOrder = (a: string | undefined, b: string | undefined): number =>
   Buffer.compare(sortKey(a), sortKey(b));
+
+/** A task of the registry (TaskRecordSchema of the contracts). */
+type TaskRecord = import('@architect-os/contracts').DataOpOutput<'tasks.get'>;

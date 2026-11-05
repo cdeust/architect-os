@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { RunEventSchema, RunEventTypeSchema, RunSchema, RunStatusSchema } from './run.js';
 import { MemoryItemSchema } from './tools.js';
 import { UsageRecordSchema } from './broker.js';
+import { IdSchema } from './ids.js';
 
 /** Dimension of the pgvector column declared in data/migrations/0002_memory.sql. */
 export const EMBEDDING_DIMENSION = 384;
@@ -69,6 +70,30 @@ export const UsageAggregateRowSchema = z.strictObject({
 });
 export type UsageAggregateRow = z.infer<typeof UsageAggregateRowSchema>;
 
+/** Why a task ended (§2, Bornes opérationnelles): done, its deadline, its number of calls, cancelled, an error. */
+export const TaskEndingSchema = z.enum(['completed', 'deadline', 'max_calls', 'cancelled', 'error']);
+export type TaskEnding = z.infer<typeof TaskEndingSchema>;
+
+export const TasksOpenInputSchema = z.strictObject({
+  task: IdSchema,
+  client: z.string().min(1).max(200),
+  profile: z.string().min(1).max(200),
+  deadline_at: z.iso.datetime(),
+});
+export const TasksEndInputSchema = z.strictObject({ task: IdSchema, ending: TaskEndingSchema });
+export const TasksGetInputSchema = z.strictObject({ task: IdSchema });
+/** A task of the registry; `ended_at` and `ending` are absent while it is open. */
+export const TaskRecordSchema = z.strictObject({
+  task: z.string(),
+  client: z.string(),
+  profile: z.string(),
+  opened_at: z.iso.datetime(),
+  deadline_at: z.iso.datetime(),
+  ended_at: z.iso.datetime().optional(),
+  ending: TaskEndingSchema.optional(),
+});
+export type TaskRecord = z.infer<typeof TaskRecordSchema>;
+
 /**
  * Every operation declares the tables it writes (`writes`), schema-qualified when not in `public`. data/sql is checked
  * against it when the statement table loads (data/src/infrastructure/sql-store.ts), and the gateway refuses at each
@@ -91,6 +116,9 @@ export const DATA_OPS = {
     output: z.object({ id: z.string() }),
     writes: ['usage_records'],
   },
+  'tasks.open': { input: TasksOpenInputSchema, output: TaskRecordSchema, writes: ['tasks'] },
+  'tasks.end': { input: TasksEndInputSchema, output: TaskRecordSchema, writes: ['tasks'] },
+  'tasks.get': { input: TasksGetInputSchema, output: TaskRecordSchema, writes: [] },
   'usage.aggregate': {
     input: UsageAggregateInputSchema,
     output: z.array(UsageAggregateRowSchema),
@@ -99,6 +127,7 @@ export const DATA_OPS = {
 } as const satisfies Record<string, { input: z.ZodType; output: z.ZodType; writes: readonly string[] }>;
 export type DataOpName = keyof typeof DATA_OPS;
 export type DataOpInput<Op extends DataOpName> = z.output<(typeof DATA_OPS)[Op]['input']>;
+export type DataOpOutput<Op extends DataOpName> = z.output<(typeof DATA_OPS)[Op]['output']>;
 export const DATA_OP_NAMES = Object.keys(DATA_OPS) as DataOpName[];
 
 /**
