@@ -19,7 +19,7 @@ Feature: usage, from the broker through the gateway to data (docs/design/platfor
   Scenario Outline: UsageSink contract: data gone is unavailable, not a refusal (<adapter>)
     Given the "<adapter>" usage sink
     And data is gone
-    Then appending the usage record '{"at":"2026-11-05T10:00:00.000Z","layer":"broker","task":"t1","status":200}' fails with "SERVICE_UNAVAILABLE"
+    Then appending the usage record '{"at":"2026-11-05T10:00:00.000Z","layer":"broker","task":"t1","status":200}' fails with "SERVICE_UNAVAILABLE" saying "data unavailable"
     And the usage sink is not available
 
     Examples:
@@ -29,7 +29,7 @@ Feature: usage, from the broker through the gateway to data (docs/design/platfor
 
   Scenario: an MCP data that cannot reach its store is unavailable; a record it refuses is an answer
     Given the "mcp" usage sink over a store that fails with "connection to db.internal refused"
-    Then appending the usage record '{"at":"2026-11-05T10:00:00.000Z","layer":"broker","task":"t1","status":200}' fails with "SERVICE_UNAVAILABLE"
+    Then appending the usage record '{"at":"2026-11-05T10:00:00.000Z","layer":"broker","task":"t1","status":200}' fails with "SERVICE_UNAVAILABLE" saying "data cannot reach its store"
     And the usage sink is not available
     Given the "mcp" usage sink
     When the gateway appends the usage record '{"at":"2026-11-05T10:00:00.000Z","layer":"worker","task":"t1","status":200}'
@@ -42,7 +42,7 @@ Feature: usage, from the broker through the gateway to data (docs/design/platfor
     Then the broker honours "tok_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" for '{"task":"task-1","parent":"call-1"}'
     When the gateway grants "tok_ffffffffffffffffffffffffffffffffffff" to the task "task-3"
     Then the broker honours "tok_ffffffffffffffffffffffffffffffffffff" for '{"task":"task-3"}'
-    And granting "tok_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" to the task "task-2" is refused
+    And granting "tok_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" to the task "task-2" is refused as "token already granted"
     When the gateway revokes "tok_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     Then the broker does not honour "tok_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 

@@ -18,8 +18,15 @@ Feature: SQL store, statement table and migrations
       | an unknown field                               | operations.json | add the unknown field cache            |
       | a SQL file that does not exist                 | operations.json | point the first statement at nope.sql  |
       | not JSON                                       | operations.json | replace the content by an opening brace |
-      | a statement writing a table it does not declare | runs.get.sql    | append a delete of the runs            |
-      | a declared table its statement does not write   | usage.append.sql | select the 12 parameters instead       |
+
+  Scenario Outline: rejects a table whose SQL writes other tables than its operation declares: <defect>
+    When I copy the sql directory and rewrite "<file>" as "<rewrite>"
+    Then loading the statement table from the copy fails with "<message>"
+
+    Examples:
+      | defect                                          | file             | rewrite                          | message                                                             |
+      | a statement writing a table it does not declare | runs.get.sql     | append a delete of the runs      | operation runs.get writes [runs] but declares [] in DATA_OPS        |
+      | a declared table its statement does not write   | usage.append.sql | select the 12 parameters instead | operation usage.append writes [] but declares [usage_records] in DATA_OPS |
 
   Scenario Outline: reads the tables a statement writes: <statement>
     Then the statement "<statement>" writes "<tables>"

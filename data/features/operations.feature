@@ -63,3 +63,14 @@ Feature: Data operations
     Then the failure code is "INVALID_INPUT"
     When I execute "usage.aggregate" with the input '{"limit":1000}'
     Then the answer has 0 items
+
+  Scenario Outline: keeps a usage record of the layer <layer>
+    Given data operations over an in-memory store
+    When I execute "usage.append" with the input '{"at":"2026-11-05T10:00:00.000Z","layer":"<layer>","task":"t1","status":200}'
+    And I execute "usage.aggregate" with the input '{}'
+    Then the answer matches '[{"task":"t1","layer":"<layer>","requests":1}]'
+
+    Examples:
+      | layer  |
+      | broker |
+      | client |

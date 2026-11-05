@@ -39,7 +39,7 @@ Feature: Data MCP server (docs/design/platform-v3-srt.md, brick 1b.3)
   Scenario: a failure of the store answers INTERNAL, without its message
     Given an MCP client of the data MCP server over a store that fails with "password=hunter2 at db.internal"
     When the client calls "runs.get" with '{"run_id":"00000000-0000-4000-8000-000000000000"}'
-    Then the MCP call is refused with the code "INTERNAL"
+    Then the MCP call is refused with '{"code":"INTERNAL","message":"internal error"}'
     And the MCP answer does not contain "hunter2"
 
   Scenario: the data process serves MCP on its stdio and ends with 0 when its stdin ends
@@ -52,8 +52,8 @@ Feature: Data MCP server (docs/design/platform-v3-srt.md, brick 1b.3)
     And the data process wrote nothing but MCP on its stdout
     And the data process wrote "data: DATABASE_URL is not set: using the in-memory backend" on its stderr
 
-  Scenario: a data process whose stdin ended before it served ends with 0
-    Given the data process started with its stdin already ended
+  Scenario: a data process whose stdin ended and was read before it served ends with 0
+    Given the data process started with a stdin already ended and read
     Then the data process ends with 0
 
   Scenario: a data process that cannot open its store ends with 1 and says why on stderr

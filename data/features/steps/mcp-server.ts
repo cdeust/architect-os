@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { once } from 'node:events';
 import { PassThrough, type Readable, type Writable } from 'node:stream';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -44,7 +45,7 @@ class StreamClientTransport implements Transport {
 
 interface McpState {
   client?: Client;
-  answer?: { isError: boolean; text: string };
+  answer?: { isError: boolean; text: string; structured: unknown };
   process?: { exit: Promise<number>; stdin: PassThrough; stdout: string[]; stderr: string[] };
 }
 
@@ -66,8 +67,7 @@ async function serveOver(world: DataWorld, operations: DataOperations): Promise<
 }
 
 /** Runs serveStdio on a pair of streams, collecting what it writes on stdout and stderr. */
-function startProcess(world: DataWorld, env: Record<string, string>) {
-  const stdin = new PassThrough();
+function startProcess(world: DataWorld, env: Record<string, string>, stdin = new PassThrough()) {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
   const written = { out: [] as string[], err: [] as string[] };
@@ -115,9 +115,12 @@ Given('the data process served on a pair of streams over the database of the sce
   await connect(this, new StreamClientTransport(tap, stdin));
 });
 
-Given('the data process started with its stdin already ended', function () {
-  const { stdin } = startProcess(this, {});
+Given('the data process started with a stdin already ended and read', async function () {
+  const stdin = new PassThrough();
+  stdin.resume();
   stdin.end();
+  await once(stdin, 'end');
+  startProcess(this, {}, stdin);
 });
 
 Given('the data process started with the DATABASE_URL {string}', function (url: string) {
@@ -136,7 +139,11 @@ When('the client calls {string} with {string}', async function (tool: string, in
     arguments: json(scenario(this), input) as Record<string, unknown>,
   });
   const first = (response.content as { type: string; text?: string }[])[0];
-  mcp(this).answer = { isError: response.isError === true, text: first?.text ?? '' };
+  mcp(this).answer = {
+    isError: response.isError === true,
+    text: first?.text ?? '',
+    structured: response.structuredContent,
+  };
 });
 
 function answer(world: DataWorld) {
@@ -184,6 +191,14 @@ Then('the MCP call is refused with the code {string}', function (code: string) {
   const got = answer(this);
   assert.equal(got.isError, true);
   assert.equal((JSON.parse(got.text) as { code: string }).code, code);
+  assert.deepEqual(got.structured, JSON.parse(got.text));
+});
+
+Then('the MCP call is refused with {string}', function (refusal: string) {
+  const got = answer(this);
+  assert.equal(got.isError, true);
+  assert.deepEqual(JSON.parse(got.text), JSON.parse(refusal));
+  assert.deepEqual(got.structured, JSON.parse(refusal));
 });
 
 Then('the MCP call is refused by the input schema', function () {

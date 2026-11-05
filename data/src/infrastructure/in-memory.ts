@@ -22,13 +22,16 @@ const TOKEN_FIELDS = [
   'cache_creation_input_tokens',
 ] as const;
 
-/** Bytewise order, absent first: the ORDER BY ... COLLATE "C" NULLS FIRST of sql/usage.aggregate.sql. */
-function byteOrder(a: string | undefined, b: string | undefined): number {
-  if (a === b) return 0;
-  if (a === undefined) return -1;
-  if (b === undefined) return 1;
-  return Buffer.compare(Buffer.from(a), Buffer.from(b));
-}
+/**
+ * The sort key of a value: the ORDER BY ... COLLATE "C" NULLS FIRST of sql/usage.aggregate.sql. An absent value is the
+ * empty key; a present one is its UTF-8 bytes after the byte 1, so that it sorts after the absent one, an empty string
+ * included, and bytewise among the others.
+ */
+const sortKey = (value: string | undefined): Buffer =>
+  value === undefined ? Buffer.alloc(0) : Buffer.from(`\u0001${value}`);
+
+const byteOrder = (a: string | undefined, b: string | undefined): number =>
+  Buffer.compare(sortKey(a), sortKey(b));
 
 function cosine(a: number[], b: number[]): number {
   let dot = 0;

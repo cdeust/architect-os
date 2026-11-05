@@ -135,13 +135,12 @@ Then('the append outcome is {string}', function (outcome: string) {
 });
 
 Then(
-  'appending the usage record {string} fails with {string}',
-  async function (record: string, code: string) {
+  'appending the usage record {string} fails with {string} saying {string}',
+  async function (record: string, code: string, saying: string) {
     await assert.rejects(
       must(scene(this).sink, 'a usage sink').append(JSON.parse(record) as UsageAppendInput),
-      {
-        code,
-      },
+      (error: { code?: string; message?: string }) =>
+        error.code === code && (error.message ?? '').startsWith(saying),
     );
   },
 );
@@ -182,9 +181,15 @@ When('the gateway revokes {string}', async function (token: string) {
   await must(scene(this).control, 'a broker control').revoke(token);
 });
 
-Then('granting {string} to the task {string} is refused', async function (token: string, task: string) {
-  await assert.rejects(must(scene(this).control, 'a broker control').grant({ token, task }));
-});
+Then(
+  'granting {string} to the task {string} is refused as {string}',
+  async function (token: string, task: string, reason: string) {
+    await assert.rejects(
+      must(scene(this).control, 'a broker control').grant({ token, task }),
+      (error: Error) => error.message.includes(reason),
+    );
+  },
+);
 
 Then('the broker honours {string} for {string}', function (token: string, expected: string) {
   const grant = must(scene(this).honours, 'a broker control')(token);

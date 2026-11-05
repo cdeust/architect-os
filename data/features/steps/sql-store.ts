@@ -30,7 +30,7 @@ const REWRITES: Record<string, (source: string) => string> = {
   'replace the content by an opening brace': () => '{',
   'append a delete of the runs': (source) => `${source};\nDELETE FROM runs WHERE false`,
   'select the 12 parameters instead': () =>
-    `SELECT ${Array.from({ length: 12 }, (_, i) => `${i + 1}`).join(', ')} AS id`,
+    `SELECT ${Array.from({ length: 12 }, (_, i) => `$${i + 1}`).join(', ')} AS id`,
 };
 
 const RUN_ROW = {
@@ -70,6 +70,10 @@ When('I copy the sql directory and rewrite {string} as {string}', function (file
   assert.ok(change, `unknown rewrite: ${rewrite}`);
   writeFileSync(join(dir, file), change(readFileSync(join(dir, file), 'utf8')));
   this.state['brokenDir'] = dir;
+});
+
+Then('loading the statement table from the copy fails with {string}', function (message: string) {
+  assert.throws(() => loadStatementTable(this.state['brokenDir'] as string), { message });
 });
 
 Then('loading the statement table from the copy fails', function () {

@@ -47,12 +47,15 @@ Feature: the usage forwarder of the gateway (docs/design/platform-v3-srt.md, §2
     Then the usage state is '{"data":"down","lost":2,"refused":0}'
     And a probe of data waits 250 ms
     Given data is available again
+    When the broker sends the usage record '{"at":"2026-11-05T10:00:02.000Z","status":200,"task":"task-1"}'
+    Then the usage state is '{"data":"down","lost":3,"refused":0}'
+    And data holds no usage record
     When the probe of data runs
-    Then the usage state is '{"data":"up","lost":2,"refused":0}'
+    Then the usage state is '{"data":"up","lost":3,"refused":0}'
     And the broker got the calls "grant tok-1, grant tok-2, revoke tok-1, revoke tok-2, revoke tok-2, grant tok-1, grant tok-3"
     And the broker honours the tokens "tok-1, tok-3"
     And no probe of data waits
-    When the broker sends the usage record '{"at":"2026-11-05T10:00:02.000Z","status":200,"task":"task-3"}'
+    When the broker sends the usage record '{"at":"2026-11-05T10:00:03.000Z","status":200,"task":"task-3"}'
     Then data holds the usage records '[{"layer":"broker","task":"task-3"}]'
 
   Scenario: writes that find data unavailable together revoke each token once

@@ -120,19 +120,23 @@ Feature: DataStore contract
       | adapter  |
       | postgres |
 
-  Scenario Outline: keeps usage records and sums them per task, layer and model, absent tokens counting 0
+  Scenario Outline: keeps usage records and sums them per task, layer and model, in bytewise order, absent model first
     Given the <adapter> data store
-    When I execute "usage.append" with the input '{"at":"2026-11-05T10:00:00.000Z","layer":"broker","task":"t1","parent":"c1","status":200,"route":"/v1/messages","model":"m1","input_tokens":10,"output_tokens":5,"cache_read_input_tokens":2,"cache_creation_input_tokens":1}'
+    When I execute "usage.append" with the input '{"at":"2026-11-05T10:00:00.000Z","layer":"broker","task":"t2","status":200,"model":"m2","output_tokens":7}'
     Then the answer has a string field "id"
-    When I execute "usage.append" with the input '{"at":"2026-11-05T10:00:01.000Z","layer":"broker","task":"t1","status":200,"model":"m1","input_tokens":1,"output_tokens":1}'
-    And I execute "usage.append" with the input '{"at":"2026-11-05T10:00:02.000Z","layer":"client","task":"t1","status":200,"model":"m1","input_tokens":100}'
-    And I execute "usage.append" with the input '{"at":"2026-11-05T10:00:03.000Z","layer":"broker","task":"t1","status":400,"error_type":"invalid_request_error"}'
-    And I execute "usage.append" with the input '{"at":"2026-11-05T10:00:04.000Z","layer":"broker","task":"t2","status":200,"model":"m2","output_tokens":7}'
+    When I execute "usage.append" with the input '{"at":"2026-11-05T10:00:01.000Z","layer":"client","task":"t1","status":200,"model":"m1","input_tokens":100}'
+    And I execute "usage.append" with the input '{"at":"2026-11-05T10:00:02.000Z","layer":"broker","task":"t1","parent":"c1","status":200,"route":"/v1/messages","model":"m1","input_tokens":10,"output_tokens":5,"cache_read_input_tokens":2,"cache_creation_input_tokens":1}'
+    And I execute "usage.append" with the input '{"at":"2026-11-05T10:00:03.000Z","layer":"broker","task":"t1","status":200,"model":"","input_tokens":4}'
+    And I execute "usage.append" with the input '{"at":"2026-11-05T10:00:04.000Z","layer":"broker","task":"t1","status":400,"error_type":"invalid_request_error"}'
+    And I execute "usage.append" with the input '{"at":"2026-11-05T10:00:05.000Z","layer":"broker","task":"t1","status":200,"model":"m1","input_tokens":1,"output_tokens":1}'
+    And I execute "usage.append" with the input '{"at":"2026-11-05T10:00:06.000Z","layer":"broker","task":"t1","status":200,"model":"Z9","input_tokens":9}'
     And I execute "usage.aggregate" with the input '{}'
     Then the answer matches:
       """
       [
         {"task":"t1","layer":"broker","requests":1,"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},
+        {"task":"t1","layer":"broker","model":"","requests":1,"input_tokens":4,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},
+        {"task":"t1","layer":"broker","model":"Z9","requests":1,"input_tokens":9,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},
         {"task":"t1","layer":"broker","model":"m1","requests":2,"input_tokens":11,"output_tokens":6,"cache_read_input_tokens":2,"cache_creation_input_tokens":1},
         {"task":"t1","layer":"client","model":"m1","requests":1,"input_tokens":100,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},
         {"task":"t2","layer":"broker","model":"m2","requests":1,"input_tokens":0,"output_tokens":7,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}

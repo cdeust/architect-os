@@ -20,7 +20,7 @@ function refusal(error: unknown) {
  * The MCP server of data (docs/design/platform-v3-srt.md, §2 and brick 1b.3), generated from DATA_OPS: one tool per
  * typed operation, named as the operation, with its input schema, and nothing else; there is no tool that takes SQL.
  * Its one client is the gateway, its parent on stdio. An answer is the JSON of the operation's output; a refusal is
- * `isError` with `{ code, message }` (node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.d.ts, `registerTool`).
+ * `isError` with `{ code, message }`, as text and as `structuredContent` (node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.d.ts, `registerTool`).
  */
 export function createDataMcpServer(operations: DataOperations): McpServer {
   const server = new McpServer({ name: 'architect-os-data', version: '0.1.0' });
@@ -35,7 +35,8 @@ export function createDataMcpServer(operations: DataOperations): McpServer {
         try {
           return { content: text(await operations.execute(op, args)) };
         } catch (error) {
-          return { content: text(refusal(error)), isError: true };
+          const refused = refusal(error);
+          return { content: text(refused), structuredContent: refused, isError: true };
         }
       },
     );

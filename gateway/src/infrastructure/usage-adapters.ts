@@ -6,12 +6,6 @@ import type { AppendOutcome, BrokerControl, Scheduler, TaskGrant, UsageSink } fr
 
 type Caller = Pick<Client, 'callTool'>;
 
-const textOf = (response: Awaited<ReturnType<Caller['callTool']>>): string =>
-  (response.content as { type: string; text?: string }[] | undefined)?.[0]?.text ?? '';
-
-/** A refusal of data is `{ code, message }` in that order (data/src/presentation/mcp-server.ts); INTERNAL: no store. */
-const INTERNAL = '{"code":"INTERNAL"';
-
 /**
  * Data, as the gateway reaches it on its stdio (data/src/presentation/mcp-server.ts). Unavailable: the `tools/call`
  * fails (data gone, its transport closed) or data answers INTERNAL (its store unreachable). Any other refusal is an
@@ -20,30 +14,36 @@ const INTERNAL = '{"code":"INTERNAL"';
 export class McpUsageSink implements UsageSink {
   constructor(private readonly data: Caller) {}
 
-  /** Whether data answered or refused; it rejects with SERVICE_UNAVAILABLE when data is unavailable. */
-  private async call(name: string, args: Record<string, unknown>): Promise<'answered' | 'refused'> {
+  /**
+   * Whether data answered (false: it refused); it rejects with SERVICE_UNAVAILABLE when data is unavailable. A refusal of
+   * data carries `{ code, message }` as `structuredContent` (data/src/presentation/mcp-server.ts); one of the MCP SDK,
+   * arguments outside the schema, carries none.
+   */
+  private async call(name: string, args: Record<string, unknown>): Promise<boolean> {
     let response;
     try {
       response = await this.data.callTool({ name, arguments: args });
     } catch (error) {
       throw new GatewayError('SERVICE_UNAVAILABLE', `data unavailable: ${String(error)}`);
     }
-    if (response.isError !== true) return 'answered';
-    if (textOf(response).startsWith(INTERNAL)) {
+    if (response.isError !== true) return true;
+    if ((response.structuredContent as { code?: unknown } | undefined)?.code === 'INTERNAL') {
       throw new GatewayError('SERVICE_UNAVAILABLE', 'data cannot reach its store');
     }
-    return 'refused';
+    return false;
   }
 
   async append(record: UsageAppendInput): Promise<AppendOutcome> {
-    const outcome = await this.call('usage.append', record as unknown as Record<string, unknown>);
-    return outcome === 'answered' ? 'stored' : 'refused';
+    return (await this.call('usage.append', record as unknown as Record<string, unknown>))
+      ? 'stored'
+      : 'refused';
   }
 
-  /** A read of one group: it reaches the store, which a ping of the MCP session would not. */
+  /** A read of the store, which a ping of the MCP session would not reach: available when it does not reject. */
   async available(): Promise<boolean> {
+    // Stryker disable next-line ObjectLiteral: équivalent: la sonde ne lit que l'issue de la lecture ; limit: 1 n'en borne que le coût (défaut 100)
     return this.call('usage.aggregate', { limit: 1 }).then(
-      (outcome) => outcome === 'answered',
+      () => true,
       () => false,
     );
   }
@@ -55,7 +55,8 @@ export class McpBrokerControl implements BrokerControl {
 
   private async call(name: string, args: Record<string, unknown>): Promise<void> {
     const response = await this.broker.callTool({ name, arguments: args });
-    if (response.isError === true) throw new Error(`broker refused ${name}: ${textOf(response)}`);
+    if (response.isError === true)
+      throw new Error(`broker refused ${name}: ${JSON.stringify(response.content)}`);
   }
 
   /** A parent left undefined is absent on the wire: JSON drops it. */
