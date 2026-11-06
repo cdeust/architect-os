@@ -70,3 +70,45 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
     process.exit(1);
   });
 }
+
+/** What the routing of brick 1b.4 is built from: the files of the topology and the adapters of its ports. */
+export interface RoutingDependencies {
+  files: import('./infrastructure/topology-files.js').TopologyFiles;
+  runner: import('@architect-os/sandbox').SandboxRunner;
+  launch: import('./infrastructure/module-host.js').ModuleLaunch;
+  /** The MCP client of data, child of the gateway on stdio. */
+  data: import('./infrastructure/mcp-routing.js').DataCaller;
+  tokens: import('./domain/routing.js').TaskTokens;
+  sandboxes: import('./domain/routing.js').TaskSandboxes;
+  audit: AuditLog;
+  clock: Clock;
+  scheduler: import('./domain/ports.js').Scheduler;
+  ids: import('./domain/routing.js').Ids;
+}
+
+/**
+ * Composes the routing of the tasks (docs/design/platform-v3-srt.md, §2, brick 1b.4): the topology loaded whole, or
+ * refused before any module is launched; the modules hosted in their sandboxes; the router over them and data. Its
+ * imports are inline so that the lines above keep their positions (tools/test-gate/mutation-debt.json).
+ */
+export async function composeRouting(deps: RoutingDependencies) {
+  const { loadTopology } = await import('./infrastructure/topology-files.js');
+  const { ModuleHost } = await import('./infrastructure/module-host.js');
+  const { McpDataClient, McpTaskRegistry } = await import('./infrastructure/mcp-routing.js');
+  const { TaskRouter } = await import('./application/task-router.js');
+  const topology = loadTopology(deps.files);
+  const modules = new ModuleHost(topology.servers, deps.runner, deps.launch);
+  const router = new TaskRouter(
+    topology,
+    modules,
+    new McpDataClient(deps.data),
+    new McpTaskRegistry(deps.data),
+    deps.tokens,
+    deps.sandboxes,
+    deps.audit,
+    deps.clock,
+    deps.scheduler,
+    deps.ids,
+  );
+  return { router, modules };
+}

@@ -27,14 +27,19 @@ export class InMemoryModules implements ModuleClient {
   }
 }
 
-/** Data of a scenario: answers the operation and its arguments. */
+/** Data of a scenario: answers the operation and its arguments; unavailable, as data down. */
 export class InMemoryDataClient implements DataClient {
+  /** The failure of data, while it is down. */
+  unavailable: Error | undefined;
+
   async execute(op: DataOpName, args: Record<string, unknown>): Promise<ServiceResponse> {
+    if (this.unavailable !== undefined) throw this.unavailable;
     return answer(`${op} ${JSON.stringify(args)}`);
   }
 }
 
-/** The registry of a scenario: the tasks opened and the ends written, in order; unavailable, as data down. */
+/** The registry of a scenario: the tasks opened and the ends written, in order, a task ended once, as data does
+ * (data/migrations/0005_tasks.sql); unavailable, as data down. */
 export class InMemoryTaskRegistry implements TaskRegistry {
   readonly opened: DataOpInput<'tasks.open'>[] = [];
   readonly ended: { task: string; ending: TaskEnding }[] = [];
@@ -47,6 +52,7 @@ export class InMemoryTaskRegistry implements TaskRegistry {
 
   async end(task: string, ending: TaskEnding): Promise<void> {
     if (this.unavailable !== undefined) throw this.unavailable;
+    if (this.ended.some((end) => end.task === task)) throw new Error('tasks.end: invalid operation');
     this.ended.push({ task, ending });
   }
 }

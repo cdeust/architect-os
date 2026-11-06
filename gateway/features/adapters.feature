@@ -85,12 +85,17 @@ Feature: Gateway port adapters
   Scenario Outline: TaskRegistry contract: a task opened is ended with its reason
     Given the "<adapter>" task registry
     When the registry opens the task '{"task":"task-1","client":"cli","profile":"local","deadline_at":"2026-11-06T10:00:00.000Z"}'
+    And the registry opens the task '{"task":"task-2","client":"cli","profile":"local","deadline_at":"2026-11-06T10:00:00.000Z"}'
     And the registry ends "task-1" with "cancelled"
+    And the registry ends "task-2" with "deadline"
     Then the registry reads back "task-1" ended with "cancelled"
+    And the registry reads back "task-2" ended with "deadline"
+    And the registry refuses to end "task-1" again
 
     Examples:
       | adapter   |
       | in-memory |
+      | mcp       |
 
   Scenario Outline: TaskTokens contract: a token granted is honoured until it is retired
     Given the "<adapter>" task tokens
@@ -102,6 +107,7 @@ Feature: Gateway port adapters
     Examples:
       | adapter   |
       | in-memory |
+      | usage forwarder |
 
   Scenario Outline: Ids contract: identifiers of a kind are distinct and name their kind
     Given the "<adapter>" identifiers
@@ -110,6 +116,7 @@ Feature: Gateway port adapters
     Examples:
       | adapter    |
       | sequential |
+      | random     |
 
   Scenario Outline: ModuleClient contract: a call reaches the tool of its module and its answer comes back untouched
     Given the "<adapter>" module client
@@ -119,21 +126,56 @@ Feature: Gateway port adapters
     Examples:
       | adapter   |
       | in-memory |
+      | mcp       |
 
   Scenario Outline: DataClient contract: an operation reaches data and its answer comes back untouched
     Given the "<adapter>" data client
-    When the data client executes "tasks.get" with '{"task":"task-1"}'
-    Then the data answer is 'tasks.get {"task":"task-1"}'
+    When the data client executes "memory.search" with '{"query":"q"}'
+    Then the data answer is 'memory.search {"query":"q"}'
 
     Examples:
       | adapter   |
       | in-memory |
+      | mcp       |
+
+  Scenario Outline: DataClient contract: data down, or data without its store, is SERVICE_UNAVAILABLE: <state>
+    Given the "<adapter>" data client while <state>
+    When the data client executes "memory.search" with '{"query":"q"}', refused
+    Then the data call is refused with code "SERVICE_UNAVAILABLE" saying "<saying>"
+
+    Examples:
+      | adapter   | state                         | saying                                     |
+      | in-memory | data is down                  | data did not answer memory.search          |
+      | mcp       | data is down                  | data did not answer memory.search          |
+      | mcp       | data cannot reach its store   | data cannot reach its store for memory.search |
+
+  Scenario: McpDataClient forwards a refusal of data as an answer, with its code
+    Given the "mcp" data client
+    When the data client executes "tasks.get" with '{"task":"task-9"}'
+    Then the data answer matches '{"isError":true,"structured":{"code":"NOT_FOUND"}}'
+    When the data client executes "runs.get" with '{"run_id":"r"}'
+    Then the data answer matches '{"isError":true}'
+
+  Scenario: TaskSandboxGroups stops each sandbox of a task once, and a task without sandbox at once
+    Given the task sandbox groups with 2 sandboxes of "task-1"
+    When the sandbox groups stop "task-1"
+    And the sandbox groups stop "task-1"
+    And the sandbox groups stop "task-2"
+    Then each sandbox of "task-1" was stopped once
 
   Scenario Outline: TaskSandboxes contract: the sandboxes of a task are stopped
-    Given the "<adapter>" task sandboxes
+    Given the "<adapter>" task sandboxes of "task-1"
     When the sandboxes of "task-1" are stopped
     Then the sandboxes of "task-1" are gone
 
     Examples:
       | adapter   |
       | in-memory |
+      | groups    |
+
+  Scenario: ModuleHost refuses a module it has no server for, and launches nothing
+    Given a module host over no server
+    When the module client calls "ghost" tool "grade" with '{}' and the call identifier "call-1", refused
+    Then the module call is refused with code "SERVICE_UNAVAILABLE"
+    And the module call refusal says "no server for ghost"
+    And the module host launched no sandbox
