@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { TopologySchema } from '@architect-os/contracts';
+import { INTERNAL_TOOLS, TOOLS, TopologySchema } from '@architect-os/contracts';
+import { z } from 'zod';
 import { Given, ROOT, Then, When, stored } from './helpers.js';
 
 /** The topology as JSON, before its schema: a scenario breaks one rule of it. */
@@ -19,9 +20,9 @@ type Module = Record<string, unknown> & {
 
 const read = (path: string): unknown => JSON.parse(readFileSync(join(ROOT, path), 'utf8'));
 
-Given('the committed topology with an empty catalogue', function () {
+Given('the committed topology', function () {
   this.state['topology'] = {
-    catalog: { modules: [] },
+    catalog: read('topology/catalog.json'),
     servers: read('topology/modules.mcp.json'),
     clients: read('topology/clients.json'),
   };
@@ -116,4 +117,41 @@ Then('the topology is refused saying {string}', function (message: string) {
     issues.some((issue) => issue.includes(message)),
     `no issue says "${message}":\n${issues.join('\n')}`,
   );
+});
+
+Then('the committed catalogue has the modules {string}', function (names: string) {
+  const parsed = TopologySchema.parse(stored<unknown>(this, 'topology'));
+  assert.deepEqual(
+    parsed.catalog.modules.map((module) => module.name),
+    names.split(', '),
+  );
+});
+
+/** The contracts the committed schema files describe, by the words of manifest.feature. */
+const CONTRACTS: Record<string, z.ZodType> = {
+  'the input of the internal tool memory_search': INTERNAL_TOOLS.memory_search.input,
+  'the input of the internal tool memory_insert': INTERNAL_TOOLS.memory_insert.input,
+  'the input of the intent tool recall': TOOLS.recall.input,
+  'the data of the intent tool recall': TOOLS.recall.data,
+  'the input of the intent tool remember': TOOLS.remember.input,
+  'the data of the intent tool remember': TOOLS.remember.data,
+};
+
+Then('the committed schema {string} is the JSON schema of {}', function (file: string, contract: string) {
+  const schema = CONTRACTS[contract];
+  assert.ok(schema, `no contract named "${contract}"`);
+  const io = contract.startsWith('the input') ? 'input' : 'output';
+  assert.deepEqual(read(file), JSON.parse(JSON.stringify(z.toJSONSchema(schema, { io }))));
+});
+
+Then('every schema a tool names is a file under modules\\/<module>\\/', function () {
+  const parsed = TopologySchema.parse(stored<unknown>(this, 'topology'));
+  for (const module of parsed.catalog.modules) {
+    for (const tool of module.tools) {
+      for (const schema of [tool.input_schema, tool.output_schema].filter((s) => s !== undefined)) {
+        const file = join('modules', module.name, schema);
+        assert.ok(existsSync(join(ROOT, file)), `${module.name}.${tool.name}: ${file} is missing`);
+      }
+    }
+  }
 });

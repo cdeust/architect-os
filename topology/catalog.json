@@ -1,0 +1,70 @@
+{
+  "modules": [
+    {
+      "name": "memory",
+      "version": "0.1.0",
+      "domain": "memory",
+      "owner": "platform",
+      "tools": [
+        {
+          "name": "search",
+          "description": "Search stored memories by text.",
+          "input_schema": "./schemas/search.in.json",
+          "kind": "data",
+          "stable": true,
+          "max_result_tokens": 4000,
+          "validator": "schema",
+          "annotations": { "readOnlyHint": true }
+        },
+        {
+          "name": "insert",
+          "description": "Store one memory.",
+          "input_schema": "./schemas/insert.in.json",
+          "kind": "data",
+          "stable": true,
+          "max_result_tokens": 200,
+          "validator": "schema"
+        }
+      ],
+      "agent": null,
+      "egress": "none",
+      "writes_tables": ["memory.memories"],
+      "reads_domains": ["memory"],
+      "calls_allowed": [],
+      "timeout_ms": 10000
+    },
+    {
+      "name": "memory-agent",
+      "version": "0.1.0",
+      "domain": "memory",
+      "owner": "platform",
+      "tools": [
+        {
+          "name": "recall",
+          "description": "Recall memories relevant to a question and return a grounded summary with evidence.",
+          "input_schema": "./schemas/recall.in.json",
+          "output_schema": "./schemas/recall.out.json",
+          "kind": "agent",
+          "max_result_tokens": 4000,
+          "validator": "schema",
+          "annotations": { "readOnlyHint": true }
+        },
+        {
+          "name": "remember",
+          "description": "Store a piece of knowledge in memory.",
+          "input_schema": "./schemas/remember.in.json",
+          "output_schema": "./schemas/remember.out.json",
+          "kind": "agent",
+          "max_result_tokens": 200,
+          "validator": "schema"
+        }
+      ],
+      "agent": { "profile": "memory", "model_min": "haiku", "max_turns": 8, "timeout_ms": 120000 },
+      "egress": "none",
+      "writes_tables": [],
+      "reads_domains": ["memory"],
+      "calls_allowed": ["memory"],
+      "timeout_ms": 120000
+    }
+  ]
+}

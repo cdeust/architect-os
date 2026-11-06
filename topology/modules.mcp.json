@@ -1,3 +1,12 @@
 {
-  "mcpServers": {}
+  "mcpServers": {
+    "memory": {
+      "command": "node",
+      "args": ["${repo}/modules/memory/dist/src/serve.js"]
+    },
+    "memory-agent": {
+      "command": "node",
+      "args": ["${repo}/services/memory/dist/worker/main.js"]
+    }
+  }
 }

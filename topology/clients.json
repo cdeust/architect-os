@@ -2,7 +2,7 @@
   "profiles": [
     {
       "name": "owner",
-      "modules": [],
+      "modules": ["memory-agent"],
       "model": "sonnet",
       "effort": "medium",
       "mode": "execute",

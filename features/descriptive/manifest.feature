@@ -2,11 +2,29 @@ Feature: modules, their catalogue, their servers and the profiles of the clients
   The gateway reads three files together: the catalogue that manifest-registry writes from the manifests, the servers of
   topology/modules.mcp.json and the profiles of topology/clients.json. Each rule is one line of the schemas of
   packages/contracts/src/modules.ts and one row here; a topology that breaks one is refused whole, and nothing of it is
-  routed. Until the first real module (brick 1b.5) the committed catalogue is empty.
+  routed. Until manifest-registry writes it, the committed catalogue is topology/catalog.json, written by hand in its
+  output format (brick 1b.5).
 
-  Scenario: the committed servers and client profiles hold with an empty catalogue
-    Given the committed topology with an empty catalogue
+  Scenario: the committed catalogue, servers and client profiles hold together
+    Given the committed topology
     Then the topology is valid
+    And the committed catalogue has the modules "memory, memory-agent"
+
+  Scenario Outline: the schema <file> a tool of the committed catalogue names is the JSON schema of <contract>
+    Then the committed schema "<file>" is the JSON schema of <contract>
+
+    Examples:
+      | file                                          | contract                                |
+      | modules/memory/schemas/search.in.json         | the input of the internal tool memory_search |
+      | modules/memory/schemas/insert.in.json         | the input of the internal tool memory_insert |
+      | modules/memory-agent/schemas/recall.in.json   | the input of the intent tool recall     |
+      | modules/memory-agent/schemas/recall.out.json  | the data of the intent tool recall      |
+      | modules/memory-agent/schemas/remember.in.json | the input of the intent tool remember   |
+      | modules/memory-agent/schemas/remember.out.json | the data of the intent tool remember   |
+
+  Scenario: every schema a tool of the committed catalogue names is a committed file under its module
+    Given the committed topology
+    Then every schema a tool names is a file under modules/<module>/
 
   Scenario: the fixture topology holds
     Given the fixture topology

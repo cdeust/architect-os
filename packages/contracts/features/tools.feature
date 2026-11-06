@@ -24,3 +24,15 @@ Feature: Tool schemas
       """
       { "status": "ok", "data": {}, "evidence": [], "cost": { "input_tokens": -1, "output_tokens": 0, "usd": 0 } }
       """
+
+  Scenario Outline: bounds the evidence of a worker output and of a Result (decision 3): <case>
+    Then the worker output schema <verdict> <count> evidence with a source of <source>, a ref of <ref> and an excerpt of <excerpt> characters
+    And the Result schema of recall data <verdict> <count> evidence with a source of <source>, a ref of <ref> and an excerpt of <excerpt> characters
+
+    Examples:
+      | case                      | verdict | count | source | ref | excerpt |
+      | every bound reached       | accepts | 50    | 64     | 256 | 2000    |
+      | one evidence too many     | rejects | 51    | 1      | 1   | 1       |
+      | a source one too long     | rejects | 1     | 65     | 1   | 1       |
+      | a ref one too long        | rejects | 1     | 1      | 257 | 1       |
+      | an excerpt one too long   | rejects | 1     | 1      | 1   | 2001    |

@@ -32,6 +32,7 @@ Feature: Builder profile template
       | ${home}/.aws              |
       | ${home}/.gnupg            |
       | ${home}/.config/gh        |
+      | ${home}/.config/architect-os |
       | ${home}/.npmrc            |
       | ${home}/.netrc            |
       | ${home}/.claude           |

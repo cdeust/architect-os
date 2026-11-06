@@ -43,6 +43,7 @@ const DEFECTS: Record<string, (t: Record<string, any>) => unknown> = {
   'a base URL to another host': (t) =>
     (t['env']['set']['ANTHROPIC_BASE_URL'] = 'https://evil.example/${authProxyPort}'),
   'a host Claude variable passed through': (t) => t['env']['pass'].push('CLAUDE_CODE_OAUTH_TOKEN'),
+  'a literal API key written in the file': (t) => (t['env']['set']['ANTHROPIC_API_KEY'] = 'sk-ant-literal'),
 };
 
 const template = (w: SandboxWorld) => stored<ProfileTemplate>(w, 'template');
@@ -51,12 +52,34 @@ const column = (table: DataTable) => table.raw().map((row) => row[0] as string);
 const pairs = (table: DataTable) =>
   Object.fromEntries(table.raw().map(([k, v]) => [k as string, v as string]));
 
-When('I load the committed builder profile', function () {
-  this.state['template'] = loadTemplate(PROFILES, 'builder');
+When('I load the committed {word} profile', function (name: string) {
+  this.state['template'] = loadTemplate(PROFILES, name);
 });
 
 When('I resolve the profile with the test variables', function () {
   this.state['resolved'] = resolveProfile(template(this), VARS);
+});
+
+/** The variables of a platform process: a disposable cwd instead of a worktree, and the ports and token of its launcher. */
+const PLATFORM_VARS: ProfileVariables = {
+  ...VARS,
+  worktree: '/t/aos/work',
+  repo: '/p',
+  callbackPort: '8080',
+  brokerPort: '8084',
+  taskToken: 'task-token',
+};
+
+When('I resolve the profile with the variables of a platform process', function () {
+  this.state['resolved'] = resolveProfile(template(this), PLATFORM_VARS);
+});
+
+When('I break a copy of the committed {word} profile with {}', function (name: string, defect: string) {
+  const breakIt = DEFECTS[defect];
+  assert.ok(breakIt, `no defect named "${defect}"`);
+  const broken = JSON.parse(readFileSync(join(PROFILES, `${name}.json`), 'utf8')) as Record<string, any>;
+  breakIt(broken);
+  this.state['broken'] = broken;
 });
 
 Then('the profile grants at least one write path', function () {
@@ -185,4 +208,20 @@ When('I build the closed environment from the host environment:', function (tabl
 
 Then('the closed environment is exactly:', function (table: DataTable) {
   assert.deepEqual(stored(this, 'closedEnv'), pairs(table));
+});
+
+Then('the profile allows writing to exactly:', function (table: DataTable) {
+  assert.deepEqual(template(this).srt.filesystem.allowWrite, column(table));
+});
+
+Then('the profile passes exactly the variables:', function (table: DataTable) {
+  assert.deepEqual(template(this).env.pass, column(table));
+});
+
+Then('the profile sets exactly the variables:', function (table: DataTable) {
+  assert.deepEqual(template(this).env.set, pairs(table));
+});
+
+Then('the resolved network domains are exactly {string}', function (domains: string) {
+  assert.deepEqual(resolved(this).settings.network.allowedDomains, domains.split(', '));
 });

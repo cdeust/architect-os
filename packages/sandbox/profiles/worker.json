@@ -1,0 +1,41 @@
+{
+  "description": "Profil worker de la brique 1b.5 (docs/design/platform-v3-srt.md, §5, sorte agent) : un processus par task, query() de l'Agent SDK et le binaire Claude Code qu'il lance, client MCP de la gateway sur son propre stdio. Réseau : le broker seul, en 127.0.0.1:${brokerPort}, par le proxy srt. Le jeton de la task est la seule valeur en ANTHROPIC_API_KEY : le worker n'a jamais la clé. Écriture : son cwd jetable, son dossier de configuration propre et son dossier temporaire. Variables : ${home}, ${worktree} (le cwd jetable du processus, dans le dossier de sa sandbox), ${repo} (la racine de la plateforme, en lecture), ${tmp} et ${config} (adaptateur), ${brokerPort} et ${taskToken} (lanceur, un par task).",
+  "srt": {
+    "network": {
+      "allowedDomains": ["127.0.0.1:${brokerPort}"],
+      "deniedDomains": []
+    },
+    "filesystem": {
+      "denyRead": [
+        "${home}/.ssh",
+        "${home}/.aws",
+        "${home}/.gnupg",
+        "${home}/.config/gh",
+        "${home}/.config/architect-os",
+        "${home}/.npmrc",
+        "${home}/.netrc",
+        "${home}/.claude",
+        "${home}/.claude.json",
+        "${home}/Library/Keychains"
+      ],
+      "allowWrite": ["${worktree}", "${config}", "${tmp}"],
+      "denyWrite": ["${worktree}/.mcp.json", "${worktree}/.claude"]
+    }
+  },
+  "env": {
+    "pass": ["HOME", "PATH", "LANG", "LC_ALL", "LC_CTYPE"],
+    "set": {
+      "TMPDIR": "${tmp}",
+      "CLAUDE_CODE_TMPDIR": "${tmp}",
+      "CLAUDE_CONFIG_DIR": "${config}",
+      "ANTHROPIC_BASE_URL": "http://127.0.0.1:${brokerPort}",
+      "ANTHROPIC_API_KEY": "${taskToken}",
+      "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1",
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+      "DISABLE_AUTOUPDATER": "1",
+      "DISABLE_TELEMETRY": "1"
+    },
+    "unset": ["NO_PROXY", "no_proxy"]
+  },
+  "files": {}
+}

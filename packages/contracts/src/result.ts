@@ -18,9 +18,9 @@ export const ErrorCodeSchema = z.enum([
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
 export const EvidenceSchema = z.object({
-  source: z.string(),
-  ref: z.string(),
-  excerpt: z.string().optional(),
+  source: z.string().max(64),
+  ref: z.string().max(256),
+  excerpt: z.string().max(2000).optional(),
 });
 export type Evidence = z.infer<typeof EvidenceSchema>;
 
@@ -53,7 +53,7 @@ export function resultSchema<T extends z.ZodType>(data: T) {
     .object({
       status: ResultStatusSchema,
       data: data.nullable(),
-      evidence: z.array(EvidenceSchema),
+      evidence: z.array(EvidenceSchema).max(50),
       run_id: z.string().nullable(),
       cost: CostSchema,
       error: ErrorInfoSchema.optional(),

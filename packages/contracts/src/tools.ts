@@ -79,7 +79,7 @@ export type WorkerInput = z.infer<typeof WorkerInputSchema>;
 export const WorkerOutputSchema = z.object({
   status: ResultStatusSchema,
   data: z.unknown(),
-  evidence: z.array(EvidenceSchema),
+  evidence: z.array(EvidenceSchema).max(50),
   cost: CostSchema,
   error: z.object({ code: z.string(), message: z.string() }).optional(),
 });
