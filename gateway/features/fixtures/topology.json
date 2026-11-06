@@ -110,6 +110,49 @@
         "reads_domains": [],
         "calls_allowed": [],
         "timeout_ms": 2000
+      },
+      {
+        "name": "agent",
+        "version": "0.1.0",
+        "domain": "agent",
+        "owner": "platform",
+        "tools": [
+          {
+            "name": "summarise",
+            "description": "summary of the fixture, stable",
+            "input_schema": "./schemas/summarise.in.json",
+            "kind": "workflow",
+            "max_result_tokens": 100,
+            "validator": "schema"
+          },
+          {
+            "name": "recall",
+            "description": "recall of an agent of the fixture",
+            "input_schema": "./schemas/recall.in.json",
+            "kind": "agent",
+            "max_result_tokens": 100,
+            "validator": "schema"
+          },
+          {
+            "name": "draft",
+            "description": "draft of the fixture, of no contract",
+            "input_schema": "./schemas/draft.in.json",
+            "kind": "agent",
+            "max_result_tokens": 100,
+            "validator": "schema"
+          }
+        ],
+        "agent": {
+          "profile": "memory",
+          "model_min": "haiku",
+          "max_turns": 3,
+          "timeout_ms": 1500
+        },
+        "egress": "none",
+        "writes_tables": [],
+        "reads_domains": [],
+        "calls_allowed": ["judge"],
+        "timeout_ms": 3000
       }
     ]
   },
@@ -134,6 +177,10 @@
       "scout": {
         "command": "node",
         "args": ["modules/scout/dist/src/serve.js"]
+      },
+      "agent": {
+        "command": "node",
+        "args": ["modules/agent/dist/src/serve.js"]
       }
     }
   },
@@ -141,7 +188,7 @@
     "profiles": [
       {
         "name": "local",
-        "modules": ["memory-recall", "judge", "memory-write", "verify"],
+        "modules": ["memory-recall", "judge", "memory-write", "verify", "agent"],
         "model": "sonnet",
         "effort": "medium",
         "mode": "execute",

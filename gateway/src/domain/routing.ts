@@ -47,3 +47,34 @@ export interface TaskSandboxes {
 export interface Ids {
   next(kind: 'task' | 'token' | 'call'): string;
 }
+
+/** One run of the worker of an agent tool, for one call: launched once, never relaunched (§2, brick 1b.5). */
+export interface WorkerRun {
+  task: string;
+  /** The token of the task at the broker: the API key of its worker, never written to the audit. */
+  token: string;
+  module: string;
+  tool: string;
+  call: string;
+  timeoutMs: number;
+  signal: AbortSignal;
+}
+
+/**
+ * What the gateway serves on the streams of a worker (§2, Un seul transport): the input of its call, the relay of its
+ * calls to the modules of its calls_allowed, and its output, given once. Its identity is the call it serves.
+ */
+export interface WorkerChannel {
+  input(): Record<string, unknown>;
+  relay(address: string, args: Record<string, unknown>): Promise<ServiceResponse>;
+  /** Takes the output of the worker; its status once validated. */
+  complete(output: unknown): string;
+}
+
+/**
+ * Port: the workers of the agent tools, under srt, one sandbox per run, stopped with its task. Resolves once the worker
+ * ended; rejects with GatewayError SERVICE_UNAVAILABLE when it cannot start.
+ */
+export interface AgentWorkers {
+  run(run: WorkerRun, channel: WorkerChannel): Promise<void>;
+}

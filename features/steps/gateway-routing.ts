@@ -12,6 +12,7 @@ import type { TaskRouter } from '../../gateway/src/application/task-router.js';
 import type { ServiceResponse } from '../../gateway/src/domain/ports.js';
 import { InMemoryAuditLog } from '../../gateway/src/infrastructure/in-memory.js';
 import {
+  InMemoryAgentWorkers,
   InMemoryTaskSandboxes,
   InMemoryTaskTokens,
   ManualTime,
@@ -77,6 +78,7 @@ async function load(world: ArchitectWorld, change?: Parameters<typeof topologyFi
     clock: scene.time,
     scheduler: scene.time,
     ids: new SequentialIds(),
+    workers: new InMemoryAgentWorkers(),
   });
   world.cleanups.push(() => modules.close());
   Object.assign(scene, { router, host: modules });

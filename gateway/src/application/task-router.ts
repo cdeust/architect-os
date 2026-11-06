@@ -8,7 +8,9 @@ import {
 } from '@architect-os/contracts';
 import { GatewayError, type GatewayErrorCode } from '../domain/errors.js';
 import type { AuditLog, Clock, Scheduler, ServiceResponse } from '../domain/ports.js';
+import { WorkerSession } from './worker-session.js';
 import type {
+  AgentWorkers,
   DataClient,
   Ids,
   ModuleClient,
@@ -77,6 +79,7 @@ export class TaskRouter {
     private readonly clock: Clock,
     private readonly scheduler: Scheduler,
     private readonly ids: Ids,
+    private readonly workers: AgentWorkers,
   ) {
     this.addresses = new Map(
       topology.catalog.modules.flatMap((module) =>
@@ -128,7 +131,9 @@ export class TaskRouter {
         }
         task.calls += 1;
         const now = this.now();
-        const deadline = Math.min(origin.from?.deadline ?? task.deadline, now + module.timeout_ms);
+        // The shortest wins: the deadline of the parent, the timeout_ms of the module, and that of its agent (§2).
+        const timeout = Math.min(module.timeout_ms, module.agent?.timeout_ms ?? module.timeout_ms);
+        const deadline = Math.min(origin.from?.deadline ?? task.deadline, now + timeout);
         return this.dispatch(task, module, address, args, depth, deadline, now);
       },
     );
@@ -188,16 +193,22 @@ export class TaskRouter {
     this.scheduler.after(deadline - now, () => this.cancelCall(id, 'DEADLINE_EXCEEDED'));
     const tool = address.slice(module.domain.length + 1);
     const signal = call.abort.signal;
+    const timeoutMs = deadline - now;
     let answer: ServiceResponse;
+    let maxTurns = false;
     try {
-      answer = await this.modules.call({
-        module: module.name,
-        tool,
-        args,
-        call: id,
-        timeoutMs: deadline - now,
-        signal,
-      });
+      if (module.tools.find((candidate) => candidate.name === tool)!.kind === 'agent') {
+        const session = new WorkerSession(task.task, tool, args, module.agent!.max_turns, (to, relayed) =>
+          this.call({ call: id }, to, relayed),
+        );
+        await this.workers.run(
+          { task: task.task, token: task.token, module: module.name, tool, call: id, timeoutMs, signal },
+          session,
+        );
+        answer = respond(session.result());
+        maxTurns = session.maxTurnsReached;
+      } else
+        answer = await this.modules.call({ module: module.name, tool, args, call: id, timeoutMs, signal });
     } catch (error) {
       throw call.cancelled === undefined ? error : cancelled(id, call.cancelled);
     } finally {
@@ -205,6 +216,11 @@ export class TaskRouter {
     }
     // A module that answers once its call is cancelled is not routed: its caller has its refusal.
     if (call.cancelled !== undefined) throw cancelled(id, call.cancelled);
+    // max_turns is a bound of the task, the second rampart of an agent (§2, Bornes opérationnelles): it ends the task.
+    if (maxTurns) {
+      await this.end(task.task, 'error', 'gateway');
+      throw new GatewayError('MAX_TURNS_EXCEEDED', `${address} reached ${module.agent!.max_turns} turns`);
+    }
     return answer;
   }
 
@@ -298,3 +314,9 @@ export class TaskRouter {
 const unknownTask = (task: string) => new GatewayError('UNKNOWN_TASK', `no open task ${task}`);
 const cancelled = (id: string, code: GatewayErrorCode) => new GatewayError(code, `call ${id} cancelled`);
 const codeOf = (error: unknown): string => (error instanceof GatewayError ? error.code : 'INTERNAL');
+/** The Result of a worker as the gateway answers it: structured, and as text. */
+const respond = (result: object): ServiceResponse => ({
+  structured: result as Record<string, unknown>,
+  text: JSON.stringify(result),
+  isError: (result as { status: string }).status !== 'ok',
+});

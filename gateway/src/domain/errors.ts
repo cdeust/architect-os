@@ -11,7 +11,8 @@ export type GatewayErrorCode =
   | 'DEPTH_EXCEEDED'
   | 'DEADLINE_EXCEEDED'
   | 'MAX_CALLS_EXCEEDED'
-  | 'TASK_ENDED';
+  | 'TASK_ENDED'
+  | 'MAX_TURNS_EXCEEDED';
 
 export class GatewayError extends Error {
   constructor(

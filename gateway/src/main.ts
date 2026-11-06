@@ -84,6 +84,8 @@ export interface RoutingDependencies {
   clock: Clock;
   scheduler: import('./domain/ports.js').Scheduler;
   ids: import('./domain/routing.js').Ids;
+  /** The workers of the agent tools, one sandbox per run. */
+  workers: import('./domain/routing.js').AgentWorkers;
 }
 
 /**
@@ -109,6 +111,7 @@ export async function composeRouting(deps: RoutingDependencies) {
     deps.clock,
     deps.scheduler,
     deps.ids,
+    deps.workers,
   );
   return { router, modules };
 }

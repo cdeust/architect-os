@@ -1,6 +1,7 @@
 import type { DataOpName, TaskEnding, DataOpInput } from '@architect-os/contracts';
 import type { Clock, Scheduler, ServiceResponse, TaskGrant } from '../domain/ports.js';
 import type {
+  AgentWorkers,
   DataClient,
   Ids,
   ModuleCall,
@@ -8,6 +9,8 @@ import type {
   TaskRegistry,
   TaskSandboxes,
   TaskTokens,
+  WorkerChannel,
+  WorkerRun,
 } from '../domain/routing.js';
 
 const answer = (text: string): ServiceResponse => ({ structured: undefined, text, isError: false });
@@ -119,5 +122,24 @@ export class ManualTime implements Clock, Scheduler {
       due.work();
     }
     this.current = until;
+  }
+}
+
+/** What the worker of a scenario does with its run and its channel. */
+export type WorkerScript = (run: WorkerRun, channel: WorkerChannel) => Promise<void>;
+
+/** The workers of a scenario: each run and its input recorded; the worker follows its script, by default ends at once. */
+export class InMemoryAgentWorkers implements AgentWorkers {
+  readonly runs: WorkerRun[] = [];
+  readonly inputs: Record<string, unknown>[] = [];
+  script: WorkerScript = async () => {};
+  /** Why a worker cannot start, while it cannot. */
+  unavailable: Error | undefined;
+
+  async run(run: WorkerRun, channel: WorkerChannel): Promise<void> {
+    if (this.unavailable !== undefined) throw this.unavailable;
+    this.runs.push(run);
+    this.inputs.push(channel.input());
+    await this.script(run, channel);
   }
 }

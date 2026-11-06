@@ -5,9 +5,10 @@ import { TopologySchema } from '@architect-os/contracts';
 import { TaskRouter } from '../../src/application/task-router.js';
 import { GatewayError } from '../../src/domain/errors.js';
 import type { ServiceResponse } from '../../src/domain/ports.js';
-import type { ModuleCall } from '../../src/domain/routing.js';
+import type { ModuleCall, WorkerChannel, WorkerRun } from '../../src/domain/routing.js';
 import { InMemoryAuditLog } from '../../src/infrastructure/in-memory.js';
 import {
+  InMemoryAgentWorkers,
   InMemoryDataClient,
   InMemoryModules,
   InMemoryTaskRegistry,
@@ -32,6 +33,7 @@ interface Scene {
   registry: InMemoryTaskRegistry;
   tokens: InMemoryTaskTokens;
   sandboxes: InMemoryTaskSandboxes;
+  workers: InMemoryAgentWorkers;
   audit: InMemoryAuditLog;
   time: ManualTime;
   /** The call of the scenario, awaited or still in flight. */
@@ -62,6 +64,7 @@ Given('the gateway over the topology {word}', function (path: string) {
     registry: new InMemoryTaskRegistry(),
     tokens: new InMemoryTaskTokens(),
     sandboxes: new InMemoryTaskSandboxes(),
+    workers: new InMemoryAgentWorkers(),
     audit: new InMemoryAuditLog(),
   };
   const seen: Seen[] = [];
@@ -83,6 +86,7 @@ Given('the gateway over the topology {word}', function (path: string) {
     time,
     time,
     new SequentialIds(),
+    parts.workers,
   );
   this.state['routing'] = {
     ...parts,
@@ -390,4 +394,149 @@ Then('the registry holds the tasks {string}', function (tasks: string) {
     scene(this).registry.opened.map((open) => open.task),
     tasks.split(', '),
   );
+});
+
+// --- the worker of an agent tool (agent-tools.feature) ---
+
+const workers = (world: GatewayWorld) => scene(world).workers;
+
+/** What a call of the worker got: the text of its answer, or its refusal. */
+const relayed = (world: GatewayWorld): Attempt[] => {
+  const found = world.state['relayed'] as Attempt[] | undefined;
+  if (found !== undefined) return found;
+  return (world.state['relayed'] = []);
+};
+
+const giving = (output: string) => async (_run: WorkerRun, channel: WorkerChannel) => {
+  channel.complete(JSON.parse(output));
+};
+
+Given('the worker gives the output {string}', function (output: string) {
+  workers(this).script = giving(output);
+});
+
+Given('the worker gives the output {string} twice', function (output: string) {
+  const world = this;
+  workers(this).script = async (run, channel) => {
+    channel.complete(JSON.parse(output));
+    relayed(world).push(await attempt(async () => channel.complete(JSON.parse(output))));
+  };
+});
+
+Given(
+  'the worker calls {string} with {string}, then gives the output {string}',
+  function (address: string, args: string, output: string) {
+    const world = this;
+    workers(this).script = async (run, channel) => {
+      relayed(world).push(await attempt(() => channel.relay(address, JSON.parse(args))));
+      channel.complete(JSON.parse(output));
+    };
+  },
+);
+
+Given('the worker gives an output of {int} evidence', function (count: number) {
+  const evidence = Array.from({ length: count }, (_, at) => ({ source: 'memory', ref: `m${at}` }));
+  workers(this).script = giving(
+    JSON.stringify({
+      status: 'ok',
+      data: { summary: 's', memories: [] },
+      evidence,
+      cost: { input_tokens: 0, output_tokens: 0, usd: 0 },
+    }),
+  );
+});
+
+Given('the worker ends without its output', function () {
+  workers(this).script = async () => {};
+});
+
+Given('the worker waits until its run is cancelled', function () {
+  const world = this;
+  workers(this).script = (run) =>
+    new Promise<void>((done) => {
+      world.state['workerInFlight'] = true;
+      run.signal.addEventListener('abort', () => {
+        world.state['workerCancelled'] = true;
+        done();
+      });
+    });
+});
+
+Given('the worker cannot start', function () {
+  workers(this).unavailable = new GatewayError('SERVICE_UNAVAILABLE', 'the worker cannot start');
+});
+
+Then('the call answers the Result {string}', async function (result: string) {
+  const got = await outcome(this);
+  assert.ok(got !== undefined && !got.failed, `the call failed: ${String(got?.error)}`);
+  const response = got.value as ServiceResponse;
+  assert.deepEqual(JSON.parse(response.text), JSON.parse(result));
+  assert.deepEqual(response.structured, JSON.parse(result));
+  assert.equal(response.isError, false);
+});
+
+Then(
+  'the call answers a failed Result {string} saying {string}, for {string} at a cost of {}',
+  async function (code: string, message: string, task: string, cost: string) {
+    const got = await outcome(this);
+    assert.ok(got !== undefined && !got.failed, `the call failed: ${String(got?.error)}`);
+    const response = got.value as ServiceResponse;
+    const result = JSON.parse(response.text) as Record<string, any>;
+    assert.deepEqual(response.structured, result);
+    assert.equal(response.isError, true);
+    assert.equal(result['data'], null);
+    assert.deepEqual(result['evidence'], []);
+    assert.equal(result['run_id'], task);
+    assert.deepEqual(result['cost'], JSON.parse(cost));
+    assert.equal(result['error'].code, code);
+    assert.ok(String(result['error'].message).includes(message), result['error'].message);
+  },
+);
+
+Then('the call answers a Result {string} for {string}', async function (status: string, task: string) {
+  const got = await outcome(this);
+  assert.ok(got !== undefined && !got.failed, `the call failed: ${String(got?.error)}`);
+  const result = JSON.parse((got.value as ServiceResponse).text) as Record<string, unknown>;
+  assert.equal(result['status'], status);
+  assert.equal(result['run_id'], task);
+});
+
+Then('the worker ran once: {string}', function (expected: string) {
+  assert.deepEqual(
+    workers(this).runs.map(({ signal, ...run }) => run),
+    [JSON.parse(expected)],
+  );
+});
+
+Then('the worker was given {string}', function (input: string) {
+  assert.deepEqual(workers(this).inputs, [JSON.parse(input)]);
+});
+
+Then('the worker got {string}', function (text: string) {
+  const [got] = relayed(this);
+  assert.ok(got !== undefined && !got.failed, `the relay failed: ${String(got?.error)}`);
+  assert.equal((got.value as ServiceResponse).text, text);
+});
+
+Then('the worker got the refusal {string}', function (code: string) {
+  refusedWith(relayed(this)[0], code);
+});
+
+Then('the worker got the refusal {string} saying {string}', function (code: string, message: string) {
+  const [got] = relayed(this);
+  refusedWith(got, code);
+  assert.equal((got?.error as Error).message, message);
+});
+
+Then('the worker has its run in flight', function () {
+  assert.equal(this.state['workerInFlight'], true);
+  assert.equal(this.state['workerCancelled'], undefined);
+});
+
+Then('the worker saw its run cancelled', function () {
+  assert.equal(this.state['workerCancelled'], true);
+});
+
+Then('the worker never ran', function () {
+  assert.deepEqual(workers(this).runs, []);
 });
