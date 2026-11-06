@@ -71,7 +71,7 @@ Every descriptive file has a scenario that loads the committed file, checks it a
 - `@modelcontextprotocol/sdk` only in `presentation` and `infrastructure` of `gateway`, `services/*`, `modules/*` and `data`, and in their `features/` (step definitions).
 - `node:child_process` only in `packages/sandbox`, the `SandboxRunner` port through which every process is launched (component infrastructure may import it), with two named exceptions in `.dependency-cruiser.cjs`: `tools/test-gate/src/infrastructure/git.ts` (the one file through which the gate runs git) and `tools/test-gate/src/infrastructure/replay.ts` (the one through which it replays mutation verdicts). `@anthropic-ai/sandbox-runtime` only in `packages/sandbox`, no exception.
 - No import cycles.
-- The gateway and the proxy contain no business logic: the gateway runs no agent and touches no data.
+- The gateway and the proxy contain no business logic: the gateway runs no agent, and reaches data only through its typed operations: to write the registry (tasks, usage) and to forward the data operations of a module, refused outside its `writes_tables` (docs/design/platform-v3-srt.md, §2).
 
 ## Adding a brick
 

@@ -932,3 +932,77 @@ Rapports appariés par tâche, moyenne et intervalle à 95 % par bootstrap sur l
   - Limite connue : une écriture cachée dans une fonction SQL échappe à la lecture des tables. Les droits de base par module de la brique 4 la ferment.
   - Dépendances : `@modelcontextprotocol/sdk` 1.32.2 ajouté à `data`, même version épinglée que la gateway et le broker ; lockfile à jour.
 - Opérationnel : aucun secret lu ni écrit ; IRB sans objet, aucune donnée humaine (des comptes de tokens).
+
+## 28. Brique 1b.4 : topologie validée, identifiants d'appel, bornes de task, modules lancés et relancés, 6 novembre 2026
+
+**Fait.**
+- Contrats (`packages/contracts/src/modules.ts`, `ids.ts`, `data-ops.ts`) :
+  - manifeste de module, catalogue écrit par `manifest-registry`, serveurs de `topology/modules.mcp.json` (stdio seul, `type: http` refusé) et profils clients, validés ensemble par `TopologySchema` ; une topologie qui enfreint une règle est refusée entière ;
+  - règles : un tool `agent` n'est jamais stable et exige le bloc `agent`, pas d'appel de soi, pas de cycle de `calls_allowed`, pas de module appelé qui n'existe pas, une table a un seul écrivain, une adresse `domaine.tool` est unique, chaque module a son serveur et chaque serveur son module, un profil ne voit que des modules du catalogue ;
+  - registre des tasks : `tasks.open`, `tasks.end` et `tasks.get`, avec la fin parmi terminée, délai, nombre d'appels, annulée, erreur.
+- `data` : migration `0005_tasks.sql`, où une task se termine une fois et n'est jamais supprimée (déclencheurs, 55000), plus les trois opérations, sur les deux stores.
+- Fichiers décrits : `topology/modules.mcp.json` (vide jusqu'au premier module, brique 1b.5) et `topology/clients.json` (le profil du propriétaire).
+- Gateway, domaine et application (`gateway/src/domain/routing.ts`, `gateway/src/application/task-router.ts`) :
+  - `TaskRouter` ouvre une task sous un profil : registre, jeton au broker, échéance ;
+  - chaque appel de module reçoit un identifiant d'appel neuf, relié à sa task, son module, sa profondeur et son échéance, et invalide à son retour ;
+  - un module rappelle avec cet identifiant, vers un module de son `calls_allowed` ou vers une opération de `data` dont les tables sont dans son `writes_tables` ;
+  - refus nommés : `UNAUTHORIZED`, `UNKNOWN_TASK`, `UNKNOWN_TOOL`, `FORBIDDEN_CALL`, `FORBIDDEN_WRITE`, `DEPTH_EXCEEDED`, `DEADLINE_EXCEEDED`, `MAX_CALLS_EXCEEDED`, `TASK_ENDED`, `UNKNOWN_PROFILE` ; chaque appel et chaque refus est journalisé avec son code ;
+  - fin de task, par le délai, par le nombre d'appels, par le client ou par l'annulation du propriétaire : appels en vol annulés et identifiants invalidés, jeton retiré, sandboxes de la task arrêtées, fin écrite au registre, task oubliée.
+- Gateway, infrastructure :
+  - `ModuleHost` lance chaque module par le `SandboxRunner` à son premier appel, et parle MCP sur son stdio (`StreamClientTransport`), l'identifiant d'appel dans `_meta`, l'échéance en `signal` et en `timeout` de la requête ;
+  - un module dont la sandbox a fini est relancé à son appel suivant ; après 3 lancements de suite sans réponse, il est `SERVICE_UNAVAILABLE` pour la vie de la gateway ;
+  - un module qui écrit autre chose que du MCP est arrêté et compte comme un lancement raté ;
+  - `McpTaskRegistry` et `McpDataClient` sur le serveur MCP de `data`, `RandomIds`, `TaskSandboxGroups`, et `loadTopology` qui lit les trois fichiers et les valide ensemble ;
+  - `composeRouting` (`gateway/src/main.ts`) compose le tout.
+
+**Décisions.**
+- « Sandbox jamais relancée » vise la sandbox d'une task, son worker : une task finie ne repart pas. Un module, partagé entre tasks, est relancé à son appel suivant, dans la limite de 3 lancements de suite sans réponse.
+- Le compteur de lancements repart de zéro à chaque réponse ; un module épuisé reste indisponible jusqu'au redémarrage de la gateway, ce qui coupe une boucle de plantages.
+- L'appel au-delà du nombre maximal d'appels du profil termine la task (`max_calls`) et est refusé.
+- La fin d'une task exécute ses trois effets (jeton, sandboxes, registre) quoi qu'il arrive à l'un d'eux. Si `data` est indisponible, la task reste finie pour la gateway, et l'échec est journalisé avec son code. Rattraper une task restée ouverte au registre est prévu à la brique 3, avec l'executor.
+- Un module qui répond après l'annulation de son appel n'est pas routé ; son appelant reçoit le refus.
+- Le client nomme sa task ; la présentation la tirera de ce que le client présente, son jeton (brique 3). Un module ne nomme jamais sa task : elle vient de son identifiant d'appel.
+
+**Prouvé.**
+- Scénarios :
+  - `features/descriptive/manifest.feature` : la topologie de fixture et les fichiers commités tiennent ; chaque règle a sa copie cassée refusée, avec son message ; chaque format et chaque énumération a sa ligne acceptée et sa ligne refusée ;
+  - `data/features` : tasks sur les deux stores, Postgres compris ; une task ne se termine qu'une fois, ne change plus ensuite et n'est jamais supprimée (55000) ; sorties conformes au schéma ; les cinq fins, et les entrées hors schéma refusées, sur le serveur MCP ;
+  - `gateway/features/gateway.feature` (29 scénarios) :
+    - identifiant neuf, invalide au retour ; profondeur ; échéance du parent ;
+    - refus nommés et journalisés : module hors profil ou hors `calls_allowed`, table hors `writes_tables`, opération inconnue, au-delà de la profondeur, après l'échéance, identifiant inconnu, rendu ou qui n'en est pas un (jeton, nom de task) ;
+    - fin par le délai, par le nombre d'appels, par le client ou par le propriétaire : appels en vol annulés, jeton retiré, sandboxes arrêtées, fin écrite une fois. Aucun module n'est atteint ensuite, celui nommé `verify` compris, et la fin n'est jamais `completed` ; le vrai validateur `verify` n'existe pas encore (brique 3) ;
+    - la fin d'une task laisse les appels d'une autre task en vol ; un module qui répond après son annulation n'est pas routé ; avec `data` indisponible à la fin, jeton et sandboxes finissent quand même et l'échec est journalisé ;
+  - `gateway/features/adapters.feature` : contrat de chaque nouveau port sur chacun de ses adaptateurs (en mémoire, MCP, `UsageForwarder`, `RandomIds`, `TaskSandboxGroups`), avec `data` absent ou sans store ;
+  - `features/integration/gateway.feature` : des modules qui sont de vrais serveurs MCP du SDK, dans de fausses sandboxes ; `data` réel sur son store en mémoire :
+    - identifiant dans `_meta` ; annulation reçue par le module à l'échéance ; réponses transmises telles quelles (erreur, contenu structuré, sans contenu, sans texte) ;
+    - un lancement pour deux appels simultanés ; relance après une mort ; `SERVICE_UNAVAILABLE` après 3 lancements ratés, sans quatrième ; compteur remis à zéro par une réponse ; module qui écrit autre chose que du MCP arrêté ; arrêt de tous les modules ;
+    - fin écrite au registre de `data` ; topologie invalide refusée sans aucun lancement.
+- Gate, commit par commit, chacun amendé localement avant d'être poussé :
+  - contrats : rouge (72 survivants), puis vert (270 mutants, 0 survivant) ;
+  - gateway, domaine et application : rouge (37 survivants, 1 non couvert), rouge (1), puis vert (273 mutants, 0 survivant) ;
+  - infrastructure : rouge (31 survivants, 10 non couverts), rouge (1), puis vert (136 mutants, 0 survivant).
+- Gate de la brique entière, dans un worktree jetable, avec un commit écrasé `a197c79..0cefecc` : vert ; 901 scénarios exécutés, soit 767 de base et 134 ajoutés ; 17 fichiers, 679 mutants, aucun survivant ; règles 1 à 7 sans violation.
+- Témoins négatifs à la main, en plus du gate : 8 mutants du routeur et 7 de l'hôte des modules, tous tués. Le retrait de la fermeture sur un flux non MCP bloque la suite de tests ; Stryker le compte comme un délai dépassé.
+- Rouges rencontrés en route, corrigés à la cause :
+  - messages et listes non vérifiés ;
+  - mutants équivalents retirés par simplification : détection de cycle réécrite, refus de zod en forme chaîne, garde et écoute en double du transport ;
+  - annulation rendue déterministe (`Call.cancelled`) au lieu d'une course entre deux rejets ;
+  - dette de `gateway/src/domain/errors.ts` payée : le nom `GatewayError` est vérifié à chaque refus. Le registre passe de 598 à 597 entrées.
+
+**Pas fait dans cette brique, avec son étape.**
+- Le canal de rappel des modules, MCP sur HTTP en `127.0.0.1:8080`, avec l'identifiant d'appel comme jeton, et le profil srt `module` : brique 1b.5, avec le premier module réel (`manifest-registry`). Le routage qu'il appellera, `TaskRouter.call` et `TaskRouter.operate` avec un identifiant d'appel, est prouvé ici.
+- Le serveur MCP de la gateway sur les flux de chaque sandbox de task, pour l'executor et le worker : briques 1b.5 (worker) et 3 (executor).
+- `maxTurns` : brique 1b.5, avec le worker agent.
+- Le câblage de `composeRouting` dans le processus de la gateway : brique 1b.5, quand le catalogue cesse d'être vide.
+
+**Trois piliers.**
+- Recherche : chaque case de la sortie de la ligne 1b.4 a son scénario, sauf `maxTurns`, prévu à la brique 1b.5 avec le worker. Chaque barrière a son témoin négatif : copie cassée refusée, mutant tué, panne injectée.
+- SSDLC (STRIDE de la brique) :
+  - usurpation : la task et l'appelant viennent de l'identifiant d'appel, jamais d'un argument. Un identifiant inconnu, rendu ou qui n'en est pas un (jeton, nom de task) est refusé (`UNAUTHORIZED`). Les identifiants sont des UUID aléatoires, sans valeur hors de leur appel (R-10 inchangé) ;
+  - falsification : écriture hors `writes_tables` refusée à l'opération (`FORBIDDEN_WRITE`) ; topologie validée entière (un écrivain par table, pas de cycle, pas d'appel de soi), invalide = rien n'est lancé ;
+  - répudiation : chaque appel, chaque refus et chaque fin de task est au journal avec son code ; la fin est au registre, une seule fois, jamais supprimée (déclencheurs) ;
+  - fuite : un module qui échoue rend `INTERNAL` au journal ; une réponse après annulation n'est pas routée. Le rappel, et la question de ce qu'il expose, est prévu à 1b.5 ;
+  - déni de service : délai, nombre d'appels et profondeur par task, échéance par appel ; une boucle de plantages est coupée après 3 lancements ; un module hors protocole est arrêté ; deux appels simultanés ne lancent qu'une sandbox ;
+  - élévation : un profil ne voit que ses modules, un module que son `calls_allowed` ; l'annulation est réservée au profil propriétaire ;
+  - dépendances : la gateway dépend désormais de `@architect-os/sandbox` (paquet du dépôt, déjà dans l'image) ; aucune dépendance externe ajoutée ; lockfile à jour.
+- Opérationnel : aucun secret lu ni écrit ; les sandboxes des tests sont des fausses en mémoire, sans réseau ; IRB sans objet, aucune donnée humaine.

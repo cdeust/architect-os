@@ -10,7 +10,7 @@ Short ADRs. Format: context, decision, alternative rejected and why. Status of a
 
 ## 2. Gateway without business logic
 
-- Decision: the gateway does auth, catalogue, routing per tool, quota, audit. It runs no agent and touches no data.
+- Decision: the gateway does auth, catalogue, routing per tool, quota, audit. It runs no agent; it reaches data only through its typed operations, to write the registry (tasks, usage) and to forward the data operations of a module within its `writes_tables` (docs/design/platform-v3-srt.md, §2).
 - Rejected: put orchestration in the gateway. It would become the monolith again and could not be reasoned about as a pure router.
 
 ## 3. Intent tools backed by an agent worker
