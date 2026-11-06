@@ -19,6 +19,7 @@ import type { Sandbox, SandboxExit, SandboxRunner } from '../../src/port.js';
 import {
   SrtSandboxRunner,
   standardStreamsAreTerminals,
+  type ProcessRunnerOptions,
   type SrtRunnerOptions,
 } from '../../src/srt-runner.js';
 import { Given, PKG, Then, When, messageMatches, stored, type SandboxWorld } from './helpers.js';
@@ -407,4 +408,57 @@ When('I write two megabytes on its stdin and wait for it to end', async function
   s.stderr.resume();
   s.stdin.end('y'.repeat(2 * 1024 * 1024));
   await s.exited;
+});
+
+Given('an srt runner for the processes of the platform over a throwaway platform root', function () {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'aos-platform-')));
+  this.cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, 'marker'), 'platform');
+  const options: ProcessRunnerOptions = {
+    ...srtOptions({ variables: { callbackPort: '9' } }),
+    workspace: 'disposable',
+  };
+  const runner = new SrtSandboxRunner(options);
+  this.state['runner'] = runner;
+  this.state['srt'] = runner;
+  this.state['cwd'] = root;
+});
+
+When(
+  'I start profile {string} with command {string} and read its output to its end',
+  async function (profile: string, command: string) {
+    const started = await runner(this).start({
+      profile,
+      cwd: stored<string>(this, 'cwd'),
+      command: command.split(' '),
+    });
+    this.state['sandbox'] = started;
+    started.stdin.end();
+    started.stderr.resume();
+    this.state['read'] = await readAll(started);
+    await started.exited;
+  },
+);
+
+Then(
+  'its output is a folder named {string} inside a per-sandbox folder, of mode {string}',
+  function (name: string, mode: string) {
+    const [folder, got] = stored<string>(this, 'read').trim().split(':');
+    const parts = (folder ?? '').split('/');
+    assert.equal(parts.at(-1), name);
+    assert.match(parts.at(-2) ?? '', /^aos-sandbox-/);
+    assert.equal(got, mode);
+  },
+);
+
+Then('its output is {string}', function (text: string) {
+  assert.equal(stored<string>(this, 'read').trim(), text);
+});
+
+Then('it does not exit with code 0', async function () {
+  assert.notEqual((await sandbox(this).exited).code, 0);
+});
+
+Then('the platform root holds no file {string}', function (name: string) {
+  assert.equal(existsSync(join(stored<string>(this, 'cwd'), name)), false);
 });

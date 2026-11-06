@@ -29,7 +29,7 @@ import {
   type SrtSettings,
 } from './profile.js';
 import { killGroup } from './process-group.js';
-import { resolveWorktree } from './worktree.js';
+import { resolveWorktree, type Worktree } from './worktree.js';
 
 /**
  * Adaptateur srt du port SandboxRunner (platform-v3-srt.md, §6). Règles tenues ici :
@@ -189,9 +189,9 @@ export class SrtSandboxRunner implements SandboxRunner {
     const [name, ...args] = request.command;
     if (name === undefined) throw new SandboxError('COMMAND_NOT_FOUND', 'argv vide');
     const template = loadTemplate(o.profilesDir, request.profile);
-    const wt = resolveWorktree(request.cwd);
     const dir = realpathSync(mkdtempSync(join(o.tmpRoot, 'aos-sandbox-')));
     try {
+      const wt = workspaceOf(o, request.cwd, dir);
       const tmp = join(dir, 'tmp');
       const config = join(dir, 'config');
       mkdirSync(tmp, { mode: 0o700 });
@@ -228,7 +228,7 @@ export class SrtSandboxRunner implements SandboxRunner {
       ]);
       const srtCli = realpathSync(o.srtCli);
       assertTrusted(profile.settings, [nodeModulesOf(srtCli)]);
-      const cwd = realpathSync(resolve(request.cwd));
+      const cwd = realpathSync(resolve(wt.cwd ?? request.cwd));
       await this.canary(profile.settings, srtCli, dir, cwd, env);
       return {
         // Les arguments portent les variables du profil : `--settings ${config}/settings.json` pour Claude Code.
@@ -352,4 +352,25 @@ function runBounded(
     child.once('error', finish);
     child.once('close', finish);
   });
+}
+
+/**
+ * The runner of a platform process, module or worker (platform-v3-srt.md, §5, Un gabarit) : its cwd is not a worktree but
+ * a disposable folder, `${worktree}`, made in the folder of its sandbox and removed with it; `${repo}` is the root of the
+ * platform, `request.cwd`, which the sandbox reads and never writes.
+ */
+export interface ProcessRunnerOptions extends SrtRunnerOptions {
+  readonly workspace: 'disposable';
+}
+
+/** The worktree that holds `cwd`; for a platform process, its disposable cwd under `dir` and the root it reads. */
+function workspaceOf(
+  options: SrtRunnerOptions,
+  cwd: string,
+  dir: string,
+): Worktree & { readonly cwd?: string } {
+  if ((options as Partial<ProcessRunnerOptions>).workspace !== 'disposable') return resolveWorktree(cwd);
+  const work = join(dir, 'work');
+  mkdirSync(work, { mode: 0o700 });
+  return { repo: realpathSync(cwd), worktree: work, worktreeName: basename(work), cwd: work };
 }

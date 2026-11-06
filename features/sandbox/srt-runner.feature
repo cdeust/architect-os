@@ -53,3 +53,18 @@ Feature: SandboxRunner contract on the real srt adapter
     Given an srt runner over a throwaway git repository
     When I try to start profile "builder" with command "echo ${nope}"
     Then it is refused with "PROFILE_INVALID: variable inconnue"
+
+  Scenario: srt adapter runs a platform process in a disposable cwd, made in the folder of its sandbox, 0700, and removed with it
+    Given an srt runner for the processes of the platform over a throwaway platform root
+    And I note the entries of the temporary directory
+    When I start profile "module" with command "node -p process.cwd()+':'+(require('fs').statSync('.').mode&511).toString(8)" and read its output to its end
+    Then its output is a folder named "work" inside a per-sandbox folder, of mode "700"
+    And no per-sandbox folder is left in the temporary directory
+
+  Scenario: srt adapter lets a platform process read the platform root, never write it
+    Given an srt runner for the processes of the platform over a throwaway platform root
+    When I start profile "module" with command "node -p require('fs').readFileSync(process.argv[1]+'/marker','utf8') ${repo}" and read its output to its end
+    Then its output is "platform"
+    When I start profile "module" with command "touch ${repo}/written", close its input, drain its output and wait for it to end
+    Then it does not exit with code 0
+    And the platform root holds no file "written"
