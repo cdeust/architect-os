@@ -1006,3 +1006,85 @@ Rapports appariés par tâche, moyenne et intervalle à 95 % par bootstrap sur l
   - élévation : un profil ne voit que ses modules, un module que son `calls_allowed` ; l'annulation est réservée au profil propriétaire ;
   - dépendances : la gateway dépend désormais de `@architect-os/sandbox` (paquet du dépôt, déjà dans l'image) ; aucune dépendance externe ajoutée ; lockfile à jour.
 - Opérationnel : aucun secret lu ni écrit ; les sandboxes des tests sont des fausses en mémoire, sans réseau ; IRB sans objet, aucune donnée humaine.
+
+## 29. Brique 1b.5 : module `memory` et worker sous srt, `agents/memory.md`, rappel en `127.0.0.1`, `recall` de bout en bout, 7 novembre 2026
+
+**Fait.**
+- Contrats (`packages/contracts`) :
+  - `evidence` bornée (décision 3) dans `WorkerOutputSchema` et dans un `Result` : 50 preuves au plus, `source` 64, `ref` 256, `excerpt` 2000 caractères ;
+  - `TaskInputSchema`, ce que `task_input` rend au worker : le tool, son entrée et `max_turns`, sans budget en dollars (décision 11) ;
+  - `AgentFileSchema`, le frontmatter d'un profil de task `agents/<nom>.md`.
+- Fichiers décrits :
+  - `topology/catalog.json` : module `memory` (tools `search` et `insert`, sorte data, écrivain de `memory.memories`) et module `memory-agent` (tools `recall` et `remember`, sorte agent, profil `memory`, haiku au moins, 8 tours, `calls_allowed: [memory]`) ;
+  - leurs schémas sous `modules/<module>/schemas/`, leurs serveurs dans `topology/modules.mcp.json`, le profil propriétaire qui voit `memory-agent` ;
+  - `agents/memory.md`, le profil de task du worker ;
+  - les profils srt `module` (réseau : le rappel de la gateway seul ; `GATEWAY_CALLBACK_URL` ; `NODE_USE_ENV_PROXY=1`) et `worker` (réseau : le broker seul ; le jeton de la task comme clé).
+- Sandbox : un processus de la plateforme tourne dans un cwd jetable 0700, dans le dossier de sa sandbox, retiré avec elle ; il lit la racine de la plateforme et n'y écrit jamais.
+- Gateway :
+  - un tool de sorte agent lance son worker une fois pour son appel (`WorkerSession`, `WorkerHost`) : sandbox `worker` par exécution, jeton de la task en variable du profil, gardée avec la task ;
+  - sur les flux du worker, la gateway sert `task_input`, `call` (relais sous l'identifiant de l'appel servi) et `task_complete` (sortie prise une fois, validée par le contrat du worker et celui du tool) ;
+  - `max_turns` atteint termine la task (fin `error`, refus `MAX_TURNS_EXCEEDED`) ; l'échéance est la plus courte du parent, du module et de l'agent ;
+  - l'hôte de rappel des modules : MCP sur HTTP, `POST /mcp` en `127.0.0.1`, l'identifiant d'appel en jeton porteur, `401` sinon ; une opération de `data` va à `operate`, une adresse de module à `call` ;
+  - `BrokerTaskTokens` : le jeton d'une task accordé au broker à l'ouverture, révoqué à la fin.
+- Module `memory` (`modules/memory`) : serveur MCP sur son stdio ; chaque tool rappelle son opération de `data` avec l'identifiant reçu dans `_meta.call` ; sans identifiant, rien n'est rappelé.
+- Worker v3 (`services/memory/worker/task-*.ts`, `infrastructure/`) : client MCP sur son propre stdio, profil de task comme fil principal du SDK (`agent`, `agents`), `maxTurns`, sortie structurée, preuves coupées à leurs bornes.
+- Le gate et `npm test` construisent d'abord (`tsc -b`) : la plateforme lance ses modules et ses workers depuis leurs points d'entrée construits.
+
+**Décisions.**
+- Topologie à deux modules, choix du propriétaire : `memory` (données) et `memory-agent` (agent, qui appelle `memory`).
+- **Mode additif, décision du propriétaire** : rien n'est retiré tant que les trois environnements hôtes (macOS, Linux, Windows) ne sont pas viables. Le retrait de `internal-http.ts`, prévu à la ligne 1b.5 du plan, est donc reporté ; le service memory v2, le worker Docker et `compose.yaml` restent en état de marche. La gateway reste un processus séparé (§9.1 A) ; seul son câblage v2 partira.
+- `max_turns` atteint termine la task en `error` ; le `Result` de l'appel garde `WORKER_FAILED`, `MAX_TURNS_EXCEEDED` n'étant pas un code de `Result` ; le refus `MAX_TURNS_EXCEEDED` et la fin sont du routeur.
+- Le jeton de la task arrive au worker par une variable de son profil, jamais dans un message MCP ni au journal.
+- Variables de profil : `${worktree}` est le cwd jetable, `${repo}` la racine de la plateforme.
+- Le dossier de la clé du broker, `${home}/.config/architect-os`, est en `denyRead` dans tous les profils, `builder` compris (correction).
+- Trois faits sondés contre un faux modèle local, chacun corrigé à sa cause :
+  - les tools d'un agent en fil principal retirent `StructuredOutput` : l'adaptateur le lui donne avec ses tools ;
+  - Claude Code refuse le `$schema` du draft 2020-12, défaut de zod : le schéma de sortie vise draft-07. L'ancien `sdk-agent.ts` porte le même défaut, latent, puisqu'il n'a jamais tourné contre le vrai CLI ;
+  - avec les tools de l'agent et `settingSources: []`, ni `strictMcpConfig`, ni `tools: []`, ni `permissionMode` ne changent ce qui est offert au modèle. Un `.mcp.json` intrus n'est pas chargé, et un appel `Bash` jamais offert est refusé. Ces trois options ne sont plus posées ; le plancher est la liste des tools de l'agent, et la frontière la sandbox `worker`.
+- Un CLI qui sort sans message `result` termine le flux sans erreur (sondé) : l'adaptateur le refuse (`WORKER_FAILED`) ; son exécutable est une option de configuration (`pathToClaudeCodeExecutable`).
+
+**Prouvé.**
+- Scénarios :
+  - `packages/contracts/features/tools.feature` : 50, 64, 256 et 2000 acceptés, 51, 65, 257 et 2001 refusés, dans une sortie de worker et dans un `Result` ;
+  - `features/descriptive/manifest.feature` : catalogue, schémas (chacun égal au schéma JSON de son contrat), et chaque module agent dont le serveur nomme `agents/<profil>.md`, un profil de ce nom ;
+  - `packages/sandbox/features/platform-profiles.feature` : profils `module` et `worker`, valeurs exactes, copies cassées refusées ;
+  - `features/sandbox/srt-runner.feature`, sous vrai srt : cwd jetable 0700, retiré ; la racine se lit et ne s'écrit pas ;
+  - `gateway/features/agent-tools.feature` : exécution unique, relais à profondeur 2, refus hors `calls_allowed`, sorties hors contrat, 50 contre 51 preuves, sortie absente ou donnée deux fois, `max_turns`, échéance 1499 contre 1500 ms, worker qui ne démarre pas ;
+  - `gateway/features/worker-host.feature` : lancement unique avec le jeton, liste exacte des tools, relais et refus, annulation, sortie du worker ;
+  - `gateway/features/callback-host.feature` : `401` sans jeton, avec un jeton inconnu ou sous un autre schéma ; réponses en JSON ; `operate` et `call` sous l'identifiant ; refus et erreurs transmis ;
+  - `modules/memory/features/memory-module.feature` et `services/memory/features/task-worker.feature` : rappel sous l'identifiant, rien sans lui ; profil de task et ses copies cassées ; preuves coupées à leurs bornes ; canal MCP du worker ;
+  - `features/integration/agent-worker.feature` : vrai SDK, vrai CLI, faux modèle en boucle locale. Prompt du profil, haiku, outils offerts, résultat d'outil renvoyé au modèle, `max_turns` réel, sortie jamais structurée, API en 400, sortie qui casse son schéma, CLI muet, aucune transcription de session ;
+  - **sortie attendue de la ligne 1b.5**, `features/sandbox/recall.feature`, sous vrai srt : `recall` de bout en bout, le module `memory` et le worker de `memory-agent` dans leurs profils, depuis la topologie commitée. Le faux modèle ne reçoit que la clé du broker, jamais le jeton de la task ; la preuve est la mémoire insérée ; à la fin de la task, la sandbox du worker est arrêtée et le broker refuse le jeton.
+- Gate, commit par commit, chacun amendé localement :
+  - contrats et fichiers décrits : vert ;
+  - sandbox : rouge (littéral `'work'`), puis vert ;
+  - outils agent de la gateway : rouge, puis vert (101 mutants, 0 survivant) ;
+  - infrastructure : rouge (66 survivants, 9 non couverts), rouge (3), puis vert (401 mutants, 0 survivant) ;
+  - `recall` de bout en bout : vert.
+- Gate de la brique entière, dans un worktree jetable, avec un commit écrasé `1e3b0d5..ae5e1dc` : vert ; 1020 scénarios exécutés, soit 901 de base, 120 ajoutés et 1 retiré ; 25 fichiers, 518 mutants, aucun survivant ; règles 1 à 7 sans violation.
+- Rouges corrigés à la cause : littéraux non vérifiés (identités MCP, descriptions, schémas des tools), branches non couvertes, et code sans effet retiré après sondage ou lecture de la source :
+  - `catch` et fermeture de l'hôte de rappel : Hono répond lui-même 500, et le transport en JSON ne garde aucun flux ;
+  - `once` d'un `AbortSignal` ;
+  - filtre des tools, déjà fait par l'agent ;
+  - les trois options du SDK sans effet.
+- Processus de test périmés trouvés et arrêtés : quatre sandboxes srt du 4 novembre, issues de runs de mutation antérieurs (un mutant de l'arrêt laisse un enfant qui ignore SIGTERM). Aucune ne venait de 1b.5.
+
+**Pas fait dans cette brique, avec son étape.**
+- **Preuve Windows** (WSL2 avec srt, ou Docker natif), avant tout retrait : étape « Hôtes », brief remis au propriétaire le 6 novembre, à exécuter sur son poste Windows ; sa place au plan, avant 1b.6, est à décider par le propriétaire avec son résultat.
+- Retrait de `internal-http.ts`, du service memory v2 et du worker Docker : après la preuve des trois hôtes, avec 1b.6 (`compose.yaml`).
+- Le câblage de `composeRouting`, de `WorkerHost`, de l'hôte de rappel et de `BrokerTaskTokens` dans le processus natif de la gateway : avec le choix de l'hôte, même étape. Le scénario `recall.feature` compose déjà exactement ces pièces.
+- `manifest-registry`, qui écrirait le catalogue : aucune brique ne le porte ; le catalogue est écrit à la main dans son format, et `manifest.feature` le valide.
+- Le gabarit de base `denyRead: ["~"]` est remplacé par la liste du profil `builder` ; le test d'évasion appartient à `escape.feature`, à la sortie de 1b.
+- `remember` de bout en bout sous srt : son chemin est le même que `recall` (même worker, `memory.insert`) et est prouvé en processus ; un scénario srt lui sera ajouté avec 1b.6.
+
+**Trois piliers.**
+- Recherche : chaque case de la sortie de la ligne 1b.5 a son scénario, `recall` sous vrai srt compris ; chaque barrière a son témoin négatif (copie cassée refusée, mutant tué, panne injectée). Les faits du SDK sont établis par sondage reproductible contre un faux modèle, `features/support/fake-model.ts`, et chacun est fixé par un scénario.
+- SSDLC (STRIDE de la brique) :
+  - usurpation : le module présente l'identifiant de l'appel qu'il sert, sinon `401` avant tout MCP ; le worker ne nomme rien, son identité est son flux ;
+  - falsification : sortie du worker validée deux fois (worker, tool), prise une fois ; écriture hors `writes_tables` refusée ;
+  - répudiation : chaque appel, refus et fin de task au journal et au registre ;
+  - fuite : le jeton de la task ne quitte pas le worker vers le modèle (prouvé : seul le broker parle à l'amont, avec sa clé) ; aucun secret dans les profils, les tests ni le dépôt ; la clé du broker du test est factice, dans un fichier jetable ;
+  - déni de service : `max_turns`, échéance, nombre d'appels ; un worker annulé est arrêté, sa sandbox finie avec sa task ;
+  - élévation : réseau du module limité au rappel, du worker au broker ; la racine de la plateforme se lit sans s'écrire ; les tools offerts au modèle sont ceux du profil de task seuls ;
+  - dépendances : `yaml` 2.9.1 épinglé pour le worker, déjà dans le lockfile ; nouveau paquet du dépôt `@architect-os/module-memory` ; aucune dépendance externe nouvelle.
+- Opérationnel : aucun secret lu ni écrit, aucune clé réelle ; le faux modèle et le broker écoutent en boucle locale ; IRB sans objet, aucune donnée humaine.

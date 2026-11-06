@@ -4,7 +4,7 @@
 
 ```bash
 npm ci                 # Install (Node 26 LTS, see .nvmrc; exact versions, lockfile committed)
-npm test               # cucumber-js: every scenario (unit, port contracts, end to end, typecheck, format, architecture guard)
+npm test               # tsc -b, then cucumber-js: every scenario (unit, port contracts, end to end, typecheck, format, architecture guard)
 npm run gate           # the CI gate (docs/design/platform-v3-srt.md §7): plan, cucumber, Stryker on the perimeter, verdict
 npm run gate -- --job macos   # features/sandbox only
 npm run check          # = npm test. Must be green before every PR.

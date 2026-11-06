@@ -1,6 +1,6 @@
 # Testing
 
-Every test is a Gherkin scenario run by `@cucumber/cucumber` (`npm test` is `cucumber-js`). Typecheck, format and the architecture guard are scenarios too, so `npm run check` is `npm test`. No test calls the network or Anthropic. The CI gate (`npm run gate`, `docs/design/platform-v3-srt.md` §7) adds the pickle count and mutation testing on top.
+Every test is a Gherkin scenario run by `@cucumber/cucumber` (`npm test` is `cucumber-js`, after `tsc -b`: the platform launches its modules and workers from their built entry points). Typecheck, format and the architecture guard are scenarios too, so `npm run check` is `npm test`. No test calls the network or Anthropic. The CI gate (`npm run gate`, `docs/design/platform-v3-srt.md` §7) adds the pickle count and mutation testing on top.
 
 ## Three families
 
