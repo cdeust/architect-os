@@ -7,6 +7,7 @@
     { "path": "../data" },
     { "path": "../gateway" },
     { "path": "../services/memory" },
-    { "path": "../modules/broker" }
+    { "path": "../modules/broker" },
+    { "path": "../modules/memory" }
   ]
 }

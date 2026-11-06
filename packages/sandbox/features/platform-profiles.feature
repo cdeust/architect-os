@@ -44,7 +44,9 @@ Feature: module and worker profiles of the platform (docs/design/platform-v3-srt
       | LC_ALL   |
       | LC_CTYPE |
     And the profile sets exactly the variables:
-      | TMPDIR | ${tmp} |
+      | TMPDIR               | ${tmp}                               |
+      | GATEWAY_CALLBACK_URL | http://127.0.0.1:${callbackPort}/mcp |
+      | NODE_USE_ENV_PROXY   | 1                                    |
     When I resolve the profile with the variables of a platform process
     Then the resolved network domains are exactly "127.0.0.1:8080"
     And the resolved profile contains no "${" placeholder

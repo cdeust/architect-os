@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { INTERNAL_TOOLS, TOOLS, TopologySchema } from '@architect-os/contracts';
 import { z } from 'zod';
 import { Given, ROOT, Then, When, stored } from './helpers.js';
+import { parseAgentFile } from '../../services/memory/worker/agent-file.js';
 
 /** The topology as JSON, before its schema: a scenario breaks one rule of it. */
 interface Raw {
@@ -155,3 +156,20 @@ Then('every schema a tool names is a file under modules\\/<module>\\/', function
     }
   }
 });
+
+Then(
+  'the server of every agent module names agents\\/<profile>.md, a task profile of that name',
+  function () {
+    const parsed = TopologySchema.parse(stored<unknown>(this, 'topology'));
+    const agents = parsed.catalog.modules.filter((module) => module.agent !== null);
+    assert.ok(agents.length > 0, 'the committed catalogue has an agent module');
+    for (const module of agents) {
+      const file = `agents/${module.agent!.profile}.md`;
+      assert.ok(
+        parsed.servers.mcpServers[module.name]!.args.includes(`${'$'}{repo}/${file}`),
+        `${module.name} runs ${file}`,
+      );
+      assert.equal(parseAgentFile(readFileSync(join(ROOT, file), 'utf8')).name, module.agent!.profile);
+    }
+  },
+);

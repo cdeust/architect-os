@@ -6,7 +6,7 @@
     },
     "memory-agent": {
       "command": "node",
-      "args": ["${repo}/services/memory/dist/worker/main.js"]
+      "args": ["${repo}/services/memory/dist/worker/task-serve.js", "${repo}/agents/memory.md"]
     }
   }
 }

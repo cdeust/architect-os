@@ -15,6 +15,7 @@
     "gateway",
     "services/memory",
     "modules/broker",
+    "modules/memory",
     "tools/test-gate"
   ],
   "scripts": {

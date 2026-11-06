@@ -84,3 +84,27 @@ export const WorkerOutputSchema = z.object({
   error: z.object({ code: z.string(), message: z.string() }).optional(),
 });
 export type WorkerOutput = z.infer<typeof WorkerOutputSchema>;
+
+/**
+ * What `task_input` gives the worker of an agent tool on its streams (docs/design/platform-v3-srt.md, §2, Un seul
+ * transport, brick 1b.5): the tool, its input, and the max_turns of its agent (§2, Bornes opérationnelles). No
+ * budget in dollars (decision 11): the tokens of a task are spent at the broker alone.
+ */
+export const TaskInputSchema = z.strictObject({
+  tool: z.string(),
+  input: z.unknown(),
+  limits: z.strictObject({ max_turns: z.number().int().positive() }),
+});
+export type TaskInput = z.infer<typeof TaskInputSchema>;
+
+/**
+ * The frontmatter of a task profile, `agents/<name>.md`, in the format of Claude Code (§4, Profils de task): its
+ * name, what it is for, the only tools it may use, and its model. The body of the file is its system prompt.
+ */
+export const AgentFileSchema = z.strictObject({
+  name: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  description: z.string().min(1),
+  tools: z.array(z.string().regex(/^mcp__[a-z][a-z0-9-]*__[a-z][a-z0-9_]*$/)).min(1),
+  model: z.enum(['haiku', 'sonnet', 'opus']),
+});
+export type AgentFile = z.infer<typeof AgentFileSchema>;

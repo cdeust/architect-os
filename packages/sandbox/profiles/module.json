@@ -25,7 +25,9 @@
   "env": {
     "pass": ["HOME", "PATH", "LANG", "LC_ALL", "LC_CTYPE"],
     "set": {
-      "TMPDIR": "${tmp}"
+      "TMPDIR": "${tmp}",
+      "GATEWAY_CALLBACK_URL": "http://127.0.0.1:${callbackPort}/mcp",
+      "NODE_USE_ENV_PROXY": "1"
     },
     "unset": ["NO_PROXY", "no_proxy"]
   },

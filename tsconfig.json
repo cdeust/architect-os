@@ -20,6 +20,9 @@
       "path": "modules/broker"
     },
     {
+      "path": "modules/memory"
+    },
+    {
       "path": "tools/test-gate"
     },
     {

@@ -26,6 +26,10 @@ Feature: modules, their catalogue, their servers and the profiles of the clients
     Given the committed topology
     Then every schema a tool names is a file under modules/<module>/
 
+  Scenario: every agent module of the committed catalogue runs the task profile its manifest names (brick 1b.5)
+    Given the committed topology
+    Then the server of every agent module names agents/<profile>.md, a task profile of that name
+
   Scenario: the fixture topology holds
     Given the fixture topology
     Then the topology is valid

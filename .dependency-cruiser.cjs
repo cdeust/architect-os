@@ -97,10 +97,11 @@ module.exports = {
       name: 'mcp-sdk-only-in-presentation-and-infrastructure',
       comment:
         'The MCP SDK is allowed in presentation/infrastructure of gateway, services, modules and data (and in their step ' +
-        'definitions).',
+        'definitions), and in the infrastructure of a worker: its channel to the gateway on its own stdio (brick 1b.5).',
       severity: 'error',
       from: {
-        pathNot: '^(gateway|services/[^/]+|modules/[^/]+|data)/(src/(presentation|infrastructure)|features)/',
+        pathNot:
+          '^((gateway|services/[^/]+|modules/[^/]+|data)/(src/(presentation|infrastructure)|features)|services/[^/]+/worker/infrastructure)/',
       },
       to: { path: '(^|/)node_modules/@modelcontextprotocol/sdk(/|$)' },
     },

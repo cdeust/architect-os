@@ -21,6 +21,7 @@ Feature: Architecture guard (dependency-cruiser)
       | gateway/src/infrastructure/zz-fixture-sdk.ts            | import '@anthropic-ai/claude-agent-sdk';                  | agent-sdk-only-in-worker                      |
       | gateway/src/domain/zz-fixture-mcp.ts                    | import '@modelcontextprotocol/sdk/server/mcp.js';         | mcp-sdk-only-in-presentation-and-infrastructure |
       | services/memory/worker/zz-fixture-worker.ts             | import '../src/domain/ports.js';                          | worker-is-self-contained                      |
+      | services/memory/worker/zz-fixture-mcp.ts                | import '@modelcontextprotocol/sdk/client/index.js';       | mcp-sdk-only-in-presentation-and-infrastructure |
       | packages/contracts/src/zz-fixture-contracts.ts          | import '../../../gateway/src/domain/ports.js';            | contracts-has-no-component-dependency         |
       | gateway/src/infrastructure/zz-fixture-spawn.ts          | import 'node:child_process';                              | child-process-only-in-sandbox                 |
       | services/memory/src/infrastructure/zz-fixture-spawn.ts  | import 'child_process';                                   | child-process-only-in-sandbox                 |
