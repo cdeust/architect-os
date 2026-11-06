@@ -1,7 +1,7 @@
 #!/bin/sh
 # npm run gate [-- --job macos]: the CI gate in one local command (docs/design/platform-v3-srt.md §7).
 #   1. test-gate plan: diff against the first parent, perimeter, Stryker mutate list -> reports/gate-plan.json
-#   2. cucumber-js (job macos: profile macos, features/sandbox only); its exit code is never read
+#   2. tsc -b, then cucumber-js (job macos: profile macos, features/sandbox only); its exit code is never read
 #   3. Stryker, linux job only and only when the plan mutates something (always the canary of rule 7)
 #   4. test-gate replay: each verdict of Stryker in the perimeter and the canary replayed with cucumber-js directly;
 #      its exit code is never read either, check reads its record
@@ -19,6 +19,8 @@ fi
 gate="node --import tsx tools/test-gate/src/main.ts"
 rm -rf reports/cucumber.ndjson reports/mutation reports/replay reports/gate-plan.json reports/gate-report.md reports/gate-base.json
 $gate plan --job "$job" || exit 1
+# The platform launches its modules and workers from their built entry points (topology/modules.mcp.json): build first.
+npx tsc -b || exit 1
 if [ "$job" = linux ]; then
   cucumber-js
 else

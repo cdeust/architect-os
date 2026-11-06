@@ -23,6 +23,7 @@
     "typecheck": "tsc -b",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "pretest": "tsc -b",
     "test": "cucumber-js",
     "arch": "depcruise --config .dependency-cruiser.cjs packages data gateway services modules tools",
     "lint": "npm run format:check --silent && npm run typecheck --silent",
