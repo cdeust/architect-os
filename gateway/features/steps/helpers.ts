@@ -31,6 +31,7 @@ export async function attempt(work: () => Promise<unknown>): Promise<Attempt> {
 export function refusedWith(outcome: Attempt | undefined, code: string): void {
   assert.ok(outcome?.failed, `expected a refusal with ${code}, the call succeeded`);
   assert.equal((outcome.error as { code?: unknown }).code, code);
+  assert.equal((outcome.error as Error).name, 'GatewayError');
 }
 
 /** Partial deep match, like a `toMatchObject`: objects by the expected keys, arrays by length and element. */

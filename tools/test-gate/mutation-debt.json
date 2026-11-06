@@ -995,20 +995,6 @@
       "replacement": "this.clock.now().getTime() + started.getTime()"
     },
     {
-      "file": "gateway/src/domain/errors.ts",
-      "start": {
-        "line": 10,
-        "column": 17
-      },
-      "end": {
-        "line": 10,
-        "column": 31
-      },
-      "mutator": "StringLiteral",
-      "original": "'GatewayError'",
-      "replacement": "\"\""
-    },
-    {
       "file": "gateway/src/infrastructure/in-memory.ts",
       "start": {
         "line": 25,

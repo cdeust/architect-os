@@ -1,0 +1,175 @@
+{
+  "catalog": {
+    "modules": [
+      {
+        "name": "memory-recall",
+        "version": "0.1.0",
+        "domain": "memory",
+        "owner": "platform",
+        "tools": [
+          {
+            "name": "recall",
+            "description": "recall of the fixture",
+            "input_schema": "./schemas/recall.in.json",
+            "kind": "workflow",
+            "max_result_tokens": 100,
+            "validator": "schema"
+          }
+        ],
+        "agent": null,
+        "egress": "none",
+        "writes_tables": [],
+        "reads_domains": [],
+        "calls_allowed": ["judge"],
+        "timeout_ms": 1000
+      },
+      {
+        "name": "judge",
+        "version": "0.1.0",
+        "domain": "judge",
+        "owner": "platform",
+        "tools": [
+          {
+            "name": "grade",
+            "description": "grade of the fixture",
+            "input_schema": "./schemas/grade.in.json",
+            "kind": "workflow",
+            "max_result_tokens": 100,
+            "validator": "schema"
+          }
+        ],
+        "agent": null,
+        "egress": "none",
+        "writes_tables": [],
+        "reads_domains": [],
+        "calls_allowed": [],
+        "timeout_ms": 2000
+      },
+      {
+        "name": "memory-write",
+        "version": "0.1.0",
+        "domain": "memory",
+        "owner": "platform",
+        "tools": [
+          {
+            "name": "remember",
+            "description": "remember of the fixture",
+            "input_schema": "./schemas/remember.in.json",
+            "kind": "data",
+            "max_result_tokens": 100,
+            "validator": "schema"
+          }
+        ],
+        "agent": null,
+        "egress": "none",
+        "writes_tables": ["memory.memories"],
+        "reads_domains": [],
+        "calls_allowed": [],
+        "timeout_ms": 60000
+      },
+      {
+        "name": "verify",
+        "version": "0.1.0",
+        "domain": "verify",
+        "owner": "platform",
+        "tools": [
+          {
+            "name": "check",
+            "description": "check of the fixture",
+            "input_schema": "./schemas/check.in.json",
+            "kind": "workflow",
+            "max_result_tokens": 100,
+            "validator": "schema"
+          }
+        ],
+        "agent": null,
+        "egress": "none",
+        "writes_tables": [],
+        "reads_domains": [],
+        "calls_allowed": [],
+        "timeout_ms": 2000
+      },
+      {
+        "name": "scout",
+        "version": "0.1.0",
+        "domain": "scout",
+        "owner": "platform",
+        "tools": [
+          {
+            "name": "explore",
+            "description": "explore of the fixture",
+            "input_schema": "./schemas/explore.in.json",
+            "kind": "workflow",
+            "max_result_tokens": 100,
+            "validator": "schema"
+          }
+        ],
+        "agent": null,
+        "egress": "none",
+        "writes_tables": [],
+        "reads_domains": [],
+        "calls_allowed": [],
+        "timeout_ms": 2000
+      }
+    ]
+  },
+  "servers": {
+    "mcpServers": {
+      "memory-recall": {
+        "command": "node",
+        "args": ["modules/memory-recall/dist/src/serve.js"]
+      },
+      "judge": {
+        "command": "node",
+        "args": ["modules/judge/dist/src/serve.js"]
+      },
+      "memory-write": {
+        "command": "node",
+        "args": ["modules/memory-write/dist/src/serve.js"]
+      },
+      "verify": {
+        "command": "node",
+        "args": ["modules/verify/dist/src/serve.js"]
+      },
+      "scout": {
+        "command": "node",
+        "args": ["modules/scout/dist/src/serve.js"]
+      }
+    }
+  },
+  "clients": {
+    "profiles": [
+      {
+        "name": "local",
+        "modules": ["memory-recall", "judge", "memory-write", "verify"],
+        "model": "sonnet",
+        "effort": "medium",
+        "mode": "execute",
+        "max_duration_ms": 10000,
+        "max_calls": 3,
+        "max_depth": 2
+      },
+      {
+        "name": "shallow",
+        "modules": ["memory-recall"],
+        "model": "sonnet",
+        "effort": "medium",
+        "mode": "execute",
+        "max_duration_ms": 10000,
+        "max_calls": 3,
+        "max_depth": 1
+      },
+      {
+        "name": "owner",
+        "modules": [],
+        "model": "sonnet",
+        "effort": "medium",
+        "mode": "execute",
+        "max_duration_ms": 10000,
+        "max_calls": 3,
+        "max_depth": 2,
+        "owner": true
+      }
+    ]
+  }
+}

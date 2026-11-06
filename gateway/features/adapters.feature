@@ -81,3 +81,59 @@ Feature: Gateway port adapters
     Given an MCP service client whose "memory" client answers an error with the text 'boom'
     When the service client invokes "memory" tool "recall" with arguments '{}'
     Then the service client response matches '{"isError":true,"text":"boom"}'
+
+  Scenario Outline: TaskRegistry contract: a task opened is ended with its reason
+    Given the "<adapter>" task registry
+    When the registry opens the task '{"task":"task-1","client":"cli","profile":"local","deadline_at":"2026-11-06T10:00:00.000Z"}'
+    And the registry ends "task-1" with "cancelled"
+    Then the registry reads back "task-1" ended with "cancelled"
+
+    Examples:
+      | adapter   |
+      | in-memory |
+
+  Scenario Outline: TaskTokens contract: a token granted is honoured until it is retired
+    Given the "<adapter>" task tokens
+    When the tokens grant "token-1" to "task-1"
+    Then the token "token-1" is honoured for "task-1"
+    When the tokens retire "token-1"
+    Then the token "token-1" is not honoured
+
+    Examples:
+      | adapter   |
+      | in-memory |
+
+  Scenario Outline: Ids contract: identifiers of a kind are distinct and name their kind
+    Given the "<adapter>" identifiers
+    Then 3 identifiers of the kind "call" are distinct and start with "call-"
+
+    Examples:
+      | adapter    |
+      | sequential |
+
+  Scenario Outline: ModuleClient contract: a call reaches the tool of its module and its answer comes back untouched
+    Given the "<adapter>" module client
+    When the module client calls "judge" tool "grade" with '{"x":1}' and the call identifier "call-1"
+    Then the module answer is 'judge/grade {"x":1}'
+
+    Examples:
+      | adapter   |
+      | in-memory |
+
+  Scenario Outline: DataClient contract: an operation reaches data and its answer comes back untouched
+    Given the "<adapter>" data client
+    When the data client executes "tasks.get" with '{"task":"task-1"}'
+    Then the data answer is 'tasks.get {"task":"task-1"}'
+
+    Examples:
+      | adapter   |
+      | in-memory |
+
+  Scenario Outline: TaskSandboxes contract: the sandboxes of a task are stopped
+    Given the "<adapter>" task sandboxes
+    When the sandboxes of "task-1" are stopped
+    Then the sandboxes of "task-1" are gone
+
+    Examples:
+      | adapter   |
+      | in-memory |

@@ -21,6 +21,8 @@ export interface QuotaPolicy {
 
 export interface AuditEntry {
   at: string;
+  /** The task of the call, when it names one (brick 1b.4). */
+  task?: string | undefined;
   subject: string;
   tool: string;
   owner: string | null;
