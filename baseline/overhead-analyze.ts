@@ -64,16 +64,37 @@ const rows = configs.map((config) => {
 });
 
 const next = random(42);
-const overhead = (config: string) => kept(config).map((value) => value);
-const [srtStart, srtLow, srtHigh] = difference(overhead('iso-srt'), overhead('iso-none'), next);
-const [dockerStart, dockerLow, dockerHigh] = difference(overhead('iso-docker'), overhead('iso-none'), next);
-const [h1, h1Low, h1High] = difference(overhead('iso-srt'), overhead('iso-docker'), next);
-const [h2, h2Low, h2High] = difference(overhead('recall-srt-warm'), overhead('recall-inproc'), next);
-const [h3, h3Low, h3High] = difference(overhead('recall-srt-cold'), overhead('recall-srt-warm'), next);
 
 /** A hypothesis holds when the whole interval is below its threshold, fails when the whole interval is above. */
 const verdict = (low: number, high: number, threshold: number) =>
   high < threshold ? 'tient' : low >= threshold ? 'réfutée' : 'indécise (l’intervalle contient le seuil)';
+
+/**
+ * One difference of medians, `a` minus `b`, with its interval and, when it is a hypothesis, its verdict; nothing
+ * when the file did not measure both configurations. H1 against a warm Docker draws no conclusion (journal §30).
+ */
+function row(label: string, a: string, b: string, threshold?: number, note?: string): string {
+  if (kept(a).length === 0 || kept(b).length === 0) return '';
+  const [value, low, high] = difference(kept(a), kept(b), next);
+  const judged = threshold === undefined ? '' : (note ?? verdict(low, high, threshold));
+  const limit = threshold === undefined ? '' : `< ${threshold} ms`;
+  return `| ${label} | ${ms(value)} | ${ms(low)} à ${ms(high)} | ${limit} | ${judged} |\n`;
+}
+
+const differences = [
+  row('démarrage srt − aucun', 'iso-srt', 'iso-none'),
+  row('démarrage Docker chaud − aucun', 'iso-docker', 'iso-none'),
+  row(
+    'H1 : srt − Docker chaud',
+    'iso-srt',
+    'iso-docker',
+    0,
+    'sans conclusion : Docker chaud contre srt froid',
+  ),
+  row('H1 amendée, les deux froids : srt − Docker froid', 'iso-srt', 'iso-docker-cold', 0),
+  row('H2 : recall srt chaud − en processus', 'recall-srt-warm', 'recall-inproc', 1000),
+  row('H3 : recall srt froid − chaud', 'recall-srt-cold', 'recall-srt-warm', 1000),
+].join('');
 
 const report = `# Mesure A, surcoût de la structure
 
@@ -87,11 +108,6 @@ ${rows.join('\n')}
 
 | Écart | Valeur | Intervalle | Seuil | Verdict |
 | --- | --- | --- | --- | --- |
-| démarrage srt − aucun | ${ms(srtStart)} | ${ms(srtLow)} à ${ms(srtHigh)} | | |
-| démarrage Docker − aucun | ${ms(dockerStart)} | ${ms(dockerLow)} à ${ms(dockerHigh)} | | |
-| H1 : srt − Docker | ${ms(h1)} | ${ms(h1Low)} à ${ms(h1High)} | < 0 ms | ${verdict(h1Low, h1High, 0)} |
-| H2 : recall srt chaud − en processus | ${ms(h2)} | ${ms(h2Low)} à ${ms(h2High)} | < 1 000 ms | ${verdict(h2Low, h2High, 1000)} |
-| H3 : recall srt froid − chaud | ${ms(h3)} | ${ms(h3Low)} à ${ms(h3High)} | < 1 000 ms | ${verdict(h3Low, h3High, 1000)} |
-`;
+${differences}`;
 writeFileSync(`${file.replace(/\.jsonl$/, '')}.md`, report);
 process.stdout.write(report);

@@ -1128,6 +1128,14 @@ Rapports appariés par tâche, moyenne et intervalle à 95 % par bootstrap sur l
 
 H1 n'est donc ni réfutée ni confirmée ; ma première lecture, « réfutée », est retirée. H2 et H3 comparent srt à srt et restent valides. Le protocole amendé est dans `baseline/README.md`, à côté de l'original, qui n'est pas réécrit.
 
+**H1 amendée, les deux froids** (amendement accepté par le propriétaire avant toute mesure, commit `3499901` ; résultats `baseline/results/overhead-2026-11-07T09-36-52-336Z.jsonl`, analyse `.md` à côté) :
+- protocole : à chaque exécution, une VM Colima dédiée (`aos-bench`, 2 cœurs, 2 Gio) est démarrée, le conteneur lancé, puis la VM arrêtée, les trois étapes chronométrées ; l'image reste sur le disque de la VM, comme Node sur celui de l'hôte pour srt ; Colima tourne avec son propre dossier de configuration Docker, et le contexte de l'hôte (`colima-ci-autonome`) n'a pas bougé ;
+- 30 mesures par configuration après 2 de chauffe, en alternance, aucun échec ;
+- `iso-srt` : médiane 686 ms (p10 652, p90 730) ; `iso-docker-cold` : médiane 17 870 ms (p10 16 637, p90 18 395) ;
+- **H1 amendée, tient** : srt − Docker froid = − 17 184 ms (− 17 326 à − 17 096), seuil < 0 ; srt froid démarre environ 26 fois plus vite que Docker froid sur cet hôte.
+
+Portée : sur macOS, Docker exige une VM, et c'est son démarrage qui fait l'écart. Sur Linux, Docker n'a pas de VM : la définition du froid y est à fixer avec le propriétaire avant de mesurer (démon arrêté puis démarré, ou démon d'un service système considéré comme partie de l'hôte), étape « Hôtes ».
+
 **Lecture.**
 - srt paie à chaque lancement son canari, une seconde exécution sous srt qui vérifie lecture et connexion refusées (§6, sans repli).
 - Une décomposition (srt sans canari) répondrait à la question suivante : faut-il un canari par lancement, ou par profil et par démarrage de la gateway ? Elle n'était pas au protocole : ce serait une mesure exploratoire, annoncée comme telle, et le changement du canari est une décision du propriétaire, puisque c'est un plancher de sécurité.
@@ -1139,7 +1147,8 @@ H1 n'est donc ni réfutée ni confirmée ; ma première lecture, « réfutée »
 **Limites.**
 - Faux modèle : ni latence réseau, ni temps du modèle.
 - Un seul hôte. Le contexte Docker actif (VM Colima) sert aussi à une autre session : du bruit est possible, sans écriture de notre part (`run --rm` seul).
-- La VM Docker n'est pas comptée : c'est ce qui invalide H1.
+- La VM Docker n'est pas comptée dans la première campagne : c'est ce qui invalide sa H1 ; la campagne froide la compte.
+- Le profil Colima `aos-bench` reste sur le disque (20 Gio alloués) : sa suppression, définitive, revient au propriétaire (`colima delete --profile aos-bench`).
 
 **Pas fait, avec son étape.**
 - La même commande sur Linux (bwrap) et, avec la preuve Windows, sur WSL2 et sur Docker natif : étape « Hôtes ».

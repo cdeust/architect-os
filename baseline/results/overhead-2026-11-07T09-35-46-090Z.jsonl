@@ -1,0 +1,7 @@
+{"header":true,"at":"2026-11-07T09:35:46.124Z","os":"Darwin 27.0.0 arm64","cpu":"Apple M4","cpus":10,"node":"v26.11.1","srt":"0.0.81","docker":"28.3.3","claudeCode":"2.1.312","n":1,"only":"cold","warmup":2}
+{"config":"iso-srt","i":0,"warmup":true,"ms":938.5,"ok":true}
+{"config":"iso-docker-cold","i":0,"warmup":true,"ms":18096.5,"ok":true}
+{"config":"iso-docker-cold","i":1,"warmup":true,"ms":16705.9,"ok":true}
+{"config":"iso-srt","i":1,"warmup":true,"ms":698.3,"ok":true}
+{"config":"iso-srt","i":2,"warmup":false,"ms":655.5,"ok":true}
+{"config":"iso-docker-cold","i":2,"warmup":false,"ms":16403.1,"ok":true}

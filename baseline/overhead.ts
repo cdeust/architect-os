@@ -4,8 +4,8 @@
 // warm, and under srt on a fresh platform. One JSON line per measure in baseline/results/overhead-<date>.jsonl, after
 // a header line describing the host. OVERHEAD_N changes the number of measures per configuration (30 by default).
 import { spawn, spawnSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
-import { arch, cpus, release, type } from 'node:os';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { arch, cpus, homedir, release, tmpdir, type } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { SrtSandboxRunner } from '@architect-os/sandbox';
@@ -14,6 +14,8 @@ import { serveInProcess } from '../features/support/inproc-worker.js';
 import { ROOT, runnerOptions, startSrtPlatform, type SrtPlatform } from '../features/support/srt-platform.js';
 
 const N = Number(process.env['OVERHEAD_N'] ?? 30);
+/** `cold`: only srt against a cold Docker (amendment of H1, baseline/README.md); otherwise the protocol of measure A. */
+const ONLY = process.env['OVERHEAD_ONLY'];
 const WARMUP = 2;
 /** The image of iso-docker, pinned by digest: the Node 26 of the worker image of v2 (services/memory/worker/Dockerfile). */
 const IMAGE = 'node:26-bookworm-slim@sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9';
@@ -55,6 +57,7 @@ write({
   docker: docker.status === 0 ? docker.stdout.trim() : null,
   claudeCode: version('@anthropic-ai/claude-agent-sdk', 'claudeCodeVersion'),
   n: N,
+  only: ONLY ?? null,
   warmup: WARMUP,
 });
 
@@ -63,6 +66,21 @@ const exitOf = (command: string, args: string[]) =>
   new Promise<number | null>((resolve) => {
     const child = spawn(command, args, { stdio: 'ignore' });
     child.on('exit', (code) => resolve(code));
+  });
+
+/** The dedicated Colima VM of iso-docker-cold, distinct from the profiles of other sessions. */
+const COLD_PROFILE = 'aos-bench';
+const COLD_SOCKET = `unix://${join(homedir(), '.colima', COLD_PROFILE, 'docker.sock')}`;
+// Colima switches the Docker context when it starts: its own config folder keeps the context of the host unchanged.
+const coldEnv = { ...process.env, DOCKER_CONFIG: mkdtempSync(join(tmpdir(), 'aos-bench-docker-')) };
+const colima = (verb: 'start' | 'stop') =>
+  new Promise<boolean>((resolve) => {
+    const child = spawn('colima', [verb, '--profile', COLD_PROFILE], {
+      stdio: 'ignore',
+      env: coldEnv,
+      cwd: tmpdir(),
+    });
+    child.on('exit', (code) => resolve(code === 0));
   });
 
 const srt = new SrtSandboxRunner(runnerOptions({ callbackPort: '9' }));
@@ -77,6 +95,18 @@ const isolation: Record<string, () => Promise<boolean>> = {
   },
   'iso-docker': async () =>
     (await exitOf('docker', ['run', '--rm', '--network', 'none', IMAGE, 'node', '-e', '0'])) === 0,
+};
+
+/** Both cold (amendment of H1): a fresh srt sandbox, and a container in the dedicated VM started then stopped. */
+const cold: Record<string, () => Promise<boolean>> = {
+  'iso-srt': isolation['iso-srt']!,
+  'iso-docker-cold': async () => {
+    const started = await colima('start');
+    const args = ['-H', COLD_SOCKET, 'run', '--rm', '--network', 'none', IMAGE, 'node', '-e', '0'];
+    const ran = started && (await exitOf('docker', args)) === 0;
+    const stopped = await colima('stop');
+    return started && ran && stopped;
+  },
 };
 
 /** Whether a recall answered ok with the scripted data and the inserted memory as its evidence. */
@@ -147,8 +177,11 @@ async function family(configs: Record<string, () => Promise<{ ms: number; ok: bo
 }
 
 try {
-  await family(isolation);
-  await family(recall);
+  if (ONLY === 'cold') await family(cold);
+  else {
+    await family(isolation);
+    await family(recall);
+  }
 } finally {
   await warm.close();
   await model.close();
