@@ -92,6 +92,7 @@ const differences = [
     'sans conclusion : Docker chaud contre srt froid',
   ),
   row('H1 amendée, les deux froids : srt − Docker froid', 'iso-srt', 'iso-docker-cold', 0),
+  row('H4 : délégation claude -p, srt − Docker froid', 'deleg-srt', 'deleg-docker-cold', 0),
   row('H2 : recall srt chaud − en processus', 'recall-srt-warm', 'recall-inproc', 1000),
   row('H3 : recall srt froid − chaud', 'recall-srt-cold', 'recall-srt-warm', 1000),
 ].join('');

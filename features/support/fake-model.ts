@@ -77,7 +77,7 @@ function events(turn: Exclude<ModelTurn, { status: number }>, id: number): Event
  */
 export async function startFakeModel(
   script: readonly ModelTurn[],
-  options: { readonly cycle?: boolean } = {},
+  options: { readonly cycle?: boolean; readonly host?: string } = {},
 ): Promise<FakeModel> {
   const requests: ModelRequest[] = [];
   let next = 0;
@@ -115,7 +115,8 @@ export async function startFakeModel(
       res.end();
     });
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  // The loopback, unless a container must reach it inside a Linux VM (baseline/overhead.ts).
+  await new Promise<void>((resolve) => server.listen(0, options.host ?? '127.0.0.1', resolve));
   const port = (server.address() as AddressInfo).port;
   return {
     url: `http://127.0.0.1:${port}`,

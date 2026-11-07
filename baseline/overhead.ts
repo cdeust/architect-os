@@ -136,8 +136,10 @@ const okRecall = (
   JSON.stringify(result.data) === JSON.stringify(OUTPUT) &&
   JSON.stringify(result.evidence) === JSON.stringify([{ source: 'memory', ref: memory, excerpt }]);
 
-const model = await startFakeModel(SCRIPT, { cycle: true });
-const warm = await startSrtPlatform(MEMORY, SCRIPT, { cycle: true });
+// The model and the warm platform of measure A, started only when its families run.
+const MEASURE_A = ONLY === undefined;
+const model = MEASURE_A ? await startFakeModel(SCRIPT, { cycle: true }) : undefined;
+const warm = MEASURE_A ? await startSrtPlatform(MEMORY, SCRIPT, { cycle: true }) : undefined;
 
 async function recallOn(platform: SrtPlatform): Promise<{ ms: number; ok: boolean }> {
   const { task } = await platform.router.open('overhead-owner', 'owner');
@@ -152,7 +154,7 @@ const recall: Record<string, () => Promise<{ ms: number; ok: boolean }>> = {
   'recall-inproc': async () => {
     const started = performance.now();
     const run = await serveInProcess({
-      modelUrl: model.url,
+      modelUrl: model!.url,
       tool: 'recall',
       input: { query: 'alpha' },
       turns: 4,
@@ -166,7 +168,7 @@ const recall: Record<string, () => Promise<{ ms: number; ok: boolean }>> = {
     run.remove();
     return { ms, ok: run.exit === 0 && okRecall(run.session.result(), 'm1') };
   },
-  'recall-srt-warm': () => recallOn(warm),
+  'recall-srt-warm': () => recallOn(warm!),
   'recall-srt-cold': async () => {
     const fresh = await startSrtPlatform(MEMORY, SCRIPT, { cycle: true });
     try {
@@ -193,15 +195,99 @@ async function family(configs: Record<string, () => Promise<{ ms: number; ok: bo
   }
 }
 
+/** The isolated delegation (baseline/README.md): the same `claude -p` in srt and in a cold Docker. */
+const KEY = 'fake-not-a-key';
+const PROMPT = 'Answer with the single word ok.';
+const DELEGATION_IMAGE = 'aos-bench/claude:2.1.312';
+const CLAUDE = join(
+  ROOT,
+  'node_modules',
+  '@anthropic-ai',
+  LINUX ? 'claude-agent-sdk-linux-arm64' : 'claude-agent-sdk-darwin-arm64',
+  'claude',
+);
+const CLAUDE_ARGS = ['-p', PROMPT, '--output-format', 'json', '--bare'];
+// In a Linux VM the container reaches the model through the gateway of its host; under macOS through the address of
+// the host as the Colima VM sees it, which reaches its loopback.
+const delegationModel =
+  ONLY === 'deleg'
+    ? await startFakeModel([{ text: 'ok' }], { cycle: true, host: LINUX ? '0.0.0.0' : '127.0.0.1' })
+    : undefined;
+const dockerModelUrl = () =>
+  LINUX ? `http://model.internal:${delegationModel!.port}` : `http://192.168.5.2:${delegationModel!.port}`;
+
+/** Runs `command` to its end; resolves its exit code and its stdout. */
+const outputOf = (command: string, args: string[]) =>
+  new Promise<{ code: number | null; out: string }>((resolve) => {
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'ignore'] });
+    let out = '';
+    child.stdout.on('data', (chunk: Buffer) => (out += String(chunk)));
+    child.on('exit', (code) => resolve({ code, out }));
+  });
+
+/** Whether `claude -p` gave the answer of the model. */
+const answered = (out: string): boolean => {
+  try {
+    return (JSON.parse(out) as { result?: unknown }).result === 'ok';
+  } catch {
+    return false;
+  }
+};
+
+const delegation: Record<string, () => Promise<{ ms: number; ok: boolean } | boolean>> = {
+  'deleg-srt': async () => {
+    const runner = new SrtSandboxRunner(
+      runnerOptions({ brokerPort: String(delegationModel!.port), taskToken: KEY }),
+    );
+    const sandbox = await runner.start({ profile: 'worker', cwd: ROOT, command: [CLAUDE, ...CLAUDE_ARGS] });
+    sandbox.stdin.end();
+    sandbox.stderr.resume();
+    let out = '';
+    sandbox.stdout.on('data', (chunk: Buffer) => (out += String(chunk)));
+    return (await sandbox.exited).code === 0 && answered(out);
+  },
+  'deleg-docker-cold': async () => {
+    const reset = LINUX ? await engine('reset-failed') : true;
+    const clock = performance.now();
+    const started = await engine('start');
+    const args = [
+      ...COLD_HOST,
+      'run',
+      '--rm',
+      ...(LINUX ? ['--add-host', 'model.internal:host-gateway'] : []),
+      ...['-e', `ANTHROPIC_BASE_URL=${dockerModelUrl()}`, '-e', `ANTHROPIC_API_KEY=${KEY}`],
+      ...[
+        '-e',
+        'HOME=/tmp',
+        '-e',
+        'CLAUDE_CONFIG_DIR=/tmp/claude',
+        '-e',
+        'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1',
+      ],
+      DELEGATION_IMAGE,
+      '/opt/claude/claude',
+      ...CLAUDE_ARGS,
+    ];
+    const ran = started ? await outputOf('docker', args) : { code: null, out: '' };
+    const stopped = await engine('stop');
+    return {
+      ms: performance.now() - clock,
+      ok: reset && started && ran.code === 0 && answered(ran.out) && stopped,
+    };
+  },
+};
+
 try {
   if (ONLY === 'cold') await family(cold);
+  else if (ONLY === 'deleg') await family(delegation);
   else {
     await family(isolation);
     await family(recall);
   }
 } finally {
-  await warm.close();
-  await model.close();
+  await warm?.close();
+  await model?.close();
+  await delegationModel?.close();
 }
 process.stderr.write(`${out}\n`);
 process.exit(0);
