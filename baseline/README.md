@@ -27,3 +27,45 @@ npm run baseline:analyze -- baseline/results/campaign-<date>.jsonl
 ## Propreté des cibles
 
 Les dépôts sont clonés en miroir dans un dossier temporaire ; chaque session travaille dans un clone local de ce miroir, dans un worktree `.claude/worktrees/bench`, jamais poussé. Les branches et les tags distants (`git ls-remote --heads --tags`) sont relevés avant et comparés après ; la dernière ligne du fichier de résultats dit s'ils sont intacts (`remotesUntouched`) et nomme chaque référence qui a changé (`remoteChanges`), pour distinguer un push venu d'ailleurs. L'`origin` des copies est le cache local, et les sessions ne peuvent lancer que la commande de test.
+
+## Surcoût de la structure (mesure A), protocole pré-enregistré
+
+Mesure du temps que la structure de la plateforme ajoute à un appel, sans coût de modèle : le modèle est le faux
+modèle local de `features/support/fake-model.ts`, scripté (une recherche, puis la sortie structurée), donc les tokens
+sont fixés et le coût est nul. Ce protocole est commité avant toute mesure ; les résultats ne le modifient pas.
+
+| Configuration     | Ce qui est chronométré                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------------------------- |
+| `iso-none`        | `node -e 0` lancé directement, sans isolation                                                                  |
+| `iso-srt`         | le même `node -e 0` par `SrtSandboxRunner`, profil `module`, cwd jetable, canari compris                       |
+| `iso-docker`      | le même `node -e 0` par `docker run --rm --network none`, image `node:26-bookworm-slim` épinglée par digest    |
+| `recall-inproc`   | un `recall` en processus : serveur MCP de la gateway, worker v3, vrai SDK, vrai CLI, relais répondu en mémoire |
+| `recall-srt-warm` | un `recall` par la plateforme sous srt, comme `features/sandbox/recall.feature`, module déjà lancé             |
+| `recall-srt-cold` | le même, sur une plateforme neuve : le module est lancé par cet appel                                          |
+
+Le worker est toujours neuf, une sandbox par appel (§2). Le `recall` v2 (worker Docker) n'est pas mesuré : avec le
+Claude Code actuel, il échoue avant tout tour, le CLI refusant son schéma de sortie (draft 2020-12, journal §29) ; seule
+son isolation est comparée, par `iso-docker`.
+
+Hypothèses, réfutables, publiées quel que soit le résultat :
+
+- H1 : le surcoût de démarrage de srt, canari compris, est inférieur à celui de Docker : médiane(`iso-srt` −
+  `iso-none`) < médiane(`iso-docker` − `iso-none`).
+- H2 : sur un `recall`, la plateforme sous srt ajoute moins d'une seconde : médiane(`recall-srt-warm`) −
+  médiane(`recall-inproc`) < 1 000 ms.
+- H3 : lancer le module au premier appel ajoute moins d'une seconde : médiane(`recall-srt-cold`) −
+  médiane(`recall-srt-warm`) < 1 000 ms.
+
+Méthode : 30 mesures par configuration après 2 mesures de chauffe écartées (cache d'image, cache du CLI) ; les
+configurations d'isolation alternent à chaque répétition, celles de `recall` aussi ; temps mural par
+`performance.now()`. Statistiques : médiane, p10 et p90 ; écarts de médianes avec intervalle à 95 % par bootstrap
+(10 000 tirages, graine 42). L'en-tête du fichier de résultats relève l'hôte : système, processeur, Node, srt, Docker,
+Claude Code.
+
+Limites, écrites d'avance : faux modèle, donc ni latence réseau ni temps du modèle, qui dominent un vrai appel ; un
+seul hôte par campagne. La même commande se relance sur Linux et, avec la preuve Windows, sur WSL2 et Docker.
+
+```bash
+npm run baseline:overhead
+npm run baseline:overhead-analyze -- baseline/results/overhead-<date>.jsonl
+```
