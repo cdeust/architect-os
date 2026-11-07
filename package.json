@@ -32,7 +32,9 @@
     "broker:live": "cucumber-js --profile live",
     "baseline:pilot": "node --import tsx baseline/run.ts",
     "baseline:campaign": "BASELINE_REPEATS=3 node --import tsx baseline/run.ts",
-    "baseline:analyze": "node --import tsx baseline/analyze.ts"
+    "baseline:analyze": "node --import tsx baseline/analyze.ts",
+    "baseline:overhead": "node --import tsx baseline/overhead.ts",
+    "baseline:overhead-analyze": "node --import tsx baseline/overhead-analyze.ts"
   },
   "devDependencies": {
     "@cucumber/cucumber": "12.9.0",

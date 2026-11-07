@@ -73,9 +73,12 @@ function events(turn: Exclude<ModelTurn, { status: number }>, id: number): Event
 
 /**
  * Starts the fake model on 127.0.0.1: each POST /v1/messages answers the next turn of the script, then a text "end"
- * once the script is spent; count_tokens answers 1; anything else 404.
+ * once the script is spent, unless it cycles; count_tokens answers 1; anything else 404.
  */
-export async function startFakeModel(script: readonly ModelTurn[]): Promise<FakeModel> {
+export async function startFakeModel(
+  script: readonly ModelTurn[],
+  options: { readonly cycle?: boolean } = {},
+): Promise<FakeModel> {
   const requests: ModelRequest[] = [];
   let next = 0;
   const server: Server = createServer((req, res) => {
@@ -98,7 +101,8 @@ export async function startFakeModel(script: readonly ModelTurn[]): Promise<Fake
         res.writeHead(404).end();
         return;
       }
-      const turn = script[next] ?? { text: 'end' };
+      // A cycling script plays again from its first turn: one script per call, for several calls of one platform.
+      const turn = (options.cycle === true ? script[next % script.length] : script[next]) ?? { text: 'end' };
       next += 1;
       if ('status' in turn) {
         const error = { type: 'error', error: { type: 'invalid_request_error', message: 'scripted error' } };

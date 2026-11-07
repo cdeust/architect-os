@@ -1,0 +1,25 @@
+{"header":true,"at":"2026-11-07T08:20:33.272Z","os":"Darwin 27.0.0 arm64","cpu":"Apple M4","cpus":10,"node":"v26.11.1","srt":"0.0.81","docker":"28.3.3","claudeCode":"2.1.312","n":2,"warmup":2}
+{"config":"iso-none","i":0,"warmup":true,"ms":115.7,"ok":true}
+{"config":"iso-srt","i":0,"warmup":true,"ms":674.8,"ok":true}
+{"config":"iso-docker","i":0,"warmup":true,"ms":1695,"ok":true}
+{"config":"iso-srt","i":1,"warmup":true,"ms":657.7,"ok":true}
+{"config":"iso-docker","i":1,"warmup":true,"ms":316.4,"ok":true}
+{"config":"iso-none","i":1,"warmup":true,"ms":158.7,"ok":true}
+{"config":"iso-docker","i":2,"warmup":false,"ms":141.1,"ok":true}
+{"config":"iso-none","i":2,"warmup":false,"ms":126.5,"ok":true}
+{"config":"iso-srt","i":2,"warmup":false,"ms":634.9,"ok":true}
+{"config":"iso-none","i":3,"warmup":false,"ms":114.7,"ok":true}
+{"config":"iso-srt","i":3,"warmup":false,"ms":636.8,"ok":true}
+{"config":"iso-docker","i":3,"warmup":false,"ms":112.8,"ok":true}
+{"config":"recall-inproc","i":0,"warmup":true,"ms":690.2,"ok":true}
+{"config":"recall-srt-warm","i":0,"warmup":true,"ms":1675.7,"ok":true}
+{"config":"recall-srt-cold","i":0,"warmup":true,"ms":1748.9,"ok":true}
+{"config":"recall-srt-warm","i":1,"warmup":true,"ms":1046.2,"ok":true}
+{"config":"recall-srt-cold","i":1,"warmup":true,"ms":1796.6,"ok":true}
+{"config":"recall-inproc","i":1,"warmup":true,"ms":311.7,"ok":true}
+{"config":"recall-srt-cold","i":2,"warmup":false,"ms":1701.8,"ok":true}
+{"config":"recall-inproc","i":2,"warmup":false,"ms":284,"ok":true}
+{"config":"recall-srt-warm","i":2,"warmup":false,"ms":932.1,"ok":true}
+{"config":"recall-inproc","i":3,"warmup":false,"ms":300.2,"ok":true}
+{"config":"recall-srt-warm","i":3,"warmup":false,"ms":964,"ok":true}
+{"config":"recall-srt-cold","i":3,"warmup":false,"ms":1676,"ok":true}

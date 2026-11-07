@@ -1088,3 +1088,60 @@ Rapports appariés par tâche, moyenne et intervalle à 95 % par bootstrap sur l
   - élévation : réseau du module limité au rappel, du worker au broker ; la racine de la plateforme se lit sans s'écrire ; les tools offerts au modèle sont ceux du profil de task seuls ;
   - dépendances : `yaml` 2.9.1 épinglé pour le worker, déjà dans le lockfile ; nouveau paquet du dépôt `@architect-os/module-memory` ; aucune dépendance externe nouvelle.
 - Opérationnel : aucun secret lu ni écrit, aucune clé réelle ; le faux modèle et le broker écoutent en boucle locale ; IRB sans objet, aucune donnée humaine.
+
+## 30. Mesure A : le surcoût de la structure, isolation et `recall`, sans coût de modèle, 7 novembre 2026
+
+**Question du propriétaire.** Avec 1b.5, refaire des mesures pour montrer l'intérêt de la structure. Partage retenu : A, ce que la structure coûte en temps, gratuit et reproductible ; B, ce qu'elle fait gagner en coût de modèle, avec un vrai modèle, plus tard et sur accord.
+
+**Fait.**
+- Protocole et hypothèses commités avant toute mesure (`baseline/README.md`, commit `eb2cca5`), seuils compris.
+- Banc : `npm run baseline:overhead`, puis `npm run baseline:overhead-analyze -- <fichier>`. Il réutilise exactement ce que prouvent les scénarios, sorti dans `features/support` :
+  - `srt-platform.ts`, la plateforme de `features/sandbox/recall.feature` ;
+  - `inproc-worker.ts`, l'appel en processus de `features/integration/agent-worker.feature`.
+- Faux modèle en boucle locale, script cyclique (une recherche, puis la sortie structurée) : aucun token dépensé.
+- Docker : image `node:26-bookworm-slim` épinglée par digest.
+- Chaque `recall` est vérifié avant d'être compté (statut, données, preuve = la mémoire insérée).
+- Répétition à 2 mesures, puis campagne ; les deux fichiers restent dans `baseline/results/`.
+
+**Résultats** (`baseline/results/overhead-2026-11-07T08-21-20-467Z.jsonl`, analyse `.md` à côté). Apple M4, macOS (Darwin 27), Node 26.11.1, srt 0.0.81, Docker 28.3.3 (VM Colima déjà démarrée), Claude Code 2.1.312. 30 mesures par configuration après 2 de chauffe, aucun échec.
+
+| Configuration | Médiane | p10 | p90 |
+|---|---|---|---|
+| `iso-none` | 132 ms | 119 ms | 140 ms |
+| `iso-srt` | 668 ms | 655 ms | 697 ms |
+| `iso-docker` | 108 ms | 97 ms | 124 ms |
+| `recall-inproc` | 301 ms | 295 ms | 342 ms |
+| `recall-srt-warm` | 1 000 ms | 982 ms | 1 040 ms |
+| `recall-srt-cold` | 1 771 ms | 1 746 ms | 1 796 ms |
+
+Écarts de médianes, intervalle à 95 % par bootstrap (10 000 tirages, graine 42) :
+- démarrage sous srt, canari compris : + 536 ms (529 à 551) ;
+- démarrage sous Docker : − 24 ms (− 29 à − 16) ;
+- **H1, réfutée** : srt − Docker = + 560 ms (553 à 574), seuil < 0 ;
+- **H2, tient** : `recall` sous srt, module chaud, moins en processus = + 700 ms (686 à 709), seuil < 1 000 ms ;
+- **H3, tient** : premier appel, qui lance le module, = + 771 ms (751 à 782), seuil < 1 000 ms.
+
+**Lecture.**
+- H1 est réfutée sur cet hôte, et la comparaison est inégale dans les deux sens :
+  - le coût de Docker est déplacé dans une VM résidente, déjà démarrée, que la mesure ne compte pas ; un conteneur y démarre même plus vite qu'un `node` macOS sur l'hôte ;
+  - srt, lui, paie à chaque lancement son canari, une seconde exécution sous srt qui vérifie lecture et connexion refusées (§6, sans repli).
+- Une décomposition (srt sans canari) répondrait à la question suivante : faut-il un canari par lancement, ou par profil et par démarrage de la gateway ? Elle n'était pas au protocole : ce serait une mesure exploratoire, annoncée comme telle, et le changement du canari est une décision du propriétaire, puisque c'est un plancher de sécurité.
+- Le démarrage de la sandbox du worker fait l'essentiel des 700 ms ajoutés à un `recall` (536 ms). Le reste, environ 160 ms, se partage entre le broker, la gateway et le rappel du module.
+- La mesure A dit ce que la structure coûte, pas ce qu'elle rapporte. Avec un vrai modèle, chaque tour coûte des secondes, mais ce rapport n'est pas mesuré ici : c'est la mesure B, qui comparera aussi les coûts.
+
+**Fait annexe.** Le `recall` v2 (worker Docker) échoue avec le Claude Code actuel avant tout tour : le CLI refuse son schéma de sortie (draft 2020-12), le défaut corrigé en v3 au §29. Sondé en processus contre le faux modèle. Le chemin v2 gardé en mode additif ne sert donc plus un `recall` réel. Le réparer touche `run-worker.ts`, endetté, pour un chemin destiné au retrait : décision du propriétaire.
+
+**Limites.**
+- Faux modèle : ni latence réseau, ni temps du modèle.
+- Un seul hôte. Le contexte Docker actif (VM Colima) sert aussi à une autre session : du bruit est possible, sans écriture de notre part (`run --rm` seul).
+- La VM Docker n'est pas comptée.
+
+**Pas fait, avec son étape.**
+- La même commande sur Linux (bwrap) et, avec la preuve Windows, sur WSL2 et sur Docker natif : étape « Hôtes ».
+- Mesure B, coût réel avec un vrai modèle, lancée par le propriétaire (sa clé) : sur son accord, protocole pré-enregistré de la même façon.
+- La décomposition du canari : exploratoire, sur décision.
+
+**Trois piliers.**
+- Recherche : protocole commité avant les mesures, hypothèse réfutée publiée telle quelle, données et analyse versionnées, une commande par étape, graine fixe.
+- SSDLC : aucune dépendance ajoutée, image Docker épinglée par digest ; le banc ne lit aucune clé, la clé du broker est factice et jetable ; le code de production est inchangé, seul le code de test est partagé.
+- Opérationnel : aucun token dépensé, aucune donnée humaine, IRB sans objet.

@@ -4,20 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { Result } from '@architect-os/contracts';
-import { WorkerSession } from '../../gateway/src/application/worker-session.js';
+import type { WorkerSession } from '../../gateway/src/application/worker-session.js';
 import { GatewayError } from '../../gateway/src/domain/errors.js';
 import type { ServiceResponse } from '../../gateway/src/domain/ports.js';
-import { StreamClientTransport } from '../../gateway/src/infrastructure/stream-transport.js';
-import { workerServer } from '../../gateway/src/infrastructure/worker-host.js';
-import { SdkTaskAgent } from '../../services/memory/worker/infrastructure/sdk-task-agent.js';
 import { serveWorker } from '../../services/memory/worker/task-main.js';
 import { startFakeModel, type FakeModel, type ModelTurn } from '../support/fake-model.js';
+import { AGENT_FILE, TASK_KEY, serveInProcess } from '../support/inproc-worker.js';
 import type { ArchitectWorld } from '../support/world.js';
 import { Given, Then, When } from './helpers.js';
-
-/** The key the worker presents: in the platform the token of its task at the broker; here a fixed fake. */
-const TASK_KEY = 'tok-test-not-a-key';
-const AGENT_FILE = new URL('../../agents/memory.md', import.meta.url).pathname;
 
 interface Scene {
   model?: FakeModel;
@@ -77,37 +71,26 @@ async function serve(
   relay: (address: string, args: Record<string, unknown>) => Promise<ServiceResponse>,
 ): Promise<void> {
   const scene = sceneOf(world);
-  const fake = must(scene.model, 'a fake model');
-  const config = mkdtempSync(join(tmpdir(), 'aos-agent-worker-'));
-  world.cleanups.push(() => rmSync(config, { recursive: true, force: true }));
-  const session = new WorkerSession('task-1', tool, JSON.parse(input), turns, (address, args) => {
-    scene.relays.push([address, args]);
-    return relay(address, args);
-  });
-  scene.session = session;
-  // The stdio of the worker: the gateway writes its stdin and reads its stdout.
-  const stdin = new PassThrough();
-  const stdout = new PassThrough();
-  const server = workerServer(session);
-  await server.connect(new StreamClientTransport(stdout, stdin));
-  const agent = new SdkTaskAgent(
-    {
-      PATH: process.env['PATH'],
-      HOME: config,
-      ANTHROPIC_BASE_URL: fake.url,
-      ANTHROPIC_API_KEY: TASK_KEY,
-      CLAUDE_CONFIG_DIR: config,
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-      DISABLE_AUTOUPDATER: '1',
-      DISABLE_TELEMETRY: '1',
+  const run = await serveInProcess({
+    modelUrl: must(scene.model, 'a fake model').url,
+    tool,
+    input: JSON.parse(input),
+    turns,
+    relay: (address, args) => {
+      scene.relays.push([address, args]);
+      return relay(address, args);
     },
-    scene.executable,
-  );
-  scene.config = config;
-  scene.exit = await serveWorker(scene.agentFile ?? AGENT_FILE, stdin, stdout, new PassThrough(), agent);
-  scene.client = server.getClientVersion();
-  scene.stdinListeners = stdin.listenerCount('data');
-  await server.close();
+    agentFile: scene.agentFile,
+    executable: scene.executable,
+  });
+  world.cleanups.push(() => run.remove());
+  Object.assign(scene, {
+    session: run.session,
+    exit: run.exit,
+    client: run.client,
+    stdinListeners: run.stdinListeners,
+    config: run.config,
+  });
 }
 
 When(
