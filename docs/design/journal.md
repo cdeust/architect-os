@@ -1143,16 +1143,39 @@ H1 n'est donc ni réfutée ni confirmée ; ma première lecture, « réfutée »
 
 Portée : sur macOS, Docker exige une VM, et c'est son démarrage qui fait l'écart. Sous Linux, l'écart vient du démarrage du moteur (containerd et dockerd) ; il est mesuré dans une VM sur un hôte macOS, sans gage pour une machine Linux nue. Windows : avec la preuve de l'étape « Hôtes ».
 
+**Délégation isolée, H4** (demande du propriétaire : comparer la même délégation, `claude -p`, isolée dans srt et dans Docker, les deux froids ; un `claude -p` hors isolation n'apporte ni la sécurité ni la réduction de coûts de l'architecture et n'est pas comparé). Protocole pré-enregistré (`07b01e3`), puis amendé deux fois par le propriétaire avant toute mesure retenue :
+- `fbadb32` : l'image d'une délégation est reconstruite sans cache ;
+- `e4b8440` : l'environnement est jetable en entier.
+
+Pour chaque délégation Docker, sont chronométrés :
+- l'écriture de sa configuration (jamais la clé) ;
+- le démarrage du moteur ;
+- la construction `--no-cache --pull` : base épinglée retéléchargée, binaire Linux 0.3.312 dont le sha512 est vérifié contre le lockfile ;
+- le conteneur ;
+- l'effacement de toutes les images et de tout le cache (`system prune -af`) ;
+- l'arrêt du moteur.
+
+Côté srt : une sandbox neuve, profil `worker`, réseau vers le seul port du modèle, canari compris. Faux modèle, réponse en un tour ; une délégation n'est comptée que si elle sort en 0 avec la réponse.
+- Essais avant les campagnes, conservés et non analysés :
+  - une campagne interrompue, dont l'image était construite d'avance (disque chaud, retirée par le propriétaire) ;
+  - trois échecs d'environ 18 s, avant l'enregistrement des étapes, qui n'ont pas pu être attribués ;
+  - deux mesures de chauffe à 369 et 381 s : lenteurs du registre.
+- **macOS** (`baseline/results/overhead-2026-11-07T13-03-08-844Z.jsonl`) : `deleg-srt` 921 ms (p10 696, p90 1 218) ; `deleg-docker-cold` 64 057 ms (p10 61 770, p90 67 170). Médianes des étapes Docker : VM 15,5 s, construction 45,4 s, conteneur 0,4 s, effacement 0,1 s, arrêt 2,4 s. **H4 tient** : − 63 136 ms (− 64 244 à − 62 324), soit environ 70 fois moins.
+- **Linux**, VM `aos-bench`, démon arrêté (`baseline/results/overhead-2026-11-07T13-39-32-644Z-linux.jsonl`) : `deleg-srt` 475 ms (p10 358, p90 595) ; `deleg-docker-cold` 45 050 ms (p10 43 559, p90 47 534). Médianes des étapes : démon 0,4 s, construction 44,0 s, conteneur 0,4 s, effacement 0,1 s, arrêt 0,02 s. **H4 tient** : − 44 575 ms (− 45 437 à − 43 843), soit environ 95 fois moins.
+- Aucun échec dans les deux campagnes, 30 mesures par configuration après 2 de chauffe.
+
 **Lecture pour la conception** (question du propriétaire : pourquoi srt plutôt qu'un Docker relancé à chaque délégation, ou qu'une délégation à une autre session Claude) :
 - à isolation froide égale, une délégation sous srt démarre plus vite que sous Docker, sur les deux hôtes mesurés ;
 - un Docker à démon résident, avec un conteneur neuf par délégation, est un autre modèle : il garde un composant résident et privilégié, partagé entre les tâches, alors que srt n'en a aucun et que rien ne survit à une délégation. La comparaison froide ne tranche pas ce point, qui relève de la sécurité ;
-- la délégation à une autre session Claude n'est pas encore mesurée : son temps de lancement peut l'être face au faux modèle, comme A, et son coût le sera par la mesure B.
+- la délégation à une session Claude hors isolation n'est pas mesurée, par décision du propriétaire : elle n'a ni la sécurité ni la réduction de coûts de l'architecture, et ne se compare pas à une délégation isolée. La comparaison retenue est H4 ; le coût réel viendra de la mesure B.
 
 **Lecture.**
 - srt paie à chaque lancement son canari, une seconde exécution sous srt qui vérifie lecture et connexion refusées (§6, sans repli).
 - Une décomposition (srt sans canari) répondrait à la question suivante : faut-il un canari par lancement, ou par profil et par démarrage de la gateway ? Elle n'était pas au protocole : ce serait une mesure exploratoire, annoncée comme telle, et le changement du canari est une décision du propriétaire, puisque c'est un plancher de sécurité.
 - Le démarrage de la sandbox du worker fait l'essentiel des 700 ms ajoutés à un `recall` (536 ms). Le reste, environ 160 ms, se partage entre le broker, la gateway et le rappel du module.
 - La mesure A dit ce que la structure coûte, pas ce qu'elle rapporte. Avec un vrai modèle, chaque tour coûte des secondes, mais ce rapport n'est pas mesuré ici : c'est la mesure B, qui comparera aussi les coûts.
+- délégation isolée : à environnement jetable égal, srt délègue en moins d'une seconde, Docker en 45 à 64 s. L'écart vient de ce que Docker doit fabriquer et jeter un environnement à chaque délégation : télécharger sa base, copier le binaire de 293 Mo, construire. srt, lui, ne fabrique rien : il restreint le système de l'hôte autour d'un processus et le tue ensuite. Le conteneur lui-même ne coûte que 0,4 s des deux côtés de l'hôte ;
+- limites : la construction dépend du réseau de cet hôte vers Docker Hub ; un miroir de registre la raccourcirait, mais il garderait l'image de base hors de l'environnement, ce que la décision du propriétaire exclut. Le réseau du conteneur n'est pas restreint au modèle : Docker n'a pas de liste d'hôtes autorisés sans proxy de sortie, un écart de sécurité qui s'ajoute à celui du démon.
 
 **Fait annexe.** Le `recall` v2 (worker Docker) échoue avec le Claude Code actuel avant tout tour : le CLI refuse son schéma de sortie (draft 2020-12), le défaut corrigé en v3 au §29. Sondé en processus contre le faux modèle. Le chemin v2 gardé en mode additif ne sert donc plus un `recall` réel. Le réparer touche `run-worker.ts`, endetté, pour un chemin destiné au retrait : décision du propriétaire.
 
