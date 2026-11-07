@@ -77,10 +77,16 @@ const LINUX = process.platform === 'linux';
 const COLD_HOST = LINUX ? [] : ['-H', `unix://${join(homedir(), '.colima', COLD_PROFILE, 'docker.sock')}`];
 // Colima switches the Docker context when it starts: its own config folder keeps the context of the host unchanged.
 const coldEnv = { ...process.env, DOCKER_CONFIG: mkdtempSync(join(tmpdir(), 'aos-bench-docker-')) };
-const engine = (verb: 'start' | 'stop') =>
+/** Under Linux the whole engine: containerd, which dockerd runs on, and dockerd with its socket. */
+const LINUX_UNITS = {
+  start: ['containerd.service', 'docker.socket', 'docker.service'],
+  stop: ['docker.service', 'docker.socket', 'containerd.service'],
+};
+const engine = (verb: 'start' | 'stop' | 'reset-failed') =>
   new Promise<boolean>((resolve) => {
+    const units = verb === 'reset-failed' ? LINUX_UNITS.start : LINUX_UNITS[verb];
     const [command, args] = LINUX
-      ? ['sudo', ['-n', 'systemctl', verb, 'docker.socket', 'docker.service']]
+      ? ['sudo', ['-n', 'systemctl', verb, ...units]]
       : ['colima', [verb, '--profile', COLD_PROFILE]];
     const child = spawn(command as string, args as string[], {
       stdio: 'ignore',
@@ -105,14 +111,18 @@ const isolation: Record<string, () => Promise<boolean>> = {
 };
 
 /** Both cold (amendment of H1): a fresh srt sandbox, and a container in a cold Docker of the host. */
-const cold: Record<string, () => Promise<boolean>> = {
+const cold: Record<string, () => Promise<{ ms: number; ok: boolean } | boolean>> = {
   'iso-srt': isolation['iso-srt']!,
   'iso-docker-cold': async () => {
+    // Untimed, under Linux only: systemd refuses a unit started 3 times within 60 s (start-limit-hit), a guard of
+    // systemd and no cost of Docker; its counter is reset before each start.
+    const reset = LINUX ? await engine('reset-failed') : true;
+    const clock = performance.now();
     const started = await engine('start');
     const args = [...COLD_HOST, 'run', '--rm', '--network', 'none', IMAGE, 'node', '-e', '0'];
     const ran = started && (await exitOf('docker', args)) === 0;
     const stopped = await engine('stop');
-    return started && ran && stopped;
+    return { ms: performance.now() - clock, ok: reset && started && ran && stopped };
   },
 };
 
