@@ -68,14 +68,21 @@ const exitOf = (command: string, args: string[]) =>
     child.on('exit', (code) => resolve(code));
   });
 
-/** The dedicated Colima VM of iso-docker-cold, distinct from the profiles of other sessions. */
+/**
+ * The cold Docker of iso-docker-cold, by host (baseline/README.md): under macOS the dedicated Colima VM `aos-bench`,
+ * distinct from the profiles of other sessions, started then stopped; under Linux the daemon, started then stopped.
+ */
 const COLD_PROFILE = 'aos-bench';
-const COLD_SOCKET = `unix://${join(homedir(), '.colima', COLD_PROFILE, 'docker.sock')}`;
+const LINUX = process.platform === 'linux';
+const COLD_HOST = LINUX ? [] : ['-H', `unix://${join(homedir(), '.colima', COLD_PROFILE, 'docker.sock')}`];
 // Colima switches the Docker context when it starts: its own config folder keeps the context of the host unchanged.
 const coldEnv = { ...process.env, DOCKER_CONFIG: mkdtempSync(join(tmpdir(), 'aos-bench-docker-')) };
-const colima = (verb: 'start' | 'stop') =>
+const engine = (verb: 'start' | 'stop') =>
   new Promise<boolean>((resolve) => {
-    const child = spawn('colima', [verb, '--profile', COLD_PROFILE], {
+    const [command, args] = LINUX
+      ? ['sudo', ['-n', 'systemctl', verb, 'docker.socket', 'docker.service']]
+      : ['colima', [verb, '--profile', COLD_PROFILE]];
+    const child = spawn(command as string, args as string[], {
       stdio: 'ignore',
       env: coldEnv,
       cwd: tmpdir(),
@@ -97,14 +104,14 @@ const isolation: Record<string, () => Promise<boolean>> = {
     (await exitOf('docker', ['run', '--rm', '--network', 'none', IMAGE, 'node', '-e', '0'])) === 0,
 };
 
-/** Both cold (amendment of H1): a fresh srt sandbox, and a container in the dedicated VM started then stopped. */
+/** Both cold (amendment of H1): a fresh srt sandbox, and a container in a cold Docker of the host. */
 const cold: Record<string, () => Promise<boolean>> = {
   'iso-srt': isolation['iso-srt']!,
   'iso-docker-cold': async () => {
-    const started = await colima('start');
-    const args = ['-H', COLD_SOCKET, 'run', '--rm', '--network', 'none', IMAGE, 'node', '-e', '0'];
+    const started = await engine('start');
+    const args = [...COLD_HOST, 'run', '--rm', '--network', 'none', IMAGE, 'node', '-e', '0'];
     const ran = started && (await exitOf('docker', args)) === 0;
-    const stopped = await colima('stop');
+    const stopped = await engine('stop');
     return started && ran && stopped;
   },
 };
