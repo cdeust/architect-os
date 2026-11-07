@@ -120,3 +120,10 @@ chronométrés : le démarrage du moteur, la construction de l'image de la dél�
 délégation), le conteneur, le retrait de l'image, l'arrêt du moteur. Le binaire Linux vient de
 `@anthropic-ai/claude-agent-sdk-linux-arm64` 0.3.312, sha512 vérifié contre le lockfile par le banc lui-même. La
 campagne interrompue du 7 novembre (image construite d'avance) n'est pas analysée et reste comme essai abandonné.
+
+Amendement du 7 novembre 2026, second, décision du propriétaire avant toute mesure retenue : l'environnement est
+jetable en entier, images et caches compris. Rien ne persiste d'une délégation à l'autre : avant la campagne, les
+images et le cache de construction du moteur de mesure sont effacés ; pour chaque exécution, l'image de base épinglée
+est retéléchargée depuis le registre par la construction, et le retrait final efface toutes les images et tout le cache
+de construction (`docker system prune -af`) avant l'arrêt du moteur, retrait chronométré. La variance du réseau et les
+limites de téléchargement du registre font partie de la mesure ; un téléchargement refusé est un échec compté.
