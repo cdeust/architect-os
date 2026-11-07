@@ -111,3 +111,12 @@ autorisés sans proxy de sortie, écart de sécurité noté, non mesuré.
 
 Méthode et statistiques : celles de la mesure A (30 mesures après 2 de chauffe, en alternance, bootstrap à graine 42).
 Commande : `OVERHEAD_ONLY=deleg npm run baseline:overhead`.
+
+Amendement du 7 novembre 2026, décision du propriétaire avant toute mesure retenue : un environnement Docker de
+délégation est éphémère et jetable, son image et ses paramètres changent d'une délégation à l'autre ; une image
+construite d'avance sur le disque de la VM le rendait chaud. Pour chaque exécution de `deleg-docker-cold`, sont
+chronométrés : le démarrage du moteur, la construction de l'image de la délégation avec `docker build --no-cache` (base
+`node:26-bookworm-slim` épinglée par digest, présente sur le disque ; binaire Claude Code ; une couche propre à la
+délégation), le conteneur, le retrait de l'image, l'arrêt du moteur. Le binaire Linux vient de
+`@anthropic-ai/claude-agent-sdk-linux-arm64` 0.3.312, sha512 vérifié contre le lockfile par le banc lui-même. La
+campagne interrompue du 7 novembre (image construite d'avance) n'est pas analysée et reste comme essai abandonné.
