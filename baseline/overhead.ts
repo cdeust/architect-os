@@ -4,7 +4,8 @@
 // warm, and under srt on a fresh platform. One JSON line per measure in baseline/results/overhead-<date>.jsonl, after
 // a header line describing the host. OVERHEAD_N changes the number of measures per configuration (30 by default).
 import { spawn, spawnSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { arch, cpus, homedir, release, tmpdir, type } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -111,7 +112,7 @@ const isolation: Record<string, () => Promise<boolean>> = {
 };
 
 /** Both cold (amendment of H1): a fresh srt sandbox, and a container in a cold Docker of the host. */
-const cold: Record<string, () => Promise<{ ms: number; ok: boolean } | boolean>> = {
+const cold: Record<string, () => Promise<{ ms: number; ok: boolean; steps?: unknown } | boolean>> = {
   'iso-srt': isolation['iso-srt']!,
   'iso-docker-cold': async () => {
     // Untimed, under Linux only: systemd refuses a unit started 3 times within 60 s (start-limit-hit), a guard of
@@ -180,7 +181,9 @@ const recall: Record<string, () => Promise<{ ms: number; ok: boolean }>> = {
 };
 
 /** The configurations of one family, their order rotated at each repetition. */
-async function family(configs: Record<string, () => Promise<{ ms: number; ok: boolean } | boolean>>) {
+async function family(
+  configs: Record<string, () => Promise<{ ms: number; ok: boolean; steps?: unknown } | boolean>>,
+) {
   const names = Object.keys(configs);
   for (let i = 0; i < WARMUP + N; i++) {
     for (let k = 0; k < names.length; k++) {
@@ -189,7 +192,15 @@ async function family(configs: Record<string, () => Promise<{ ms: number; ok: bo
       const outcome = await configs[name]!();
       const ms = performance.now() - started;
       const measure = typeof outcome === 'boolean' ? { ms, ok: outcome } : outcome;
-      write({ config: name, i, warmup: i < WARMUP, ms: Math.round(measure.ms * 10) / 10, ok: measure.ok });
+      const steps = 'steps' in measure ? { steps: measure.steps } : {};
+      write({
+        config: name,
+        i,
+        warmup: i < WARMUP,
+        ms: Math.round(measure.ms * 10) / 10,
+        ok: measure.ok,
+        ...steps,
+      });
       process.stderr.write(`${name} ${i} ${Math.round(measure.ms)} ms ${measure.ok ? 'ok' : 'FAILED'}\n`);
     }
   }
@@ -198,7 +209,44 @@ async function family(configs: Record<string, () => Promise<{ ms: number; ok: bo
 /** The isolated delegation (baseline/README.md): the same `claude -p` in srt and in a cold Docker. */
 const KEY = 'fake-not-a-key';
 const PROMPT = 'Answer with the single word ok.';
-const DELEGATION_IMAGE = 'aos-bench/claude:2.1.312';
+/** The Linux binary of Claude Code in the image of a delegation: the package of the lockfile, its sha512 checked. */
+const LINUX_PACKAGE = '@anthropic-ai/claude-agent-sdk-linux-arm64';
+
+/**
+ * The build context of the delegations, made once and untimed: the Dockerfile and the binary. Under Linux the binary
+ * is the one npm ci installed from the lockfile; under macOS the package is fetched by npm pack and refused unless its
+ * sha512 is the one of the lockfile. Each delegation writes its own configuration there before its build.
+ */
+function delegationContext(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'aos-bench-context-'));
+  let binary = join(ROOT, 'node_modules', LINUX_PACKAGE, 'claude');
+  if (!LINUX) {
+    const lock = JSON.parse(readFileSync(join(ROOT, 'package-lock.json'), 'utf8')) as {
+      packages: Record<string, { version: string; integrity: string }>;
+    };
+    const entry = lock.packages[`node_modules/${LINUX_PACKAGE}`]!;
+    const packed = spawnSync('npm', ['pack', `${LINUX_PACKAGE}@${entry.version}`, '--silent'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    const tarball = join(dir, packed.stdout.trim());
+    const integrity = `sha512-${createHash('sha512').update(readFileSync(tarball)).digest('base64')}`;
+    if (integrity !== entry.integrity)
+      throw new Error(`${LINUX_PACKAGE}: sha512 is not the one of the lockfile`);
+    spawnSync('tar', ['-xzf', tarball, '-C', dir]);
+    binary = join(dir, 'package', 'claude');
+  }
+  cpSync(binary, join(dir, 'claude'));
+  const dockerfile = [
+    `FROM ${IMAGE}`,
+    'COPY claude /opt/claude/claude',
+    'COPY delegation.json /opt/delegation/config.json',
+  ];
+  writeFileSync(join(dir, 'Dockerfile'), `${dockerfile.join('\n')}\n`);
+  writeFileSync(join(dir, '.dockerignore'), '*\n!claude\n!Dockerfile\n!delegation.json\n');
+  return dir;
+}
+let delegations = 0;
 const CLAUDE = join(
   ROOT,
   'node_modules',
@@ -209,6 +257,7 @@ const CLAUDE = join(
 const CLAUDE_ARGS = ['-p', PROMPT, '--output-format', 'json', '--bare'];
 // In a Linux VM the container reaches the model through the gateway of its host; under macOS through the address of
 // the host as the Colima VM sees it, which reaches its loopback.
+const context = ONLY === 'deleg' ? delegationContext() : undefined;
 const delegationModel =
   ONLY === 'deleg'
     ? await startFakeModel([{ text: 'ok' }], { cycle: true, host: LINUX ? '0.0.0.0' : '127.0.0.1' })
@@ -234,7 +283,7 @@ const answered = (out: string): boolean => {
   }
 };
 
-const delegation: Record<string, () => Promise<{ ms: number; ok: boolean } | boolean>> = {
+const delegation: Record<string, () => Promise<{ ms: number; ok: boolean; steps?: unknown } | boolean>> = {
   'deleg-srt': async () => {
     const runner = new SrtSandboxRunner(
       runnerOptions({ brokerPort: String(delegationModel!.port), taskToken: KEY }),
@@ -248,8 +297,25 @@ const delegation: Record<string, () => Promise<{ ms: number; ok: boolean } | boo
   },
   'deleg-docker-cold': async () => {
     const reset = LINUX ? await engine('reset-failed') : true;
+    const tag = `aos-bench/claude-delegation:${(delegations += 1)}`;
     const clock = performance.now();
+    // Its parameters and configuration, never its key (passed at run), as srt writes the files of its sandbox.
+    const configuration = {
+      delegation: delegations,
+      tool: 'claude -p',
+      prompt: PROMPT,
+      model: dockerModelUrl(),
+    };
+    writeFileSync(join(context!, 'delegation.json'), `${JSON.stringify(configuration)}\n`);
+    // The time of each step, to say where the time goes.
+    const at: Record<string, number> = {};
+    const lap = (step: string) => (at[step] = Math.round(performance.now() - clock));
     const started = await engine('start');
+    lap('started');
+    // Built without cache from the base pulled again (nothing survives a delegation), run, then destroyed.
+    const build = [...COLD_HOST, 'build', '--no-cache', '--pull', '-q', '-t', tag, context!];
+    const built = started && (await outputOf('docker', build)).code === 0;
+    lap('built');
     const args = [
       ...COLD_HOST,
       'run',
@@ -264,18 +330,34 @@ const delegation: Record<string, () => Promise<{ ms: number; ok: boolean } | boo
         '-e',
         'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1',
       ],
-      DELEGATION_IMAGE,
+      tag,
       '/opt/claude/claude',
       ...CLAUDE_ARGS,
     ];
-    const ran = started ? await outputOf('docker', args) : { code: null, out: '' };
+    const ran = built ? await outputOf('docker', args) : { code: null, out: '' };
+    lap('ran');
+    // Every image and all the build cache, the base included: the next delegation finds nothing.
+    const wiped = started && (await outputOf('docker', [...COLD_HOST, 'system', 'prune', '-af'])).code === 0;
+    lap('wiped');
     const stopped = await engine('stop');
+    lap('stopped');
     return {
       ms: performance.now() - clock,
-      ok: reset && started && ran.code === 0 && answered(ran.out) && stopped,
+      ok: reset && started && built && ran.code === 0 && answered(ran.out) && wiped && stopped,
+      steps: { reset, started, built, ran: ran.code, answered: answered(ran.out), wiped, stopped, at },
     };
   },
 };
+
+// Before the campaign, untimed: the engine of the measure holds no image and no cache (baseline/README.md).
+if (ONLY === 'deleg') {
+  const emptied =
+    (LINUX ? await engine('reset-failed') : true) &&
+    (await engine('start')) &&
+    (await outputOf('docker', [...COLD_HOST, 'system', 'prune', '-af'])).code === 0 &&
+    (await engine('stop'));
+  if (!emptied) throw new Error('the engine of the measure could not be emptied before the campaign');
+}
 
 try {
   if (ONLY === 'cold') await family(cold);

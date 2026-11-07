@@ -1,0 +1,5 @@
+{"header":true,"at":"2026-11-07T12:49:25.294Z","os":"Darwin 27.0.0 arm64","cpu":"Apple M4","cpus":10,"node":"v26.11.1","srt":"0.0.81","docker":"28.3.3","claudeCode":"2.1.312","n":0,"only":"deleg","warmup":2}
+{"config":"deleg-srt","i":0,"warmup":true,"ms":1129,"ok":true}
+{"config":"deleg-docker-cold","i":0,"warmup":true,"ms":369318.2,"ok":true,"steps":{"reset":true,"started":true,"built":true,"ran":0,"answered":true,"wiped":true,"stopped":true}}
+{"config":"deleg-docker-cold","i":1,"warmup":true,"ms":380957.2,"ok":true,"steps":{"reset":true,"started":true,"built":true,"ran":0,"answered":true,"wiped":true,"stopped":true}}
+{"config":"deleg-srt","i":1,"warmup":true,"ms":1924.2,"ok":true}
