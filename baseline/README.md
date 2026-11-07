@@ -70,7 +70,7 @@ npm run baseline:overhead
 npm run baseline:overhead-analyze -- baseline/results/overhead-<date>.jsonl
 ```
 
-### Amendement du 7 novembre 2026 : H1 (proposé, en attente d'accord du propriétaire)
+### Amendement du 7 novembre 2026 : H1, accepté par le propriétaire avant toute mesure
 
 La campagne du 7 novembre ne permet pas de conclure sur H1 (journal §30). Elle opposait un srt froid à un Docker chaud,
 dont la VM et le démon étaient déjà démarrés. Règle : les deux environnements sont comparés froids par défaut. Un srt
