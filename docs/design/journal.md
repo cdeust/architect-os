@@ -1134,7 +1134,19 @@ H1 n'est donc ni réfutée ni confirmée ; ma première lecture, « réfutée »
 - `iso-srt` : médiane 686 ms (p10 652, p90 730) ; `iso-docker-cold` : médiane 17 870 ms (p10 16 637, p90 18 395) ;
 - **H1 amendée, tient** : srt − Docker froid = − 17 184 ms (− 17 326 à − 17 096), seuil < 0 ; srt froid démarre environ 26 fois plus vite que Docker froid sur cet hôte.
 
-Portée : sur macOS, Docker exige une VM, et c'est son démarrage qui fait l'écart. Sur Linux, Docker n'a pas de VM : la définition du froid y est à fixer avec le propriétaire avant de mesurer (démon arrêté puis démarré, ou démon d'un service système considéré comme partie de l'hôte), étape « Hôtes ».
+**H1 amendée sous Linux**, le froid étant le démon arrêté (décision du propriétaire avant toute mesure, commit `75c35a7` ; résultats `baseline/results/overhead-2026-11-07T12-10-43-525Z-linux.jsonl`, analyse `.md` à côté) :
+- hôte : la VM dédiée `aos-bench`, Ubuntu 24.04, noyau 6.8, 2 cœurs, 2 Gio, sur l'hôte macOS ; Node 26.11.1 posé depuis nodejs.org, SHA-256 vérifié ; bubblewrap 0.9.0, avec les espaces de noms utilisateur autorisés comme dans `gate.yml` ; Docker 28.3.3 et containerd 1.7.27 (relevés à part : l'en-tête ne peut pas lire la version d'un démon arrêté) ; copie du commit par `git archive`, dépendances par le lockfile ;
+- deux corrections avant la campagne, trouvées à l'essai et non comptées : systemd refuse une unité démarrée 3 fois en 60 s (`start-limit-hit`), un garde-fou de systemd et non un coût de Docker, et son compteur est remis à zéro hors chronomètre avant chaque démarrage ; `containerd`, sur lequel tourne `dockerd`, restait actif, donc une part du moteur restait chaude, et il est désormais arrêté et démarré avec lui ;
+- 30 mesures par configuration après 2 de chauffe, en alternance, aucun échec ;
+- `iso-srt` : médiane 187 ms (p10 184, p90 305) ; `iso-docker-cold` : médiane 467 ms (p10 439, p90 489) ;
+- **H1 amendée, tient sous Linux** : srt − Docker froid = − 279 ms (− 285 à − 266), seuil < 0 ; environ 2,5 fois plus rapide, contre environ 26 fois sous macOS.
+
+Portée : sur macOS, Docker exige une VM, et c'est son démarrage qui fait l'écart. Sous Linux, l'écart vient du démarrage du moteur (containerd et dockerd) ; il est mesuré dans une VM sur un hôte macOS, sans gage pour une machine Linux nue. Windows : avec la preuve de l'étape « Hôtes ».
+
+**Lecture pour la conception** (question du propriétaire : pourquoi srt plutôt qu'un Docker relancé à chaque délégation, ou qu'une délégation à une autre session Claude) :
+- à isolation froide égale, une délégation sous srt démarre plus vite que sous Docker, sur les deux hôtes mesurés ;
+- un Docker à démon résident, avec un conteneur neuf par délégation, est un autre modèle : il garde un composant résident et privilégié, partagé entre les tâches, alors que srt n'en a aucun et que rien ne survit à une délégation. La comparaison froide ne tranche pas ce point, qui relève de la sécurité ;
+- la délégation à une autre session Claude n'est pas encore mesurée : son temps de lancement peut l'être face au faux modèle, comme A, et son coût le sera par la mesure B.
 
 **Lecture.**
 - srt paie à chaque lancement son canari, une seconde exécution sous srt qui vérifie lecture et connexion refusées (§6, sans repli).
