@@ -87,3 +87,27 @@ le démon arrêté. Pour chaque exécution de `iso-docker-cold`, le démon (`doc
 le conteneur lancé, puis le démon arrêté ; les trois étapes sont chronométrées, comme la VM sous macOS. `iso-srt` y
 tourne avec bubblewrap. Hôte de la première mesure Linux : la VM dédiée `aos-bench` (Ubuntu 24.04), où srt et Docker
 partagent les mêmes 2 cœurs et 2 Gio.
+
+### Délégation isolée : `claude -p` dans srt contre dans Docker, les deux froids (pré-enregistré le 7 novembre 2026)
+
+Demande du propriétaire : comparer la même délégation, isolée des deux côtés. Un `claude -p` hors isolation n'apporte
+ni la sécurité ni la réduction de coûts de l'architecture ; il n'est pas comparé.
+
+| Configuration       | Ce qui est chronométré                                                                                                                                                |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deleg-srt`         | un `claude -p` dans une sandbox srt neuve, profil `worker` (réseau : le port du modèle seul), canari compris, jusqu'au retrait de son dossier                         |
+| `deleg-docker-cold` | le même `claude -p` dans un conteneur, moteur froid selon l'hôte (macOS : VM `aos-bench` démarrée puis arrêtée ; Linux : containerd et dockerd démarrés puis arrêtés) |
+
+Les deux : Claude Code 2.1.312, `-p` avec une consigne fixe, `--bare --output-format json`, une clé factice, le même
+faux modèle, une réponse en un tour. Une délégation n'est comptée que si elle sort en 0 avec la réponse du modèle.
+Docker : image `aos-bench/claude:2.1.312`, construite une fois hors chronomètre dans le moteur de l'hôte de mesure,
+sur `node:26-bookworm-slim` épinglé par digest, avec le binaire Linux de `@anthropic-ai/claude-agent-sdk-linux-arm64`
+0.3.312, dont l'empreinte sha512 est vérifiée contre le lockfile ; elle reste sur le disque, comme le binaire de l'hôte
+pour srt. Le conteneur atteint le faux modèle par le réseau par défaut de Docker : Docker n'a pas de liste d'hôtes
+autorisés sans proxy de sortie, écart de sécurité noté, non mesuré.
+
+- H4 : médiane(`deleg-srt`) − médiane(`deleg-docker-cold`) < 0, l'intervalle à 95 % entier sous 0, sur chaque hôte
+  mesuré (macOS ; Linux dans la VM `aos-bench`).
+
+Méthode et statistiques : celles de la mesure A (30 mesures après 2 de chauffe, en alternance, bootstrap à graine 42).
+Commande : `OVERHEAD_ONLY=deleg npm run baseline:overhead`.
