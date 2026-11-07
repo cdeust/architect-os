@@ -81,3 +81,9 @@ Définition proposée de `iso-docker-cold` sur macOS, où Docker exige une VM : 
 Les trois étapes sont chronométrées, comme srt l'est de la création de sa sandbox jusqu'au retrait de son dossier.
 L'image reste sur le disque de la VM, comme le binaire de Node reste sur le disque de l'hôte pour srt : un disque
 chaud de part et d'autre, aucun processus chaud. H1 est reformulée sur `iso-docker-cold` ; son seuil ne change pas.
+
+Sous Linux, décision du propriétaire du 7 novembre 2026, avant toute mesure : Docker n'a pas de VM, et le froid y est
+le démon arrêté. Pour chaque exécution de `iso-docker-cold`, le démon (`docker.service` et `docker.socket`) est démarré,
+le conteneur lancé, puis le démon arrêté ; les trois étapes sont chronométrées, comme la VM sous macOS. `iso-srt` y
+tourne avec bubblewrap. Hôte de la première mesure Linux : la VM dédiée `aos-bench` (Ubuntu 24.04), où srt et Docker
+partagent les mêmes 2 cœurs et 2 Gio.
