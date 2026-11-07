@@ -1117,14 +1117,19 @@ Rapports appariés par tâche, moyenne et intervalle à 95 % par bootstrap sur l
 Écarts de médianes, intervalle à 95 % par bootstrap (10 000 tirages, graine 42) :
 - démarrage sous srt, canari compris : + 536 ms (529 à 551) ;
 - démarrage sous Docker : − 24 ms (− 29 à − 16) ;
-- **H1, réfutée** : srt − Docker = + 560 ms (553 à 574), seuil < 0 ;
+- H1 : srt − Docker = + 560 ms (553 à 574), seuil < 0 : **mesure invalide pour H1, aucune conclusion** (correction ci-dessous) ;
 - **H2, tient** : `recall` sous srt, module chaud, moins en processus = + 700 ms (686 à 709), seuil < 1 000 ms ;
 - **H3, tient** : premier appel, qui lance le module, = + 771 ms (751 à 782), seuil < 1 000 ms.
 
+**Correction du propriétaire.** La comparaison de H1 n'a pas de valeur :
+- elle opposait un srt froid (sandbox créée de zéro, canari à chaque lancement, comme le veut la conception) à un Docker chaud (VM Colima et démon déjà démarrés, seule la création du conteneur chronométrée) ;
+- une comparaison ne vaut que si les deux environnements sont froids par défaut ;
+- l'inverse, un srt chaud, n'a pas d'intérêt : la sandbox meurt après chaque exécution, sans reprise de session, pour bloquer la contamination.
+
+H1 n'est donc ni réfutée ni confirmée ; ma première lecture, « réfutée », est retirée. H2 et H3 comparent srt à srt et restent valides. Le protocole amendé est dans `baseline/README.md`, à côté de l'original, qui n'est pas réécrit.
+
 **Lecture.**
-- H1 est réfutée sur cet hôte, et la comparaison est inégale dans les deux sens :
-  - le coût de Docker est déplacé dans une VM résidente, déjà démarrée, que la mesure ne compte pas ; un conteneur y démarre même plus vite qu'un `node` macOS sur l'hôte ;
-  - srt, lui, paie à chaque lancement son canari, une seconde exécution sous srt qui vérifie lecture et connexion refusées (§6, sans repli).
+- srt paie à chaque lancement son canari, une seconde exécution sous srt qui vérifie lecture et connexion refusées (§6, sans repli).
 - Une décomposition (srt sans canari) répondrait à la question suivante : faut-il un canari par lancement, ou par profil et par démarrage de la gateway ? Elle n'était pas au protocole : ce serait une mesure exploratoire, annoncée comme telle, et le changement du canari est une décision du propriétaire, puisque c'est un plancher de sécurité.
 - Le démarrage de la sandbox du worker fait l'essentiel des 700 ms ajoutés à un `recall` (536 ms). Le reste, environ 160 ms, se partage entre le broker, la gateway et le rappel du module.
 - La mesure A dit ce que la structure coûte, pas ce qu'elle rapporte. Avec un vrai modèle, chaque tour coûte des secondes, mais ce rapport n'est pas mesuré ici : c'est la mesure B, qui comparera aussi les coûts.
@@ -1134,7 +1139,7 @@ Rapports appariés par tâche, moyenne et intervalle à 95 % par bootstrap sur l
 **Limites.**
 - Faux modèle : ni latence réseau, ni temps du modèle.
 - Un seul hôte. Le contexte Docker actif (VM Colima) sert aussi à une autre session : du bruit est possible, sans écriture de notre part (`run --rm` seul).
-- La VM Docker n'est pas comptée.
+- La VM Docker n'est pas comptée : c'est ce qui invalide H1.
 
 **Pas fait, avec son étape.**
 - La même commande sur Linux (bwrap) et, avec la preuve Windows, sur WSL2 et sur Docker natif : étape « Hôtes ».

@@ -69,3 +69,15 @@ seul hôte par campagne. La même commande se relance sur Linux et, avec la preu
 npm run baseline:overhead
 npm run baseline:overhead-analyze -- baseline/results/overhead-<date>.jsonl
 ```
+
+### Amendement du 7 novembre 2026 : H1 (proposé, en attente d'accord du propriétaire)
+
+La campagne du 7 novembre ne permet pas de conclure sur H1 (journal §30). Elle opposait un srt froid à un Docker chaud,
+dont la VM et le démon étaient déjà démarrés. Règle : les deux environnements sont comparés froids par défaut. Un srt
+chaud est exclu, car la sandbox meurt après chaque exécution, sans reprise de session, pour bloquer la contamination.
+
+Définition proposée de `iso-docker-cold` sur macOS, où Docker exige une VM : pour chaque exécution, une VM Colima dédiée
+(profil `aos-bench`, distinct des profils des autres sessions) est démarrée, le conteneur lancé, puis la VM arrêtée.
+Les trois étapes sont chronométrées, comme srt l'est de la création de sa sandbox jusqu'au retrait de son dossier.
+L'image reste sur le disque de la VM, comme le binaire de Node reste sur le disque de l'hôte pour srt : un disque
+chaud de part et d'autre, aucun processus chaud. H1 est reformulée sur `iso-docker-cold` ; son seuil ne change pas.
