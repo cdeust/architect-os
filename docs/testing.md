@@ -37,6 +37,7 @@ Each descriptive file is loaded by its test exactly as production loads it, chec
 | `services/memory/worker/prompts/<tool>.md`                              | `services/memory/test/worker/run-worker.test.ts` | missing prompt, empty prompt                                                                            |
 | `.claude/agents/*.md`, `.claude/commands/*.md`, `.claude/settings.json` | `test/descriptive/claude-files.test.ts`          | no frontmatter, missing `description`, misspelt field                                                   |
 | `compose.yaml`                                                          | `test/infra/compose.test.ts`                     | (zone assertions)                                                                                       |
+| `.github/workflows/claude-review.yml` (review prompt)                   | `test/descriptive/review-workflow.test.ts`       | no run link after the verdict instruction                                                               |
 
 The end-to-end test loads the committed prompts and asserts the agent received them.
 
