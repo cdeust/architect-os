@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- The review prompt puts the run's link just before the verdict line in every comment that carries it (Cortex ADR-1130). The resolver reads a verdict only from a comment that links the review run of the head; a review posted with `gh pr comment` can carry the verdict without the link, and an approved, green pull request then stays unmerged.
 - The Claude review and the merge follow Cortex's CI (`cdeust/Cortex`): `claude-review.yml` replaces `claude-code-review.yml` (three reviews per pull request at most, a verdict line), `scripts/ci_review_budget.py` counts them, and `pipeline-after-merge.yml` merges into `main` a pull request whose gate succeeded and whose review approves.
 - The repository was replaced by the architecture skeleton. The previous content is archived under the tag `archive/v1-2026-10-29` and is no longer maintained.
 
