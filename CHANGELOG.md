@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- The Claude review and the merge follow Cortex's CI (`cdeust/Cortex`): `claude-review.yml` replaces `claude-code-review.yml` (three reviews per pull request at most, a verdict line), `scripts/ci_review_budget.py` counts them, and `pipeline-after-merge.yml` merges into `main` a pull request whose gate succeeded and whose review approves.
 - The repository was renamed from `agentic-ai` to `architect-os` (npm scope `@agentic-ai/*` is now `@architect-os/*`); GitHub redirects the old URL.
 - The repository was replaced by the architecture skeleton. The previous content is archived under the tag `archive/v1-2026-10-29` and is no longer maintained.
 

@@ -3,7 +3,9 @@ dist
 package-lock.json
 *.tsbuildinfo
 .github/workflows/claude.yml
-.github/workflows/claude-code-review.yml
+# Copied from cdeust/Cortex, kept byte for byte where this repository does not differ.
+.github/workflows/claude-review.yml
+.github/workflows/pipeline-after-merge.yml
 docs/design
 bench
 docs/communication/deck

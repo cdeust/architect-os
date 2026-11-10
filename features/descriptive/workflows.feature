@@ -11,13 +11,14 @@ Feature: GitHub workflows
     And every checkout in it has persist-credentials false
 
     Examples:
-      | file                   |
-      | bench-sandbox.yml      |
-      | broker-live.yml        |
-      | claude-code-review.yml |
-      | claude.yml             |
-      | gate.yml               |
-      | mutation-full.yml      |
+      | file                     |
+      | bench-sandbox.yml        |
+      | broker-live.yml          |
+      | claude-review.yml        |
+      | claude.yml               |
+      | gate.yml                 |
+      | mutation-full.yml        |
+      | pipeline-after-merge.yml |
 
   Scenario: gate.yml follows the rules of the CI gate
     Given the committed workflow "gate.yml"
