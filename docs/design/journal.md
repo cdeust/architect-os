@@ -1194,3 +1194,71 @@ Côté srt : une sandbox neuve, profil `worker`, réseau vers le seul port du mo
 - Recherche : protocole commité avant les mesures, hypothèse réfutée publiée telle quelle, données et analyse versionnées, une commande par étape, graine fixe.
 - SSDLC : aucune dépendance ajoutée, image Docker épinglée par digest ; le banc ne lit aucune clé, la clé du broker est factice et jetable ; le code de production est inchangé, seul le code de test est partagé.
 - Opérationnel : aucun token dépensé, aucune donnée humaine, IRB sans objet.
+
+## 31. Lot A : fusion de `feat/gate-1a` vers `main`, protection de la branche, 11 novembre 2026
+
+**Mandat.** Brief du propriétaire du 11 novembre 2026 (« écosystème autonome »), lot A, exécuté sans lui : aucune question, la décision et sa raison écrites ici. Métrique du lot : `main` contient les briques prouvées, et le lien du journal sur `feat/gate-1a` répond toujours 200.
+
+**État vérifié avant d'agir** (règle 9 du brief), chaque ligne avec sa commande :
+
+| Constat | Valeur | Commande |
+| --- | --- | --- |
+| Fichiers suivis sur `main` (`f699c89`) | 128 | `git ls-tree -r --name-only origin/main \| wc -l` |
+| Fichiers suivis sur `feat/gate-1a` (`e20964b`, 10 novembre, 09 h 19 +0100) | 521 | `git ls-tree -r --name-only origin/feat/gate-1a \| wc -l` |
+| Porte sur la tête de la branche | verte, run [42781761974](https://github.com/cdeust/architect-os/actions/runs/42781761974) | liste des runs de `gate.yml` sur la branche |
+| PR ouvertes | aucune | liste des PR ouvertes, 11 novembre |
+| Branches du dépôt | `main`, `feat/gate-1a`, `ci/cortex-parity`, `ci/cortex-parity-main`, `ci/review-workflow-as-cortex`, `ci/verdict-links-its-run`, `claude/ci-autonome-repos-g4qh8v` ; **aucune `sentinel/*`** | `git ls-remote --heads origin` |
+| Tag `residency-2026-11` | absent | `git ls-remote --tags origin` |
+| Lien du journal sur la branche | 200 (page et brut) | `curl -o /dev/null -w '%{http_code}' https://github.com/cdeust/architect-os/blob/feat/gate-1a/docs/design/journal.md` |
+| Dépôt | public | API de recherche, `private: false` |
+| Fusion de la branche avec `main` | conflit réel, 7 fichiers | `git merge-tree --write-tree --name-only origin/feat/gate-1a origin/main` |
+
+Limite de la preuve du lien : la requête est sortie par le proxy de la session, sans identifiant posé par moi. Que le dépôt soit public est la preuve indépendante qu'un lecteur anonyme l'obtient.
+
+**Ce que cette session ne peut pas faire.** Le brief suppose une session sur le poste du propriétaire, avec `gh` en administrateur. Celle-ci tourne dans un conteneur distant : pas d'API d'administration (réglages du dépôt, rulesets, création de refs), et `git push` n'y est autorisé que vers la branche de travail `claude/ecosystem-autonome-cdeust-pu7fe4`. Mesuré : `git push origin e20964b:refs/tags/residency-2026-11` est refusé (HTTP 403). C'est une barrière posée exprès, elle n'est pas contournée. A1 (ne plus supprimer les branches fusionnées, ruleset `keep-feat-gate-1a`, tag) et A2 (ruleset `main`) sont donc inscrits dans [`decisions-en-attente.md`](decisions-en-attente.md), commande prête.
+
+**Décision 1 : la PR de fusion part de la branche de travail, pas de `feat/gate-1a`.** Deux raisons.
+
+- Le conflit avec `main` exige un commit de fusion, qui doit être poussé quelque part. `feat/gate-1a` ne doit pas être réécrite et cette session ne peut pas y pousser.
+- Le résolveur fusionne par l'API en `squash`. Tant que `delete_branch_on_merge` n'a pas été mis à `false` (A1, non exécutable ici), GitHub supprime la branche de tête d'une PR fusionnée. Avec cette tête, la branche supprimée ne peut être que la branche de travail. `feat/gate-1a` n'est la tête d'aucune PR : la fusion ne peut pas la toucher.
+
+`feat/gate-1a` reste à `e20964b`, aucun push ni avant ni après. La branche de travail est `e20964b` plus un commit de fusion de `main` (`65668e4`, parents `e20964b` et `f699c89`), plus ce journal.
+
+**Décision 2 : résolution du conflit.** `main` et la branche ont reçu la CI de Cortex le 10 novembre ; `main` a pris ensuite trois changements (#100, #101, #102). Règle 5 du brief : la CI de Cortex fait foi.
+
+| Fichier | Résolution | Raison |
+| --- | --- | --- |
+| `.github/workflows/claude-review.yml`, `scripts/ci_review_budget.py` | version de `main` | identiques à Cortex, octet pour octet (`git rev-parse` : blobs `5239284`, `5835138` des deux côtés) |
+| `.github/workflows/pipeline-after-merge.yml` | version de `main` | c'est celle de la branche plus la fusion en attente qui finit verte (Cortex ADR-1128) : `git diff e20964b origin/main` ne montre rien d'autre |
+| `.prettierignore`, `docs/infrastructure.md` | version de la branche | le côté `main` décrit `ci.yml` et l'arbre `test/`, que la branche a retirés |
+| `CHANGELOG.md` | les trois entrées de `main`, l'entrée commune, puis le renommage | aucune perte des deux côtés |
+| `docs/testing.md` | tableau de la branche, plus une ligne par workflow documenté sur `main` | idem |
+| `test/descriptive/review-workflow.test.ts`, `after-merge-workflow.test.ts` (vitest, ajoutés sur `main`) | retirés ; leurs 13 cas deviennent 13 pickles de `features/descriptive/workflows.feature`, steps dans `features/steps/cortex-workflows.ts` | la branche n'a plus vitest ni aucun `*.test.ts` (porte de sortie de 1a, §16) ; mêmes assertions, mêmes copies cassées refusées |
+
+**Preuves, rejouables sur `65668e4`.**
+
+- `npx tsc -b` : sortie 0.
+- `npx cucumber-js --profile replay features/descriptive/workflows.feature --format summary` : 36 scénarios verts (23 avant la fusion, 13 ajoutés). Les règles d'épinglage, de `npm ci --ignore-scripts` et de checkout sans identifiants passent sur les versions de `main` des deux workflows de Cortex.
+- `npx cucumber-js --format summary`, suite entière, 1 034 scénarios. Premier passage : 1 008 verts, 26 rouges qui dépendent de la machine, 12 `@postgres` (PostgreSQL 17 absent ; `apt.postgresql.org` est refusé par la politique réseau de la session) et 14 de `features/sandbox/` (bubblewrap absent).
+- Après `apt-get install bubblewrap socat`, même commande sur le commit final : 1 022 verts, 12 rouges, tous `@postgres`, tous sur le même message (« needs a PostgreSQL 17 with pgvector »). `npx cucumber-js --profile macos --format summary` : 17 scénarios sur 17, srt réel sous bwrap dans le conteneur.
+- `git ls-files '*.test.ts'` : vide.
+
+**Non prouvé ici, et où ce le sera.**
+
+- Les 12 scénarios `@postgres` sur l'arbre fusionné : `gate-linux` de la PR. La fusion ne touche ni `data/` ni leurs steps.
+- La porte sur le diff entier de la PR (premier parent : `main`) : Stryker y mute toutes les lignes de production des briques, puisqu'elles sont toutes nouvelles pour `main`, et le registre de dette est créé par ce diff (`created`, règle 6 : aucune entrée « ajoutée »). Les portes écrasées par brique sont vertes (§27 à §29) ; aucune n'a porté sur toutes les briques à la fois. Si elle est rouge : correction à la cause, sur la branche de travail, jamais au registre.
+- `exécutés = base + ajoutés − supprimés` avec une base lue : premier run de `gate.yml` sur `main` après la fusion (§16, reste nommé).
+
+**Faits pour le propriétaire.**
+
+- Aucune branche `sentinel/*` n'existe plus sur le dépôt : la décision « supprimer les branches sentinelles » (§16, décision 4) n'a plus d'objet côté distant.
+- Après la fusion, `broker-live.yml` se déclenchera sur `main` et échouera tant que l'environnement `broker-live` et le secret `ANTHROPIC_TEST_KEY` n'existent pas (§26) : attendu, inscrit aux décisions en attente.
+- La revue Claude est comptée : trois au plus par PR. Tout le lot est poussé en une fois, la PR n'est sortie du brouillon qu'ensuite.
+
+**Reste du lot, après la fusion (A4).** README (lien cliquable vers ce journal, `npm run gate`), retrait des deux déclencheurs `push` temporaires de `gate.yml`, relevé du premier run sur `main`, ajout d'architect-os et de sillage au périmètre de `ci-autonome` (PR dans ce dépôt).
+
+**Trois piliers.**
+
+- Recherche : chaque constat a sa commande ; ce qui n'est pas prouvé est nommé avec l'endroit où il le sera.
+- SSDLC : aucune dépendance ajoutée ; les trois fichiers de CI sont ceux de `main`, sans retouche ; les steps ajoutés lancent `python3` sur le résolveur extrait du workflow, sans réseau (`resolve` remplacé), comme le test vitest qu'ils remplacent.
+- Opérationnel : aucun secret lu ni écrit ; aucune fusion à la main, aucun contournement : la porte et le résolveur décident.
