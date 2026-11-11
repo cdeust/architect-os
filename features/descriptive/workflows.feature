@@ -70,3 +70,51 @@ Feature: GitHub workflows
   Scenario: a gate workflow with broader permissions is rejected
     Given the committed workflow "gate.yml"
     Then a gate workflow with broader permissions is rejected
+
+  Scenario: the review prompt puts the run link in every comment that carries the verdict
+    Given the committed workflow "claude-review.yml"
+    Then its prompt gives the run link after the verdict instruction
+
+  Scenario: a review prompt without the run link is rejected
+    Given the committed workflow "claude-review.yml"
+    Then a review prompt without the run link is rejected
+
+  Scenario Outline: the resolver ends green with a notice and no output when "<reason>"
+    Given the committed workflow "pipeline-after-merge.yml"
+    When its resolver refuses with "<reason>"
+    Then the resolver exits 0 with the notice "<reason>" and no output
+
+    Examples:
+      | reason                                                   |
+      | merge held: Pipeline has not succeeded on this head      |
+      | merge held: no Claude review ran on this head            |
+      | merge held: Claude has not posted a verdict on this head |
+      | merge held: Claude review verdict is block               |
+      | PR head advanced after testing                           |
+
+  Scenario Outline: the resolver still fails when "<reason>"
+    Given the committed workflow "pipeline-after-merge.yml"
+    When its resolver refuses with "<reason>"
+    Then the resolver exits 1 with the error "<reason>" and no output
+
+    Examples:
+      | reason                                   |
+      | PR label holds merge                     |
+      | GitHub did not confirm a completed merge |
+      | PR is closed or draft                    |
+
+  Scenario: the resolver holds a merge for the listed reasons and no other
+    Given the committed workflow "pipeline-after-merge.yml"
+    Then the held reasons its resolver can raise are
+      | merge held: Pipeline has not succeeded on this head      |
+      | merge held: no Claude review ran on this head            |
+      | merge held: Claude has not posted a verdict on this head |
+      | merge held: Claude review verdict is block               |
+
+  Scenario: no job runs after a waiting resolver
+    Given the committed workflow "pipeline-after-merge.yml"
+    Then its only dependent job requires a pull request number
+
+  Scenario: a resolver for which a held merge is a failure is rejected
+    Given the committed workflow "pipeline-after-merge.yml"
+    Then a resolver for which a held merge is a failure exits 1

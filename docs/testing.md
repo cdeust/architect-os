@@ -76,6 +76,8 @@ Each descriptive file is loaded by its scenarios exactly as production loads it,
 | `packages/sandbox/profiles/builder.json`, `packages/sandbox/code.json`  | `packages/sandbox/features/profile.feature`, `packages/sandbox/features/tool.feature` | misspelt or weakening srt key, literal token, foreign base URL, plain-http upstream, unanchored route, empty command |
 | `.claude/agents/*.md`, `.claude/commands/*.md`, `.claude/settings.json` | `features/descriptive/claude-files.feature`                                           | no frontmatter, missing `description`, misspelt field                                                                |
 | `compose.yaml`                                                          | `features/infra/compose.feature`                                                      | (zone assertions)                                                                                                    |
+| `.github/workflows/claude-review.yml` (review prompt)                   | `features/descriptive/workflows.feature`                                              | no run link after the verdict instruction                                                                            |
+| `.github/workflows/pipeline-after-merge.yml` (resolver)                 | `features/descriptive/workflows.feature`                                              | a held merge exits 1                                                                                                 |
 
 The end-to-end scenarios load the committed prompts and assert the agent received them.
 
