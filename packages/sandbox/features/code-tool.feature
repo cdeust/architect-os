@@ -160,3 +160,6 @@ Feature: the code tool of 1a.0, composed from code.json (host side, fake runner,
     When I run the code tool
     Then the code tool exits with 1
     And no limit was scheduled
+
+  Scenario: the real timer fires after its delay and the function it returns cancels it
+    Then the real timer fires after its delay, and not once cancelled

@@ -40,7 +40,7 @@ Then('the committed review verdict schema is the JSON schema of the verdict cont
     committed,
     // draft-07: Claude Code 2.1.325 refuses the 2020-12 `$schema` zod writes by default (`--json-schema is not a valid
     // JSON Schema: no schema with key or ref …/draft/2020-12/schema`, measured), as the SDK does (journal §29).
-    JSON.parse(JSON.stringify(z.toJSONSchema(ReviewVerdictSchema, { target: 'draft-07', io: 'output' }))),
+    JSON.parse(JSON.stringify(z.toJSONSchema(ReviewVerdictSchema, { target: 'draft-07' }))),
   );
 });
 

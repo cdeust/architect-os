@@ -13,6 +13,8 @@ export interface SessionMeasure {
   cacheReadPerAnswer: number;
   models: string[];
   permissionDenials: number;
+  /** Les lignes non vides du flux qui ne sont pas du JSON (une ligne coupée par la mort de la session en est une). */
+  ignoredLines: number;
   report: string;
   structuredOutput: unknown;
 }
@@ -42,22 +44,24 @@ const AssistantEventSchema = z.object({
   message: z.object({ id: z.string() }),
 });
 
-/** Les valeurs JSON du flux ; une ligne qui n'est pas du JSON est ignorée. */
-function events(stream: string): unknown[] {
-  return stream.split('\n').flatMap((line) => {
+/** Les valeurs JSON du flux, et le nombre de lignes non vides qui n'en sont pas : elles sont ignorées. */
+function events(stream: string): { values: unknown[]; ignoredLines: number } {
+  const values: unknown[] = [];
+  let ignoredLines = 0;
+  for (const line of stream.split('\n')) {
+    if (line === '') continue;
     try {
-      return [JSON.parse(line) as unknown];
-      // Stryker disable next-line BlockStatement: équivalent: sans retour, la ligne donne `undefined`, que ni le schéma d'un événement assistant ni celui d'un événement result n'acceptent : elle reste ignorée.
+      values.push(JSON.parse(line) as unknown);
     } catch {
-      // Stryker disable next-line ArrayDeclaration: équivalent: une chaîne n'est acceptée par aucun des deux schémas d'événement : la ligne reste ignorée.
-      return [];
+      ignoredLines++;
     }
-  });
+  }
+  return { values, ignoredLines };
 }
 
 /** Les mesures d'une session `claude -p --verbose --output-format stream-json`. */
 export function measureSession(stream: string): SessionMeasure {
-  const all = events(stream);
+  const { values: all, ignoredLines } = events(stream);
   const ids = new Set<string>();
   for (const event of all) {
     const assistant = AssistantEventSchema.safeParse(event);
@@ -81,6 +85,7 @@ export function measureSession(stream: string): SessionMeasure {
       cacheReadPerAnswer: 0,
       models: [],
       permissionDenials: 0,
+      ignoredLines,
       report: '',
       structuredOutput: undefined,
     };
@@ -98,6 +103,7 @@ export function measureSession(stream: string): SessionMeasure {
     cacheReadPerAnswer: answers === 0 ? 0 : Math.round(result.usage.cache_read_input_tokens / answers),
     models: Object.keys(result.modelUsage).sort(),
     permissionDenials: result.permission_denials.length,
+    ignoredLines,
     report: result.result,
     structuredOutput: result.structured_output,
   };

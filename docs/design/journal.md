@@ -1452,3 +1452,63 @@ Avec la revue : 3,88 $ au tarif public, sur le forfait du propriétaire. Faits �
 - Recherche : chaque défaut ramené à sa cause par une mesure avant correction (rejeu sous vrai srt, lecture de la source de srt, sortie d'erreur du runner, longueur de socket mesurée sur les deux versions de macOS) ; témoin sans srt pour chaque attaque locale ; l'écart entre l'hôte et la CI expliqué, pas contourné ; registre de dette mesuré.
 - SSDLC : le test d'évasion est le DAST prévu de 1b ; divulgation d'information entre tasks fermée (STRIDE I), parent des sandboxes vérifié contre un autre utilisateur local (STRIDE E, T) ; mutation verte sur les lignes changées ; aucune dépendance ajoutée.
 - Opérationnel : moindre privilège renforcé (lecture retirée, rien d'ajouté) ; aucun secret lu ; IRB sans objet.
+
+## 36. Orchestration O.1 : `npm run step`, la boucle dans le dépôt, 14 novembre 2026
+
+Jusqu'ici la boucle de [`orchestration-fable-5-2.md`](orchestration-fable-5-2.md) tenait à des scripts de l'orchestrateur, hors dépôt : un tiers ne pouvait pas la rejouer. O.1 la fait entrer dans `packages/sandbox` (note, §12). O.2, la boucle par la gateway, dépend du câblage natif, donc du choix de l'hôte (§29).
+
+### Construit dans l'outil
+
+`claude-sonnet-5-5`, `--effort medium`, prompt système `prompts/build.md`, consigne sur l'entrée standard.
+
+| # | Étape | Durée | Réponses | Cache lu par réponse | Coût |
+|---|---|---|---|---|---|
+| O.1a | Parties sans processus : `step-file.ts` (fichier descriptif d'une étape), `measure.ts` (mesures depuis le flux `stream-json`), `review-verdict.ts` (contrat du verdict, `blocks`), scénarios et fixtures | 124 s | 13 | 23 091 | 0,300 $ |
+| O.1b | La commande : `step-tool.ts`, entrée `step.ts`, limite de temps dans l'outil de code (`limitMs`, `schedule`), scénarios à sessions factices, README et `CLAUDE.md` | 275 s | 24 | 43 825 | 0,661 $ |
+
+**Mesuré avant de spécifier.** Sur une session réelle (étape 6 du §34), les totaux de l'événement `result` du flux sont ceux du journal d'usage du proxy (entrée 18, sortie 3 214, cache lu 78 473, cache écrit 14 827), et le nombre de `message.id` distincts des événements `assistant` est le nombre de réponses (8). Les mesures se calculent donc depuis le flux seul ; la commande ne lit pas le journal d'usage.
+
+### Un défaut trouvé avant livraison : le schéma du verdict
+
+Le brief d'O.1a demandait que `prompts/review-verdict.schema.json` soit exactement ce que génère le contrat zod. Régénéré, le fichier portait `"$schema": "https://json-schema.org/draft/2020-12/schema"`, défaut de `z.toJSONSchema`. Essayé par une revue réelle : `Error: --json-schema is not a valid JSON Schema: no schema with key or ref "https://json-schema.org/draft/2020-12/schema"`, sortie 1, aucun appel. `npm run review` aurait cessé de fonctionner. Le journal le disait déjà pour le SDK (§29) ; le brief ne le rappelait pas, échec de l'orchestrateur.
+
+Correction : cible `draft-07`, dans la comparaison du scénario comme dans la commande. Vérifié sans appel (port amont fermé) : la forme draft-07 passe la validation de Claude Code, la forme 2020-12 est refusée. Puis par une revue réelle d'O.1a avec ce schéma : verdict structuré rendu, bornes d'entier (`minimum`, `maximum` des entiers sûrs, ajoutées par zod) comprises.
+
+Cette revue (Opus 5.5, `--effort high`, 166 s, 0,525 $) a rendu `request_changes` pour deux mutants équivalents du `catch` de `measure.ts` (une ligne qui n'est pas du JSON reste ignorée que le bloc rende `[]`, une chaîne ou rien) : marqués `// Stryker disable next-line … : équivalent: …` avec leur invariant.
+
+### Preuve réelle : une étape jouée par la commande, en deux passes
+
+Lanceur à `d731fcb`, worktree jetable, dossier d'étape hors dépôt. Sujet : le tableau « Descriptive files » de `docs/testing.md`, qui ne nommait que deux des dix fichiers descriptifs de `packages/sandbox`. `step.json` : construction `claude-sonnet-5-5` `medium`, revue `claude-opus-5-5` `high`, 900 s chacune.
+
+| Passe | Construction | Revue | Résumé rendu | Sortie | Durée totale |
+|---|---|---|---|---|---|
+| 1 | aboutie, 6 réponses, 23 s, 0,066 $ | `request_changes`, 3 constats, 0,262 $ | `"blocks":true` | 1 | 96 s |
+| 2, constats nommés dans le brief | aboutie, 7 réponses, 26 s, 0,057 $ | `accept`, 2 propositions, 0,217 $ | `"blocks":false` | 0 | 108 s |
+
+Le constat bloquant de la première passe était exact : la ligne de `step.json` nommait `step-file.feature`, qui ne lit aucun fichier (ses steps appellent `parseStepFile` sur un objet), au lieu de `step-tool.feature`, qui charge `step.json` comme la production. La relance l'a corrigé. Le dossier de chaque passe garde les deux flux, les mesures, le rapport et le verdict.
+
+### La porte du lot, et les survivants tués par la commande
+
+Porte complète sur `d731fcb` (O.1a et O.1b), sur l'hôte : 1 192 = 1 117 + 75 − 0 = statique ; mutation, 236 mutants du périmètre en 51 min, puis rejeu : 210 tués, 15 erreurs d'exécution et 4 délais dépassés confirmés par le rejeu (règle 7 sans violation), 1 ignoré, **6 survivants** : `measure.ts:51`, `step-tool.ts:50`, `:53`, `:101`, `:162`, `:213`. Rouge.
+
+L'étape qui les tue, O.1c, est jouée par `npm run step`, en deux passes :
+
+| Passe | Construction | Revue | Sortie |
+|---|---|---|---|
+| 1 | aboutie, 23 réponses, 124 s, 0,312 $ | `request_changes`, 0,411 $ : la correction introduisait un `trim()` qu'aucune fixture ne distingue, donc un nouveau survivant, et `readFile` levait `EISDIR` sur un dossier au lieu de le lire comme absent | 1 |
+| 2 | aboutie, 7 réponses, 35 s, 0,072 $ | `accept`, 0,250 $ | 0 |
+
+Ce qui change : `measureSession` compte les lignes non vides du flux qui ne sont pas du JSON (`ignoredLines`), dont la ligne tronquée d'une session tuée en cours d'écriture, au lieu d'un `catch` indiscernable de ses mutants ; `readFile` sans `try`, une condition par cas (absent, dossier, fichier) ; cinq scénarios de plus (schéma passé à `--json-schema` égal au fichier commité, deux raisons de refus d'un verdict, rapport de construction non écrasé par la revue, panne quelconque d'une session, dépendances réelles et minuteur réel).
+
+**Échec de méthode.** Le marquage `// Stryker disable next-line BlockStatement`, posé par l'orchestrateur avant un `} catch {` après la revue d'O.1a, n'est pas reconnu par Stryker à cet endroit : le mutant a survécu. La réécriture le remplace.
+
+**Vérifié par l'outil, pas seulement par la relecture.** La correction va dans un second commit, pour que la porte ne mute pas de nouveau les 236 mutants ; or quatre des lignes survivantes ne sont pas modifiées, seulement couvertes par de nouveaux scénarios. Stryker lancé à la main sur ces lignes (`stryker run --mutate "packages/sandbox/src/step-tool.ts:50-50,…:53-53,…:101-101,…:162-162"`, 165 s) : 13 mutants tués sur 14, **1 survivant de plus**, `io: 'output'` rendu vide. L'option n'a aucun effet pour ce contrat : retirée, ici comme dans la comparaison du scénario.
+
+### Branches
+
+À la demande du propriétaire, le dépôt distant ne garde que `main` et `feat/gate-1a`. Supprimées, après une copie locale vérifiée (`git bundle`, hors dépôt) : cinq branches de PR fusionnées (#98 à #102) et `claude/ecosystem-autonome-cdeust-pu7fe4`, celle de la PR #103, fermée sans fusion. `feat/gate-1a` n'est pas fusionnée dans `main` : la décision est au propriétaire.
+
+**Trois piliers.**
+- Recherche : la boucle se rejoue en une commande depuis un dossier d'étape, et laisse flux, mesures et verdict ; les mesures du flux confrontées au journal d'usage avant d'en dépendre ; le refus du schéma 2020-12 reproduit puis sa correction prouvée par un appel réel.
+- SSDLC : aucun effet hors injection dans `runStep`, scénarios sans attente réelle ; la revue tourne sous le profil `reviewer`, son verdict est validé par contrat, un verdict invalide bloque ; aucune dépendance ajoutée.
+- Opérationnel : aucun secret lu ; consignes et flux hors dépôt ; IRB sans objet.

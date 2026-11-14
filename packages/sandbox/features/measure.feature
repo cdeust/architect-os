@@ -17,6 +17,7 @@ Feature: the measures of a claude stream-json session
         "cacheReadPerAnswer": 39237,
         "models": ["claude-haiku-4-5", "claude-sonnet-5-5"],
         "permissionDenials": 2,
+        "ignoredLines": 1,
         "report": "Done: two files changed."
       }
       """
@@ -38,6 +39,7 @@ Feature: the measures of a claude stream-json session
         "cacheReadPerAnswer": 0,
         "models": [],
         "permissionDenials": 0,
+        "ignoredLines": 1,
         "report": ""
       }
       """
@@ -59,6 +61,7 @@ Feature: the measures of a claude stream-json session
         "cacheReadPerAnswer": 1000,
         "models": ["claude-sonnet-5-5"],
         "permissionDenials": 0,
+        "ignoredLines": 0,
         "report": "Stopped."
       }
       """
@@ -80,6 +83,7 @@ Feature: the measures of a claude stream-json session
         "cacheReadPerAnswer": 1000,
         "models": ["claude-sonnet-5-5"],
         "permissionDenials": 0,
+        "ignoredLines": 0,
         "report": "Stopped."
       }
       """
@@ -101,6 +105,7 @@ Feature: the measures of a claude stream-json session
         "cacheReadPerAnswer": 0,
         "models": [],
         "permissionDenials": 0,
+        "ignoredLines": 0,
         "report": ""
       }
       """
@@ -122,6 +127,7 @@ Feature: the measures of a claude stream-json session
         "cacheReadPerAnswer": 0,
         "models": [],
         "permissionDenials": 0,
+        "ignoredLines": 0,
         "report": "Nothing to do."
       }
       """
@@ -143,7 +149,30 @@ Feature: the measures of a claude stream-json session
         "cacheReadPerAnswer": 333,
         "models": ["claude-opus-5-5"],
         "permissionDenials": 0,
+        "ignoredLines": 0,
         "report": "Verdict given.",
         "structuredOutput": { "verdict": "accept", "findings": [], "not_checked": [] }
+      }
+      """
+
+  Scenario: a session killed while writing ends on a truncated line: one ignored line, a line of two spaces is another, an empty line is not counted
+    When I measure the fixture "session-truncated.jsonl"
+    Then the measure is
+      """
+      {
+        "completed": false,
+        "answers": 2,
+        "turns": 0,
+        "durationSeconds": 0,
+        "costUsd": 0,
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "cacheReadPerAnswer": 0,
+        "models": [],
+        "permissionDenials": 0,
+        "ignoredLines": 2,
+        "report": ""
       }
       """

@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { PassThrough } from 'node:stream';
+import { mock } from 'node:test';
 import { startAuthProxy, type AuthProxy, type AuthProxyOptions } from '../../src/auth-proxy.js';
 import {
   failureReporter,
@@ -10,6 +11,7 @@ import {
   reviewDependencies,
   runCodeTool,
   srtOptions,
+  timer,
   type CodeProcess,
   type CodeToolDependencies,
   type CodeToolRunner,
@@ -560,3 +562,19 @@ Then(
     );
   },
 );
+
+Then('the real timer fires after its delay, and not once cancelled', function () {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  this.cleanups.push(() => mock.timers.reset());
+  let fired = 0;
+  const cancel = timer(() => void fired++, 1000);
+  mock.timers.tick(999);
+  assert.equal(fired, 0);
+  mock.timers.tick(1);
+  assert.equal(fired, 1);
+  const cancelled = timer(() => void fired++, 1000);
+  cancelled();
+  mock.timers.tick(5000);
+  assert.equal(fired, 1);
+  cancel();
+});

@@ -2,7 +2,7 @@
 // La session de construction avec le brief, puis la session de revue, chacune sous srt par l'outil de code ; tout ce
 // qu'il faut pour relire l'étape reste dans le dossier. Ni rejeu sur l'hôte, ni porte, ni commit : ils restent à
 // l'orchestrateur. `step.ts` ne fait que lui passer le processus.
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import { isatty } from 'node:tty';
@@ -46,8 +46,7 @@ class Refusal extends Error {}
 const SESSION_ARGUMENTS = ['-p', '--verbose', '--output-format', 'stream-json'];
 
 /** Le schéma du verdict pour `--json-schema` : Claude Code 2.1.325 refuse le `$schema` 2020-12 (mesuré). */
-const verdictSchema = () =>
-  JSON.stringify(z.toJSONSchema(ReviewVerdictSchema, { target: 'draft-07', io: 'output' }));
+const verdictSchema = () => JSON.stringify(z.toJSONSchema(ReviewVerdictSchema, { target: 'draft-07' }));
 
 const issues = (error: z.ZodError): string =>
   error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
@@ -207,13 +206,8 @@ export const toolDependencies =
 export function stepDependencies(proc: CodeProcess): StepDependencies {
   return {
     folderArguments: proc.argv.slice(2),
-    readFile: (path) => {
-      try {
-        return readFileSync(path, 'utf8');
-      } catch {
-        return undefined;
-      }
-    },
+    readFile: (path) =>
+      existsSync(path) && statSync(path).isFile() ? readFileSync(path, 'utf8') : undefined,
     writeFile: (path, content) => writeFileSync(path, content),
     appendFile: (path, content) => appendFileSync(path, content),
     session: codeToolSession(toolDependencies(proc)),

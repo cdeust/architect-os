@@ -4,10 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mock } from 'node:test';
 import { PassThrough } from 'node:stream';
-import { z } from 'zod';
 import type { CodeProcess, CodeToolDependencies } from '../../src/code-tool.js';
 import { SandboxError } from '../../src/port.js';
-import { ReviewVerdictSchema } from '../../src/review-verdict.js';
 import {
   codeToolSession,
   runStep,
@@ -92,6 +90,10 @@ Given(
   },
 );
 
+Given('the build session fails with the plain error {string}', function (message: string) {
+  step(this).behaviours['code.json'].failure = new Error(message);
+});
+
 When('I run the step with the arguments {string}', async function (args: string) {
   const s = step(this);
   const stdout = new PassThrough();
@@ -175,7 +177,10 @@ Then(
     const argv = step(this).calls[n - 1]?.argv ?? [];
     assert.deepEqual(argv.slice(0, -1), args.split(' '));
     const schema: unknown = JSON.parse(argv.at(-1) as string);
-    assert.deepEqual(schema, z.toJSONSchema(ReviewVerdictSchema, { target: 'draft-07', io: 'output' }));
+    const committed: unknown = JSON.parse(
+      readFileSync(join(PKG, 'prompts', 'review-verdict.schema.json'), 'utf8'),
+    );
+    assert.deepEqual(schema, committed);
     assert.equal((schema as Record<string, unknown>)['$schema'], 'http://json-schema.org/draft-07/schema#');
   },
 );

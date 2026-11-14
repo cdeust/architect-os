@@ -118,6 +118,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
           "claude-sonnet-5-5"
         ],
         "permissionDenials": 2,
+        "ignoredLines": 1,
         "stopped": false
       }
       """
@@ -143,6 +144,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the session 2 got the arguments "-p --verbose --output-format stream-json --model claude-opus-5-5 --effort high --json-schema" and then the draft-07 schema of the verdict
       And the step file "review.stream.jsonl" is the fixture "structured.jsonl"
       And the step folder has no file "review.report.md"
+      And the step file "build.report.md" is exactly "Done: two files changed."
       And the step file "review.measure.json" is:
       """
       {
@@ -160,6 +162,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
           "claude-opus-5-5"
         ],
         "permissionDenials": 0,
+        "ignoredLines": 0,
         "stopped": false
       }
       """
@@ -273,6 +276,20 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237},"review":{"verdict":"invalid","blocks":true,"findings":0,"costUsd":0.25}}
       """
 
+    Scenario: a review refused for two reasons at once gives both, separated by a semicolon
+      Given a step folder
+      And the step folder holds a step.json with a build and "a review"
+      And the build session writes the fixture "session.jsonl"
+      And the review session writes the fixture "review-two-reasons.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 1
+      And the step file "review.verdict.json" is:
+      """
+      {
+        "invalid": "verdict: Invalid option: expected one of \"accept\"|\"request_changes\"; not_checked: Invalid input: expected array, received undefined"
+      }
+      """
+
   Rule: a build that does not pass starts no review
 
     Scenario: a build that is an error
@@ -302,6 +319,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
           "claude-sonnet-5-5"
         ],
         "permissionDenials": 0,
+        "ignoredLines": 0,
         "stopped": false
       }
       """
@@ -339,6 +357,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
           "claude-sonnet-5-5"
         ],
         "permissionDenials": 2,
+        "ignoredLines": 1,
         "stopped": true
       }
       """
@@ -372,6 +391,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "cacheReadPerAnswer": 0,
         "models": [],
         "permissionDenials": 0,
+        "ignoredLines": 1,
         "stopped": false
       }
       """
@@ -391,6 +411,15 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the step stderr is "architect-os step: ISOLATION_UNAVAILABLE: pas de srt"
       And the step stdout is empty
       And the sessions started were "code.json"
+
+    Scenario: an error that is not a SandboxError during the build
+      Given a step folder
+      And the step folder holds a step.json with a build and "a review"
+      And the build session fails with the plain error "boom"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: Error: boom"
+      And the step stdout is empty
 
   Rule: the real session and the real dependencies
 
