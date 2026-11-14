@@ -7,6 +7,7 @@ import { startAuthProxy, type AuthProxy, type AuthProxyOptions } from '../../src
 import {
   failureReporter,
   processDependencies,
+  reviewDependencies,
   runCodeTool,
   srtOptions,
   type CodeProcess,
@@ -484,6 +485,14 @@ When('I build the process dependencies of the stored tool file', function () {
 
 When('I build the process dependencies of the tool file {string}', function (file: string) {
   this.state['deps'] = processDependencies(stored(this, 'process'), () => false, file);
+});
+
+When('I build the review dependencies', function () {
+  this.state['deps'] = reviewDependencies(stored(this, 'process'), () => false);
+});
+
+Then('the profile of the dependencies is {string}', function (profile: string) {
+  assert.equal(deps(this).tool.profile, profile);
 });
 
 Then('the dependencies load the tool of review.json', function () {

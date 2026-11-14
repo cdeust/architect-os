@@ -101,6 +101,13 @@ Feature: the code tool of 1a.0, composed from code.json (host side, fake runner,
     Then the dependencies load the tool of review.json
     And the system prompts of the dependencies are the launcher prompt only
 
+  Scenario: the review dependencies load review.json, profile reviewer and the committed launcher prompt
+    Given a process with INIT_CWD "/target", the cwd "/elsewhere" and the arguments "node review.ts"
+    When I build the review dependencies
+    Then the dependencies load the tool of review.json
+    And the profile of the dependencies is "reviewer"
+    And the system prompts of the dependencies are the launcher prompt only
+
   Scenario: a tool naming both prompt files passes the worktree one first, then the launcher one
     Given a hand-written git layout for the linked worktree "w"
     And the worktree "w" holds the file "CLAUDE.md"

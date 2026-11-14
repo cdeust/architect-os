@@ -163,6 +163,14 @@ export function processDependencies(
   };
 }
 
+/** Les dépendances réelles de `npm run review` : celles de `processDependencies`, décrites par `review.json`. */
+export function reviewDependencies(
+  proc: CodeProcess,
+  isTerminalFd: (fd: number) => boolean = isatty,
+): CodeToolDependencies {
+  return processDependencies(proc, isTerminalFd, 'review.json');
+}
+
 /** Écrit l'échec sur stderr, sans pile ; le code de sortie est 2. */
 export const failureReporter =
   (stderr: Writable) =>
