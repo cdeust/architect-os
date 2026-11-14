@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
+  statSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -76,7 +78,7 @@ const readAll = async (sandbox: Sandbox): Promise<string> => {
 };
 
 /** The throwaway repository of the scenario, created on first use and removed by the After hook. */
-function repoOf(world: SandboxWorld): { root: string; worktree: string } {
+export function repoOf(world: SandboxWorld): { root: string; worktree: string } {
   if (world.state['repo'] === undefined) {
     const repo = makeRepo();
     world.cleanups.push(() => rmSync(repo.root, { recursive: true, force: true }));
@@ -85,13 +87,26 @@ function repoOf(world: SandboxWorld): { root: string; worktree: string } {
   return world.state['repo'] as { root: string; worktree: string };
 }
 
+/**
+ * The temporary root of the scenario's sandboxes: its own, so that a scenario never reads the folders of another run,
+ * and under `/tmp`, short enough for the socket of srt. Created on first use, removed by the After hook.
+ */
+export function tmpRootOf(world: SandboxWorld): string {
+  if (world.state['tmpRoot'] === undefined) {
+    const root = realpathSync(mkdtempSync('/tmp/aos-t-'));
+    world.cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+    world.state['tmpRoot'] = root;
+  }
+  return world.state['tmpRoot'] as string;
+}
+
 /** Installs the srt runner over the scenario's repository; the working directory is its worktree. */
-function useSrt(
+export function useSrt(
   world: SandboxWorld,
   extra: (repo: { root: string; worktree: string }) => Partial<SrtRunnerOptions>,
 ) {
   const repo = repoOf(world);
-  const runner = new SrtSandboxRunner(srtOptions(extra(repo)));
+  const runner = new SrtSandboxRunner(srtOptions({ tmpRoot: tmpRootOf(world), ...extra(repo) }));
   world.state['runner'] = runner;
   world.state['srt'] = runner;
   world.state['cwd'] = repo.worktree;
@@ -252,9 +267,27 @@ Then('its exit is the same as the exit of the stop', async function () {
   assert.deepEqual(await sandbox(this).exited, stored<SandboxExit>(this, 'stopExit'));
 });
 
+/** The entries of `aos-sb` under the scenario's temporary root, the parent of every per-sandbox and canary folder. */
+const sandboxEntries = (world: SandboxWorld): string[] => {
+  try {
+    return readdirSync(join(tmpRootOf(world), 'aos-sb'));
+  } catch {
+    return [];
+  }
+};
+
 When('I note the entries of the temporary directory', function () {
-  this.state['before'] = execFileSync('ls', [tmpdir()], { encoding: 'utf8' });
+  this.state['before'] = sandboxEntries(this);
 });
+
+Then(
+  'the throwaway temporary root holds a folder {string} of mode {string}',
+  function (name: string, mode: string) {
+    const found = statSync(join(stored<string>(this, 'tmpRoot'), name));
+    assert.equal(found.isDirectory(), true);
+    assert.equal((found.mode & 0o777).toString(8), mode);
+  },
+);
 
 When(
   'I start profile {string} with command {string}, close its input, drain its output and wait for it to end',
@@ -272,13 +305,38 @@ When(
 );
 
 Then('no per-sandbox folder is left in the temporary directory', function () {
-  const before = stored<string>(this, 'before');
-  const after = execFileSync('ls', [tmpdir()], { encoding: 'utf8' });
-  const leftovers = after.split('\n').filter((f) => f.startsWith('aos-sandbox-') && !before.includes(f));
+  const before = stored<string[]>(this, 'before');
+  const leftovers = sandboxEntries(this).filter((f) => /^[sc]-/.test(f) && !before.includes(f));
   assert.deepEqual(leftovers, []);
 });
 
 // --- canary.feature and spawn.feature (features/sandbox): real srt, a lying canary, a hostile child ---
+
+Given(
+  'an srt runner over a throwaway git repository whose canary reports the path of its secret as what it read',
+  function () {
+    useSrt(this, (repo) => {
+      const probe = join(repo.root, 'telling-canary.mjs');
+      writeFileSync(
+        probe,
+        'process.stdout.write(JSON.stringify({ read: process.argv[2], connect: "denied" }) + "\\n");\n',
+      );
+      return { canaryProbe: probe };
+    });
+  },
+);
+
+Then('it is refused because the canary read a secret in the sibling folder of the sandbox', function () {
+  const error = stored<Error | null>(this, 'refusal');
+  assert.ok(error !== null, 'the start was not refused');
+  const parent = join(tmpRootOf(this), 'aos-sb').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  assert.match(
+    error.message,
+    new RegExp(
+      `^ISOLATION_UNAVAILABLE: canari : lecture ${parent}/c-[A-Za-z0-9]{6}/canary-secret, connexion denied$`,
+    ),
+  );
+});
 
 Given('an srt runner over a throwaway git repository whose canary prints {string}', function (line: string) {
   useSrt(this, (repo) => {
@@ -288,6 +346,24 @@ Given('an srt runner over a throwaway git repository whose canary prints {string
     return { canaryProbe: probe };
   });
 });
+
+Given(
+  'an srt runner over a throwaway git repository whose builder profile does not deny reading the folder of the sandboxes',
+  function () {
+    useSrt(this, (repo) => {
+      const profilesDir = join(repo.root, 'profiles');
+      mkdirSync(profilesDir);
+      const template = JSON.parse(readFileSync(join(PKG, 'profiles', 'builder.json'), 'utf8')) as {
+        srt: { filesystem: { denyRead: string[] } };
+      };
+      const denied = template.srt.filesystem.denyRead;
+      assert.ok(denied.includes('${sandboxes}'), 'the committed profile does not deny ${sandboxes}');
+      template.srt.filesystem.denyRead = denied.filter((p) => p !== '${sandboxes}');
+      writeFileSync(join(profilesDir, 'builder.json'), JSON.stringify(template));
+      return { profilesDir };
+    });
+  },
+);
 
 /**
  * The token of the descendant of a scenario, in its argv: under Linux the sandbox has its own pid namespace, so the
@@ -410,18 +486,24 @@ When('I write two megabytes on its stdin and wait for it to end', async function
   await s.exited;
 });
 
-Given('an srt runner for the processes of the platform over a throwaway platform root', function () {
+/** Installs the srt runner of the platform processes over a throwaway platform root, its working directory. */
+export function usePlatform(world: SandboxWorld, extra: Partial<SrtRunnerOptions>): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'aos-platform-')));
-  this.cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+  world.cleanups.push(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(join(root, 'marker'), 'platform');
   const options: ProcessRunnerOptions = {
-    ...srtOptions({ variables: { callbackPort: '9' } }),
+    ...srtOptions({ variables: { callbackPort: '9' }, tmpRoot: tmpRootOf(world), ...extra }),
     workspace: 'disposable',
   };
   const runner = new SrtSandboxRunner(options);
-  this.state['runner'] = runner;
-  this.state['srt'] = runner;
-  this.state['cwd'] = root;
+  world.state['runner'] = runner;
+  world.state['srt'] = runner;
+  world.state['cwd'] = root;
+  return root;
+}
+
+Given('an srt runner for the processes of the platform over a throwaway platform root', function () {
+  usePlatform(this, {});
 });
 
 When(
@@ -446,7 +528,8 @@ Then(
     const [folder, got] = stored<string>(this, 'read').trim().split(':');
     const parts = (folder ?? '').split('/');
     assert.equal(parts.at(-1), name);
-    assert.match(parts.at(-2) ?? '', /^aos-sandbox-/);
+    assert.match(parts.at(-2) ?? '', /^s-/);
+    assert.equal(parts.at(-3), 'aos-sb');
     assert.equal(got, mode);
   },
 );

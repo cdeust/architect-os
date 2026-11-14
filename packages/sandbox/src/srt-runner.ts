@@ -189,7 +189,7 @@ export class SrtSandboxRunner implements SandboxRunner {
     const [name, ...args] = request.command;
     if (name === undefined) throw new SandboxError('COMMAND_NOT_FOUND', 'argv vide');
     const template = loadTemplate(o.profilesDir, request.profile);
-    const dir = realpathSync(mkdtempSync(join(o.tmpRoot, 'aos-sandbox-')));
+    const dir = sandboxFolder(o.tmpRoot);
     try {
       const wt = workspaceOf(o, request.cwd, dir);
       const tmp = join(dir, 'tmp');
@@ -197,7 +197,7 @@ export class SrtSandboxRunner implements SandboxRunner {
       mkdirSync(tmp, { mode: 0o700 });
       mkdirSync(config, { mode: 0o700 });
       const vars = {
-        ...o.variables,
+        ...withSandboxes(o.variables, dir),
         home: realpathSync(o.home),
         repo: wt.repo,
         worktree: wt.worktree,
@@ -229,7 +229,7 @@ export class SrtSandboxRunner implements SandboxRunner {
       const srtCli = realpathSync(o.srtCli);
       assertTrusted(profile.settings, [nodeModulesOf(srtCli)]);
       const cwd = realpathSync(resolve(wt.cwd ?? request.cwd));
-      await this.canary(profile.settings, srtCli, dir, cwd, env);
+      await this.canary(profile.settings, srtCli, dir, cwd, env).finally(() => dropCanary(dir));
       return {
         // Les arguments portent les variables du profil : `--settings ${config}/settings.json` pour Claude Code.
         argv: [
@@ -251,7 +251,7 @@ export class SrtSandboxRunner implements SandboxRunner {
     }
   }
 
-  /** Le profil réel, plus un fichier secret en denyRead ; un port écouté par l'hôte, hors allowlist. */
+  /** Le profil réel ; un secret dans un dossier frère, qu'il doit cacher ; un port écouté par l'hôte, hors allowlist. */
   private async canary(
     settings: SrtSettings,
     srtCli: string,
@@ -260,11 +260,11 @@ export class SrtSandboxRunner implements SandboxRunner {
     env: Record<string, string>,
   ) {
     const o = this.options;
-    const secret = join(dir, 'canary-secret');
+    const secret = join(canaryFolder(dir), 'canary-secret');
     writeFileSync(secret, randomUUID(), { mode: 0o600 });
     const canarySettings: SrtSettings = {
       ...settings,
-      filesystem: { ...settings.filesystem, denyRead: [...settings.filesystem.denyRead, secret] },
+      filesystem: settings.filesystem, // sans ajout : le parent des sandboxes, que le profil refuse, cache le secret
     };
     const file = join(dir, 'canary.json');
     writeFileSync(file, JSON.stringify(canarySettings), { mode: 0o400 });
@@ -373,4 +373,70 @@ function workspaceOf(
   const work = join(dir, 'work');
   mkdirSync(work, { mode: 0o700 });
   return { repo: realpathSync(cwd), worktree: work, worktreeName: basename(work), cwd: work };
+}
+
+/** Parent de tous les dossiers par sandbox : le profil le refuse en lecture et ne rouvre que ses dossiers inscriptibles. */
+const SANDBOXES = 'aos-sb';
+/** Longueur de `/srt-mux-` + un pid de 7 chiffres + `-99.sock`, ajoutée au dossier temporaire de la sandbox. */
+const SOCKET_SUFFIX = 24;
+/** Longueur maximale d'un chemin de socket Unix (macOS jusqu'à 26). */
+const SOCKET_PATH_MAX = 103;
+
+/**
+ * Le parent de tous les dossiers par sandbox, créé sans `recursive` (un dossier existant n'est pas une erreur), puis
+ * pris pour sûr seulement s'il est un vrai dossier (pas un lien symbolique), de l'uid donné, de mode exactement 0700 :
+ * sous Linux `/tmp` est partagé, un autre utilisateur peut l'avoir créé avant. Retourne son chemin réel.
+ */
+export function sandboxesParent(tmpRoot: string, uid: number = process.getuid!()): string {
+  const parent = join(tmpRoot, SANDBOXES);
+  try {
+    mkdirSync(parent, { mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+  }
+  // `statSync` suit les liens : un lien est reconnu à son chemin réel, qui n'est plus `<tmpRoot réel>/aos-sb`.
+  const real = realpathSync(parent);
+  const found = statSync(parent);
+  if (
+    real !== join(realpathSync(tmpRoot), SANDBOXES) ||
+    !found.isDirectory() ||
+    found.uid !== uid ||
+    (found.mode & 0o777) !== 0o700
+  )
+    throw unavailable(
+      `dossier parent des sandboxes non sûr : ${parent} doit être un dossier (pas un lien), de l'utilisateur courant, de mode 0700`,
+    );
+  return real;
+}
+
+/** Le dossier d'une sandbox, `s-XXXXXX` sous le parent ; refusé si le socket de srt dans son `tmp` ne tiendrait pas. */
+function sandboxFolder(tmpRoot: string): string {
+  const folder = realpathSync(mkdtempSync(join(sandboxesParent(tmpRoot), 's-')));
+  const tmp = join(folder, 'tmp');
+  if (tmp.length + SOCKET_SUFFIX > SOCKET_PATH_MAX) {
+    rmSync(folder, { recursive: true });
+    throw unavailable(
+      `dossier temporaire trop long pour un socket Unix : ${tmp}, ${tmp.length} caractères, ${SOCKET_PATH_MAX - SOCKET_SUFFIX} au plus`,
+    );
+  }
+  return folder;
+}
+
+/** Les variables données, plus `sandboxes` : le parent du dossier de la sandbox. */
+function withSandboxes(variables: Readonly<Record<string, string>> | undefined, dir: string) {
+  return { ...variables, sandboxes: dirname(dir) };
+}
+
+/** Le dossier du canari d'une sandbox `s-XXXXXX` : son frère `c-XXXXXX`, sous le même parent. */
+const canaryPath = (dir: string): string => join(dirname(dir), `c-${basename(dir).slice(2)}`);
+
+/** Crée le dossier frère où le canari pose son secret : hors du dossier de la sandbox, donc caché par le profil. */
+function canaryFolder(dir: string): string {
+  mkdirSync(canaryPath(dir));
+  return canaryPath(dir);
+}
+
+/** Fin du canari, qu'il ait passé ou non : le dossier de son secret est retiré. */
+function dropCanary(dir: string): void {
+  rmSync(canaryPath(dir), { recursive: true });
 }

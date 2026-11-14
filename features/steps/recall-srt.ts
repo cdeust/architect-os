@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import type { MemoryItem } from '@architect-os/contracts';
 import type { ServiceResponse } from '../../gateway/src/domain/ports.js';
 import { BROKER_KEY, startSrtPlatform, type SrtPlatform } from '../support/srt-platform.js';
 import type { ArchitectWorld } from '../support/world.js';
@@ -7,6 +8,8 @@ import { Given, Then, When } from './helpers.js';
 interface Platform extends SrtPlatform {
   task?: { task: string; token: string };
   answer?: ServiceResponse;
+  /** The memories the store held before the call. */
+  before?: MemoryItem[];
 }
 
 const platformOf = (world: ArchitectWorld): Platform => {
@@ -25,6 +28,24 @@ Given(
     ]);
     this.cleanups.push(() => platform.close());
     this.state['recall-srt'] = platform satisfies Platform;
+  },
+);
+
+Given(
+  'the platform of the committed topology under srt, data in memory holding the memory {string}, and the broker before a fake model that inserts the memory {string} tagged {string} then answers with the id it got',
+  { timeout: 60_000 },
+  async function (held: string, content: string, tags: string) {
+    const platform = await startSrtPlatform(held, [
+      { tool: 'mcp__platform__memory_insert', input: { content, tags: tags.split(',') } },
+      {
+        tool: 'StructuredOutput',
+        inputFrom: (result) => ({ memory_id: (/"id"\s*:\s*"([^"]+)"/.exec(result) ?? [])[1] }),
+      },
+    ]);
+    this.cleanups.push(() => platform.close());
+    const given: Platform = platform;
+    given.before = await platform.memories();
+    this.state['recall-srt'] = given;
   },
 );
 
@@ -54,6 +75,28 @@ Then(
         data: JSON.parse(data),
         evidence: [{ source: 'memory', ref: memory, excerpt: content }],
       },
+    );
+  },
+);
+
+Then('the call answers ok with a memory id', function () {
+  const { answer } = platformOf(this);
+  assert.ok(answer !== undefined && !answer.isError, String(answer?.text));
+  assert.equal(answer.structured?.['status'], 'ok');
+  const data = answer.structured?.['data'] as { memory_id?: unknown } | undefined;
+  assert.ok(typeof data?.memory_id === 'string' && data.memory_id !== '', JSON.stringify(data));
+});
+
+Then(
+  'the store holds exactly one memory more, {string} tagged {string}, whose id is the memory id of the answer',
+  async function (content: string, tags: string) {
+    const platform = platformOf(this);
+    const known = new Set((platform.before ?? []).map((memory) => memory.id));
+    const added = (await platform.memories()).filter((memory) => !known.has(memory.id));
+    const data = platform.answer?.structured?.['data'] as { memory_id: string };
+    assert.deepEqual(
+      added.map(({ id, content, tags }) => ({ id, content, tags })),
+      [{ id: data.memory_id, content, tags: tags.split(',') }],
     );
   },
 );

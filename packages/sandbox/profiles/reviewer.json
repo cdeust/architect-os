@@ -1,5 +1,5 @@
 {
-  "description": "Profil reviewer (docs/design/platform-v3-srt.md, §8) : une session de revue lit le worktree et rapporte, sans pouvoir le modifier. Même frontière que le profil builder (Claude Code en --bare, dossier de configuration propre à la sandbox, jeton de session en ANTHROPIC_API_KEY, proxy d'authentification de l'hôte seul joignable), mais le worktree et le .git du dépôt ne sont pas inscriptibles, aucun registre npm, aucun terminal. Variables : ${home}, ${repo}, ${worktree}, ${worktreeName}, ${tmp} et ${config} (adaptateur), ${authProxyPort} et ${sessionToken} (lanceur).",
+  "description": "Profil reviewer (docs/design/platform-v3-srt.md, §8) : une session de revue lit le worktree et rapporte, sans pouvoir le modifier. Même frontière que le profil builder (Claude Code en --bare, dossier de configuration propre à la sandbox, jeton de session en ANTHROPIC_API_KEY, proxy d'authentification de l'hôte seul joignable), mais le worktree et le .git du dépôt ne sont pas inscriptibles, aucun registre npm, aucun terminal. Les dossiers des autres sandboxes (${sandboxes}) sont refusés en lecture, les dossiers inscriptibles propres à la sandbox rouverts par allowRead. Variables : ${home}, ${repo}, ${worktree}, ${worktreeName}, ${tmp}, ${config} et ${sandboxes} (adaptateur), ${authProxyPort} et ${sessionToken} (lanceur).",
   "srt": {
     "network": {
       "allowedDomains": ["127.0.0.1:${authProxyPort}"],
@@ -16,8 +16,10 @@
         "${home}/.netrc",
         "${home}/.claude",
         "${home}/.claude.json",
-        "${home}/Library/Keychains"
+        "${home}/Library/Keychains",
+        "${sandboxes}"
       ],
+      "allowRead": ["${config}", "${tmp}"],
       "allowWrite": ["${config}", "${tmp}"],
       "denyWrite": ["${config}/settings.json"]
     }

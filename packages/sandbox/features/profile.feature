@@ -38,6 +38,10 @@ Feature: Builder profile template
       | ${home}/.claude           |
       | ${home}/.claude.json      |
       | ${home}/Library/Keychains |
+      | ${sandboxes}               |
+    And the profile allows reading exactly:
+      | ${config} |
+      | ${tmp} |
     And the profile allows a pseudo-terminal
     And the profile sets the variable "CLAUDE_CODE_TMPDIR" to "${tmp}"
     And the profile unsets exactly the variables:

@@ -1,5 +1,5 @@
 {
-  "description": "Profil builder de la brique 1a.0 (docs/design/platform-v3-srt.md, §8 ; journal, §14 et §15). Aucun secret ne franchit la frontière : Claude Code tourne en --bare avec un dossier de configuration propre à la sandbox, son fichier de réglages passé par --settings (règles permissions.deny, couche de réduction derrière srt) et un jeton de session en ANTHROPIC_API_KEY, et ne joint le modèle que par le proxy d'authentification de l'hôte. Variables : ${home}, ${repo}, ${worktree}, ${worktreeName}, ${tmp} et ${config} (adaptateur), ${authProxyPort} et ${sessionToken} (lanceur).",
+  "description": "Profil builder de la brique 1a.0 (docs/design/platform-v3-srt.md, §8 ; journal, §14 et §15). Aucun secret ne franchit la frontière : Claude Code tourne en --bare avec un dossier de configuration propre à la sandbox, son fichier de réglages passé par --settings (règles permissions.deny, couche de réduction derrière srt) et un jeton de session en ANTHROPIC_API_KEY, et ne joint le modèle que par le proxy d'authentification de l'hôte. Les dossiers des autres sandboxes (${sandboxes}) sont refusés en lecture, les dossiers inscriptibles propres à la sandbox rouverts par allowRead. Variables : ${home}, ${repo}, ${worktree}, ${worktreeName}, ${tmp}, ${config} et ${sandboxes} (adaptateur), ${authProxyPort} et ${sessionToken} (lanceur).",
   "srt": {
     "network": {
       "allowedDomains": ["127.0.0.1:${authProxyPort}", "registry.npmjs.org"],
@@ -16,8 +16,10 @@
         "${home}/.netrc",
         "${home}/.claude",
         "${home}/.claude.json",
-        "${home}/Library/Keychains"
+        "${home}/Library/Keychains",
+        "${sandboxes}"
       ],
+      "allowRead": ["${config}", "${tmp}"],
       "allowWrite": [
         "${worktree}",
         "${repo}/.git/worktrees/${worktreeName}",

@@ -1,5 +1,5 @@
 {
-  "description": "Profil module de la brique 1b.5 (docs/design/platform-v3-srt.md, §5, sorte module) : un processus par module data ou workflow, serveur MCP sur son stdio pour la gateway, son parent. Réseau : la gateway seule, son canal de rappel en 127.0.0.1:${callbackPort}, par le proxy srt. Écriture : son cwd jetable et son dossier temporaire. Aucun secret, aucune clé, aucun jeton dans l'environnement : l'identifiant d'appel arrive dans le _meta de chaque appel. Variables : ${home}, ${worktree} (le cwd jetable du processus, dans le dossier de sa sandbox), ${repo} (la racine de la plateforme, en lecture), ${tmp} et ${config} (adaptateur), ${callbackPort} (lanceur).",
+  "description": "Profil module de la brique 1b.5 (docs/design/platform-v3-srt.md, §5, sorte module) : un processus par module data ou workflow, serveur MCP sur son stdio pour la gateway, son parent. Réseau : la gateway seule, son canal de rappel en 127.0.0.1:${callbackPort}, par le proxy srt. Écriture : son cwd jetable et son dossier temporaire. Aucun secret, aucune clé, aucun jeton dans l'environnement : l'identifiant d'appel arrive dans le _meta de chaque appel. Les dossiers des autres sandboxes (${sandboxes}) sont refusés en lecture, les dossiers inscriptibles propres à la sandbox rouverts par allowRead. Variables : ${home}, ${worktree} (le cwd jetable du processus, dans le dossier de sa sandbox), ${repo} (la racine de la plateforme, en lecture), ${tmp}, ${config} et ${sandboxes} (adaptateur), ${callbackPort} (lanceur).",
   "srt": {
     "network": {
       "allowedDomains": ["127.0.0.1:${callbackPort}"],
@@ -16,8 +16,10 @@
         "${home}/.netrc",
         "${home}/.claude",
         "${home}/.claude.json",
-        "${home}/Library/Keychains"
+        "${home}/Library/Keychains",
+        "${sandboxes}"
       ],
+      "allowRead": ["${worktree}", "${tmp}"],
       "allowWrite": ["${worktree}", "${tmp}"],
       "denyWrite": ["${worktree}/.mcp.json", "${worktree}/.claude"]
     }

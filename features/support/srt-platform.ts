@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
+import type { MemoryItem } from '@architect-os/contracts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { SrtSandboxRunner, type ProcessRunnerOptions, type Sandbox } from '@architect-os/sandbox';
@@ -37,6 +38,8 @@ export interface SrtPlatform {
   /** The identifier of the memory data holds. */
   readonly memory: string;
   readonly brokerPort: number;
+  /** Every memory the store holds, read through data. */
+  memories(): Promise<MemoryItem[]>;
   /** The sandboxes of the workers, in launch order. */
   readonly workers: Sandbox[];
   close(): Promise<void>;
@@ -130,7 +133,11 @@ export async function startSrtPlatform(
     });
     router = composed.router;
     closers.push(() => composed.modules.close());
-    return { router, model, memory, brokerPort, workers, close };
+    const memories = async () => {
+      const found = await data.callTool({ name: 'memory.search', arguments: { query: '', limit: 50 } });
+      return JSON.parse((found.content as { text: string }[])[0]!.text) as MemoryItem[];
+    };
+    return { router, model, memory, brokerPort, memories, workers, close };
   } catch (error) {
     await close();
     throw error;

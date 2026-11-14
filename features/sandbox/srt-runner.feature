@@ -39,6 +39,9 @@ Feature: SandboxRunner contract on the real srt adapter
     When I start profile "builder" with command "cat", close its input, drain its output and wait for it to end
     Then no per-sandbox folder is left in the temporary directory
 
+  # The creation of the parent folder, its refusals (a link, a mode, another owner) and the socket budget are scenarios
+  # of packages/sandbox/features/sandboxes-parent.feature, which need no srt.
+
   Scenario: srt adapter refuses to start when a trusted path is writable by the sandbox (the launcher inside the worktree)
     Given an srt runner over a throwaway git repository that trusts a launcher file inside the worktree
     When I try to start profile "builder" with command "cat"

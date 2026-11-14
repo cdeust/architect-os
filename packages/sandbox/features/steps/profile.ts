@@ -25,6 +25,7 @@ const VARS: ProfileVariables = {
   worktreeName: 'w',
   tmp: '/t/aos/tmp',
   config: '/t/aos/config',
+  sandboxes: '/t',
   authProxyPort: '4321',
   sessionToken: 'session-token',
 };
@@ -104,6 +105,10 @@ Then('the profile denies writing to exactly:', function (table: DataTable) {
 
 Then('the profile denies reading exactly:', function (table: DataTable) {
   assert.deepEqual(template(this).srt.filesystem.denyRead, column(table));
+});
+
+Then('the profile allows reading exactly:', function (table: DataTable) {
+  assert.deepEqual(template(this).srt.filesystem.allowRead, column(table));
 });
 
 Then('the profile allows a pseudo-terminal', function () {

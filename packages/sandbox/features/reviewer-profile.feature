@@ -25,6 +25,10 @@ Feature: Reviewer profile template
       | ${home}/.claude              |
       | ${home}/.claude.json         |
       | ${home}/Library/Keychains    |
+      | ${sandboxes}                  |
+    And the profile allows reading exactly:
+      | ${config} |
+      | ${tmp} |
     And the profile allows the network domains exactly:
       | 127.0.0.1:${authProxyPort} |
     And the profile allows no pseudo-terminal

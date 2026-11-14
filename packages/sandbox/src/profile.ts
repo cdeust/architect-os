@@ -71,8 +71,19 @@ export const ProfileTemplateSchema = z.strictObject({
 });
 export type ProfileTemplate = z.infer<typeof ProfileTemplateSchema>;
 
-/** Variables posées par l'adaptateur ; le lanceur peut en ajouter (`SrtRunnerOptions.variables`). */
-export const PROFILE_VARIABLES = ['home', 'repo', 'worktree', 'worktreeName', 'tmp', 'config'] as const;
+/**
+ * Variables posées par l'adaptateur ; le lanceur peut en ajouter (`SrtRunnerOptions.variables`). `sandboxes` est le
+ * parent des dossiers de toutes les sandboxes.
+ */
+export const PROFILE_VARIABLES = [
+  'home',
+  'repo',
+  'worktree',
+  'worktreeName',
+  'tmp',
+  'config',
+  'sandboxes',
+] as const;
 export type ProfileVariables = Record<(typeof PROFILE_VARIABLES)[number], string> & Record<string, string>;
 
 export interface ResolvedProfile {

@@ -17,6 +17,7 @@ Feature: module and worker profiles of the platform (docs/design/platform-v3-srt
       | ${home}/.claude              |
       | ${home}/.claude.json         |
       | ${home}/Library/Keychains    |
+      | ${sandboxes}                  |
     And the profile denies writing to exactly:
       | ${worktree}/.mcp.json |
       | ${worktree}/.claude   |
@@ -37,6 +38,9 @@ Feature: module and worker profiles of the platform (docs/design/platform-v3-srt
     And the profile allows writing to exactly:
       | ${worktree} |
       | ${tmp}  |
+    And the profile allows reading exactly:
+      | ${worktree} |
+      | ${tmp} |
     And the profile passes exactly the variables:
       | HOME     |
       | PATH     |
@@ -59,6 +63,10 @@ Feature: module and worker profiles of the platform (docs/design/platform-v3-srt
       | ${worktree}   |
       | ${config} |
       | ${tmp}    |
+    And the profile allows reading exactly:
+      | ${worktree} |
+      | ${config}   |
+      | ${tmp}      |
     And the profile passes exactly the variables:
       | HOME     |
       | PATH     |

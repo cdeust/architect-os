@@ -1,9 +1,13 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-/** One turn of the scripted model: a call of a tool, a text that ends the turn, or an HTTP error of the API. */
+/**
+ * One turn of the scripted model: a call of a tool, a text that ends the turn, or an HTTP error of the API. A call
+ * takes its input as given, or from `inputFrom`, which reads the text of the tool result the request just brought.
+ */
 export type ModelTurn =
   | { readonly tool: string; readonly input: unknown }
+  | { readonly tool: string; readonly inputFrom: (toolResult: string) => unknown }
   | { readonly text: string }
   | { readonly status: number };
 
@@ -24,10 +28,25 @@ export interface FakeModel {
 
 type Event = [string, unknown];
 
+/** The text of the last tool result a request carries, "" when it carries none. */
+function lastToolResult(body: ModelRequest['body']): string {
+  const blocks = (body.messages ?? []).flatMap((message) => {
+    const content = (message as { content?: unknown }).content;
+    return Array.isArray(content) ? (content as Record<string, unknown>[]) : [];
+  });
+  const result = blocks.filter((block) => block['type'] === 'tool_result').at(-1);
+  if (result === undefined) return '';
+  const content = result['content'];
+  if (typeof content === 'string') return content;
+  return Array.isArray(content)
+    ? content.map((part) => String((part as { text?: unknown }).text ?? '')).join('')
+    : '';
+}
+
 const usage = { input_tokens: 10, output_tokens: 5 };
 
 /** The server-sent events of one turn (https://docs.anthropic.com/en/api/messages-streaming), as bench T-41 sent them. */
-function events(turn: Exclude<ModelTurn, { status: number }>, id: number): Event[] {
+function events(turn: { tool: string; input: unknown } | { text: string }, id: number): Event[] {
   const start: Event = [
     'message_start',
     {
@@ -110,7 +129,11 @@ export async function startFakeModel(
         return;
       }
       res.writeHead(200, { 'content-type': 'text/event-stream' });
-      for (const [name, data] of events(turn, next))
+      const played =
+        'inputFrom' in turn
+          ? { tool: turn.tool, input: turn.inputFrom(lastToolResult(requests.at(-1)!.body)) }
+          : turn;
+      for (const [name, data] of events(played, next))
         res.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
       res.end();
     });
