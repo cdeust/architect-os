@@ -1514,3 +1514,89 @@ Porte sur le commit de correction `50f9c87`, hôte et CI d'essai (Linux ; macOS 
 - Recherche : la boucle se rejoue en une commande depuis un dossier d'étape, et laisse flux, mesures et verdict ; les mesures du flux confrontées au journal d'usage avant d'en dépendre ; le refus du schéma 2020-12 reproduit puis sa correction prouvée par un appel réel.
 - SSDLC : aucun effet hors injection dans `runStep`, scénarios sans attente réelle ; la revue tourne sous le profil `reviewer`, son verdict est validé par contrat, un verdict invalide bloque ; aucune dépendance ajoutée.
 - Opérationnel : aucun secret lu ; consignes et flux hors dépôt ; IRB sans objet.
+
+## 37. Brique S.1 : le guichet des preuves ; ce que Claude Science permet, mesuré sur l'application, 14 novembre 2026
+
+Demande du propriétaire : lier la boucle à Claude Science, pour que les faits reposent sur des publications et non sur le web ; puis, en cours de journée : aucune interaction manuelle pour traiter une question, la boucle étant pilotée à distance. Conception : [`evidence-desk.md`](evidence-desk.md). Consignes, flux et relevés : dossier de l'orchestrateur, hors dépôt ; pages de documentation de Claude Science copiées hors dépôt avec leurs empreintes.
+
+### Ce qui est livré
+
+`tools/evidence`, commande `npm run evidence` : `ask` enregistre une question dans un registre que l'hôte seul écrit et la copie dans un dossier d'échange ; `verify` juge chaque réponse déposée. Une réponse n'est acceptée que si, pour chaque source, le DOI existe (`doi.org`), désigne bien l'article nommé, n'est pas rétracté, et si le passage cité se trouve dans le texte intégral déposé, lui-même rattaché au DOI par son titre. Chaque refus est nommé et rendu au répondant. Le contrat est dans `packages/contracts/src/evidence.ts`.
+
+**Limite, écrite dans chaque fiche** (`level: quote_in_supplied_text`) : le texte est celui que le répondant a déposé ; un texte fabriqué qui contient le titre passerait. L'étape S.3 fait récupérer le texte par l'hôte. Vérifié le même jour : arXiv (HTML) et Europe PMC (XML) le servent sans clé ni adresse.
+
+### Relevé avant de spécifier
+
+`doi.org` en négociation de contenu (CSL JSON), sur quatre DOI : un article Crossref, un article rétracté (`updated-by` de type `retraction`), une prépublication arXiv enregistrée chez DataCite, un DOI inexistant (404). L'API de Crossref, prévue d'abord, répond 404 pour la prépublication arXiv : d'où `doi.org`, une adresse pour toutes les agences. Les trois réponses 200 sont les fixtures de l'adaptateur.
+
+### Construit dans l'outil, trois étapes
+
+`npm run step` : construction `claude-sonnet-5-5` `medium`, revue `claude-opus-5-5` `high`.
+
+| Étape | Construction | Revue | Coût |
+|---|---|---|---|
+| S.1a, domaine et adaptateurs | aboutie, 26 réponses, 448 s | `request_changes`, 15 constats | 2,55 $ |
+| S.1a, seconde passe | aboutie, 25 réponses, 386 s | `request_changes`, 11 constats | 2,51 $ |
+| S.1b, cas d'usage, commande, skill, docs | aboutie, 56 réponses, 637 s | `request_changes`, 8 constats | 3,69 $ |
+
+8,75 $ au tarif public, sur le forfait du propriétaire. Aucune des trois revues n'a accepté, et chacune a eu raison sur le fond :
+
+| Constat de la revue, reproduit par elle | Cause | Correction |
+|---|---|---|
+| Un lien posé par le répondant à la place d'un sous-dossier du dossier d'échange faisait lire ou écrire l'hôte ailleurs | sous-dossiers créés sans contrôle, lecture par chemin après `lstat` | deux dossiers **plats**, `out` (hôte) et `in` (répondant) ; lecture par descripteur ouvert sans suivre de lien, fichier ordinaire à un seul lien ; écriture par fichier temporaire exclusif puis renommage |
+| Un tube nommé dans `in` bloquait le vérificateur indéfiniment | ouverture bloquante | `O_NONBLOCK` ; scénario sur un vrai tube nommé, à la racine (`features/integration`), le lancement de processus étant interdit dans `tools/` |
+| La borne de 5 Mio ne tenait que sur la taille lue avant la lecture | contrôle puis usage | une lecture, dans un tampon de la borne plus un octet |
+| zod importé par le domaine | erreur de la consigne de l'orchestrateur ; le garde d'architecture le refuse | schémas dans `packages/contracts` |
+| Une réponse refusée n'était pas reprise quand seul le texte source était corrigé | l'empreinte du refus ne couvrait que la réponse | l'empreinte couvre la réponse et chaque texte qu'elle cite |
+
+Faits à la main par l'orchestrateur après la troisième revue : l'empreinte étendue, la lecture en un appel, le code de sortie 3 pour une erreur imprévue (un appelant distingue une panne d'un refus), l'assertion du délai de 20 s dans la racine de composition, trois scénarios, deux consignes du skill.
+
+### La porte du lot
+
+Première porte complète, sur l'hôte : 1 475 = 1 196 + 279 − 0 = statique ; 648 mutants du périmètre, 605 tués, 32 erreurs d'exécution et 1 délai dépassé confirmés par le rejeu, **10 survivants**. Rouge. Aucun n'avait été vu par les trois revues, qui avaient pourtant annoncé leurs survivants par lecture : la mutation exécutée reste le seul juge.
+
+| Survivants | Ce qu'aucun scénario ne distinguait | Correction |
+|---|---|---|
+| `verify.ts`, valeur initiale de `pending` | elle était écrasée avant le retour | la liste est calculée au retour |
+| `verify.ts`, trois conditions des refus d'ensemble | « mauvais identifiant » seul, et « question jamais posée » seule | deux scénarios |
+| `fs-store.ts`, quatre mutants sur la fermeture des descripteurs | un descripteur resté ouvert | scénario qui compte les descripteurs du processus avant et après 40 lectures et 40 écritures |
+| `ports.ts`, motif des noms publiés | un nom commençant par un point | un exemple |
+| `main.ts`, message d'une erreur imprévue | un remplacement de saut de ligne qu'aucune erreur réelle ne déclenche | remplacement retiré |
+
+Vérifié par l'outil avant de relancer la porte : Stryker sur les seules lignes corrigées, 143 tués, 7 erreurs d'exécution, 0 survivant.
+
+### Preuve réelle, sur l'hôte, contre le vrai registre
+
+Texte d'une prépublication arXiv récupéré et converti par code, puis cinq réponses jugées par la commande :
+
+| Réponse | Verdict |
+|---|---|
+| passage exact, DOI de la prépublication | vérifiée ; titre et année pris au registre, texte gardé par son empreinte |
+| DOI inexistant | `DOI_UNKNOWN` |
+| DOI d'un autre article | `TITLE_MISMATCH`, `TEXT_NOT_OF_DOI` |
+| DOI d'un article rétracté | `TITLE_MISMATCH`, `RETRACTED`, `TEXT_NOT_OF_DOI` |
+| passage inventé | `QUOTE_ABSENT` |
+
+### Claude Science, mesuré sur l'application (0.1.72, macOS)
+
+| Essai | Résultat |
+|---|---|
+| Sous-commandes `run`, `ask`, `chat`, `api`, `mcp` | refusées |
+| Connecteur « commande locale » pointant un script du dossier personnel | lancé, puis `Cannot find module` : son bac à sable ne voit pas le dossier personnel |
+| Lien `claude-science url` suivi par un client sans navigateur, puis par un Chrome sans fenêtre ; démon de l'application, puis second démon en mode serveur sur son propre dossier de données | page « Sign in », `invalid bearer token` |
+| Connecteur « Remote » vers un serveur MCP de l'hôte (essai hors dépôt : outils `next_question`, `submit_answer`), derrière un tunnel ngrok du propriétaire | accepté : `connected via streamable_http` ; un tour complet n'a pas été joué, faute de session |
+
+Le bac à sable de Science repose sur les mêmes briques que srt (bubblewrap et socat sous Linux, `sandbox-exec` sous macOS) ; son binaire porte le vocabulaire de configuration de srt (`denyRead`, `allowedDomains`).
+
+**Arrêté pour deux raisons.** Les conditions d'utilisation grand public d'Anthropic interdisent l'accès par « automated or non-human means », sauf clé d'API ou permission explicite d'Anthropic ; et le garde de la session de l'orchestrateur a refusé, comme accès non autorisé, la lecture de la page de connexion du démon. L'orchestrateur n'a pas contourné ce refus.
+
+**Échecs de l'orchestrateur.** Un message d'erreur d'un script d'essai a affiché le jeton du serveur d'essai dans la conversation : jeton supprimé et remplacé avant toute ouverture du tunnel. Deux veilles sur un fichier de rapport se sont déclenchées sur le rapport de son propre essai : remplacées par une veille sur le journal.
+
+### Décision
+
+Science ne démarre pas de session sans geste. Le répondant de la boucle sera donc un documentaliste sous srt (étape S.2) : Claude Code sans interface, profil `researcher`, réseau fermé aux registres de publications. Science reste un répondant possible par le dossier et le skill livrés ici, quand une personne est devant l'application.
+
+**Trois piliers.**
+- Recherche : capacités de Science relevées dans sa documentation puis mesurées sur l'application ; registre des DOI relevé sur le service réel avant de spécifier ; preuve du vérificateur contre le registre réel, une réponse exacte et quatre fausses ; limite du niveau de preuve écrite dans chaque fiche.
+- SSDLC : STRIDE dans la note ; trois défauts de sécurité trouvés par la revue et fermés à la cause (lien, tube nommé, lecture non bornée) ; contrat strict ; aucune dépendance ajoutée. Vérificateur sous srt : prévu à l'étape S.4.
+- Opérationnel : registre hors de portée du répondant ; aucune adresse ni donnée personnelle envoyée au registre ; aucun secret au dépôt ; tunnel et second démon arrêtés en fin d'essai. IRB sans objet.

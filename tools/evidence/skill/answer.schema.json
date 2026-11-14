@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "statement": { "type": "string", "minLength": 1, "maxLength": 600 },
+          "sources": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "doi": { "type": "string", "maxLength": 200, "pattern": "^10\\.\\d{4,9}\\/\\S+$" },
+                "title": { "type": "string", "minLength": 1 },
+                "quote": { "type": "string", "minLength": 40, "maxLength": 600 },
+                "text": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,120}\\.txt$" }
+              },
+              "required": ["doi", "title", "quote", "text"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["statement", "sources"],
+        "additionalProperties": false
+      }
+    },
+    "not_found": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  },
+  "required": ["id", "claims", "not_found"],
+  "additionalProperties": false
+}

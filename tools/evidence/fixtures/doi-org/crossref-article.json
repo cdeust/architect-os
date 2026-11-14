@@ -1,0 +1,324 @@
+{
+  "indexed": {
+    "date-parts": [[2026, 11, 14]],
+    "date-time": "2026-11-14T13:11:09Z",
+    "timestamp": 1794661869704,
+    "version": "4.9.1"
+  },
+  "publisher-location": "New York, NY, USA",
+  "reference-count": 78,
+  "publisher": "ACM",
+  "license": [
+    {
+      "start": {
+        "date-parts": [[2024, 4, 12]],
+        "date-time": "2024-04-12T00:00:00Z",
+        "timestamp": 1712880000000
+      },
+      "content-version": "vor",
+      "delay-in-days": 0,
+      "URL": "https:\/\/creativecommons.org\/licenses\/by\/4.0\/"
+    }
+  ],
+  "content-domain": { "domain": ["dl.acm.org"], "crossmark-restriction": true },
+  "published-print": { "date-parts": [[2024, 4, 12]] },
+  "DOI": "10.1145\/3597503.3639187",
+  "type": "proceedings-article",
+  "created": {
+    "date-parts": [[2024, 4, 12]],
+    "date-time": "2024-04-12T12:43:26Z",
+    "timestamp": 1712925806000
+  },
+  "page": "1-13",
+  "update-policy": "https:\/\/doi.org\/10.1145\/crossmark-policy",
+  "source": "Crossref",
+  "is-referenced-by-count": 402,
+  "title": "Using an LLM to Help With Code Understanding",
+  "prefix": "10.1145",
+  "author": [
+    {
+      "ORCID": "https:\/\/orcid.org\/0009-0006-3846-6924",
+      "authenticated-orcid": false,
+      "given": "Daye",
+      "family": "Nam",
+      "sequence": "first",
+      "affiliation": [{ "name": "Carnegie Mellon University, Pittsburgh, Pennsylvania, USA" }],
+      "role": [{ "vocabulary": "crossref", "role": "author" }]
+    },
+    {
+      "ORCID": "https:\/\/orcid.org\/0009-0003-8215-8513",
+      "authenticated-orcid": false,
+      "given": "Andrew",
+      "family": "Macvean",
+      "sequence": "additional",
+      "affiliation": [{ "name": "Google, Mountain View, California, USA" }],
+      "role": [{ "vocabulary": "crossref", "role": "author" }]
+    },
+    {
+      "ORCID": "https:\/\/orcid.org\/0000-0001-7516-0525",
+      "authenticated-orcid": false,
+      "given": "Vincent",
+      "family": "Hellendoorn",
+      "sequence": "additional",
+      "affiliation": [{ "name": "Carnegie Mellon University, Pittsburgh, Pennsylvania, USA" }],
+      "role": [{ "vocabulary": "crossref", "role": "author" }]
+    },
+    {
+      "ORCID": "https:\/\/orcid.org\/0000-0003-4418-5783",
+      "authenticated-orcid": false,
+      "given": "Bogdan",
+      "family": "Vasilescu",
+      "sequence": "additional",
+      "affiliation": [{ "name": "Carnegie Mellon University, Pittsburgh, Pennsylvania, USA" }],
+      "role": [{ "vocabulary": "crossref", "role": "author" }]
+    },
+    {
+      "ORCID": "https:\/\/orcid.org\/0000-0002-4769-0219",
+      "authenticated-orcid": false,
+      "given": "Brad",
+      "family": "Myers",
+      "sequence": "additional",
+      "affiliation": [{ "name": "Carnegie Mellon University, Pittsburgh, Pennsylvania, USA" }],
+      "role": [{ "vocabulary": "crossref", "role": "author" }]
+    }
+  ],
+  "member": "320",
+  "published-online": { "date-parts": [[2024, 4, 12]] },
+  "reference": [
+    {
+      "key": "e_1_3_2_1_1_1",
+      "volume-title": "Sruti Srinivasa Ragavan, and Mohammad Amin Alipour",
+      "author": "Amoozadeh Matin",
+      "year": "2023",
+      "unstructured": "Matin Amoozadeh, David Daniels, Daye Nam, Stella Chen, Michael Hilton, Sruti Srinivasa Ragavan, and Mohammad Amin Alipour. 2023. Trust in Generative AI among students: An Exploratory Study. arXiv:2310.04631 Retrieved from https:\/\/arxiv.org\/abs\/2310.04631."
+    },
+    { "key": "e_1_3_2_1_2_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3586030" },
+    { "key": "e_1_3_2_1_3_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3368089.3417052" },
+    { "key": "e_1_3_2_1_4_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/1124772.1124808" },
+    {
+      "key": "e_1_3_2_1_5_1",
+      "unstructured": "Bokeh. 2023. Bokeh. https:\/\/bokeh.org\/ Retrieved: 2024-01-11."
+    },
+    { "key": "e_1_3_2_1_6_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/1753326.1753402" },
+    { "key": "e_1_3_2_1_7_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/1518701.1518944" },
+    { "key": "e_1_3_2_1_8_1", "doi-asserted-by": "publisher", "DOI": "10.1093\/IWC\/IWV046" },
+    { "key": "e_1_3_2_1_9_1", "doi-asserted-by": "publisher", "DOI": "10.1016\/J.JSS.2008.12.036" },
+    {
+      "key": "e_1_3_2_1_10_1",
+      "volume-title": "Teaching thematic analysis: Overcoming challenges and developing strategies for effective learning. The psychologist 26, 2",
+      "author": "Clarke Victoria",
+      "year": "2013",
+      "unstructured": "Victoria Clarke and Virginia Braun. 2013. Teaching thematic analysis: Overcoming challenges and developing strategies for effective learning. The psychologist 26, 2 (2013), 120--123."
+    },
+    { "key": "e_1_3_2_1_11_1", "doi-asserted-by": "publisher", "DOI": "10.1080\/00913367.1995.10673467" },
+    { "key": "e_1_3_2_1_12_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3587157" },
+    { "key": "e_1_3_2_1_13_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3545945.3569823" },
+    { "key": "e_1_3_2_1_15_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/ICSE.2012.6227187" },
+    {
+      "key": "e_1_3_2_1_16_1",
+      "volume-title": "Djamel Eddine Khelladi, and Benoit Combemale",
+      "author": "D\u00f6derlein Jean-Baptiste",
+      "year": "2023",
+      "unstructured": "Jean-Baptiste D\u00f6derlein, Mathieu Acher, Djamel Eddine Khelladi, and Benoit Combemale. 2023. Piloting Copilot and Codex: Hot Temperature, Cold Prompts, or Black Magic? arXiv:2210.14699 Retrieved from https:\/\/arxiv.org\/abs\/2210.14699."
+    },
+    { "key": "e_1_3_2_1_17_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3511861.3511863" },
+    { "key": "e_1_3_2_1_18_1", "doi-asserted-by": "publisher", "DOI": "10.1002\/ASI.23278" },
+    { "key": "e_1_3_2_1_19_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/1753326.1753431" },
+    {
+      "key": "e_1_3_2_1_20_1",
+      "volume-title": "How to measure diversity actionably in technology. Equity, Diversity, and Inclusion in Software Engineering: Best Practices and Insights",
+      "author": "Hamid Md Montaser",
+      "year": "2023",
+      "unstructured": "Md Montaser Hamid, Amreeta Chatterjee, Mariam Guizani, Andrew Anderson, Fatima Moussaoui, Sarah Yang, I Escobar, Anita Sarma, and Margaret Burnett. 2023. How to measure diversity actionably in technology. Equity, Diversity, and Inclusion in Software Engineering: Best Practices and Insights (2023)."
+    },
+    {
+      "key": "e_1_3_2_1_21_1",
+      "volume-title": "Advances in psychology.",
+      "author": "Hart Sandra G",
+      "unstructured": "Sandra G Hart and Lowell E Staveland. 1988. Development of NASA-TLX (Task Load Index): Results of empirical and theoretical research. In Advances in psychology. Vol. 52. Elsevier, 139--183."
+    },
+    { "key": "e_1_3_2_1_22_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3568813.3600139" },
+    { "key": "e_1_3_2_1_23_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/VLHCC.2019.8818681" },
+    { "key": "e_1_3_2_1_24_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3510454.3522684" },
+    {
+      "key": "e_1_3_2_1_25_1",
+      "unstructured": "GitHub Inc. 2024. GitHub Codespaces. https:\/\/github.com\/features\/codespaces Retrieved: 2024-01-11."
+    },
+    {
+      "key": "e_1_3_2_1_26_1",
+      "unstructured": "GitHub Inc. 2024. GitHub Copilot. https:\/\/github.com\/features\/copilot Retrieved: 2024-01-11."
+    },
+    {
+      "key": "e_1_3_2_1_27_1",
+      "unstructured": "GitHub Inc. 2024. GitHub Copilot X: The AI-powered developer experience. https:\/\/github.com\/features\/preview\/copilot-x Retrieved: 2024-01-11."
+    },
+    {
+      "key": "e_1_3_2_1_28_1",
+      "volume-title": "Confounding and collinearity in regression analysis: a cautionary tale and an alternative procedure, illustrated by studies of British voting behaviour. Quality & quantity 52",
+      "author": "Johnston Ron",
+      "year": "2018",
+      "unstructured": "Ron Johnston, Kelvyn Jones, and David Manley. 2018. Confounding and collinearity in regression analysis: a cautionary tale and an alternative procedure, illustrated by studies of British voting behaviour. Quality & quantity 52 (2018), 1957--1976."
+    },
+    { "key": "e_1_3_2_1_29_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3544548.3580919" },
+    { "key": "e_1_3_2_1_30_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/ICSE.2007.45" },
+    { "key": "e_1_3_2_1_31_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/tse.2006.116" },
+    { "key": "e_1_3_2_1_32_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/VLHCC.2011.6070395" },
+    { "key": "e_1_3_2_1_33_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/1287624.1287675" },
+    { "key": "e_1_3_2_1_34_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/1134285.1134355" },
+    { "key": "e_1_3_2_1_35_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/TSE.2010.111" },
+    {
+      "key": "e_1_3_2_1_36_1",
+      "volume-title": "The technology acceptance model: Past, present, and future. Communications of the Association for information systems 12, 1",
+      "author": "Lee Younghwa",
+      "year": "2003",
+      "unstructured": "Younghwa Lee, Kenneth A Kozar, and Kai RT Larsen. 2003. The technology acceptance model: Past, present, and future. Communications of the Association for information systems 12, 1 (2003), 50."
+    },
+    {
+      "key": "e_1_3_2_1_37_1",
+      "volume-title": "Comparing Code Explanations Created by Students and Large Language Models. arXiv",
+      "author": "Leinonen Juho",
+      "year": "2023",
+      "unstructured": "Juho Leinonen, Paul Denny, Stephen MacNeil, Sami Sarsa, Seth Bernstein, Joanne Kim, Andrew Tran, and Arto Hellas. 2023. Comparing Code Explanations Created by Students and Large Language Models. arXiv (2023). arXiv:2304.03938"
+    },
+    { "key": "e_1_3_2_1_38_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/WCRE.2013.6671289" },
+    { "key": "e_1_3_2_1_39_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/SANER.2015.7081849" },
+    {
+      "key": "e_1_3_2_1_40_1",
+      "volume-title": "Myers",
+      "author": "Liang Jenny T.",
+      "year": "2023",
+      "unstructured": "Jenny T. Liang, Chenyang Yang, and Brad A. Myers. 2023. A Large-Scale Survey on the Usability of AI Programming Assistants: Successes and Challenges. arXiv:2303.17125 Retrieved from https:\/\/arxiv.org\/abs\/2303.17125."
+    },
+    {
+      "key": "e_1_3_2_1_41_1",
+      "volume-title": "Yuyao Wang, and Lingming Zhang.",
+      "author": "Liu Jiawei",
+      "year": "2023",
+      "unstructured": "Jiawei Liu, Chunqiu Steven Xia, Yuyao Wang, and Lingming Zhang. 2023. Is Your Code Generated by ChatGPT Really Correct? Rigorous Evaluation of Large Language Models for Code Generation. arXiv:2305.01210 Retrieved from https:\/\/arxiv.org\/abs\/2305.01210."
+    },
+    { "key": "e_1_3_2_1_42_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3491102.3501968" },
+    { "key": "e_1_3_2_1_43_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/TSE.2013.12" },
+    { "key": "e_1_3_2_1_44_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/2622669" },
+    {
+      "key": "e_1_3_2_1_45_1",
+      "volume-title": "Experiences from Using Code Explanations Generated by Large Language Models in a Web Software Development E-Book. arXiv",
+      "author": "MacNeil Stephen",
+      "year": "2022",
+      "unstructured": "Stephen MacNeil, Andrew Tran, Arto Hellas, Joanne Kim, Sami Sarsa, Paul Denny, Seth Bernstein, and Juho Leinonen. 2022. Experiences from Using Code Explanations Generated by Large Language Models in a Web Software Development E-Book. arXiv (2022). arXiv:2211.02265"
+    },
+    { "key": "e_1_3_2_1_46_1", "doi-asserted-by": "publisher", "DOI": "10.1177\/0047281617721853" },
+    { "key": "e_1_3_2_1_47_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3358931.3358937" },
+    { "key": "e_1_3_2_1_48_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/tse.2017.2656886" },
+    {
+      "key": "e_1_3_2_1_49_1",
+      "doi-asserted-by": "crossref",
+      "unstructured": "Hussein Mozannar Gagan Bansal Adam Fourney and Eric Horvitz. 2023. Reading Between the Lines: Modeling User Behavior and Costs in AI-Assisted Programming. arXiv:2210.14306 Retrieved from https:\/\/arxiv.org\/abs\/2210.14306.",
+      "DOI": "10.1145\/3613904.3641936"
+    },
+    {
+      "key": "e_1_3_2_1_50_1",
+      "doi-asserted-by": "publisher",
+      "unstructured": "Daye Nam Andrew Macvean Vincent Hellendoorn Bogdan Vasilescu and Brad Myers. 2024. Artifacts for Using an LLM to Help With Code Understanding. 10.5281\/zenodo.10461385",
+      "DOI": "10.5281\/zenodo.10461385"
+    },
+    {
+      "key": "e_1_3_2_1_51_1",
+      "unstructured": "Daye Nam Andrew Macvean Brad Myers and Bogdan Vasilescu. 2023. Exploring Documentation Usage via Page-view Log Analysis. arXiv:2310.10817 Retrieved from https:\/\/arxiv.org\/abs\/2310.10817."
+    },
+    { "key": "e_1_3_2_1_52_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/ICSE48619.2023.00161" },
+    {
+      "key": "e_1_3_2_1_53_1",
+      "volume-title": "Open3D - A Modern Library for 3D Data Processing",
+      "author": "D.",
+      "unstructured": "Open3D. 2024. Open3D - A Modern Library for 3D Data Processing. http:\/\/www.open3d.org\/ Retrieved: 2024-01-11."
+    },
+    {
+      "key": "e_1_3_2_1_54_1",
+      "unstructured": "OpenAI. 2024. ChatGPT|OpenAI. https:\/\/chat.openai.com\/ Retrieved: 2024-01-11."
+    },
+    { "key": "e_1_3_2_1_55_1", "doi-asserted-by": "publisher", "DOI": "10.2190\/GUJT-JCBJ-Q6QU-Q9PL" },
+    { "key": "e_1_3_2_1_56_1", "doi-asserted-by": "publisher", "DOI": "10.48550\/arXiv.2211.03622" },
+    { "key": "e_1_3_2_1_57_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/2950290.2950302" },
+    { "key": "e_1_3_2_1_58_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3196398.3196425" },
+    { "key": "e_1_3_2_1_59_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/BIGDATA50022.2020.9378083" },
+    { "key": "e_1_3_2_1_60_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/MS.2009.193" },
+    { "key": "e_1_3_2_1_61_1", "doi-asserted-by": "publisher", "DOI": "10.1007\/S10664-010-9150-8" },
+    { "key": "e_1_3_2_1_62_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/ICPC.2015.22" },
+    { "key": "e_1_3_2_1_63_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3581641.3584037" },
+    {
+      "key": "e_1_3_2_1_64_1",
+      "volume-title": "Proceedings of the 33rd Annual Workshop of the Psychology of Programming Interest Group, (PPIG 2022",
+      "author": "Sarkar Advait",
+      "year": "2022",
+      "unstructured": "Advait Sarkar, Carina Negreanu, Ben Zorn, Sruti Srinivasa Ragavan, Christian Politz, and Andrew D. Gordon. 2022. What is it like to program with artificial intelligence?. In Proceedings of the 33rd Annual Workshop of the Psychology of Programming Interest Group, (PPIG 2022), The Open University, Milton Keynes, UK & Online, September 5--9, 2022. Psychology of Programming Interest Group, 127--153. https:\/\/ppig.org\/papers\/2022-ppig-33rd-sarkar\/"
+    },
+    { "key": "e_1_3_2_1_65_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3501385.3543957" },
+    { "key": "e_1_3_2_1_66_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/TSE.2008.26" },
+    {
+      "key": "e_1_3_2_1_67_1",
+      "volume-title": "Tabnine: AI assistant for software developers. https:\/\/www.tabnine.com\/ Retrieved: 2024-01-11.",
+      "year": "2024",
+      "unstructured": "Tabnine. 2024. Tabnine: AI assistant for software developers. https:\/\/www.tabnine.com\/ Retrieved: 2024-01-11."
+    },
+    { "key": "e_1_3_2_1_68_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3444945" },
+    {
+      "key": "e_1_3_2_1_69_1",
+      "volume-title": "Xunzhu Tang, Shing-Chi Cheung, Jacques Klein, and Tegawend\u00e9 F. Bissyand\u00e9.",
+      "author": "Tian Haoye",
+      "year": "2023",
+      "unstructured": "Haoye Tian, Weiqi Lu, Tsz On Li, Xunzhu Tang, Shing-Chi Cheung, Jacques Klein, and Tegawend\u00e9 F. Bissyand\u00e9. 2023. Is ChatGPT the Ultimate Programming Assistant - How far is it? arXiv:2304.11938 Retrieved from https:\/\/arxiv.org\/abs\/2304.11938."
+    },
+    { "key": "e_1_3_2_1_70_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/MS.2014.80" },
+    { "key": "e_1_3_2_1_71_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3491101.3519665" },
+    { "key": "e_1_3_2_1_72_1", "doi-asserted-by": "publisher", "DOI": "10.1109\/TSE.2018.2874470" },
+    { "key": "e_1_3_2_1_73_1", "doi-asserted-by": "publisher", "DOI": "10.1007\/S10664-018-9634-5" },
+    { "key": "e_1_3_2_1_74_1", "doi-asserted-by": "publisher", "DOI": "10.1007\/S10664-017-9514-4" },
+    { "key": "e_1_3_2_1_75_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3520312.3534862" },
+    { "key": "e_1_3_2_1_76_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3544548.3581388" },
+    { "key": "e_1_3_2_1_77_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3313831.3376382" },
+    { "key": "e_1_3_2_1_78_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3180155.3180260" },
+    { "key": "e_1_3_2_1_79_1", "doi-asserted-by": "publisher", "DOI": "10.1145\/3520312.3534864" }
+  ],
+  "event": "ICSE '24: IEEE\/ACM 46th International Conference on Software Engineering",
+  "container-title": "Proceedings of the IEEE\/ACM 46th International Conference on Software Engineering",
+  "original-title": [],
+  "link": [
+    {
+      "URL": "https:\/\/dl.acm.org\/doi\/10.1145\/3597503.3639187",
+      "content-type": "unspecified",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+    },
+    {
+      "URL": "https:\/\/dl.acm.org\/doi\/pdf\/10.1145\/3597503.3639187",
+      "content-type": "unspecified",
+      "content-version": "vor",
+      "intended-application": "similarity-checking"
+    }
+  ],
+  "deposited": {
+    "date-parts": [[2025, 6, 18]],
+    "date-time": "2025-06-18T18:49:13Z",
+    "timestamp": 1750272553000
+  },
+  "score": 1,
+  "resource": { "primary": { "URL": "https:\/\/dl.acm.org\/doi\/10.1145\/3597503.3639187" } },
+  "subtitle": [],
+  "short-title": [],
+  "issued": { "date-parts": [[2024, 4, 12]] },
+  "references-count": 78,
+  "alternative-id": ["10.1145\/3597503.3639187", "10.1145\/3597503"],
+  "URL": "http:\/\/dx.doi.org\/10.1145\/3597503.3639187",
+  "relation": {},
+  "subject": [],
+  "published": { "date-parts": [[2024, 4, 12]] },
+  "assertion": [
+    {
+      "value": "2024-04-12",
+      "order": 3,
+      "name": "published",
+      "label": "Published",
+      "group": { "name": "publication_history", "label": "Publication History" }
+    }
+  ]
+}

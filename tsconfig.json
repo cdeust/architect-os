@@ -26,6 +26,9 @@
       "path": "tools/test-gate"
     },
     {
+      "path": "tools/evidence"
+    },
+    {
       "path": "features"
     }
   ]

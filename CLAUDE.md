@@ -14,6 +14,8 @@ npm run arch           # dependency-cruiser: layers, boundaries, cycles (also a 
 npm --prefix <launcher checkout> run code   # from a worktree: claude under srt, builder profile (packages/sandbox/README.md)
 npm --prefix <launcher checkout> run review # from a worktree: the read-only reviewer session, prompt from the launcher
 npm --prefix <launcher checkout> run step -- <folder>  # one step of the orchestration loop: build session then review session under srt, files left in <folder> (packages/sandbox/README.md)
+npm run evidence -- ask <ledger> <desk> <id> < question.txt  # evidence desk: record a question, publish the skill (tools/evidence/README.md)
+npm run evidence -- verify <ledger> <desk>                   # evidence desk: verify the answers left in the desk; exit 0, 1 (rejected or deferred), 2 (refused) or 3 (unexpected error)
 ```
 
 ## What This Is
@@ -26,18 +28,19 @@ client -> proxy -> gateway -> services/<name> -> worker (container, exec network
                                    +-> data -> postgres (pgvector)
 ```
 
-| Dir                   | Role                                                                                                                                                                                 |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `proxy/`              | Caddyfile. Only exposed component: `/mcp` to the gateway, `/healthz`.                                                                                                                |
-| `gateway/`            | The single MCP server for clients. Auth, tool catalogue, routing per tool, quotas, audit. Nothing else.                                                                              |
-| `services/memory/`    | Intent tools `recall` / `remember`. `src/` is the MCP service, `worker/` is the agent image.                                                                                         |
-| `data/`               | Only component that imports `pg`. Typed operations served from `sql/` by one executor, over HTTP and as MCP tools generated from `DATA_OPS` (`src/serve-mcp.ts`, stdio); migrations. |
-| `packages/contracts/` | Only shared package: `Result<T>`, `Run`, `RunEvent`, zod schemas of tools and data operations. No logic.                                                                             |
-| `packages/sandbox/`   | `SandboxRunner` port, srt adapter, builder profile template, host auth proxy and its relay, `npm run code` (brick 1a.0), `npm run review` and `npm run step`.                        |
-| `modules/broker/`     | The broker (1b.2): sole holder of the API key, task tokens granted and revoked by MCP on its stdio, one usage record per answer.                                                     |
-| `tools/test-gate/`    | The CI gate (`npm run gate`). Layers `domain`, `infrastructure`, composition root `src/main.ts`.                                                                                     |
-| `features/`           | End-to-end and cross-cutting scenarios (`integration`, `arch`, `descriptive`, `infra`, `repository`, `sandbox`).                                                                     |
-| `bench/`              | Outside production: nothing in production imports it, the gate neither counts nor mutates it (DC-8). No dependency-cruiser rule.                                                     |
+| Dir                   | Role                                                                                                                                                                                                                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `proxy/`              | Caddyfile. Only exposed component: `/mcp` to the gateway, `/healthz`.                                                                                                                                                                                                                           |
+| `gateway/`            | The single MCP server for clients. Auth, tool catalogue, routing per tool, quotas, audit. Nothing else.                                                                                                                                                                                         |
+| `services/memory/`    | Intent tools `recall` / `remember`. `src/` is the MCP service, `worker/` is the agent image.                                                                                                                                                                                                    |
+| `data/`               | Only component that imports `pg`. Typed operations served from `sql/` by one executor, over HTTP and as MCP tools generated from `DATA_OPS` (`src/serve-mcp.ts`, stdio); migrations.                                                                                                            |
+| `packages/contracts/` | Only shared package: `Result<T>`, `Run`, `RunEvent`, zod schemas of tools and data operations, the evidence desk contract (`evidence.ts`). No logic.                                                                                                                                            |
+| `packages/sandbox/`   | `SandboxRunner` port, srt adapter, builder profile template, host auth proxy and its relay, `npm run code` (brick 1a.0), `npm run review` and `npm run step`.                                                                                                                                   |
+| `modules/broker/`     | The broker (1b.2): sole holder of the API key, task tokens granted and revoked by MCP on its stdio, one usage record per answer.                                                                                                                                                                |
+| `tools/test-gate/`    | The CI gate (`npm run gate`). Layers `domain`, `infrastructure`, composition root `src/main.ts`.                                                                                                                                                                                                |
+| `tools/evidence/`     | The evidence desk (`npm run evidence`): questions for a librarian (Claude Science, or a session under srt), answers verified on the host against the DOI registry. Layers `domain`, `application`, `infrastructure`, composition root `src/main.ts`, entry `src/cli.ts`, the skill in `skill/`. |
+| `features/`           | End-to-end and cross-cutting scenarios (`integration`, `arch`, `descriptive`, `infra`, `repository`, `sandbox`).                                                                                                                                                                                |
+| `bench/`              | Outside production: nothing in production imports it, the gate neither counts nor mutates it (DC-8). No dependency-cruiser rule.                                                                                                                                                                |
 
 Details: `docs/architecture.md`, `docs/infrastructure.md`, `docs/design.md`, `docs/agents.md`, `docs/testing.md`.
 

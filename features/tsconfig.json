@@ -8,6 +8,7 @@
     { "path": "../gateway" },
     { "path": "../services/memory" },
     { "path": "../modules/broker" },
-    { "path": "../modules/memory" }
+    { "path": "../modules/memory" },
+    { "path": "../tools/evidence" }
   ]
 }

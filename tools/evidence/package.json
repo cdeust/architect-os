@@ -1,0 +1,12 @@
+{
+  "name": "@architect-os/evidence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Guichet des preuves : questions posées à Claude Science, réponses vérifiées sur l'hôte (docs/design/evidence-desk.md).",
+  "dependencies": {
+    "@architect-os/contracts": "0.1.0",
+    "zod": "4.6.7"
+  }
+}

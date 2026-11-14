@@ -5,3 +5,4 @@ export * from './data-ops.js';
 export * from './broker.js';
 export * from './ids.js';
 export * from './modules.js';
+export * from './evidence.js';
