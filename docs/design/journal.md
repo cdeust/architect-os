@@ -1217,3 +1217,61 @@ Lecture : deux tiers du coût de la brique sont du contexte. L'étape 2 relisait
 - Recherche : sept pages de documentation gardées hors dépôt avec leurs empreintes, revérifiées ; calcul refaisable à la main depuis le tableau du §16 ; protocole proposé avant toute mesure.
 - SSDLC : aucun code ni dépendance modifiés ; la boucle n'ajoute ni processus natif ni secret, et garde R-1 et R-2 ; le profil `reviewer` en lecture seule est prévu comme première étape, avec ses scénarios.
 - Opérationnel : aucun token dépensé, aucun secret lu, aucune donnée humaine, IRB sans objet.
+
+## 32. Mesure O, pilote P1 : une étape sous deux consignes ; profil `reviewer` ; l'outil de code ne lançait plus rien, 14 novembre 2026
+
+Protocole : [`orchestration-fable-5-2.md`](orchestration-fable-5-2.md), §10, pré-enregistré à `3bf6005` avant tout appel de mesure, accord du propriétaire le même jour. Consignes, flux `stream-json`, relevés et contrôle d'acceptation : dossier de l'orchestrateur, hors dépôt (`~/.local/state/architect-os/orchestration/`).
+
+**Référence reproduite avant tout changement.** `npm run check` sur l'hôte, code de `a32da1f` : 1 021 scénarios, 5 713 steps, tous verts, 2 min 14.
+
+### Constats de mise en route
+
+| Constat | Mesure | Cause | Correction |
+|---|---|---|---|
+| L'outil de code ne lance plus aucune commande | Claude Code 2.1.325, `-p --permission-mode bypassPermissions`, la commande du §16 : « Permission mode forced to default — CLAUDE_CODE_SUBPROCESS_ENV_SCRUB is set » ; `npx tsc --version` et une écriture dans le worktree refusés, 4 refus sur 4 | Avec `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`, que le profil pose pour retirer le jeton de l'environnement des commandes, Claude Code ramène `bypassPermissions` au mode par défaut ; le `settings.json` de la session n'autorisait que `Edit` dans le worktree | Essayée sur le lanceur : `"allow": ["Bash", "Read", "Edit(/${worktree}/**)"]` dans le `settings.json` du profil, 0 refus sans aucun drapeau. Faite à l'étape 2, plus bas. Le pilote a tourné avec `--allowedTools Bash Edit Read`, de même effet |
+| Le checkout principal ne peut pas servir de lanceur | `main` n'a pas `packages/sandbox` | La branche n'est pas fusionnée | Lanceur `<repo>/.claude/worktrees/gate-1a-launcher`, détaché, `npm ci --ignore-scripts` |
+| Les consignes d'origine du §16 sont perdues | Cherchées dans les journaux de session : absentes | Dossier de travail de l'orchestrateur non gardé | HO1 compare deux consignes sur une étape neuve ; les consignes sont désormais gardées dans le dossier d'état, avec leur flux |
+| Le cache s'écrit à cinq minutes | `ephemeral_5m_input_tokens` dans l'usage, plus `ephemeral_1h` | Version de Claude Code | Le prix d'écriture déduit au §31 vaut pour le 30 octobre |
+| Le prompt système d'un worker est inscriptible par la sandbox | `--append-system-prompt-file <worktree>/CLAUDE.md`, et le worktree est en `allowWrite` | Choix du 4 novembre (§21) | Borné par la lecture du diff avant tout lancement, comme le reste de R-2. Pour le relecteur, le prompt système vient du lanceur (étape 3). Décision au propriétaire : l'écrire dans R-2 |
+
+### Pilote P1 : la même étape, deux consignes
+
+Étape : le profil `reviewer` (lecture seule), ses scénarios de fichier descriptif, un scénario srt réel. Même commit de départ (`3bf6005`), un worktree jetable par variante, `claude-sonnet-5-5`, `--effort medium`, A puis B, aucune relance. A : le but, les livrables, la condition d'achèvement, 137 mots. B : les mêmes, plus les fichiers à lire, le hors périmètre, ce que la sandbox ne peut pas lancer, les commandes de vérification, la liste de contrôle, le format du rapport, 664 mots.
+
+| Relevé | A, style du §16 | B, brief découpé |
+|---|---|---|
+| Acceptation par code, sur l'hôte : schéma strict, `allowWrite`, réseau, `denyRead`, scénario srt réel, `npm run check` | 6 sur 6 ; 1 038 scénarios verts | 6 sur 6 ; 1 036 scénarios verts |
+| Durée | 1 127 s | 1 244 s |
+| Réponses, toutes `200` | 19 | 25 |
+| Tours | 21 | 30 |
+| Tokens : entrée, sortie, cache lu, cache écrit | 40 ; 11 237 ; 648 640 ; 96 807 | 52 ; 13 565 ; 771 400 ; 87 200 |
+| Cache lu par réponse | 34 139 | 30 856 |
+| Coût (`total_cost_usd`) | 0,419 $ | 0,431 $ |
+| `npm run check` lancés dans la sandbox | 2, dont un arrêté au délai de 10 min | 0 |
+| Exécution abandonnée au délai de 10 min | 1 | 1 (voir échec de méthode) |
+| Index de l'hôte touché | non | non |
+
+**Lecture.** Une session par cellule : aucune conclusion statistique.
+
+- **HO1, contexte** : B relit 10 % de tokens de cache en moins par réponse, pour un coût égal et 25 réponses au lieu de 19. L'écart est faible et dans le sens prévu ; il ne dit rien de plus à n = 1.
+- **HO2, abandon** : non tenue, dans les deux variantes. A a lancé la suite entière deux fois. B ne l'a pas lancée, mais a perdu 12 minutes sur la commande de vérification que le brief lui donnait.
+- **Contexte par réponse** : 34 000 tokens ici, contre 65 000 à 216 000 au §16. L'étape est petite et l'outil est en `--bare` depuis le 4 novembre ; la comparaison avec le §16 ne sépare pas ces deux causes.
+- Les deux diffs sont proches. A garde `allowPty` et ajoute trois `denyWrite` que `allowWrite` rend inutiles ; B n'a ni l'un ni les autres et vérifie le `settings.json` résolu en entier. B est retenue : `8f39a6d`.
+
+**Échec de méthode de l'orchestrateur.** Le brief B donnait `npx cucumber-js <fichier>` pour ne lancer qu'un fichier. Cucumber ajoute les chemins de la ligne de commande à ceux de `cucumber.mjs` (c'est écrit dans son commentaire du profil `replay`) : la commande lançait toute la suite, srt et Postgres compris, et a expiré deux fois (2 min, puis 10 min). Le worker l'a dit dans son rapport et a contourné par une configuration jetable, non laissée dans l'arbre. La commande juste est `npx cucumber-js --profile replay <fichier>` : 15 scénarios en 5 s sur l'hôte, scénario srt réel compris. Règle retenue : chaque commande d'un brief est lancée sur l'hôte avant l'envoi.
+
+### Porte et étape 2
+
+| Étape | Consigne | Durée | Réponses | Cache lu par réponse | Coût | Résultat |
+|---|---|---|---|---|---|---|
+| Profil `reviewer` (P1, B) | brief découpé | 1 244 s | 25 | 30 856 | 0,431 $ | `8f39a6d` ; `npm run gate` sur l'hôte : verte, 1 036 = 1 021 + 15 − 0 = statique, périmètre de mutation vide (aucune ligne de production), canari et rejeu sans violation |
+| 2, règles `allow` des profils `builder` et `reviewer` | brief découpé, commandes essayées sur l'hôte avant l'envoi | 36 s | 7 | 12 545 | 0,096 $ | `e02294d` ; aucune exécution abandonnée ; 50 scénarios de profils verts sur l'hôte, scénario srt réel compris |
+
+**Preuve de la correction, appel réel.** Lanceur à `e02294d`, `npm run code -- -p` sans `--permission-mode` ni `--allowedTools` : `npx tsc --version` et une écriture dans le worktree passent, 0 refus (avant : 4 sur 4).
+
+**Dépense de la journée dans l'outil, au tarif public** : essais 0,08 $, pilote 0,85 $, étape 2 0,10 $ ; sur le forfait du propriétaire. Le crédit d'API n'est pas touché.
+
+**Trois piliers.**
+- Recherche : protocole commité avant la mesure ; référence reproduite ; acceptation notée par un script écrit avant de voir les résultats ; hypothèse non tenue publiée (HO2) avec l'erreur de l'orchestrateur ; consignes, flux et relevés gardés hors dépôt.
+- SSDLC : profil `reviewer` au moindre privilège, prouvé par un scénario srt réel (lecture du worktree, écriture refusée) ; règles `deny` inchangées et prioritaires ; aucune dépendance ajoutée ; la porte est le SAST. DAST : scénario d'injection de la session de revue, prévu à l'étape 3.
+- Opérationnel : aucun secret lu ni écrit par l'orchestrateur ; l'identifiant reste dans le proxy de l'hôte ; IRB sans objet.
