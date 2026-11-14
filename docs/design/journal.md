@@ -1385,3 +1385,70 @@ L'étape 6 est le premier usage réel de `build.md` : son brief fait 250 mots, s
 - Recherche : la recommandation vérifiée à sa source, citée ; chaque défaut ramené à sa cause par un essai avant correction, et prouvé corrigé par un appel réel ; la comparaison des étapes 2 et 6 donnée comme indicative.
 - SSDLC : falsification du prompt système par le contenu du worktree retirée à la racine (un seul mécanisme, hors des chemins inscriptibles) ; mutation verte sur les lignes changées ; sonde `bench:bare` rejouée ; aucune dépendance ajoutée.
 - Opérationnel : moindre privilège inchangé (aucune écriture ajoutée hors du `tmp` de la sandbox) ; aucun secret lu ; IRB sans objet.
+
+## 35. Sortie de la brique 1b : `escape.feature`, une sandbox lisait le dossier d'une autre, limite de socket de macOS 26, 14 novembre 2026
+
+Critère de sortie de 1b (`platform-v3-srt.md`, §8) et scénario `remember` sous srt (§29, « Pas fait »). Les retraits de 1b.6 (`compose.yaml`, `proxy/`, `internal-http.ts`, service memory v2, worker Docker) et le câblage natif de la gateway restent bloqués par le mode additif (§29) : le propriétaire lancera la preuve Windows à son retour. Consignes, flux et relevés : dossier de l'orchestrateur, hors dépôt.
+
+### Le test d'évasion
+
+`features/sandbox/escape.feature`, sous vrai srt, sur un home jetable :
+
+- un `Scenario Outline` de 32 lignes : `builder`, `reviewer`, `module`, `worker`, chacun contre huit attaques (lire un faux `~/.ssh/id_test` ; écrire sous le home ; écrire `.git/hooks/pre-commit` ; joindre `example.com`, par le proxy de l'environnement puis en direct ; joindre `169.254.169.254` ; joindre un socket `.s.PGSQL.5432` que l'hôte écoute ; lire le dossier d'une autre task ; `unshare -r true`). L'échec de l'attaque est constaté sur l'hôte : marqueur absent de la sortie, fichier absent, aucune connexion acceptée, aucun code HTTP ;
+- un témoin de 5 lignes : les cinq attaques locales, lancées sur l'hôte sans srt, réussissent. Les trois autres n'ont pas de témoin (elles joindraient le vrai réseau ; `unshare` n'existe pas sur macOS, où la ligne passe parce que la commande est absente, ce que la feature écrit) ;
+- un contrôle positif de 9 lignes : chaque profil écrit et relit dans chacun de ses dossiers inscriptibles propres. Sans lui, la suite pouvait être verte sur une sandbox incapable d'écrire (constat de la revue).
+
+### Ce que le test a trouvé
+
+| Constat | Mesure | Cause racine | Correction |
+|---|---|---|---|
+| Chaque profil lisait le dossier d'une autre sandbox | Premier rejeu sur l'hôte, macOS : 33 scénarios verts, 4 rouges, « reads the folder of another task », un par profil | Les dossiers par sandbox vivaient dans le dossier temporaire commun, lisibles par toute sandbox du même uid ; ils contiennent le profil résolu, jeton de task compris. La garantie du §4 de la conception n'avait aucun scénario | Dossiers sous un parent `aos-sb`, en `denyRead` dans les quatre profils ; chaque profil ne rouvre en `allowRead` que ses dossiers inscriptibles ; le canari pose son secret dans un dossier frère `c-XXXXXX` et tourne avec le profil réel, sans ajout : chaque démarrage prouve le refus, et un profil qui l'oublie est refusé |
+| La première correction aurait cassé Linux | Revue (`npm run review`, Opus 5.5, 259 s, 1,007 $), par lecture de `linux-sandbox-utils.js` de srt 0.0.81, vérifiée ensuite par l'orchestrateur : `pushReadDenyDirMounts` rebranche d'abord les chemins inscriptibles, puis monte chaque `allowRead` en lecture seule, sauf s'il est à un chemin inscriptible rebranché | `allowRead: ["${sandbox}"]`, parent des dossiers inscriptibles, les recouvrait en lecture seule | `allowRead` = les seuls dossiers inscriptibles du profil. Prouvé en CI sous bwrap, contrôle positif compris |
+| Le parent était pris sur parole | Revue : sous Linux, `/tmp` est partagé ; un autre utilisateur peut créer `aos-sandboxes` avant, ou y poser un lien | `mkdir` récursif et `realpath` acceptent n'importe quel existant | `sandboxesParent` : créé sans `recursive`, refusé (`ISOLATION_UNAVAILABLE`) s'il n'est pas un vrai dossier (chemin réel égal au chemin attendu), de l'uid courant, de mode 0700 |
+| Sur le runner macOS 26, aucune sandbox `module` ni `worker` ne démarrait | CI, branche d'essai : `canari sans verdict`. Commit de diagnostic sur cette branche, sortie d'erreur de srt : `listen EINVAL … /aos-sandboxes/aos-sandbox-c0KOX5/tmp/srt-mux-3986-0.sock` | srt écoute sur un socket Unix dans le `TMPDIR` de la sandbox (`mux-proxy.js`) ; le parent ajouté portait ce chemin à 113 caractères, pour 103 au plus sur macOS jusqu'à 26. Mesuré sur l'hôte, macOS 27 : un chemin de 200 caractères passe, d'où le vert local | Noms courts : `aos-sb/s-XXXXXX`, 15 caractères là où `aos-sandbox-XXXXXX` en faisait 18 ; démarrage refusé, cause nommée, si le `tmp` de la sandbox plus 24 caractères dépasse 103 |
+
+### Trois défauts de la suite, corrigés à la cause
+
+- **Vérifications par délai.** Le compte des connexions du socket attendait 200 ms ; l'orchestrateur avait lui-même ajouté une attente de 200 ms à un compte de serveurs qui échouait par intermittence. Les deux sont retirées : pour le socket, l'hôte se connecte une fois après l'attaque, et quand l'écoute a fermé cette connexion, toutes les précédentes sont comptées ; le compte des serveurs n'a plus d'objet (sa ligne n'est plus touchée).
+- **Scénario qui se sautait** quand `/tmp` n'était pas inscriptible : il échoue, jamais ne se saute.
+- **Dossier partagé.** Les scénarios « aucun dossier de sandbox ne reste » lisaient le dossier temporaire commun : trois passes pendant une porte concurrente ont donné trois ensembles d'échecs différents. Chaque scénario srt réel a maintenant sa racine temporaire (`/tmp/aos-t-XXXXXX`, retirée à la fin). Preuve : deux exécutions concurrentes de `canary`, `srt-runner`, `escape` et `spawn`, 64 scénarios verts chacune.
+
+### Le registre de dette de mutation ne décrit plus l'adaptateur
+
+Mesuré à la tête poussée `14e5b5f` : sur les 597 entrées de `tools/test-gate/mutation-debt.json`, 495 désignent encore le texte qu'elles nomment ; pour `packages/sandbox/src/srt-runner.ts`, 11 sur 102 ; pour `profile.ts`, 35 sur 45 ; pour `port.ts`, 0 sur 1. Des briques antérieures ont décalé les lignes, et la porte ne juge une entrée que si sa ligne tombe dans une plage modifiée. Ces entrées n'acceptent rien et ne protègent rien : l'état réel de la mutation de l'adaptateur est inconnu jusqu'à un run complet.
+
+Conséquence pour cette brique : toute ligne changée dont le numéro porte une entrée morte la fait déclarer « introuvable », et son retrait exige la mutation du fichier entier. La correction est donc écrite sans déplacer une ligne existante de `srt-runner.ts` (contrôle par `difflib` contre `14e5b5f`) : six lignes remplacées une pour une (192, 200, 232, 254, 263, 267), aucune ne portant d'entrée, et le code nouveau ajouté en fin de fichier. Les lignes 265 et 295, que des entrées mortes désignent, ne sont pas touchées ; le dossier du canari est retiré depuis la ligne 232.
+
+**Décision du propriétaire, 14 novembre 2026** : la dette de mutation fera une brique après. Elle devra commencer par refaire le registre.
+
+### Étapes construites dans l'outil
+
+| # | Étape | Modèle | Durée | Réponses | Cache lu par réponse | Coût |
+|---|---|---|---|---|---|---|
+| E1 | `escape.feature` et ses steps | `claude-opus-5-5`, `medium` | 390 s | 24 | 61 693 | 1,485 $ |
+| E2 | Parent en `denyRead`, canari dans un dossier frère | `claude-sonnet-5-5`, `medium` | 100 s | 15 | 32 260 | 0,285 $ |
+| E3 | Corrections après revue : `allowRead`, contrôle positif, parent vérifié | idem | 127 s | 22 | 40 237 | 0,412 $ |
+| E4 | `remember` de bout en bout sous srt | idem | 101 s | 14 | 17 743 | 0,161 $ |
+| E5 | Sans décalage de ligne, noms courts, garde de longueur du socket | idem | 211 s | 27 | 41 332 | 0,526 $ |
+
+Avec la revue : 3,88 $ au tarif public, sur le forfait du propriétaire. Faits à la main par l'orchestrateur, sur l'hôte, après les rejeux : une étape préparatoire manquante dans un scénario du canari ; le retrait d'un scénario redondant dont la racine jetable dépassait elle-même la limite du socket ; les trois corrections de la suite ci-dessus ; la dernière forme de la correction (lignes 232 et 267 au lieu de 265 à 268 et 295, dossier du canari nommé d'après celui de la sandbox, `process.getuid!()` et `rmSync` sans `force` pour ne pas laisser de mutant équivalent).
+
+`remember` : le faux modèle appelle `memory_insert` une fois, puis rend l'identifiant que l'insertion a rendu (un tour scripté peut maintenant lire le résultat d'outil qu'il vient de recevoir). La preuve est dans `data` : une mémoire de plus, avec ce contenu, ces étiquettes et cet identifiant.
+
+### Portes
+
+| Tête | Où | Résultat |
+|---|---|---|
+| `1274079`, première forme | CI, branche d'essai | Linux : 1 111 scénarios verts, rouge pour la mutation (6 mutants, 23 entrées de dette décalées) ; macOS 26 : rouge, 22 scénarios, socket trop long |
+| `b078295`, sans décalage | CI, branche d'essai ; hôte | macOS 26 : vert ; Linux et hôte : scénarios verts, rouge pour 3 mutants et 2 entrées mortes (lignes 265 et 295) |
+| `1bde7c3`, forme livrée | CI, branche d'essai ; hôte | Linux vert, mutation comprise ; macOS 26 vert ; hôte : verte, 1 117 = 1 060 + 57 − 0 = statique, 2 fichiers, 49 mutants, 49 tués, règle 6 sans violation |
+
+### Observé en passant
+
+- **R-7 en vrai.** Deux exécutions `cucumber` lancées par des workers du pilote P1 (§32) tournaient encore 2 h 26 et 2 h 48 après la fin de leur session, dans des worktrees supprimés : un enfant détaché survit à l'arrêt du groupe sur macOS. Arrêtées à la main.
+- **Résidus de mutation.** Un mutant qui supprime un nettoyage laisse des dossiers dans le dossier temporaire du système ; les scénarios, eux, n'en laissent plus.
+
+**Trois piliers.**
+- Recherche : chaque défaut ramené à sa cause par une mesure avant correction (rejeu sous vrai srt, lecture de la source de srt, sortie d'erreur du runner, longueur de socket mesurée sur les deux versions de macOS) ; témoin sans srt pour chaque attaque locale ; l'écart entre l'hôte et la CI expliqué, pas contourné ; registre de dette mesuré.
+- SSDLC : le test d'évasion est le DAST prévu de 1b ; divulgation d'information entre tasks fermée (STRIDE I), parent des sandboxes vérifié contre un autre utilisateur local (STRIDE E, T) ; mutation verte sur les lignes changées ; aucune dépendance ajoutée.
+- Opérationnel : moindre privilège renforcé (lecture retirée, rien d'ajouté) ; aucun secret lu ; IRB sans objet.
