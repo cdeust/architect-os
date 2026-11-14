@@ -34,6 +34,9 @@ interface Session {
   /** The system prompt file of the session. */
   prompt: string;
   outcome?: { code: number } | { error: unknown };
+  /** The limits the session scheduled by hand, and how many were cancelled. */
+  scheduled: { fire: () => void; ms: number }[];
+  cancelled: number;
 }
 const session = (world: SandboxWorld) => stored<Session>(world, 'codeTool');
 
@@ -46,7 +49,15 @@ Given(
     const events: string[] = [];
     const stdout = new PassThrough();
     const stderr = new PassThrough();
-    const s: Session = { events, stdout: '', stderr: '', prompt: BUILD_PROMPT, deps: undefined as never };
+    const s: Session = {
+      events,
+      stdout: '',
+      stderr: '',
+      prompt: BUILD_PROMPT,
+      deps: undefined as never,
+      scheduled: [],
+      cancelled: 0,
+    };
     stdout.on('data', (chunk: Buffer) => (s.stdout += chunk.toString()));
     stderr.on('data', (chunk: Buffer) => (s.stderr += chunk.toString()));
     const proxy: AuthProxy = {
@@ -142,6 +153,21 @@ Given('the host credential cannot be read', function () {
   };
 });
 
+const byHand = (s: Session) => (fire: () => void, ms: number) => {
+  s.scheduled.push({ fire, ms });
+  return () => void s.cancelled++;
+};
+
+Given('the session has the limit of {int} milliseconds, scheduled by hand', function (limitMs: number) {
+  const s = session(this);
+  s.deps = { ...s.deps, limitMs, schedule: byHand(s) };
+});
+
+Given('the session has no limit but a schedule by hand', function () {
+  const s = session(this);
+  s.deps = { ...s.deps, schedule: byHand(s) };
+});
+
 const run = async (s: Session) => {
   s.outcome = await runCodeTool(s.deps).then(
     (code) => ({ code }),
@@ -159,6 +185,29 @@ When('I run the code tool with {string} on stdin', async function (text: string)
 
 When('I run the code tool', async function () {
   await run(session(this));
+});
+
+When('I run the code tool and fire its limit', async function () {
+  const s = session(this);
+  const running = run(s);
+  while (s.scheduled.length === 0) await new Promise((resolve) => setImmediate(resolve));
+  s.scheduled[0]!.fire();
+  await running;
+});
+
+Then('the limit was scheduled once for {int} milliseconds', function (ms: number) {
+  assert.deepEqual(
+    session(this).scheduled.map((limit) => limit.ms),
+    [ms],
+  );
+});
+
+Then('no limit was scheduled', function () {
+  assert.deepEqual(session(this).scheduled, []);
+});
+
+Then('the limit was cancelled {int} times', function (count: number) {
+  assert.equal(session(this).cancelled, count);
 });
 
 Then('the code tool exits with {int}', function (code: number) {

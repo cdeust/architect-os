@@ -127,3 +127,36 @@ Feature: the code tool of 1a.0, composed from code.json (host side, fake runner,
     When I run the code tool
     Then the code tool fails with the sandbox error "ISOLATION_UNAVAILABLE" "ISOLATION_UNAVAILABLE: no bar"
     And no proxy was started
+
+  Scenario: the sandbox is stopped when the scheduled limit fires, and the limit is cancelled once it has ended
+    Given a code tool session with the session token "tok" and the arguments "-p x"
+    And the session has the limit of 5000 milliseconds, scheduled by hand
+    When I run the code tool and fire its limit
+    Then the code tool exits with 1
+    And the limit was scheduled once for 5000 milliseconds
+    And the limit was cancelled 1 times
+    And the proxy was revoked then closed
+
+  Scenario: the limit is cancelled when the sandbox ends first
+    Given a code tool session with the session token "tok" and the arguments "-p x"
+    And the session has the limit of 5000 milliseconds, scheduled by hand
+    When I run the code tool with "done" on stdin
+    Then the code tool exits with 0
+    And the limit was scheduled once for 5000 milliseconds
+    And the limit was cancelled 1 times
+    And the code tool stdout is "done"
+
+  Scenario: without a limit nothing is scheduled
+    Given a code tool session with the session token "tok" and the arguments "-p x"
+    And the session has no limit but a schedule by hand
+    When I run the code tool with "done" on stdin
+    Then the code tool exits with 0
+    And no limit was scheduled
+
+  Scenario: the terminal run takes no limit
+    Given a code tool session with the session token "tok" and the arguments "-c"
+    And the session has the limit of 5000 milliseconds, scheduled by hand
+    And the session has a terminal, where the sandbox exits by a signal
+    When I run the code tool
+    Then the code tool exits with 1
+    And no limit was scheduled

@@ -222,3 +222,21 @@ Détail et preuves : journal, §32 et §33.
 - **Volume et budget** : laissés au jugement de l'orchestrateur par le propriétaire le 14 novembre ; sur son forfait, par petites campagnes, dépense rapportée au journal.
 - **Sortie de 1b construite dans la boucle** (journal §35) : la revue a trouvé deux défauts que le rejeu sur l'hôte ne montrait pas (montage en lecture seule sous Linux, dossier parent prévisible), et la CI un troisième (limite de socket de macOS 26). Règles ajoutées : une branche d'essai avant de pousser un changement de la frontière d'isolation ; aucune vérification par délai ; une racine temporaire par scénario ; la porte complète en fin de lot, un rejeu ciblé entre-temps.
 - **Reste ouvert** : HO3 (orchestrateur Opus 5.5 contre Fable 5.2).
+
+## 12. La boucle dans le dépôt : `npm run step` (étape O.1)
+
+Jusqu'au 14 novembre 2026, la boucle tenait à des scripts de l'orchestrateur, hors dépôt : personne d'autre ne pouvait la rejouer. O.1 la fait entrer dans `packages/sandbox`, à côté de `npm run code` et `npm run review`.
+
+`npm --prefix <lanceur> run step -- <dossier>`, depuis le worktree visé. Le dossier, hors dépôt, contient `step.json` (modèle, effort et limite en secondes de la session de construction, et de la revue si l'étape en a une) et `brief.md`. La commande lance la session de construction avec le brief sur son entrée standard, puis la session de revue si la construction a abouti sans être arrêtée. Elle laisse dans le dossier les deux flux `stream-json`, les mesures de chaque session (calculées depuis le flux seul : réponses, tours, durée, coût, tokens, cache lu par réponse), le rapport et le verdict. Elle écrit une ligne JSON de résumé et sort en 0 (construction aboutie, revue non bloquante), 1 (construction non aboutie ou arrêtée à sa limite, revue bloquante ou verdict invalide) ou 2 (refus avant toute session, panne de l'outil).
+
+Elle ne rejoue rien sur l'hôte, ne lance pas la porte et ne commite pas : ces pas restent à l'orchestrateur (§4, pas 4 et 6).
+
+| Pièce | Fichier |
+|---|---|
+| Fichier descriptif de l'étape | `src/step-file.ts`, schéma strict |
+| Mesures d'une session | `src/measure.ts`, pur |
+| Contrat du verdict | `src/review-verdict.ts` ; `prompts/review-verdict.schema.json` est exactement ce qu'il génère, en draft-07 (Claude Code refuse le `$schema` 2020-12, mesuré) |
+| La commande | `src/step-tool.ts`, effets injectés ; limite de temps portée par l'outil de code (`limitMs`), sans attente réelle dans les scénarios |
+
+Suite, O.2 : `builder` et `reviewer` comme modules agents derrière la gateway, jetons par le broker, usage au registre. Elle dépend du câblage natif de la gateway, donc du choix de l'hôte (journal §29).
+

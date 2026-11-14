@@ -1,24 +1,25 @@
 {
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "additionalProperties": false,
-  "required": ["verdict", "findings", "not_checked"],
   "properties": {
-    "verdict": { "enum": ["accept", "request_changes"] },
+    "verdict": { "type": "string", "enum": ["accept", "request_changes"] },
     "findings": {
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": false,
-        "required": ["level", "file", "line", "quote", "reason"],
         "properties": {
-          "level": { "enum": ["correctness", "contradiction", "proposal"] },
+          "level": { "type": "string", "enum": ["correctness", "contradiction", "proposal"] },
           "file": { "type": "string" },
-          "line": { "type": "integer" },
+          "line": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
           "quote": { "type": "string" },
           "reason": { "type": "string" }
-        }
+        },
+        "required": ["level", "file", "line", "quote", "reason"],
+        "additionalProperties": false
       }
     },
     "not_checked": { "type": "array", "items": { "type": "string" } }
-  }
+  },
+  "required": ["verdict", "findings", "not_checked"],
+  "additionalProperties": false
 }

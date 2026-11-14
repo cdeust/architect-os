@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"sess-0002","model":"claude-sonnet-5-5"}
+{"type":"assistant","message":{"id":"msg_0001","model":"claude-sonnet-5-5","usage":{"input_tokens":6,"output_tokens":12}}}
+{"type":"assistant","message":{"id":"msg_0001","model":"claude-sonnet-5-5","usage":{"input_tokens":6,"output_tokens":30}}}
+{"type":"assistant","message":{"id":"msg_0002","model":"claude-sonnet-5-5","usage":{"input_tokens":6,"output_tokens":20}}}
+{"type":"assistant","message":{"id":"msg_000

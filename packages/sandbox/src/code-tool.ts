@@ -47,7 +47,17 @@ export interface CodeToolDependencies {
   readonly stdin: Readable;
   readonly stdout: Writable;
   readonly stderr: Writable;
+  /** Durée maximale de la session lancée sur les flux (pas dans le terminal), en millisecondes ; sans elle, aucune. */
+  readonly limitMs?: number;
+  /** Programme `fire` dans `ms` millisecondes ; rend l'annulation. Par défaut `setTimeout`. */
+  readonly schedule?: (fire: () => void, ms: number) => () => void;
 }
+
+/** Le minuteur réel de la limite. */
+export const timer = (fire: () => void, ms: number): (() => void) => {
+  const handle = setTimeout(fire, ms);
+  return () => clearTimeout(handle);
+};
 
 /** Une session de l'outil : identifiant lisible, proxy, sandbox, puis jeton révoqué et proxy fermé ; son code de sortie. */
 export async function runCodeTool(deps: CodeToolDependencies): Promise<number> {
@@ -79,10 +89,15 @@ export async function runCodeTool(deps: CodeToolDependencies): Promise<number> {
 /** La sandbox sur les flux du processus ; stdin est libéré à la fin. */
 async function piped(runner: SandboxRunner, request: SandboxRequest, deps: CodeToolDependencies) {
   const sandbox = await runner.start(request);
+  const cancel =
+    deps.limitMs === undefined
+      ? undefined
+      : (deps.schedule ?? timer)(() => void sandbox.stop(), deps.limitMs);
   deps.stdin.pipe(sandbox.stdin);
   sandbox.stdout.pipe(deps.stdout);
   sandbox.stderr.pipe(deps.stderr);
   const exit = await sandbox.exited;
+  cancel?.();
   deps.stdin.unpipe(sandbox.stdin);
   deps.stdin.destroy();
   return exit;
@@ -157,8 +172,10 @@ export function reviewDependencies(
 
 /** Écrit l'échec sur stderr, sans pile ; le code de sortie est 2. */
 export const failureReporter =
-  (stderr: Writable) =>
+  (stderr: Writable, command = 'code') =>
   (error: unknown): number => {
-    stderr.write(`architect-os code: ${error instanceof SandboxError ? error.message : String(error)}\n`);
+    stderr.write(
+      `architect-os ${command}: ${error instanceof SandboxError ? error.message : String(error)}\n`,
+    );
     return 2;
   };

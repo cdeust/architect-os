@@ -21,6 +21,7 @@
   "scripts": {
     "code": "node --import tsx packages/sandbox/src/code.ts",
     "review": "node --import tsx packages/sandbox/src/review.ts",
+    "step": "node --import tsx packages/sandbox/src/step.ts",
     "typecheck": "tsc -b",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

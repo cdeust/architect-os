@@ -1,0 +1,2 @@
+{"type":"assistant","message":{"id":"msg_0001","model":"claude-sonnet-5-5","usage":{"input_tokens":6,"output_tokens":12}}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":4,"duration_ms":12400,"total_cost_usd":0.5,"result":"Stopped.","permission_denials":[],"modelUsage":{"claude-sonnet-5-5":{}}}

@@ -32,6 +32,24 @@ Avec un terminal, la TUI démarre sur les descripteurs du terminal, acceptés se
 
 Le dossier de configuration est recréé à chaque lancement : aucun historique de session ne passe d'un lancement à l'autre (pas de `--resume`).
 
+## L'étape
+
+Trois fichiers portent les parties pures d'une étape de l'orchestration (`docs/design/orchestration-fable-5-2.md`), sans lancer de processus. `src/step-file.ts` lit `step.json`, le fichier descriptif d'une étape : modèle, effort et limite en secondes de la session de construction et, si l'étape en a une, de la revue ; toute clé inconnue est refusée. `src/measure.ts` mesure une session `claude -p --verbose --output-format stream-json` : réponses, tours, durée, coût, jetons, cache, modèles, refus de permission et rapport ; une session tuée à sa limite, sans événement `result`, reste mesurable. `src/review-verdict.ts` porte le contrat du verdict de revue, dont `prompts/review-verdict.schema.json` est exactement le schéma généré, et `blocks`, qui dit si un verdict bloque.
+
+La commande qui les assemble, `src/step-tool.ts` (`src/step.ts` n'est que son point d'entrée), joue une étape de la boucle (§4) :
+
+```bash
+npm --prefix <checkout du lanceur> run step -- <dossier>
+```
+
+`<dossier>` est un chemin absolu, hors du dépôt, qui contient `step.json` et `brief.md`. Avant toute session, un refus (pas de dossier ou plusieurs, chemin relatif, `step.json` absent, pas du JSON ou refusé par `parseStepFile`, `brief.md` absent ou vide) écrit une ligne `architect-os step: <raison>` sur stderr et rend 2. Puis la session de construction (`code.json`, `-p --verbose --output-format stream-json --model <modèle> --effort <effort>`, le brief sur stdin), arrêtée à `build.limitSeconds` (la sandbox est stoppée, le flux écrit jusque-là est gardé) ; puis, seulement si `step.json` a une revue et que la construction est terminée et non arrêtée, la session de revue (`review.json`, mêmes arguments plus `--json-schema` du schéma généré par `z.toJSONSchema` en draft-07, le brief sur stdin), arrêtée à `review.limitSeconds`. Le stderr des sessions passe tel quel sur celui de la commande.
+
+Le dossier reçoit : `build.stream.jsonl` (écrit au fil de l'eau), `build.measure.json` (`measureSession` sans `report` ni `structuredOutput`, plus `stopped`), `build.report.md` ; pour la revue, `review.stream.jsonl`, `review.measure.json` et `review.verdict.json` (le verdict, ou `{ "invalid": "<pourquoi>" }` sans sortie structurée ou avec un verdict refusé). Stdout porte une seule ligne JSON : `build` (`completed`, `stopped`, `answers`, `turns`, `durationSeconds`, `costUsd`, `cacheReadPerAnswer`) et, si la revue a eu lieu, `review` (`verdict` `accept`, `request_changes` ou `invalid`, `blocks`, `findings`, `costUsd`) ; un verdict invalide compte pour bloquant.
+
+Code de sortie : 0 si la construction est terminée, non arrêtée, et que la revue éventuelle ne bloque pas ; 1 sinon ; 2 pour les refus et pour un échec de l'outil (`ISOLATION_UNAVAILABLE`, …), écrit comme `npm run code` le fait, avec le préfixe `architect-os step:`.
+
+Elle ne fait pas : le rejeu sur l'hôte de ce que la sandbox ne peut pas lancer, la porte (`npm run gate`), le commit. Ils restent à l'orchestrateur. La limite de temps est portée par l'outil de code (`limitMs` et `schedule` de `CodeToolDependencies`, session sur tubes seulement ; le terminal l'ignore).
+
 ## La bibliothèque de prompts
 
 Le dossier `prompts/` du lanceur porte un prompt par rôle : `prompts/build.md` (session de code, `code.json`) et `prompts/review.md` (revue, `review.json`). Chaque outil le nomme par `launcherPromptFile`, obligatoire, relatif à `packages/sandbox`. Les prompts vivent dans le lanceur parce que c'est un chemin que la sandbox ne peut pas écrire (l'outil refuse de démarrer sinon) : une session ne peut pas écrire le prompt de la suivante. Si le fichier manque, la session ne démarre pas (`ISOLATION_UNAVAILABLE`), avant tout proxy. Chaque prompt a son scénario de chargement (`features/review-files.feature`), avec des copies cassées rejetées.
