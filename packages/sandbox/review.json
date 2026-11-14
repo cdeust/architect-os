@@ -1,0 +1,37 @@
+{
+  "description": "Session de revue (docs/design/platform-v3-srt.md, §8) : `srt --settings <profil reviewer> claude --bare`, même commande que l'outil de code, profil en lecture seule, prompt système pris dans le checkout du lanceur et non dans le worktree revu. Aucun secret dans la sandbox.",
+  "profile": "reviewer",
+  "command": ["claude", "--bare", "--settings", "${config}/settings.json", "--strict-mcp-config"],
+  "launcherPromptFile": "prompts/review.md",
+  "authProxy": {
+    "upstream": "https://api.anthropic.com",
+    "routes": ["^/v1/messages(/count_tokens)?(\\?[^#]*)?$"],
+    "betas": ["oauth-2025-04-20"],
+    "policy": {
+      "bodyFields": [
+        "context_management",
+        "max_tokens",
+        "messages",
+        "metadata",
+        "model",
+        "output_config",
+        "stop_sequences",
+        "stream",
+        "system",
+        "temperature",
+        "thinking",
+        "tool_choice",
+        "tools"
+      ],
+      "maxBodyBytes": 67108864
+    },
+    "credentialCommand": [
+      "/usr/bin/security",
+      "find-generic-password",
+      "-s",
+      "Claude Code-credentials",
+      "-w"
+    ],
+    "usageLog": "${home}/.local/state/architect-os/usage.jsonl"
+  }
+}

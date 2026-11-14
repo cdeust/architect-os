@@ -36,6 +36,9 @@ Feature: code.json, the descriptive file of the 1a.0 tool
       | an absolute system prompt file |
       | a system prompt file outside the worktree |
       | an empty system prompt file |
+      | an absolute launcher prompt file |
+      | a launcher prompt file outside the package |
+      | an empty launcher prompt file |
 
   Scenario Outline: a system prompt file outside the worktree is refused by name: <defect>
     When I break a copy of the committed code.json with <defect>
@@ -45,3 +48,23 @@ Feature: code.json, the descriptive file of the 1a.0 tool
       | defect                                    |
       | an absolute system prompt file            |
       | a system prompt file outside the worktree |
+
+  Scenario Outline: a launcher prompt file outside the launcher package is refused by name: <defect>
+    When I break a copy of the committed code.json with <defect>
+    Then parsing the broken code.json fails with the message "chemin relatif à packages/sandbox, sans .."
+
+    Examples:
+      | defect                                     |
+      | an absolute launcher prompt file           |
+      | a launcher prompt file outside the package |
+
+  Scenario: review.json loads against the strict schema: reviewer profile, launcher prompt file, no worktree prompt
+    When I load the committed review.json
+    Then the tool profile is "reviewer"
+    And the tool launcher prompt file is "prompts/review.md"
+    And the tool has no system prompt file
+    And the tool command is exactly "claude --bare --settings ${config}/settings.json --strict-mcp-config"
+
+  Scenario: a tool with neither prompt file loads
+    When I change a copy of the committed code.json to name neither prompt file
+    Then parsing the changed code.json succeeds

@@ -23,6 +23,9 @@ const DEFECTS: Record<string, (t: Record<string, any>) => unknown> = {
   'an absolute system prompt file': (t) => (t['systemPromptFile'] = '/etc/CLAUDE.md'),
   'a system prompt file outside the worktree': (t) => (t['systemPromptFile'] = 'docs/../../CLAUDE.md'),
   'an empty system prompt file': (t) => (t['systemPromptFile'] = ''),
+  'an absolute launcher prompt file': (t) => (t['launcherPromptFile'] = '/etc/review.md'),
+  'a launcher prompt file outside the package': (t) => (t['launcherPromptFile'] = 'prompts/../../review.md'),
+  'an empty launcher prompt file': (t) => (t['launcherPromptFile'] = ''),
 };
 
 const credentialSource: CredentialSource = async () => ({ accessToken: 'unused' });
@@ -56,6 +59,24 @@ Then(
 
 Then('the auth proxy usage log is {string} under the home directory', function (path: string) {
   assert.equal(stored<AuthProxyOptions>(this, 'options').usageLog, join(homedir(), path));
+});
+
+When('I load the committed review.json', function () {
+  this.state['tool'] = loadTool(join(PKG, 'review.json'));
+});
+
+Then('the tool launcher prompt file is {string}', function (file: string) {
+  assert.equal(stored<Tool>(this, 'tool').launcherPromptFile, file);
+});
+
+Then('the tool has no system prompt file', function () {
+  assert.equal(stored<Tool>(this, 'tool').systemPromptFile, undefined);
+});
+
+When('I change a copy of the committed code.json to name neither prompt file', function () {
+  const changed = committed();
+  delete changed['systemPromptFile'];
+  this.state['changed'] = changed;
 });
 
 When('I load the committed code.json', function () {

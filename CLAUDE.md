@@ -12,6 +12,7 @@ npm run typecheck      # tsc -b, strict (also a scenario)
 npm run format:check   # prettier --check (npm run format to fix; also a scenario)
 npm run arch           # dependency-cruiser: layers, boundaries, cycles (also a scenario)
 npm --prefix <launcher checkout> run code   # from a worktree: claude under srt, builder profile (packages/sandbox/README.md)
+npm --prefix <launcher checkout> run review # from a worktree: the read-only reviewer session, prompt from the launcher
 ```
 
 ## What This Is
@@ -31,7 +32,7 @@ client -> proxy -> gateway -> services/<name> -> worker (container, exec network
 | `services/memory/`    | Intent tools `recall` / `remember`. `src/` is the MCP service, `worker/` is the agent image.                                                                                         |
 | `data/`               | Only component that imports `pg`. Typed operations served from `sql/` by one executor, over HTTP and as MCP tools generated from `DATA_OPS` (`src/serve-mcp.ts`, stdio); migrations. |
 | `packages/contracts/` | Only shared package: `Result<T>`, `Run`, `RunEvent`, zod schemas of tools and data operations. No logic.                                                                             |
-| `packages/sandbox/`   | `SandboxRunner` port, srt adapter, builder profile template, host auth proxy and its relay, `npm run code` (brick 1a.0).                                                             |
+| `packages/sandbox/`   | `SandboxRunner` port, srt adapter, builder profile template, host auth proxy and its relay, `npm run code` (brick 1a.0) and `npm run review`.                                        |
 | `modules/broker/`     | The broker (1b.2): sole holder of the API key, task tokens granted and revoked by MCP on its stdio, one usage record per answer.                                                     |
 | `tools/test-gate/`    | The CI gate (`npm run gate`). Layers `domain`, `infrastructure`, composition root `src/main.ts`.                                                                                     |
 | `features/`           | End-to-end and cross-cutting scenarios (`integration`, `arch`, `descriptive`, `infra`, `repository`, `sandbox`).                                                                     |

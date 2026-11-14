@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { startAuthProxy, type AuthProxy, type AuthProxyOptions } from '../../src/auth-proxy.js';
 import {
@@ -30,8 +30,8 @@ interface Session {
   proxyOptions?: AuthProxyOptions;
   stdout: string;
   stderr: string;
-  /** What the worktree's system prompt file resolves to. */
-  prompt: string | null;
+  /** The system prompt files of the session, in order. */
+  prompts: readonly string[];
   outcome?: { code: number } | { error: unknown };
 }
 const session = (world: SandboxWorld) => stored<Session>(world, 'codeTool');
@@ -45,7 +45,7 @@ Given(
     const events: string[] = [];
     const stdout = new PassThrough();
     const stderr = new PassThrough();
-    const s: Session = { events, stdout: '', stderr: '', prompt: PROMPT, deps: undefined as never };
+    const s: Session = { events, stdout: '', stderr: '', prompts: [PROMPT], deps: undefined as never };
     stdout.on('data', (chunk: Buffer) => (s.stdout += chunk.toString()));
     stderr.on('data', (chunk: Buffer) => (s.stderr += chunk.toString()));
     const proxy: AuthProxy = {
@@ -53,7 +53,7 @@ Given(
       revoke: () => void events.push('revoke'),
       close: async () => void events.push('close'),
     };
-    const memory = new InMemorySandboxRunner(['builder']);
+    const memory = new InMemorySandboxRunner(['builder', 'reviewer']);
     const runner: CodeToolRunner = {
       start: async (request) => {
         s.started = request;
@@ -69,7 +69,7 @@ Given(
     };
     s.deps = {
       tool: tool(),
-      systemPrompt: () => s.prompt,
+      systemPrompts: () => s.prompts,
       credential: async () => ({ accessToken: 'host' }),
       startProxy: async (options) => {
         s.proxyOptions = options;
@@ -181,14 +181,14 @@ Then(
   },
 );
 
-const commandOf = (args: string, prompt: string | null = PROMPT) => [
-  ...tool().command,
-  ...(prompt === null ? [] : ['--append-system-prompt-file', prompt]),
+const commandOf = (args: string, prompts: readonly string[] = [PROMPT], base = tool()) => [
+  ...base.command,
+  ...prompts.flatMap((prompt) => ['--append-system-prompt-file', prompt]),
   ...args.split(' '),
 ];
 
 Given('the worktree has no system prompt file', function () {
-  session(this).prompt = null;
+  session(this).prompts = [];
 });
 
 Then(
@@ -201,7 +201,7 @@ Then(
 Then(
   'the sandbox ran the command of code.json and {string}, without a system prompt',
   function (args: string) {
-    assert.deepEqual(session(this).started?.command, commandOf(args, null));
+    assert.deepEqual(session(this).started?.command, commandOf(args, []));
   },
 );
 
@@ -330,12 +330,12 @@ Given('the worktree {string} holds the file {string}', function (name: string, f
 Then(
   'the system prompt of the dependencies is {string} of the worktree {string}',
   function (file: string, name: string) {
-    assert.equal(deps(this).systemPrompt(), join(named(this, name).worktree, file));
+    assert.deepEqual(deps(this).systemPrompts(), [join(named(this, name).worktree, file)]);
   },
 );
 
 Then('the system prompt of the dependencies is none', function () {
-  assert.equal(deps(this).systemPrompt(), null);
+  assert.deepEqual(deps(this).systemPrompts(), []);
 });
 
 Then('the dependencies start the auth proxy of auth-proxy.ts', function () {
@@ -414,3 +414,102 @@ function reportOn(world: SandboxWorld, error: unknown): void {
 Then('it returns {int} and writes {string} to stderr', function (code: number, line: string) {
   assert.deepEqual(stored<() => { code: number; text: string }>(this, 'reported')(), { code, text: line });
 });
+
+// --- the review session: system prompts of the tool -------------------------------------------------------------
+
+const REVIEW_PROMPT = join(PKG, 'prompts', 'review.md');
+
+Given('the session takes the tool and the system prompts of the dependencies of review.json', function () {
+  const s = session(this);
+  const real = processDependencies(
+    fakeProcess({ INIT_CWD: '/work' }, '/work', 'node'),
+    () => false,
+    'review.json',
+  );
+  s.deps = { ...s.deps, tool: real.tool };
+  s.prompts = real.systemPrompts();
+});
+
+Then(
+  'the sandbox ran the profile {string} with the command of review.json, the launcher prompt and {string}',
+  function (profile: string, args: string) {
+    assert.deepEqual(session(this).started, {
+      profile,
+      cwd: '/work',
+      command: commandOf(args, [REVIEW_PROMPT], loadTool(join(PKG, 'review.json'))),
+    });
+  },
+);
+
+Given('the session system prompts are {string} and {string}', function (first: string, second: string) {
+  session(this).prompts = [first, second];
+});
+
+Then(
+  'the sandbox ran the command of code.json, the system prompts {string} then {string}, and {string}',
+  function (first: string, second: string, args: string) {
+    assert.deepEqual(session(this).started?.command, commandOf(args, [first, second]));
+  },
+);
+
+Given('the session system prompts are refused with {string}', function (message: string) {
+  const s = session(this);
+  s.deps = {
+    ...s.deps,
+    systemPrompts: () => {
+      throw new SandboxError('ISOLATION_UNAVAILABLE', message);
+    },
+  };
+});
+
+Given(
+  'a tool file derived from code.json naming the system prompt file {string} and the launcher prompt file {string}',
+  function (systemPromptFile: string, launcherPromptFile: string) {
+    const dir = mkdtempSync(join(tmpdir(), 'aos-tool-'));
+    this.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+    const file = join(dir, 'tool.json');
+    writeFileSync(file, JSON.stringify({ ...tool(), systemPromptFile, launcherPromptFile }));
+    // processDependencies joins the tool file to the package directory: a relative path reaches the temporary file.
+    this.state['toolFile'] = relative(PKG, file);
+  },
+);
+
+When('I build the process dependencies of the stored tool file', function () {
+  this.state['deps'] = processDependencies(
+    stored(this, 'process'),
+    () => false,
+    stored<string>(this, 'toolFile'),
+  );
+});
+
+When('I build the process dependencies of the tool file {string}', function (file: string) {
+  this.state['deps'] = processDependencies(stored(this, 'process'), () => false, file);
+});
+
+Then('the dependencies load the tool of review.json', function () {
+  assert.deepEqual(deps(this).tool, loadTool(join(PKG, 'review.json')));
+});
+
+Then('the system prompts of the dependencies are the launcher prompt only', function () {
+  assert.deepEqual(deps(this).systemPrompts(), [REVIEW_PROMPT]);
+});
+
+Then(
+  'the system prompts of the dependencies are {string} of the worktree {string}, then the launcher prompt',
+  function (file: string, name: string) {
+    assert.deepEqual(deps(this).systemPrompts(), [join(named(this, name).worktree, file), REVIEW_PROMPT]);
+  },
+);
+
+Then(
+  'the system prompts of the dependencies are refused naming the launcher file {string}',
+  function (file: string) {
+    assert.throws(
+      () => deps(this).systemPrompts(),
+      (error: unknown) =>
+        error instanceof SandboxError &&
+        error.code === 'ISOLATION_UNAVAILABLE' &&
+        error.message === `ISOLATION_UNAVAILABLE: prompt du lanceur introuvable : ${join(PKG, file)}`,
+    );
+  },
+);

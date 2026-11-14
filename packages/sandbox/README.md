@@ -32,6 +32,16 @@ Avec un terminal, la TUI démarre sur les descripteurs du terminal, acceptés se
 
 Le dossier de configuration est recréé à chaque lancement : aucun historique de session ne passe d'un lancement à l'autre (pas de `--resume`).
 
+## La revue
+
+Une session de revue est le second lancement du même outil : `review.json` (`src/review.ts`, `npm run review`) donne à `src/code-tool.ts` le profil `reviewer` (worktree et `.git` en lecture seule, voir `profiles/reviewer.json`) et un prompt système propre. Depuis le worktree à relire :
+
+```bash
+npm --prefix <checkout du lanceur> run review -- -p --json-schema "$(cat <lanceur>/packages/sandbox/prompts/review-verdict.schema.json)" -- "<brief de l'étape>"
+```
+
+Le prompt, `prompts/review.md`, est pris dans le checkout du lanceur (`launcherPromptFile`, relatif à `packages/sandbox`), jamais dans le worktree : une session précédente a pu écrire dans le worktree, donc le barème de la revue ne doit pas pouvoir y être réécrit. Il renvoie à `CLAUDE.md` tel que commité (`git show HEAD:CLAUDE.md`). Si le fichier du lanceur nommé manque, la session ne démarre pas (`ISOLATION_UNAVAILABLE`), avant tout proxy. Le verdict suit `prompts/review-verdict.schema.json` : `verdict`, `findings` (niveau, fichier, ligne, citation, raison), `not_checked`.
+
 ## Autorisé, refusé
 
 | Domaine          | Profil `builder`                                                                                                                                                                                                                                                                                                                                                                            |

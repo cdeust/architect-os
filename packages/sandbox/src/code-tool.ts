@@ -32,8 +32,11 @@ export interface CodeToolRunner extends SandboxRunner {
 
 export interface CodeToolDependencies {
   readonly tool: Tool;
-  /** Le fichier de prompt système de `code.json` dans le worktree visé, absolu, ou null s'il n'existe pas. */
-  readonly systemPrompt: () => string | null;
+  /**
+   * Les fichiers de prompt système, absolus, dans l'ordre : celui de l'outil dans le worktree visé s'il existe, puis
+   * celui du lanceur. Lève `ISOLATION_UNAVAILABLE` si le fichier du lanceur nommé manque.
+   */
+  readonly systemPrompts: () => readonly string[];
   readonly credential: CredentialSource;
   readonly startProxy: (options: AuthProxyOptions) => Promise<AuthProxy>;
   /** Le lanceur, pour les variables du proxy (port, jeton de session). */
@@ -52,6 +55,8 @@ export interface CodeToolDependencies {
 
 /** Une session de l'outil : identifiant lisible, proxy, sandbox, puis jeton révoqué et proxy fermé ; son code de sortie. */
 export async function runCodeTool(deps: CodeToolDependencies): Promise<number> {
+  // Avant l'identifiant et le proxy : une revue sans son barème ne démarre pas.
+  const prompts = deps.systemPrompts();
   await deps.credential().catch(() => {
     throw new SandboxError(
       'ISOLATION_UNAVAILABLE',
@@ -62,13 +67,12 @@ export async function runCodeTool(deps: CodeToolDependencies): Promise<number> {
   const proxy = await deps.startProxy(authProxyOptions(deps.tool, sessionToken, deps.credential));
   try {
     const runner = deps.runner({ authProxyPort: String(proxy.port), sessionToken });
-    const prompt = deps.systemPrompt();
     const request: SandboxRequest = {
       profile: deps.tool.profile,
       cwd: deps.cwd,
       command: [
         ...deps.tool.command,
-        ...(prompt === null ? [] : ['--append-system-prompt-file', prompt]),
+        ...prompts.flatMap((prompt) => ['--append-system-prompt-file', prompt]),
         ...deps.argv,
       ],
     };
@@ -125,14 +129,26 @@ export function srtOptions(proc: CodeProcess, variables: Readonly<Record<string,
 export function processDependencies(
   proc: CodeProcess,
   isTerminalFd: (fd: number) => boolean = isatty,
+  toolFile = 'code.json',
 ): CodeToolDependencies {
-  const tool = loadTool(join(PKG, 'code.json'));
+  const tool = loadTool(join(PKG, toolFile));
   const cwd = proc.env['INIT_CWD'] ?? proc.cwd();
   return {
     tool,
-    systemPrompt: () => {
-      const file = join(resolveWorktree(cwd).worktree, tool.systemPromptFile);
-      return existsSync(file) ? file : null;
+    systemPrompts: () => {
+      const prompts: string[] = [];
+      if (tool.systemPromptFile !== undefined) {
+        const file = join(resolveWorktree(cwd).worktree, tool.systemPromptFile);
+        if (existsSync(file)) prompts.push(file);
+      }
+      if (tool.launcherPromptFile !== undefined) {
+        const file = join(PKG, tool.launcherPromptFile);
+        if (!existsSync(file)) {
+          throw new SandboxError('ISOLATION_UNAVAILABLE', `prompt du lanceur introuvable : ${file}`);
+        }
+        prompts.push(file);
+      }
+      return prompts;
     },
     credential: commandCredential(tool.authProxy.credentialCommand),
     startProxy: startAuthProxy,

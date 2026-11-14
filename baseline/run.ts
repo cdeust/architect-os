@@ -154,9 +154,10 @@ async function hostBare(args: string[], worktree: string, dir: string) {
     resolveVars(JSON.stringify(profile.files['${config}/.claude.json'])),
   );
   const [command, ...base] = tool.command.map(resolveVars);
-  const prompts = existsSync(join(worktree, tool.systemPromptFile))
-    ? ['--append-system-prompt-file', join(worktree, tool.systemPromptFile)]
-    : [];
+  const prompts =
+    tool.systemPromptFile !== undefined && existsSync(join(worktree, tool.systemPromptFile))
+      ? ['--append-system-prompt-file', join(worktree, tool.systemPromptFile)]
+      : [];
   try {
     return await timed(command as string, [...base, ...prompts, ...args], worktree, {
       ...loginEnv(),
