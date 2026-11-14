@@ -1504,6 +1504,8 @@ Ce qui change : `measureSession` compte les lignes non vides du flux qui ne sont
 
 **Vérifié par l'outil, pas seulement par la relecture.** La correction va dans un second commit, pour que la porte ne mute pas de nouveau les 236 mutants ; or quatre des lignes survivantes ne sont pas modifiées, seulement couvertes par de nouveaux scénarios. Stryker lancé à la main sur ces lignes (`stryker run --mutate "packages/sandbox/src/step-tool.ts:50-50,…:53-53,…:101-101,…:162-162"`, 165 s) : 13 mutants tués sur 14, **1 survivant de plus**, `io: 'output'` rendu vide. L'option n'a aucun effet pour ce contrat : retirée, ici comme dans la comparaison du scénario.
 
+Porte sur le commit de correction `50f9c87`, hôte et CI d'essai (Linux ; macOS 26 vert) : 1 196 scénarios verts, 17 mutants, 15 tués, 1 erreur d'exécution confirmée, **1 survivant**, `measure.ts:49`, le tableau initial `[]` de la fonction récrite : une valeur parasite n'est ni un événement `assistant` ni un événement `result`, donc rien ne la voyait. Les lignes ignorées se comptent désormais par différence (lignes non vides moins valeurs lues) : une valeur en trop fausse le compte. Fait à la main par l'orchestrateur, treize lignes ; Stryker sur la fonction : 12 tués, 2 erreurs d'exécution, aucun survivant.
+
 ### Branches
 
 À la demande du propriétaire, le dépôt distant ne garde que `main` et `feat/gate-1a`. Supprimées, après une copie locale vérifiée (`git bundle`, hors dépôt) : cinq branches de PR fusionnées (#98 à #102) et `claude/ecosystem-autonome-cdeust-pu7fe4`, celle de la PR #103, fermée sans fusion. `feat/gate-1a` n'est pas fusionnée dans `main` : la décision est au propriétaire.

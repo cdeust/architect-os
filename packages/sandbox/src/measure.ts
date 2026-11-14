@@ -46,17 +46,17 @@ const AssistantEventSchema = z.object({
 
 /** Les valeurs JSON du flux, et le nombre de lignes non vides qui n'en sont pas : elles sont ignorées. */
 function events(stream: string): { values: unknown[]; ignoredLines: number } {
+  const lines = stream.split('\n').filter((line) => line !== '');
   const values: unknown[] = [];
-  let ignoredLines = 0;
-  for (const line of stream.split('\n')) {
-    if (line === '') continue;
+  for (const line of lines) {
     try {
       values.push(JSON.parse(line) as unknown);
     } catch {
-      ignoredLines++;
+      // Une ligne qui n'est pas du JSON ne donne pas de valeur : elle est comptée par différence, plus bas.
     }
   }
-  return { values, ignoredLines };
+  // Par différence : toute ligne non vide donne une valeur ou est ignorée, donc une valeur en trop se voit ici.
+  return { values, ignoredLines: lines.length - values.length };
 }
 
 /** Les mesures d'une session `claude -p --verbose --output-format stream-json`. */
