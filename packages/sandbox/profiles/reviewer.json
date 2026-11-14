@@ -41,7 +41,8 @@
       "CLAUDE_CONFIG_DIR": "${config}",
       "ANTHROPIC_BASE_URL": "http://127.0.0.1:${authProxyPort}",
       "ANTHROPIC_API_KEY": "${sessionToken}",
-      "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1"
+      "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1",
+      "TMPPREFIX": "${tmp}/zsh"
     },
     "unset": ["NO_PROXY", "no_proxy"]
   },

@@ -168,7 +168,7 @@ Relevé du 14 novembre 2026 dans `CLAUDE.md`, `.claude/agents/*.md`, `.claude/co
 | 3 | Contrôleur Haiku | Retiré (§8) |
 | 4 | Repli côté serveur | Sans objet dans une session Claude Code ; se rouvre avec le transport par l'Agent SDK : l'activer, et journaliser chaque repli comme une perte de raisonnement |
 | 5 | Référence Opus avant Fable | Ouverte : hypothèse HO3 du §10 |
-| 6 | Protocole et volume de la mesure O | Accord du propriétaire le 14 novembre 2026, sur son forfait ; pilote à une session par cellule, le volume d'une campagne lui revient |
+| 6 | Protocole et volume de la mesure O | Accord du propriétaire le 14 novembre 2026, sur son forfait ; volume et budget laissés au jugement de l'orchestrateur le même jour |
 
 ## 10. Mesure O, protocole pré-enregistré avant toute mesure
 
@@ -218,4 +218,6 @@ Détail et preuves : journal, §32 et §33.
 - **La boucle entière a tourné une fois, de bout en bout** : brief, worker Sonnet sous srt, rejeu sur l'hôte, revue par Opus 5.5 sous le profil `reviewer`, porte. La revue a trouvé avant la porte le seul mutant rouge de l'étape, ligne citée ; une étape de correction l'a tué ; porte verte.
 - **Essai d'injection** : le relecteur signale une note qui lui demande d'accepter, ne la suit pas, et laisse le worktree intact.
 - **Bibliothèque de prompts** (journal §34) : sur une remarque du propriétaire, plus aucune session ne prend son prompt système dans le worktree. `prompts/build.md` porte ce que chaque brief répétait (ce que la sandbox ne peut pas lancer, la règle sur l'index, le format du rapport) ; un brief ne garde que ce qui est propre à l'étape.
-- **Reste ouvert** : HO3 (orchestrateur Opus 5.5 contre Fable 5.2) ; le volume d'une campagne, au propriétaire.
+- **Revue, forme provisoire** : `npm run review` est la revue d'aujourd'hui. Le propriétaire l'a dit le 14 novembre : l'agent ou cette commande changera quand la boucle sera intégrée à la plateforme. Les agents `.claude/agents/*-reviewer.md` ne sont donc pas touchés.
+- **Volume et budget** : laissés au jugement de l'orchestrateur par le propriétaire le 14 novembre ; sur son forfait, par petites campagnes, dépense rapportée au journal.
+- **Reste ouvert** : HO3 (orchestrateur Opus 5.5 contre Fable 5.2).

@@ -148,4 +148,5 @@ Feature: Builder profile template
       | ANTHROPIC_BASE_URL      | http://127.0.0.1:4321             |
       | ANTHROPIC_API_KEY       | session-token                     |
       | CLAUDE_CODE_SUBPROCESS_ENV_SCRUB | 1                        |
+      | TMPPREFIX                        | /t/aos/tmp/zsh                    |
       | npm_config_cache        | /h/.cache/npm                     |

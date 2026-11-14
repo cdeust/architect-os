@@ -52,6 +52,7 @@ Feature: Reviewer profile template
       | ANTHROPIC_BASE_URL               | http://127.0.0.1:${authProxyPort} |
       | ANTHROPIC_API_KEY                | ${sessionToken}                   |
       | CLAUDE_CODE_SUBPROCESS_ENV_SCRUB | 1                                 |
+      | TMPPREFIX                        | ${tmp}/zsh                        |
     When I resolve the profile with the test variables
     Then the resolved file "/t/aos/config/settings.json" equals '{"sandbox":{"enabled":false},"permissions":{"allow":["Bash","Read"],"deny":["Bash(git push *)","Bash(git config *)","Bash(security *)","Read(//h/.ssh/**)","Edit(//h/.ssh/**)","Read(//h/.aws/**)","Edit(//h/.aws/**)","Read(//h/.gnupg/**)","Edit(//h/.gnupg/**)","Read(//h/.config/gh/**)","Edit(//h/.config/gh/**)","Read(//h/.npmrc)","Edit(//h/.npmrc)","Read(//h/.netrc)","Edit(//h/.netrc)","Read(//h/.claude/**)","Edit(//h/.claude/**)","Read(//h/.claude.json)","Edit(//h/.claude.json)","Read(//h/Library/Keychains/**)","Edit(//h/Library/Keychains/**)","Edit(//r/.git/hooks/**)","Edit(//r/.git/config)","Edit(//r/.claude/worktrees/w/.claude/**)"]}}'
     And the resolved file "/t/aos/config/.claude.json" contains '{"projects":{"/r":{"hasTrustDialogAccepted":true},"/r/.claude/worktrees/w":{"hasTrustDialogAccepted":true}}}'

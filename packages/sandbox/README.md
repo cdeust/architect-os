@@ -28,7 +28,7 @@ Le proxy ne renouvelle pas l'identifiant OAuth. Le jeton de rafraîchissement ch
 
 Le checkout du lanceur (son code, son `node_modules` avec srt) doit être hors du worktree visé, sinon une session pourrait réécrire srt ou le lanceur pour le lancement suivant. Lancé depuis le worktree qui l'héberge, l'outil refuse de démarrer (`ISOLATION_UNAVAILABLE`). Après fusion, le checkout principal `<repo>` sert de lanceur.
 
-Avec un terminal, la TUI démarre sur les descripteurs du terminal, acceptés seulement si 0, 1 et 2 sont des terminaux. Sans terminal (`-p` dans un script), les flux sont des tubes créés par l'adaptateur.
+Avec un terminal, la TUI démarre sur les descripteurs du terminal, acceptés seulement si 0, 1 et 2 sont des terminaux. Sans terminal (`-p` dans un script), les flux sont des tubes créés par l'adaptateur. En `-p`, la consigne se passe par l'entrée standard (`npm … run code -- -p < consigne.md`) : elle arrive telle quelle. Passée en argument, elle traverse la résolution des variables de profil comme le reste de la commande : `${tmp}` ou `${config}` y sont remplacés, et une variable inconnue est refusée (`PROFILE_INVALID`).
 
 Le dossier de configuration est recréé à chaque lancement : aucun historique de session ne passe d'un lancement à l'autre (pas de `--resume`).
 
@@ -57,7 +57,7 @@ Le prompt, `prompts/review.md`, renvoie à `CLAUDE.md` tel que commité (`git sh
 | Terminal         | `allowPty` (macOS) : sans lui, la TUI ne peut pas passer le terminal en mode brut ; `TIOCSTI` reste refusé                                                                                                                                                                                                                                                                                  |
 | Règles de refus  | `permissions.deny` du `settings.json` de la session, passé par `--settings` et non inscriptible par la sandbox : `git push`, `git config`, `security`, lecture et écriture des fichiers de secrets, écriture de `.git/hooks` et `.git/config`. Sous `--bare`, aucun hook ne tourne, d'où l'abandon du plugin `builder-guard`. C'est une couche de réduction derrière srt, pas une frontière |
 
-Le `settings.json` de la session porte aussi `permissions.allow` (`Bash`, `Read` et `Edit` dans le worktree pour `builder` ; `Bash` et `Read` pour `reviewer`), car depuis Claude Code 2.1.325 `-p` refuse toute commande qu'aucune règle n'autorise ; les règles `deny` l'emportent.
+Le `settings.json` de la session porte aussi `permissions.allow` (`Bash`, `Read` et `Edit` dans le worktree pour `builder` ; `Bash` et `Read` pour `reviewer`), car depuis Claude Code 2.1.325 `-p` refuse toute commande qu'aucune règle n'autorise ; les règles `deny` l'emportent. Les profils fixent aussi `TMPPREFIX` sur le `tmp` de la sandbox, car zsh écrit sinon ses here-documents sous `/tmp/zsh`, que la sandbox ne peut pas écrire.
 
 Refus sans repli : srt absent, canari qui lit son fichier secret ou joint le port de l'hôte, chemin de confiance inscriptible, répertoire hors d'un worktree lié, identifiant de l'hôte illisible (`ISOLATION_UNAVAILABLE`, `NOT_A_WORKTREE`).
 
