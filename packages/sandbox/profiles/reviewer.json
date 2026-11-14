@@ -1,0 +1,94 @@
+{
+  "description": "Profil reviewer (docs/design/platform-v3-srt.md, §8) : une session de revue lit le worktree et rapporte, sans pouvoir le modifier. Même frontière que le profil builder (Claude Code en --bare, dossier de configuration propre à la sandbox, jeton de session en ANTHROPIC_API_KEY, proxy d'authentification de l'hôte seul joignable), mais le worktree et le .git du dépôt ne sont pas inscriptibles, aucun registre npm, aucun terminal. Variables : ${home}, ${repo}, ${worktree}, ${worktreeName}, ${tmp} et ${config} (adaptateur), ${authProxyPort} et ${sessionToken} (lanceur).",
+  "srt": {
+    "network": {
+      "allowedDomains": ["127.0.0.1:${authProxyPort}"],
+      "deniedDomains": []
+    },
+    "filesystem": {
+      "denyRead": [
+        "${home}/.ssh",
+        "${home}/.aws",
+        "${home}/.gnupg",
+        "${home}/.config/gh",
+        "${home}/.config/architect-os",
+        "${home}/.npmrc",
+        "${home}/.netrc",
+        "${home}/.claude",
+        "${home}/.claude.json",
+        "${home}/Library/Keychains"
+      ],
+      "allowWrite": ["${config}", "${tmp}"],
+      "denyWrite": ["${config}/settings.json"]
+    }
+  },
+  "env": {
+    "pass": [
+      "HOME",
+      "USER",
+      "LOGNAME",
+      "PATH",
+      "SHELL",
+      "TERM",
+      "COLORTERM",
+      "TERM_PROGRAM",
+      "LANG",
+      "LC_ALL",
+      "LC_CTYPE"
+    ],
+    "set": {
+      "CLAUDE_CODE_TMPDIR": "${tmp}",
+      "CLAUDE_CONFIG_DIR": "${config}",
+      "ANTHROPIC_BASE_URL": "http://127.0.0.1:${authProxyPort}",
+      "ANTHROPIC_API_KEY": "${sessionToken}",
+      "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1"
+    },
+    "unset": ["NO_PROXY", "no_proxy"]
+  },
+  "files": {
+    "${config}/settings.json": {
+      "sandbox": {
+        "enabled": false
+      },
+      "permissions": {
+        "deny": [
+          "Bash(git push *)",
+          "Bash(git config *)",
+          "Bash(security *)",
+          "Read(/${home}/.ssh/**)",
+          "Edit(/${home}/.ssh/**)",
+          "Read(/${home}/.aws/**)",
+          "Edit(/${home}/.aws/**)",
+          "Read(/${home}/.gnupg/**)",
+          "Edit(/${home}/.gnupg/**)",
+          "Read(/${home}/.config/gh/**)",
+          "Edit(/${home}/.config/gh/**)",
+          "Read(/${home}/.npmrc)",
+          "Edit(/${home}/.npmrc)",
+          "Read(/${home}/.netrc)",
+          "Edit(/${home}/.netrc)",
+          "Read(/${home}/.claude/**)",
+          "Edit(/${home}/.claude/**)",
+          "Read(/${home}/.claude.json)",
+          "Edit(/${home}/.claude.json)",
+          "Read(/${home}/Library/Keychains/**)",
+          "Edit(/${home}/Library/Keychains/**)",
+          "Edit(/${repo}/.git/hooks/**)",
+          "Edit(/${repo}/.git/config)",
+          "Edit(/${worktree}/.claude/**)"
+        ]
+      }
+    },
+    "${config}/.claude.json": {
+      "hasCompletedOnboarding": true,
+      "projects": {
+        "${repo}": {
+          "hasTrustDialogAccepted": true
+        },
+        "${worktree}": {
+          "hasTrustDialogAccepted": true
+        }
+      }
+    }
+  }
+}

@@ -459,6 +459,14 @@ Then('it does not exit with code 0', async function () {
   assert.notEqual((await sandbox(this).exited).code, 0);
 });
 
+Given('the worktree holds a file {string} containing {string}', function (name: string, content: string) {
+  writeFileSync(join(stored<string>(this, 'cwd'), name), content);
+});
+
+Then('the worktree holds no file {string}', function (name: string) {
+  assert.equal(existsSync(join(stored<string>(this, 'cwd'), name)), false);
+});
+
 Then('the platform root holds no file {string}', function (name: string) {
   assert.equal(existsSync(join(stored<string>(this, 'cwd'), name)), false);
 });

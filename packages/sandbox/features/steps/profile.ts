@@ -110,6 +110,10 @@ Then('the profile allows a pseudo-terminal', function () {
   assert.equal(template(this).srt.allowPty, true);
 });
 
+Then('the profile allows no pseudo-terminal', function () {
+  assert.notEqual(template(this).srt.allowPty, true);
+});
+
 Then('the profile sets the variable {string} to {string}', function (name: string, value: string) {
   assert.equal(template(this).env.set[name], value);
 });
