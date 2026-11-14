@@ -1,10 +1,10 @@
 Feature: code.json, the descriptive file of the 1a.0 tool
 
-  Scenario: loads against the strict schema: builder profile, claude --bare with every input explicit
+  Scenario: loads against the strict schema: builder profile, launcher prompt, claude --bare with every input explicit
     When I load the committed code.json
     Then the tool profile is "builder"
     And the tool command is exactly "claude --bare --settings ${config}/settings.json --strict-mcp-config"
-    And the tool system prompt file is "CLAUDE.md"
+    And the tool launcher prompt file is "prompts/build.md"
     And the tool auth proxy upstream is "https://api.anthropic.com"
 
   Scenario: the auth proxy options are those of code.json, the usage log under the home directory
@@ -33,21 +33,10 @@ Feature: code.json, the descriptive file of the 1a.0 tool
       | no body field          |
       | a zero body size limit |
       | a fractional body size |
-      | an absolute system prompt file |
-      | a system prompt file outside the worktree |
-      | an empty system prompt file |
       | an absolute launcher prompt file |
       | a launcher prompt file outside the package |
       | an empty launcher prompt file |
-
-  Scenario Outline: a system prompt file outside the worktree is refused by name: <defect>
-    When I break a copy of the committed code.json with <defect>
-    Then parsing the broken code.json fails with the message "chemin relatif à la racine du worktree, sans .."
-
-    Examples:
-      | defect                                    |
-      | an absolute system prompt file            |
-      | a system prompt file outside the worktree |
+      | no launcher prompt file |
 
   Scenario Outline: a launcher prompt file outside the launcher package is refused by name: <defect>
     When I break a copy of the committed code.json with <defect>
@@ -58,13 +47,8 @@ Feature: code.json, the descriptive file of the 1a.0 tool
       | an absolute launcher prompt file           |
       | a launcher prompt file outside the package |
 
-  Scenario: review.json loads against the strict schema: reviewer profile, launcher prompt file, no worktree prompt
+  Scenario: review.json loads against the strict schema: reviewer profile, launcher prompt file
     When I load the committed review.json
     Then the tool profile is "reviewer"
     And the tool launcher prompt file is "prompts/review.md"
-    And the tool has no system prompt file
     And the tool command is exactly "claude --bare --settings ${config}/settings.json --strict-mcp-config"
-
-  Scenario: a tool with neither prompt file loads
-    When I change a copy of the committed code.json to name neither prompt file
-    Then parsing the changed code.json succeeds

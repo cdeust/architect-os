@@ -1,5 +1,18 @@
-Feature: the descriptive files of the review session: its prompt and its verdict schema
-  The prompt and the schema are read by Claude Code, not by the launcher: these scenarios check what they must carry.
+Feature: the descriptive files of the sessions: the build and review prompts, and the verdict schema
+  The prompts and the schema are read by Claude Code, not by the launcher: these scenarios check what they must carry.
+
+  Scenario: the committed build prompt is not empty and names the rules by git, the replay profile and the forbidden git commands
+    When I read the committed build prompt
+    Then the build prompt checks pass
+
+  Scenario Outline: a broken copy of the build prompt is rejected: <defect>
+    When I break a copy of the build prompt with <defect>
+    Then the build prompt checks fail
+
+    Examples:
+      | defect                         |
+      | an empty prompt                |
+      | no reading of the rules by git |
 
   Scenario: the committed prompt is not empty and names the three levels and the committed bar
     When I read the committed review prompt

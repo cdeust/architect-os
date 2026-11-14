@@ -1,8 +1,8 @@
 {
-  "description": "Outil de code isolé de la brique 1a.0 : `srt --settings <profil résolu> claude --bare`, chaque entrée de Claude Code déclarée ici ou dans le profil (réglages de la session par --settings, aucun serveur MCP, CLAUDE.md du worktree en prompt système), modèle joint par le proxy d'authentification de l'hôte. Aucun secret dans la sandbox.",
+  "description": "Outil de code isolé de la brique 1a.0 : `srt --settings <profil résolu> claude --bare`, chaque entrée de Claude Code déclarée ici ou dans le profil (réglages de la session par --settings, aucun serveur MCP), prompt système pris dans la bibliothèque de prompts du lanceur et non dans le worktree ; les règles du projet sont lues par la session dans le CLAUDE.md commité ; modèle joint par le proxy d'authentification de l'hôte. Aucun secret dans la sandbox.",
   "profile": "builder",
   "command": ["claude", "--bare", "--settings", "${config}/settings.json", "--strict-mcp-config"],
-  "systemPromptFile": "CLAUDE.md",
+  "launcherPromptFile": "prompts/build.md",
   "authProxy": {
     "upstream": "https://api.anthropic.com",
     "routes": ["^/v1/messages(/count_tokens)?(\\?[^#]*)?$"],

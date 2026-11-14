@@ -19,7 +19,7 @@ npm --prefix <checkout du lanceur> run code -- <arguments de claude>
    - le profil srt résolu (en lecture seule) ;
    - `tmp` (`CLAUDE_CODE_TMPDIR`) ;
    - `config` (`CLAUDE_CONFIG_DIR`), avec `settings.json` (`sandbox.enabled: false` et les règles `permissions.deny`, en lecture seule pour la sandbox) et `.claude.json` (onboarding fait, dossier approuvé).
-3. Il lance le canari, puis `srt --settings <profil> -- env -u NO_PROXY -u no_proxy claude --bare --settings <config>/settings.json --strict-mcp-config --append-system-prompt-file <worktree>/CLAUDE.md <arguments>`. Sous `--bare`, Claude Code ne charge ni hooks, ni plugins, ni skills, ni serveur MCP, ni mémoire automatique, ni CLAUDE.md : chaque entrée est déclarée dans `code.json` ou le profil, le fichier de prompt système seulement s'il existe à la racine du worktree. La sandbox reçoit seulement `ANTHROPIC_BASE_URL=http://127.0.0.1:<port>`, `ANTHROPIC_API_KEY=<jeton de session aléatoire>` (sous `--bare`, la seule authentification lue avec `apiKeyHelper`) et `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`, qui retire ce jeton de l'environnement des commandes que Claude Code lance.
+3. Il lance le canari, puis `srt --settings <profil> -- env -u NO_PROXY -u no_proxy claude --bare --settings <config>/settings.json --strict-mcp-config --append-system-prompt-file <lanceur>/packages/sandbox/prompts/build.md <arguments>`. Sous `--bare`, Claude Code ne charge ni hooks, ni plugins, ni skills, ni serveur MCP, ni mémoire automatique, ni CLAUDE.md : chaque entrée est déclarée dans `code.json` ou le profil. Le prompt passé est celui du lanceur, jamais le `CLAUDE.md` du worktree, que la sandbox peut écrire. La session lit les règles du projet par `git show HEAD:CLAUDE.md`, comme des données de moindre autorité, comme Claude Code lui-même livre `CLAUDE.md` en message utilisateur et non dans le prompt système. La sandbox reçoit seulement `ANTHROPIC_BASE_URL=http://127.0.0.1:<port>`, `ANTHROPIC_API_KEY=<jeton de session aléatoire>` (sous `--bare`, la seule authentification lue avec `apiKeyHelper`) et `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`, qui retire ce jeton de l'environnement des commandes que Claude Code lance.
 4. À la fin, il révoque le jeton de session, ferme le proxy et retire le dossier temporaire.
 
 Aucun secret ne franchit la frontière. Le proxy ne relaie que `POST /v1/messages` et `POST /v1/messages/count_tokens` vers `api.anthropic.com`, avec l'identifiant de l'hôte en `Authorization` ; le jeton de session, lu dans `x-api-key`, ne part jamais vers l'amont. Il répond 403 à toute autre route ou méthode, et 401 sans le jeton de session. Il répond aussi 403 à un corps hors de la politique de `code.json` (`authProxy.policy`, lue par `src/request-policy.ts`) : champ racine non listé, outil typé côté serveur (`web_fetch`…), image ou document dont la source n'est pas dans le corps (URL, fichier), corps au-delà de 64 Mio. Une liste de domaines accorde des capacités : par `api.anthropic.com`, ces champs feraient lire au modèle des données hors de portée de la sandbox. Il écrit une ligne d'`usage` par réponse (modèle, tokens, horodatage, route, type d'erreur, jamais le contenu) dans `~/.local/state/architect-os/usage.jsonl`, créé au démarrage en mode 600 dans un dossier 700 ; un journal qui ne s'écrit plus arrête le proxy, qui répond alors 503 en nommant la cause.
@@ -32,15 +32,19 @@ Avec un terminal, la TUI démarre sur les descripteurs du terminal, acceptés se
 
 Le dossier de configuration est recréé à chaque lancement : aucun historique de session ne passe d'un lancement à l'autre (pas de `--resume`).
 
+## La bibliothèque de prompts
+
+Le dossier `prompts/` du lanceur porte un prompt par rôle : `prompts/build.md` (session de code, `code.json`) et `prompts/review.md` (revue, `review.json`). Chaque outil le nomme par `launcherPromptFile`, obligatoire, relatif à `packages/sandbox`. Les prompts vivent dans le lanceur parce que c'est un chemin que la sandbox ne peut pas écrire (l'outil refuse de démarrer sinon) : une session ne peut pas écrire le prompt de la suivante. Si le fichier manque, la session ne démarre pas (`ISOLATION_UNAVAILABLE`), avant tout proxy. Chaque prompt a son scénario de chargement (`features/review-files.feature`), avec des copies cassées rejetées.
+
 ## La revue
 
-Une session de revue est le second lancement du même outil : `review.json` (`src/review.ts`, `npm run review`) donne à `src/code-tool.ts` le profil `reviewer` (worktree et `.git` en lecture seule, voir `profiles/reviewer.json`) et un prompt système propre. Depuis le worktree à relire :
+Une session de revue est le second lancement du même outil : `review.json` (`src/review.ts`, `npm run review`) donne à `src/code-tool.ts` le profil `reviewer` (worktree et `.git` en lecture seule, voir `profiles/reviewer.json`) et son prompt. Depuis le worktree à relire :
 
 ```bash
 npm --prefix <checkout du lanceur> run review -- -p --json-schema "$(cat <lanceur>/packages/sandbox/prompts/review-verdict.schema.json)" -- "<brief de l'étape>"
 ```
 
-Le prompt, `prompts/review.md`, est pris dans le checkout du lanceur (`launcherPromptFile`, relatif à `packages/sandbox`), jamais dans le worktree : une session précédente a pu écrire dans le worktree, donc le barème de la revue ne doit pas pouvoir y être réécrit. Il renvoie à `CLAUDE.md` tel que commité (`git show HEAD:CLAUDE.md`). Si le fichier du lanceur nommé manque, la session ne démarre pas (`ISOLATION_UNAVAILABLE`), avant tout proxy. Le verdict suit `prompts/review-verdict.schema.json` : `verdict`, `findings` (niveau, fichier, ligne, citation, raison), `not_checked`.
+Le prompt, `prompts/review.md`, renvoie à `CLAUDE.md` tel que commité (`git show HEAD:CLAUDE.md`). Le verdict suit `prompts/review-verdict.schema.json` : `verdict`, `findings` (niveau, fichier, ligne, citation, raison), `not_checked`.
 
 ## Autorisé, refusé
 

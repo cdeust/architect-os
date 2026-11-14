@@ -8,15 +8,7 @@
 // the session. Checkouts are local clones of a cache, never pushed; the remote refs are compared before and after.
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -154,10 +146,7 @@ async function hostBare(args: string[], worktree: string, dir: string) {
     resolveVars(JSON.stringify(profile.files['${config}/.claude.json'])),
   );
   const [command, ...base] = tool.command.map(resolveVars);
-  const prompts =
-    tool.systemPromptFile !== undefined && existsSync(join(worktree, tool.systemPromptFile))
-      ? ['--append-system-prompt-file', join(worktree, tool.systemPromptFile)]
-      : [];
+  const prompts = ['--append-system-prompt-file', join(SANDBOX, tool.launcherPromptFile)];
   try {
     return await timed(command as string, [...base, ...prompts, ...args], worktree, {
       ...loginEnv(),

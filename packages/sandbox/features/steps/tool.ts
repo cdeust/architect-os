@@ -20,12 +20,10 @@ const DEFECTS: Record<string, (t: Record<string, any>) => unknown> = {
   'no body field': (t) => (t['authProxy']['policy']['bodyFields'] = []),
   'a zero body size limit': (t) => (t['authProxy']['policy']['maxBodyBytes'] = 0),
   'a fractional body size': (t) => (t['authProxy']['policy']['maxBodyBytes'] = 1.5),
-  'an absolute system prompt file': (t) => (t['systemPromptFile'] = '/etc/CLAUDE.md'),
-  'a system prompt file outside the worktree': (t) => (t['systemPromptFile'] = 'docs/../../CLAUDE.md'),
-  'an empty system prompt file': (t) => (t['systemPromptFile'] = ''),
   'an absolute launcher prompt file': (t) => (t['launcherPromptFile'] = '/etc/review.md'),
   'a launcher prompt file outside the package': (t) => (t['launcherPromptFile'] = 'prompts/../../review.md'),
   'an empty launcher prompt file': (t) => (t['launcherPromptFile'] = ''),
+  'no launcher prompt file': (t) => delete t['launcherPromptFile'],
 };
 
 const credentialSource: CredentialSource = async () => ({ accessToken: 'unused' });
@@ -69,16 +67,6 @@ Then('the tool launcher prompt file is {string}', function (file: string) {
   assert.equal(stored<Tool>(this, 'tool').launcherPromptFile, file);
 });
 
-Then('the tool has no system prompt file', function () {
-  assert.equal(stored<Tool>(this, 'tool').systemPromptFile, undefined);
-});
-
-When('I change a copy of the committed code.json to name neither prompt file', function () {
-  const changed = committed();
-  delete changed['systemPromptFile'];
-  this.state['changed'] = changed;
-});
-
 When('I load the committed code.json', function () {
   this.state['tool'] = loadTool(join(PKG, 'code.json'));
 });
@@ -89,10 +77,6 @@ Then('the tool profile is {string}', function (profile: string) {
 
 Then('the tool command is exactly {string}', function (command: string) {
   assert.deepEqual(stored<Tool>(this, 'tool').command, command.split(' '));
-});
-
-Then('the tool system prompt file is {string}', function (file: string) {
-  assert.equal(stored<Tool>(this, 'tool').systemPromptFile, file);
 });
 
 Then('the tool auth proxy upstream is {string}', function (upstream: string) {

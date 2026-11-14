@@ -12,27 +12,16 @@ export const ToolSchema = z.strictObject({
   /** argv de base ; les arguments de l'appelant suivent. */
   command: z.array(z.string().min(1)).min(1),
   /**
-   * Fichier du worktree visé, relatif à sa racine, passé par `--append-system-prompt-file` s'il existe : sous `--bare`,
-   * Claude Code ne lit plus le CLAUDE.md du projet de lui-même.
-   */
-  systemPromptFile: z
-    .string()
-    .min(1)
-    .refine((file) => !isAbsolute(file) && !file.split('/').includes('..'), {
-      message: 'chemin relatif à la racine du worktree, sans ..',
-    })
-    .optional(),
-  /**
-   * Fichier du lanceur, relatif à `packages/sandbox`, passé lui aussi par `--append-system-prompt-file` : il ne vient
-   * pas du worktree visé, qu'une session précédente a pu écrire. Absent du disque, la session ne démarre pas.
+   * Prompt système de la session : fichier du lanceur, relatif à `packages/sandbox`, passé par
+   * `--append-system-prompt-file`. Il ne vient jamais du worktree visé, qu'une session précédente a pu écrire. Absent
+   * du disque, la session ne démarre pas.
    */
   launcherPromptFile: z
     .string()
     .min(1)
     .refine((file) => !isAbsolute(file) && !file.split('/').includes('..'), {
       message: 'chemin relatif à packages/sandbox, sans ..',
-    })
-    .optional(),
+    }),
   /** Proxy d'authentification de l'hôte (`auth-proxy.ts`). */
   authProxy: z.strictObject({
     upstream: z.url({ protocol: /^https$/ }),

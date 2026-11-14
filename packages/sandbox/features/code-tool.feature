@@ -22,20 +22,20 @@ Feature: the code tool of 1a.0, composed from code.json (host side, fake runner,
     And the sandbox ran in the terminal with the command of code.json, the system prompt and "-c"
     And the proxy was revoked then closed
 
-  Scenario: a worktree without its system prompt file runs the command of code.json without one
+  Scenario: the session of code.json gets the build prompt of the launcher, exactly once
     Given a code tool session with the session token "tok" and the arguments "-p hi"
-    And the worktree has no system prompt file
+    And the session takes the system prompt of the dependencies of code.json
     When I run the code tool with "hi" on stdin
     Then the code tool exits with 0
-    And the sandbox ran the command of code.json and "-p hi", without a system prompt
+    And the sandbox ran the profile "builder" in "/work" with the command of code.json, the system prompt and "-p hi"
+    And the command of the sandbox carries exactly one --append-system-prompt-file
 
-  Scenario: the system prompt file is read at the root of the worktree of INIT_CWD, when it exists
+  Scenario: the build prompt comes from the launcher and nothing from the worktree, even when it holds a CLAUDE.md
     Given a hand-written git layout for the linked worktree "w"
+    And the worktree "w" holds the file "CLAUDE.md"
     And a process with INIT_CWD in "src" of the worktree "w"
     When I build the process dependencies with stdout not a terminal
-    Then the system prompt of the dependencies is none
-    Given the worktree "w" holds the file "CLAUDE.md"
-    Then the system prompt of the dependencies is "CLAUDE.md" of the worktree "w"
+    Then the system prompt of the dependencies is the build prompt of the launcher
 
   Scenario: a piped sandbox that exits by a signal gives 1
     Given a code tool session with the session token "tok" and the arguments "-p x"
@@ -88,7 +88,7 @@ Feature: the code tool of 1a.0, composed from code.json (host side, fake runner,
 
   Scenario: with review.json, the session gets the launcher prompt and no worktree prompt
     Given a code tool session with the session token "tok" and the arguments "-p brief"
-    And the session takes the tool and the system prompts of the dependencies of review.json
+    And the session takes the tool and the system prompt of the dependencies of review.json
     When I run the code tool with "brief" on stdin
     Then the code tool exits with 0
     And the sandbox ran the profile "reviewer" with the command of review.json, the launcher prompt and "-p brief"
@@ -99,39 +99,31 @@ Feature: the code tool of 1a.0, composed from code.json (host side, fake runner,
     And a process with INIT_CWD in "src" of the worktree "w"
     When I build the process dependencies of the tool file "review.json"
     Then the dependencies load the tool of review.json
-    And the system prompts of the dependencies are the launcher prompt only
+    And the system prompt of the dependencies is the review prompt of the launcher
 
   Scenario: the review dependencies load review.json, profile reviewer and the committed launcher prompt
     Given a process with INIT_CWD "/target", the cwd "/elsewhere" and the arguments "node review.ts"
     When I build the review dependencies
     Then the dependencies load the tool of review.json
     And the profile of the dependencies is "reviewer"
-    And the system prompts of the dependencies are the launcher prompt only
+    And the system prompt of the dependencies is the review prompt of the launcher
 
-  Scenario: a tool naming both prompt files passes the worktree one first, then the launcher one
-    Given a hand-written git layout for the linked worktree "w"
-    And the worktree "w" holds the file "CLAUDE.md"
-    And a process with INIT_CWD in "src" of the worktree "w"
-    And a tool file derived from code.json naming the system prompt file "CLAUDE.md" and the launcher prompt file "prompts/review.md"
-    When I build the process dependencies of the stored tool file
-    Then the system prompts of the dependencies are "CLAUDE.md" of the worktree "w", then the launcher prompt
-
-  Scenario: the session passes one flag per system prompt, in order, after the command and before the arguments
+  Scenario: the session passes the system prompt after the command and before the arguments
     Given a code tool session with the session token "tok" and the arguments "-p x"
-    And the session system prompts are "/a/first.md" and "/b/second.md"
+    And the session system prompt is "/a/first.md"
     When I run the code tool with "x" on stdin
-    Then the sandbox ran the command of code.json, the system prompts "/a/first.md" then "/b/second.md", and "-p x"
+    Then the sandbox ran the command of code.json, the system prompt "/a/first.md", and "-p x"
 
   Scenario: a named launcher prompt file that is missing is refused, naming the file
     Given a hand-written git layout for the linked worktree "w"
     And a process with INIT_CWD in "src" of the worktree "w"
-    And a tool file derived from code.json naming the system prompt file "CLAUDE.md" and the launcher prompt file "prompts/absent.md"
+    And a tool file derived from code.json naming the launcher prompt file "prompts/absent.md"
     When I build the process dependencies of the stored tool file
-    Then the system prompts of the dependencies are refused naming the launcher file "prompts/absent.md"
+    Then the system prompt of the dependencies is refused naming the launcher file "prompts/absent.md"
 
-  Scenario: a session whose system prompts are refused stops before any proxy starts
+  Scenario: a session whose system prompt is refused stops before any proxy starts
     Given a code tool session with the session token "tok" and the arguments "-p x"
-    And the session system prompts are refused with "no bar"
+    And the session system prompt is refused with "no bar"
     When I run the code tool
     Then the code tool fails with the sandbox error "ISOLATION_UNAVAILABLE" "ISOLATION_UNAVAILABLE: no bar"
     And no proxy was started

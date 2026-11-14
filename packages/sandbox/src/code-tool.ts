@@ -20,7 +20,6 @@ import {
 import { SandboxError, type SandboxExit, type SandboxRequest, type SandboxRunner } from './port.js';
 import { SrtSandboxRunner, standardStreamsAreTerminals, type SrtRunnerOptions } from './srt-runner.js';
 import { authProxyOptions, loadTool, type Tool } from './tool.js';
-import { resolveWorktree } from './worktree.js';
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = resolve(PKG, '..', '..');
@@ -32,11 +31,8 @@ export interface CodeToolRunner extends SandboxRunner {
 
 export interface CodeToolDependencies {
   readonly tool: Tool;
-  /**
-   * Les fichiers de prompt système, absolus, dans l'ordre : celui de l'outil dans le worktree visé s'il existe, puis
-   * celui du lanceur. Lève `ISOLATION_UNAVAILABLE` si le fichier du lanceur nommé manque.
-   */
-  readonly systemPrompts: () => readonly string[];
+  /** Le fichier de prompt système, absolu, dans le checkout du lanceur. Lève `ISOLATION_UNAVAILABLE` s'il manque. */
+  readonly systemPrompt: () => string;
   readonly credential: CredentialSource;
   readonly startProxy: (options: AuthProxyOptions) => Promise<AuthProxy>;
   /** Le lanceur, pour les variables du proxy (port, jeton de session). */
@@ -55,8 +51,8 @@ export interface CodeToolDependencies {
 
 /** Une session de l'outil : identifiant lisible, proxy, sandbox, puis jeton révoqué et proxy fermé ; son code de sortie. */
 export async function runCodeTool(deps: CodeToolDependencies): Promise<number> {
-  // Avant l'identifiant et le proxy : une revue sans son barème ne démarre pas.
-  const prompts = deps.systemPrompts();
+  // Avant l'identifiant et le proxy : une session sans son prompt ne démarre pas.
+  const prompt = deps.systemPrompt();
   await deps.credential().catch(() => {
     throw new SandboxError(
       'ISOLATION_UNAVAILABLE',
@@ -70,11 +66,7 @@ export async function runCodeTool(deps: CodeToolDependencies): Promise<number> {
     const request: SandboxRequest = {
       profile: deps.tool.profile,
       cwd: deps.cwd,
-      command: [
-        ...deps.tool.command,
-        ...prompts.flatMap((prompt) => ['--append-system-prompt-file', prompt]),
-        ...deps.argv,
-      ],
+      command: [...deps.tool.command, '--append-system-prompt-file', prompt, ...deps.argv],
     };
     const exit = deps.terminal ? await runner.runInTerminal(request) : await piped(runner, request, deps);
     return exit.code ?? 1;
@@ -124,7 +116,7 @@ export function srtOptions(proc: CodeProcess, variables: Readonly<Record<string,
 
 /**
  * Les dépendances réelles : `code.json`, l'identifiant du trousseau, le proxy d'`auth-proxy.ts`, l'adaptateur srt.
- * Le worktree visé est INIT_CWD, fixé par npm, sinon le répertoire courant ; son prompt système est lu à la racine.
+ * Le worktree visé est INIT_CWD, fixé par npm, sinon le répertoire courant ; son prompt système vient du lanceur.
  */
 export function processDependencies(
   proc: CodeProcess,
@@ -135,20 +127,12 @@ export function processDependencies(
   const cwd = proc.env['INIT_CWD'] ?? proc.cwd();
   return {
     tool,
-    systemPrompts: () => {
-      const prompts: string[] = [];
-      if (tool.systemPromptFile !== undefined) {
-        const file = join(resolveWorktree(cwd).worktree, tool.systemPromptFile);
-        if (existsSync(file)) prompts.push(file);
+    systemPrompt: () => {
+      const file = join(PKG, tool.launcherPromptFile);
+      if (!existsSync(file)) {
+        throw new SandboxError('ISOLATION_UNAVAILABLE', `prompt du lanceur introuvable : ${file}`);
       }
-      if (tool.launcherPromptFile !== undefined) {
-        const file = join(PKG, tool.launcherPromptFile);
-        if (!existsSync(file)) {
-          throw new SandboxError('ISOLATION_UNAVAILABLE', `prompt du lanceur introuvable : ${file}`);
-        }
-        prompts.push(file);
-      }
-      return prompts;
+      return file;
     },
     credential: commandCredential(tool.authProxy.credentialCommand),
     startProxy: startAuthProxy,

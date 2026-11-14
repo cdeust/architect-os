@@ -39,6 +39,25 @@ function checkSchema(schema: Json): void {
   assert.equal(notChecked['items']['type'], 'string');
 }
 
+/** The checks on the build prompt: not empty, the committed rules by git, the replay profile, the forbidden git commands. */
+function checkBuildPrompt(text: string): void {
+  assert.notEqual(text.trim(), '', 'the build prompt is empty');
+  for (const needle of [
+    'git show HEAD:CLAUDE.md',
+    'npx cucumber-js --profile replay',
+    'git add',
+    'git rm',
+    'git commit',
+  ]) {
+    assert.ok(text.includes(needle), `the build prompt does not name ${needle}`);
+  }
+}
+
+const BUILD_DEFECTS: Record<string, (text: string) => string> = {
+  'an empty prompt': () => '',
+  'no reading of the rules by git': (text) => text.replaceAll('git show HEAD:CLAUDE.md', 'the file'),
+};
+
 const PROMPT_DEFECTS: Record<string, (text: string) => string> = {
   'an empty prompt': () => '',
   'no correctness level': (text) => text.replaceAll('correctness', 'x'),
@@ -60,6 +79,24 @@ const SCHEMA_DEFECTS: Record<string, (schema: Json) => unknown> = {
 
 When('I read the committed review prompt', function () {
   this.state['prompt'] = read('review.md');
+});
+
+When('I read the committed build prompt', function () {
+  this.state['build'] = read('build.md');
+});
+
+When('I break a copy of the build prompt with {}', function (defect: string) {
+  const breakIt = BUILD_DEFECTS[defect];
+  assert.ok(breakIt, `no defect named "${defect}"`);
+  this.state['build'] = breakIt(read('build.md'));
+});
+
+Then('the build prompt checks pass', function () {
+  assert.doesNotThrow(() => checkBuildPrompt(stored(this, 'build')));
+});
+
+Then('the build prompt checks fail', function () {
+  assert.throws(() => checkBuildPrompt(stored(this, 'build')));
 });
 
 When('I read the committed review verdict schema', function () {
