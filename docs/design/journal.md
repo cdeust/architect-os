@@ -1339,3 +1339,49 @@ Au tarif public (`total_cost_usd`), sur le forfait du propriétaire : essais de 
 - Recherche : chaque étape relevée au même format, flux gardés ; le constat de la revue confronté à une mesure indépendante (la porte) ; essai d'injection décrit avec son attendu, sa limite écrite.
 - SSDLC : menace traitée, l'injection indirecte par le contenu relu (prompt système hors du worktree, moindre privilège du profil, verdict au schéma) ; SAST : la porte, mutation comprise, verte ; DAST : scénario srt réel du profil et essai d'injection réel ; aucune dépendance ajoutée.
 - Opérationnel : RBAC par profil, le relecteur ne peut pas écrire ce qu'il relit ; aucun secret dans une sandbox ; IRB sans objet.
+
+## 34. Bibliothèque de prompts protégée ; heredocs dans la sandbox ; consigne par l'entrée standard, 14 novembre 2026
+
+**Remarque du propriétaire.** « Claude.md ne semble pas être préconisé par Anthropic d'être utilisé comme prompt système pour le builder. Ça serait pas plus intelligent d'avoir une bibliothèque de prompt protégée ? »
+
+**Vérifié dans la documentation de Claude Code** (`code.claude.com/docs/en/memory.md`, lue le 14 novembre 2026) : « CLAUDE.md content is delivered as a user message after the system prompt, not as part of the system prompt itself » ; et « For instructions you want at the system prompt level, use `--append-system-prompt` ». Le choix du 4 novembre (§21), `--append-system-prompt-file <worktree>/CLAUDE.md`, donnait donc à un fichier du worktree un rang que Claude Code ne lui donne pas, alors que la sandbox peut l'écrire (constat du §32).
+
+**Fait.** Le prompt système de toute session vient de `packages/sandbox/prompts/`, dans le checkout du lanceur : `build.md` pour `npm run code`, `review.md` pour `npm run review`, nommés par `launcherPromptFile`, désormais requis. `systemPromptFile` est retiré du schéma : aucun outil ne peut plus prendre un prompt dans le worktree. La bibliothèque est protégée par ce qui existait : l'outil refuse de démarrer si le lanceur est inscriptible par la sandbox (`features/sandbox/srt-runner.feature`). La session de construction lit les règles du projet elle-même, par `git show HEAD:CLAUDE.md` : la version commitée par l'hôte, reçue comme résultat d'outil, donc comme donnée. `build.md` porte ce que chaque brief répétait : ce que la sandbox ne peut pas lancer, la commande pour un seul fichier de scénarios, la règle sur l'index et sa raison, le format du rapport.
+
+### Étapes construites dans l'outil
+
+`claude-sonnet-5-5`, `--effort medium`.
+
+| # | Étape | Prompt système | Durée | Réponses | Cache lu par réponse | Coût | Résultat |
+|---|---|---|---|---|---|---|---|
+| 5 | Bibliothèque de prompts : schéma, `code-tool.ts`, `code.json`, `prompts/build.md`, `baseline/run.ts`, sonde du banc, scénarios, README | `CLAUDE.md` du worktree (ancien lanceur) | 160 s | 19 | 44 073 | 0,510 $ | `60d878a` ; porte verte |
+| 6 | `TMPPREFIX` dans les profils `builder` et `reviewer` | `prompts/build.md` (nouveau lanceur) | 34 s | 8 | 9 809 | 0,077 $ | `55a338a` |
+
+L'étape 6 est le premier usage réel de `build.md` : son brief fait 250 mots, sans section sur la sandbox, les règles ni le rapport ; sa première commande a été `git show HEAD:CLAUDE.md`. Comparaison indicative avec l'étape 2 du §32, de même taille (deux profils, deux scénarios, une phrase de README) et sous l'ancien mécanisme : 36 s, 12 545 tokens de cache lus par réponse, 0,096 $. Deux étapes, aucune conclusion.
+
+**Revue de l'étape 5** par `npm run review` (Opus 5.5, `--effort high`, 93 s, 0,393 $) : `request_changes`, deux constats `correctness`, tous deux sur la documentation réservée à l'hôte (`platform-v3-srt.md:286` et la note d'orchestration décrivaient encore l'ancienne commande), corrigés dans le même commit ; une `proposal` (un alias inutile dans un fichier de steps), appliquée.
+
+**Preuves.**
+
+| Fait | Preuve |
+|---|---|
+| Le prompt du lanceur est dans le prompt système d'un vrai Claude Code | `npm --prefix bench run bench:bare`, Claude Code 2.1.325 : `systemPromptFromLauncher: true`, `sessionTokenInApiKey: true`, `gitPushDenied: true`, sortie 0 |
+| Aucun prompt n'est pris dans le worktree, même s'il y a un `CLAUDE.md` | `packages/sandbox/features/code-tool.feature` ; un seul `--append-system-prompt-file` |
+| Un outil sans `launcherPromptFile` est refusé ; un prompt absent du disque arrête avant tout proxy | `tool.feature`, `code-tool.feature` |
+| Porte à `60d878a` | verte ; 1 060 = 1 063 + 23 − 26 = statique ; 2 fichiers, 7 mutants, 7 tués. Les 26 retirés : 13 par le renommage de `review-files.feature` (les 13 scénarios y sont toujours, sous le nouveau titre) et 13 scénarios de l'ancien mécanisme |
+
+### Deux défauts de l'outil trouvés en chemin
+
+| Constat | Mesure | Cause racine | Correction, preuve |
+|---|---|---|---|
+| Tout heredoc échoue dans une session : « can't create temp file for here document: operation not permitted » (signalé par les workers des étapes 3 et 5 et par un relecteur) | Appel réel : `TMPDIR` est le `tmp` de la sandbox, existant et inscriptible ; `TMPPREFIX=/tmp/zsh` | zsh écrit ses heredocs sous `$TMPPREFIX`, `/tmp/zsh` par défaut, qu'aucun profil n'autorise en écriture ; `TMPDIR` n'y change rien | `"TMPPREFIX": "${tmp}/zsh"` dans les deux profils (étape 6). Appel réel après correction, lanceur à `55a338a` : un heredoc `cat` et un heredoc `python3` passent, 0 refus |
+| Une consigne passée en argument est réécrite | Le worker de l'étape 6 a reçu un chemin absolu là où le brief disait `${tmp}/zsh` | L'adaptateur résout les variables de profil dans toute la commande, arguments de l'appelant compris ; une variable inconnue serait refusée (`PROFILE_INVALID`) | La consigne passe par l'entrée standard. Appel réel : « `${tmp}/zsh and ${nope}` » rendu tel quel. Écrit dans le README du paquet |
+
+**Décisions du propriétaire, 14 novembre 2026.** Volume et budget de la mesure O : laissés au jugement de l'orchestrateur. Revue : l'agent ou `npm run review` changera quand la boucle sera intégrée à la plateforme ; les agents `.claude/agents/*-reviewer.md` ne sont pas touchés. La décision 1 du §33 (écrire le prompt système inscriptible dans R-2) tombe : la cause est retirée.
+
+**Dépense de la journée dans l'outil**, au tarif public, sur le forfait du propriétaire : 2,46 $ au §33, plus étapes 5 et 6 : 0,59 $, revue 0,39 $, essais 0,02 $. Total 3,46 $. Le crédit d'API n'est pas touché.
+
+**Trois piliers.**
+- Recherche : la recommandation vérifiée à sa source, citée ; chaque défaut ramené à sa cause par un essai avant correction, et prouvé corrigé par un appel réel ; la comparaison des étapes 2 et 6 donnée comme indicative.
+- SSDLC : falsification du prompt système par le contenu du worktree retirée à la racine (un seul mécanisme, hors des chemins inscriptibles) ; mutation verte sur les lignes changées ; sonde `bench:bare` rejouée ; aucune dépendance ajoutée.
+- Opérationnel : moindre privilège inchangé (aucune écriture ajoutée hors du `tmp` de la sandbox) ; aucun secret lu ; IRB sans objet.
