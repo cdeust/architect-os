@@ -3,6 +3,7 @@
 // n'a ete etabli que par lecture ; si le temoin ne montre rien, le test ne prouve rien (resultat `fail`).
 // T-20 est rejoue sur le nouveau SQL (et sur l'ancien, pour comparaison). Les helpers observe/mark_unknown sont des UPDATE gardes ecrits par le banc,
 // pas du SQL du document. La migration (contraintes d'etat, settled_cost = 0 pour not_sent, settled_by obligatoire) n'est PAS ecrite ici.
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
@@ -14,13 +15,31 @@ if (!bin) {
   record('T-45', 'Postgres 17 introuvable (PG_BIN)', 'findPgBin', 'fail', 'ni PG_BIN ni emplacement connu ; sur le poste, PG_BIN=/opt/homebrew/opt/postgresql@17/bin');
   process.exit(0);
 }
+// ---- Source du SQL ----
+// Le document de travail n'a plus de §4.5 depuis le retrait des budgets (docs/design/journal.md, decisions 11 et 12). Le SQL est alors lu dans le
+// document tel qu'il est commite a BENCH_DOC_REV (defaut 70a146f, le texte joue par le run 41044838678), par `git show` : extrait, jamais recopie.
+// 0dd97c5 et 0ef74e6 portent le settle d'apres DC-3 (2 instructions) : T-45-sync y est rouge, ce que le journal dit deja.
+const DOC = 'docs/design/platform-v3-srt.md';
+const section = (text: string): string => (text.includes('### 4.5 Budgets') ? text.slice(text.indexOf('### 4.5 Budgets'), text.indexOf('### 4.6')) : '');
+const docRev = process.env['BENCH_DOC_REV'] ?? '70a146f';
+let docSource = `${DOC} (arbre de travail)`;
+let sec = section(readFileSync(path.join(benchRoot, '..', DOC), 'utf8'));
+if (!sec) {
+  const shown = spawnSync('git', ['show', `${docRev}:${DOC}`], { cwd: path.join(benchRoot, '..'), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  sec = shown.status === 0 ? section(shown.stdout) : '';
+  docSource = `git show ${docRev}:${DOC}`;
+  if (!sec) {
+    record('T-45', 'SQL du §4.5 introuvable : ni dans le document de travail, ni au commit BENCH_DOC_REV', docSource, 'fail',
+      `git show: statut=${shown.status} ${(shown.stderr ?? '').trim().slice(0, 300)} ; il faut l'historique complet du depot (pas de clone superficiel)`);
+    process.exit(0);
+  }
+}
+
 const cluster = await startCluster(bin);
 const pool = new pg.Pool({ host: cluster.host, port: cluster.port, user: 'bench', database: 'postgres', max: 100 });
 pool.on('error', () => undefined);
 
 // ---- SQL ----
-const doc = readFileSync(path.join(benchRoot, '../docs/design/platform-v3-srt.md'), 'utf8');
-const sec = doc.slice(doc.indexOf('### 4.5 Budgets'), doc.indexOf('### 4.6'));
 const block = /```sql\n([\s\S]*?)```/.exec(sec)?.[1] ?? '';
 const statements = (text: string): string[] =>
   text.split('\n').filter((l) => !l.trimStart().startsWith('--')).join('\n').split(/;\s*(?:\n|$)/).map((s) => s.trim()).filter(Boolean);
@@ -92,9 +111,9 @@ const tally = (rs: Array<{ rows: Row[]; err?: string }>): { rows: number; none: 
 };
 
 try {
-  record('T-45-sync', 'le SQL joue est celui du document (extrait de §4.5, jamais recopie) : 3 instructions de reserve, 1 de settle', cmd('lecture de docs/design/platform-v3-srt.md'),
+  record('T-45-sync', 'le SQL joue est celui du document (extrait de §4.5, jamais recopie) : 3 instructions de reserve, 1 de settle', cmd(`lecture de ${docSource}`),
     verdict(NEW.reserve.length === 3 && NEW.settle.length === 1 && OLD.reserve.length === 2 && OLD.settle.length === 1),
-    `nouveau: reserve=${NEW.reserve.length} (BEGIN/COMMIT retires, pilotes par le banc) settle=${NEW.settle.length} ; ancien: reserve=${OLD.reserve.length} settle=${OLD.settle.length} ; parametres substitues en litteraux par le banc (le SQL n'est pas modifie)`);
+    `source=${docSource} ; nouveau: reserve=${NEW.reserve.length} (BEGIN/COMMIT retires, pilotes par le banc) settle=${NEW.settle.length} ; ancien: reserve=${OLD.reserve.length} settle=${OLD.settle.length} ; parametres substitues en litteraux par le banc (le SQL n'est pas modifie)`);
 
   // T-45a : N reserve simultanes au meme identifiant. Plusieurs manches, une task par manche.
   {

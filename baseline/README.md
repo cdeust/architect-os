@@ -127,3 +127,13 @@ images et le cache de construction du moteur de mesure sont effacés ; pour chaq
 est retéléchargée depuis le registre par la construction, et le retrait final efface toutes les images et tout le cache
 de construction (`docker system prune -af`) avant l'arrêt du moteur, retrait chronométré. La variance du réseau et les
 limites de téléchargement du registre font partie de la mesure ; un téléchargement refusé est un échec compté.
+
+### Portage du 14 novembre 2026 : WSL2 sur un hôte Windows (étape « Hôtes »)
+
+Les trois commandes (`baseline:overhead`, puis `OVERHEAD_ONLY=cold` et `OVERHEAD_ONLY=deleg`) se relancent telles
+quelles dans WSL2 (Ubuntu 24.04, x64), avec la définition Linux du froid : containerd et dockerd démarrés puis
+arrêtés par `sudo -n systemctl`. Un seul changement de code, fait pour cette mesure et non soumis au propriétaire
+avant elle : le binaire Linux de Claude Code est celui du paquet de l'architecture de l'hôte
+(`@anthropic-ai/claude-agent-sdk-linux-<arch>` : `arm64` dans la VM `aos-bench`, `x64` sous WSL2), au lieu de `arm64`
+écrit en dur. Hypothèses, seuils, méthode et statistiques inchangés. Docker est le moteur installé dans la
+distribution WSL2 (`docker.io`), pas Docker Desktop.

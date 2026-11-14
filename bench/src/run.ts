@@ -85,7 +85,8 @@ for (const t of SUITE) {
 const count = (r: string): number => results.filter((x) => x.result === r).length;
 const summary = { total: results.length, pass: count('pass'), fail: count('fail'), residual: count('residual'), finding: count('finding') };
 const report = { meta: { ...meta, finishedAt: new Date().toISOString() }, summary, results };
-const file = path.join(outDir, `bench-sandbox-${osName}.json`);
+// Un run partiel (BENCH_ONLY) ecrit son propre fichier : il n'ecrase pas le rapport du run complet.
+const file = path.join(outDir, only ? `bench-sandbox-${osName}-only-${only.join('+')}.json` : `bench-sandbox-${osName}.json`);
 writeFileSync(file, JSON.stringify(report, null, 2));
 console.error(`\n${'id'.padEnd(18)} resultat   titre`);
 for (const r of results) console.error(`${r.id.padEnd(18)} ${r.result.padEnd(9)}  ${r.title.slice(0, 100)}`);

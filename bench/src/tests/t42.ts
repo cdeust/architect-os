@@ -98,7 +98,7 @@ if (!json) {
     const how = recoverable(received(c), key);
     const leaked = how.length > 0;
     const result: Result = !leaked ? 'pass' : mayLeak ? 'residual' : 'fail';
-    record(`T-42h-${v}`, `amont reflechissant (${v}), retrait litteral bufferise : ${leaked ? 'FUITE' : 'pas de fuite'}`, cmd, c.status === undefined && !leaked && mayLeak ? 'fail' : result,
+    record(`T-42h-${v}`, `amont reflechissant (${v}), retrait litteral bufferise : ${leaked ? 'FUITE' : 'pas de fuite'}`, cmd, c.status !== 200 && !leaked ? 'fail' : result, // sans 200, rien n'a ete reflechi : « pas de fuite » ne prouve rien
       `statut=${c.status ?? c.error} recuperable_par_le_worker=${JSON.stringify(how)} ; ` +
       (leaked ? `FUITE via ${how.join('+')} : la cle reelle ATTEINT le worker. Residu connu (§11.2) : le retrait ne couvre que le litteral ; la frontiere est la requete amont et l'hote fixe` : 'aucune forme reconstructible'));
   }

@@ -1600,3 +1600,82 @@ Science ne démarre pas de session sans geste. Le répondant de la boucle sera d
 - Recherche : capacités de Science relevées dans sa documentation puis mesurées sur l'application ; registre des DOI relevé sur le service réel avant de spécifier ; preuve du vérificateur contre le registre réel, une réponse exacte et quatre fausses ; limite du niveau de preuve écrite dans chaque fiche.
 - SSDLC : STRIDE dans la note ; trois défauts de sécurité trouvés par la revue et fermés à la cause (lien, tube nommé, lecture non bornée) ; contrat strict ; aucune dépendance ajoutée. Vérificateur sous srt : prévu à l'étape S.4.
 - Opérationnel : registre hors de portée du répondant ; aucune adresse ni donnée personnelle envoyée au registre ; aucun secret au dépôt ; tunnel et second démon arrêtés en fin d'essai. IRB sans objet.
+
+## 38. Preuve Windows : WSL2 avec srt, les bancs rejoués, 14 novembre 2026
+
+Étape « Hôtes » (§29, §30, §35). srt 0.0.81 ne prend pas Windows natif en charge : la voie jouée est WSL2. Hôte : Windows 11 Pro 10.0.26300, AMD Ryzen 7 9800X3D (16 fils). Invité : Ubuntu 24.04.2, noyau 6.6.87.2-microsoft-standard-WSL2, x64, Node 26.11.1, bubblewrap 0.9.0, Postgres 17.12 avec pgvector, Docker 29.1.3 et containerd 2.2.1 (paquet `docker.io` de la distribution, pas Docker Desktop), Claude Code 2.1.312. Commit `bb450ee` de `feat/gate-1a`, plus les corrections ci-dessous. Aucun appel réel à l'API Anthropic. Détail par variable : [`bench/JOURNAL.md`](../../bench/JOURNAL.md).
+
+### Résultats
+
+| Banc | Commande | WSL2 | Référence |
+|---|---|---|---|
+| Suite | `npm test` | 1 196 scénarios verts sur 1 196, `features/sandbox` compris, deux fois (81 s, 79 s) | Linux et macOS verts |
+| Banc de preuve srt | `npm run bench:sandbox` | 106 tests : 92 pass, 5 fail, 3 residual, 6 finding | Linux CI, run 41044838678 : 92, 5, 3, 6 |
+| Lancement `--bare` | `npm run bench:bare` | passe : jeton en `x-api-key`, prompt du lanceur, `git push` refusé, outils Bash, Edit, Read | §21 |
+| Mesure A | `npm run baseline:overhead` | H2 et H3 tiennent | §30 |
+| H1 amendée | `OVERHEAD_ONLY=cold` | tient | §30 |
+| H4 | `OVERHEAD_ONLY=deleg` | tient | §30 |
+
+Banc srt : les cinq échecs (T-02e, T-02e2, T-07-fd0, T-34h, T-34i), les trois résiduels (T-42h réencodés) et les six constats sont ceux de Linux CI, identifiant par identifiant. Aucun comportement d'isolation propre à WSL2.
+
+**Mesure A** (`baseline/results/overhead-2026-11-14T21-34-39-924Z-wsl2.jsonl`, 30 mesures par configuration après 2 de chauffe, aucun échec) :
+
+| Configuration | Médiane | p10 | p90 |
+|---|---|---|---|
+| `iso-none` | 14 ms | 13 | 16 |
+| `iso-srt` | 303 ms | 297 | 315 |
+| `iso-docker` (démon chaud) | 317 ms | 302 | 351 |
+| `recall-inproc` | 371 ms | 365 | 446 |
+| `recall-srt-warm` | 785 ms | 763 | 852 |
+| `recall-srt-cold` | 1 216 ms | 1 180 | 1 260 |
+
+- démarrage srt − aucun = + 289 ms (285 à 294) ; Docker chaud − aucun = + 303 ms (298 à 312) ;
+- H1 d'origine : srt − Docker chaud = − 14 ms (− 24 à − 7) ; sans conclusion, par la règle du §30 (Docker chaud contre srt froid) ;
+- **H2, tient** : + 414 ms (399 à 427), seuil < 1 000 ms ;
+- **H3, tient** : + 431 ms (414 à 447), seuil < 1 000 ms.
+
+**H1 amendée, les deux froids** (`overhead-2026-11-14T21-06-55-356Z-wsl2.jsonl`, froid = containerd et dockerd arrêtés, définition Linux du §30, aucun échec) : `iso-srt` 300 ms (p10 294, p90 315) ; `iso-docker-cold` 1 431 ms (p10 1 382, p90 1 503). **Tient** : − 1 131 ms (− 1 179 à − 1 105), environ 4,8 fois plus rapide.
+
+**H4, délégation isolée** (`overhead-2026-11-14T21-08-28-600Z-wsl2.jsonl`, aucun échec) : `deleg-srt` 512 ms (p10 496, p90 536) ; `deleg-docker-cold` 47 673 ms (p10 47 240, p90 48 042). Médianes des étapes Docker : moteur 1,2 s, construction 45,5 s, conteneur 0,7 s, effacement 0,2 s, arrêt 0,04 s. **Tient** : − 47 161 ms (− 47 229 à − 47 067), environ 93 fois moins.
+
+| Hôte | `iso-srt` | `iso-docker-cold` | Rapport | `deleg-srt` | `deleg-docker-cold` | Rapport |
+|---|---|---|---|---|---|---|
+| macOS (§30) | 686 ms | 17 870 ms | 26 | 921 ms | 64 057 ms | 70 |
+| Linux, VM `aos-bench` (§30) | 187 ms | 467 ms | 2,5 | 475 ms | 45 050 ms | 95 |
+| Windows, WSL2 | 300 ms | 1 431 ms | 4,8 | 512 ms | 47 673 ms | 93 |
+
+Les trois hôtes ne se comparent pas en valeur absolue (machines différentes) ; le sens de H1 amendée et de H4 est le même sur les trois.
+
+### Corrections faites pour cette preuve
+
+| Fichier | Défaut | Correction |
+|---|---|---|
+| `bench/src/tests/t45.ts` | Lisait §4.5 dans un document qui ne l'a plus (§12) : `TypeError`, T-45 rouge sur tout OS | Section absente : lue par `git show <BENCH_DOC_REV>`, défaut `70a146f` (texte du run 41044838678). Jamais recopiée |
+| `bench/src/tests/t42.ts` | T-42h sortait `pass` quand le chemin du broker était coupé (502) | Sans statut 200 : `fail` |
+| `bench/src/run.ts` | `BENCH_ONLY` écrasait le rapport du run complet | Un run partiel écrit son propre fichier |
+| `baseline/overhead.ts` | Binaire Linux de la délégation écrit en dur `linux-arm64` | Architecture de l'hôte ; noté comme portage dans `baseline/README.md`, non soumis au propriétaire avant la mesure |
+
+Exigences d'hôte relevées sous WSL2 : Postgres 17 avec pgvector ; `broker.localhost` et `evil.localhost` résolus vers le loopback (pour T-42 seulement : la suite `npm test` passe sans) ; aucun sysctl AppArmor.
+
+### Échecs de méthode
+
+- Postgres 16 installé au lieu de 17 : 12 scénarios rouges au premier `npm test`.
+- Le premier `npm test` est resté 1 h 30 à 0 % CPU. Non reproduit en trois lancements ; cause inconnue.
+- Premier run du banc srt : 79 pass sur 102, dont 13 échecs dus à l'hôte ou au banc, pas à srt.
+- Première campagne de la mesure A (`overhead-2026-11-14T21-05-25-265Z-wsl2.jsonl`) : `iso-docker` en échec 32 fois sur 32. Mes essais à une mesure avaient laissé le moteur Docker arrêté. Fichier conservé, non retenu ; campagne rejouée moteur démarré.
+- L'en-tête des campagnes froides écrit `Docker null` : il ne peut pas lire la version d'un démon arrêté (déjà noté au §30). Version relevée à part.
+- SHA-256 de l'archive Node non vérifié.
+
+### Pas fait
+
+- srt sous Windows natif : non pris en charge. Docker Desktop (« Docker natif » du §29) : non mesuré, le moteur est celui de la distribution WSL2.
+- `npm run gate` (Stryker) sous WSL2.
+- `npm run code`, `review`, `step` : sessions réelles sur le compte du propriétaire. `code.json` lit l'identifiant par `/usr/bin/security`, propre à macOS : lu dans le fichier, non essayé sous WSL2.
+- Mesure B (`baseline:pilot`, `baseline:campaign`) et `broker:live` : forfait et clé du propriétaire.
+
+**Lecture.** L'hôte Windows tient par WSL2 : suite verte, banc srt identique à Linux CI, hypothèses H2, H3, H1 amendée et H4 tenues. La preuve reste partielle sur les points de « Pas fait » ; le retrait des mécanismes de 1b.6 est une décision du propriétaire.
+
+**Trois piliers.**
+- Recherche : mêmes commandes et mêmes seuils que sur macOS et Linux, données et analyses versionnées (`baseline/results/*-wsl2.*`), campagne ratée conservée, essais à une mesure écartés.
+- SSDLC : aucune dépendance ajoutée ; aucun secret lu, clés factices ; code de production inchangé, quatre fichiers de banc modifiés. Droits posés dans WSL pour la mesure (groupe `docker`, règle sudoers limitée à trois commandes `systemctl`) retirés ensuite.
+- Opérationnel : restent sur le poste la distribution WSL2 avec ses paquets, l'utilisateur `bench`, quatre lignes dans son `/etc/hosts`, Docker installé et démarré. IRB sans objet.

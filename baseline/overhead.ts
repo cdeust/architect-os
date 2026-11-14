@@ -209,8 +209,11 @@ async function family(
 /** The isolated delegation (baseline/README.md): the same `claude -p` in srt and in a cold Docker. */
 const KEY = 'fake-not-a-key';
 const PROMPT = 'Answer with the single word ok.';
-/** The Linux binary of Claude Code in the image of a delegation: the package of the lockfile, its sha512 checked. */
-const LINUX_PACKAGE = '@anthropic-ai/claude-agent-sdk-linux-arm64';
+/**
+ * The Linux binary of Claude Code in the image of a delegation: the package of the lockfile, its sha512 checked, for the
+ * architecture of the host (arm64 in the Linux VM of the first campaigns, x64 under WSL2).
+ */
+const LINUX_PACKAGE = `@anthropic-ai/claude-agent-sdk-linux-${arch()}`;
 
 /**
  * The build context of the delegations, made once and untimed: the Dockerfile and the binary. Under Linux the binary
@@ -251,7 +254,7 @@ const CLAUDE = join(
   ROOT,
   'node_modules',
   '@anthropic-ai',
-  LINUX ? 'claude-agent-sdk-linux-arm64' : 'claude-agent-sdk-darwin-arm64',
+  LINUX ? `claude-agent-sdk-linux-${arch()}` : 'claude-agent-sdk-darwin-arm64',
   'claude',
 );
 const CLAUDE_ARGS = ['-p', PROMPT, '--output-format', 'json', '--bare'];
