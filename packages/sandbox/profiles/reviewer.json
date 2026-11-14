@@ -51,6 +51,7 @@
         "enabled": false
       },
       "permissions": {
+        "allow": ["Bash", "Read"],
         "deny": [
           "Bash(git push *)",
           "Bash(git config *)",

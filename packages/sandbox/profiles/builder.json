@@ -72,7 +72,7 @@
         "enabled": false
       },
       "permissions": {
-        "allow": ["Edit(/${worktree}/**)"],
+        "allow": ["Bash", "Read", "Edit(/${worktree}/**)"],
         "deny": [
           "Bash(git push *)",
           "Bash(git config *)",
