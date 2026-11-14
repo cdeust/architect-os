@@ -1,0 +1,169 @@
+# Boucle d'orchestration Fable 5.2 pour la brique 1a.0 : délégation et revue
+
+Note de conception, 14 novembre 2026. Elle ne modifie ni les décisions D1 à D16, ni les risques acceptés, ni la topologie de [`platform-v3-srt.md`](platform-v3-srt.md). Chaque proposition nomme le problème observé, sa source, le changement minimal et sa mesure. Aucun essai n'a tourné : le protocole du §10 attend l'accord du propriétaire avant toute mesure.
+
+Cadre posé par le propriétaire le 14 novembre 2026, qui règle cette note :
+
+> « On parle ici d'une architecture utilisant srt avec un découpage pour accentuer la sécurisation des données et pour améliorer le processus de développement en utilisant un contexte adapté aux tâches demandées. La boucle d'orchestration vise le même principe. »
+
+Sources : sept pages de la documentation Anthropic (`platform.claude.com/docs/fr/...`), lues en entier le 14 novembre 2026 et gardées hors de tout dépôt, avec leurs empreintes, dans `/Volumes/Anthropic/anthropic-partnership/reference/anthropic-prompting-2026-11-14/` (`shasum -a 256 -c SHA256SUMS` : sept fichiers `OK`) : bonnes pratiques de prompting ; prompting de Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5 ; nouveautés de Fable 5.2 ; guide de migration vers Fable 5.2. Les constats d'usage viennent du journal, §16 (brique 1a construite dans l'outil) et §23 (baseline de coût).
+
+## Trois piliers
+
+| Pilier | Fait | Prévu, à une étape nommée | Sans objet |
+|---|---|---|---|
+| Recherche | Sept pages lues en entier, empreintes revérifiées ; coût du §16 recalculé par poste, au centime près sur les douze appels (§1) ; `stream-json` essayé sans appel au modèle (§6, ligne 1) ; règles absolues et lignes de délégation relevées (§7) | Mesure O du §10 : pilote, puis volume fixé par le propriétaire ; un changement à la fois, journalisé au format du tableau du §16 | — |
+| Informatique | Aucun code modifié. STRIDE de la boucle : elle n'ajoute aucun processus natif ni aucun secret, et reprend R-1 et R-2 tels quels (§2) | Profil `reviewer` en lecture seule, avec son scénario de profil et son scénario srt réel : première étape construite dans la boucle (§3) | SAST et DAST : rien n'est exécuté ni livré par cette note |
+| Opérationnel | Aucun secret lu ni écrit ; les pages copiées restent hors dépôt ; moindre privilège par rôle écrit au §3 | Rétention de 30 jours exigée par Fable 5.2 sur l'API : preuve à produire à l'étape du transport par l'Agent SDK, si elle est ouverte (§5) | IRB : aucune donnée humaine |
+
+## 1. Le principe, et ce que les chiffres en disent
+
+La plateforme découpe : un processus srt par task, un profil qui ne donne que le réseau et les fichiers de la task, un résultat borné qui seul remonte (`platform-v3-srt.md`, §1 à §5). Le même découpage sert deux fins, la sécurité des données et le contexte : ce qu'un processus ne peut pas lire, il ne peut ni le divulguer ni le charger.
+
+**Le contexte est le premier poste de coût.** Deux mesures du journal :
+
+- §23, 180 sessions : la même tâche coûte 0,1917 $ dans la configuration habituelle de l'hôte et 0,0280 $ en `--bare` avec des entrées explicites, rapport 0,146 (0,123 à 0,173). L'écart vient du contexte chargé, pas de srt.
+- §16, brique 1a, recalculé ici depuis son tableau. Coût d'un appel = sortie × prix de sortie + cache lu × prix de lecture + cache écrit × prix d'écriture ; l'entrée hors cache (860 tokens) est négligeable. Prix par million de tokens : Opus 5.5 : 20 $, 0,20 $, 8 $ ; Sonnet 5.5 : 10 $, 0,10 $, 4 $. Les prix d'entrée, de sortie et de lecture d'Opus 5.5 sont dans le guide de migration ; le prix d'écriture (deux fois l'entrée) et ceux de Sonnet 5.5 sont déduits : avec eux, chacune des douze lignes redonne son `total_cost_usd` au centime (étape 2 : 4,20 + 6,49 + 2,91 = 13,60 $).
+
+| Poste | Brique entière | Étape 2 (Opus) |
+|---|---|---|
+| Sortie | 6,91 $, 33 % | 4,20 $, 31 % |
+| Cache lu : le contexte relu à chaque réponse | 8,23 $, 40 % | 6,49 $, 48 % |
+| Cache écrit : le contexte ajouté | 5,69 $, 27 % | 2,91 $, 21 % |
+
+Deux tiers du coût de la brique sont du contexte. L'étape 2 a relu 216 000 tokens par réponse en moyenne (32 434 543 sur 150 réponses), contre 65 000 à 83 000 pour les étapes Sonnet de migration (étapes 1, 3, 4 et 5). Le modèle n'explique qu'une part de son coût : au tarif de Sonnet, les mêmes tokens auraient coûté 6,80 $. Le reste vient d'une étape trop large, qui portait tout l'outil `tools/test-gate` dans une seule session. Le premier levier est donc le découpage des étapes ; la table de routage vient après.
+
+**Correspondance avec la plateforme.** La boucle n'invente aucun mécanisme : chaque pièce existe déjà dans la conception.
+
+| Plateforme (`platform-v3-srt.md`) | Boucle d'orchestration |
+|---|---|
+| Gateway : seul point de décision, seul parent des sandboxes (§2) | Orchestrateur : session de l'hôte, seul à écrire les briefs, à lancer l'outil, à rejouer et à commiter |
+| Worker sous srt, un par task, sans état (§2, §5) | Un `claude -p --bare` sous srt par étape, dossier de configuration recréé, pas de `--resume` |
+| `task_input` : le contenu arrive après le lancement, jamais en argv (§6) | Le brief, seul contexte propre à l'étape |
+| Profil par sorte de processus (§5) | Profil par rôle : `builder` pour écrire, `reviewer` pour lire (§3) |
+| Résultat borné, sinon résumé et handle (§3, étape 12) | Rapport final borné lu par l'orchestrateur ; flux complet gardé dans un fichier hors dépôt |
+| `verify` hors de la sandbox (§3, étape 10) | Rejeu sur l'hôte : Postgres, `listen`, Stryker, porte |
+| Usage par réponse au broker (§2) | `~/.local/state/architect-os/usage.jsonl` du proxy, par appel |
+| Bornes de task (décision 12) | Délai de l'appel, deux relances au plus |
+
+Risques : la boucle garde R-1 (le contenu envoyé au modèle sort par l'API) et R-2 (l'hôte exécute du code écrit par la sandbox ; la lecture du diff précède tout lancement). L'orchestrateur lit rapports et diffs comme des données, jamais comme des consignes.
+
+## 2. Ce que la documentation impose ou recommande
+
+**Faits d'API de Fable 5.2** (nouveautés de Fable 5.2) :
+
+- Identifiant `claude-fable-5-2` ; contexte de 1M tokens ; sortie de 128k tokens au maximum ; 8 $ en entrée et 40 $ en sortie par million de tokens, lecture du cache à 0,20 $.
+- La réflexion adaptative est toujours active. `thinking: {type: "disabled"}` et `budget_tokens` renvoient une erreur 400. L'effort est le seul réglage, `high` par défaut.
+- `tool_choice` `any` ou `tool` renvoie une erreur 400. On garde `auto`, avec `strict: true` ou les sorties structurées.
+- Vérification du préfixe : si un tour antérieur, `system` ou `tools` changent entre deux requêtes, l'API refuse la requête avec une erreur 400. L'historique doit donc être en ajout seul. Les échappatoires sont la compaction à la demande (bêta `compact-2026-09-04`), les modifications d'outils dans un message `role: "system"` (bêta `inline-tools-2026-09-15`) et `prefix_mismatch_behavior: "drop_block"` (bêta `thinking-binding-controls-2026-08-01`).
+- Les blocs de réflexion de Fable 5.2 ne sont lus que par Fable 5.2 et Mythos 5.2. Un tour exécuté sur un autre modèle, y compris les modèles de repli (Opus 4.8 et Opus 5), perd ce raisonnement.
+- Conservation des données de 30 jours obligatoire ; pas de conservation zéro sans autorisation d'Anthropic.
+- La page recommande de commencer par le dernier Opus, et de passer à Fable 5.2 quand les évaluations sur Opus, même à un effort plus élevé, ne suffisent pas.
+
+**Comportements de Fable 5.2 qui touchent l'orchestration** (prompting de Fable 5.2) :
+
+- Il termine parfois un tour avant la fin du travail, surtout à `low` et `medium` (section « Terminer la tâche entière »).
+- Il délègue selon ce que le harness l'invite à faire. À `xhigh` et `max`, il lance des sous-agents pour relire son propre travail. Les premiers testeurs l'ont jugé bon comme planificateur et orchestrateur d'autres modèles. Les sous-agents peuvent peser lourd dans le coût (section « Fixer des attentes pour les sous-agents »).
+- Il suit les règles de près, et traite « jamais » comme absolu (section « Empêcher la prudence de s'accumuler »).
+- La phrase « tu es propriétaire du code » change beaucoup son comportement : il consolide le code dupliqué, mais produit 70 à 80 % de tokens en plus, ajoute des tests et de la documentation non demandés, et son résumé de PR omet des petites modifications (section « Indiquer à qui appartient le code »).
+- Le rapport final doit se lire seul, parce que son lecteur n'a vu ni les appels d'outils ni les fichiers (section « Rendre les rapports faciles à suivre »).
+
+**Ce que disent les autres pages pour les workers et la revue :**
+
+- Opus 5.5 à `medium` égale ou dépasse Opus 5 à `high` en code agentique. Sa revue de code détecte plus de bugs avec moins de fausses alertes. Dans une boucle sans surveillance, un tour qui se termine sur du texte (`end_turn`) est un rapport, pas une fin de tâche (prompting d'Opus 5.5, « Exécutions agentiques sans surveillance »).
+- Sonnet 5.5 : `medium` pour le code agentique bien spécifié, `max_tokens` à 128 000 en streaming. Il faut lui dire de vérifier ses modifications, et de nommer la vérification qu'il n'a pas pu lancer (prompting de Sonnet 5.5, « Vérification sur les tâches de code »).
+- Pour tous les modèles : un enchaînement explicite « brouillon → revue selon des critères → affinage », un appel par étape, permet de journaliser et d'évaluer chaque étape (bonnes pratiques, « Enchaînez les prompts complexes »).
+
+## 3. Rôles : profil, contexte, modèle
+
+Chaque rôle reçoit le moins de droits et le moins de contexte qui lui permettent de finir.
+
+| Rôle | Modèle, effort | Profil srt | Contexte reçu | Ce qui en sort |
+|---|---|---|---|---|
+| Orchestrateur : découpe, briefs, lecture des diffs, relance, rejeu, commit | `claude-fable-5-2`, `high` | Aucun : natif sur l'hôte, comme la gateway | Conception, journal, diffs, rapports bornés | Briefs, commits depuis l'hôte |
+| Worker, étape bien spécifiée (migration, correctif, mutant à tuer) | `claude-sonnet-5-5`, `--effort medium` | `builder` : écrit le worktree, réseau limité au proxy et à npm | `CLAUDE.md` du worktree en prompt système (12,9 ko) et le brief | Un diff dans le worktree, un rapport final |
+| Worker, étape difficile (outil nouveau, conception) | `claude-opus-5-5`, `--effort medium` | `builder` | Idem | Idem |
+| Relecteur d'une étape | `claude-opus-5-5`, `--effort high`, appel séparé | `reviewer` : `builder` sans écriture du worktree ni de `.git`, réseau limité au proxy. **À construire** | Le diff, le brief, la section « What the review must refuse » de `CLAUDE.md` ; pas le raisonnement de l'auteur | Une liste de défauts, bornée |
+
+- **Découpage d'abord.** Une étape tient dans un brief qui nomme ses fichiers et sa condition d'achèvement. Une étape qui demande un outil entier se coupe avant d'aller à Opus : c'est la leçon de l'étape 2 (§1).
+- **Opus ou Sonnet** : l'orchestrateur le choisit dans le brief, sur un critère écrit. Un outil nouveau ou une conception va à Opus, tout le reste à Sonnet. L'effort est passé à chaque appel par `--effort` (Claude Code 2.1.325) ; le proxy laisse passer `output_config` (`code.json`).
+- **Profil `reviewer`.** Il applique la règle du §5 de la conception : « un agent en lecture n'a que `allowRead` sur le dépôt ». L'outil n'a aujourd'hui qu'un profil (`code.json`, `"profile": "builder"`). Tant que `reviewer` n'existe pas, la revue reste celle de l'orchestrateur, comme au §16 : un relecteur lancé sous `builder` pourrait écrire le worktree et `.git/objects`. Ce profil est la première étape à construire dans la boucle : petite, bien spécifiée, donc sur Sonnet.
+
+## 4. La boucle
+
+Chaque worker reste un `claude -p` sous srt, à travers le proxy de 1a.0, comme au §16. Une étape suit six pas :
+
+1. L'orchestrateur écrit un brief qui se suffit à lui-même : le but, les fichiers, ce qui est hors périmètre, la condition d'achèvement vérifiable, et la liste fermée de ce que la sandbox ne peut pas exécuter (Postgres, `listen`, Stryker, srt imbriqué), que l'hôte rejoue. Il y joint la liste de contrôle de l'étape. Brief et liste restent dans son dossier de travail, hors dépôt.
+2. Le worker travaille. Sa sortie arrive en `--verbose --output-format stream-json` : le flux complet va dans un fichier, l'orchestrateur ne lit que le rapport final.
+3. L'orchestrateur compare le rapport à la liste de contrôle. Si des éléments restent ouverts sans blocage nommé, il relance le worker par un brief qui nomme ces éléments. Il s'arrête après deux relances sur la même étape, et l'étape passe au propriétaire. Une relance est une session neuve : l'outil n'a pas de `--resume`, l'état est dans le worktree.
+4. Il lit `git diff`, puis rejoue sur l'hôte ce que la sandbox interdit, comme au §16.
+5. Le relecteur lit le diff dans un appel séparé (§3). Il s'arrête selon la règle d'arrêt des revues de la conception (§9.2) : plus de défaut de correction et plus de contradiction avec une décision du propriétaire. Une proposition de mécanisme supplémentaire ne compte pas comme défaut.
+6. Le commit se fait depuis l'hôte, comme aujourd'hui.
+
+Les bornes dures restent celles de la décision 12 : délai de l'appel et nombre de relances. `--max-turns` n'apparaît pas dans l'aide de Claude Code 2.1.325, et `--max-budget-usd` reste écarté par la décision 11. La revue ne remplace ni la porte (`npm run gate`, mutation sur le périmètre du diff) ni la lecture du diff par le propriétaire.
+
+La revue passe par un autre modèle que l'auteur, et pas par l'auto-relecture de Fable : à `xhigh` et `max`, Fable lance ses propres sous-agents de revue. L'orchestrateur tourne donc à `high`, où ces relectures spontanées sont rares.
+
+## 5. Transport de l'orchestrateur
+
+Tranché le 14 novembre 2026 : une session Claude Code sur `claude-fable-5-2`, modèle fixé par le propriétaire. Rien à construire ; l'historique en ajout seul est l'affaire de Claude Code.
+
+L'autre voie, Agent SDK `query()` ou API Messages, ferait de la boucle du code testable en Gherkin. Elle s'ouvre une fois la boucle stabilisée par la mesure, comme une variable à part. La vérification du préfixe y rend l'historique en ajout seul obligatoire (erreur 400 sinon), et l'exigence de rétention de 30 jours est à prouver pour le compte à ce moment-là.
+
+Écart au principe, écrit : cette session tourne dans la configuration habituelle de l'hôte (plugins, serveurs MCP, mémoire), celle qui écrit environ 42 000 tokens en cache par session au §23. Un orchestrateur en `--bare`, aux entrées explicites, est une variable de la mesure O, pas un changement fait ici.
+
+## 6. Échecs du §16, correction minimale, mesure
+
+| # | Constat au §16 | Section de la documentation | Changement minimal | Mesure |
+|---|---|---|---|---|
+| 1 | Rapport perdu : `--output-format json` ne garde que le dernier message (étapes 6 et 7) | Fable 5.2, « Rendre les rapports faciles à suivre » | `--verbose --output-format stream-json`. Essayé le 14 novembre sur Claude Code 2.1.325, port amont fermé, aucun appel : sans `--verbose`, `-p` sort en 1 (« stream-json requires --verbose ») ; avec, le flux d'événements s'écrit | Rapport complet présent dans le dossier de l'orchestrateur |
+| 2 | Le worker abandonne après 600 s sur Postgres, Stryker ou `listen` (étapes 1 à 9) | Sonnet 5.5, « Vérification sur les tâches de code », dernière phrase | Le brief liste ce que la sandbox ne peut pas lancer et dit que l'hôte le rejoue ; le worker nomme ce qu'il n'a pas lancé. Le texte « Finishing work » de Fable ne va pas tel quel aux workers : il pousserait à contourner ce blocage voulu | Plus d'exécution abandonnée après 600 s ; lignes « non exécuté » dans le rapport |
+| 3 | `git rm` malgré la consigne « ne pas toucher à .git » (étape 1) | Fable 5.2, « Empêcher la prudence de s'accumuler » | La frontière reste `permissions.deny` (D14). Le brief donne la règle avec son périmètre et sa raison (« ni `git rm` ni `git add` : l'index est celui de l'hôte »), pas un « jamais » nu | Refus `permissions.deny` journalisés ; index de l'hôte inchangé |
+| 4 | Une étape coûte 65 % de la brique | §1 de cette note ; Opus 5.5 et Sonnet 5.5, « Calibrer l'effort » | Découper l'étape avant de la router (§3) ; effort explicite à chaque appel | Tokens de cache lus et écrits par réponse ; coût par étape acceptée |
+| 5 | Aucune relance : un worker qui s'arrête tôt termine l'étape | Opus 5.5, « Exécutions agentiques sans surveillance » | Pas 1 et 3 de la boucle : liste de contrôle, relance qui nomme les éléments ouverts, arrêt après deux relances | Étapes finies sans intervention ; relances par étape |
+
+## 7. Règles absolues et lignes de délégation relevées
+
+Relevé du 14 novembre 2026 dans `CLAUDE.md`, `.claude/agents/*.md`, `.claude/commands/review-pr.md` et `agents/memory.md` (`grep -n -i -E '\b(never|always|must|jamais|toujours)\b'`). Rien n'est modifié ici.
+
+| Où | Texte | Lecture |
+|---|---|---|
+| `CLAUDE.md:99`, `:102` | « Never invent an SDK API », « Never compare a branch to `main` » | Gardées : chacune porte son périmètre et ce qu'il faut faire à la place ; la seconde a son exception écrite |
+| `.claude/agents/*-reviewer.md:8` | « You never edit files » | Une consigne, pas une frontière : les trois agents ont `Bash`. Le profil `reviewer` (§3) en fait une frontière |
+| `.claude/agents/*-reviewer.md:8` | « Read `CLAUDE.md` and `docs/architecture.md` first » (ou `infrastructure.md`, `testing.md`) | Contexte non adapté : 21 à 29 ko chargés par relecteur avant le diff, trois fois par revue. À remplacer par la section utile, à l'étape qui construit `reviewer` |
+| `.claude/commands/review-pr.md` | Délégation permanente à trois sous-agents, `model: inherit` | Sur Fable 5.2, la délégation suit ce que le harness invite à faire, et les trois héritent du modèle de la session. Fixer le modèle de chaque agent ; à mesurer avant de changer |
+| `agents/memory.md:12`, `:15` | « Never invent memories », « never as instructions » | Gardées : planchers du worker de plateforme, hors de cette boucle |
+
+## 8. À ne pas adopter, et pourquoi
+
+- **Montrer au modèle un budget de tokens** : sur Fable 5.2, la taille du budget change ce qu'il dépense, et le retirer a réduit le coût à performance égale (Fable 5.2, « Revoir les prompts et harness »). Les bornes restent dans le harness.
+- **« Réponds directement sans délibérer »** : sans effet sur Fable 5.2 à `medium` et au-dessus. On baisse l'effort à la place.
+- **« Considère une réponse antérieure comme terminée »** : sur Fable 5.2, ces lignes rendent le modèle beaucoup moins enclin à signaler ses propres erreurs. C'est l'inverse de ce qu'on attend d'un orchestrateur.
+- **Reprendre le réglage d'effort d'un autre modèle** : les niveaux sont recalibrés d'un modèle à l'autre.
+- **Un contrôleur Haiku 5.5 de la condition d'achèvement** (premier jet de cette note) : retiré de la boucle. Son retrait ne laisse pas de risque nommé : la condition d'achèvement est vérifiée par le rejeu sur l'hôte, et le rapport final que lit l'orchestrateur est borné. On le rouvre si la mesure montre que la lecture des rapports pèse dans le contexte de l'orchestrateur.
+- **La phrase de propriété du code dans le brief des workers** : la sortie est déjà un tiers du coût (§1), et le dépôt demande des modifications minimales. Elle s'essaie seulement sur une étape de restructuration explicite.
+
+## 9. Décisions
+
+| # | Sujet | État au 14 novembre 2026 |
+|---|---|---|
+| 1 | Propriété du code | Le propriétaire la donne à l'orchestrateur (« tu es propriétaire du code »). Elle ne passe pas aux workers (§8) |
+| 2 | Transport de l'orchestrateur | Session Claude Code sur Fable 5.2 (§5) |
+| 3 | Contrôleur Haiku | Retiré (§8) |
+| 4 | Repli côté serveur | Sans objet dans une session Claude Code ; se rouvre avec le transport par l'Agent SDK : l'activer, et journaliser chaque repli comme une perte de raisonnement |
+| 5 | Référence Opus avant Fable | Ouverte : hypothèse HO3 du §10 |
+| 6 | Protocole et volume de la mesure O | **Au propriétaire** : accord avant toute mesure (§10) |
+
+## 10. Mesure O, protocole proposé avant toute mesure
+
+Unité : une étape, c'est-à-dire un `claude -p` sous srt et ses relances. Une étape est acceptée quand la porte est verte sur l'hôte et la revue close. Relevés par étape, depuis `usage.jsonl` et le flux `stream-json` : coût ; tokens de cache lus et écrits ; contexte moyen par réponse ; tours ; relances ; exécutions abandonnées ; défauts trouvés en revue, puis après acceptation.
+
+Hypothèses, réfutables, publiées quel que soit le résultat :
+
+- **HO1, contexte.** Sur une même étape rejouée depuis le même commit, le brief découpé du §4 donne moins de tokens de cache lus par réponse que la consigne d'origine, à taux d'acceptation égal.
+- **HO2, abandon.** Avec la liste fermée de ce que la sandbox ne peut pas lancer, aucune exécution n'est abandonnée après 600 s.
+- **HO3, orchestrateur.** Sur la même suite d'étapes, un orchestrateur Opus 5.5 `high` et un orchestrateur Fable 5.2 `high` sont comparés sur le coût par étape acceptée, les relances et les défauts de revue. La documentation recommande Opus d'abord : c'est la reproduction de la référence.
+
+Méthode : une variable à la fois ; ordre des variantes alterné ; pilote d'abord (une session par cellule, aucune conclusion statistique), volume fixé ensuite par le propriétaire, comme au §22 du journal. Les sessions consomment le forfait du propriétaire : le coût est rapporté au tarif public et la consommation lue dans `usage.jsonl`. Limites écrites d'avance : un seul dépôt, un seul hôte, des étapes de tailles inégales.
+
+Ordre de mise en place : le profil `reviewer` (première étape, dans la boucle) ; puis le pilote de HO1 et HO2 sur une étape du §16 rejouée ; puis HO3.

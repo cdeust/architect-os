@@ -1194,3 +1194,26 @@ Côté srt : une sandbox neuve, profil `worker`, réseau vers le seul port du mo
 - Recherche : protocole commité avant les mesures, hypothèse réfutée publiée telle quelle, données et analyse versionnées, une commande par étape, graine fixe.
 - SSDLC : aucune dépendance ajoutée, image Docker épinglée par digest ; le banc ne lit aucune clé, la clé du broker est factice et jetable ; le code de production est inchangé, seul le code de test est partagé.
 - Opérationnel : aucun token dépensé, aucune donnée humaine, IRB sans objet.
+
+## 31. Boucle d'orchestration : note de conception, coût du §16 par poste, 14 novembre 2026
+
+**Cadre du propriétaire.** La boucle d'orchestration suit le principe de la plateforme : un découpage qui sert la sécurité des données et un contexte adapté à chaque tâche. La note est [`orchestration-fable-5-2.md`](orchestration-fable-5-2.md) ; aucun essai n'a tourné, son protocole (mesure O) attend l'accord du propriétaire.
+
+**Coût du §16 recalculé par poste.** Coût d'un appel = sortie × prix de sortie + cache lu × prix de lecture + cache écrit × prix d'écriture, par million de tokens : Opus 5.5 : 20 $, 0,20 $, 8 $ ; Sonnet 5.5 : 10 $, 0,10 $, 4 $. Les prix d'entrée, de sortie et de lecture d'Opus 5.5 viennent du guide de migration vers Fable 5.2 ; le prix d'écriture et ceux de Sonnet 5.5 sont déduits. Avec eux, chacune des douze lignes du tableau du §16 redonne son coût au centime, et la somme fait 20,82 $ pour 20,83 $ relevés.
+
+| Poste | Brique entière | Étape 2 (Opus) |
+|---|---|---|
+| Sortie | 6,91 $, 33 % | 4,20 $, 31 % |
+| Cache lu | 8,23 $, 40 % | 6,49 $, 48 % |
+| Cache écrit | 5,69 $, 27 % | 2,91 $, 21 % |
+
+Lecture : deux tiers du coût de la brique sont du contexte. L'étape 2 relisait 216 000 tokens par réponse en moyenne, contre 65 000 à 83 000 pour les étapes 1, 3, 4 et 5. Au tarif de Sonnet, ses tokens auraient coûté 6,80 $ : le modèle n'explique que la moitié de son coût, le reste vient d'une étape trop large.
+
+**Essayé, sans appel au modèle** (Claude Code 2.1.325, `--bare -p`, clé factice, port amont fermé). Sans `--verbose`, `--output-format stream-json` sort en 1 : « When using --print, --output-format=stream-json requires --verbose ». Avec `--verbose`, le flux d'événements s'écrit. La correction du rapport perdu aux étapes 6 et 7 du §16 est donc `--verbose --output-format stream-json`.
+
+**Échec de méthode.** Le premier jet de la note proposait `stream-json` sans l'avoir lancé, et un contrôleur Haiku dont le retrait ne laissait aucun risque nommé. Le premier est corrigé par l'essai ci-dessus, le second est retiré.
+
+**Trois piliers.**
+- Recherche : sept pages de documentation gardées hors dépôt avec leurs empreintes, revérifiées ; calcul refaisable à la main depuis le tableau du §16 ; protocole proposé avant toute mesure.
+- SSDLC : aucun code ni dépendance modifiés ; la boucle n'ajoute ni processus natif ni secret, et garde R-1 et R-2 ; le profil `reviewer` en lecture seule est prévu comme première étape, avec ses scénarios.
+- Opérationnel : aucun token dépensé, aucun secret lu, aucune donnée humaine, IRB sans objet.
