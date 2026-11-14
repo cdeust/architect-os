@@ -183,3 +183,28 @@ Hypothèses, réfutables, publiées quel que soit le résultat :
 Méthode : une variable à la fois ; ordre des variantes alterné ; pilote d'abord (une session par cellule, aucune conclusion statistique), volume fixé ensuite par le propriétaire, comme au §22 du journal. Les sessions consomment le forfait du propriétaire : le coût est rapporté au tarif public et la consommation lue dans `usage.jsonl`. Limites écrites d'avance : un seul dépôt, un seul hôte, des étapes de tailles inégales.
 
 Ordre de mise en place : le profil `reviewer` (première étape, dans la boucle) ; puis le pilote de HO1 et HO2 sur une étape du §16 rejouée ; puis HO3.
+
+### Pilote P1, pré-enregistré le 14 novembre 2026, avant tout appel de mesure
+
+**Référence reproduite.** `npm run check` sur l'hôte, worktree `gate-1a`, code de `a32da1f` : 1 021 scénarios, 5 713 steps, tous verts, 2 min 14.
+
+**Constats de mise en route**, appels d'essai hors mesure (Claude Code 2.1.325, 0,04 $ au total) :
+
+- L'outil part depuis un lanceur `<repo>/.claude/worktrees/gate-1a-launcher`, détaché sur `a32da1f`, `npm ci --ignore-scripts` : le checkout principal (`main`) n'a pas encore `packages/sandbox`.
+- `--permission-mode bypassPermissions`, la commande du §16, ne suffit plus : Claude Code écrit « Permission mode forced to default — CLAUDE_CODE_SUBPROCESS_ENV_SCRUB is set » et refuse chaque commande Bash qui demande une approbation (`npx tsc --version` refusé, 4 refus sur 4). Avec `--allowedTools Bash Edit Read`, les mêmes commandes passent. L'outil de code tel que documenté ne peut donc plus rien exécuter ; la correction de fond est une règle `allow` dans le profil `builder`, avec son scénario, à faire comme étape.
+- Le cache s'écrit maintenant à cinq minutes (`ephemeral_5m`), plus à une heure : le prix d'écriture déduit au §1 vaut pour le 30 octobre.
+
+**Les consignes d'origine du §16 sont perdues** (dossier de travail de l'orchestrateur, hors dépôt ; cherchées dans les journaux de session, introuvables). HO1 ne peut pas rejouer une étape du §16 à l'identique. Le pilote compare donc deux consignes pour une même étape neuve.
+
+**Étape.** Le profil `reviewer` (§3) : `packages/sandbox/profiles/reviewer.json`, ses scénarios de fichier descriptif, et un scénario srt réel où un processus lit un fichier du worktree et ne peut pas y écrire.
+
+| Variante | Consigne |
+|---|---|
+| A, style du §16 | Le but, les livrables, la condition d'achèvement, « ni `git add` ni `git rm` », « lance `npm run check` » |
+| B, brief du §4 | Le même but, les mêmes livrables et la même condition, plus : les fichiers à lire, le hors périmètre, la liste fermée de ce que la sandbox ne peut pas lancer et que l'hôte rejoue, les commandes exactes de vérification, la liste de contrôle à rendre cochée, le format du rapport |
+
+Les deux : même commit de départ, un worktree jetable chacune (`orch-a`, `orch-b`), `claude-sonnet-5-5`, `--effort medium`, `--allowedTools Bash Edit Read`, `--verbose --output-format stream-json`, arrêt forcé à 1 500 s, A puis B, aucune relance dans la mesure. La variante A est ma reconstruction du style du §16, pas une consigne d'origine : limite écrite d'avance.
+
+**Acceptation, notée par code, la même pour les deux**, sur l'hôte dans le worktree de la variante : `npm run check` sort en 0 ; `reviewer.json` se charge au schéma strict ; son `allowWrite` ne contient que `${config}` et `${tmp}` ; son réseau est exactement `127.0.0.1:${authProxyPort}` ; son `denyRead` contient celui de `builder` ; un scénario de `features/sandbox/` lance le profil sous vrai srt et montre l'écriture refusée.
+
+**Relevés** : ceux du §10. HO1 porte sur les tokens de cache lus par réponse ; HO2 sur l'absence d'exécution abandonnée. Une session par cellule : aucune conclusion statistique, le pilote sert à fixer le volume.
