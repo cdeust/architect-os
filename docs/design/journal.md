@@ -2042,3 +2042,23 @@ Un hôte, un passage, une image : cela établit le mécanisme, rien de plus.
 - Recherche : mesure avant conception, script et résultat dans le dépôt ; ce que l'essai ne montre pas est écrit ; les hypothèses restantes sont nommées avant d'être mesurées.
 - SSDLC : modélisation des menaces écrite avant le code ; un risque accepté et numéroté ; image désignée par empreinte ; aucune dépendance ajoutée.
 - Opérationnel : privilège minimum du conteneur (aucun réseau, lecture seule, non root, aucune capacité) ; la VM d'essai est celle du projet, arrêtée après usage ; IRB sans objet.
+
+## 49. Docker sans root devient un livrable ; cibles du mode Docker, 15 novembre 2026
+
+Le §48 a été poussé (`f49708e`) : porte de l'hôte verte (1 624 scénarios, aucun mutant dans le périmètre), CI verte sur Linux et macOS.
+
+J'avais présenté R-14 (en mode Docker, le compte de la gateway pilote un démon qui vaut root sur l'hôte) comme un risque accepté, avec une réduction « prévue, non construite ». Réponse du propriétaire : « Il restera le Docker non root du coup à finir. Docker est à destination de Linux et Windows WSL2. srt reste la solution privilégiée, et Docker l'alternative au cas où. »
+
+**Ce qui change au plan.**
+- R-14 n'est plus accepté comme état final : 1b.6b se termine avec Docker sans root, et le mode Docker n'est pas livré avant. Avec un démon qui tourne sous le compte de la gateway, une gateway compromise ne vaut que ce compte, comme sous srt.
+- Hôtes du mode Docker : Linux, et Windows par WSL2 avec Docker installé dans la distribution. L'intégration de Docker Desktop n'est pas mesurée.
+- srt reste le moyen privilégié partout où il tourne.
+
+**À mesurer avant de concevoir le sans-root**, comme le relais l'a été (§48) : les bornes de mémoire et de processus, que Docker ignore sans cgroup v2 délégué ; la lecture de la racine montée et la connexion à la socket du relais par l'utilisateur du conteneur, traduit vers un autre compte de l'hôte ; le refus de démarrer devant un démon avec root, qui fermerait R-14 par construction.
+
+**En cours.** Le premier pas de 1b.6b (l'adaptateur des processus de la plateforme, avec un faux client Docker) est dans la boucle.
+
+**Trois piliers.**
+- Recherche : mesure annoncée avant la conception, avec ses trois questions.
+- SSDLC : élévation de privilèges, un risque que j'avais classé accepté redevient une exigence ; rien n'est livré en mode Docker avant sa preuve.
+- Opérationnel : privilège minimum du démon lui-même ; IRB sans objet.
