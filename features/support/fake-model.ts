@@ -1,4 +1,5 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { createServer as createTlsServer } from 'node:https';
 import type { AddressInfo } from 'node:net';
 
 /**
@@ -96,11 +97,16 @@ function events(turn: { tool: string; input: unknown } | { text: string }, id: n
  */
 export async function startFakeModel(
   script: readonly ModelTurn[],
-  options: { readonly cycle?: boolean; readonly host?: string } = {},
+  options: {
+    readonly cycle?: boolean;
+    readonly host?: string;
+    /** Served over HTTPS with this key and certificate: the broker of the platform refuses an upstream in clear. */
+    readonly tls?: { readonly key: string; readonly cert: string };
+  } = {},
 ): Promise<FakeModel> {
   const requests: ModelRequest[] = [];
   let next = 0;
-  const server: Server = createServer((req, res) => {
+  const answer = (req: IncomingMessage, res: ServerResponse): void => {
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => chunks.push(chunk));
     req.on('end', () => {
@@ -137,12 +143,15 @@ export async function startFakeModel(
         res.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
       res.end();
     });
-  });
+  };
+  const server: Server =
+    options.tls === undefined ? createServer(answer) : createTlsServer(options.tls, answer);
   // The loopback, unless a container must reach it inside a Linux VM (baseline/overhead.ts).
   await new Promise<void>((resolve) => server.listen(0, options.host ?? '127.0.0.1', resolve));
   const port = (server.address() as AddressInfo).port;
   return {
-    url: `http://127.0.0.1:${port}`,
+    // Over HTTPS the certificate names localhost.
+    url: options.tls === undefined ? `http://127.0.0.1:${port}` : `https://localhost:${port}`,
     port,
     requests,
     close: () => new Promise((resolve) => server.close(() => resolve())),

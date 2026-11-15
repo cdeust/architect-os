@@ -1946,3 +1946,24 @@ Ma première réponse proposait de recopier les classes de défauts dans les pro
 - Recherche : le mécanisme redondant et les survivants qui l'ont désigné sont consignés ; le défaut trouvé au rejeu est décrit avec sa cause ; mutation exécutée ; le pas de réflexion est inscrit avec sa revue de littérature comme première étape.
 - SSDLC : élévation, srt reste dans son paquet, la règle n'est plus contournée ; déni de service, l'arrêt est borné et tue ce qui reste, un envoi vers un enfant fermé ne fait plus tomber le processus ; répudiation, une task est ouverte au nom du client configuré, affirmé par scénario ; aucune dépendance ajoutée.
 - Opérationnel : un enfant mort arrête la gateway avec le code 1 ; les deux enfants sont fermés après les ports ; aucun secret dans les scénarios (jeton et clé factices) ; IRB sans objet.
+
+## 45. Brique 1b.6a terminée : la gateway lancée par son fichier d'entrée, ses vrais enfants, de vraies sandboxes, 15 novembre 2026
+
+Le §44 a été poussé (`fe53f0d`) : porte de l'hôte verte (1 623 scénarios = 1 602 + 21 ; 110 mutants, 84 tués, 22 délais dépassés, 4 erreurs d'exécution, 0 survivant), CI verte sur Linux et macOS, run retrouvé par le SHA.
+
+`features/sandbox/gateway-entry.feature` est la sortie que le plan fixe à 1b.6a (§8) : rien n'y est composé par un test. Le processus est `node gateway/dist/src/serve.js`, lancé avec sa seule configuration, sept variables, et rien d'autre de l'environnement du test. Il lance `data` et le broker comme ses enfants, le module memory et le worker de memory-agent sous vrai srt, et sert un vrai client MCP en HTTP.
+
+**Ce que le scénario joue.** Un client appelle `remember`, puis `recall` : le second appel rend comme preuve la mémoire que le premier a écrite, avec son identifiant, ce qui montre que `data` a tenu son état entre deux tasks. Le faux modèle reçoit quatre demandes, toutes avec la clé du broker, jamais avec un jeton de task. La sortie standard du processus porte le journal d'audit des deux appels, au nom du client configuré. Un appel sans jeton est refusé `UNAUTHORIZED`. Sur SIGTERM, le processus rend 0 sans une ligne d'échec, et plus rien n'écoute sur son port ni sur celui du broker.
+
+**Le modèle en HTTPS.** Le broker refuse un amont en clair. Le faux modèle est servi en HTTPS avec un certificat auto-signé créé par `openssl` pour le scénario et supprimé avec son dossier ; l'autorité est remise au broker seul, par `NODE_EXTRA_CA_CERTS`, la variable que `readNativeConfig` lui réserve (§42). Vérifié hors dépôt avec les deux `openssl` du poste (OpenSSL 4.0.3 et le LibreSSL 3.3.6 du système) : Node accepte le certificat avec l'autorité, le refuse sans (`DEPTH_ZERO_SELF_SIGNED_CERT`).
+
+**Mesures et contrôles.** Sur l'hôte : 1 scénario, 12 steps, 4 s, trois fois de suite. Après les rejeux, aucun processus de la gateway, de `data`, du broker, du module ou du worker ne reste (`pgrep`). Contrôle négatif, fait à la main : sans l'autorité dans la configuration, le scénario échoue au premier appel ; fichier restauré ensuite. Le constat que la revue du §44 avait laissé ouvert (les options que reçoit le lanceur srt n'étaient lues par aucun scénario) est fermé par ce chemin : de vraies sandboxes démarrent avec elles.
+
+**Limites dites.** Le scénario tourne sur le stockage qui ne garde rien (`DATABASE_URL=memory`) et devant un modèle scripté : le même chemin contre Postgres et contre l'API réelle n'a pas été joué par ce fichier d'entrée. Ce commit n'a pas eu de revue indépendante : il n'ajoute que le scénario, son support et la documentation ; le contrôle négatif tient lieu de vérification qu'il échoue sans ce qu'il nomme.
+
+**Bilan de 1b.6a.** Quatre pas de code et cette preuve. Sessions de construction : 0,27 $, 0,52 $, 0,61 $, 1,12 $, soit 2,52 $. Sessions de revue : 1,64 $, 1,84 $, 3,69 $, 2,40 $, soit 9,57 $. La suite passe de 1 478 à 1 624 scénarios. Les retraits (1b.6b à 1b.6d) peuvent commencer : la plateforme démarre par son chemin natif, prouvé.
+
+**Trois piliers.**
+- Recherche : le scénario se rejoue en une commande (`npx cucumber-js --profile replay features/sandbox/gateway-entry.feature`, après `npx tsc -b`) ; le contrôle négatif et ses conditions sont consignés ; les limites sont écrites.
+- SSDLC : fuite d'information, la clé du broker n'atteint que le modèle, jamais un worker ; l'autorité de certificat ne va qu'au broker ; usurpation, un appel sans jeton n'ouvre rien ; clé, jeton et certificat sont factices et créés pour le scénario ; aucune dépendance ajoutée (`openssl` est un outil du poste et des images de CI, pas du dépôt).
+- Opérationnel : le processus ne reçoit que sa configuration déclarée ; arrêt propre sur SIGTERM, aucun processus laissé ; IRB sans objet.
