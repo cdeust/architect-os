@@ -2008,3 +2008,37 @@ Le §46 a été poussé (`e609897`, avec `9ed4e81`, la preuve de bout en bout) :
 - Recherche : les deux erreurs sont consignées avec les mots du propriétaire ; les faits sont rejouables (fermeture d'imports de `task-serve.ts`, recherche des utilisateurs de l'adaptateur Docker) ; ce qui n'est pas fait est dit.
 - SSDLC : aucun code changé ; la proposition nomme la modélisation des menaces de l'adaptateur Docker sur le chemin natif comme préalable à tout code.
 - Opérationnel : aucun retrait ; le seul chemin sans srt reste en place ; IRB sans objet.
+
+## 48. Décision 18 : Docker d'abord sur le chemin natif ; l'essai du relais par socket Unix ; la conception avant le code, 15 novembre 2026
+
+Le §47 a été poussé (`34cc72f`) : porte de l'hôte verte (1 624 scénarios, aucun mutant dans le périmètre), CI verte sur Linux et macOS.
+
+**Décision du propriétaire.** « J'ai réinitialisé mon quota, donc tu peux faire la partie Docker et refaire du coup la brique 1b.6b. » Inscrite comme décision 18 : une architecture, deux moyens d'isolation ; Docker branché et prouvé sur le chemin natif d'abord, le retrait de la première réalisation ensuite ; memory et Docker restent.
+
+**La question à laquelle il fallait répondre avant de concevoir.** Sous srt, un module ne joint que le port de rappel de la gateway et un worker que le port du broker, sur la boucle locale de l'hôte. Un conteneur n'a pas la boucle locale de son hôte. Lui ouvrir un réseau Docker lui ouvrirait plus qu'un port (les autres conteneurs du réseau, les services de l'hôte qui écoutent sur la passerelle). La conception annonçait déjà la voie (§6 : « joindre le broker sans réseau ») sans l'avoir essayée.
+
+**Essai, hors production** (`bench/docker-bridge/trial.sh`, rejouable en une commande sur un hôte Linux avec Docker). Un conteneur lancé avec `--network none` et les options durcies de l'adaptateur, un dossier monté en lecture seule qui porte une socket Unix, et dans le conteneur un relais de `127.0.0.1:4100` vers cette socket. Linux 6.8.0-64 aarch64, Docker 28.3.3, dans la VM Colima `aos-bench` de la mesure A, démarrée pour l'essai puis arrêtée ; le contexte Docker du poste est resté celui d'avant (vérifié).
+
+| Ce que le conteneur a tenté | Résultat |
+|---|---|
+| Requête HTTP vers `127.0.0.1:4100` | `200 pong`, de l'écouteur de l'hôte |
+| Ses interfaces réseau | `lo` seule |
+| `1.1.1.1:80` | `ENETUNREACH` |
+| La passerelle Docker de l'hôte, `172.17.0.1:22` | `ENETUNREACH` |
+| Écrire dans le dossier monté | `EROFS` |
+| Écrire dans son image | `EROFS` |
+
+Un hôte, un passage, une image : cela établit le mécanisme, rien de plus.
+
+**Conception, écrite avant tout code** (`platform-v3-srt.md`, §6, « Docker sur le chemin natif »). La gateway, `data` et le broker restent natifs ; seuls les modules et les workers passent en conteneur ; les mêmes gabarits pilotent srt et Docker. Aucun réseau, un seul port relayé par une socket Unix propre à chaque sandbox ; la racine de la plateforme montée en lecture seule au même chemin, donc pas d'image à reconstruire ni d'écart de version entre la gateway et ses sandboxes ; une image de `node` seul, désignée par son empreinte ; un canari au démarrage ; arrêt par `docker rm -f`. Hôtes : Linux (sous macOS une socket de l'hôte ne se monte pas dans la VM de Docker, et srt y tourne).
+
+**Modélisation des menaces** (même section, table STRIDE propre à ce mode). Un point n'a pas de réponse dans ce mode et devient un risque accepté, R-14 : le compte de la gateway pilote le démon Docker, ce qui équivaut à root sur l'hôte. Sous srt, une gateway compromise ne vaut que son uid ; sous Docker, elle vaut l'hôte. Réduction prévue, non construite : Docker sans root, ou Podman.
+
+**Plan refait.** 1b.6b : l'adaptateur, le champ de configuration `GATEWAY_SANDBOX` (sans valeur par défaut), la gateway qui lance ses sandboxes par l'un ou l'autre ; sortie : le bout en bout de 1b.6a rejoué avec Docker sur un hôte Linux, et le test d'évasion rejoué pour ce mode. 1b.6c : le retrait de la première réalisation, avec la liste de ce qui ne part pas et l'obligation de présenter les fichiers au propriétaire avant.
+
+**Hypothèses à mesurer dans la brique, pas encore établies.** Les dépendances installées sur l'hôte tournent dans le conteneur (même système, même architecture) ; l'utilisateur non root du conteneur lit la racine montée ; le binaire de l'agent tourne avec des `tmpfs` pour seule écriture ; le coût d'un démarrage. La preuve de bout en bout ne peut pas tourner sur ce poste (macOS) : elle tournera en CI sur Linux, dans un jeu de scénarios à part, puisque la machine macOS de CI n'a pas Docker.
+
+**Trois piliers.**
+- Recherche : mesure avant conception, script et résultat dans le dépôt ; ce que l'essai ne montre pas est écrit ; les hypothèses restantes sont nommées avant d'être mesurées.
+- SSDLC : modélisation des menaces écrite avant le code ; un risque accepté et numéroté ; image désignée par empreinte ; aucune dépendance ajoutée.
+- Opérationnel : privilège minimum du conteneur (aucun réseau, lecture seule, non root, aucune capacité) ; la VM d'essai est celle du projet, arrêtée après usage ; IRB sans objet.
