@@ -1738,3 +1738,37 @@ Tout ce qui précède passe par des fonctions documentées : une personne lance 
 - Recherche : les trois inconnues du §37 levées par mesure sur l'application ; trois tours réels, délais et comptes relevés au registre ; essai rejouable (`bench/evidence-remote`) ; ce qui n'est pas mesuré est dit.
 - SSDLC : serveur lié à la boucle locale, refus sans jeton vérifié à travers le tunnel, jeton du tunnel au trousseau ; même vérificateur qu'au §37, donc mêmes refus ; pas de scénario ni de mutation, l'essai étant hors production : prévu à la brique S.4.
 - Opérationnel : Science ne voit que le guichet ; aucune session démarrée par programme ; questions sans code ni secret, par un tiers (ngrok) accepté par le propriétaire pour l'essai. IRB sans objet.
+
+## 40. Brique 1b.6 ouverte : décision de retrait, découpage, lanceur des natifs, 15 novembre 2026
+
+**Décision du propriétaire, 15 novembre 2026 :** « On peut retirer l'ancienne pile à conteneurs. » La preuve Windows est enregistrée sous WSL2 (§38) ; Windows natif n'est pas envisagé (§39, décision 17).
+
+**Le retrait ne peut pas venir en premier.** `gateway/src/main.ts` ne lance que le chemin d'origine (le service memory joint en HTTP par `MEMORY_URL`) ; `composeRouting` n'est composé que par les supports de test. Découpage écrit dans [`platform-v3-srt.md`](platform-v3-srt.md), §8 : 1b.6a câblage natif de la gateway, 1b.6b retrait du chemin d'origine, 1b.6c retrait de `compose.yaml` et des `Dockerfile`, 1b.6d docs. Rien ne se retire avant la preuve de 1b.6a.
+
+### Premier pas de 1b.6a : lancer les natifs
+
+`packages/sandbox/src/native-launcher.ts` : le broker et `data`, que la conception laisse hors de srt (§2), lancés sur une liste fermée d'un nom, d'un dossier de travail, d'un argv et de variables ; rien d'hérité de l'hôte, pas de shell. Rien ne s'en sert encore.
+
+**Échec de conception de l'orchestrateur, corrigé avant livraison.** La première consigne demandait un adaptateur du port `SandboxRunner`. Construit dans l'outil (131 s, 0,27 $ ; revue 0,77 $), vert, sans survivant, commité en local. À la relecture, après le rappel du propriétaire (« n'accepte en code que ce que tu accepterais de maintenir ») : un lanceur qui n'isole rien se présentait sous le type des sandboxes, et pouvait être passé à l'hôte des modules ou des workers sans que le compilateur proteste ; l'appelant répétait l'argv pour qu'on vérifie qu'il était le déclaré ; l'arrêt tuait le groupe d'emblée, alors que `data` tient une base. La revue ne pouvait pas le voir : elle jugeait le code contre la consigne. Commit local retiré, rien n'avait été poussé.
+
+Réécrit par l'orchestrateur, puis relu par une session de revue à qui le refus était dit (`npm run review`, 251 s, 0,87 $, `request_changes`) :
+
+| Constat de la revue | Correction |
+|---|---|
+| Le type distinct ne tenait qu'au lanceur : un enfant natif avait exactement la forme d'une `Sandbox`, donc restait accepté là où une sandbox est attendue. Vérifié par elle avec `tsc --strict` | L'enfant natif n'a ni `stop()` ni `stderr` : il a `close()`. Deux affectations marquées `@ts-expect-error` (enfant vers `Sandbox`, lanceur vers `SandboxRunner`) : le jour où l'une compile, `tsc -b` échoue |
+| Un enfant dont personne ne lit la sortie d'erreur se bloque une fois le tube plein et ne voit jamais la fin de son entrée ; `data` y écrit ses migrations | Le lanceur lit lui-même la sortie d'erreur et la remet à un journal avec le nom du processus. Scénario : 204 800 caractères de trois octets, aucun coupé, puis fin propre |
+| Le dossier de travail était choisi à chaque lancement, hors de la liste fermée | Il fait partie de la déclaration, absolu |
+| Les processus de test qui ne finissent pas sortaient du groupe du run | Chacun se borne à une minute ; le groupe est tué au nettoyage |
+| Le minuteur venait du module de l'outil de code | `timer.ts`, module neutre |
+| Un scénario préparait plus qu'il ne vérifiait | Chaque préparation a son assertion |
+
+`close()` ferme l'entrée de l'enfant, que le broker et `data` lisent comme le départ de leur parent, puis tue le groupe après un délai de grâce injecté. Mutation du fichier par Stryker, lancée à la main : 29 tués, 12 délais dépassés (un mutant qui casse une promesse bloque le scénario), 1 erreur d'exécution, 0 survivant.
+
+**Second défaut de consigne, corrigé avant construction.** L'étape suivante ouvrait chaque task au nom d'une constante, le cas d'usage ne transmettant pas l'identité authentifiée : le registre n'aurait pas su dire qui a ouvert quoi. La consigne demande maintenant que l'identité traverse.
+
+**Règle retenue.** Relire sa propre consigne comme une proposition à accepter ou refuser en revue, avant de la lancer : une revue qui juge le code contre la consigne ne voit pas les défauts de la consigne.
+
+**Trois piliers.**
+- Recherche : le défaut de conception est conservé ici, avec ce qu'il a coûté ; chaque règle du lanceur a un scénario sur de vrais processus ; mutation exécutée, pas estimée.
+- SSDLC : liste fermée copiée à la construction, environnement non hérité, frontière de types tenue par le compilateur (élévation : un contenu non fiable ne peut pas être lancé hors sandbox par confusion de type) ; aucune dépendance ajoutée.
+- Opérationnel : arrêt propre avant l'arrêt forcé ; aucun secret ; IRB sans objet.

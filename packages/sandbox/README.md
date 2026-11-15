@@ -83,6 +83,14 @@ Refus sans repli : srt absent, canari qui lit son fichier secret ou joint le por
 
 L'adaptateur Docker (`src/docker-runner.ts`) sert seulement là où srt n'est pas supporté, choisi par configuration, jamais par détection ni bascule : il reprend sans extension les options durcies de l'ancien runner de memory (lecture seule, aucune capacité, pas d'élévation, utilisateur non root, réseau d'exécution seul, mémoire et PID bornés), lance le client Docker dans son propre groupe de processus avec un environnement fermé, et à l'arrêt tue ce groupe et retire le conteneur par son nom. Sa preuve d'équivalence sur un vrai démon s'écrit au premier hôte réel qui en a besoin (§6). Toute sortie lue d'une sandbox passe par `readCapped` (`src/capped.ts`) : au-delà du plafond, `OUTPUT_TOO_LARGE`, et l'appelant arrête la sandbox.
 
+## Les natifs de la conception
+
+Le broker et `data` tournent hors de srt, enfants de la gateway (conception, §2, « Pourquoi quatre natifs »). `src/native-launcher.ts` les lance, et rien d'autre : une liste fermée, copiée à la construction, d'un nom, d'un dossier de travail, d'un argv et de variables. Rien n'est hérité de l'environnement de l'appelant, pas même `PATH` : le dossier et `argv[0]` sont des chemins absolus. Pas de shell.
+
+Ce n'est pas un adaptateur du port `SandboxRunner`, et c'est voulu : il n'isole rien. Ni le lanceur ni ses enfants n'ont les types du port (un enfant natif n'a pas de `stop()`), donc le compilateur les refuse là où une sandbox est attendue, l'hôte des modules ou celui des workers ; deux affectations marquées `@ts-expect-error` dans `features/steps/native-launcher.ts` le tiennent à chaque `tsc -b`. Aucun contenu non fiable ne passe par lui.
+
+`close()` ferme l'entrée de l'enfant, que le broker et `data` lisent comme le départ de leur parent : ils ferment leur écoute ou leur base et sortent. Un enfant encore là après le délai de grâce a tout son groupe de processus tué. Le lanceur lit lui-même la sortie d'erreur de l'enfant et la remet à un journal avec son nom : un enfant dont personne ne lit la sortie d'erreur se bloque une fois le tube plein, et ne verrait jamais la fin de son entrée. Pas de plafond de sortie : ces enfants parlent MCP à leur parent pendant toute la vie de la gateway.
+
 ## Risques acceptés (document, §4.2)
 
 | #   | Risque                                                                                                                                                                                                                                                                                                                                                                  | Pourquoi on vit avec                                                                        | Ce qui le borne                                                                                                            | On le rouvre si         |

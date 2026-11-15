@@ -7,3 +7,5 @@ export * from './capped.js';
 export * from './docker-runner.js';
 export * from './tool.js';
 export * from './auth-proxy.js';
+export * from './native-launcher.js';
+export * from './timer.js';

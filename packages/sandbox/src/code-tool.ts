@@ -20,6 +20,7 @@ import {
 import { SandboxError, type SandboxExit, type SandboxRequest, type SandboxRunner } from './port.js';
 import { SrtSandboxRunner, standardStreamsAreTerminals, type SrtRunnerOptions } from './srt-runner.js';
 import { authProxyOptions, loadTool, type Tool } from './tool.js';
+import { timer } from './timer.js';
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = resolve(PKG, '..', '..');
@@ -53,11 +54,8 @@ export interface CodeToolDependencies {
   readonly schedule?: (fire: () => void, ms: number) => () => void;
 }
 
-/** Le minuteur réel de la limite. */
-export const timer = (fire: () => void, ms: number): (() => void) => {
-  const handle = setTimeout(fire, ms);
-  return () => clearTimeout(handle);
-};
+/** Le minuteur réel de la limite (`timer.ts`). */
+export { timer };
 
 /** Une session de l'outil : identifiant lisible, proxy, sandbox, puis jeton révoqué et proxy fermé ; son code de sortie. */
 export async function runCodeTool(deps: CodeToolDependencies): Promise<number> {
