@@ -1982,3 +1982,29 @@ J'avais demandé au propriétaire s'il voulait voir sa lecture écrite au README
 - Recherche : hypothèse écrite avant la mesure ; point de comparaison nommé ; revue de littérature annoncée comme première étape, par le guichet des preuves.
 - SSDLC : sans objet, aucune ligne de code.
 - Opérationnel : sans objet ; IRB sans objet.
+
+## 47. Deux erreurs de l'orchestrateur dans le découpage de 1b.6, relevées par le propriétaire avant tout retrait, 15 novembre 2026
+
+Le §46 a été poussé (`e609897`, avec `9ed4e81`, la preuve de bout en bout) : portes de l'hôte vertes (1 624 scénarios), CI verte sur Linux et macOS pour les deux commits, runs retrouvés par SHA. La preuve de bout en bout passe donc aussi sur les deux machines de CI.
+
+1b.6a terminée, j'ai lancé un inventaire en lecture seule du retrait suivant (1b.6b) et je l'ai annoncé dans les mots de ma propre ligne de plan : retrait « du service memory d'origine » et de `docker-runner.ts`. Rien n'a été retiré.
+
+**Première correction du propriétaire.** « Bah non on peut pas supprimer la partie memory. Je pense qu'on s'est mal exprimé sur le 1b.6b dans ce cas. » Sa décision portait sur « l'ancienne pile à conteneurs » (§40). C'est moi qui, en découpant, y ai fait entrer `services/memory/src` et des fichiers du worker.
+
+**Seconde correction.** « Là où je me pose une question, c'est si on doit vraiment supprimer le container, si le container en question c'est Docker, ça reste l'alternative à srt pour des environnements dans lesquels srt n'est pas utilisable. » La conception le disait déjà (`platform-v3-srt.md`, §6 : srt par défaut, Docker seulement là où srt n'est pas supporté, par un champ de configuration explicite). Ma ligne rangeait `docker-runner.ts` parmi les retraits, contre ce paragraphe. Je ne l'avais pas relue contre le §6.
+
+**Faits relevés, en lecture seule.**
+- La fermeture d'imports du worker natif (`services/memory/worker/task-serve.ts`) : six fichiers de `services/memory/worker`. Le reste de `services/memory` (23 fichiers hors scénarios, dont `src/` entier) est la première réalisation du service, jointe en HTTP.
+- L'adaptateur Docker du port n'a qu'un utilisateur : cette première réalisation. Le processus natif ne connaît que srt.
+- Donc, sur un hôte où srt ne tourne pas, l'ancienne pile est aujourd'hui le seul chemin qui marche. La retirer maintenant l'aurait ôté. C'est la règle du mode additif de la brique 1b (§29), que mon découpage ne respectait plus une fois Windows ramené à WSL2 (décision 17) : j'avais conclu qu'aucun hôte sans srt ne restait à servir, ce que le propriétaire n'a jamais dit.
+
+**Ce qui change.** Les lignes 1b.6b et 1b.6c du plan sont suspendues ; la question est inscrite aux décisions ouvertes (§9.2), avec les faits, ma proposition (« une architecture, deux moyens d'isolation » : Docker choisi par configuration sur le chemin natif et prouvé d'abord, retrait de la première réalisation ensuite, memory et l'adaptateur restant) et l'autre voie (laisser l'ancienne pile, passer à une autre brique). Au propriétaire.
+
+**Inventaire interrompu.** L'agent d'exploration s'est arrêté sur la limite hebdomadaire du forfait (modèle Opus, retour le 16 novembre à 20 h, heure de Paris). Les faits ci-dessus viennent d'un script de fermeture d'imports et de recherches que j'ai faits moi-même ; l'inventaire complet (scénarios, entrées de dette, mentions dans la documentation) n'est pas fait. Les sessions de revue de la boucle tournent sur Opus : aucune revue par l'outil avant ce retour.
+
+**Règle retenue.** Une ligne de plan qui retire quelque chose se relit contre les décisions de la conception qu'elle touche, et se présente au propriétaire par la liste des fichiers, pas par un nom de composant.
+
+**Trois piliers.**
+- Recherche : les deux erreurs sont consignées avec les mots du propriétaire ; les faits sont rejouables (fermeture d'imports de `task-serve.ts`, recherche des utilisateurs de l'adaptateur Docker) ; ce qui n'est pas fait est dit.
+- SSDLC : aucun code changé ; la proposition nomme la modélisation des menaces de l'adaptateur Docker sur le chemin natif comme préalable à tout code.
+- Opérationnel : aucun retrait ; le seul chemin sans srt reste en place ; IRB sans objet.
