@@ -50,9 +50,11 @@ Le contrat ne dit pas qui répond. Trois répondants sont possibles, le vérific
 |---|---|---|---|
 | Documentaliste sous srt : Claude Code sans interface, profil `researcher`, réseau fermé aux registres de publications | une commande, donc pilotable à distance | Crossref et `doi.org`, Europe PMC et PubMed, arXiv, bioRxiv, Semantic Scholar | étape S.2 |
 | Claude Science par le dossier et le skill | une phrase collée dans l'application | ses connecteurs de recherche, son relecteur | livré à l'étape S.1 |
-| Claude Science par un connecteur Remote (outils `next_question`, `submit_answer`) | une session lancée une fois, qui reste à l'écoute | idem | essai : connexion établie, tour complet non joué |
+| Claude Science par un connecteur Remote (outils `next_question`, `submit_answer`) | une session lancée une fois, qui reste à l'écoute | idem | essai hors production : trois tours complets le 15 novembre 2026 (journal §39, `bench/evidence-remote`) |
 
 **Exigence du propriétaire, 14 novembre 2026 :** aucune interaction manuelle pour traiter une question, la boucle étant pilotée à distance. Science ne se déclenche pas sans geste : le répondant de la boucle est donc le documentaliste sous srt. Science reste un répondant possible quand une personne est devant l'application.
+
+**Décision du propriétaire, 15 novembre 2026 :** en attendant la réponse d'Anthropic, le répondant utilisé est Claude Science par le connecteur Remote, session lancée une fois par lui ; le documentaliste sous srt n'est pas construit.
 
 ## 3. Rôles et zones
 
@@ -195,6 +197,6 @@ Geste du propriétaire, une fois par projet Science : accorder `<guichet>/out` e
 | Étape | Contenu | État |
 |---|---|---|
 | S.1 | Contrat, dépôt, registre des DOI, `ask`, `verify`, skill ; preuve réelle contre `doi.org` | livré |
-| S.2 | Documentaliste sous srt : profil `researcher`, commande qui fait répondre une question sans geste | suit |
+| S.2 | Documentaliste sous srt : profil `researcher`, commande qui fait répondre une question sans geste | en suspens (décision du 15 novembre 2026) ; confinement essayé sous srt réel |
 | S.3 | Texte récupéré par l'hôte, niveau `quote_in_refetched_text` | après S.2 |
 | S.4 | Vérificateur sous srt, module MCP servi par la gateway ; c'est là que le connecteur Remote de Science trouve sa place | avec O.2 |

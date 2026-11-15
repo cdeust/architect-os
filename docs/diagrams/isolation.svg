@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 560" width="980" height="560" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title id="t">One sandbox per session: what a session can touch</title>
+  <desc id="d">Claude Code runs inside an srt sandbox with a random session token. The only route out is an authentication proxy on the host, which alone holds the credential. Secrets of the home folder and the folders of other sandboxes cannot be read. Four profiles set what a session may write and reach.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
+  </defs>
+  <rect x="0.5" y="0.5" width="979" height="559" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="24" y="34" font-size="17" font-weight="600" fill="#1f2328">One sandbox per session: what a session can touch</text>
+  <text x="24" y="54" font-size="12.5" fill="#57606a">packages/sandbox, on srt (@anthropic-ai/sandbox-runtime): Seatbelt on macOS, bubblewrap on Linux</text>
+
+  <!-- host -->
+  <rect x="20" y="72" width="380" height="250" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="36" y="94" font-size="13" font-weight="600" fill="#1f2328">Host</text>
+  <g font-size="12">
+    <rect x="36" y="104" width="348" height="50" rx="6" fill="#ffffff" stroke="#8c959f"/>
+    <text x="48" y="124" font-weight="600" fill="#1f2328">Launcher</text>
+    <text x="48" y="142" fill="#57606a">npm run code · review · step, called from a worktree</text>
+
+    <rect x="36" y="166" width="348" height="54" rx="6" fill="#ffffff" stroke="#cf222e"/>
+    <text x="48" y="186" font-weight="600" fill="#cf222e">Unreadable from every sandbox</text>
+    <text x="48" y="204" fill="#57606a">~/.ssh · ~/.aws · keychain · ~/.claude · other sandboxes</text>
+
+    <rect x="36" y="232" width="348" height="76" rx="6" fill="#ffffff" stroke="#8c959f"/>
+    <text x="48" y="252" font-weight="600" fill="#1f2328">Authentication proxy</text>
+    <text x="48" y="270" fill="#57606a">sole holder of the Claude credential, read from the keychain;</text>
+    <text x="48" y="286" fill="#57606a">relays POST /v1/messages only; one usage line per answer,</text>
+    <text x="48" y="302" fill="#57606a">never the content</text>
+  </g>
+
+  <!-- sandbox -->
+  <rect x="440" y="72" width="520" height="250" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+  <text x="456" y="94" font-size="13" font-weight="600" fill="#1f2328">srt sandbox · one per session, destroyed at the end</text>
+  <g font-size="12">
+    <rect x="456" y="104" width="316" height="100" rx="6" fill="#ffffff" stroke="#bf8700"/>
+    <text x="468" y="124" font-weight="600" fill="#1f2328">Claude Code --bare</text>
+    <text x="468" y="142" fill="#57606a">a random session token, revoked at the end;</text>
+    <text x="468" y="158" fill="#57606a">its own config and tmp folders, new at each launch;</text>
+    <text x="468" y="174" fill="#57606a">system prompt from the launcher's library,</text>
+    <text x="468" y="190" fill="#57606a">never from the worktree it works on</text>
+
+    <rect x="786" y="104" width="158" height="100" rx="6" fill="#ffffff" stroke="#bf8700"/>
+    <text x="798" y="124" font-weight="600" fill="#1f2328">Worktree</text>
+    <text x="798" y="142" fill="#57606a">builder: writes it</text>
+    <text x="798" y="158" fill="#57606a">reviewer: reads it</text>
+    <text x="798" y="174" fill="#57606a">neither can commit</text>
+    <text x="798" y="190" fill="#57606a">or push</text>
+
+    <rect x="456" y="216" width="488" height="92" rx="6" fill="#ffffff" stroke="#bf8700"/>
+    <text x="468" y="236" font-weight="600" fill="#1f2328">Canary, before every start</text>
+    <text x="468" y="254" fill="#57606a">a secret placed in a sibling sandbox folder must be unreadable,</text>
+    <text x="468" y="270" fill="#57606a">a port outside the allow-list must be unreachable:</text>
+    <text x="468" y="286" fill="#57606a">with the real profile; otherwise the session does not start</text>
+  </g>
+
+  <!-- the only route out -->
+  <path d="M456 136H420V270H388" stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <rect x="403" y="194" width="34" height="18" rx="9" fill="#ffffff" stroke="#57606a"/>
+  <text x="420" y="207" text-anchor="middle" font-size="10.5" fill="#57606a">only</text>
+
+  <!-- upstream -->
+  <rect x="110" y="342" width="200" height="34" rx="6" fill="#ddf4ff" stroke="#218bff"/>
+  <text x="210" y="364" text-anchor="middle" font-size="12" fill="#1f2328">api.anthropic.com</text>
+  <path d="M210 308V340" stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <text x="330" y="364" font-size="12" fill="#57606a">the session never holds the credential: it holds a token the proxy alone accepts</text>
+
+  <!-- profiles -->
+  <text x="24" y="412" font-size="13" font-weight="600" fill="#1f2328">Four profiles (packages/sandbox/profiles)</text>
+  <g font-size="12">
+    <rect x="20" y="422" width="940" height="26" fill="#f6f8fa" stroke="#d0d7de"/>
+    <rect x="20" y="448" width="940" height="26" fill="#ffffff" stroke="#d0d7de"/>
+    <rect x="20" y="474" width="940" height="26" fill="#ffffff" stroke="#d0d7de"/>
+    <rect x="20" y="500" width="940" height="26" fill="#ffffff" stroke="#d0d7de"/>
+    <rect x="20" y="526" width="940" height="26" fill="#ffffff" stroke="#d0d7de"/>
+    <g font-weight="600" fill="#1f2328">
+      <text x="32" y="440">Profile</text><text x="132" y="440">Runs</text><text x="392" y="440">May write</text><text x="682" y="440">May reach</text>
+    </g>
+    <g fill="#1f2328">
+      <text x="32" y="466">builder</text><text x="32" y="492">reviewer</text><text x="32" y="518">module</text><text x="32" y="544">worker</text>
+    </g>
+    <g fill="#57606a">
+      <text x="132" y="466">a build session</text><text x="392" y="466">its worktree and that worktree's git data</text><text x="682" y="466">the authentication proxy, the npm registry</text>
+      <text x="132" y="492">a review session</text><text x="392" y="492">only its own config and tmp folders</text><text x="682" y="492">the authentication proxy</text>
+      <text x="132" y="518">a platform module, MCP on its stdio</text><text x="392" y="518">a disposable working folder</text><text x="682" y="518">the gateway's callback</text>
+      <text x="132" y="544">the agent worker of one task</text><text x="392" y="544">a disposable working folder</text><text x="682" y="544">the broker, with the task's token</text>
+    </g>
+  </g>
+</svg>

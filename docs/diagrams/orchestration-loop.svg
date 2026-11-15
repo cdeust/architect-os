@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 430" width="980" height="430" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title id="t">One step of the orchestration loop</title>
+  <desc id="d">A brief goes to a build session in a sandbox, the host reads the diff and runs what the sandbox cannot, a read-only review session in another sandbox returns a verdict, the gate runs the scenarios and the mutation, and the host commits. A refusal becomes a new brief that names the findings.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#cf222e"/></marker>
+  </defs>
+  <rect x="0.5" y="0.5" width="979" height="429" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="24" y="34" font-size="17" font-weight="600" fill="#1f2328">One step of the orchestration loop</text>
+  <text x="24" y="54" font-size="12.5" fill="#57606a">npm run step -- &lt;folder&gt; plays the two sessions (2 and 4) from step.json and brief.md and keeps their files; the rest is the host's</text>
+
+  <g font-size="12" fill="#1f2328">
+    <!-- 1 brief -->
+    <rect x="20" y="86" width="140" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+    <text x="90" y="110" text-anchor="middle" font-weight="600" font-size="13">1 · Brief</text>
+    <text x="90" y="132" text-anchor="middle" fill="#57606a">written by the</text>
+    <text x="90" y="148" text-anchor="middle" fill="#57606a">orchestrator,</text>
+    <text x="90" y="164" text-anchor="middle" fill="#57606a">given on stdin:</text>
+    <text x="90" y="180" text-anchor="middle" fill="#57606a">only what this</text>
+    <text x="90" y="196" text-anchor="middle" fill="#57606a">step needs</text>
+    <!-- 2 build -->
+    <rect x="180" y="86" width="140" height="132" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+    <text x="250" y="110" text-anchor="middle" font-weight="600" font-size="13">2 · Build session</text>
+    <text x="250" y="132" text-anchor="middle" fill="#57606a">Claude Code in srt</text>
+    <text x="250" y="148" text-anchor="middle" fill="#57606a">profile builder:</text>
+    <text x="250" y="164" text-anchor="middle" fill="#57606a">writes its worktree;</text>
+    <text x="250" y="180" text-anchor="middle" fill="#57606a">network: the host's</text>
+    <text x="250" y="196" text-anchor="middle" fill="#57606a">proxy, npm registry</text>
+    <!-- 3 replay -->
+    <rect x="340" y="86" width="140" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+    <text x="410" y="110" text-anchor="middle" font-weight="600" font-size="13">3 · Replay</text>
+    <text x="410" y="132" text-anchor="middle" fill="#57606a">the host reads the</text>
+    <text x="410" y="148" text-anchor="middle" fill="#57606a">diff and runs what</text>
+    <text x="410" y="164" text-anchor="middle" fill="#57606a">the sandbox cannot:</text>
+    <text x="410" y="180" text-anchor="middle" fill="#57606a">real srt, Postgres,</text>
+    <text x="410" y="196" text-anchor="middle" fill="#57606a">mutation</text>
+    <!-- 4 review -->
+    <rect x="500" y="86" width="140" height="132" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+    <text x="570" y="110" text-anchor="middle" font-weight="600" font-size="13">4 · Review session</text>
+    <text x="570" y="132" text-anchor="middle" fill="#57606a">Claude Code in srt</text>
+    <text x="570" y="148" text-anchor="middle" fill="#57606a">profile reviewer</text>
+    <text x="570" y="164" text-anchor="middle" fill="#57606a">reads, cannot write;</text>
+    <text x="570" y="180" text-anchor="middle" fill="#57606a">verdict checked</text>
+    <text x="570" y="196" text-anchor="middle" fill="#57606a">against a contract</text>
+    <!-- 5 gate -->
+    <rect x="660" y="86" width="140" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+    <text x="730" y="110" text-anchor="middle" font-weight="600" font-size="13">5 · Gate</text>
+    <text x="730" y="132" text-anchor="middle" fill="#57606a">every scenario run,</text>
+    <text x="730" y="148" text-anchor="middle" fill="#57606a">count = base</text>
+    <text x="730" y="164" text-anchor="middle" fill="#57606a">+ added − removed;</text>
+    <text x="730" y="180" text-anchor="middle" fill="#57606a">0 surviving mutant</text>
+    <text x="730" y="196" text-anchor="middle" fill="#57606a">on changed lines</text>
+    <!-- 6 commit -->
+    <rect x="820" y="86" width="140" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+    <text x="890" y="110" text-anchor="middle" font-weight="600" font-size="13">6 · Commit</text>
+    <text x="890" y="132" text-anchor="middle" fill="#57606a">by the host only:</text>
+    <text x="890" y="148" text-anchor="middle" fill="#57606a">a sandbox can</text>
+    <text x="890" y="164" text-anchor="middle" fill="#57606a">neither commit</text>
+    <text x="890" y="180" text-anchor="middle" fill="#57606a">nor push</text>
+  </g>
+
+  <g stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)">
+    <path d="M160 152H178"/><path d="M320 152H338"/><path d="M480 152H498"/><path d="M640 152H658"/><path d="M800 152H818"/>
+  </g>
+
+  <!-- refusal loop -->
+  <g stroke="#cf222e" stroke-width="1.6" fill="none">
+    <path d="M570 218V262H90V220" marker-end="url(#r)"/>
+    <path d="M730 218V262H570"/>
+  </g>
+  <rect x="196" y="250" width="268" height="24" rx="12" fill="#ffffff" stroke="#cf222e"/>
+  <text x="330" y="266" text-anchor="middle" font-size="12" fill="#cf222e">refused: a new brief names the findings</text>
+
+  <!-- kept -->
+  <rect x="20" y="302" width="940" height="52" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="36" y="323" font-size="12.5" font-weight="600" fill="#1f2328">Left in the step folder, for every step</text>
+  <text x="36" y="342" font-size="12" fill="#57606a">both session streams · measures read from the stream (answers, tokens, cache, cost) · the build report · the review verdict · exit code 0, 1 or 2</text>
+
+  <!-- legend -->
+  <rect x="20" y="380" width="16" height="16" rx="3" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="44" y="393" font-size="12" fill="#57606a">on the host</text>
+  <rect x="150" y="380" width="16" height="16" rx="3" fill="#fff8e1" stroke="#bf8700"/>
+  <text x="174" y="393" font-size="12" fill="#57606a">inside an srt sandbox, one per session, destroyed at the end</text>
+</svg>

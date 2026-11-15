@@ -1679,3 +1679,60 @@ Exigences d'hôte relevées sous WSL2 : Postgres 17 avec pgvector ; `broker.loca
 - Recherche : mêmes commandes et mêmes seuils que sur macOS et Linux, données et analyses versionnées (`baseline/results/*-wsl2.*`), campagne ratée conservée, essais à une mesure écartés.
 - SSDLC : aucune dépendance ajoutée ; aucun secret lu, clés factices ; code de production inchangé, quatre fichiers de banc modifiés. Droits posés dans WSL pour la mesure (groupe `docker`, règle sudoers limitée à trois commandes `systemctl`) retirés ensuite.
 - Opérationnel : restent sur le poste la distribution WSL2 avec ses paquets, l'utilisateur `bench`, quatre lignes dans son `/etc/hosts`, Docker installé et démarré. IRB sans objet.
+
+## 39. Trois tours complets avec Claude Science par un connecteur Remote ; ce qui reste à l'essai, 15 novembre 2026
+
+Suite du §37, à la demande du propriétaire : « faute de mieux », garder Claude Science comme répondant en attendant la réponse d'Anthropic, par le seul canal documenté qui a fonctionné, le connecteur Remote. Essai hors production : [`bench/evidence-remote/`](../../bench/evidence-remote/README.md). Rien n'est ajouté au périmètre de la porte.
+
+### Montage
+
+Sur l'hôte, un serveur MCP sur HTTP au-dessus du guichet livré au §37, lié à `127.0.0.1`, refusant tout appel sans jeton ; devant lui, un tunnel ngrok du propriétaire. Dans Claude Science 0.1.72, un connecteur Remote vers l'adresse du tunnel. Trois outils : `desk_instructions` (le skill et ce que le connecteur y change), `next_question` (la question en attente ; sans question, l'appel attend), `submit_answer` (dépose la réponse, lance `verify`, rend le verdict dans l'appel). Les textes intégraux passent par le dossier `in`, accordé à Science en lecture et écriture : un texte de plusieurs dizaines de pages ne peut pas transiter par un argument d'outil sans être retapé par le modèle.
+
+Le jeton ngrok est dans le trousseau de l'hôte et passé à ngrok par l'environnement. Mesuré avant : ngrok ne lit la variable d'environnement que si son fichier de configuration ne contient pas de jeton ; le script le lance donc avec une configuration à lui, sans jeton.
+
+### Résultat
+
+Une session, lancée une fois par le propriétaire avec une phrase (« Appelle l'outil desk_instructions du connecteur architect-os-desk et suis ses instructions »). Les trois questions sont posées par `npm run evidence -- ask` ; la deuxième et la troisième pendant que la session attendait, sans aucun geste dans l'application.
+
+| Question | De la remise de la question au verdict | Verdict | Affirmations, passages, articles | Dit non trouvé |
+|---|---|---|---|---|
+| Le score de mutation est-il corrélé à la détection de fautes réelles, plus que la couverture ? | 19 min | vérifiée à la première soumission | 10, 20, 4 | 7 |
+| Les injections indirectes réussissent-elles contre des agents LLM, et quelles défenses ont été mesurées ? | 6 min 53 s | vérifiée à la première soumission | 10, 19, 8 | 5 |
+| Quel taux de références fabriquées par les LLM, et quelles méthodes de détection ont été mesurées ? | 8 min 21 s | vérifiée à la première soumission | 10, 22, 9 | 5 |
+
+61 passages, tous retrouvés mot pour mot dans les 21 textes déposés ; 21 DOI résolus, aucun rétracté. La vérification d'une réponse prend moins de deux secondes.
+
+| Inconnue du §37 | Mesure |
+|---|---|
+| Science accepte-t-il un serveur de l'hôte derrière un tunnel ? | oui, connexion en 0,3 s, appels venant de `Claude-Science/0.1.72` |
+| Science laisse-t-il un appel d'outil ouvert ? | oui, 50 s, jusqu'au retour « rien en attente » ; il rappelle ensuite de lui-même |
+| Une question posée depuis l'hôte atteint-elle une session à l'écoute ? | oui, dans la seconde (posée à 09:34:43 UTC, remise à 09:34:43 ; posée à 09:42:53, remise à 09:42:53) |
+
+**Ce que les réponses montrent du dispositif.** Science n'a pas comblé les trous. Pour la première question, les deux études de référence (Just et al. 2014, Papadakis et al. 2018) n'ont pas pu être lues en texte intégral, l'éditeur refusant la récupération automatique : elles ne sont pas citées, leurs résultats sont rapportés à travers un article qui les discute, et chaque affirmation concernée le dit. L'accès fermé est le plafond de profondeur observé ; les clés d'éditeur ou le proxy de bibliothèque de Science (`literature-access.md`) le lèveraient. Pour un sujet de génie logiciel, Science dit n'avoir aucun connecteur de littérature dédié au-delà d'alphaXiv et se rabat sur OpenAlex, Crossref et arXiv.
+
+**Réveil de l'hôte.** `wait-verdict.mjs` attend le prochain verdict par événement du système de fichiers et se termine : la fin de cette tâche de fond réveille la session Claude Code. Essayé sur la troisième question : réveil 50 ms après l'écriture de la fiche.
+
+### Défauts et limites relevés
+
+| Constat | Mesure | Suite |
+|---|---|---|
+| La troisième question a été remise deux fois, à 27 s d'écart | journal du serveur ; deux pistes actives dans la session | une question remise doit être réservée un temps ; à faire dans la brique |
+| Le jeton du guichet est dans l'adresse du connecteur | la configuration de Science le garde, le tunnel le voit | en-tête d'authentification : Science ne sait le produire que par une commande, lancée dans son bac à sable, qui n'a pas accès à un secret de l'hôte |
+| Niveau de preuve `quote_in_supplied_text` | les textes sont ceux que Science a déposés | étape S.3, inchangée |
+| Durée de vie d'une session à l'écoute, coût en quota d'une attente à vide | non mesurés : l'essai a duré 39 min | à mesurer avant tout usage régulier |
+| Le vérificateur ne juge pas qu'une affirmation découle de son passage | l'orchestrateur a relu les dix affirmations de la première réponse contre leurs passages (prudentes, collées au texte) ; les vingt autres ont été lues sans leurs passages | reste à la revue |
+
+### La ligne à ne pas franchir
+
+Tout ce qui précède passe par des fonctions documentées : une personne lance la session, Science appelle un connecteur, l'hôte ne réagit qu'à ses propres fichiers. Démarrer une session par programme, piloter l'interface ou ses routes internes, approuver ses cartes d'autorisation : écarté (§37). Reste une zone grise, dite au propriétaire : une session à l'écoute reçoit ses questions d'un programme, sans que personne ne tape. La question de l'usage sans surveillance a été posée à Anthropic par le propriétaire le 14 novembre (support partenaire, qui renvoie au service commercial) ; pas de réponse sur le fond à ce jour.
+
+**Décision du propriétaire, 15 novembre 2026 :** s'en tenir à ce qui a été fait. Pas de déclenchement automatique de la suite, pas de base in/out par identifiant de tâche pour l'instant (elle est la cible : étape S.4, avec la gateway et `data`). Tunnel et serveur arrêtés en fin d'essai.
+
+**README.** À la demande du propriétaire, le `README.md` dit où en est le projet, ce qu'il apporte avec ses mesures, ce qui est prouvé et par quelle commande, et ce qui ne l'est pas, preuve Windows du §38 comprise ; trois diagrammes SVG dans `docs/diagrams/` (une sandbox par session, une étape de la boucle, le guichet des preuves), rendus et relus avant commit. Chaque chiffre du README renvoie à une section de ce journal ou à la baseline.
+
+**Écart relevé avec le §38.** Le §38 écrit que srt 0.0.81 ne prend pas Windows natif en charge. Le README de srt 0.0.81 installé au dépôt (`node_modules/@anthropic-ai/sandbox-runtime/README.md`, « Platform Support ») décrit une prise en charge de Windows en alpha, par un utilitaire `srt-win.exe` et la commande `srt windows-install`. Elle n'a pas été essayée : le README du projet dit donc « non essayé, alpha », et non « non pris en charge ».
+
+**Trois piliers.**
+- Recherche : les trois inconnues du §37 levées par mesure sur l'application ; trois tours réels, délais et comptes relevés au registre ; essai rejouable (`bench/evidence-remote`) ; ce qui n'est pas mesuré est dit.
+- SSDLC : serveur lié à la boucle locale, refus sans jeton vérifié à travers le tunnel, jeton du tunnel au trousseau ; même vérificateur qu'au §37, donc mêmes refus ; pas de scénario ni de mutation, l'essai étant hors production : prévu à la brique S.4.
+- Opérationnel : Science ne voit que le guichet ; aucune session démarrée par programme ; questions sans code ni secret, par un tiers (ngrok) accepté par le propriétaire pour l'essai. IRB sans objet.
