@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { PassThrough } from 'node:stream';
 import type { DataOpName, TaskEnding } from '@architect-os/contracts';
 import type { ServiceResponse } from '../../src/domain/ports.js';
 import type {
@@ -31,6 +32,7 @@ import {
 } from '../../src/infrastructure/in-memory-usage.js';
 import { McpDataClient, McpTaskRegistry, RandomIds } from '../../src/infrastructure/mcp-routing.js';
 import { ModuleHost } from '../../src/infrastructure/module-host.js';
+import { StreamClientTransport } from '../../src/infrastructure/stream-transport.js';
 import { TaskSandboxGroups } from '../../src/infrastructure/task-sandboxes.js';
 import { FakeModuleRunner } from './fake-modules.js';
 import { Given, Then, When, type GatewayWorld } from './helpers.js';
@@ -482,4 +484,45 @@ When('the sandboxes of {string} are stopped', async function (task: string) {
 
 Then('the sandboxes of {string} are gone', async function (task: string) {
   assert.equal(await must(contracts(this).stopped, 'sandboxes')(task), true);
+});
+
+// --- the stream transport ---
+
+interface Sending {
+  transport: StreamClientTransport;
+  raised: unknown[];
+  refusal?: unknown;
+}
+const sending = (world: GatewayWorld): Sending =>
+  must(world.state['sending'] as Sending | undefined, 'a transport');
+
+Given('a stream transport over the streams of a child whose stdin has ended', async function () {
+  const stdin = new PassThrough();
+  const raised: unknown[] = [];
+  stdin.on('error', (error) => raised.push(error));
+  stdin.end();
+  const transport = new StreamClientTransport(new PassThrough(), stdin);
+  await transport.start();
+  this.state['sending'] = { transport, raised } satisfies Sending;
+});
+
+When('a message is sent on the stream transport', async function () {
+  const current = sending(this);
+  current.refusal = await current.transport
+    .send({ jsonrpc: '2.0', method: 'notifications/initialized' })
+    .then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+  await new Promise((resolve) => setImmediate(resolve));
+});
+
+Then('the sending is refused with {string}', function (message: string) {
+  const { refusal } = sending(this);
+  assert.ok(refusal instanceof Error, String(refusal));
+  assert.equal(refusal.message, message);
+});
+
+Then('no error was raised on the stdin of the child', function () {
+  assert.deepEqual(sending(this).raised, []);
 });

@@ -203,3 +203,9 @@ Feature: Gateway port adapters
     Then the module call is refused with code "SERVICE_UNAVAILABLE"
     And the module call refusal says "the gateway is shutting down"
     And the module host launched no sandbox
+
+  Scenario: a message for a child whose stdin has ended is refused, and nothing is raised on the stream
+    Given a stream transport over the streams of a child whose stdin has ended
+    When a message is sent on the stream transport
+    Then the sending is refused with "the child is gone: its stdin has ended"
+    And no error was raised on the stdin of the child

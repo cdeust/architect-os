@@ -229,3 +229,195 @@ export async function composeNative(deps: NativeDependencies) {
     },
   };
 }
+
+/** What the process of the native gateway is given: everything that touches the outside, so that a scenario drives it. */
+export interface NativeHost {
+  env: Readonly<Record<string, string | undefined>>;
+  /** The platform root and the absolute path of node, for the configuration. */
+  root: string;
+  node: string;
+  /** The refusals of the process, and what its children write on their stderr, each line prefixed by the name of its process. */
+  stderr: import('node:stream').Writable;
+  audit: AuditLog;
+  /** What starts a child by name, over the closed list of the configuration; `log` takes what a child writes on its stderr. */
+  launch(
+    processes: import('./infrastructure/native-config.js').NativeConfig['processes'],
+    log: (name: string, text: string) => void,
+  ): { start(name: string): Promise<import('@architect-os/sandbox').NativeChild> };
+  runners: NativeDependencies['runners'];
+  /** Resolves when the process is asked to stop. */
+  stopped: Promise<void>;
+  /** The bound of the stop, from its beginning, on `scheduler`. */
+  graceMs: number;
+  scheduler: import('./domain/ports.js').Scheduler;
+  /** The period of the probe of data by the usage forwarder. */
+  probeMs: number;
+}
+
+/**
+ * The process of the native gateway (docs/design/platform-v3-srt.md, §8, 1b.6a): data and the broker as children
+ * on their stdio, the composition, the HTTP host of the clients on the loopback; it runs until it is asked to stop or
+ * a child exits (the gateway does not outlive them, §2). Resolves with the exit code, once the children have exited:
+ * 0 when asked to stop, 1 for a refused configuration, a failed start, a child that exited or a stop that failed.
+ *
+ * The stop is the same whatever led to it: the HTTP host ends its connections and the composition closes; once that
+ * is over, or `graceMs` after the stop began, every sandbox still alive is killed; then the children are closed. Past
+ * the bound the composition is left behind, not cancelled: it goes on as long as the process lives, stops a
+ * sandbox whose launch ends later (ModuleHost.close waits for the launches; a worker whose call is cancelled stops
+ * itself). A stop asked while the process starts waits for the start: nothing but the two children exists until then,
+ * and they end with their stdin if the process is killed.
+ */
+export async function serveNative(host: NativeHost): Promise<number> {
+  const { readNativeConfig } = await import('./infrastructure/native-config.js');
+  const { connectOverStreams } = await import('./infrastructure/stream-transport.js');
+  const { RandomIds } = await import('./infrastructure/mcp-routing.js');
+  const { once } = await import('node:events');
+
+  const say = (text: string): void => void host.stderr.write(`${text}\n`);
+  let config;
+  try {
+    config = readNativeConfig(host.env, host.root, host.node);
+  } catch (error) {
+    say(`gateway: ${(error as Error).message}`);
+    return 1;
+  }
+  let code = 0;
+  const fail = (error: unknown): void => {
+    code = 1;
+    say(`gateway: ${(error as Error).message}`);
+  };
+  // What a child writes comes in chunks: a line is written once whole, and the last one when the child is gone.
+  const partial = new Map<string, string>();
+  const log = (name: string, text: string): void => {
+    const lines = `${partial.get(name) ?? ''}${text}`.split('\n');
+    partial.set(name, lines.pop()!);
+    for (const line of lines) say(`${name}: ${line}`);
+  };
+  const children: import('@architect-os/sandbox').NativeChild[] = [];
+  // Every sandbox the runners start is kept until it exits: a sandbox is a detached process group, it survives the
+  // gateway if nobody kills it.
+  const live = new Set<import('@architect-os/sandbox').Sandbox>();
+  const runners: NativeDependencies['runners'] = (variables) => {
+    const runner = host.runners(variables);
+    return {
+      start: async (request) => {
+        const sandbox = await runner.start(request);
+        live.add(sandbox);
+        void sandbox.exited.then(() => live.delete(sandbox));
+        return sandbox;
+      },
+    };
+  };
+  const connected = (child: (typeof children)[number]) => connectOverStreams(child.stdout, child.stdin);
+  let composed: Awaited<ReturnType<typeof composeNative>> | undefined;
+  let web: import('node:http').Server | undefined;
+  try {
+    const launcher = host.launch(config.processes, log);
+    const data = await launcher.start('data');
+    children.push(data);
+    const broker = await launcher.start('broker');
+    children.push(broker);
+    const clock = new SystemClock();
+    composed = await composeNative({
+      files: config.files,
+      data: await connected(data),
+      broker: await connected(broker),
+      brokerPort: config.brokerPort,
+      runners,
+      root: host.root,
+      callbackPort: 0,
+      auth: new InMemoryAuthenticator(
+        new Map([...config.tokens].map(([token, subject]) => [token, { subject }])),
+      ),
+      quota: new InMemoryQuota(config.quotaPerMinute, 60_000, clock),
+      audit: host.audit,
+      clock,
+      scheduler: host.scheduler,
+      ids: new RandomIds(),
+      profile: config.profile,
+      probeMs: host.probeMs,
+    });
+    web = createHttpHost(composed.createServer);
+    web.listen(config.port, '127.0.0.1');
+    // `once` rejects when the host emits `error` first: a port that is taken.
+    await once(web, 'listening');
+    const first = await Promise.race([
+      host.stopped.then(() => undefined),
+      data.exited.then(() => 'data'),
+      broker.exited.then(() => 'broker'),
+    ]);
+    if (first !== undefined) fail(new Error(`${first} exited`));
+  } catch (error) {
+    fail(error);
+  }
+
+  // The stop. Past the bound the composition is left behind: what it could not stop in time is killed below, and
+  // what it reports from then on is said to come after the bound.
+  const serving = web;
+  let behind = false;
+  const closing = (async () => {
+    if (serving?.listening)
+      await new Promise<void>((done) => {
+        serving.close(() => done());
+        serving.closeAllConnections();
+      });
+    await composed?.close();
+  })().catch((error: unknown) =>
+    fail(behind ? new Error(`after the bound: ${(error as Error).message}`) : error),
+  );
+  await Promise.race([closing, new Promise<void>((bound) => host.scheduler.after(host.graceMs, bound))]);
+  behind = true;
+  await Promise.all(
+    [...live].map((sandbox) =>
+      sandbox
+        .stop()
+        .catch((error: unknown) => fail(new Error(`killing a sandbox: ${(error as Error).message}`))),
+    ),
+  );
+  await Promise.all(children.map((child) => child.close()));
+  for (const [name, rest] of partial) if (rest !== '') say(`${name}: ${rest}`);
+  return code;
+}
+
+/** What the entry reads of its process; `process` is one. */
+export interface GatewayProcess {
+  readonly env: Readonly<Record<string, string | undefined>>;
+  readonly execPath: string;
+  readonly stderr: import('node:stream').Writable;
+  on(signal: 'SIGTERM' | 'SIGINT', stop: () => void): unknown;
+}
+
+/**
+ * The host of the real process, for `entry`, the URL of its entry file (gateway/dist/src/serve.js: three levels under
+ * the platform root): the real launcher of the two children, the srt runner of the sandboxes, the audit log on stdout,
+ * a stop on SIGTERM and SIGINT. The entry file itself holds nothing a scenario could not reach here.
+ */
+export async function nativeHost(proc: GatewayProcess, entry: string): Promise<NativeHost> {
+  const { realpathSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { NativeLauncher, SrtSandboxRunner, processRunnerOptions, timer } =
+    await import('@architect-os/sandbox');
+  const { TimerScheduler } = await import('./infrastructure/usage-adapters.js');
+  const root = realpathSync(fileURLToPath(new URL('../../../', entry)));
+  return {
+    env: proc.env,
+    root,
+    node: proc.execPath,
+    stderr: proc.stderr,
+    audit: new JsonLinesAuditLog(),
+    // A child is given 5 s between the end of its stdin and its kill; the stop of the gateway 10 s before it kills
+    // the sandboxes that are left (srt then gives a group 2 s): 17 s at worst from the signal to the end, under the
+    // 20 s a supervisor such as launchd leaves by default. The usage forwarder probes data every second while down.
+    launch: (processes, log) => new NativeLauncher(processes, { graceMs: 5000, schedule: timer, log }),
+    runners: (variables) => new SrtSandboxRunner(processRunnerOptions(root, proc.execPath, variables)),
+    // The listeners stay: a second signal during the stop (a double Ctrl-C) is ignored instead of ending the
+    // process by its default action, with its sandboxes left behind.
+    stopped: new Promise<void>((resolve) => {
+      proc.on('SIGTERM', resolve);
+      proc.on('SIGINT', resolve);
+    }),
+    graceMs: 10_000,
+    scheduler: new TimerScheduler(),
+    probeMs: 1000,
+  };
+}

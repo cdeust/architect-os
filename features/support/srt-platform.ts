@@ -1,13 +1,12 @@
 import { existsSync, realpathSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import type { MemoryItem } from '@architect-os/contracts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
   SrtSandboxRunner,
+  processRunnerOptions,
   type ProcessRunnerOptions,
   type Sandbox,
   type SandboxRunner,
@@ -30,7 +29,6 @@ import { startFakeModel, type FakeModel, type ModelTurn } from './fake-model.js'
 
 /** The platform root: the module and the worker read their code there, and write nothing there. */
 export const ROOT = realpathSync(new URL('../../', import.meta.url).pathname);
-const SRT_CLI = createRequire(import.meta.url).resolve('@anthropic-ai/sandbox-runtime/dist/cli.js');
 /** The built entry points topology/modules.mcp.json launches (tsc -b: npm test and the gate build first). */
 const ENTRY_POINTS = ['modules/memory/dist/src/serve.js', 'services/memory/dist/worker/task-serve.js'];
 /** A fake key of the broker, in a throwaway file: never a real one. */
@@ -65,18 +63,8 @@ export interface SrtPlatform {
 }
 
 /** The options of a platform runner: the committed profiles, a disposable cwd, the variables of its launcher. */
-export const runnerOptions = (variables: Record<string, string>): ProcessRunnerOptions => ({
-  profilesDir: join(ROOT, 'packages', 'sandbox', 'profiles'),
-  srtCli: SRT_CLI,
-  node: process.execPath,
-  canaryProbe: join(ROOT, 'packages', 'sandbox', 'src', 'canary-probe.mjs'),
-  tmpRoot: tmpdir(),
-  home: homedir(),
-  hostEnv: { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: process.env['HOME'] },
-  trusted: [],
-  variables,
-  workspace: 'disposable',
-});
+export const runnerOptions = (variables: Record<string, string>): ProcessRunnerOptions =>
+  processRunnerOptions(ROOT, process.execPath, variables);
 
 /**
  * Starts the platform as features/sandbox/recall.feature proves it: data in memory over MCP holding one memory, the

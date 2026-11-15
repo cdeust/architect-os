@@ -1,11 +1,11 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { ModulesMcpJson } from '@architect-os/contracts';
 import type { Sandbox, SandboxRunner } from '@architect-os/sandbox';
 import { GatewayError } from '../domain/errors.js';
 import type { ServiceResponse } from '../domain/ports.js';
 import type { ModuleCall, ModuleClient } from '../domain/routing.js';
 import { toResponse } from './mcp-routing.js';
-import { StreamClientTransport } from './stream-transport.js';
+import { connectOverStreams } from './stream-transport.js';
 
 /** Where the modules run: the sandbox profile and the working directory of every module of topology/modules.mcp.json. */
 export interface ModuleLaunch {
@@ -113,15 +113,15 @@ export class ModuleHost implements ModuleClient {
 
   private async start(module: string, command: string[]): Promise<Link> {
     const sandbox = await this.runner.start({ profile: this.launch.profile, cwd: this.launch.cwd, command });
-    const client = new Client({ name: 'architect-os-gateway', version: '0.1.0' });
-    const link: Link = { client, sandbox, alive: true };
-    void sandbox.exited.then(() => (link.alive = false));
+    let client;
     try {
-      await client.connect(new StreamClientTransport(sandbox.stdout, sandbox.stdin));
+      client = await connectOverStreams(sandbox.stdout, sandbox.stdin);
     } catch (error) {
       await sandbox.stop();
       throw error;
     }
+    const link: Link = { client, sandbox, alive: true };
+    void sandbox.exited.then(() => (link.alive = false));
     this.links.set(module, link);
     return link;
   }

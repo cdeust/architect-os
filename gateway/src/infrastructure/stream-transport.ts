@@ -1,4 +1,5 @@
 import type { Readable, Writable } from 'node:stream';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { ReadBuffer, serializeMessage } from '@modelcontextprotocol/sdk/shared/stdio.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
@@ -34,7 +35,9 @@ export class StreamClientTransport implements Transport {
     this.input.on('close', () => this.onclose!());
   }
 
+  /** A message for a child whose stdin has ended is refused: written after the end, it would raise on the stream. */
   async send(message: JSONRPCMessage): Promise<void> {
+    if (!this.output.writable) throw new Error('the child is gone: its stdin has ended');
     this.output.write(serializeMessage(message));
   }
 
@@ -42,4 +45,14 @@ export class StreamClientTransport implements Transport {
   async close(): Promise<void> {
     this.input.destroy();
   }
+}
+
+/**
+ * The MCP client of the gateway on the streams of a child (its stdout to read, its stdin to write), once initialized:
+ * a module in its sandbox, data, the broker. They all see the same client.
+ */
+export async function connectOverStreams(input: Readable, output: Writable): Promise<Client> {
+  const client = new Client({ name: 'architect-os-gateway', version: '0.1.0' });
+  await client.connect(new StreamClientTransport(input, output));
+  return client;
 }

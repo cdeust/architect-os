@@ -184,6 +184,32 @@ Given(
 );
 
 Given(
+  'a native launcher of grace {int} ms whose process {string} is node ending on the close of its input, and leaving a grandchild that writes {string} on the same stderr afterwards',
+  function (graceMs: number, name: string, text: string) {
+    const grandchild = `${BOUND}process.stdin.on('end', () => process.stderr.write(${JSON.stringify(text)}, () => process.exit(0))).resume()`;
+    declare(
+      this,
+      name,
+      node(
+        [
+          "const { spawn } = require('node:child_process');",
+          // The grandchild holds the stderr of the child, and writes once the child is gone: its stdin is a pipe
+          // of the child, which ends with it.
+          `spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: ['pipe', 'ignore', 'inherit'] });`,
+          "process.stdin.on('end', () => process.exit(0)).resume();",
+        ].join(''),
+      ),
+      {},
+      graceMs,
+    );
+  },
+);
+
+Then('the log held {string} when the close of the native process resolved', function (text: string) {
+  assert.equal(stored<string>(this, 'nativeLogAtClose'), text);
+});
+
+Given(
   'a native launcher of grace {int} ms whose process {string} is node starting a grandchild, printing both pids, and ignoring the end of its input',
   function (graceMs: number, name: string) {
     declare(
@@ -293,6 +319,10 @@ Then('the native exit is no code and the signal {string}', function (signal: str
 
 When('I close the native process', async function () {
   this.state['nativeClose'] = await childOf(this).close();
+  // Read in the turn the close resolves: what the log holds then, not what it holds later.
+  this.state['nativeLogAtClose'] = stored<{ name: string; text: string }[]>(this, 'nativeLog')
+    .map((entry) => entry.text)
+    .join('');
 });
 
 Then('the exit of the native close is code {int} and no signal', function (code: number) {

@@ -33,10 +33,12 @@ export interface NativeLauncherOptions {
 export interface NativeChild {
   readonly stdin: Writable;
   readonly stdout: Readable;
+  /** The process ended: given at once, its last words on stderr may still be on their way to the log. */
   readonly exited: Promise<SandboxExit>;
   /**
    * Closes its stdin, which a native of the design reads as its parent leaving and ends on (data closes its store,
    * the broker its listener); a child still there after the grace period has its whole process group killed.
+   * Resolves once the process ended and its streams are closed: the log then holds everything it wrote.
    */
   close(): Promise<SandboxExit>;
 }
@@ -104,6 +106,11 @@ export class NativeLauncher {
     const exited = new Promise<SandboxExit>((done) =>
       child.once('exit', (code, signal) => done({ code, signal })),
     );
+    // `close` comes after `exit`, once the streams of the child are closed (node:child_process: they may still be
+    // open when `exit` fires): the log then holds the last words of the child, and of whatever it left writing.
+    const closed = new Promise<SandboxExit>((done) =>
+      child.once('close', (code, signal) => done({ code, signal })),
+    );
     return {
       stdin: child.stdin,
       stdout: child.stdout,
@@ -111,7 +118,7 @@ export class NativeLauncher {
       close: () => {
         child.stdin.end();
         const cancel = schedule(() => killGroup(child.pid, 'SIGKILL'), graceMs);
-        return exited.finally(cancel);
+        return closed.finally(cancel);
       },
     };
   }

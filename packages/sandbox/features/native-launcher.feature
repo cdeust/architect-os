@@ -51,6 +51,13 @@ Feature: NativeLauncher, the launcher of the processes the design keeps outside 
       When I start the native process "cwd" and read its output
       Then the native output is the line of the declared working directory
 
+    Scenario: closing a child resolves once its streams are closed: the log holds what was still being written
+      Given a native launcher of grace 1500 ms whose process "leaver" is node ending on the close of its input, and leaving a grandchild that writes "late" on the same stderr afterwards
+      When I start the native process "leaver"
+      And I close the native process
+      Then the exit of the native close is code 0 and no signal
+      And the log held "late" when the close of the native process resolved
+
     Scenario: the launcher reads the stderr of a child: its logs reach the log with its name, and a child that writes more than a pipe holds still ends on the close of its input
       Given a native launcher of grace 1500 ms whose process "talker" is node writing 204800 characters on its stderr, then reading its stdin to the end
       When I start the native process "talker"

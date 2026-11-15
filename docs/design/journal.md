@@ -1894,3 +1894,55 @@ Demande du propriétaire : tenir le journal et le README à jour, le README serv
 - Recherche : chaque chiffre du README renvoie à une entrée de ce journal ; les liens et les ancres du README ont été vérifiés par un script ; le diagramme a été rendu et relu.
 - SSDLC : sans objet pour le code (aucune ligne de production changée) ; le README ne nomme aucun secret ni aucune valeur de configuration réelle.
 - Opérationnel : le README dit ce qui n'est pas prouvé, dont la limite de droits par client ; IRB sans objet.
+
+## 44. Brique 1b.6a, quatrième pas : le processus de la gateway native ; le pas de réflexion demandé pour la boucle, 15 novembre 2026
+
+Le §43 a été poussé (`e40d8c0`) : porte de l'hôte verte (1 602 scénarios, aucun mutant dans le périmètre), CI verte sur Linux et macOS.
+
+`serveNative` (`gateway/src/main.ts`) est le processus : il lit la configuration, lance `data` et le broker, leur connecte un client MCP sur leurs flux, compose, sert les clients en HTTP sur `127.0.0.1`, puis attend qu'on lui demande de s'arrêter ou qu'un enfant meure (la gateway ne survit ni à `data` ni au broker, §2). Tout ce qui touche l'extérieur lui arrive par un hôte (`NativeHost`), ce qui permet de le piloter par scénarios sans srt ni vrais enfants. `nativeHost` construit l'hôte du vrai processus ; `gateway/src/serve.ts` ne fait qu'appeler les deux.
+
+**L'arrêt, le même quelle qu'en soit la cause.** L'hôte HTTP ferme ses connexions sans attendre qu'un client raccroche ; la composition se ferme (§42) ; une fois cela fini, ou `graceMs` après le début de l'arrêt, toute sandbox encore en vie est tuée ; puis les deux enfants sont fermés, et le processus ne rend son code qu'après leur sortie. C'est la borne que le §42 avait laissée au point d'entrée : une sandbox est un groupe de processus détaché, elle survit à la gateway si personne ne la tue. Passé la borne, la composition est laissée derrière, pas annulée : elle continue tant que le processus vit.
+
+**Ce que la boucle a rendu.** Construction : 489 s, 1,12 $ ; revue : 343 s, 1,14 $, `request_changes`, neuf constats. Le worker ne pouvait jouer qu'un scénario sur onze (les autres écoutent sur un port).
+
+| Constat de la revue | Décision |
+|---|---|
+| srt résolu dans le code de la gateway par `createRequire` : la règle d'architecture (srt dans `packages/sandbox` seulement) était contournée sans que `npm run arch` le voie, la consigne demandant de signaler un import refusé plutôt que de contourner | Fondé. `processRunnerOptions` vit dans `packages/sandbox` et l'exporte ; la gateway et le support des scénarios sous srt s'en servent ; scénarios dans le paquet |
+| Le sujet du client, le quota, le port du broker donné aux workers et le port de rappel donné aux modules n'étaient observés par aucun scénario | Fondés. Le registre de `data` reçoit une task au nom du client configuré ; un second appel est refusé `QUOTA_EXCEEDED` avec un quota de 1 ; les variables de chaque sandbox sont affirmées |
+| L'identité du client MCP des enfants (`gateway`, `0.1.0`) n'était lue par personne | Fondé. Un seul client MCP sur flux, celui que l'hôte des modules utilisait déjà (`architect-os-gateway`), dont un scénario existant lit l'identité |
+| Une sandbox dont le lancement finit après la borne n'était jamais arrêtée | Voir ci-dessous : le mécanisme que j'ai ajouté était redondant |
+| Après la borne, la fermeture laissée derrière continue et écrit encore : assertions dépendantes du moment | Fondé. Ce qu'elle rapporte après la borne n'est plus de cet arrêt et n'est plus écrit ; les scénarios lisent l'état au moment où le code est rendu |
+| Une garde sans scénario, une définition de step jamais utilisée | Scénario ajouté ; step retiré |
+
+**Trouvé en rejouant sur l'hôte, que ni le worker ni la revue ne pouvaient voir.** Un message envoyé à un enfant dont l'entrée est fermée (la fermeture laissée derrière écrit au registre après la sortie de `data`) levait `write after end` sur le flux, hors de toute promesse : une erreur non rattrapée dans le processus. `StreamClientTransport.send` le refuse maintenant ; scénario. La doublure de sandbox gardait une entrée ouverte après sa fin, ce qu'un vrai processus mort ne fait pas : corrigée.
+
+**Mutation, lancée à la main.** Premier passage, 111 mutants : 5 survivants et 1 non couvert. Deux désignaient le mécanisme que je venais d'ajouter pour tuer à son démarrage une sandbox lancée après la borne : en le retirant, rien n'échouait, parce que la composition laissée derrière l'arrête déjà (`ModuleHost.close` attend les lancements ; un worker dont l'appel est annulé s'arrête seul). Retiré ; le scénario reste et prouve le comportement par ce chemin. Les quatre autres disaient qu'aucun scénario ne faisait échouer la fermeture avant la borne : scénario ajouté. Second passage sur le processus : 81 mutants, 67 tués, 10 délais dépassés, 4 erreurs d'exécution, 0 survivant. Dernier passage, après la seconde revue, sur toutes les lignes de production changées (processus, transport, hôte des modules, lanceur, options srt) : 110 mutants, 84 tués, 22 délais dépassés, 4 erreurs d'exécution, 0 survivant.
+
+**Seconde revue, sur ma reprise** (`npm run review`, 330 s, 1,26 $, `request_changes`).
+
+| Constat | Décision |
+|---|---|
+| La dernière ligne inachevée qu'un enfant écrit sur sa sortie d'erreur pouvait être perdue ou coupée : la fermeture d'un enfant se résolvait sur `exit`, que Node émet alors que les flux de l'enfant peuvent encore être ouverts. Raisonné par elle, non reproduit | Fondé, corrigé à la racine, dans le lanceur : `close()` se résout une fois les flux de l'enfant clos ; `exited` reste immédiat, pour que la mort d'un enfant arrête la gateway sans attendre. Scénario déterministe : un enfant qui finit sur la fermeture de son entrée et laisse un petit-enfant écrire après lui sur la même sortie. Vérifié à la main : il échoue avec l'ancien comportement. Mon premier scénario (un gros volume puis la sortie) passait dans les deux cas : remplacé |
+| Passé la borne, tout échec de la composition laissée derrière était tu, y compris l'arrêt raté d'une sandbox lancée tard | Fondé. Il est écrit, préfixé `after the bound:` ; l'échec d'un arrêt forcé est préfixé `killing a sandbox:` : un opérateur distingue les trois moments, et le même message n'apparaît plus deux fois à l'identique |
+| Les signaux étaient écoutés une seule fois : un second Ctrl-C tuait le processus en plein arrêt, sandboxes laissées derrière | Fondé. Les écouteurs restent ; scénario |
+| Pire cas de l'arrêt à 27 s (20 s de borne, 2 s de srt, 5 s pour un enfant), au-delà des 20 s que launchd laisse par défaut | Fondé. Borne ramenée à 10 s, pire cas 17 s ; la contrainte de déploiement est écrite à la ligne 1b.6d du plan |
+| `HOME` : le dossier personnel du compte est maintenant donné même quand la variable est absente | Voulu, dit dans le commentaire |
+| Les attentes des scénarios (4 s) peuvent céder sur un hôte chargé ; les vérifications d'absence valent pour un nombre fixe de tours | Attente portée à 20 s, atteinte seulement en cas d'échec. La seconde limite reste : une absence ne se prouve que dans une fenêtre |
+| Les options que reçoit le lanceur srt ne sont lues par aucun scénario | Reporté au pas suivant, qui lance de vraies sandboxes par ce chemin |
+
+**Le fichier d'entrée ne porte aucune valeur.** Règle apprise au §34 : un point d'entrée que les scénarios ne chargent pas donne des mutants non couverts. Le worker y avait mis les signaux, les délais et le chemin de la racine. Ils sont dans `nativeHost`, que trois scénarios atteignent : arrêt sur SIGTERM, sur SIGINT, et un vrai enfant lancé puis fermé par le vrai lanceur.
+
+**Mesures.** Sur l'hôte : gateway, intégration, options srt et lanceur du paquet 293/293 ; les 17 scénarios du processus trois fois de suite ; sous vrai srt `recall` 1/1, `remember` 1/1, `gateway-native` 3/3, par les options du paquet.
+
+**Non fait, pas suivant.** La preuve du plan pour 1b.6a : la gateway lancée par son fichier d'entrée, ses vrais enfants, de vraies sandboxes, un faux modèle en HTTPS (le broker refuse un amont en clair). Rien n'est retiré avant.
+
+### Le pas de réflexion de la boucle, demandé par le propriétaire
+
+En lisant au README que les revues de 1b.6a avaient coûté cinq fois la construction (§43), le propriétaire a donné sa lecture, puis corrigé la mienne. Ses mots sont dans [`orchestration-fable-5-2.md`](orchestration-fable-5-2.md), §4 : ce coût est celui d'un travail itératif sans comparaison ni historique d'un travail similaire ; ce journal est l'historique du travail et des preuves, pas ce qui rend une session plus intelligente ; ce rôle revient à la boucle, par une réflexion en fin de travail qui enregistre la décision et le résultat pour les sessions suivantes ; la plupart des harnais et des boucles en ont une.
+
+Ma première réponse proposait de recopier les classes de défauts dans les prompts des sessions. C'est ce que je fais déjà à la main dans chaque consigne, et ce que ce pas doit remplacer. Inscrit à la conception comme septième pas, non construit, avec ses questions ouvertes ; il commencera par l'état de l'art, pris dans les publications par le guichet des preuves, et sa mesure sera pré-enregistrée contre les quatre pas de 1b.6a.
+
+**Trois piliers.**
+- Recherche : le mécanisme redondant et les survivants qui l'ont désigné sont consignés ; le défaut trouvé au rejeu est décrit avec sa cause ; mutation exécutée ; le pas de réflexion est inscrit avec sa revue de littérature comme première étape.
+- SSDLC : élévation, srt reste dans son paquet, la règle n'est plus contournée ; déni de service, l'arrêt est borné et tue ce qui reste, un envoi vers un enfant fermé ne fait plus tomber le processus ; répudiation, une task est ouverte au nom du client configuré, affirmé par scénario ; aucune dépendance ajoutée.
+- Opérationnel : un enfant mort arrête la gateway avec le code 1 ; les deux enfants sont fermés après les ports ; aucun secret dans les scénarios (jeton et clé factices) ; IRB sans objet.

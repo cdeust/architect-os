@@ -116,6 +116,17 @@ Chaque worker reste un `claude -p` sous srt, à travers le proxy de 1a.0, comme 
 5. Le relecteur lit le diff dans un appel séparé, par son propre outil (§3). Il s'arrête selon la règle d'arrêt des revues de la conception (§9.2) : plus de défaut de correction et plus de contradiction avec une décision du propriétaire. Une proposition de mécanisme supplémentaire ne compte pas comme défaut.
 6. Le commit se fait depuis l'hôte, comme aujourd'hui.
 
+**Septième pas, demandé par le propriétaire le 15 novembre 2026, non construit : la réflexion.** Constat de départ : sur les trois pas du câblage natif de la gateway, les sessions de revue ont coûté 7,17 $ pour 1,40 $ de construction, et chaque revue a retrouvé des classes de défauts déjà rencontrées (journal, §40 à §43). Lecture du propriétaire : « La revue a coûté plus cher parce qu'on est sur un travail itératif sans comparaison ni historique d'un travail similaire. » Et sur le moyen : « Je n'irais pas jusqu'à dire que le journal est l'historique. Il est l'historique de travail et de preuves. Pour qu'une session et que le travail soit plus intelligent, c'est le rôle de la boucle d'orchestration avec la partie self improvement. C'est-à-dire réflexion après fin du travail et enregistrement de la décision et de l'output pour les sessions ultérieures. »
+
+Ce que cela fixe :
+- le journal reste ce qu'il est, le relevé du travail et des preuves, écrit pour une personne ; il n'est pas l'entrée des sessions ;
+- après le commit d'une étape, la boucle réfléchit sur l'étape finie et enregistre la décision prise et ce que l'étape a produit, pour les sessions suivantes ;
+- une session suivante reçoit ce qui la concerne de cet enregistrement, sans quitter le principe du contexte adapté à la tâche (§1).
+
+Remarque du propriétaire, le même jour : la plupart des harnais et des boucles d'orchestration ont une phase de réflexion en fin de travail pour améliorer la fois suivante. Ce pas commence donc par l'état de l'art (pilier Recherche) : ce que ces phases enregistrent, comment elles le relisent, et ce qui en a été mesuré, pris dans les publications par le guichet des preuves (`docs/design/evidence-desk.md`) et non de mémoire.
+
+Ce qui reste ouvert, à décider avant de construire : où vit l'enregistrement (le module de mémoire de la plateforme, donc O.2, ou un dépôt de fichiers d'ici là) ; qui réfléchit et avec quel profil ; comment une session retrouve ce qui la concerne sans tout charger ; et la mesure, pré-enregistrée comme au §10 : nombre de tours de revue et coût par étape, contre les trois pas de 1b.6a, une variable à la fois. Recopier à la main les leçons dans les consignes ou dans les prompts n'est pas ce pas : c'est ce que l'orchestrateur fait aujourd'hui, et ce que ce pas doit remplacer.
+
 Les bornes dures restent celles de la décision 12 : délai de l'appel et nombre de relances. `--max-turns` n'apparaît pas dans l'aide de Claude Code 2.1.325, et `--max-budget-usd` reste écarté par la décision 11. La revue ne remplace ni la porte (`npm run gate`, mutation sur le périmètre du diff) ni la lecture du diff par le propriétaire.
 
 La revue passe par un autre modèle que l'auteur, et pas par l'auto-relecture de Fable : à `xhigh` et `max`, Fable lance ses propres sous-agents de revue. L'orchestrateur tourne donc à `high`, où ces relectures spontanées sont rares.

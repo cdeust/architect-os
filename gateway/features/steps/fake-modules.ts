@@ -58,6 +58,8 @@ export class FakeModuleRunner implements SandboxRunner {
         if (over) return;
         over = true;
         this.ended.push(module);
+        // A sandbox that ended has no stdin left to write to, and writes nothing more.
+        stdin.end();
         stdout.end();
         done(exit);
       };
