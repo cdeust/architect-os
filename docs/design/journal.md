@@ -2062,3 +2062,37 @@ J'avais présenté R-14 (en mode Docker, le compte de la gateway pilote un démo
 - Recherche : mesure annoncée avant la conception, avec ses trois questions.
 - SSDLC : élévation de privilèges, un risque que j'avais classé accepté redevient une exigence ; rien n'est livré en mode Docker avant sa preuve.
 - Opérationnel : privilège minimum du démon lui-même ; IRB sans objet.
+
+## 50. Docker sans root : la mesure, ce que dit la documentation, et ce que le mainteneur accepte, 15 novembre 2026
+
+Le §49 a été poussé (`5192535`) : porte de l'hôte verte (1 624 scénarios, aucun mutant dans le périmètre), CI verte sur Linux et macOS.
+
+**Essai** (`bench/docker-bridge/rootless.sh`, hors production, rejouable en une commande devant un démon sans root). Même VM que le §48 (Ubuntu 24.04.2, Linux 6.8.0-64 aarch64, Docker 28.3.3, cgroup v2 délégué), où j'ai installé `uidmap`, `docker-ce-rootless-extras`, `slirp4netns` et `dbus-user-session`. Joué deux fois, mêmes résultats ; VM arrêtée ensuite, contexte Docker du poste inchangé.
+
+| Question | Résultat |
+|---|---|
+| Le démon démarre-t-il sous le compte de l'utilisateur ? | Pas avec ses réglages par défaut : il échoue à créer son pont (`iptables ... Permission denied`). Lancé sans pont ni NAT, oui |
+| Un conteneur démarre-t-il ? | Pas sans `--security-opt apparmor=unconfined` sur cet hôte : « Could not check if docker-default AppArmor profile was loaded », code 126 |
+| Le relais par socket Unix | `200 pong` ; interface `lo` seule ; l'extérieur `ENETUNREACH` |
+| L'utilisateur du conteneur lit-il la racine montée ? | Oui ; écriture `EROFS` ; écriture dans le `tmpfs` réussie |
+| Sous quel uid de l'hôte tourne le conteneur ? | 534288, un uid subordonné : ni root, ni le compte de l'utilisateur |
+| Borne de mémoire de 64 Mo, programme de 300 Mo | Tué, code 137 ; sans borne, il aboutit |
+| Borne de 16 processus, 40 enfants | 9 démarrés, 31 refusés ; sans borne, 40 |
+
+**Documentation lue** (Docker Engine, mode sans root, pages « troubleshooting » et « tips », et la page AppArmor ; copies et empreintes hors dépôt). Elle range AppArmor parmi ce que le mode sans root ne supporte pas, et dit que les bornes ne s'appliquent que sous cgroup v2 avec systemd, ignorées sinon. Une recherche sur le message d'erreur n'a donné aucun correctif propre au mode sans root.
+
+**Erreur de posture, corrigée après un rappel du propriétaire.** J'avais écrit que je lui présenterais « le choix avec ses conséquences » pour AppArmor. Son rappel : « tu es owner et maintainer, n'accepte que ce que tu accepterais de maintenir et de voir comme code dans le projet ». C'est une décision de mainteneur, que je devais prendre après avoir lu la documentation, pas lui renvoyer.
+
+**Ce que j'accepte.**
+- Le mode Docker est sans root, seulement. Un démon avec root est refusé au démarrage ; aucun champ de configuration ne l'autorise. R-14 est fermé par construction.
+- L'adaptateur passe `apparmor=unconfined`, une ligne, avec la référence : dans ce mode le profil ne peut pas s'appliquer, il n'y a rien à perdre. La table des menaces dit ce qui confine le conteneur.
+- Le canari vérifie que les bornes s'appliquent, et refuse de démarrer sinon.
+
+**Ce que je refuse.** Un champ pour accepter « quand même » un démon root. Du code de la gateway qui démarre ou règle le démon : c'est le travail de l'opérateur, la gateway constate et refuse. Le support de Podman : un seul moteur, prouvé.
+
+**Non mesuré.** Un hôte sans AppArmor (l'option y est-elle sans effet ?) ; un hôte où cgroup v2 n'est pas délégué ; Windows par WSL2 ; le module et le worker de la plateforme eux-mêmes. Le premier se mesurera en CI.
+
+**Trois piliers.**
+- Recherche : documentation officielle lue avant de décider, copies gardées avec empreintes ; essai déposé et rejoué ; ce qui n'est pas mesuré est écrit.
+- SSDLC : élévation de privilèges, R-14 fermé par un refus au démarrage plutôt que par une consigne ; le compromis sur AppArmor est écrit dans la table des menaces, avec ce qui reste ; aucune dépendance ajoutée.
+- Opérationnel : séparation nette entre ce que règle l'opérateur et ce que vérifie la gateway ; la VM d'essai est celle du projet, arrêtée après usage, l'unité laissée par l'installation désactivée ; IRB sans objet.
