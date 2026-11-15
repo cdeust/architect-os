@@ -1967,3 +1967,18 @@ Le §44 a été poussé (`fe53f0d`) : porte de l'hôte verte (1 623 scénarios =
 - Recherche : le scénario se rejoue en une commande (`npx cucumber-js --profile replay features/sandbox/gateway-entry.feature`, après `npx tsc -b`) ; le contrôle négatif et ses conditions sont consignés ; les limites sont écrites.
 - SSDLC : fuite d'information, la clé du broker n'atteint que le modèle, jamais un worker ; l'autorité de certificat ne va qu'au broker ; usurpation, un appel sans jeton n'ouvre rien ; clé, jeton et certificat sont factices et créés pour le scénario ; aucune dépendance ajoutée (`openssl` est un outil du poste et des images de CI, pas du dépôt).
 - Opérationnel : le processus ne reçoit que sa configuration déclarée ; arrêt propre sur SIGTERM, aucun processus laissé ; IRB sans objet.
+
+## 46. Le README porte l'hypothèse du propriétaire sur le coût des revues, 15 novembre 2026
+
+J'avais demandé au propriétaire s'il voulait voir sa lecture écrite au README comme l'hypothèse que l'on mesure (§43, §44). Sa réponse : « Oui, elle doit être sur le README, avec l'information que cette partie réduction du coût de revue devrait s'améliorer avec l'intégration du feedback à la fin de la boucle d'orchestration. La méthodologie à appliquer pour cette partie reste à définir pour avoir une architecture adaptée et organisée comme celle qu'on a là pour la partie boucle d'orchestration et sécurisation. »
+
+**Ce qui change.**
+- README : une section « The cost of review, and what is expected to lower it » ; la ligne des défauts arrêtés dit que le rapport revue/construction est un point de départ et y renvoie ; une ligne « O, feedback » dans l'état des briques ; une limite ajoutée : rien n'est construit ni mesuré, la méthodologie n'est pas définie.
+- Note de la boucle (`orchestration-fable-5-2.md`, §4) : ses mots, et la conséquence que j'en tire : le premier livrable de ce pas est une note de conception à lui, avant tout code.
+
+**Ce que le README affirme, et pas plus.** Un constat mesuré (9,57 $ de revue pour 2,52 $ de construction sur quatre pas, §45), une lecture attribuée au propriétaire, et une hypothèse dite comme telle, à mesurer contre ces quatre pas. Il ne dit pas que le coût baissera.
+
+**Trois piliers.**
+- Recherche : hypothèse écrite avant la mesure ; point de comparaison nommé ; revue de littérature annoncée comme première étape, par le guichet des preuves.
+- SSDLC : sans objet, aucune ligne de code.
+- Opérationnel : sans objet ; IRB sans objet.
