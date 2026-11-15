@@ -71,7 +71,7 @@ The whole suite is 1,478 scenarios. On the last brick, none of the 645 mutants o
 
 ## What is not proven
 
-- **Windows beyond WSL2.** Native Windows was not tried: srt's own support for it is alpha. Under WSL2 the suite, the srt bench and the overhead measures pass, but the gate with its mutation and real sessions were not run there (§38).
+- **Windows beyond the suite.** Windows is supported through WSL2; native Windows is not planned for now (srt's own support for it is alpha and was not tried). Under WSL2 the suite, the srt bench and the overhead measures pass, but the gate with its mutation and real sessions were not run there (§38, §39).
 - **Savings on real work.** The baseline measures short fix tasks whose tests are named. Its own limits are stated below.
 - **The context targets of the design** (tokens per task, per layer): they belong to bricks 2 and 3.
 - **The orchestration loop against other ways of working.** One pilot, one session per cell: no statistical conclusion (§32).

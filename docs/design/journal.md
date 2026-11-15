@@ -1732,6 +1732,8 @@ Tout ce qui précède passe par des fonctions documentées : une personne lance 
 
 **Écart relevé avec le §38.** Le §38 écrit que srt 0.0.81 ne prend pas Windows natif en charge. Le README de srt 0.0.81 installé au dépôt (`node_modules/@anthropic-ai/sandbox-runtime/README.md`, « Platform Support ») décrit une prise en charge de Windows en alpha, par un utilitaire `srt-win.exe` et la commande `srt windows-install`. Elle n'a pas été essayée : le README du projet dit donc « non essayé, alpha », et non « non pris en charge ».
 
+**Décision du propriétaire, 15 novembre 2026, sur cet écart :** Windows natif n'est pas envisagé pour l'instant ; Windows s'entend par WSL2 (décision 17 de [`platform-v3-srt.md`](platform-v3-srt.md), §9.1).
+
 **Trois piliers.**
 - Recherche : les trois inconnues du §37 levées par mesure sur l'application ; trois tours réels, délais et comptes relevés au registre ; essai rejouable (`bench/evidence-remote`) ; ce qui n'est pas mesuré est dit.
 - SSDLC : serveur lié à la boucle locale, refus sans jeton vérifié à travers le tunnel, jeton du tunnel au trousseau ; même vérificateur qu'au §37, donc mêmes refus ; pas de scénario ni de mutation, l'essai étant hors production : prévu à la brique S.4.

@@ -397,6 +397,7 @@ Deux causes racines gardées. Un `disableAllHooks` écrit dans les réglages du 
 | 14  | D14 : `CLAUDE_CONFIG_DIR` propre, recréé à chaque lancement, `sandbox.enabled: false`, hooks `onFailure: block`, confiance pré-écrite ; `allowPty: true` ; builder-guard par `--plugin-dir`, remplacé le 4 novembre 2026 par `permissions.deny` sous `--bare` (décision 2) ; pas de renouvellement OAuth (503)                                | §8, 1a.0          |
 | 15  | D15 : R-1 et R-2 réécrits ; constats externes `#104359`, `srt#755`, `srt#391`                                                                                                                                                                                  | §4.2              |
 | 16  | D16 : décisions 1a.0 closes (hooks, `allowPty`, dossiers de session, confiance du dossier) ; les options (a), (b), (c) du journal §14 sont remplacées                                                                                                          | Journal §14, §15  |
+| 17  | D17, 15 novembre 2026 : hôtes pris en charge, macOS, Linux, et Windows par WSL2. Windows natif n'est pas envisagé pour l'instant : srt 0.0.81 en propose une prise en charge en alpha, non essayée, et l'adaptateur (`packages/sandbox`) est écrit pour POSIX | Journal §38, §39  |
 
 ### 9.2 Décisions ouvertes
 
