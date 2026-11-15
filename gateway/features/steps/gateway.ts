@@ -30,6 +30,7 @@ interface Scene {
   router: TaskRouter;
   seen: Seen[];
   modules: InMemoryModules;
+  data: InMemoryDataClient;
   registry: InMemoryTaskRegistry;
   tokens: InMemoryTaskTokens;
   sandboxes: InMemoryTaskSandboxes;
@@ -39,6 +40,10 @@ interface Scene {
   /** The call of the scenario, awaited or still in flight. */
   pending?: Promise<Attempt>;
   outcome?: Attempt;
+  /** Releases the openings the registry holds. */
+  release?: () => void;
+  /** The shutdown a scenario started without waiting for it. */
+  shutdown?: { over: boolean };
   /** The tokens of the tasks, by task. */
   tokenOf: Map<string, string>;
   /** The calls a module saw cancelled. */
@@ -61,6 +66,7 @@ Given('the gateway over the topology {word}', function (path: string) {
   const time = new ManualTime(new Date('2026-11-06T09:00:00.000Z'));
   const parts = {
     modules: new InMemoryModules(),
+    data: new InMemoryDataClient(),
     registry: new InMemoryTaskRegistry(),
     tokens: new InMemoryTaskTokens(),
     sandboxes: new InMemoryTaskSandboxes(),
@@ -78,7 +84,7 @@ Given('the gateway over the topology {word}', function (path: string) {
   const router: TaskRouter = new TaskRouter(
     topology,
     recording,
-    new InMemoryDataClient(),
+    parts.data,
     parts.registry,
     parts.tokens,
     parts.sandboxes,
@@ -266,6 +272,90 @@ When('the client of the profile {string} cancels {string}', async function (prof
   scene(this).outcome = await attempt(() => scene(this).router.cancel(profile, task));
   await settle();
 });
+
+When('the gateway shuts down', async function () {
+  await scene(this).router.shutdown();
+  await settle();
+});
+
+When('the gateway starts to shut down', async function () {
+  const current = scene(this);
+  current.shutdown = { over: false };
+  const mark = (): void => void (current.shutdown!.over = true);
+  current.router.shutdown().then(mark, mark);
+  await settle();
+});
+
+Then('the shutdown is not over', function () {
+  assert.equal(scene(this).shutdown!.over, false);
+});
+
+Then('the shutdown is over', async function () {
+  await settle();
+  assert.equal(scene(this).shutdown!.over, true);
+});
+
+Given('data holds its answers', function () {
+  scene(this).release = scene(this).data.hold();
+});
+
+When('data gives the held answers', async function () {
+  scene(this).release!();
+  await settle();
+});
+
+Given('the registry holds the ends', function () {
+  scene(this).release = scene(this).registry.holdEnds();
+});
+
+When('the registry answers the held ends', async function () {
+  scene(this).release!();
+  await settle();
+});
+
+When('the client completes {string} without waiting', async function (task: string) {
+  scene(this).pending = attempt(() => scene(this).router.complete(task));
+  await settle();
+});
+
+Given('the broker holds the grants', function () {
+  scene(this).release = scene(this).tokens.hold();
+});
+
+When('the broker answers the held grants', async function () {
+  scene(this).release!();
+  await settle();
+});
+
+Given('the registry holds the openings', function () {
+  scene(this).release = scene(this).registry.hold();
+});
+
+When('the registry answers the held openings', async function () {
+  scene(this).release!();
+  await settle();
+});
+
+When(
+  'the client {string} opens a task with the profile {string} without waiting',
+  async function (client: string, profile: string) {
+    scene(this).pending = attempt(() => scene(this).router.open(client, profile));
+    await settle();
+  },
+);
+
+Then(
+  'the registry holds the ends {string}, the tokens {string} retired and the sandboxes {string} stopped',
+  function (ends: string, tokens: string, sandboxes: string) {
+    const scenes = scene(this);
+    assert.deepEqual(
+      scenes.registry.ended.map(({ task, ending }) => `${task} ${ending}`),
+      ends.split(', '),
+    );
+    assert.deepEqual(scenes.tokens.retired, tokens.split(', '));
+    assert.deepEqual(scenes.sandboxes.stopped, sandboxes.split(', '));
+  },
+);
 
 When('the client completes {string}', async function (task: string) {
   scene(this).outcome = await attempt(() => scene(this).router.complete(task));

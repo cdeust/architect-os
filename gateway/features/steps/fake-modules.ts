@@ -31,13 +31,24 @@ export class FakeModuleRunner implements SandboxRunner {
   readonly failing = new Map<string, number>();
   /** Launches still to write what is not MCP on stdout, per module: the sandbox stays up until it is stopped. */
   readonly garbling = new Map<string, number>();
+  /** The modules whose sandbox refuses to stop. */
+  readonly unstoppable = new Set<string>();
   /** The modules whose sandbox ended, in order. */
   readonly ended: string[] = [];
   private readonly live = new Map<string, () => void>();
+  private gate: Promise<void> | undefined;
+
+  /** Holds the launches from now on: each is recorded, then waits for the returned function to be called. */
+  hold(): () => void {
+    let release = (): void => {};
+    this.gate = new Promise<void>((resolve) => (release = resolve));
+    return release;
+  }
 
   async start(request: SandboxRequest): Promise<Sandbox> {
     const module = /modules\/([^/]+)\//.exec(request.command.join(' '))?.[1] ?? '?';
     this.started.push(module);
+    await this.gate;
     const stdin = new PassThrough();
     const stdout = new PassThrough();
     let finish: (exit: SandboxExit) => void = () => {};
@@ -57,6 +68,7 @@ export class FakeModuleRunner implements SandboxRunner {
       stderr: new PassThrough(),
       exited,
       stop: async () => {
+        if (this.unstoppable.has(module)) throw new Error(`${module} cannot be stopped`);
         finish({ code: null, signal: 'SIGTERM' });
         return exited;
       },

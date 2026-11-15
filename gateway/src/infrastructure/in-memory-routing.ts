@@ -35,8 +35,18 @@ export class InMemoryDataClient implements DataClient {
   /** The failure of data, while it is down. */
   unavailable: Error | undefined;
 
+  private gate: Promise<void> | undefined;
+
+  /** Holds the answers from now on: each operation waits for the returned function to be called. */
+  hold(): () => void {
+    let release = (): void => {};
+    this.gate = new Promise<void>((resolve) => (release = resolve));
+    return release;
+  }
+
   async execute(op: DataOpName, args: Record<string, unknown>): Promise<ServiceResponse> {
     if (this.unavailable !== undefined) throw this.unavailable;
+    await this.gate;
     return answer(`${op} ${JSON.stringify(args)}`);
   }
 }
@@ -49,14 +59,34 @@ export class InMemoryTaskRegistry implements TaskRegistry {
   /** The failure of data, while it is down. */
   unavailable: Error | undefined;
 
+  private gate: Promise<void> | undefined;
+
+  /** Holds the openings from now on: each is written, then waits for the returned function to be called. */
+  hold(): () => void {
+    let release = (): void => {};
+    this.gate = new Promise<void>((resolve) => (release = resolve));
+    return release;
+  }
+
   async open(task: DataOpInput<'tasks.open'>): Promise<void> {
     this.opened.push(task);
+    await this.gate;
+  }
+
+  private endGate: Promise<void> | undefined;
+
+  /** Holds the ends from now on: each is written, then waits for the returned function to be called. */
+  holdEnds(): () => void {
+    let release = (): void => {};
+    this.endGate = new Promise<void>((resolve) => (release = resolve));
+    return release;
   }
 
   async end(task: string, ending: TaskEnding): Promise<void> {
     if (this.unavailable !== undefined) throw this.unavailable;
     if (this.ended.some((end) => end.task === task)) throw new Error('tasks.end: invalid operation');
     this.ended.push({ task, ending });
+    await this.endGate;
   }
 }
 
@@ -67,9 +97,19 @@ export class InMemoryTaskTokens implements TaskTokens {
   /** The failure of the broker to grant, while it refuses. */
   refusing: Error | undefined;
 
+  private gate: Promise<void> | undefined;
+
+  /** Holds the grants from now on: each is recorded, then waits for the returned function to be called. */
+  hold(): () => void {
+    let release = (): void => {};
+    this.gate = new Promise<void>((resolve) => (release = resolve));
+    return release;
+  }
+
   async grant(grant: TaskGrant): Promise<void> {
     if (this.refusing !== undefined) throw this.refusing;
     this.granted.push(grant);
+    await this.gate;
   }
 
   async retire(token: string): Promise<void> {

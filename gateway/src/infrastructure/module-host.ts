@@ -37,6 +37,8 @@ export class ModuleHost implements ModuleClient {
   private readonly failures = new Map<string, number>();
   /** The launch under way, per module: calls that arrive meanwhile wait for it instead of launching again. */
   private readonly launching = new Map<string, Promise<Link>>();
+  /** Once closed, no module is launched any more. */
+  private closed = false;
 
   constructor(
     private readonly servers: ModulesMcpJson,
@@ -62,9 +64,21 @@ export class ModuleHost implements ModuleClient {
     return toResponse(response);
   }
 
-  /** Stops every module: their groups are killed (`kill(-pgid)`). */
+  /**
+   * Stops every module, the ones being launched included: their groups are killed (`kill(-pgid)`). No module is
+   * launched afterwards.
+   */
   async close(): Promise<void> {
-    await Promise.all([...this.links.values()].map((link) => link.sandbox.stop()));
+    this.closed = true;
+    await Promise.allSettled([...this.launching.values()]);
+    // Every stop is awaited whatever another did; the first that failed then rejects.
+    const failures: unknown[] = [];
+    await Promise.all(
+      [...this.links.values()].map((link) =>
+        link.sandbox.stop().catch((error: unknown) => failures.push(error)),
+      ),
+    );
+    if (failures.length > 0) throw failures[0];
   }
 
   /** The link of a module, launched again when its sandbox ended. */
@@ -84,6 +98,7 @@ export class ModuleHost implements ModuleClient {
     const server = this.servers.mcpServers[module];
     if (server === undefined) throw new GatewayError('SERVICE_UNAVAILABLE', `no server for ${module}`);
     for (;;) {
+      if (this.closed) throw shuttingDown();
       const failures = this.failures.get(module) ?? 0;
       if (failures >= this.relaunches)
         throw new GatewayError(
@@ -111,3 +126,5 @@ export class ModuleHost implements ModuleClient {
     return link;
   }
 }
+
+const shuttingDown = () => new GatewayError('SERVICE_UNAVAILABLE', 'the gateway is shutting down');

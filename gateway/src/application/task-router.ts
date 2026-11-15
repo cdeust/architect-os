@@ -7,6 +7,7 @@ import {
   type Topology,
 } from '@architect-os/contracts';
 import { GatewayError, type GatewayErrorCode } from '../domain/errors.js';
+import { Underway } from './underway.js';
 import type { AuditLog, Clock, Scheduler, ServiceResponse } from '../domain/ports.js';
 import { WorkerSession } from './worker-session.js';
 import type {
@@ -67,6 +68,10 @@ export class TaskRouter {
   private readonly tasks = new Map<string, OpenTask>();
   private readonly calls = new Map<string, Call>();
   private readonly addresses: Map<string, ModuleManifest>;
+  /** Once the gateway shuts down, no task is opened any more. */
+  private closed = false;
+  /** The openings, the ends and the journaled calls under way: the shutdown waits for them. */
+  private readonly underway = new Underway();
 
   constructor(
     private readonly topology: Topology,
@@ -89,7 +94,12 @@ export class TaskRouter {
   }
 
   /** Opens a task under a profile of the topology; its deadline ends it. */
-  async open(client: string, profileName: string): Promise<{ task: string; token: string }> {
+  open(client: string, profileName: string): Promise<{ task: string; token: string }> {
+    return this.underway.track(this.opening(client, profileName));
+  }
+
+  private async opening(client: string, profileName: string): Promise<{ task: string; token: string }> {
+    if (this.closed) throw unavailable();
     const profile = this.topology.clients.profiles.find((candidate) => candidate.name === profileName);
     if (profile === undefined) throw new GatewayError('UNKNOWN_PROFILE', `no profile ${profileName}`);
     const task = this.ids.next('task');
@@ -102,6 +112,11 @@ export class TaskRouter {
       deadline_at: new Date(deadline).toISOString(),
     });
     this.tasks.set(task, { task, profile, token, deadline, calls: 0 });
+    if (this.closed) {
+      // The gateway shut down while the registry held the opening: the task it wrote is ended, not left open.
+      await this.end(task, 'cancelled', 'gateway');
+      throw unavailable();
+    }
     try {
       await this.tokens.grant({ token, task });
     } catch (error) {
@@ -109,8 +124,31 @@ export class TaskRouter {
       await this.end(task, 'error', 'gateway');
       throw error;
     }
+    if (this.closed) {
+      // The shutdown ended the task while its token was being granted: the grant may have landed after the
+      // revocation, so the token is retired again, and the opening is refused.
+      await this.tokens.retire(token);
+      throw unavailable();
+    }
     this.scheduler.after(profile.max_duration_ms, () => void this.end(task, 'deadline', 'gateway'));
     return { task, token };
+  }
+
+  /**
+   * The gateway stops: every open task ends `cancelled`, and no task is opened any more. It resolves once nothing is
+   * under way: an opening that was waiting for the registry or the broker has ended its own task, an end started
+   * before (a deadline, a completion) has finished, a call or a data operation in flight has its audit entry. It sets
+   * no bound of its own: what it waits for is bounded by the adapters (the timeout of an MCP request, the kill of a
+   * sandbox), and whoever calls it bounds the whole. An end of the shutdown that failed (an audit log that cannot be
+   * written) then rejects it.
+   */
+  async shutdown(): Promise<void> {
+    this.closed = true;
+    const failures: unknown[] = [];
+    for (const task of [...this.tasks.keys()])
+      this.end(task, 'cancelled', 'gateway').catch((error: unknown) => failures.push(error));
+    await this.underway.settled();
+    if (failures.length > 0) throw failures[0];
   }
 
   /** A `tools/call` of a module, at its address `<domain>.<tool>`, by the client of a task or by a module. */
@@ -244,7 +282,11 @@ export class TaskRouter {
    * The three effects run whatever one of them meets (data down, for the registry): a failure is audited with its
    * code, and the task stays ended for the gateway. False when the task is not open.
    */
-  private async end(task: string, ending: TaskEnding, by: Ender): Promise<boolean> {
+  private end(task: string, ending: TaskEnding, by: Ender): Promise<boolean> {
+    return this.underway.track(this.ending(task, ending, by));
+  }
+
+  private async ending(task: string, ending: TaskEnding, by: Ender): Promise<boolean> {
     const open = this.tasks.get(task);
     if (open === undefined) return false;
     this.tasks.delete(task);
@@ -286,8 +328,17 @@ export class TaskRouter {
     return this.clock.now().getTime();
   }
 
-  /** Runs `work` and audits it, ok or refused with its code. */
-  private async journal<T>(
+  /** Runs `work` and audits it, ok or refused with its code; under way until its audit entry is written. */
+  private journal<T>(
+    task: string | undefined,
+    subject: string,
+    tool: string,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    return this.underway.track(this.journaled(task, subject, tool, work));
+  }
+
+  private async journaled<T>(
     task: string | undefined,
     subject: string,
     tool: string,
@@ -317,6 +368,7 @@ export class TaskRouter {
   }
 }
 
+const unavailable = () => new GatewayError('SERVICE_UNAVAILABLE', 'the gateway is shutting down');
 const unknownTask = (task: string) => new GatewayError('UNKNOWN_TASK', `no open task ${task}`);
 const cancelled = (id: string, code: GatewayErrorCode) => new GatewayError(code, `call ${id} cancelled`);
 const codeOf = (error: unknown): string => (error instanceof GatewayError ? error.code : 'INTERNAL');

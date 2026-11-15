@@ -1816,3 +1816,60 @@ Le contrôle du profil a laissé un survivant (« au moins un profil » contre �
 - Recherche : la version refusée et ses deux survivants sont consignés ; chaque constat de la revue a un scénario ; mutation exécutée ; rejeu en une commande par fichier (`npx cucumber-js --profile replay <fichier>`).
 - SSDLC : usurpation et répudiation, le registre nomme le sujet authentifié de chaque task, et un appel sans jeton n'en ouvre aucune ; élévation de privilèges, risque écrit au plan : un seul profil, donc tout sujet authentifié est `owner` jusqu'à la brique 2 ; fuite d'information, l'hôte de rappel n'écoute qu'en boucle locale, affirmé par scénario ; déni de service, une composition qui échoue ne laisse aucun port tenu ; aucune dépendance ajoutée.
 - Opérationnel : privilège minimum, `composeNative` ne possède ni `data`, ni le broker, ni l'hôte HTTP des clients ; aucun secret (clé et jeton factices, modèle factice) ; IRB sans objet.
+
+## 42. Brique 1b.6a, troisième pas : un arrêt qui ne laisse rien tourner, la configuration lue de l'environnement, 15 novembre 2026
+
+Le §41 a été poussé (`e3f4aa7`) : porte de l'hôte verte (1 510 scénarios = 1 495 + 15 ; 44 mutants, 0 survivant), CI verte sur Linux et macOS. Une erreur de suivi, rattrapée avant l'annonce : la première commande de suivi a pris un ancien run vert du même nom de branche d'essai, pour un autre commit. Règle : chercher le run par le SHA du commit, comparer son `headSha` à la tête.
+
+Ce pas prépare ce dont le point d'entrée du processus a besoin et qui se prouve sans lui. Le point d'entrée (les vrais enfants lancés par `NativeLauncher`, l'hôte HTTP des clients, les signaux) est le pas suivant ; rien n'est retiré.
+
+**Arrêt.** `TaskRouter.shutdown()` termine chaque task ouverte (`cancelled`, par `gateway` : appels en cours annulés, jeton retiré, sandboxes arrêtées, registre, journal), refuse ensuite toute ouverture (`SERVICE_UNAVAILABLE`), et ne se termine que lorsque le routeur n'a plus rien en vol : ouvertures, fins, appels et opérations de données jusqu'à leur entrée d'audit, donc les runs des workers. Il ne fixe pas de borne : ce qu'il attend est borné par les adaptateurs. `composeNative(...).close()` fait cet arrêt, arrête les modules (lancements en cours compris), ferme l'hôte de rappel : chaque étape est tentée quoi qu'ait fait la précédente, puis `close()` rejette avec le premier échec.
+
+**Configuration.** `readNativeConfig` (`gateway/src/infrastructure/native-config.ts`) lit l'environnement et ne lance rien : jetons des clients, port, quota, profil, les trois fichiers de topologie, et la liste fermée des deux processus natifs (`data`, broker) pour `NativeLauncher`. Aucune valeur par défaut : tout est requis, sauf `NODE_EXTRA_CA_CERTS` (remise au broker seul : un opérateur derrière une inspection TLS y nomme son autorité, et seul le broker parle au modèle). `DATABASE_URL` est remise à `data` seule ; le stockage qui ne garde rien se choisit par son nom (`DATABASE_URL=memory`), il n'est plus un repli silencieux. Un jeton suit la RFC 6750 et fait au moins 32 caractères ; un entier n'a qu'une écriture. Le port du broker est lu dans le fichier que le broker reçoit (`BROKER_CONFIG`), dans les bornes que le broker accepte : le port donné aux workers et celui où le broker écoute ont une seule source. Un refus est une `Error` ordinaire qui nomme la variable et ce qui en est attendu, jamais sa valeur.
+
+**Ce que la boucle a rendu.** Construction : 232 s, 0,61 $ ; revue : 0,99 $, `request_changes`. Les scénarios qui écoutent sur un port ne tournent pas dans la sandbox du worker : je les ai joués sur l'hôte pour la première fois après reprise.
+
+| Constat de la revue | Décision |
+|---|---|
+| Quatre survivants dans la configuration, vérifiés par elle sur des copies mutées : chemin relatif (les cas pointaient vers des fichiers absents), bloc `catch`, ancre de l'expression des entiers, borne d'un jeton d'un caractère | Fondés. Un seul point de refus pour le fichier du broker, sans branche qu'un scénario ne distingue pas ; cas ajoutés : chemin relatif vers un fichier valide, signe plus, exposant, texte avant et après des chiffres, jeton d'un caractère |
+| Un arrêt qui tombe pendant l'octroi du jeton laissait l'ouverture réussir, et l'octroi pouvait arriver après la révocation. Le worker l'avait signalé sans le traiter, la consigne ne nommant que l'attente du registre | Fondé, et c'est un défaut de ma consigne. L'ouverture est refusée et le jeton retiré une seconde fois ; scénario avec un broker qui retient l'octroi |
+| Un titre de scénario affirmait un ordre que rien ne vérifiait | Titre ramené à ce qui est vérifié |
+
+**Un défaut que la première revue n'a pas relevé, corrigé à la relecture.** Le worker notait que `close()` s'arrêtait net si la fin des tasks échouait : un journal d'audit qui ne s'écrit plus à l'arrêt aurait laissé les sandboxes des modules en vie et l'hôte de rappel à l'écoute. Chaque étape est maintenant tentée ; scénario avec un journal qui refuse.
+
+**Seconde revue, sur ma reprise** (`npm run review`, 295 s, 1,20 $, `request_changes`). Elle a refusé une phrase de cette entrée, « l'arrêt ne laisse ni sandbox, ni jeton accordé » : l'arrêt ne tenait que pour ce qui était au repos quand il tombait. Reproduit par elle hors de l'arbre avec les doublures.
+
+| Constat | Décision |
+|---|---|
+| `shutdown()` n'attendait ni une ouverture encore en attente du registre (sa task n'est pas encore dans la table), ni une fin déjà lancée par une échéance ou une clôture (sa task n'y est plus) ; l'appelant fermait ensuite `data` et le broker sous elles | Fondé. Le routeur suit ses ouvertures et ses fins en cours (`gateway/src/application/underway.ts`) ; l'arrêt ne se termine que lorsqu'il n'en reste aucune. Trois scénarios : l'arrêt commence, n'a pas fini tant que le registre ou le broker retient, a fini ensuite |
+| Un module en cours de lancement à la fermeture finissait de démarrer après elle, et plus personne ne l'arrêtait | Fondé, code antérieur désormais sur le chemin d'arrêt. `ModuleHost.close()` attend les lancements en cours, puis arrête tout ; plus aucun lancement ensuite |
+| Un worker qui démarre pendant l'arrêt n'était arrêté que par un appel que personne n'attend | Fondé. J'ai d'abord ajouté une attente dans l'hôte des workers ; la troisième revue a montré qu'elle était redondante (ci-dessous) |
+| Jetons : un sujet contenant `=`, des blancs, un jeton d'un caractère acceptés | Fondé. Au moins 32 caractères, sans blanc (format précisé à la troisième revue) ; le scénario du jeton d'un caractère, que j'avais ajouté pour tuer un mutant de borne, affirmait un comportement que je ne veux pas |
+| `080` accepté ; port du broker accepté de 1 à 65535 alors que le broker exige 1024 à 65535 ; variable facultative vide transmise à l'enfant | Fondés, corrigés |
+| Sans `DATABASE_URL`, `data` passe en mémoire sans que l'opérateur l'ait choisi, alors que cette entrée disait « aucune configuration implicite » | Fondé. `DATABASE_URL` requise : une URL Postgres, ou `memory` |
+| Rien ne distinguait « toutes les fins sont attendues » de « la première qui échoue » | L'arrêt ne passe plus par cette forme : il collecte les échecs et attend tout ce qui est en vol |
+
+Deux de mes cas ne prouvaient rien : une cellule de table perd ses blancs de bord, donc « blanc avant le jeton » et « blanc après le sujet » arrivaient sans blanc, et la configuration, valide, n'était pas refusée. L'échec des deux scénarios l'a montré. Le blanc s'écrit maintenant `[blank]`.
+
+**Troisième revue, sur les corrections du second tour** (393 s, 1,50 $, `request_changes`).
+
+| Constat | Décision |
+|---|---|
+| La boucle de relance d'un module ne regardait pas la fermeture : un lancement qui échoue pendant `close()` en relançait jusqu'à trois. Reproduit par elle | Fondé. La boucle s'arrête dès que l'hôte se ferme ; scénario avec un lancement retenu qui échoue : un seul lancement |
+| Seules les ouvertures et les fins étaient suivies : l'opération de données d'un module en cours, et l'écriture d'audit d'un appel, se terminaient après l'arrêt. Reproduit par elle. Cette entrée affirmait le contraire | Fondé. Tout appel journalisé est suivi jusqu'à son entrée d'audit ; scénario avec `data` qui retient sa réponse |
+| `ModuleHost.close()` rejetait au premier arrêt échoué sans attendre les autres | Fondé. Tous les arrêts sont attendus, le premier échec rejette ensuite |
+| Les étapes de `close()` se suivent : un registre qui ne répond pas retarde l'arrêt des modules ; le plan disait que la fermeture de l'un ne dépend pas de celle des autres, ce qui tient pour un échec, pas pour une lenteur | Fondé. Plan corrigé ; les bornes sont dites dans le commentaire ; le point d'entrée borne l'arrêt et devra encore tuer les sandboxes à l'échéance (écrit au plan, pas suivant) |
+| Aucun scénario n'échouait si l'attente des workers était retirée de `close()` | Fondé, et la vérification à la main a montré plus : cette attente était redondante. Le routeur attend déjà chaque run, qui vit à l'intérieur d'un appel journalisé. `WorkerHost.close()` est retiré ; le scénario d'un worker en cours de démarrage à la fermeture reste, et passe par le routeur |
+| Un jeton produit par `openssl rand -base64 32` finit par `=` et était refusé sans que le message le dise | Fondé. Un jeton suit maintenant la RFC 6750 (lettres, chiffres, `-._~+/`, puis `=` en fin seulement) ; la paire se coupe à son dernier `=` |
+| 400 chiffres donnaient un quota infini | Fondé. Entier sûr exigé |
+
+Vérifié à la main, en retirant la ligne puis en la remettant : sans le suivi des appels journalisés, le scénario de l'opération de données échoue ; sans l'attente des workers, rien n'échouait, d'où son retrait.
+
+**Mesures.** Sur l'hôte : scénarios de la gateway et d'intégration 255/255 ; sous vrai srt `recall` 1/1, `remember` 1/1, `gateway-native` 3/3. Mutation des lignes de production changées (`native-config.ts` et `underway.ts` entiers, `TaskRouter`, `ModuleHost`, `close()`, les doublures) : 208 mutants, 190 tués, 10 délais dépassés, 7 erreurs d'exécution, 1 survivant : une garde de fermeture dans `ModuleHost.linked`, redondante avec celle de la boucle de relance. Garde retirée ; les lignes de fermeture de `ModuleHost` relancées seules : 8 tués, 0 survivant.
+
+**Coût de ce pas.** Construction 0,61 $ ; trois revues 0,99 $, 1,20 $, 1,50 $, soit 3,69 $ de revue pour 0,61 $ de construction. Chaque revue a trouvé des défauts que la précédente ne pouvait pas voir, parce qu'ils étaient dans les corrections.
+
+**Trois piliers.**
+- Recherche : les survivants trouvés par la revue ont été reproduits par elle avant d'être corrigés ; le défaut de consigne est consigné ; mutation exécutée ; rejeu en une commande par fichier.
+- SSDLC : fuite d'information, aucun refus de configuration ne contient la valeur fautive (jeton, URL de base), affirmé par scénario ; élévation, chaque enfant natif ne reçoit que ses variables déclarées ; déni de service, l'arrêt attend ce qui est en vol (ouvertures, fins, appels, opérations de données, lancements de modules, runs de workers) et ne laisse ni sandbox, ni jeton accordé, ni port tenu, y compris quand une étape échoue ; aucune dépendance ajoutée.
+- Opérationnel : aucune valeur par défaut ni repli, le stockage sans persistance est un choix écrit ; privilège minimum par processus ; plancher de 32 caractères pour un jeton de client ; IRB sans objet.

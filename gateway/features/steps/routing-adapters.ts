@@ -254,6 +254,102 @@ When(
   },
 );
 
+const JUDGE = { mcpServers: { judge: { command: 'node', args: ['modules/judge/dist/src/serve.js'] } } };
+
+/** What a module host of a scenario closes, and whether it is over. */
+interface Closing {
+  host: ModuleHost;
+  release?: () => void;
+  over: boolean;
+}
+const closing = (world: GatewayWorld): Closing =>
+  must(world.state['module-host-closing'] as Closing | undefined, 'a module host to close');
+
+Given('a module host over the server of "judge"', function () {
+  const runner = new FakeModuleRunner();
+  const host = new ModuleHost(JUDGE, runner, { profile: 'module', cwd: '.' });
+  Object.assign(contracts(this), { modules: host, runner });
+  this.state['module-host-closing'] = { host, over: false } satisfies Closing;
+});
+
+Given('a module host over the server of "judge", whose launches are held', function () {
+  const runner = new FakeModuleRunner();
+  // The module does not answer its call: it is stopped under it, as a module at work is.
+  runner.hanging.add('judge');
+  const host = new ModuleHost(JUDGE, runner, { profile: 'module', cwd: '.' });
+  Object.assign(contracts(this), { modules: host, runner });
+  this.state['module-host-closing'] = { host, release: runner.hold(), over: false } satisfies Closing;
+});
+
+Given(
+  'a module host over the server of "judge", whose launches are held and whose next launch fails',
+  function () {
+    const runner = new FakeModuleRunner();
+    runner.failing.set('judge', 1);
+    const host = new ModuleHost(JUDGE, runner, { profile: 'module', cwd: '.' });
+    Object.assign(contracts(this), { modules: host, runner });
+    this.state['module-host-closing'] = { host, release: runner.hold(), over: false } satisfies Closing;
+  },
+);
+
+Then('the closing of the module host is over, after {int} launch', async function (launches: number) {
+  const runner = must(contracts(this).runner, 'a module host');
+  const deadline = Date.now() + 5000;
+  while (!closing(this).over && Date.now() < deadline) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(closing(this).over, true);
+  assert.equal(runner.started.length, launches);
+});
+
+When(
+  'the module client calls {string} tool {string} with {string} and the call identifier {string}, without waiting',
+  async function (module: string, tool: string, args: string, call: string) {
+    // The call ends refused once its module is stopped under it: what it gives is not what the scenario is about.
+    void must(contracts(this).modules, 'a module client')
+      .call({
+        module,
+        tool,
+        args: JSON.parse(args) as Record<string, unknown>,
+        call,
+        timeoutMs: 1000,
+        signal: new AbortController().signal,
+      })
+      .catch(() => undefined);
+    await new Promise((resolve) => setImmediate(resolve));
+  },
+);
+
+When('the module host starts to close', async function () {
+  const current = closing(this);
+  const mark = (): void => void (current.over = true);
+  current.host.close().then(mark, mark);
+  await new Promise((resolve) => setImmediate(resolve));
+});
+
+When('the module host is closed', async function () {
+  await closing(this).host.close();
+});
+
+Then('the closing of the module host is not over', function () {
+  assert.equal(closing(this).over, false);
+});
+
+When('the held launches of the module host go on', function () {
+  closing(this).release!();
+});
+
+Then(
+  'the closing of the module host is over, and the sandbox of {string} ended',
+  async function (module: string) {
+    const runner = must(contracts(this).runner, 'a module host');
+    // The launch goes on over several turns of the event loop (the MCP handshake over streams): polled, bounded.
+    const deadline = Date.now() + 5000;
+    while (!closing(this).over && Date.now() < deadline)
+      await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(closing(this).over, true);
+    assert.deepEqual(runner.ended, [module]);
+  },
+);
+
 Then('the module call is refused with code {string}', function (code: string) {
   assert.equal((contracts(this).refusal as { code?: string }).code, code);
 });

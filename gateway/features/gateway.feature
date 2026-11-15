@@ -212,3 +212,64 @@ Feature: the gateway routes the calls of a task to its modules, within the bound
     And the audit log holds "task-2 gateway task.end:error ok"
     When the client calls "judge.grade" for "task-2" with '{}'
     Then the call is refused with "UNKNOWN_TASK"
+
+  Scenario: the shutdown ends every open task as cancelled, and the call in flight is refused
+    Given the module "judge" waits until its call is cancelled
+    And the client "cli" opened the task "task-2" with the profile "local"
+    When the client calls "judge.grade" for "task-2" with '{}' without waiting
+    And the gateway shuts down
+    Then the call is refused with "TASK_ENDED"
+    And the module "judge" saw its call cancelled
+    And the registry holds the ends "task-1 cancelled, task-2 cancelled", the tokens "token-1, token-2" retired and the sandboxes "task-1, task-2" stopped
+    And the audit log holds in any order "task-1 gateway task.end:cancelled ok, task-2 gateway task.end:cancelled ok, task-2 client judge.grade TASK_ENDED"
+    When the client calls "judge.grade" for "task-1" with '{}'
+    Then the call is refused with "UNKNOWN_TASK"
+
+  Scenario: after the shutdown a task is not opened, and nothing is written to the registry
+    When the gateway shuts down
+    And the client "cli" opens a task with the profile "local"
+    Then the opening is refused with "SERVICE_UNAVAILABLE"
+    And the refusal says "the gateway is shutting down"
+    And the registry holds the tasks "task-1"
+
+  Scenario: the shutdown waits for an opening held by the registry, which is refused and ends its own task
+    Given the registry holds the openings
+    When the client "cli" opens a task with the profile "local" without waiting
+    And the gateway starts to shut down
+    Then the shutdown is not over
+    When the registry answers the held openings
+    Then the shutdown is over
+    And the opening is refused with "SERVICE_UNAVAILABLE"
+    And the registry holds the tasks "task-1, task-2"
+    And the registry holds the ends "task-1 cancelled, task-2 cancelled", the tokens "token-1, token-2" retired and the sandboxes "task-1, task-2" stopped
+    And the audit log holds "task-1 gateway task.end:cancelled ok, task-2 gateway task.end:cancelled ok"
+
+  Scenario: the shutdown waits for an opening whose token is being granted, which is refused, its token retired again
+    Given the broker holds the grants
+    When the client "cli" opens a task with the profile "local" without waiting
+    And the gateway starts to shut down
+    Then the shutdown is not over
+    When the broker answers the held grants
+    Then the shutdown is over
+    And the opening is refused with "SERVICE_UNAVAILABLE"
+    And the registry holds the ends "task-1 cancelled, task-2 cancelled", the tokens "token-1, token-2, token-2" retired and the sandboxes "task-1, task-2" stopped
+    And the audit log holds "task-1 gateway task.end:cancelled ok, task-2 gateway task.end:cancelled ok"
+
+  Scenario: the shutdown waits for an end already under way, started by the client before it
+    Given the registry holds the ends
+    When the client completes "task-1" without waiting
+    And the gateway starts to shut down
+    Then the shutdown is not over
+    When the registry answers the held ends
+    Then the shutdown is over
+    And the audit log holds "task-1 client task.end:completed ok, task-1 client task.complete ok"
+
+  Scenario: the shutdown waits for a data operation of a module under way, until its audit entry is written
+    Given the module "memory-write" calls back the data operation "memory.insert" with '{"kind":"note","content":"c"}' before it answers
+    And data holds its answers
+    When the client calls "memory.remember" for "task-1" with '{}' without waiting
+    And the gateway starts to shut down
+    Then the shutdown is not over
+    When data gives the held answers
+    Then the shutdown is over
+    And the audit log holds in any order "task-1 gateway task.end:cancelled ok, task-1 memory-write memory.insert ok, task-1 client memory.remember TASK_ENDED"

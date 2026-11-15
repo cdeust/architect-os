@@ -14,7 +14,8 @@ import {
 import { RandomIds } from '../../src/infrastructure/mcp-routing.js';
 import { TimerScheduler } from '../../src/infrastructure/usage-adapters.js';
 import { composeNative, type NativeDependencies } from '../../src/main.js';
-import { Given, Then, When, type GatewayWorld } from './helpers.js';
+import { FakeModuleRunner } from './fake-modules.js';
+import { Given, Then, When, attempt, type Attempt, type GatewayWorld } from './helpers.js';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -24,6 +25,18 @@ interface Scene {
   handlers: { set: number };
   composed?: Awaited<ReturnType<typeof composeNative>>;
   refusal?: unknown;
+  /** The operations asked of the data double, in order. */
+  asked: { name: string; arguments: unknown }[];
+  /** The module sandboxes, when the scenario has fake ones. */
+  modules?: FakeModuleRunner;
+  /** The task opened through the composed router. */
+  task?: string;
+  /** Releases the launches the fake sandboxes hold. */
+  release?: () => void;
+  /** Whether the closing a scenario started without waiting is over. */
+  closed?: { over: boolean };
+  /** What closing the composition produced. */
+  closing?: Attempt;
 }
 const scene = (world: GatewayWorld): Scene => world.state['native-composition'] as Scene;
 
@@ -57,7 +70,7 @@ function dependencies(files: NativeDependencies['files'], port: number, profile 
     profile,
     probeMs: 1000,
   };
-  return { deps, handlers };
+  return { deps, handlers, asked: [] };
 }
 
 const committed = (name: string): string => join(ROOT, 'topology', name);
@@ -123,6 +136,144 @@ Given(
   },
 );
 
+/** Data and the broker answer every operation with a text, and data records what it was asked. */
+function accepting(current: Scene): void {
+  const answer = { content: [{ type: 'text' as const, text: 'ok' }] };
+  current.deps.data = {
+    callTool: (params) => {
+      current.asked.push({ name: params.name, arguments: params.arguments });
+      return Promise.resolve(answer);
+    },
+  };
+  current.deps.broker = { ...current.deps.broker, callTool: () => Promise.resolve(answer) };
+}
+
+Given(
+  'a native composition over the committed topology on any free callback port, whose data and broker accept every operation',
+  function () {
+    const current = dependencies(files('catalog.json'), 0);
+    accepting(current);
+    this.state['native-composition'] = current;
+  },
+);
+
+Given(
+  'a native composition over the committed topology and a client profile {string} of the module {string}, with fake module sandboxes, on any free callback port',
+  function (profile: string, module: string) {
+    const committedClients = JSON.parse(readFileSync(committed('clients.json'), 'utf8')) as {
+      profiles: Record<string, unknown>[];
+    };
+    const dir = mkdtempSync(join(tmpdir(), 'native-composition-'));
+    this.cleanups.push(() => rmSync(dir, { recursive: true }));
+    const clients = join(dir, 'clients.json');
+    writeFileSync(
+      clients,
+      JSON.stringify({
+        profiles: [
+          ...committedClients.profiles,
+          { ...committedClients.profiles[0], name: profile, modules: [module], owner: false },
+        ],
+      }),
+    );
+    const current = dependencies({ ...files('catalog.json'), clients }, 0, profile);
+    accepting(current);
+    current.modules = new FakeModuleRunner();
+    current.deps.runners = () => current.modules!;
+    this.state['native-composition'] = current;
+  },
+);
+
+When(
+  'a task is opened through the composed router for the profile {string}',
+  async function (profile: string) {
+    const current = scene(this);
+    current.task = (await current.composed!.router.open('cli', profile)).task;
+  },
+);
+
+When('the composed router calls {string} for that task', async function (address: string) {
+  const current = scene(this);
+  await current.composed!.router.call({ task: current.task! }, address, {});
+});
+
+When('the sandbox of the module {string} refuses to stop', function (module: string) {
+  const { modules } = scene(this);
+  modules!.unstoppable.add(module);
+  // Pushed after the cleanup of the composition, so it runs first: the sandbox then stops with the second close.
+  this.cleanups.push(() => void modules!.unstoppable.delete(module));
+});
+
+Given(
+  'a native composition over the committed topology with fake sandboxes whose launches are held, on any free callback port',
+  function () {
+    const current = dependencies(files('catalog.json'), 0);
+    accepting(current);
+    current.modules = new FakeModuleRunner();
+    current.release = current.modules.hold();
+    current.deps.runners = () => current.modules!;
+    this.state['native-composition'] = current;
+  },
+);
+
+When('the composed router calls {string} for that task without waiting', async function (address: string) {
+  const current = scene(this);
+  // The call is refused once its task is ended under it: what it gives is not what the scenario is about.
+  void current.composed!.router.call({ task: current.task! }, address, {}).catch(() => undefined);
+  await new Promise((resolve) => setImmediate(resolve));
+});
+
+When('the native composition starts to close', async function () {
+  const current = scene(this);
+  current.closed = { over: false };
+  const mark = (): void => void (current.closed!.over = true);
+  current.composed!.close().then(mark, mark);
+  for (let turn = 0; turn < 20; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+});
+
+Then('the closing of the composition is not over', function () {
+  assert.equal(scene(this).closed!.over, false);
+});
+
+When('the held launches of the composition go on', function () {
+  scene(this).release!();
+});
+
+Then(
+  'the closing of the composition is over, and the {int} sandbox it launched has ended',
+  async function (count: number) {
+    const current = scene(this);
+    const deadline = Date.now() + 5000;
+    while (!current.closed!.over && Date.now() < deadline)
+      await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(current.closed!.over, true);
+    assert.equal(current.modules!.started.length, count);
+    assert.equal(current.modules!.ended.length, count);
+  },
+);
+
+When('the audit log of the composition refuses to be written', function () {
+  scene(this).deps.audit.record = () => Promise.reject(new Error('the audit log is closed'));
+});
+
+Then('the sandbox of the module {string} ended', function (module: string) {
+  assert.deepEqual(scene(this).modules!.ended, [module]);
+});
+
+Then('data was asked to end that task as {string}, after it opened it', function (ending: string) {
+  const { asked, task } = scene(this);
+  assert.deepEqual(
+    asked.map(({ name }) => name),
+    ['tasks.open', 'tasks.end'],
+  );
+  assert.deepEqual(asked[1]!.arguments, { task, ending });
+});
+
+Then('the closing is refused with {string}', function (message: string) {
+  const { closing } = scene(this);
+  assert.ok(closing?.failed, 'the closing succeeded');
+  assert.equal((closing.error as Error).message, message);
+});
+
 When('the native gateway is composed', async function () {
   const current = scene(this);
   try {
@@ -168,6 +319,11 @@ Then(
 
 When('the native composition is closed', async function () {
   await scene(this).composed!.close();
+});
+
+When('the native composition is closed, and its closing is awaited whatever it does', async function () {
+  const current = scene(this);
+  current.closing = await attempt(() => current.composed!.close());
 });
 
 Then('nothing listens on the callback port any more', async function () {

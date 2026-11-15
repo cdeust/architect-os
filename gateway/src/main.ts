@@ -210,10 +210,22 @@ export async function composeNative(deps: NativeDependencies) {
     router,
     /** Where the callback host of the modules listens: the loopback, and its port. */
     callback: { address: listening().address, port: listening().port },
-    /** Closes the modules and the callback host. */
+    /**
+     * Ends the open tasks and waits for what the router has under way (a call in flight, hence the worker it runs),
+     * stops the modules, closes the callback host: each step is attempted whatever the one before did, so that a
+     * failure leaves no sandbox running and nothing listening; close() then rejects with the first failure. The steps
+     * run one after the other and set no bound: a registry that does not answer delays the stop of the modules, up
+     * to the timeout of its MCP request. Whoever calls close() bounds it.
+     */
     close: async () => {
-      await modules.close();
-      await new Promise<void>((resolve) => callback.close(() => resolve()));
+      const steps = [
+        () => router.shutdown(),
+        () => modules.close(),
+        () => new Promise<void>((resolve) => callback.close(() => resolve())),
+      ];
+      const failures: unknown[] = [];
+      for (const step of steps) await step().catch((error: unknown) => failures.push(error));
+      if (failures.length > 0) throw failures[0];
     },
   };
 }

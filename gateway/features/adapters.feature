@@ -179,3 +179,27 @@ Feature: Gateway port adapters
     Then the module call is refused with code "SERVICE_UNAVAILABLE"
     And the module call refusal says "no server for ghost"
     And the module host launched no sandbox
+
+  Scenario: ModuleHost close waits for a module being launched, and stops it
+    Given a module host over the server of "judge", whose launches are held
+    When the module client calls "judge" tool "grade" with '{}' and the call identifier "call-1", without waiting
+    And the module host starts to close
+    Then the closing of the module host is not over
+    When the held launches of the module host go on
+    Then the closing of the module host is over, and the sandbox of "judge" ended
+
+  Scenario: ModuleHost does not launch a module again once it is closing, whatever its launch under way did
+    Given a module host over the server of "judge", whose launches are held and whose next launch fails
+    When the module client calls "judge" tool "grade" with '{}' and the call identifier "call-1", without waiting
+    And the module host starts to close
+    Then the closing of the module host is not over
+    When the held launches of the module host go on
+    Then the closing of the module host is over, after 1 launch
+
+  Scenario: ModuleHost launches nothing once closed
+    Given a module host over the server of "judge"
+    When the module host is closed
+    And the module client calls "judge" tool "grade" with '{}' and the call identifier "call-1", refused
+    Then the module call is refused with code "SERVICE_UNAVAILABLE"
+    And the module call refusal says "the gateway is shutting down"
+    And the module host launched no sandbox
