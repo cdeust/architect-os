@@ -1873,3 +1873,24 @@ Vérifié à la main, en retirant la ligne puis en la remettant : sans le suivi 
 - Recherche : les survivants trouvés par la revue ont été reproduits par elle avant d'être corrigés ; le défaut de consigne est consigné ; mutation exécutée ; rejeu en une commande par fichier.
 - SSDLC : fuite d'information, aucun refus de configuration ne contient la valeur fautive (jeton, URL de base), affirmé par scénario ; élévation, chaque enfant natif ne reçoit que ses variables déclarées ; déni de service, l'arrêt attend ce qui est en vol (ouvertures, fins, appels, opérations de données, lancements de modules, runs de workers) et ne laisse ni sandbox, ni jeton accordé, ni port tenu, y compris quand une étape échoue ; aucune dépendance ajoutée.
 - Opérationnel : aucune valeur par défaut ni repli, le stockage sans persistance est un choix écrit ; privilège minimum par processus ; plancher de 32 caractères pour un jeton de client ; IRB sans objet.
+
+## 43. Le README porte l'état de 1b.6a et ce que l'architecture a rapporté, 15 novembre 2026
+
+Le §42 a été poussé (`814c4cd`) : porte de l'hôte verte (1 602 scénarios = 1 510 + 92 ; 206 mutants, 189 tués, 10 délais dépassés, 7 erreurs d'exécution, 0 survivant), CI verte sur Linux et macOS, run retrouvé par le SHA du commit.
+
+Demande du propriétaire : tenir le journal et le README à jour, le README servant aussi à montrer les bénéfices de l'architecture. Le README affichait encore 1b.6 comme une décision à prendre et une suite de 1 478 scénarios.
+
+**Ce qui change dans le README.**
+- Une section « The native gateway » et son diagramme (`docs/diagrams/native-gateway.svg`) : un arbre de processus, ce que chacun détient seul (`data` l'URL de la base, le broker la clé), ce qu'une sandbox peut joindre, ce que fait l'arrêt.
+- Deux lignes de bénéfices, chacune renvoyant à ses preuves : le privilège minimum par processus ; les défauts arrêtés avant tout push sur les trois pas du câblage natif, avec leur prix.
+- L'état : 1b.6a, trois pas faits, le point d'entrée en cours ; 1b.6b à 1b.6d décidés, non commencés.
+- Trois preuves rejouables ajoutées (appel d'un client à travers la composition de production, arrêt qui ne laisse rien en vol, configuration sans valeur par défaut) ; deux limites ajoutées (la gateway native n'est pas encore un processus prouvé ; un seul profil, donc tout client authentifié a les droits du propriétaire).
+
+**D'où viennent les montants.** Sessions de construction des trois pas : 0,27 $ (§40), 0,52 $ (§41), 0,61 $ (§42), soit 1,40 $. Sessions de revue : 0,77 $ et 0,87 $ (§40), 0,79 $ et 1,05 $ (§41), 0,99 $, 1,20 $ et 1,50 $ (§42), soit 7,17 $. Ce sont les coûts que l'outil relève par session, au prix public ; la session de l'orchestrateur, qui a repris chaque pas, n'est pas comptée, et le README le dit.
+
+**Ce que ces trois pas montrent, et ce qu'ils ne montrent pas.** La revue a coûté cinq fois la construction, et aucune revue n'a suffi seule : chacune a trouvé des défauts dans les corrections de la précédente, et la mutation a désigné deux morceaux de code que rien ne distinguait de leur absence. C'est une observation sur trois pas d'une même brique, sans groupe témoin : elle ne dit pas ce qu'aurait donné une autre façon de travailler (§32).
+
+**Trois piliers.**
+- Recherche : chaque chiffre du README renvoie à une entrée de ce journal ; les liens et les ancres du README ont été vérifiés par un script ; le diagramme a été rendu et relu.
+- SSDLC : sans objet pour le code (aucune ligne de production changée) ; le README ne nomme aucun secret ni aucune valeur de configuration réelle.
+- Opérationnel : le README dit ce qui n'est pas prouvé, dont la limite de droits par client ; IRB sans objet.

@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 636" width="980" height="636" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title id="t">The native gateway: one process tree, each process given only what it needs</title>
+  <desc id="d">A client calls the gateway over HTTP on the loopback with a bearer token. The gateway starts two native children on stdio, data and the broker, and starts modules and workers in srt sandboxes. A module calls back the gateway with its call identifier. A worker reaches only the broker, with the token of its task. The broker alone holds the API key and reaches api.anthropic.com.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
+  </defs>
+  <rect x="0.5" y="0.5" width="979" height="635" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="24" y="34" font-size="17" font-weight="600" fill="#1f2328">The native gateway: one process tree, each process given only what it needs</text>
+  <text x="24" y="54" font-size="12.5" fill="#57606a">gateway/src/main.ts (composeNative), packages/sandbox (NativeLauncher, srt adapter)</text>
+
+  <!-- client -->
+  <g font-size="12">
+    <rect x="274" y="72" width="230" height="66" rx="6" fill="#ffffff" stroke="#8c959f"/>
+    <text x="286" y="92" font-weight="600" fill="#1f2328">Client</text>
+    <text x="286" y="110" fill="#57606a">MCP over HTTP, a bearer token;</text>
+    <text x="286" y="126" fill="#57606a">one intent tool: recall, remember</text>
+  </g>
+
+  <!-- host -->
+  <rect x="20" y="168" width="500" height="338" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="274" y="497" font-size="13" font-weight="600" fill="#1f2328">Host · native processes, outside srt</text>
+  <g font-size="12">
+    <rect x="36" y="184" width="222" height="140" rx="6" fill="#ffffff" stroke="#8c959f"/>
+    <text x="48" y="204" font-weight="600" fill="#1f2328">data</text>
+    <text x="48" y="222" fill="#57606a">child process, MCP on stdio;</text>
+    <text x="48" y="238" fill="#57606a">sole holder of the database URL:</text>
+    <text x="48" y="254" fill="#57606a">memories, usage records,</text>
+    <text x="48" y="270" fill="#57606a">the registry of tasks;</text>
+    <text x="48" y="286" fill="#57606a">typed operations, never SQL;</text>
+    <text x="48" y="302" fill="#57606a">ends when its stdin ends</text>
+
+    <rect x="36" y="338" width="222" height="140" rx="6" fill="#ffffff" stroke="#cf222e"/>
+    <text x="48" y="358" font-weight="600" fill="#cf222e">broker</text>
+    <text x="48" y="376" fill="#57606a">child process, MCP on stdio;</text>
+    <text x="48" y="392" fill="#57606a">sole holder of the API key;</text>
+    <text x="48" y="408" fill="#57606a">one token per task, granted and</text>
+    <text x="48" y="424" fill="#57606a">revoked by the gateway;</text>
+    <text x="48" y="440" fill="#57606a">one usage record per answer,</text>
+    <text x="48" y="456" fill="#57606a">never the content</text>
+
+    <rect x="274" y="184" width="230" height="294" rx="6" fill="#ffffff" stroke="#0969da"/>
+    <text x="286" y="204" font-weight="600" fill="#0969da">gateway</text>
+    <text x="286" y="222" fill="#57606a">auth, quota, audit, routing;</text>
+    <text x="286" y="238" fill="#57606a">runs no agent, touches no data</text>
+    <text x="286" y="264" fill="#57606a">one task per call, opened for the</text>
+    <text x="286" y="280" fill="#57606a">authenticated subject, ended</text>
+    <text x="286" y="296" fill="#57606a">whatever the call did</text>
+    <text x="286" y="322" fill="#57606a">listens on 127.0.0.1 only:</text>
+    <text x="286" y="338" fill="#57606a">the port of the clients and</text>
+    <text x="286" y="354" fill="#57606a">the callback of the modules</text>
+    <text x="286" y="380" fill="#57606a">at stop: ends every task, waits</text>
+    <text x="286" y="396" fill="#57606a">for what is under way up to its</text>
+    <text x="286" y="412" fill="#57606a">audit entry, stops the modules</text>
+    <text x="286" y="438" fill="#57606a">composes everything first,</text>
+    <text x="286" y="454" fill="#57606a">listens last</text>
+  </g>
+
+  <!-- sandboxes -->
+  <rect x="560" y="168" width="400" height="338" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+  <text x="576" y="497" font-size="13" font-weight="600" fill="#1f2328">srt sandboxes · one per module, one per run</text>
+  <g font-size="12">
+    <rect x="576" y="184" width="368" height="140" rx="6" fill="#ffffff" stroke="#bf8700"/>
+    <text x="588" y="204" font-weight="600" fill="#1f2328">module · launched at its first call</text>
+    <text x="588" y="222" fill="#57606a">MCP on stdio: a data tool, or the front of an agent;</text>
+    <text x="588" y="238" fill="#57606a">reaches data only through the gateway, by a callback</text>
+    <text x="588" y="254" fill="#57606a">that carries its call identifier: the gateway takes the</text>
+    <text x="588" y="270" fill="#57606a">task and the caller from it, never from an argument;</text>
+    <text x="588" y="286" fill="#57606a">writes only the tables its manifest names,</text>
+    <text x="588" y="302" fill="#57606a">calls only the modules its manifest allows</text>
+
+    <rect x="576" y="338" width="368" height="140" rx="6" fill="#ffffff" stroke="#bf8700"/>
+    <text x="588" y="358" font-weight="600" fill="#1f2328">worker · one per run, stopped with its task</text>
+    <text x="588" y="376" fill="#57606a">runs the agent; no route to data, no API key;</text>
+    <text x="588" y="392" fill="#57606a">reaches one port, the broker, with the token of its task:</text>
+    <text x="588" y="408" fill="#57606a">the token dies with the task;</text>
+    <text x="588" y="424" fill="#57606a">its tools are relayed by the gateway, within the calls</text>
+    <text x="588" y="440" fill="#57606a">its module is allowed and the bounds of the task</text>
+    <text x="588" y="456" fill="#57606a">(deadline, number of calls, depth, turns)</text>
+  </g>
+
+  <!-- client to gateway -->
+  <path d="M389 138V182" stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <rect x="397" y="146" width="112" height="18" rx="9" fill="#ffffff" stroke="#57606a"/>
+  <text x="453" y="159" text-anchor="middle" font-size="10.5" fill="#57606a">HTTP, 127.0.0.1</text>
+
+  <!-- gateway to its children -->
+  <path d="M274 254H260" stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <path d="M274 408H260" stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+
+  <!-- gateway to module, and back -->
+  <path d="M504 230H574" stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <rect x="523" y="221" width="34" height="18" rx="9" fill="#ffffff" stroke="#57606a"/>
+  <text x="540" y="234" text-anchor="middle" font-size="10.5" fill="#57606a">stdio</text>
+  <path d="M576 286H506" stroke="#57606a" stroke-width="1.6" stroke-dasharray="5 4" fill="none" marker-end="url(#a)"/>
+  <rect x="514" y="277" width="52" height="18" rx="9" fill="#ffffff" stroke="#57606a"/>
+  <text x="540" y="290" text-anchor="middle" font-size="10.5" fill="#57606a">callback</text>
+
+  <!-- gateway to worker -->
+  <path d="M504 392H574" stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <rect x="523" y="383" width="34" height="18" rx="9" fill="#ffffff" stroke="#57606a"/>
+  <text x="540" y="396" text-anchor="middle" font-size="10.5" fill="#57606a">stdio</text>
+
+  <!-- worker to broker, under the regions -->
+  <path d="M920 478V522H147V480" stroke="#cf222e" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <rect x="390" y="513" width="180" height="18" rx="9" fill="#ffffff" stroke="#cf222e"/>
+  <text x="480" y="526" text-anchor="middle" font-size="10.5" fill="#cf222e">HTTP, the token of the task</text>
+
+  <!-- broker to the model -->
+  <path d="M80 478V552" stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+
+  <g font-size="12">
+    <rect x="36" y="554" width="222" height="66" rx="6" fill="#ffffff" stroke="#8c959f"/>
+    <text x="48" y="574" font-weight="600" fill="#1f2328">api.anthropic.com</text>
+    <text x="48" y="592" fill="#57606a">POST /v1/messages only,</text>
+    <text x="48" y="608" fill="#57606a">from the broker alone</text>
+
+    <rect x="274" y="554" width="686" height="66" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+    <text x="286" y="574" font-weight="600" fill="#1f2328">What each process is given, and nothing else</text>
+    <text x="286" y="592" fill="#57606a">data: the database URL · broker: its configuration file and the operator's certificate authority</text>
+    <text x="286" y="608" fill="#57606a">module: the port of the callback · worker: the port of the broker and the token of its task</text>
+  </g>
+</svg>
