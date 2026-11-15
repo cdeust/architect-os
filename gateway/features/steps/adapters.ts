@@ -191,7 +191,7 @@ When(
   async function (service: string, tool: string, args: string) {
     const s = scenario(this);
     const services = required(s.services, 'a service client');
-    s.outcome = await attempt(() => services.invoke(service, tool, JSON.parse(args)));
+    s.outcome = await attempt(() => services.invoke(service, tool, JSON.parse(args), { subject: 'alice' }));
   },
 );
 

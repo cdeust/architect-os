@@ -1772,3 +1772,47 @@ Réécrit par l'orchestrateur, puis relu par une session de revue à qui le refu
 - Recherche : le défaut de conception est conservé ici, avec ce qu'il a coûté ; chaque règle du lanceur a un scénario sur de vrais processus ; mutation exécutée, pas estimée.
 - SSDLC : liste fermée copiée à la construction, environnement non hérité, frontière de types tenue par le compilateur (élévation : un contenu non fiable ne peut pas être lancé hors sandbox par confusion de type) ; aucune dépendance ajoutée.
 - Opérationnel : arrêt propre avant l'arrêt forcé ; aucun secret ; IRB sans objet.
+
+## 41. Brique 1b.6a, deuxième pas : la composition native de la gateway en code de production, 15 novembre 2026
+
+Jusqu'ici, ce que la conception appelle la gateway native (l'hôte de rappel, les modules et les workers sous srt, le routeur, le relais d'usage) n'était composé que par deux supports de test. `composeNative` (`gateway/src/main.ts`) l'écrit une fois, en production ; `features/support/srt-platform.ts` l'appelle : `recall.feature` et `remember.feature`, inchangés, prouvent désormais la composition de production. Le point d'entrée du processus et les vrais enfants (`NativeLauncher`) sont le pas suivant ; rien n'est encore retiré.
+
+**L'identité arrive jusqu'à la task.** `ServiceClient.invoke` reçoit l'identité que `CallTool` a authentifiée. `RouterServices` (`gateway/src/infrastructure/router-services.ts`) ouvre une task par appel au nom de ce sujet, appelle l'adresse `<service>.<tool>`, puis termine la task quoi qu'ait fait l'appel ; après un refus de l'appel, c'est ce refus qui remonte, pas celui de la clôture. Un seul profil par gateway (`owner`, le seul commité) : un profil par client relève de la brique 2.
+
+**Ce que la boucle a rendu, et ce que j'en ai gardé.** Construction dans l'outil : 206 s, 0,52 $ ; revue : 202 s, 0,79 $, `request_changes`, cinq constats.
+
+| Constat de la revue | Décision |
+|---|---|
+| Rien ne prouvait le relais d'usage dans la composition : le retirer ne faisait échouer aucun scénario | Fondé. `gateway-native.feature` lit dans le registre de `data` l'usage de la task : deux réponses du modèle, couche `broker` |
+| Le scénario « aucune task ouverte » lisait le journal d'audit, où une ouverture ne s'écrit pas : une task ouverte avant l'authentification serait passée | Fondé. Le support enregistre chaque opération que la gateway demande à `data` ; le scénario lit les `tasks.open` |
+| Un échec après l'écoute laissait l'hôte de rappel ouvert, sans rien rendu pour le fermer | Fondé, voir ci-dessous |
+| L'adresse `127.0.0.1` ne se distinguait pas de son mutant (toutes les interfaces) | Fondé. La composition rend l'adresse où elle écoute ; un scénario l'affirme |
+| Le plan (`platform-v3-srt.md`) modifié hors périmètre | Non retenu : la modification est celle de l'orchestrateur, faite avant l'étape (ci-dessous) ; la revue ne pouvait pas le savoir |
+
+**Deuxième version refusée par moi, avant toute revue.** Pour le troisième constat, j'ai d'abord entouré la composition d'un `try`/`catch` qui fermait l'écoute. Stryker (lancé à la main sur les lignes ajoutées) a laissé deux survivants, et le code gardait un routeur affecté après coup derrière des `!`. La cause n'était pas l'absence de nettoyage mais l'ordre : on écoutait avant d'avoir composé. Version livrée : tout est composé d'abord, l'hôte de rappel reçoit le routeur fini, et l'écoute est la dernière chose faite ; un échec avant elle n'a rien à fermer, un port pris la refuse (`EADDRINUSE`) sans rien derrière. C'est possible parce qu'un module n'est lancé qu'à son premier appel : son lanceur ne lit le port de rappel qu'à ce moment. Plus de `catch`, plus de `!`. Scénarios sans srt (`gateway/features/native-composition.feature`, cinq après la seconde revue) : topologie refusée avant toute écoute, port pris, écoute en boucle locale puis fermée par `close()`.
+
+**Seconde revue, sur la version reprise** (`npm run review`, 233 s, 1,05 $, `request_changes`), à qui les deux décisions du propriétaire du code étaient dites.
+
+| Constat | Décision |
+|---|---|
+| Le plan disait « sous le profil du client » ; la gateway n'a qu'un profil, donc tout sujet authentifié a les droits de `owner` | Fondé. Aucun fichier ne relie un client à un profil et un seul profil est commité : la résolution par client arrive avec le second profil (brique 2). Écrit dans la ligne 1b.6a du plan, avec sa conséquence ; un profil absent de la topologie est refusé à la composition, plus au premier appel |
+| `TaskRouter.open` inscrit la task au registre, puis octroie le jeton : si l'octroi échoue, la task reste ouverte pour toujours, sans personne pour la terminer. Code antérieur, désormais atteint par chaque appel d'un client | Fondé, corrigé à la racine : la task est terminée `error` par le routeur (jeton retiré, sandboxes arrêtées, registre, journal), et le refus remonte. Scénario dans `gateway.feature` |
+| Le relais d'usage était branché sur le client du broker avant que la composition ait pu échouer | Fondé. Branché après l'écoute ; les scénarios de refus affirment que rien n'a été touché |
+| L'écouteur d'erreur de l'écoute restait attaché : une erreur ultérieure de l'hôte aurait été avalée | Fondé. `once` de `node:events`, qui ne laisse rien derrière |
+| `close()` ne termine pas les tasks ouvertes, et ne ferme pas l'hôte de rappel si l'arrêt des modules échoue | Fondé, reporté au pas suivant et écrit au plan : c'est le chemin d'arrêt du processus, qui se prouve avec un vrai processus. `close()` ne sert aujourd'hui qu'aux supports de test |
+| Un refus de la clôture après une réponse remplace la réponse : un client de `remember` peut voir un refus alors que la mémoire est écrite | Choix maintenu (une task que la gateway ne sait pas terminer n'est pas un succès), désormais écrit au plan et dans le commentaire de la classe |
+| L'attente du scénario d'usage tournait à vide | Fondé. Relève toutes les 20 ms, bornée |
+| Le port de rappel lu paresseusement est fragile si un module est un jour lancé avant l'écoute | Vrai, non corrigé : le routeur, les modules et l'hôte de rappel se référencent en cercle, l'un des trois doit être différé. Le commentaire dit sur quoi cela repose |
+
+Le contrôle du profil a laissé un survivant (« au moins un profil » contre « tous ») : avec un seul profil commité, les deux se confondent. Scénario ajouté avec un second profil dans un fichier temporaire ; survivant tué.
+
+**Dette acceptée, bornée dans le plan.** `composeNative` est ajouté à la suite de `gateway/src/main.ts`, avec des imports en ligne, parce que les lignes existantes du fichier portent 34 entrées du registre de dette de mutation, identifiées par numéro de ligne. Réécrire le fichier maintenant retirerait `main()` avant que son remplaçant soit prouvé. Le plan (§8, 1b.6b) dit que le retrait réécrit ce fichier avec des imports statiques et ne lit plus la topologie qu'une fois (elle l'est deux fois aujourd'hui : par `composeNative` pour l'hôte des workers, par `composeRouting`).
+
+**Mesures.** Sur l'hôte, sous vrai srt : `recall.feature` 1/1, `remember.feature` 1/1, `gateway-native.feature` 3/3 (un vrai client MCP en HTTP, jeton porteur ; sans jeton : `UNAUTHORIZED`, aucune task) ; scénarios de la gateway et d'intégration 163/163. Mutation des lignes de production changées (`main.ts`, `router-services.ts`, ligne 41 de `call-tool.ts`, `TaskRouter.open`, la doublure des jetons) : 38 tués, 5 délais dépassés, 3 erreurs d'exécution, 0 survivant. Aucune ligne existante de `main.ts` retirée ni déplacée.
+
+**Non fait.** `features/steps/usage.ts` compose encore le relais d'usage lui-même : son scénario remplace le lien vers `data` en cours de route, ce que `composeNative` n'expose pas, et n'a pas à exposer. Une task dont le worker rend un `Result` en échec se termine `completed` : la fin `error` d'une task sur un échec métier se décide avec les profils par client (brique 2).
+
+**Trois piliers.**
+- Recherche : la version refusée et ses deux survivants sont consignés ; chaque constat de la revue a un scénario ; mutation exécutée ; rejeu en une commande par fichier (`npx cucumber-js --profile replay <fichier>`).
+- SSDLC : usurpation et répudiation, le registre nomme le sujet authentifié de chaque task, et un appel sans jeton n'en ouvre aucune ; élévation de privilèges, risque écrit au plan : un seul profil, donc tout sujet authentifié est `owner` jusqu'à la brique 2 ; fuite d'information, l'hôte de rappel n'écoute qu'en boucle locale, affirmé par scénario ; déni de service, une composition qui échoue ne laisse aucun port tenu ; aucune dépendance ajoutée.
+- Opérationnel : privilège minimum, `composeNative` ne possède ni `data`, ni le broker, ni l'hôte HTTP des clients ; aucun secret (clé et jeton factices, modèle factice) ; IRB sans objet.

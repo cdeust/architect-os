@@ -22,6 +22,7 @@ const answer = { structured: { status: 'ok' }, text: '{}', isError: false };
 
 class CallToolScenario {
   readonly calls: string[] = [];
+  readonly identities: unknown[] = [];
   readonly audit = new InMemoryAuditLog();
   tool: CallTool | undefined;
   outcome: Attempt | undefined;
@@ -31,8 +32,9 @@ class CallToolScenario {
   }
   recordingServices(): ServiceClient {
     return {
-      invoke: async (service, tool) => {
+      invoke: async (service, tool, _args, identity) => {
         this.calls.push(`invoke:${service}/${tool}`);
+        this.identities.push(identity);
         return answer;
       },
     };
@@ -102,6 +104,10 @@ Then('the call is refused with code {string}', function (code: string) {
 
 Then('the recorded calls are {string}', function (expected: string) {
   assert.deepEqual(scenario(this).calls, expected.split(', '));
+});
+
+Then('the service was invoked with the identity {string}', function (expected: string) {
+  assert.deepEqual(scenario(this).identities, [JSON.parse(expected)]);
 });
 
 Then('no call was recorded', function () {

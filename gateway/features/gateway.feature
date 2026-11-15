@@ -203,3 +203,12 @@ Feature: the gateway routes the calls of a task to its modules, within the bound
     Then the opening is refused with "UNKNOWN_PROFILE"
     And the refusal says "no profile root"
     And the registry holds the tasks "task-1"
+
+  Scenario: a task whose token cannot be granted is refused and ended, not left open in the registry
+    Given the broker refuses to grant a token
+    When the client "cli" opens a task with the profile "local"
+    Then the opening is refused with "SERVICE_UNAVAILABLE"
+    And the registry holds the end of "task-2" with "error", its token "token-2" retired and its sandboxes stopped
+    And the audit log holds "task-2 gateway task.end:error ok"
+    When the client calls "judge.grade" for "task-2" with '{}'
+    Then the call is refused with "UNKNOWN_TASK"

@@ -38,7 +38,7 @@ export class CallTool {
       const identity = await this.auth.authenticate(command.presented);
       subject = identity.subject;
       await this.quota.consume(identity, command.tool);
-      const response = await this.services.invoke(descriptor.owner, command.tool, command.args);
+      const response = await this.services.invoke(descriptor.owner, command.tool, command.args, identity);
       await this.journal(started, subject, command.tool, descriptor.owner, 'ok');
       return response;
     } catch (error) {

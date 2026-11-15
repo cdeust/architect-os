@@ -206,6 +206,23 @@ Given('the registry is unavailable', function () {
   scene(this).registry.unavailable = new GatewayError('SERVICE_UNAVAILABLE', 'data is unavailable');
 });
 
+Given('the broker refuses to grant a token', function () {
+  scene(this).tokens.refusing = new GatewayError('SERVICE_UNAVAILABLE', 'the broker is unavailable');
+});
+
+Then(
+  'the registry holds the end of {string} with {string}, its token {string} retired and its sandboxes stopped',
+  function (task: string, ending: string, token: string) {
+    const { registry, tokens, sandboxes } = scene(this);
+    assert.deepEqual(
+      registry.ended.filter((end) => end.task === task),
+      [{ task, ending }],
+    );
+    assert.deepEqual(tokens.retired, [token]);
+    assert.deepEqual(sandboxes.stopped, [task]);
+  },
+);
+
 function echo(call: ModuleCall, nested: ServiceResponse): ServiceResponse {
   return {
     structured: undefined,

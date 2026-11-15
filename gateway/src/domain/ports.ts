@@ -43,9 +43,14 @@ export interface ServiceResponse {
   isError: boolean;
 }
 
-/** Port: call a tool on the service that owns it. */
+/** Port: call a tool on the service that owns it, for the caller `identity` (an adapter may ignore it). */
 export interface ServiceClient {
-  invoke(service: string, tool: string, args: Record<string, unknown>): Promise<ServiceResponse>;
+  invoke(
+    service: string,
+    tool: string,
+    args: Record<string, unknown>,
+    identity: Identity,
+  ): Promise<ServiceResponse>;
 }
 
 export interface Clock {

@@ -1,25 +1,30 @@
 import { existsSync, realpathSync } from 'node:fs';
-import type { AddressInfo } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import type { MemoryItem } from '@architect-os/contracts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { SrtSandboxRunner, type ProcessRunnerOptions, type Sandbox } from '@architect-os/sandbox';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import {
+  SrtSandboxRunner,
+  type ProcessRunnerOptions,
+  type Sandbox,
+  type SandboxRunner,
+} from '@architect-os/sandbox';
 import { DataOperations } from '../../data/src/application/operations.js';
 import { InMemoryDataStore } from '../../data/src/infrastructure/in-memory.js';
 import { createDataMcpServer } from '../../data/src/presentation/mcp-server.js';
 import type { TaskRouter } from '../../gateway/src/application/task-router.js';
-import { BrokerTaskTokens } from '../../gateway/src/infrastructure/broker-task-tokens.js';
-import { InMemoryAuditLog, SystemClock } from '../../gateway/src/infrastructure/in-memory.js';
+import {
+  InMemoryAuditLog,
+  InMemoryAuthenticator,
+  InMemoryQuota,
+  SystemClock,
+} from '../../gateway/src/infrastructure/in-memory.js';
 import { RandomIds } from '../../gateway/src/infrastructure/mcp-routing.js';
-import { TaskSandboxGroups } from '../../gateway/src/infrastructure/task-sandboxes.js';
-import { loadTopology } from '../../gateway/src/infrastructure/topology-files.js';
-import { McpBrokerControl, TimerScheduler } from '../../gateway/src/infrastructure/usage-adapters.js';
-import { WorkerHost } from '../../gateway/src/infrastructure/worker-host.js';
-import { composeRouting } from '../../gateway/src/main.js';
-import { createCallbackHost } from '../../gateway/src/presentation/callback-host.js';
+import { TimerScheduler } from '../../gateway/src/infrastructure/usage-adapters.js';
+import { composeNative } from '../../gateway/src/main.js';
 import { keyFile, startTestBroker, testConfig } from '../../modules/broker/features/steps/harness.js';
 import { startFakeModel, type FakeModel, type ModelTurn } from './fake-model.js';
 
@@ -31,9 +36,23 @@ const ENTRY_POINTS = ['modules/memory/dist/src/serve.js', 'services/memory/dist/
 /** A fake key of the broker, in a throwaway file: never a real one. */
 export const BROKER_KEY = 'sk-ant-fake-broker-key-of-the-e2e-not-a-key';
 
+/** The bearer token the clients' front accepts, and the subject it stands for. */
+export const FRONT_TOKEN = 'front-token-of-the-e2e';
+export const FRONT_SUBJECT = 'front-client';
+
 /** The platform of the committed topology under srt, in this process, before a fake model; and how to close it. */
 export interface SrtPlatform {
   readonly router: TaskRouter;
+  /** The MCP server of the clients, over the router. */
+  readonly createServer: () => McpServer;
+  /** The audit log of the gateway: the calls of the clients and the operations of the router. */
+  readonly audit: InMemoryAuditLog;
+  /** The MCP client of data, to read its registry. */
+  readonly data: Client;
+  /** Every operation the gateway asked of data, in order: what it wrote to the registry, and what it did not. */
+  readonly dataCalls: { name: string; arguments: Record<string, unknown> }[];
+  /** Where the callback host of the modules listens. */
+  readonly callback: { address: string; port: number };
   readonly model: FakeModel;
   /** The identifier of the memory data holds. */
   readonly memory: string;
@@ -94,50 +113,67 @@ export async function startSrtPlatform(
     closers.push(() => broker.broker.close());
     const brokerPort = broker.broker.relay.port;
 
-    // The callback is listened before the router exists: it reaches the router once composed.
-    let router: TaskRouter | undefined;
-    const callback = createCallbackHost({
-      describe: (id) => router!.describe(id),
-      operate: (call, op, args) => router!.operate(call, op, args),
-      call: (caller, address, args) => router!.call(caller, address, args),
-    });
-    await new Promise<void>((resolve) => callback.listen(0, '127.0.0.1', resolve));
-    closers.push(() => new Promise<void>((resolve) => callback.close(() => resolve())));
-    const callbackPort = String((callback.address() as AddressInfo).port);
-
-    const files = {
-      catalog: join(ROOT, 'topology', 'catalog.json'),
-      servers: join(ROOT, 'topology', 'modules.mcp.json'),
-      clients: join(ROOT, 'topology', 'clients.json'),
+    const audit = new InMemoryAuditLog();
+    const dataCalls: SrtPlatform['dataCalls'] = [];
+    const recorded: Pick<Client, 'callTool'> = {
+      callTool: (request, ...rest) => {
+        dataCalls.push({ name: request.name, arguments: { ...request.arguments } });
+        return data.callTool(request, ...rest);
+      },
     };
-    const groups = new TaskSandboxGroups();
+    const clock = new SystemClock();
     const workers: Sandbox[] = [];
-    const host = new WorkerHost(
-      loadTopology(files).servers,
-      ({ taskToken }) => new SrtSandboxRunner(runnerOptions({ brokerPort: String(brokerPort), taskToken })),
-      { profile: 'worker', cwd: ROOT },
-      { add: (task, sandbox) => (workers.push(sandbox), groups.add(task, sandbox)) },
-    );
-    const composed = await composeRouting({
-      files,
-      runner: new SrtSandboxRunner(runnerOptions({ callbackPort })),
-      launch: { profile: 'module', cwd: ROOT },
-      data,
-      tokens: new BrokerTaskTokens(new McpBrokerControl(broker.client)),
-      sandboxes: groups,
-      audit: new InMemoryAuditLog(),
-      clock: new SystemClock(),
+    const runners = (variables: Record<string, string>): SandboxRunner => {
+      const runner = new SrtSandboxRunner(runnerOptions(variables));
+      return {
+        start: async (request) => {
+          const sandbox = await runner.start(request);
+          if (request.profile === 'worker') workers.push(sandbox);
+          return sandbox;
+        },
+      };
+    };
+    const composed = await composeNative({
+      files: {
+        catalog: join(ROOT, 'topology', 'catalog.json'),
+        servers: join(ROOT, 'topology', 'modules.mcp.json'),
+        clients: join(ROOT, 'topology', 'clients.json'),
+      },
+      data: recorded,
+      broker: broker.client,
+      brokerPort,
+      runners,
+      root: ROOT,
+      callbackPort: 0,
+      auth: new InMemoryAuthenticator(new Map([[FRONT_TOKEN, { subject: FRONT_SUBJECT }]])),
+      quota: new InMemoryQuota(1000, 60_000, clock),
+      audit,
+      clock,
       scheduler: new TimerScheduler(),
       ids: new RandomIds(),
-      workers: host,
+      profile: 'owner',
+      probeMs: 1000,
     });
-    router = composed.router;
-    closers.push(() => composed.modules.close());
+    closers.push(() => composed.close());
+    const { router, createServer, callback } = composed;
     const memories = async () => {
       const found = await data.callTool({ name: 'memory.search', arguments: { query: '', limit: 50 } });
       return JSON.parse((found.content as { text: string }[])[0]!.text) as MemoryItem[];
     };
-    return { router, model, memory, brokerPort, memories, workers, close };
+    return {
+      router,
+      createServer,
+      audit,
+      data,
+      dataCalls,
+      callback,
+      model,
+      memory,
+      brokerPort,
+      memories,
+      workers,
+      close,
+    };
   } catch (error) {
     await close();
     throw error;

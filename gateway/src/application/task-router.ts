@@ -101,8 +101,14 @@ export class TaskRouter {
       profile: profile.name,
       deadline_at: new Date(deadline).toISOString(),
     });
-    await this.tokens.grant({ token, task });
     this.tasks.set(task, { task, profile, token, deadline, calls: 0 });
+    try {
+      await this.tokens.grant({ token, task });
+    } catch (error) {
+      // The registry already holds the task, and its caller never gets its identifier: it is ended here.
+      await this.end(task, 'error', 'gateway');
+      throw error;
+    }
     this.scheduler.after(profile.max_duration_ms, () => void this.end(task, 'deadline', 'gateway'));
     return { task, token };
   }

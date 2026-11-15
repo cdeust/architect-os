@@ -85,3 +85,6 @@ export class TimerScheduler implements Scheduler {
     setTimeout(work, ms).unref();
   }
 }
+
+/** The MCP client of the broker: the calls of its control tools and the usage notifications it sends. */
+export type BrokerClient = Pick<Client, 'callTool' | 'setNotificationHandler'>;

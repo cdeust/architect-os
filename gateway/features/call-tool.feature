@@ -13,6 +13,11 @@ Feature: CallTool
     And the recorded calls are "quota, invoke:memory/recall"
     And the audit entries match '[{"subject":"alice","tool":"recall","owner":"memory","outcome":"ok"}]'
 
+  Scenario: invokes the service with the identity that was authenticated
+    Given a CallTool with a recording quota and a recording service client
+    When the tool "recall" is called with arguments '{"query":"q"}' and token "t"
+    Then the service was invoked with the identity '{"subject":"alice"}'
+
   Scenario: refuses an unknown tool before touching auth or services
     Given a CallTool with a recording quota and a recording service client
     When the tool "nope" is called with arguments '{}' and token "t"

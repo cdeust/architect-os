@@ -115,3 +115,105 @@ export async function composeRouting(deps: RoutingDependencies) {
   );
   return { router, modules };
 }
+
+/** What the native gateway is built from: the topology, its children as clients, the runners, the ports of the platform. */
+export interface NativeDependencies {
+  files: import('./infrastructure/topology-files.js').TopologyFiles;
+  /** The MCP client of data. */
+  data: import('./infrastructure/mcp-routing.js').DataCaller;
+  /** The MCP client of the broker, and the port of its relay. */
+  broker: import('./infrastructure/usage-adapters.js').BrokerClient;
+  brokerPort: number;
+  /** A runner with the variables of a profile: the callback port for a module; the broker port and the task token for a worker. */
+  runners: (variables: Record<string, string>) => import('@architect-os/sandbox').SandboxRunner;
+  /** The platform root: the `cwd` of the launches. */
+  root: string;
+  /** The port the callback host listens on, 0 for any free port. */
+  callbackPort: number;
+  auth: Authenticator;
+  quota: QuotaPolicy;
+  audit: AuditLog;
+  clock: Clock;
+  scheduler: import('./domain/ports.js').Scheduler;
+  ids: import('./domain/routing.js').Ids;
+  /** The profile of the tasks opened for the clients. */
+  profile: string;
+  /** The period of the probe of data by the usage forwarder. */
+  probeMs: number;
+}
+
+/**
+ * Composes the native gateway: the callback host of the modules on the loopback, the modules and the workers under their
+ * sandboxes, the router, the usage of the broker written through data, and the MCP server of the clients over the
+ * router. The caller owns data, the broker and the HTTP host of the clients.
+ */
+export async function composeNative(deps: NativeDependencies) {
+  const { createCallbackHost } = await import('./presentation/callback-host.js');
+  const { WorkerHost } = await import('./infrastructure/worker-host.js');
+  const { TaskSandboxGroups } = await import('./infrastructure/task-sandboxes.js');
+  const { McpBrokerControl, McpUsageSink, onUsage } = await import('./infrastructure/usage-adapters.js');
+  const { UsageForwarder } = await import('./application/usage-forwarder.js');
+  const { RouterServices } = await import('./infrastructure/router-services.js');
+  const { loadTopology } = await import('./infrastructure/topology-files.js');
+  const { GatewayError } = await import('./domain/errors.js');
+  const { once } = await import('node:events');
+
+  // A profile the topology does not hold is refused here, with the topology, not at the first call of a client.
+  const topology = loadTopology(deps.files);
+  if (!topology.clients.profiles.some((profile) => profile.name === deps.profile))
+    throw new GatewayError('UNKNOWN_PROFILE', `no profile ${deps.profile}`);
+  const forwarder = new UsageForwarder(
+    new McpUsageSink(deps.data),
+    new McpBrokerControl(deps.broker),
+    deps.scheduler,
+    deps.probeMs,
+  );
+  const groups = new TaskSandboxGroups();
+  const workers = new WorkerHost(
+    topology.servers,
+    ({ taskToken }) => deps.runners({ brokerPort: String(deps.brokerPort), taskToken }),
+    { profile: 'worker', cwd: deps.root },
+    groups,
+  );
+  // Nothing listens and nothing is launched until the whole of it is composed: a module is launched at its first
+  // call (ModuleHost), and its runner takes the callback port then, once the callback host listens. Once closed, the
+  // host has no port left to give: no module is launched after close().
+  const { router, modules } = await composeRouting({
+    files: deps.files,
+    runner: { start: (request) => deps.runners({ callbackPort: String(listening().port) }).start(request) },
+    launch: { profile: 'module', cwd: deps.root },
+    data: deps.data,
+    tokens: forwarder,
+    sandboxes: groups,
+    audit: deps.audit,
+    clock: deps.clock,
+    scheduler: deps.scheduler,
+    ids: deps.ids,
+    workers,
+  });
+  const front = compose({
+    auth: deps.auth,
+    quota: deps.quota,
+    services: new RouterServices(router, deps.profile),
+    audit: deps.audit,
+    clock: deps.clock,
+  });
+  const callback = createCallbackHost(router);
+  const listening = () => callback.address() as import('node:net').AddressInfo;
+  // Last: a port that cannot be listened on rejects, with nothing behind it to close and nothing of the caller
+  // touched. `once` leaves no listener behind (node:events): a later error of the host is not swallowed.
+  callback.listen(deps.callbackPort, '127.0.0.1');
+  await once(callback, 'listening');
+  onUsage(deps.broker, (record) => forwarder.receive(record));
+  return {
+    createServer: front.createServer,
+    router,
+    /** Where the callback host of the modules listens: the loopback, and its port. */
+    callback: { address: listening().address, port: listening().port },
+    /** Closes the modules and the callback host. */
+    close: async () => {
+      await modules.close();
+      await new Promise<void>((resolve) => callback.close(() => resolve()));
+    },
+  };
+}

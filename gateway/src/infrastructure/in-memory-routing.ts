@@ -64,8 +64,11 @@ export class InMemoryTaskRegistry implements TaskRegistry {
 export class InMemoryTaskTokens implements TaskTokens {
   readonly granted: TaskGrant[] = [];
   readonly retired: string[] = [];
+  /** The failure of the broker to grant, while it refuses. */
+  refusing: Error | undefined;
 
   async grant(grant: TaskGrant): Promise<void> {
+    if (this.refusing !== undefined) throw this.refusing;
     this.granted.push(grant);
   }
 
