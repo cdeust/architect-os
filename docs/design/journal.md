@@ -2096,3 +2096,62 @@ Le §49 a été poussé (`5192535`) : porte de l'hôte verte (1 624 scénarios, 
 - Recherche : documentation officielle lue avant de décider, copies gardées avec empreintes ; essai déposé et rejoué ; ce qui n'est pas mesuré est écrit.
 - SSDLC : élévation de privilèges, R-14 fermé par un refus au démarrage plutôt que par une consigne ; le compromis sur AppArmor est écrit dans la table des menaces, avec ce qui reste ; aucune dépendance ajoutée.
 - Opérationnel : séparation nette entre ce que règle l'opérateur et ce que vérifie la gateway ; la VM d'essai est celle du projet, arrêtée après usage, l'unité laissée par l'installation désactivée ; IRB sans objet.
+
+## 51. 1b.6b, premier pas : l'adaptateur Docker des processus de la plateforme ; deux revues, ce que la mutation cachait, et un premier essai d'entrées inédites, 15 et 16 novembre 2026
+
+Le §50 a été poussé (`60c3f45`) : porte de l'hôte verte (1 624 scénarios), CI verte sur Linux et macOS.
+
+**Ce qui est livré.** `packages/sandbox/src/docker-process-runner.ts` (`DockerProcessRunner`, un adaptateur du port `SandboxRunner`), `container-relay.ts` (ce que l'adaptateur et le conteneur partagent : `relayServer`, et l'entrée du conteneur `runContainerEntry`), `container-entry.ts` (le fichier que le conteneur exécute). Rien ne l'appelle encore : le champ de configuration, le contrôle au démarrage et la preuve de bout en bout devant un vrai démon sont les pas suivants. Le premier adaptateur Docker (`docker-runner.ts`) n'est pas touché.
+
+**La boucle, puis ma reprise.** Construction (Sonnet 5.5, effort moyen) : 733 s, 1,59 $. Revue de la boucle (Opus 5.5, effort élevé) : 1,46 $, `request_changes`, huit constats. Les quatre de justesse : le jeton de task d'un worker passait sur la ligne de commande du client Docker (`--env NOM=valeur`), lisible par tout utilisateur de l'hôte ; trois mutants survivants annoncés par lecture. J'ai repris le code plutôt que de relancer : les valeurs du gabarit passent par nom (`--env NOM`), leur valeur dans l'environnement du client ; un chemin de socket de plus de 103 caractères est refusé sur tout hôte (le poste, sous macOS 27, l'acceptait : le scénario dépendait de l'hôte).
+
+**Ce que la mutation cachait.** En remplaçant un ensemble de connexions suivies (dont le retrait n'était observable par aucun scénario) par un signal d'abandon, deux mutants jusque-là rangés « délai dépassé » sont devenus survivants. Ils ne tuaient rien : sans la ligne mutée, une connexion restait ouverte, le processus de test ne finissait pas, et Stryker comptait le délai comme une mort. Aucun scénario n'affirmait le comportement. Leçon : un mutant mort par délai n'est pas un mutant tué par une assertion ; quand le code change autour de lui, il peut se révéler nu.
+
+**Seconde revue, indépendante, de ma reprise** (Opus 5.5, effort élevé, 366 s, 1,17 $) : `request_changes`, treize constats. Je les ai tous lus comme le mainteneur du code, et les sept de justesse étaient fondés.
+
+| Constat | Décision | Preuve |
+|---|---|---|
+| La jonction des deux sockets détruisait un côté dès que l'autre se fermait : la fin d'une réponse que son lecteur n'avait pas encore prise était perdue ; une demi-fermeture n'était pas tenue | Chaque sens se termine pour lui-même (`allowHalfOpen` des deux côtés, `pipe`) ; destruction sur erreur seulement ; une seule fonction, `relayServer`, pour l'hôte et pour le conteneur | Deux scénarios de demi-fermeture, un par sens ; banc `bench/docker-bridge/join.mjs` (ci-dessous) |
+| L'entrée est le premier processus du conteneur et ne récolte pas les orphelins du programme : ils restent zombies et comptent dans la borne de processus | `--init` | Mesuré : 5 zombies sans, 0 avec |
+| Le client Docker qui meurt seul laisse le conteneur vivant, alors que `exited` dit la sandbox finie | Le conteneur est retiré par son nom à toute fin du client, et `exited` n'est résolu qu'après ; `stop()` tue le client et attend ce retrait | Mesuré : conteneur `Up` après la mort du client ; scénario de la fin spontanée |
+| La suppression du dossier du relais pouvait lever dans un écouteur d'événement et faire tomber la gateway | `close()` du relais ne lève pas | Scénario : un dossier retiré par autre chose n'empêche pas la fin |
+| Rien ne nettoyait si l'ouverture du relais échouait ; `spawn` pouvait lever hors du bloc gardé | Un seul chemin d'échec, qui ferme et retire ; `spawn` dans le bloc | Scénarios du chemin trop long et de l'argument avec un caractère nul |
+| Pas de `--log-driver` : le démon écrivait sur disque tout ce que le conteneur écrit, dont le flux MCP d'un module | `--log-driver none` | Mesuré : 4 167 octets gardés par défaut, rien avec `none`, le client reçoit toujours la sortie |
+| Ordre d'arrêt différent du §6 (le relais fermé avant `docker rm -f`) | Le §6 est amendé : fermer d'abord le seul chemin du conteneur vers l'hôte est plus strict | |
+| Variables `DOCKER_*` non refusées dans un gabarit ; bornes non validées, pas de borne de swap | Préfixe refusé ; bornes en octets et en nombre, entières et d'au moins 1 ; `--memory-swap` égal à `--memory` | Scénarios ; mesuré : code 137 |
+| L'écouteur de l'entrée ne traitait qu'une première erreur | Écouteur permanent | |
+| Scénario IPv6 qui ne distingue pas `127.0.0.1` de `0.0.0.0` | Laissé : sans réseau dans le conteneur, les deux sont équivalents ; la limite est écrite ici | |
+
+**Mesures devant le démon sans root** (`bench/docker-bridge/lifecycle.sh`, même VM que le §50, jouées quatre fois dans la nuit du 15 au 16 novembre, mêmes résultats ; VM arrêtée, contexte Docker du poste inchangé). En plus des lignes du tableau : `docker rm -f` d'un conteneur qui n'existe pas sort en 0 avec un message d'erreur ; un programme qui s'arrête à la fin de son entrée standard disparaît avec son client ; `--mount` refuse un chemin qui porte un guillemet double ou une virgule (code 125) et refuse `/` comme destination, mais porte un espace et un signe égal.
+
+**La perte de fin de réponse, mesurée** (`node bench/docker-bridge/join.mjs`, macOS 27, node 26.11.1, joué deux fois). Un client qui ne lit rien tant que le relais n'a pas pris toute la réponse : avec l'ancienne jonction, 8 192 octets reçus sur 16 384, 16 384 sur 32 768, 16 384 sur 49 152 ; avec la nouvelle, tout. Je n'ai pas réussi à en faire un scénario de la porte : avec un lecteur dans le même processus la perte ne se produit pas (six essais sur 8 Mo), et la fenêtre où elle se produit dépend de ce que le noyau garde pour une socket Unix (8 Kio ici, environ 208 Kio sous Linux). J'ai retiré le scénario qui ne prouvait pas son titre. La correction est de structure (plus aucune destruction à la fermeture) et les deux scénarios de demi-fermeture, déterministes, gardent la sémantique.
+
+**Entrées inédites : un premier essai, à la demande du propriétaire.** Le 16 novembre il a signalé le plugin `code-modernization` d'Anthropic (« ils ont la même optique que nous pour la partie testing », « ça répond à notre problématique de feedback et d'amélioration ») et, pour le mécanisme de test que nous n'avions pas : « ça serait pertinent de l'ajouter ». Ce mécanisme (`modernize-verify`, §4) : à la vérification, une session neuve invente des entrées que le développement n'a pas utilisées. Essai à la main sur ce pas, sans code neuf : une session neuve (Opus 5.5, effort élevé, 468 s, 1,64 $) a écrit un fichier de 57 scénarios avec les seuls steps existants, le résultat attendu de chacun tiré du contrat (commentaires de l'adaptateur et du port, §6) et non du comportement du code. Je les ai lus un par un avant de les jouer sur l'hôte : du texte venu d'une sandbox qui s'exécute hors sandbox.
+
+| | |
+|---|---|
+| Entrées inventées | 57 |
+| Échecs sur l'hôte | 4, exactement ceux que la session avait annoncés |
+| Défauts distincts | 3 : un gabarit pouvait poser `AOS_RELAY_SOCKET`, que l'adaptateur pose lui-même ; une racine `/` était acceptée ; un chemin avec un guillemet double était accepté alors que `--mount` ne peut pas le porter |
+| Signalé sans pouvoir l'écrire | Une borne comme `1e21` arrivait à Docker sous la forme `1e+21` |
+| Après correction | 56 passent ; la dernière ne diffère que par le libellé d'un message changé |
+| Gardés dans le dépôt | 14 des 57 (scénarios ou lignes d'exemples), ceux qui prouvent ce que rien d'autre ne prouve, plus deux tirés de sa liste d'entrées qu'elle n'avait pas pu écrire ; le fichier entier reste avec l'état du pas, hors dépôt |
+
+Aucun de ces trois défauts n'avait été vu par les deux revues ni par la mutation. L'affirmation de la session sur `--mount`, faite de mémoire, a été mesurée avant d'être crue. Au vu de ce résultat, le propriétaire : « On peut déjà valider l'utilité de l'ajout de ce nouveau principe. » Il est inscrit à la conception de la boucle (`orchestration-fable-5-2.md`, §4) : acquis, appliqué à la main à chaque pas qui change un comportement d'ici sa construction dans l'outil.
+
+**Décisions de mainteneur.** Un gabarit qui déclare des fichiers est refusé (`reviewer.json` passait le contrôle du réseau et ses fichiers auraient été ignorés sans rien dire). Ce qu'un gabarit demande et que cet adaptateur ne peut pas donner est refusé, jamais omis. `stop()` dit quel conteneur a pu rester quand le client du retrait ne peut pas être lancé ; `exited`, lui, ne rejette jamais. Le système de fichiers du conteneur est fixé par l'adaptateur ; le gabarit donne le port et l'environnement.
+
+**Ce qui n'est pas prouvé.**
+- Un `stop()` qui suit immédiatement le lancement : si le client est tué pendant que le démon crée le conteneur, le retrait par le nom peut arriver avant lui. Un conteneur ainsi laissé n'a plus de relais, donc plus aucun chemin vers l'hôte, et un programme qui lit son entrée standard finit avec elle (mesuré). À mesurer devant un vrai démon au pas de bout en bout.
+- Ce que répond `docker rm -f` n'est pas lu (son code, un démon arrêté).
+- Un échec d'écoute de la socket du relais n'a pas pu être provoqué : `events.once` le transforme en refus de ce lancement, sans scénario.
+- Une erreur d'acceptation du relais de l'hôte après son écoute (descripteurs épuisés) n'est pas traitée.
+- Un nettoyeur de fichiers temporaires qui retirerait la socket d'un module qui vit longtemps : consigne de déploiement (1b.6d).
+- Devant un vrai démon : l'entrée sous `--init` avec une vraie entrée standard, `noexec` et le binaire de l'agent, la bibliothèque C de l'image face aux binaires de la racine montée, le contrat `SandboxRunner` joué contre cet adaptateur.
+
+**Chiffres.** 94 scénarios (84 pour l'adaptateur, 10 pour l'entrée), rejoués trois fois de suite. Mutation des trois fichiers, sur la version commitée : 244 mutants, 198 tués, 36 délais dépassés, 10 erreurs d'exécution, aucun survivant (50 minutes : chaque constante de module fait rejouer toute la suite). En chemin, sept mutants que rien ne tuait. Sessions de ce pas : 5,86 $ (construction 1,59 ; revues 1,46 et 1,17 ; entrées inédites 1,64). La porte et la CI de ce commit sont rapportées au paragraphe suivant.
+
+**Trois piliers.**
+- Recherche : chaque option ajoutée est mesurée devant un démon sans root, deux fois, par un script déposé ; une affirmation faite de mémoire (le format de `--mount`) est mesurée avant d'entrer dans le code ; un scénario qui ne prouvait pas son titre est retiré et remplacé par un banc ; ce qui n'est pas prouvé est listé.
+- SSDLC : fuite d'information (jeton hors de la ligne de commande, aucun journal du démon), déni de service (zombies, bornes validées, swap borné, conteneur retiré à toute fin du client), falsification (variables réservées, chemins qu'un montage ne peut pas porter) ; aucune dépendance ajoutée ; revue indépendante et entrées inédites avant le commit.
+- Opérationnel : démon sans root seulement ; la VM d'essai est celle du projet, arrêtée après usage, contexte du poste vérifié ; du texte produit dans une sandbox n'est exécuté sur l'hôte qu'après lecture ; IRB sans objet.

@@ -45,6 +45,46 @@ Same VM (Ubuntu 24.04.2, Linux 6.8.0-64 aarch64, Docker 28.3.3, cgroup v2 with `
 
 Documentation read the same day, kept outside the repository with its fingerprints: Docker Engine, rootless mode, troubleshooting (known limitations) and tips (limiting resources), and the AppArmor page.
 
+## What the adapter relies on, 15 and 16 November 2026
+
+The adapter (`packages/sandbox/src/docker-process-runner.ts`) was reviewed before it was committed, and each option the review asked for was measured before the same rootless daemon (`lifecycle.sh`, played four times in the night of 15 to 16 November, same results).
+
+```bash
+DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock sh bench/docker-bridge/lifecycle.sh
+```
+
+| Question | Result |
+| --- | --- |
+| Five orphans of the program, without `--init` | The first process is `node`; 5 zombies |
+| The same, with `--init` | The first process is `docker-init`; 0 zombies |
+| The default log driver | `json-file`: the daemon keeps on disk what the container writes on its stdout (4,167 bytes for 4,097 written) |
+| `--log-driver none` | Nothing kept; the client still receives the stdout; `docker logs` refuses |
+| Bounds in bytes, `--memory-swap` equal to `--memory`, a program that takes 300 MB | Killed, exit 137 |
+| The client killed by SIGKILL, a program that does not read its stdin | The container is still up; `docker rm -f` by its name removes it, exit 0 |
+| The client killed by SIGKILL, a program that ends when its stdin ends | The container is gone |
+| `docker rm -f` of a container that does not exist | Exit 0, with `No such container` |
+| A mounted folder whose name holds a space, or an equals sign | Mounted |
+| A mounted folder whose name holds a double quote, or a comma | Refused by the client, exit 125 (`parse error`, `invalid field`) |
+| The root of the host mounted on the root of the container | Refused by the daemon: `destination can't be '/'` |
+
+## Joining the two connections of a relay, 16 November 2026
+
+The first relay destroyed one connection as soon as the other closed. `join.mjs` shows what that loses, with no Docker at all: a client that reads nothing until the relay has taken the whole answer.
+
+```bash
+node bench/docker-bridge/join.mjs
+```
+
+macOS 27, node 26.11.1, played twice:
+
+| Answer | Destroy on close | End each direction (the adapter) |
+| --- | --- | --- |
+| 16,384 bytes | 8,192 received | 16,384 received |
+| 32,768 bytes | 16,384 received | 32,768 received |
+| 49,152 bytes | 16,384 received | 49,152 received |
+
+The sizes are small on purpose, and the loss depends on the host: it shows only when the answer is larger than what the kernel holds for a Unix socket (8 KiB here, about 208 KiB on Linux) and small enough for the relay to take it whole while its client reads nothing. That is why it is a trial and not a scenario of the gate.
+
 ## What this does not show
 
-One host, one image. It does not show the platform's module or worker running this way, the agent's own binary in such a container, the cost of a start, a host without AppArmor, a host where cgroup v2 is not delegated, Windows through WSL2, or Podman. Those belong to the brick that builds the adapter (journal, §48, §50).
+One host, one image. It does not show the platform's module or worker running this way, the agent's own binary in such a container, the cost of a start, a `stop` that follows a start at once, a host without AppArmor, a host where cgroup v2 is not delegated, Windows through WSL2, or Podman. Those belong to the end-to-end step of the brick (journal, §48, §50, §51).
