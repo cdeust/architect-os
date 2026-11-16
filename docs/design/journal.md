@@ -2428,3 +2428,28 @@ Le §56 a été poussé (`78fb6da`) : porte de l'hôte verte (1 895 scénarios =
 - Recherche : l'affirmation « la première réalisation fonctionne » a été mesurée avant d'être écrite, et la mesure l'a démentie sur trois points ; les cinq passes sont rapportées, dont celle où l'essai avait tort ; ce que la pile ne fait pas est affirmé par le même essai que ce qu'elle fait.
 - SSDLC : les images de la pile sont désignées par leur empreinte ; la capacité rendue au proxy est la seule, nommée, avec un scénario qui interdit d'en rendre une autre ; le workflow n'a ni secret ni droit d'écriture, et ses deux valeurs d'environnement ne valent rien ; le risque connu de cette pile (la socket du démon montée dans memory) est redit, pas masqué.
 - Opérationnel : rien de fonctionnel n'est retiré ; un fichier mort l'est ; la documentation de la pile dit ce qui tourne et ce qui ne tourne pas ; la pile est arrêtée et ses volumes retirés à la fin de chaque passe ; IRB sans objet.
+
+## 58. 1b.6d : les docs décrivent les deux réalisations, le chemin natif d'abord, 16 novembre 2026
+
+Le §57 a été poussé (`922b4d7`) : porte de l'hôte verte (1 897 scénarios = 1 895 + 2 ; aucun mutant dans le périmètre, le commit ne changeant aucune ligne de production hors le fichier retiré), CI verte sur les trois workflows : `gate` (Linux et macOS), `rootless` (41 scénarios sur 41, en x86-64 et en arm64) et `compose` (la pile de la première réalisation construite, démarrée, et son essai vert), runs retrouvés par le SHA du commit.
+
+**Ce qui est livré.** Les documents qui décrivaient la plateforme comme la seule première réalisation disent maintenant ce qu'elle est : une architecture, deux réalisations dans le dépôt, le chemin natif d'abord.
+
+| Document | Ce qui change |
+|---|---|
+| `docs/architecture.md` | Une section en tête sur le chemin natif (l'arbre de processus, qui tient quel secret, le module et le worker en sandbox, le moyen d'isolation écrit par l'opérateur, la topologie) avec les scénarios qui le prouvent ; la suite est titrée pour ce qu'elle est, la première réalisation |
+| `docs/agents.md` | Le worker du chemin natif d'abord : son canal vers la gateway, son profil de task et le schéma qui borne ses outils, ses limites, ce qu'il dit quand il échoue ; l'ancien worker est nommé comme celui de la première réalisation |
+| `docs/testing.md` | Les deux jeux de scénarios hors de la porte et pourquoi (`rootless/`, `modules/broker/live/`) ; les manques connus corrigés (la pile est démarrée en CI ; le mode Docker n'a pas tourné sous WSL2) |
+| `CLAUDE.md` | « What This Is » : les deux schémas ; la commande `npm run test:rootless` ; la table des dossiers complétée (`modules/memory`, `agents`, `topology`, `rootless`, `compose`) |
+| `docs/operating.md`, `docs/infrastructure.md` | Livrés aux §56 et §57 |
+
+Chaque phrase ajoutée a été relue contre le code ou un scénario avant d'être gardée : que la gateway valide la sortie du worker (`worker-session.ts`, `WORKER_OUTPUT_INVALID`), que le profil de task ne peut lister que des outils MCP (`AgentFileSchema`), que le worker natif n'a pas de budget en dollars (décision 11), que la topologie tient en trois fichiers. `docs/design.md`, les décisions de la première réalisation, n'est pas touché : il dit ce qu'il a toujours dit, et l'architecture renvoie maintenant à la conception du chemin natif.
+
+**Le journal tronqué, et ce qui l'empêche désormais.** Le commit du §56 (`78fb6da`) a réécrit ce fichier avec sa seule nouvelle section : le script qui l'ajoutait ouvrait le fichier en écriture avant de le relire. Les sections 1 à 55 ont disparu de la branche publiée pendant environ une heure et demie, deux commits durant, portes et CI vertes : rien ne lisait ce fichier. C'est le propriétaire qui l'a vu (« Je vois plus les entrées du journal »). Restauré aussitôt par un commit à part (`b10649f`), poussé sans attendre une porte, les 55 sections identiques octet pour octet à leur dernier état (`2053099`), les suivantes inchangées ; l'historique de la branche n'est pas réécrit. Cause traitée, pas seulement l'effet : `features/descriptive/journal.feature` lit maintenant le journal à chaque porte (son titre en tête, ses sections numérotées de 1 sans trou) et refuse six copies cassées, dont la forme exacte de la troncature. Un journal coupé rend désormais la porte rouge. Et la règle pour qui écrit dans ce fichier : on y ajoute, on ne le réécrit pas.
+
+**Ce qui reste de 1b.6.** Le test du mode Docker sous WSL2, par le propriétaire, sur sa machine. Le registre de dette de mutation de l'adaptateur srt, dont des entrées ne pointent plus sur leurs lignes (écrit au README) : tant qu'il n'est pas refait, `srt-runner.ts` et le haut de `gateway/src/main.ts` ne se déplacent pas, et l'exposition notée au §55 (une variable du lanceur dans un argument, sous srt) reste ouverte.
+
+**Trois piliers.**
+- Recherche : un document ne dit que ce qu'un scénario ou le code tient ; ce qui n'est pas refait (le registre de dette) est nommé avec sa conséquence.
+- SSDLC : la documentation ne décrit plus comme existant ce qui ne tourne pas ; les consignes du dépôt pour ses contributeurs et ses revues (`CLAUDE.md`) décrivent le chemin sur lequel les secrets sont réellement tenus.
+- Opérationnel : un lecteur trouve d'abord le chemin qui sert un agent, et le guide pour le lancer ; IRB sans objet.

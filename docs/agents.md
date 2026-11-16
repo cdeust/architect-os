@@ -4,9 +4,25 @@ Two kinds of agents exist in this repository: worker agents that serve users at 
 
 ## Worker agents
 
-A worker agent is a Claude Agent SDK `query()` run inside a worker container. It is created per execution by `services/<name>/worker` and has no state between runs.
+A worker agent is a Claude Agent SDK `query()`, created per execution by `services/<name>/worker`, with no state between runs. There are two, one per realisation of the platform ([architecture.md](architecture.md)): the worker of the native path, in a sandbox, and the worker of the first realisation, in a container image of its own.
 
-### memory worker (`services/memory/worker/`)
+### The worker of the native path (`services/memory/worker/task-serve.ts`)
+
+| Aspect       | Value                                                                                                                                                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Role         | Serve one task of an agent tool (`recall`, `remember`), then end. One sandbox per task, stopped with the task.                                                                                                                 |
+| Entry point  | `task-serve.ts`, given the task profile as its argument. The gateway is on its stdin and stdout: the worker is the MCP client, with the tools `task_input`, `call` and `task_complete` (`infrastructure/platform-channel.ts`). |
+| Task profile | `agents/<name>.md`, in the format of Claude Code: a frontmatter (`name`, `description`, `tools`, `model`) checked against `AgentFileSchema`, then the system prompt. Refused whole when it is outside its schema.              |
+| Tools        | The tools the profile lists, and they can only be MCP tools: the schema refuses any other name. They are served by one in-process MCP server and relayed to the gateway, which routes them. No built-in tool is offered.       |
+| Isolation    | The profile `worker` of `packages/sandbox/profiles`: one port, the broker; the token of the task as its only credential; its own folders. Under srt, or in a container before a rootless daemon.                               |
+| Limits       | `maxTurns`, sent by the gateway with the task. No budget in dollars (design, decision 11): the gateway bounds a task by its calls and its deadline.                                                                            |
+| Output       | `outputFormat` with the JSON schema of the tool's data, generated from `packages/contracts`. The gateway validates what the worker gives; the worker does not decide trust.                                                    |
+| Failure      | A named code. When the Claude Code process itself fails, the message quotes the end of its error output, where the cause is (`infrastructure/sdk-task-agent.ts`).                                                              |
+| Secrets      | None. `ANTHROPIC_BASE_URL` is the broker on the loopback; `ANTHROPIC_API_KEY` is the token of the task, which the broker revokes when the task ends.                                                                           |
+
+Proven with the real Claude Code binary against a fake model: `features/integration/agent-worker.feature`; end to end through the entry file of the gateway: `features/sandbox/gateway-entry.feature`, `rootless/gateway-entry.feature`.
+
+### The worker of the first realisation (`services/memory/worker/main.ts`)
 
 | Aspect         | Value                                                                                                                                                                                                                                                                                            |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

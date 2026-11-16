@@ -27,7 +27,10 @@ npm test                              # every scenario (cucumber-js); also `npm 
 npx cucumber-js <path>.feature        # adds to the configured paths, see below
 npm run gate                          # plan, cucumber, Stryker on the perimeter, verdict
 npm run gate -- --job macos           # features/sandbox only
+npm run test:rootless                 # rootless/*.feature: the Docker mode before a real rootless daemon, on Linux
 ```
+
+Two sets of scenarios are outside the gate, each for a written reason, and each has its own profile in `cucumber.mjs`: `rootless/` needs a real rootless Docker daemon, which the owner's host (macOS) cannot run, and is played by the workflow `rootless.yml` on x86-64 and arm64; `modules/broker/live/` spends on the real API with a real key, and is a command of the owner. Neither is counted by the gate, and mutation does not apply to them: they add no production line of their own.
 
 Positional paths given to `cucumber-js` are merged with the `paths` of `cucumber.mjs`; they add to the run instead of narrowing it. To run one feature, use a profile or a throwaway config naming only that path (`npx cucumber-js --config <file>`). The `macos` profile of `cucumber.mjs` runs `features/sandbox` alone.
 
@@ -102,8 +105,9 @@ rm gateway/src/application/zz-tmp.ts && npm run arch                      # gree
 
 ## Known gaps
 
-- `services/memory/worker/sdk-agent.ts` is not exercised against the live SDK in the default suite (needs the broker and an API key).
-- Docker images and `docker compose up` are not exercised by CI; `compose.yaml` is validated structurally.
+- `services/memory/worker/sdk-agent.ts`, the agent of the first realisation, is not exercised against the live SDK (needs the broker and an API key). The agent of the native path is, with the real Claude Code binary against a fake model (`features/integration/agent-worker.feature`).
+- The stack of `compose.yaml` is built and started by the workflow `compose.yml`, which asserts what it answers through the proxy (`compose/smoke.mjs`). That is a smoke test, not scenarios: it is outside the gate. The stack runs no agent, and the test says so.
+- The Docker mode of the native path is proven on hosted Linux runners only; under WSL2 it has not been run yet.
 
 ## Checklist for a new brick
 

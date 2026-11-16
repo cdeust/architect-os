@@ -1,6 +1,29 @@
 # Architecture
 
-Four tiers. Each tier has one job and talks only to its neighbour. Decisions and the alternatives we rejected are in [design.md](design.md).
+One architecture, two realisations in this tree. The **native path** is the one the platform is built on: one process, which isolates what it runs. The **first realisation** puts each component in a container behind a proxy; it stays, and its stack is started in CI. Both share the contracts, the layers inside a component, the `Result` envelope and the rules below; they differ in how components reach each other and in how an agent is isolated. The design of the native path, its threat model and its bricks are in [design/platform-v3-srt.md](design/platform-v3-srt.md); how to run it on a host is in [operating.md](operating.md).
+
+## The native path
+
+```
+client --> gateway --> module (sandbox, MCP on stdio)       a data tool
+               \--> worker (sandbox, one per task) --> broker --> api.anthropic.com
+               \--> data (child, MCP on stdio) --> postgres + pgvector, or a store in memory
+```
+
+One process tree, started by `node gateway/dist/src/serve.js` with nothing but its configuration.
+
+- The **gateway** authenticates, counts, audits and routes. It runs no agent and touches no data. It serves its clients over HTTP on the loopback only.
+- **data** and the **broker** are its two children outside any sandbox, started from a closed list of commands and variables with nothing inherited from the host. `data` alone holds the database URL; the broker alone holds the API key, and gives one token per task.
+- A **module** (`modules/memory`) is started in a sandbox at its first call and speaks MCP on its stdio. It reaches one port, a callback of the gateway, through which its data operations pass, refused outside the tables it declares.
+- A **worker** (`services/memory/worker/task-serve.ts`) is started in a sandbox once per task and stopped with it. It is the MCP client of the gateway on its own stdio, runs the task profile of `agents/<name>.md`, and reaches one port, the broker, with the token of its task.
+- The **means of isolation** is written by the operator and never detected: `srt`, or Docker before a rootless daemon (`packages/sandbox/src/platform-sandboxes.ts`). The same profile templates drive both. Before anything is launched the means is checked; a means that does not confine is a refusal to start.
+- What exists is declared in `topology/`: the catalogue of the tools, the servers of the modules, the client profiles. The topology is loaded whole or refused before any module is launched.
+
+Proven by the entry file, not by a composition written for a test: `features/sandbox/gateway-entry.feature` under real srt on Linux and macOS, and `rootless/gateway-entry.feature` with the module and the workers in containers before a real rootless daemon, on x86-64 and arm64. No profile escapes its sandbox: `features/sandbox/escape.feature`, `rootless/escape.feature`.
+
+## The first realisation: one container per component
+
+Four tiers. Each tier has one job and talks only to its neighbour. Decisions and the alternatives we rejected are in [design.md](design.md). What its stack does today, and what it does not, is in [infrastructure.md](infrastructure.md): it starts, serves its catalogue and refuses a call without a token; it runs no agent.
 
 ```
                  public            app                          exec            data
