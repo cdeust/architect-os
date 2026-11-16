@@ -23,6 +23,18 @@ Feature: usage reading and command credential (host side)
     Then both readings give the access token "a"
     And the credential command ran 1 time
 
+  Scenario: commandCredential reads again when the token it keeps is the one just refused, and keeps the renewed one
+    Given a credential command that counts its runs and prints the access token "a" at its first run and "b" afterwards
+    When I read the credential, then again saying each of '["a","a"]' was just refused
+    Then the readings give the access tokens '["a","b","b"]'
+    And the credential command ran 2 times
+
+  Scenario: commandCredential does not read again for a refused token that is not the one it keeps
+    Given a credential command that counts its runs and prints the access token "a" at its first run and "b" afterwards
+    When I read the credential, then again saying each of '["z"]' was just refused
+    Then the readings give the access tokens '["a","a"]'
+    And the credential command ran 1 time
+
   Scenario: commandCredential refuses an expired credential and never echoes the command output
     Given a credential command that prints the access token "zz-secret" expired since the epoch plus 1 ms
     Then reading the credential is refused with "expired"

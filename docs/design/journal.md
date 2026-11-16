@@ -2632,3 +2632,44 @@ Le §63 a été poussé (`ef164dc`) : porte de l'hôte verte (1 553 scénarios =
 - Recherche : la lecture du changelog est datée, bornée à une plage de versions, et sa décision par entrée est commitée ; une épingle bouge une à la fois.
 - SSDLC : un correctif de sécurité du binaire est pris ; l'écart entre une épingle et la version publiée devient visible sans que quelqu'un doive y penser ; les versions restent exactes et le fichier de verrouillage commité.
 - Opérationnel : le relevé dit comment remonter une épingle et ce qui la prouve ; IRB sans objet.
+
+## 65. Le proxy d'authentification envoyait un jeton révoqué : il relit l'identifiant quand l'amont le refuse, 16 novembre 2026
+
+Le §64 a été poussé (`10f5110`) : porte de l'hôte verte (1 554 scénarios = 1 553 + 1, la ligne du nouveau workflow dans le scénario qui les vérifie ; aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS), run retrouvé par le SHA du commit. Le README de ce commit disait 1 553 : il est corrigé ici.
+
+**L'incident.** La première session de la boucle lancée après la mise à niveau s'est arrêtée au bout de 197 secondes, après seize réponses normales : « Failed to authenticate: OAuth token revoked ». Le mainteneur a d'abord écrit au propriétaire que son jeton avait été renouvelé pendant la session, sans l'avoir vérifié, et a relancé. Le propriétaire : « Ça me semble peu probable que mon token ait expiré, le problème est plus profond. Tu es maintainer et owner du code, donc ça devrait aussi te faire investiguer la source et pas assumer une cause en surface. »
+
+**La cause, par les traces.**
+
+| Heure (poste) | Fait | Source |
+|---|---|---|
+| 16:32:32 | La session de construction démarre ; son proxy lit l'identifiant du poste | Date de création du flux de la session |
+| 16:35:46 | L'entrée du trousseau qui tient l'identifiant est réécrite ; sa nouvelle échéance est 00:35:46, huit heures plus tard exactement | Date de modification de l'entrée, lue sans son secret ; champ `expiresAt` |
+| 16:35:50 | Le proxy reçoit de l'API un 401 `authentication_error` : le premier de son journal d'usage, 2 538 lignes depuis octobre | `usage.jsonl` |
+| 16:36:12 | La relance démarre : un proxy neuf relit le trousseau, et la session va au bout | Flux de la relance |
+
+Le jeton n'a pas expiré. Une session Claude Code du poste l'a renouvelé en avance sur son échéance, et l'ancien a été révoqué à cet instant. Le défaut est dans `commandCredential` (`packages/sandbox/src/auth-proxy.ts`) : le proxy gardait le jeton lu et ne relisait le trousseau qu'à une minute de l'échéance nominale ; entre le renouvellement par le poste et cette minute, il envoyait un jeton révoqué. Et devant le 401 de l'amont il ne relisait rien : il le rendait à la session, qui s'arrêtait. Toute session à cheval sur un renouvellement échouait ainsi, une fois toutes les huit heures.
+
+**Le correctif.** La source d'un identifiant reçoit le jeton que l'amont vient de refuser, et ne le redonne jamais de sa mémoire : elle relit. Le relais, devant un 401 de l'amont, garde ce refus au lieu de le transmettre, redemande l'identifiant, et rejoue la requête une seule fois si le jeton a changé ; sinon, ou si la relecture échoue, ou si le second jeton est refusé aussi, il rend au client le refus de l'amont tel quel. Une ligne d'usage par réponse de l'amont, y compris le refus qui n'est pas transmis. Le broker de la plateforme passe par le même relais : une clé d'API remplacée dans son fichier est relue de la même façon.
+
+| Scénario | Ce qu'il affirme |
+|---|---|
+| Jeton refusé, renouvelé | Le client reçoit 200 ; l'amont a vu deux requêtes, l'ancien jeton puis le nouveau, même chemin et même corps ; la source a été interrogée avec le jeton refusé ; deux lignes d'usage, 401 puis 200 |
+| Jeton refusé, relu identique | Le client reçoit le 401 de l'amont, corps et en-têtes ; une seule requête |
+| Jeton renouvelé, refusé aussi | 401 au client ; deux requêtes, jamais une troisième |
+| Relecture impossible après le refus | 401 de l'amont au client ; une seule requête |
+| La source garde le jeton renouvelé | Lectures a, puis b quand a est dit refusé, puis b encore ; la commande a tourné deux fois |
+| Un autre jeton dit refusé | La source ne relit pas |
+
+**Mutation des lignes changées, avant la porte.** 63 mutants : 42 tués, 19 délais dépassés, 2 erreurs d'exécution, aucun survivant. Les délais dépassés ont été relus un par un : chacun laisse le client sans réponse, ou rejoue sans fin, ce qu'aucune assertion ne peut constater autrement que par l'attente.
+
+**Une faute de méthode en chemin.** Pour éviter une installation, le mainteneur avait lié les dépendances de l'arbre de travail à celles d'un autre arbre : un scénario de l'outil de la porte ne retrouvait pas ses paquets à travers ce lien, et le passage initial de la mutation a échoué. Le lien a été remplacé par une installation depuis le fichier de verrouillage.
+
+**Ce qui n'est pas prouvé.** Le correctif est prouvé devant un amont factice ; le renouvellement réel d'un jeton par le poste ne se rejoue pas en scénario. La prochaine session de la boucle à cheval sur un renouvellement le montrera, et son journal d'usage portera alors un 401 suivi d'un 200.
+
+**Chiffres.** 1 560 scénarios dans la suite (6 de plus : quatre pour le relais, deux pour la source) ; 121 pour le proxy, la source d'identifiant et le broker rejoués sur l'hôte.
+
+**Trois piliers.**
+- Recherche : la cause est établie par quatre dates de trois sources indépendantes, et la première explication donnée, fausse dans son mot (« expiré ») et non vérifiée, est rapportée.
+- SSDLC : le détenteur de l'identifiant ne renvoie plus un jeton révoqué ; un refus de l'amont ne déclenche qu'une relecture et qu'un seul nouvel essai ; aucun jeton n'entre dans un message ni dans le journal d'usage.
+- Opérationnel : une session de la boucle ne meurt plus au renouvellement du jeton du poste ; IRB sans objet.

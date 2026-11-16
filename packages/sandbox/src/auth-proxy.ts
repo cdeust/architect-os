@@ -25,14 +25,19 @@ import { refusalOf, type RequestPolicy } from './request-policy.js';
  *
  * Pas de renouvellement OAuth ici : le jeton de rafraîchissement tourne à chaque usage, et le renouveler hors de
  * Claude Code sur l'hôte invaliderait la connexion de l'hôte. Le proxy relit le trousseau quand le jeton
- * approche de l'expiration ; une session Claude Code de l'hôte le renouvelle.
+ * approche de l'expiration, et quand l'amont vient de le refuser : une session Claude Code de l'hôte le renouvelle
+ * avant son échéance, et l'ancien jeton est révoqué à cet instant (mesuré le 16 novembre 2026, journal §65).
  */
 export interface Credential {
   readonly accessToken: string;
   /** Millisecondes depuis l'époque, si connu. */
   readonly expiresAt?: number;
 }
-export type CredentialSource = () => Promise<Credential>;
+/**
+ * Gives the credential. `refused` is an access token the upstream has just answered 401 to: a source that keeps its
+ * credential must not give that one again without reading it anew.
+ */
+export type CredentialSource = (refused?: string) => Promise<Credential>;
 
 /** What a key presented in `x-api-key` is worth: the task it spends for and the call that granted it, if any. */
 export interface Grant {
@@ -242,10 +247,15 @@ interface Forward {
   readonly upstream: URL;
   readonly betas: readonly string[];
   readonly scheme: RelayOptions['scheme'];
+  readonly credential: CredentialSource;
   readonly log: (record: UsageRecord) => void;
 }
 
-/** Relaie une requête admise vers l'amont et rend sa réponse au client, en flux ; une ligne d'usage à la fin. */
+/**
+ * Relaie une requête admise vers l'amont et rend sa réponse au client, en flux ; une ligne d'usage par réponse de
+ * l'amont. Un 401 de l'amont refuse l'identifiant lui-même : la source est relue, et si elle en donne un autre la
+ * requête est rejouée avec lui, une seule fois. Sinon le refus de l'amont est rendu au client tel quel.
+ */
 function relay(
   relay: Forward,
   grant: Grant,
@@ -256,32 +266,46 @@ function relay(
 ): void {
   const path = String(req.url);
   const send = relay.upstream.protocol === 'https:' ? httpsRequest : httpRequest;
-  const outgoing = send(
-    new URL(path, relay.upstream),
-    { method: 'POST', headers: forwardHeaders(req.headers, token, relay.betas, relay.scheme) },
-    (up) => {
-      res.writeHead(up.statusCode ?? 502, withoutHopByHop(up.headers));
-      let answer = '';
-      up.on('data', (chunk: Buffer) => {
-        answer += chunk.toString('utf8');
-        res.write(chunk);
-      });
-      up.on('end', () => {
-        res.end();
-        relay.log({
-          at: new Date().toISOString(),
-          status: up.statusCode ?? 0,
-          ...grant,
-          route: path.split('?')[0],
-          ...usageOf(String(up.headers['content-type']), answer),
+  /** Sends the request with `token`. `renewable`: a refusal of this token may still be answered by another one. */
+  const ask = (token: string, renewable: boolean): void => {
+    const outgoing = send(
+      new URL(path, relay.upstream),
+      { method: 'POST', headers: forwardHeaders(req.headers, token, relay.betas, relay.scheme) },
+      (up) => {
+        const head = () => res.writeHead(up.statusCode ?? 502, withoutHopByHop(up.headers));
+        // A refusal that may be answered by a renewed credential is held, not streamed: the client may never see it.
+        const held = up.statusCode === 401 && renewable;
+        if (!held) head();
+        let answer = '';
+        up.on('data', (chunk: Buffer) => {
+          answer += chunk.toString('utf8');
+          if (!held) res.write(chunk);
         });
-      });
-      up.on('error', () => res.destroy());
-    },
-  );
-  // Avant la réponse seulement : passé ses en-têtes, Node signale une coupure sur `up`, pas sur la requête.
-  outgoing.on('error', () => fail(res, 502, 'api_error', 'upstream unreachable'));
-  outgoing.end(body);
+        up.on('end', () => {
+          relay.log({
+            at: new Date().toISOString(),
+            status: up.statusCode ?? 0,
+            ...grant,
+            route: path.split('?')[0],
+            ...usageOf(String(up.headers['content-type']), answer),
+          });
+          if (!held) return void res.end();
+          const refusal = () => void head().end(answer);
+          relay
+            .credential(token)
+            .then(
+              (renewed) => (renewed.accessToken === token ? refusal() : ask(renewed.accessToken, false)),
+              refusal,
+            );
+        });
+        up.on('error', () => res.destroy());
+      },
+    );
+    // Avant la réponse seulement : passé ses en-têtes, Node signale une coupure sur `up`, pas sur la requête.
+    outgoing.on('error', () => fail(res, 502, 'api_error', 'upstream unreachable'));
+    outgoing.end(body);
+  };
+  ask(token, true);
 }
 
 export async function startRelay(options: RelayOptions): Promise<Relay> {
@@ -300,6 +324,7 @@ export async function startRelay(options: RelayOptions): Promise<Relay> {
     upstream: new URL(options.upstream),
     betas: options.betas,
     scheme: options.scheme,
+    credential: options.credential,
     log,
   };
 
@@ -383,7 +408,8 @@ export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthPro
 
 /**
  * Lit l'identifiant comme Claude Code sur l'hôte : la commande du trousseau rend le JSON
- * `{ claudeAiOauth: { accessToken, expiresAt } }`. Relu quand l'expiration approche ; rien n'est écrit.
+ * `{ claudeAiOauth: { accessToken, expiresAt } }`. Relu quand l'expiration approche, et quand le jeton gardé est
+ * celui que l'amont vient de refuser ; rien n'est écrit.
  * Une erreur ne porte jamais la sortie de la commande.
  */
 export function commandCredential(
@@ -415,8 +441,8 @@ export function commandCredential(
         }
       });
     });
-  return async () => {
-    if (fresh(cached)) return cached;
+  return async (refused) => {
+    if (fresh(cached) && cached.accessToken !== refused) return cached;
     cached = await read();
     if (!fresh(cached)) throw new Error('host credential expired');
     return cached;

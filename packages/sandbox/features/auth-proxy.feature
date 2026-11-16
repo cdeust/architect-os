@@ -59,6 +59,51 @@ Feature: Auth proxy (host side, fake upstream, fake credential)
     Then the proxy response status is 401
     And the upstream received no request
 
+  Scenario: a credential the upstream refuses is read again, and the request replayed once with the renewed one: the client sees no refusal
+    Given the proxy is restarted with the host credential "revoked-credential", renewed to "host-credential" once the upstream has refused it
+    When I POST through the proxy "/v1/messages?beta=true" with the body '{"model":"m"}'
+    Then the proxy response status is 200
+    And the proxy response body is the upstream stream
+    And the upstream received 2 requests
+    And the upstream request 0 has the header "authorization" "Bearer revoked-credential"
+    And the upstream request 1 has the header "authorization" "Bearer host-credential"
+    And the upstream request 1 has the url "/v1/messages?beta=true"
+    And the upstream request 1 has the body '{"model":"m"}'
+    And the host credential was asked for '[null,"revoked-credential"]'
+    And the usage log holds the statuses '[401,200]', in that order
+
+  Scenario: a refused credential that reads the same again is not sent twice: the client gets the refusal of the upstream as it is
+    Given the proxy is restarted with the host credential "revoked-credential", renewed to "revoked-credential" once the upstream has refused it
+    When I POST through the proxy "/v1/messages" with the body '{}'
+    Then the proxy response status is 401
+    And the proxy response has the header "x-request-id" "r-401"
+    And the proxy response body is exactly:
+      """
+      {"type":"error","error":{"type":"authentication_error","message":"OAuth token revoked"}}
+      """
+    And the upstream received 1 request
+    And the usage log holds the statuses '[401]', in that order
+
+  Scenario: a renewed credential the upstream refuses too is not renewed again: two requests, never a third
+    Given the proxy is restarted with the host credential "revoked-credential", renewed to "revoked-again" once the upstream has refused it
+    When I POST through the proxy "/v1/messages" with the body '{}'
+    Then the proxy response status is 401
+    And the proxy response body is exactly:
+      """
+      {"type":"error","error":{"type":"authentication_error","message":"OAuth token revoked"}}
+      """
+    And the upstream received 2 requests
+    And the host credential was asked for '[null,"revoked-credential"]'
+    And the usage log holds the statuses '[401,401]', in that order
+
+  Scenario: a refused credential that cannot be read again leaves the refusal of the upstream to the client
+    Given the proxy is restarted with the host credential "revoked-credential", which cannot be read again once the upstream has refused it
+    When I POST through the proxy "/v1/messages" with the body '{}'
+    Then the proxy response status is 401
+    And the proxy response body does contain "OAuth token revoked"
+    And the upstream received 1 request
+    And the host credential was asked for '[null,"revoked-credential"]'
+
   Scenario: answers 503 without detail when the host credential cannot be read
     Given the proxy is restarted with a host credential that fails with "detail that must not leak"
     When I POST through the proxy "/v1/messages" with the body '{}'

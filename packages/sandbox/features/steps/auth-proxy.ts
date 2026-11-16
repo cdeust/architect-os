@@ -5,7 +5,7 @@ import { connect, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { DataTable } from '@cucumber/cucumber';
-import { startAuthProxy, type AuthProxy } from '../../src/auth-proxy.js';
+import { startAuthProxy, type AuthProxy, type CredentialSource } from '../../src/auth-proxy.js';
 import { Given, Then, When, assertMatches, stored, type SandboxWorld } from './helpers.js';
 
 /** Faux amont : enregistre méthode, chemin et en-têtes, répond en SSE avec un `usage`. */
@@ -27,6 +27,9 @@ const SSE = [
   '',
 ].join('\n');
 
+/** What the API answers to a credential it has revoked. */
+const REVOKED = '{"type":"error","error":{"type":"authentication_error","message":"OAuth token revoked"}}';
+
 /** Everything one proxy scenario shares; `proxy` is replaced when a step restarts it. */
 interface ProxyScenario {
   seen: Seen[];
@@ -34,6 +37,8 @@ interface ProxyScenario {
   dir: string;
   token: string;
   response?: { status: number; text: string; headers?: IncomingHttpHeaders };
+  /** What the host credential was asked with, call by call: the token just refused, or null for none. */
+  asked?: (string | null)[];
 }
 const scenario = (world: SandboxWorld) => stored<ProxyScenario>(world, 'proxy');
 const running = (s: ProxyScenario): AuthProxy => {
@@ -57,6 +62,11 @@ Given('a fake upstream answering with a server-sent-events stream that carries a
     req.on('end', () => {
       seen.push({ method: req.method, url: req.url, headers: req.headers, body });
       const url = req.url ?? '';
+      // A credential the upstream has revoked: the API answers 401 to it, in JSON, whatever the request.
+      if (String(req.headers.authorization).startsWith('Bearer revoked-')) {
+        res.writeHead(401, { 'content-type': 'application/json', 'x-request-id': 'r-401' });
+        return res.end(REVOKED);
+      }
       if (url.includes('hold')) return;
       if (url.includes('json')) {
         res.writeHead(200, { 'content-type': 'application/json' });
@@ -128,6 +138,56 @@ Given(
     });
   },
 );
+
+/** Restarts the proxy of the scenario over the same upstream, with a host credential of the step's own. */
+async function restartWith(world: SandboxWorld, credential: CredentialSource): Promise<void> {
+  const s = scenario(world);
+  await running(s).close();
+  s.proxy = await startAuthProxy({
+    upstream: `http://127.0.0.1:${stored<number>(world, 'upstream')}`,
+    routes: ROUTES,
+    betas: ['oauth-2025-04-20'],
+    policy: POLICY,
+    sessionToken: s.token,
+    credential,
+    usageLog: usageLogPath(s),
+  });
+}
+
+Given(
+  'the proxy is restarted with the host credential {string}, renewed to {string} once the upstream has refused it',
+  async function (first: string, renewed: string) {
+    const asked: (string | null)[] = (scenario(this).asked = []);
+    await restartWith(this, async (refused) => {
+      asked.push(refused ?? null);
+      return { accessToken: refused === first ? renewed : first };
+    });
+  },
+);
+
+Given(
+  'the proxy is restarted with the host credential {string}, which cannot be read again once the upstream has refused it',
+  async function (first: string) {
+    const asked: (string | null)[] = (scenario(this).asked = []);
+    await restartWith(this, async (refused) => {
+      asked.push(refused ?? null);
+      if (refused !== undefined) throw new Error('the keychain is locked');
+      return { accessToken: first };
+    });
+  },
+);
+
+Then('the host credential was asked for {string}', function (expected: string) {
+  assert.deepEqual(scenario(this).asked, JSON.parse(expected));
+});
+
+Then('the usage log holds the statuses {string}, in that order', function (statuses: string) {
+  const records = readFileSync(usageLogPath(scenario(this)), 'utf8')
+    .split('\n')
+    .filter((line) => line !== '')
+    .map((line) => (JSON.parse(line) as { status: number }).status);
+  assert.deepEqual(records, JSON.parse(statuses));
+});
 
 Given('the proxy is restarted without required betas', async function () {
   const s = scenario(this);

@@ -128,3 +128,34 @@ Then('reading the credential is refused', async function () {
 Then('reading the credential is accepted', async function () {
   await assert.doesNotReject(stored<CredentialSource>(this, 'source')());
 });
+
+Given(
+  'a credential command that counts its runs and prints the access token {string} at its first run and {string} afterwards',
+  function (first: string, later: string) {
+    const counter = (this.state['counter'] = join(credentialDir(this), 'count'));
+    const argv = script(
+      this,
+      `import { appendFileSync, readFileSync } from 'node:fs'; appendFileSync(${JSON.stringify(counter)}, 'x');` +
+        `const token = readFileSync(${JSON.stringify(counter)}, 'utf8') === 'x' ? ${JSON.stringify(first)} : ${JSON.stringify(later)};` +
+        `console.log(JSON.stringify({ claudeAiOauth: { accessToken: token, expiresAt: Date.now() + 3600e3 } }));`,
+    );
+    this.state['source'] = commandCredential(argv);
+  },
+);
+
+When(
+  'I read the credential, then again saying each of {string} was just refused',
+  async function (refusals: string) {
+    const source = stored<CredentialSource>(this, 'source');
+    const readings = [await source()];
+    for (const refused of JSON.parse(refusals) as string[]) readings.push(await source(refused));
+    this.state['readings'] = readings;
+  },
+);
+
+Then('the readings give the access tokens {string}', function (tokens: string) {
+  assert.deepEqual(
+    stored<Credential[]>(this, 'readings').map((reading) => reading.accessToken),
+    JSON.parse(tokens),
+  );
+});
