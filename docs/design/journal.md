@@ -2608,3 +2608,27 @@ Le §62 a été poussé (`89911cd`) : porte de l'hôte verte (1 822 scénarios =
 - Recherche : le mode retiré avait été mesuré et prouvé ; ce que son retrait fait perdre est écrit, avec la façon de le rétablir.
 - SSDLC : un seul moyen d'isolation, celui dont le test d'évasion tourne à chaque changement sur les deux systèmes ; une image et deux archives de moins dans la chaîne d'approvisionnement.
 - Opérationnel : l'opérateur n'a plus de moyen à choisir ni de démon à préparer ; IRB sans objet.
+
+## 64. 1b.8 : le binaire de l'agent et le runtime de sandbox remontés, et une veille du changelog, 16 novembre 2026
+
+Le §63 a été poussé (`ef164dc`) : porte de l'hôte verte (1 553 scénarios = 1 822 − 269 ; 11 mutants dans le périmètre, 11 tués), CI verte sur `gate` (Linux et macOS), run retrouvé par le SHA du commit. Il ne reste qu'un workflow de preuve, `gate`.
+
+**La demande du propriétaire.** « On devrait maintenir notre système à jour par rapport au changelog de Claude code. Y a code-mode qui permet de générer des scripts JavaScript pour concatener des usages de tools, qu'on utilise pas. Et d'autres choses apportées par Anthropic qu'on utilise pas alors que ça nous aiderai. »
+
+**L'écart mesuré.** Le dépôt épinglait le SDK de l'agent en 0.3.312, donc le binaire Claude Code 2.1.312 que lancent les workers et la boucle d'orchestration, alors que 2.1.325 était publié : treize versions, 1 043 entrées de changelog, dont un correctif de sécurité (le décodage des réponses compressées en zstd). Le runtime de sandbox était en 0.0.81 pour 0.0.83 publié. Rien ne surveillait cet écart.
+
+**Ce qui est fait.**
+- Les deux épingles sont remontées, une à la fois, scripts d'installation coupés. Après le SDK : 431 scénarios rejoués, dont ceux qui lancent le vrai binaire devant le modèle factice. Après le runtime de sandbox : 646, dont la plateforme par son fichier d'entrée et le test d'évasion sous srt réel. Aucun changement de code n'a été nécessaire.
+- `docs/claude-code-watch.md` : ce qui a été lu (le changelog de Claude Code de 2.1.313 à 2.1.325, les notes de version du runtime de sandbox 0.0.82 et 0.0.83), les entrées qui touchent une exécution sans interface, le SDK, la sandbox, les hooks ou ce qu'une session envoie à l'API, et la décision pour chacune.
+- `pins.yml` : un workflow planifié chaque lundi, sans secret ni installation, rouge quand une version publiée dépasse une épingle. GitHub ne joue un workflow planifié que sur la branche par défaut : tant que cette branche n'est pas `main`, il se lance à la main.
+
+**Le mode code.** Lu dans sa page de documentation, pas de mémoire : expérimental, éteint par défaut, réservé à une session interactive en terminal. Il ne fonctionne ni avec `-p`, ni avec l'Agent SDK, ni derrière une adresse d'API personnalisée, ni télémétrie coupée : ce sont les conditions de la boucle et des workers. Pour une session interactive, c'est un réglage de l'utilisateur, incompatible avec Remote Control.
+
+**Ce qui n'est pas pris, et pourquoi.** Trois réglages récents ne s'appliquent pas à un worker (il ne lance pas de sous-agent, n'enregistre pas de hook, et son profil coupe déjà la télémétrie et le trafic annexe). Un quatrième est candidat pour les sessions de la boucle (`permissions.blockWritesOutsideWorkingDirectories`) : c'est un comportement à ajouter avec son scénario, pas une ligne à glisser avec une épingle ; il est inscrit au relevé.
+
+**Ce qui n'est pas prouvé.** Le correctif de sécurité est pris par la version, pas rejoué par un scénario. Le workflow `pins.yml` a été joué à la main sur le poste (les deux épingles égales aux versions publiées), pas encore par GitHub.
+
+**Trois piliers.**
+- Recherche : la lecture du changelog est datée, bornée à une plage de versions, et sa décision par entrée est commitée ; une épingle bouge une à la fois.
+- SSDLC : un correctif de sécurité du binaire est pris ; l'écart entre une épingle et la version publiée devient visible sans que quelqu'un doive y penser ; les versions restent exactes et le fichier de verrouillage commité.
+- Opérationnel : le relevé dit comment remonter une épingle et ce qui la prouve ; IRB sans objet.

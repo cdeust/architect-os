@@ -12,7 +12,7 @@
     }
   },
   "dependencies": {
-    "@anthropic-ai/sandbox-runtime": "0.0.81",
+    "@anthropic-ai/sandbox-runtime": "0.0.83",
     "zod": "4.6.7"
   }
 }

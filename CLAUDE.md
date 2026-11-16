@@ -105,6 +105,7 @@ Common bricks need no new TypeScript:
 
 - TypeScript strict, ESM, `.js` suffix in relative imports. Prettier formats (`npm run format`).
 - Dependencies are pinned to exact versions; verify with `npm view <pkg> version`; commit `package-lock.json`.
+- The Claude Agent SDK (which holds the Claude Code binary) and the sandbox runtime move by `docs/claude-code-watch.md`: the changelog read between the two versions, a decision per entry that applies, one pin at a time. The workflow `pins.yml` is red when a pin is behind.
 - Never invent an SDK API: read the published `.d.ts` under `node_modules/<pkg>` and cite the file in the comment.
 - Failures are values: a tool call returns `Result` with `status: 'failed'` and a named `error.code`; do not throw across a service boundary.
 - Secrets go through the secrets broker only (brick 1a.0: the host auth proxy of `packages/sandbox` alone holds the owner's Claude credential; the sandbox gets a session token. Brick 1b.2: `modules/broker` alone holds the API key, in a 0600 file; a worker gets a task token). `gate.yml` holds no secret: the real call of the broker (T-04R) is `.github/workflows/broker-live.yml`, on `main` only, with the test key of the environment `broker-live` (created by the owner, branch policy `main`). Never put an API key, token or password in a worker container, an image, the repository, a log or a test.
