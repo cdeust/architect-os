@@ -12,6 +12,8 @@ Feature: the Docker adapter of a platform process
       run
       --rm
       -i
+      --pull
+      never
       --init
       --log-driver
       none
@@ -48,6 +50,8 @@ Feature: the Docker adapter of a platform process
       type=bind,source=<folder>,target=/relay,readonly
       --workdir
       /work
+      --entrypoint
+      /usr/local/bin/node
       --env
       TMPDIR
       --env
@@ -59,7 +63,6 @@ Feature: the Docker adapter of a platform process
       --env
       AOS_RELAY_SOCKET=/relay/s
       node:22-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      /usr/local/bin/node
       /srv/platform/packages/sandbox/dist/src/container-entry.js
       4100
       --
@@ -79,6 +82,8 @@ Feature: the Docker adapter of a platform process
       run
       --rm
       -i
+      --pull
+      never
       --init
       --log-driver
       none
@@ -115,6 +120,8 @@ Feature: the Docker adapter of a platform process
       type=bind,source=<folder>,target=/relay,readonly
       --workdir
       /work
+      --entrypoint
+      /usr/local/bin/node
       --env
       TMPDIR
       --env
@@ -138,7 +145,6 @@ Feature: the Docker adapter of a platform process
       --env
       AOS_RELAY_SOCKET=/relay/s
       node:22-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      /usr/local/bin/node
       /srv/platform/packages/sandbox/dist/src/container-entry.js
       4200
       --
@@ -301,6 +307,17 @@ Feature: the Docker adapter of a platform process
       | a relative temporary          | tmpRoot | tmp/aos        |
       | a temporary with a comma      | tmpRoot | /tmp/a,b       |
       | a temporary with double quote | tmpRoot | /tmp/a"b       |
+
+  Scenario Outline: a node of the image that is not an absolute path is refused: <case>
+    Given a Docker process harness with the variables "callbackPort=4100"
+    When I build a Docker process runner whose path option node is '<path>'
+    Then the Docker process runner is refused with 'ISOLATION_UNAVAILABLE: node is not an absolute path of the image: <path>'
+
+    Examples:
+      | case            | path     |
+      | a name          | node     |
+      | a relative path | bin/node |
+      | empty           |          |
 
   Scenario: a platform root with a control character is refused
     Given a Docker process harness with the variables "callbackPort=4100"

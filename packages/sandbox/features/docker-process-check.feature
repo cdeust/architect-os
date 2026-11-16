@@ -14,7 +14,6 @@ Feature: the check at start of the Docker adapter of a platform process
     And the canary run has the options of the sandbox run, up to the image
     And the canary run ends with
       """
-      /usr/local/bin/node
       /srv/platform/packages/sandbox/dist/src/container-entry.js
       <port>
       --
@@ -135,7 +134,7 @@ Feature: the check at start of the Docker adapter of a platform process
     And the Docker process harness bounds the check to 300 ms
     And the fake docker client never ends info
     When I try to start the Docker process profile "module" with the command "node serve.js"
-    Then the Docker process start is refused starting with "ISOLATION_UNAVAILABLE: docker info: Command failed: "
+    Then the Docker process start is refused with "ISOLATION_UNAVAILABLE: docker info: no answer within 300 ms"
     And no container was launched by the Docker client
 
   Scenario Outline: a wrong value read through the relay is refused: <json>

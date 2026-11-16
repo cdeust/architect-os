@@ -245,6 +245,20 @@ Then('the stderr of the container entry holds {string}', async function (text: s
   await until(() => fileText(entry.errFile).includes(text), `the stderr to hold ${text}`);
 });
 
+Then('the stderr of the container entry is empty', function () {
+  assert.equal(fileText(entryOf(this).errFile), '');
+});
+
+Then(
+  'the stderr of the container entry says its command was ended by {string}, and nothing else',
+  function (signal: string) {
+    assert.equal(
+      fileText(entryOf(this).errFile),
+      `container entry: ${process.execPath} ended by ${signal}\n`,
+    );
+  },
+);
+
 Then('the marker of the command was not written', function () {
   assert.ok(!existsSync(join(entryOf(this).dir, 'marker')));
 });

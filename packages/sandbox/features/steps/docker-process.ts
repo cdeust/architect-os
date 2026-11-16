@@ -371,7 +371,7 @@ When(
   function (which: string, text: string) {
     // `[newline]` stands for the character a step line cannot hold.
     const path = text.replaceAll('[newline]', '\n');
-    build(harness(this), which === 'root' ? { root: path } : { tmpRoot: path });
+    build(harness(this), { [which]: path } as Partial<DockerProcessRunnerOptions>);
   },
 );
 
@@ -1022,7 +1022,7 @@ Then('the canary run holds the means of the platform and the root of this reposi
   const after = (option: string) => args[args.indexOf(option) + 1];
   assert.equal(after('--memory'), '300m');
   assert.equal(after('--pids-limit'), '48');
-  assert.equal(args[args.indexOf(PLATFORM_IMAGE) + 1], '/image/bin/node');
+  assert.equal(after('--entrypoint'), '/image/bin/node');
   assert.ok(args.includes(`type=bind,source=${ROOT},target=${ROOT},readonly`), args.join(' '));
 });
 

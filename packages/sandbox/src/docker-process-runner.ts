@@ -1,4 +1,9 @@
-import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import {
+  execFile,
+  spawn,
+  type ChildProcessWithoutNullStreams,
+  type ExecFileException,
+} from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { chmodSync, mkdtempSync, rmdirSync } from 'node:fs';
@@ -33,7 +38,9 @@ export interface DockerProcessRunnerOptions {
   readonly docker: string;
   /** `name@sha256:<64 hexadecimal characters>`: an image is designated by its digest, never by a tag. */
   readonly image: string;
-  /** Absolute path of `node` inside the image. */
+  /**
+   * Absolute path of `node` inside the image: the entrypoint of every container, in place of the one the image declares.
+   */
   readonly node: string;
   /** The root of the platform: mounted read-only in the container at the same path, `${repo}` of the profiles. */
   readonly root: string;
@@ -175,6 +182,10 @@ function dockerRunArgs(
     'run',
     '--rm',
     '-i',
+    // A start never downloads: the image is there, or the client says which image it did not find and the start is
+    // refused. Fetching the image is the operator's act, not the gateway's.
+    '--pull',
+    'never',
     // The entry is not the first process of the container: Docker's init is, and reaps the orphans of the program.
     '--init',
     // The daemon keeps no copy of what the container writes: its stdout is the MCP stream of a module.
@@ -211,9 +222,12 @@ function dockerRunArgs(
     ...bind(run.relayFolder, RELAY),
     '--workdir',
     WORK,
+    // The entrypoint the image declares is not run: the official node image has one, a script that rewrites the command
+    // it does not know (measured, `bench/docker-bridge`). The first program of the container is its node, on the entry.
+    '--entrypoint',
+    o.node,
     ...run.env.args,
     o.image,
-    o.node,
     compiled(o.root, 'container-entry.js'),
     String(run.port),
     '--',
@@ -275,8 +289,8 @@ export class DockerProcessRunner {
   private checked: Promise<void> | undefined;
 
   /**
-   * @throws SandboxError ISOLATION_UNAVAILABLE when the image does not carry a digest, when a bound does not bound, when
-   * a path cannot be mounted.
+   * @throws SandboxError ISOLATION_UNAVAILABLE when the image does not carry a digest, when the node of the image is not
+   * an absolute path, when a bound does not bound, when a path cannot be mounted.
    */
   constructor(
     private readonly options: DockerProcessRunnerOptions,
@@ -286,6 +300,12 @@ export class DockerProcessRunner {
       throw new SandboxError(
         'ISOLATION_UNAVAILABLE',
         `image without a digest (name@sha256:<64 hexadecimal characters>): ${options.image}`,
+      );
+    // A name would be resolved in the PATH of the image, which the adapter does not know.
+    if (!options.node.startsWith('/'))
+      throw new SandboxError(
+        'ISOLATION_UNAVAILABLE',
+        `node is not an absolute path of the image: ${options.node}`,
       );
     for (const [name, bound, least] of [
       ['memoryMiB', options.memoryMiB, MEMORY_MIB_MIN],
@@ -373,7 +393,7 @@ export class DockerProcessRunner {
   private async requireRootless(): Promise<void> {
     const o = this.options;
     const { error, stdout, stderr } = await new Promise<{
-      error: Error | null;
+      error: ExecFileException | null;
       stdout: string;
       stderr: string;
     }>((done) =>
@@ -384,8 +404,13 @@ export class DockerProcessRunner {
         (error, stdout, stderr) => done({ error, stdout, stderr }),
       ),
     );
-    if (error !== null)
-      throw new SandboxError('ISOLATION_UNAVAILABLE', `docker info: ${firstLine(stderr) || error.message}`);
+    if (error !== null) {
+      // Killed: the bound of the check ended it. Otherwise what the client said, or why it could not be run.
+      const why = error.killed
+        ? `no answer within ${o.checkTimeoutMs} ms`
+        : firstLine(stderr) || error.message;
+      throw new SandboxError('ISOLATION_UNAVAILABLE', `docker info: ${why}`);
+    }
     const entries = securityOptions(stdout);
     if (entries === null)
       throw new SandboxError(

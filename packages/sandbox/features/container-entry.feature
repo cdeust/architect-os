@@ -8,6 +8,7 @@ Feature: the entry of a platform process in its container
     When I run the container entry with the command "relay-client"
     Then the container entry ended with 3
     And the stdout of the container entry is "got:pong:ping"
+    And the stderr of the container entry is empty
     And the port of the container entry is free again
     And no SIGTERM listener of the container entry remains
 
@@ -60,10 +61,11 @@ Feature: the entry of a platform process in its container
     Then the container entry ended with 42
     And no SIGTERM listener of the container entry remains
 
-  Scenario: a command ended by a signal gives 1
+  Scenario: a command ended by a signal gives 1, and the entry says which signal on stderr
     Given a free loopback port for the container entry
     When I run the container entry with the command "kill-itself"
     Then the container entry ended with 1
+    And the stderr of the container entry says its command was ended by "SIGKILL", and nothing else
 
   Scenario: a command that cannot be started gives 1 and its reason on stderr
     Given a free loopback port for the container entry

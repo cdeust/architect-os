@@ -106,6 +106,49 @@ macOS 27, node 26.11.1, played twice:
 
 The sizes are small on purpose, and the loss depends on the host: it shows only when the answer is larger than what the kernel holds for a Unix socket (8 KiB here, about 208 KiB on Linux) and small enough for the relay to take it whole while its client reads nothing. That is why it is a trial and not a scenario of the gate.
 
+## The real adapter before a real rootless daemon, 16 November 2026
+
+Until this trial the adapter and its check at start had only run before a fake Docker client. `adapter/` runs the compiled adapter itself (`DockerProcessRunner`, the code the gateway calls), on the Linux host, before the rootless daemon: its check, then a few starts of the profile `module` with a program that reports what it is (`adapter/module-probe.mjs`), then the refusals.
+
+```bash
+npx tsc -b && sh bench/docker-bridge/adapter/bundle.sh /tmp/aos-bundle.tgz     # on the host of the repository
+colima ssh --profile <profile> -- sh -c 'cat > /tmp/aos-bundle.tgz' < /tmp/aos-bundle.tgz
+colima ssh --profile <profile> -- sh -s < bench/docker-bridge/adapter/host.sh  # in the VM, which is the Linux host
+```
+
+Same VM (Ubuntu 24.04.2, Linux 6.8.0-64 aarch64, Docker 28.3.3, the daemon started without a bridge). Image `node:26-bookworm-slim`, by its digest `node@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1`, fetched by the trial before the adapter is called; node 26.13.1, the node of the host being the one of the image, copied out of it. Bounds: 256 MiB, 64 processes, a check bounded at 30 s. Played three times: once with the adapter of commit `8dd8cee`, then twice with the adapter corrected by what the pass before showed.
+
+| Question | Result (third pass) |
+| --- | --- |
+| The check at start, before the rootless daemon | Passes, 235 ms (196 and 220 ms at the passes before); asked again, 0 ms; no container and no relay folder left |
+| A module reads its callback port | `200 pong from the host`, through the entry and the relay; uid 10001, working directory `/work`; its environment is what the template sets, its home, the relay socket, and what the image sets (`PATH`, `HOSTNAME`, `NODE_VERSION`): nothing of the host |
+| A module writes in the platform root, in `/work` | `EROFS`; written |
+| A module tries another port of the loopback of the host, where a listener answers | `ECONNREFUSED`: its loopback is its own |
+| A module takes 400 MiB under a bound of 256 | Killed by the kernel; the sandbox ends with 1 and the entry says `container entry: /usr/local/bin/node ended by SIGKILL` |
+| A module starts 100 children under a bound of 64 processes | 49 started, 51 refused |
+| A start, to the first output of the module; then its stop | 62 to 82 ms; 35 to 48 ms (five times) |
+| A stop that follows a start at once | 6 ms, the client killed, no container left |
+| After every start and stop above | No container, no relay folder |
+| The daemon with root of the same host | Refused, 18 ms: `the daemon is not rootless: ["name=apparmor","name=seccomp,profile=builtin","name=cgroupns"]` |
+| An image that is not there | Refused, 27 ms, nothing downloaded: `No such image: node@sha256:0000...` |
+| No node at that path in the image | Refused: `exec /usr/local/bin/nodex failed: No such file or directory` |
+| A platform root 755 under a home that others cannot enter (750) | Passes: the mount gives the folder, not its parents |
+| A platform root that others cannot enter (700) | Refused: the node of the container cannot read the entry (`Cannot find module <root>/packages/sandbox/dist/src/container-entry.js`) |
+| A check bounded at 5 ms | Refused: `docker info: no answer within 5 ms` |
+| A check bounded at 60 ms | Refused: `canary: the probe has not ended within 60 ms` |
+| No daemon at that address; no docker client in `PATH` | Refused: `Cannot connect to the Docker daemon at ...`; `spawn docker ENOENT` |
+
+What the first two passes showed, and the adapter now does (the first three rows were seen at the first pass):
+
+| Seen | Cause | Now, measured at the third pass |
+| --- | --- | --- |
+| A wrong path of node gave `Cannot find module '/usr/local/bin/nodex'` | The image declares an entrypoint, a script that ran before the entry and rewrote a command it did not know into `node <command>` | `--entrypoint <node>`: the entrypoint of the image is not run; a node that is not an absolute path is refused at construction |
+| An image that was not there made `docker run` try to download it, inside the bound of the check | The default of `docker run` | `--pull never`: a start never downloads; the client names the image it did not find |
+| A module killed at its memory bound ended with the code 1 and nothing on its error output | The entry gave 1 for any signal, in silence | The entry says which signal ended its program |
+| `docker info` ended by the bound of the check said `Command failed: docker info ...` (second pass, with a bound of 5 ms) | The message of node for any failed command | `docker info: no answer within <n> ms` |
+
+The first module-probe started 100 children that were node: under the bound of processes one of them hung at its start, and the container never ended. That was the probe, not the adapter: the children are now `/bin/sleep`, and each run of the trial is bounded at 20 s.
+
 ## What this does not show
 
-One host, one image. It does not show the platform's module or worker running this way, the agent's own binary in such a container, the cost of a start, a `stop` that follows a start at once, a host without AppArmor, a host where cgroup v2 is not delegated, Windows through WSL2, or Podman. Those belong to the end-to-end step of the brick (journal, §48, §50, §51).
+One host, one image. It does not show the platform's own module or worker running this way (the module of the trial is a probe), the agent's own binary in such a container, a host without AppArmor, a host where cgroup v2 is not delegated, an x86-64 host, Windows through WSL2, or Podman. A trial is played by hand: none of this is a scenario of the gate. Those belong to the end-to-end step of the brick (journal, §48, §50, §51).

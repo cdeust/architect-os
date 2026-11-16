@@ -57,7 +57,8 @@ export interface EntryProcess extends EventEmitter {
 /**
  * The entry of a container: relays `127.0.0.1:<port>` to the socket of `RELAY_SOCKET_VARIABLE`, starts the program
  * with the stdio of the process, forwards SIGTERM to it, and resolves with its exit code (1 when a signal ended it).
- * When it cannot listen, or cannot start the program, it says why on stderr and resolves with 1. It is not the first
+ * When it cannot listen, cannot start the program, or a signal ended the program (the kernel kills it at the memory
+ * bound of the container), it says so on stderr and resolves with 1. It is not the first
  * process of the container: the adapter runs it under `--init`, which reaps the orphans of the program.
  */
 export function runContainerEntry(host: EntryProcess): Promise<number> {
@@ -86,7 +87,10 @@ export function runContainerEntry(host: EntryProcess): Promise<number> {
         host.stderr.write(`container entry: cannot start ${program}: ${error.message}\n`);
         end(1);
       });
-      child.once('exit', (code) => end(code ?? 1));
+      child.once('exit', (code, signal) => {
+        if (signal !== null) host.stderr.write(`container entry: ${program} ended by ${signal}\n`);
+        end(code ?? 1);
+      });
     });
   });
 }
