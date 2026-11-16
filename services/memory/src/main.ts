@@ -3,8 +3,9 @@ import type { Server } from 'node:http';
 import type { Writable } from 'node:stream';
 import { IntentService } from './application/intent-service.js';
 import { InternalToolService } from './application/internal-tools.js';
-import type { ContainerRunner, DataPort, RunRegistry, WorkerLimits } from './domain/ports.js';
+import type { ContainerRunner, DataPort, RunRegistry, RunTokens, WorkerLimits } from './domain/ports.js';
 import { HttpDataClient } from './infrastructure/data-client.js';
+import { InMemoryRunTokens } from './infrastructure/in-memory.js';
 import { DockerSandboxRunner, type DockerRunnerOptions } from '@architect-os/sandbox';
 import { SandboxContainerRunner } from './infrastructure/sandbox-container-runner.js';
 import { createHttpHost } from './presentation/http-host.js';
@@ -15,6 +16,7 @@ export interface MemoryDependencies {
   registry: RunRegistry;
   data: DataPort;
   runner: ContainerRunner;
+  tokens: RunTokens;
   limits: WorkerLimits;
 }
 
@@ -22,7 +24,7 @@ export const DEFAULT_LIMITS: WorkerLimits = { timeoutMs: 120_000, maxTurns: 8, m
 
 /** Composition root. All wiring of the memory service happens here. */
 export function compose(deps: MemoryDependencies) {
-  const intents = new IntentService(deps.registry, deps.runner, deps.limits);
+  const intents = new IntentService(deps.registry, deps.runner, deps.tokens, deps.limits);
   const internalTools = new InternalToolService(deps.data, 'memory');
   return {
     intents,
@@ -101,7 +103,14 @@ export async function start(
     cwd: process.cwd(),
     maxOutputBytes: WORKER_MAX_OUTPUT_BYTES,
   });
-  const app = compose({ registry: dataClient, data: dataClient, runner, limits: DEFAULT_LIMITS });
+  // The tokens are in memory for now: the adapter that speaks to the broker replaces it in the next step.
+  const app = compose({
+    registry: dataClient,
+    data: dataClient,
+    runner,
+    tokens: new InMemoryRunTokens(),
+    limits: DEFAULT_LIMITS,
+  });
   const http = createHttpHost(app.createServer);
   const internal = createInternalToolsHost(app.internalTools);
   let ports: readonly [number, number];

@@ -19,6 +19,7 @@ const ENV: Record<string, string> = {
 };
 
 const LIMITS = { max_turns: 1, max_budget_usd: 0.1 };
+const TOKEN = `tok-${'x'.repeat(32)}`;
 
 /** A fake docker client: records its argv in calls.jsonl beside it; `run` echoes stdin, or prints N bytes for `big-N`. */
 const FAKE_DOCKER = `#!${process.execPath}
@@ -203,7 +204,10 @@ Then('the memory MCP host no longer answers', async function () {
 
 const run = async (world: MemoryWorld, input: unknown) => {
   scenario(world).outcome = await first(world)
-    .runner.run({ input: { run_id: 'r1', tool: 'recall', input, limits: LIMITS }, timeoutMs: 20_000 })
+    .runner.run({
+      input: { run_id: 'r1', tool: 'recall', token: TOKEN, input, limits: LIMITS },
+      timeoutMs: 20_000,
+    })
     .then(
       (result) => ({ stdout: result.stdout }),
       (error: { code?: string; message: string }) => ({ error }),
@@ -216,7 +220,13 @@ When('the memory worker runner runs a recall request through the fake docker cli
 
 Then('the memory worker returned the input it was sent', function () {
   assert.deepEqual(scenario(this).outcome, {
-    stdout: JSON.stringify({ run_id: 'r1', tool: 'recall', input: { query: 'q' }, limits: LIMITS }),
+    stdout: JSON.stringify({
+      run_id: 'r1',
+      tool: 'recall',
+      token: TOKEN,
+      input: { query: 'q' },
+      limits: LIMITS,
+    }),
   });
 });
 

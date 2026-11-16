@@ -10,7 +10,13 @@ import {
   type ToolName,
   type WorkerOutput,
 } from '@architect-os/contracts';
-import { ServiceError, type ContainerRunner, type RunRegistry, type WorkerLimits } from '../domain/ports.js';
+import {
+  ServiceError,
+  type ContainerRunner,
+  type RunRegistry,
+  type RunTokens,
+  type WorkerLimits,
+} from '../domain/ports.js';
 
 function failure(
   code: ErrorCode,
@@ -44,6 +50,7 @@ export class IntentService {
   constructor(
     private readonly registry: RunRegistry,
     private readonly runner: ContainerRunner,
+    private readonly tokens: RunTokens,
     private readonly limits: WorkerLimits,
   ) {}
 
@@ -67,7 +74,27 @@ export class IntentService {
     }
   }
 
+  /** Grants the token of the run, and retires it once, whatever the end of the run. */
   private async execute(tool: ToolName, runId: string, input: unknown): Promise<Result<unknown>> {
+    let token: string;
+    try {
+      token = await this.tokens.grant(runId);
+    } catch (error) {
+      const message = `the token of the run could not be granted: ${describe(error)}`;
+      return this.finish(runId, failure('WORKER_UNAVAILABLE', message, runId));
+    }
+    try {
+      return await this.work(tool, runId, input, token);
+    } finally {
+      try {
+        await this.tokens.retire(token);
+      } catch {
+        // A broker that cannot be reached holds no token any more: the result of the run stands.
+      }
+    }
+  }
+
+  private async work(tool: ToolName, runId: string, input: unknown, token: string): Promise<Result<unknown>> {
     await this.registry.appendEvent(runId, 'worker.started', {});
     let stdout: string;
     try {
@@ -76,6 +103,7 @@ export class IntentService {
           run_id: runId,
           tool,
           input,
+          token,
           limits: { max_turns: this.limits.maxTurns, max_budget_usd: this.limits.maxBudgetUsd },
         },
         timeoutMs: this.limits.timeoutMs,

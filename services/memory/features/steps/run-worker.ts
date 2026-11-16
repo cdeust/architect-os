@@ -19,6 +19,7 @@ import {
 } from './helpers.js';
 
 const COST = { input_tokens: 3, output_tokens: 2, usd: 0.0002 };
+const TOKEN = `tok-${'x'.repeat(32)}`;
 const PROMPTS = { recall: 'recall prompt', remember: 'remember prompt' };
 
 /** Scripted agent: no network, no Anthropic call. */
@@ -41,7 +42,13 @@ const tools: InternalTools = {
 };
 
 const input = (tool: string, body: unknown) =>
-  JSON.stringify({ run_id: 'r1', tool, input: body, limits: { max_turns: 3, max_budget_usd: 0.2 } });
+  JSON.stringify({
+    run_id: 'r1',
+    tool,
+    token: TOKEN,
+    input: body,
+    limits: { max_turns: 3, max_budget_usd: 0.2 },
+  });
 
 class WorkerScenario {
   agent: ScriptedAgent | undefined;

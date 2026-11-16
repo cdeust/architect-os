@@ -12,6 +12,7 @@ import {
 } from '../../gateway/src/infrastructure/in-memory.js';
 import { McpServiceClient } from '../../gateway/src/infrastructure/mcp-service-client.js';
 import { InProcessContainerRunner } from '../../services/memory/src/infrastructure/in-process-runner.js';
+import { InMemoryRunTokens } from '../../services/memory/src/infrastructure/in-memory.js';
 import { HttpDataClient } from '../../services/memory/src/infrastructure/data-client.js';
 import { compose as composeMemory, DEFAULT_LIMITS } from '../../services/memory/src/main.js';
 import type { AgentPort, AgentRequest } from '../../services/memory/worker/agent-port.js';
@@ -55,6 +56,7 @@ export async function buildStack(agent: AgentPort) {
   const memory = composeMemory({
     registry: dataClient,
     data: dataClient,
+    tokens: new InMemoryRunTokens(),
     runner: new InProcessContainerRunner((stdin) =>
       runWorker(stdin, {
         agent,

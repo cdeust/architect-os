@@ -44,9 +44,12 @@ export async function runWorker(stdin: string, deps: WorkerDependencies): Promis
       tool,
       input: input.data.input,
       systemPrompt,
-      outputSchema: z.toJSONSchema(contract.data) as Record<string, unknown>,
+      // draft-07: Claude Code refuses the `$schema` of draft 2020-12, zod's default ("--json-schema is not a valid JSON
+      // Schema", features/integration/worker-of-the-stack.feature): with it the agent never starts.
+      outputSchema: z.toJSONSchema(contract.data, { target: 'draft-07' }) as Record<string, unknown>,
       limits: { maxTurns: input.data.limits.max_turns, maxBudgetUsd: input.data.limits.max_budget_usd },
       tools: deps.tools,
+      token: input.data.token,
     });
     const output: WorkerOutput = {
       status: 'ok',

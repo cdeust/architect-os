@@ -5,8 +5,9 @@ import {
   timeoutError,
   type ContainerRunner,
   type RunRegistry,
+  type RunTokens,
 } from '../../src/domain/ports.js';
-import { InMemoryRunRegistry } from '../../src/infrastructure/in-memory.js';
+import { InMemoryRunRegistry, InMemoryRunTokens } from '../../src/infrastructure/in-memory.js';
 import { Given, Then, When, assertMatches, required, slot, type MemoryWorld } from './helpers.js';
 
 const LIMITS = { timeoutMs: 1000, maxTurns: 4, maxBudgetUsd: 0.1 };
@@ -30,15 +31,40 @@ function runner(stdout: string | Error, exitCode = 0): ContainerRunner {
 
 type Result = Awaited<ReturnType<IntentService['handle']>>;
 
+/** Records which events the run held when its token was granted. */
+class SpyTokens extends InMemoryRunTokens {
+  readonly eventsAtGrant: string[][] = [];
+  constructor(private readonly registry: InMemoryRunRegistry) {
+    super();
+  }
+  override async grant(runId: string): Promise<string> {
+    this.eventsAtGrant.push(this.registry.get(runId).events.map((e) => e.type));
+    return super.grant(runId);
+  }
+}
+
 class IntentScenario {
   registry = new InMemoryRunRegistry();
+  tokens = new SpyTokens(this.registry);
+  /** How many tokens had been retired when the worker ran. */
+  retiredAtWorker: number | undefined;
   service: IntentService | undefined;
   result: Result | undefined;
   seenRequest: unknown;
 
-  over(r: ContainerRunner): void {
+  over(r: ContainerRunner, tokens?: (spy: SpyTokens) => RunTokens): void {
     this.registry = new InMemoryRunRegistry();
-    this.service = new IntentService(this.registry, r, LIMITS);
+    this.tokens = new SpyTokens(this.registry);
+    this.service = new IntentService(this.registry, r, tokens?.(this.tokens) ?? this.tokens, LIMITS);
+  }
+  recordingWorker(): ContainerRunner {
+    return {
+      run: async (request) => {
+        this.seenRequest = request;
+        this.retiredAtWorker = this.tokens.retired.length;
+        return { exitCode: 0, stdout: okWorker };
+      },
+    };
   }
   get lastResult(): Result {
     return required(this.result, 'an intent result');
@@ -78,17 +104,33 @@ Given('an intent service over a run registry that is down', function () {
     async appendEvent() {},
     async complete() {},
   };
-  s.service = new IntentService(down, runner(okWorker), LIMITS);
+  s.service = new IntentService(down, runner(okWorker), s.tokens, LIMITS);
 });
 
 Given('an intent service over a worker that records its request', function () {
   const s = scenario(this);
-  s.over({
-    async run(request) {
-      s.seenRequest = request;
-      return { exitCode: 0, stdout: okWorker };
+  s.over(s.recordingWorker());
+});
+
+Given('an intent service whose broker cannot grant a token because {string}', function (reason: string) {
+  const s = scenario(this);
+  s.over(s.recordingWorker(), (spy) => ({
+    grant: async () => {
+      throw new Error(reason);
     },
-  });
+    retire: (token) => spy.retire(token),
+  }));
+});
+
+Given('an intent service whose broker cannot retire a token', function () {
+  const s = scenario(this);
+  s.over(runner(okWorker), (spy) => ({
+    grant: (runId) => spy.grant(runId),
+    retire: async (token) => {
+      await spy.retire(token);
+      throw new Error('broker unreachable');
+    },
+  }));
 });
 
 When('the intent service handles {string} with input {string}', async function (tool: string, input: string) {
@@ -131,4 +173,54 @@ Then('the run registry holds {int} runs', function (count: number) {
 
 Then('the worker request matches {string}', function (expected: string) {
   assertMatches(scenario(this).seenRequest, JSON.parse(expected));
+});
+
+const grantedTokens = (s: IntentScenario) => s.tokens.granted;
+
+Then('the token of the run was granted before its event {string}', function (type: string) {
+  const s = scenario(this);
+  assert.equal(s.tokens.eventsAtGrant.length, 1);
+  assert.ok(!s.tokens.eventsAtGrant[0]?.includes(type), `${type} was recorded before the grant`);
+});
+
+Then('the worker input carries exactly the token granted for its run', function () {
+  const s = scenario(this);
+  const granted = grantedTokens(s);
+  assert.equal(granted.length, 1);
+  assert.equal(granted[0]?.runId, s.lastResult.run_id);
+  assert.equal((s.seenRequest as { input: { token: string } }).input.token, granted[0]?.token);
+});
+
+Then('the token of the run was retired once, after the worker ran', function () {
+  const s = scenario(this);
+  assert.deepEqual(s.tokens.retired, [grantedTokens(s)[0]?.token]);
+  assert.equal(s.retiredAtWorker, 0);
+});
+
+Then('the token of the run was retired once', function () {
+  const s = scenario(this);
+  assert.equal(grantedTokens(s).length, 1);
+  assert.deepEqual(s.tokens.retired, [grantedTokens(s)[0]?.token]);
+});
+
+Then('no worker was started and no token retired', function () {
+  const s = scenario(this);
+  assert.equal(s.seenRequest, undefined);
+  assert.deepEqual(s.tokens.retired, []);
+});
+
+Then('the two runs were granted two different tokens, each for its run', function () {
+  const s = scenario(this);
+  const [first, second] = grantedTokens(s);
+  assert.equal(grantedTokens(s).length, 2);
+  assert.notEqual(first?.token, second?.token);
+  assert.notEqual(first?.runId, second?.runId);
+});
+
+Then('no event of the run and no result holds its token', function () {
+  const s = scenario(this);
+  const token = required(grantedTokens(s)[0], 'a granted token').token;
+  const run = JSON.stringify(s.registry.get(s.lastResult.run_id ?? ''));
+  assert.ok(!run.includes(token), 'the recorded run holds the token');
+  assert.ok(!JSON.stringify(s.lastResult).includes(token), 'the result holds the token');
 });

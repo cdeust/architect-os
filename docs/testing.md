@@ -105,7 +105,7 @@ rm gateway/src/application/zz-tmp.ts && npm run arch                      # gree
 
 ## Known gaps
 
-- `services/memory/worker/sdk-agent.ts`, the agent of the first realisation, is not exercised against the live SDK (needs the broker and an API key). The agent of the native path is, with the real Claude Code binary against a fake model (`features/integration/agent-worker.feature`).
+- Both agents run with the real Claude Code binary against a fake model: the one of the native path (`features/integration/agent-worker.feature`) and the one of the first realisation (`features/integration/worker-of-the-stack.feature`). Neither is exercised against the real API in the gate (it needs a key); `modules/broker/live/` is the owner's command for that.
 - The stack of `compose.yaml` is built and started by the workflow `compose.yml`, which asserts what it answers through the proxy (`compose/smoke.mjs`). That is a smoke test, not scenarios: it is outside the gate. The stack runs no agent, and the test says so.
 - The Docker mode of the native path is proven on hosted Linux runners only; under WSL2 it has not been run yet.
 

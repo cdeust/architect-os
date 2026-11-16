@@ -21,6 +21,14 @@ export interface ContainerRunner {
   run(request: WorkerRunRequest): Promise<WorkerRunResult>;
 }
 
+/** The tokens of the runs at the broker: granted for one run, worth nothing once retired. */
+export interface RunTokens {
+  /** A new token, granted for this run. Rejects when the broker cannot grant: no worker is started then. */
+  grant(runId: string): Promise<string>;
+  /** Retires the token: it is worth nothing afterwards. */
+  retire(token: string): Promise<void>;
+}
+
 /** The service's view of the run registry kept by the data component. */
 export interface RunRegistry {
   create(tool: string, input: unknown): Promise<{ id: string }>;

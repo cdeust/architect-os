@@ -56,7 +56,7 @@ export class ClaudeSdkAgent implements AgentPort {
         maxTurns: request.limits.maxTurns,
         maxBudgetUsd: request.limits.maxBudgetUsd,
         outputFormat: { type: 'json_schema', schema: request.outputSchema },
-        env: this.env,
+        env: { ...this.env, ANTHROPIC_API_KEY: request.token },
       },
     });
 

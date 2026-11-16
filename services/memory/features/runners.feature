@@ -37,7 +37,7 @@ Feature: ContainerRunner adapters
     Given the "sandbox (fake port)" container runner whose worker prints '{}' and exits with 0
     When the container runner runs a recall request with a timeout of 50 ms
     Then the fake port was asked for the profile "memory-worker" in "/work" with an empty argv
-    And the fake port received on stdin '{"run_id":"r1","tool":"recall","input":{"query":"q"},"limits":{"max_turns":1,"max_budget_usd":0.1}}'
+    And the fake port received on stdin '{"run_id":"r1","tool":"recall","token":"tok-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","input":{"query":"q"},"limits":{"max_turns":1,"max_budget_usd":0.1}}'
     And the fake port was not stopped
     And the run left no timer behind
 

@@ -24,6 +24,7 @@ import {
 } from './helpers.js';
 
 const LIMITS = { max_turns: 1, max_budget_usd: 0.1 };
+const TOKEN = `tok-${'x'.repeat(32)}`;
 
 /** What the scripted port does: print, then exit; or never finish; or refuse to start; or fail its stdout. */
 type Script =
@@ -151,7 +152,7 @@ When(
     const before = activeTimers();
     s.outcome = await attempt(() =>
       runner.run({
-        input: { run_id: 'r1', tool: 'recall', input: { query: 'q' }, limits: LIMITS },
+        input: { run_id: 'r1', tool: 'recall', token: TOKEN, input: { query: 'q' }, limits: LIMITS },
         timeoutMs,
       }),
     );

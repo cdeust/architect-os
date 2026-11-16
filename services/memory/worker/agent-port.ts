@@ -13,6 +13,8 @@ export interface AgentRequest {
   outputSchema: Record<string, unknown>;
   limits: { maxTurns: number; maxBudgetUsd: number };
   tools: InternalTools;
+  /** The token of the run at the broker: the key the agent runtime presents, never logged. */
+  token: string;
 }
 
 export interface AgentOutcome {

@@ -70,6 +70,8 @@ export const WorkerInputSchema = z.object({
   run_id: z.string(),
   tool: z.string(),
   input: z.unknown(),
+  /** The token of this run at the broker: the worker's only credential, never the API key. */
+  token: z.string().min(32),
   /** Set by the service (services/<name>/src/main.ts DEFAULT_LIMITS); the worker has no defaults of its own. */
   limits: z.object({ max_turns: z.number().int().positive(), max_budget_usd: z.number().positive() }),
 });

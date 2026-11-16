@@ -1,5 +1,6 @@
 import type { DataOpName, MemoryItem, RunEventType, RunStatus } from '@architect-os/contracts';
-import type { DataPort, RunRegistry } from '../domain/ports.js';
+import { randomBytes } from 'node:crypto';
+import type { DataPort, RunRegistry, RunTokens } from '../domain/ports.js';
 
 export interface RecordedRun {
   id: string;
@@ -33,6 +34,24 @@ export class InMemoryRunRegistry implements RunRegistry {
     const run = this.runs.get(runId);
     if (run === undefined) throw new Error(`unknown run ${runId}`);
     return run;
+  }
+}
+
+/** In-memory RunTokens: records what it granted and retired (the real broker holds the tokens in the next step). */
+export class InMemoryRunTokens implements RunTokens {
+  /** Every grant, in order: the run and its token. */
+  readonly granted: { runId: string; token: string }[] = [];
+  /** Every retirement, in order. */
+  readonly retired: string[] = [];
+
+  async grant(runId: string): Promise<string> {
+    const token = randomBytes(24).toString('hex');
+    this.granted.push({ runId, token });
+    return token;
+  }
+
+  async retire(token: string): Promise<void> {
+    this.retired.push(token);
   }
 }
 

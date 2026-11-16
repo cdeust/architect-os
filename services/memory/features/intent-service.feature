@@ -62,3 +62,57 @@ Feature: IntentService
     Given an intent service over a worker that records its request
     When the intent service handles "recall" with input '{"query":"q"}'
     Then the worker request matches '{"timeoutMs":1000,"input":{"tool":"recall","limits":{"max_turns":4,"max_budget_usd":0.1}}}'
+
+  Scenario: grants the token of the run before its worker starts, and gives it to the worker
+    Given an intent service over a worker that records its request
+    When the intent service handles "recall" with input '{"query":"q"}'
+    Then the token of the run was granted before its event "worker.started"
+    And the worker input carries exactly the token granted for its run
+
+  Scenario: retires the token of the run once the worker ended
+    Given an intent service over a worker that records its request
+    When the intent service handles "recall" with input '{"query":"q"}'
+    Then the token of the run was retired once, after the worker ran
+
+  Scenario Outline: retires the token of the run once when <case>
+    Given an intent service over a worker that <worker>
+    When the intent service handles "recall" with input '{"query":"q"}'
+    Then the token of the run was retired once
+
+    Examples:
+      | case                    | worker                                                                            |
+      | the worker timed out    | exceeds its timeout                                                               |
+      | the worker cannot start | cannot start because 'no docker'                                                  |
+      | the output is invalid   | exits with code 0 and prints 'oops'                                               |
+      | the worker fails        | exits with code 137 and prints ''                                                 |
+
+  Scenario: ends the run as WORKER_UNAVAILABLE, with no worker, when the token cannot be granted
+    Given an intent service whose broker cannot grant a token because 'broker down'
+    When the intent service handles "recall" with input '{"query":"q"}'
+    Then the intent result matches '{"status":"failed","error":{"code":"WORKER_UNAVAILABLE"}}'
+    And the intent result error message contains "token of the run could not be granted: broker down"
+    And the recorded run events are "run.created, run.completed"
+    And no worker was started and no token retired
+
+  Scenario: keeps the result of the run when the token cannot be retired
+    Given an intent service whose broker cannot retire a token
+    When the intent service handles "recall" with input '{"query":"q"}'
+    Then the intent result matches '{"status":"ok","data":{"summary":"found"}}'
+    And the recorded run events are "run.created, worker.started, worker.exited, output.validated, run.completed"
+    And the token of the run was retired once
+
+  Scenario: grants two different tokens to two runs
+    Given an intent service over a worker that prints the ok recall output
+    When the intent service handles "recall" with input '{"query":"q"}'
+    And the intent service handles "recall" with input '{"query":"q"}'
+    Then the two runs were granted two different tokens, each for its run
+
+  Scenario Outline: puts the token in no event and no result: <case>
+    Given an intent service over a worker that exits with code 0 and prints '<stdout>'
+    When the intent service handles "recall" with input '{"query":"q"}'
+    Then no event of the run and no result holds its token
+
+    Examples:
+      | case           | stdout                                                                                                                                                                         |
+      | an ok output   | {"status":"ok","data":{"summary":"found","memories":[]},"evidence":[],"cost":{"input_tokens":1,"output_tokens":1,"usd":0.001}} |
+      | an invalid one | oops                                                                                                                                                                           |

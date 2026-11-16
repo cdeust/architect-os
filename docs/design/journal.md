@@ -2453,3 +2453,34 @@ Chaque phrase ajoutée a été relue contre le code ou un scénario avant d'êtr
 - Recherche : un document ne dit que ce qu'un scénario ou le code tient ; ce qui n'est pas refait (le registre de dette) est nommé avec sa conséquence.
 - SSDLC : la documentation ne décrit plus comme existant ce qui ne tourne pas ; les consignes du dépôt pour ses contributeurs et ses revues (`CLAUDE.md`) décrivent le chemin sur lequel les secrets sont réellement tenus.
 - Opérationnel : un lecteur trouve d'abord le chemin qui sert un agent, et le guide pour le lancer ; IRB sans objet.
+
+## 59. 1b.7, premier pas : la première réalisation reçoit un jeton par run ; son worker tourne pour la première fois avec le vrai binaire, et ne démarrait pas, 16 novembre 2026
+
+Le §58 a été poussé (`c4acdd6`) : porte de l'hôte verte (1 904 scénarios = 1 897 + 7 ; aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS), `rootless` (x86-64 et arm64) et `compose`, runs retrouvés par le SHA du commit. Le journal publié a ses 58 sections, et la porte le lit.
+
+**La décision.** Le §57 constatait que la pile de la première réalisation ne lance aucun agent, et laissait au propriétaire la décision d'y investir. Il l'a prise le jour même (décision 20) : « Il faut donner cette pile à un broker et un client docker, c'est l'occasion de voir si ça marche bien. » La brique 1b.7 est conçue au §8 : le service memory lance le broker de la plateforme comme son enfant et le pilote sur son entrée standard ; un relais sur le réseau d'exécution mène les workers à son port local ; le jeton d'un run arrive au worker sur son entrée standard ; memory reçoit un réseau de sortie pour son seul enfant ; le client Docker entre dans l'image de memory. Trois pas : le jeton et le worker (celui-ci), le broker et le relais, l'empaquetage et la preuve en CI.
+
+**Ce qui est livré.** Un port `RunTokens` (accorder un jeton pour un run, le retirer) et son adaptateur en mémoire. `IntentService` accorde le jeton avant de lancer le worker et le retire une fois, quelle que soit la fin du run ; un jeton qui ne peut pas être accordé termine le run en `WORKER_UNAVAILABLE` sans lancer de worker ; un retrait qui échoue ne change pas le résultat. Le jeton voyage dans l'entrée du worker (`WorkerInput.token`, 32 caractères au moins), jamais sur une ligne de commande, et devient la clé que le binaire de l'agent présente. Aucun événement, aucun résultat ne le contient. L'adaptateur qui parle au vrai broker est le pas suivant : d'ici là la composition du service tient l'adaptateur en mémoire, ce qui ne change rien à ce que la pile fait aujourd'hui.
+
+**« Voir si ça marche » : non, et c'est ce pas qui le montre.** L'agent de la première réalisation (`sdk-agent.ts`) n'avait jamais tourné dans un scénario : la documentation le rangeait parmi les manques connus. La consigne demandait de le jouer avec le vrai binaire devant le modèle factice, comme le worker du chemin natif l'est. Premier lancement sur l'hôte : le binaire refuse de démarrer, « --json-schema is not a valid JSON Schema ». Le worker lui donnait un schéma de sortie au format 2020-12, celui de zod par défaut, que Claude Code refuse ; le worker natif le sait depuis la brique 1b.5 et demande draft-07. Ce worker-ci n'aurait donc jamais rendu une réponse, quel que soit le broker qu'on lui donne. Corrigé, avec un scénario qui affirme le format demandé, et deux scénarios avec le vrai binaire qui passent par le cœur du worker (son entrée, ses invites commitées, son agent) : l'outil appelé par le modèle est relayé, sa réponse devient une preuve, la sortie est la structure du contrat avec son coût ; et chaque requête reçue par le modèle porte le jeton du run, jamais la clé que l'environnement du worker contenait.
+
+**La boucle.** Construction (Sonnet 5.5, effort moyen) : 175 s, 0,44 $. Revue (Opus 5.5, effort élevé) : 169 s, 0,67 $, `request_changes`, cinq constats.
+
+| Constat de la revue | Suite |
+|---|---|
+| Les scénarios du vrai binaire scriptaient un outil du serveur `platform` ; ce worker sert ses outils sous `memory` : ils auraient échoué au premier lancement | Vrai. Réécrits, et par le cœur du worker plutôt que par l'agent seul : c'est ce qui a mis le schéma refusé sur le chemin |
+| L'entrée de conception citait un §59 qui n'existait pas | C'est celui-ci |
+| La sortie structurée n'est ni offerte ni permise par les options de cet agent : passe-t-elle ? | Mesuré : oui, la réponse revient |
+| « Aucune autre clé » n'était affirmé que sur un chemin | Affirmé sur toute requête reçue |
+| Le manque connu de la documentation des tests devient faux | Corrigé dans ce commit |
+
+Ni la construction ni la revue ne pouvaient lancer le binaire : leur sandbox n'écoute sur aucun port. Le défaut du schéma n'a été vu qu'à l'exécution sur l'hôte. La revue avait vu le mauvais nom d'outil par lecture, pas le schéma.
+
+**Ce qui n'est pas prouvé.** Le vrai broker n'est pas encore dans le chemin : le jeton est accordé en mémoire. Le fichier d'entrée du worker (`main.ts`) et son image ne sont pas joués par ces scénarios. La pile ne lance toujours aucun worker : le workflow `compose` l'affirme encore.
+
+**Chiffres.** 106 scénarios pour le service memory, son bout en bout en processus et le worker avec le vrai binaire, rejoués deux fois sur l'hôte. La porte et la CI de ce commit sont rapportées au paragraphe suivant.
+
+**Trois piliers.**
+- Recherche : la question du propriétaire (« voir si ça marche ») a reçu une mesure, et la mesure dit non avant de dire oui ; le défaut est rapporté avec le moment où il a été vu et par quoi.
+- SSDLC : le jeton d'un run ne passe ni par une ligne de commande, ni par une image, ni par un événement ; il est retiré sur tous les chemins, et un scénario par chemin l'affirme ; le worker ne présente que lui, même quand son environnement tient une autre clé.
+- Opérationnel : un run dont le jeton ne peut pas être accordé échoue par son nom sans lancer de conteneur ; IRB sans objet.

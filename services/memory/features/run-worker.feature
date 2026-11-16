@@ -7,7 +7,12 @@ Feature: Worker
     Then the worker exit code is 0
     And the worker stdout matches '{"status":"ok","cost":{"input_tokens":3,"output_tokens":2,"usd":0.0002},"data":{"summary":"one fact"}}'
     And the first agent request matches '{"limits":{"maxTurns":3,"maxBudgetUsd":0.2},"tool":"recall","systemPrompt":"recall prompt"}'
-    And the first agent request matches '{"outputSchema":{"type":"object"}}'
+    And the first agent request matches '{"outputSchema":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object"}}'
+
+  Scenario: gives the agent the token of the input
+    Given a scripted agent that answers an empty object
+    When the worker runs the tool "recall" with input '{"query":"q"}'
+    Then the first agent request matches '{"token":"tok-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}'
 
   Scenario: turns an agent error into a failed WorkerOutput with a named code
     Given a scripted agent that throws 'agent stopped: error_max_turns'
@@ -24,9 +29,11 @@ Feature: Worker
     Examples:
       | case                    | stdin                                                                                           | prompts                                                |
       | not JSON                | nope                                                                                            | {"recall":"recall prompt","remember":"remember prompt"} |
-      | an unknown tool         | {"run_id":"r1","tool":"teleport","input":{},"limits":{"max_turns":3,"max_budget_usd":0.2}}      | {"recall":"recall prompt","remember":"remember prompt"} |
+      | an unknown tool         | {"run_id":"r1","tool":"teleport","token":"tok-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","input":{},"limits":{"max_turns":3,"max_budget_usd":0.2}}      | {"recall":"recall prompt","remember":"remember prompt"} |
       | a malformed envelope    | {"tool":1}                                                                                      | {"recall":"recall prompt","remember":"remember prompt"} |
-      | a tool without a prompt | {"run_id":"r1","tool":"recall","input":{"query":"q"},"limits":{"max_turns":3,"max_budget_usd":0.2}} | {}                                                 |
+      | a tool without a prompt | {"run_id":"r1","tool":"recall","token":"tok-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","input":{"query":"q"},"limits":{"max_turns":3,"max_budget_usd":0.2}} | {}                                                 |
+      | an input without a token | {"run_id":"r1","tool":"recall","input":{"query":"q"},"limits":{"max_turns":3,"max_budget_usd":0.2}} | {"recall":"recall prompt","remember":"remember prompt"} |
+      | a token of 31 characters | {"run_id":"r1","tool":"recall","token":"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy","input":{"query":"q"},"limits":{"max_turns":3,"max_budget_usd":0.2}} | {"recall":"recall prompt","remember":"remember prompt"} |
 
   Scenario: loads a non-empty committed prompt for every intent tool the worker serves
     When the committed worker prompts are loaded

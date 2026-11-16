@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { InMemoryDataPort, InMemoryRunRegistry } from '../../src/infrastructure/in-memory.js';
+import {
+  InMemoryDataPort,
+  InMemoryRunRegistry,
+  InMemoryRunTokens,
+} from '../../src/infrastructure/in-memory.js';
 import { InProcessContainerRunner } from '../../src/infrastructure/in-process-runner.js';
 import { compose, DEFAULT_LIMITS } from '../../src/main.js';
 import { Given, Then, When, assertMatches, required, slot, type MemoryWorld } from './helpers.js';
@@ -19,6 +23,7 @@ Given('a memory MCP client over a worker that prints {string}', async function (
     registry: new InMemoryRunRegistry(),
     data: new InMemoryDataPort(),
     runner: new InProcessContainerRunner(async () => ({ exitCode: 0, stdout })),
+    tokens: new InMemoryRunTokens(),
     limits: DEFAULT_LIMITS,
   });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
