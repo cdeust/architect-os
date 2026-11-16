@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- `claude-review.yml` and `scripts/ci_review_budget.py` are now Cortex's files, byte for byte (Cortex #980): the review workflow authorizes the pinned action's fetch only on a private repository and names no reviewer count, and the budget script counts only reviews run under the review contract (ADR-1129) and refuses a `GITHUB_OUTPUT` outside `RUNNER_TEMP`. `test_ci_review_budget.py` is Cortex's test.
+- A merge that waits no longer fails `Pipeline after merge` (Cortex ADR-1128). Each head wakes the resolver twice, once at the end of the Pipeline and once at the end of the review, and the first wake-up is held; it exited 1, so the default branch showed a failed run for every normal merge. A held merge, or a head that advanced, now ends green with a notice and writes no output, and `close-issues` requires a pull request number. Every other refusal still fails.
+- The review prompt puts the run's link just before the verdict line in every comment that carries it (Cortex ADR-1130). The resolver reads a verdict only from a comment that links the review run of the head; a review posted with `gh pr comment` can carry the verdict without the link, and an approved, green pull request then stays unmerged.
 - The Claude review and the merge follow Cortex's CI (`cdeust/Cortex`): `claude-review.yml` replaces `claude-code-review.yml` (three reviews per pull request at most, a verdict line), `scripts/ci_review_budget.py` counts them, and `pipeline-after-merge.yml` merges into `main` a pull request whose gate succeeded and whose review approves.
 - The repository was renamed from `agentic-ai` to `architect-os` (npm scope `@agentic-ai/*` is now `@architect-os/*`); GitHub redirects the old URL.
 - The repository was replaced by the architecture skeleton. The previous content is archived under the tag `archive/v1-2026-10-29` and is no longer maintained.

@@ -2740,3 +2740,34 @@ Mutation de contrôle après ces corrections : la fonction de réalignement (95 
 - Recherche : chaque entrée replacée est comparée au rapport d'une mutation du fichier entier ; la règle de placement fausse du mainteneur et les sept survivants de son propre code sont rapportés avec leur traitement.
 - SSDLC : la porte refuse désormais une entrée qui ne désigne plus son code, sans dépendre du périmètre muté ; l'outil de la porte n'a aucun survivant sur ses lignes changées ; aucune surface nouvelle (une commande locale qui lit le registre et les sources, et n'écrit que le registre).
 - Opérationnel : le run complet du lundi compare ses survivants à un registre qui désigne le code réel ; il ne tournera qu'une fois la branche par défaut avancée, décision du propriétaire ; IRB sans objet.
+
+## 67. Les trois correctifs de CI que `main` avait et que la branche n'avait pas, 17 novembre 2026
+
+Le §66 a été poussé (`1348972`) : porte de l'hôte verte (1 597 scénarios = 1 560 + 45 − 8 ; 242 mutants dans le périmètre de l'outil de la porte : 200 tués, 42 erreurs d'exécution, aucun survivant), CI verte sur `gate` (Linux et macOS), run retrouvé par le SHA du commit. Pour prouver le retrait des deux entrées, la porte a muté `srt-runner.ts` en entier, machine calme cette fois : 271 mutants, 79 en vie (47 survivants, 32 non couverts), chacun avec son entrée ; 21 entrées n'ont pas survécu à ce run, comptées et gardées.
+
+**Pourquoi ce pas.** Le propriétaire, la mutation finale en cours : « Si c'est bon on peut envisager la branche par défaut. » Le contrôle planifié des épingles (§64), le run complet de mutation et l'appel réel du broker ne tournent que depuis la branche par défaut ; tant que `main` est à l'état d'avant la réécriture, aucun ne tourne sur ce code.
+
+**L'état mesuré.** `main` (`f699c89`) et `feat/gate-1a` ont divergé : 183 commits d'un côté, 4 de l'autre. Les quatre de `main` portent sur la revue et la fusion reprises de `cdeust/Cortex` : #98, que la branche a sous la forme de #99, puis #100, #101 et #102, qu'elle n'avait pas. Une avance rapide de `main` était donc impossible, et une fusion aurait buté sur sept fichiers.
+
+**Ce qui est repris.**
+
+| De `main` | Ce que cela corrige | Sur la branche |
+|---|---|---|
+| #100, ADR-1130 de Cortex | La revue postée par `gh pr comment` portait le verdict sans le lien du run ; le résolveur ne lit un verdict que dans un commentaire qui lie le run, et une PR approuvée restait non fusionnée | `claude-review.yml` pris de `main`, octet pour octet ; 2 scénarios |
+| #101, ADR-1128 | Chaque tête réveille le résolveur deux fois, et le premier réveil, tenu, sortait en 1 : un run rouge sur la branche par défaut à chaque fusion normale | `pipeline-after-merge.yml` pris de `main` ; 11 scénarios |
+| #102, ADR-1129 | Le compte des revues prenait celles du workflow d'avant le contrat ; `GITHUB_OUTPUT` accepté hors de `RUNNER_TEMP` | `scripts/ci_review_budget.py` pris de `main` ; son test est celui de Cortex, il n'est pas dans ce dépôt |
+
+Les deux tests de `main` étaient écrits pour vitest, que la branche n'a plus : ils sont réécrits en 13 scénarios de `features/descriptive/workflows.feature`, sans table calculée (`features/steps/review-workflows.ts`). Le résolveur est joué tel que le workflow l'embarque, par `python3`, sa fonction `resolve` remplacée par un refus : aucun appel ne quitte l'hôte. Les scénarios ont été éprouvés en cassant les fichiers commités (une attente retirée de `WAITING`, la condition de `close-issues` retirée, le mot « every » du prompt) : 8 sont devenus rouges, puis les fichiers ont été restaurés.
+
+**Deux phrases de la documentation étaient fausses.** `docs/infrastructure.md` et `CONTRIBUTING.md` disaient les deux jobs de la porte « exigés par le ruleset sur `main` ». Lu sur le dépôt le 17 novembre : aucun ruleset, aucune protection de branche, aucun environnement. Le ruleset est une décision de la conception (décision 4 des workflows) qui n'a pas été appliquée ; c'est un réglage du dépôt, que seul le propriétaire crée. Les deux phrases disent maintenant ce qui est : tant qu'il n'existe pas, seul le résolveur tient une fusion à une porte verte, et rien ne tient un push direct. De même l'environnement `broker-live` et son secret `ANTHROPIC_TEST_KEY` n'existent pas : `broker-live.yml` sera rouge à son premier déclenchement sur `main`, et le dit lui-même.
+
+**La suite, dans l'ordre.** Un commit de fusion sur la branche enregistre `main` comme incluse sans changer l'arbre (`git merge -s ours`) : tout ce que `main` a d'autre est l'état d'avant la réécriture, et ses deux tests vitest sont les 13 scénarios ci-dessus. `main` peut alors avancer jusqu'à la tête de la branche, par avance rapide, mêmes SHA, la branche restant en place. Ce dernier pas attend l'accord explicite du propriétaire.
+
+**Ce qui n'est pas prouvé.** La revue et le résolveur ne tournent que depuis la branche par défaut : leur comportement réel sur une PR de ce dépôt, avec ces fichiers, ne se verra qu'une fois `main` avancée. Le script du compte des revues n'a pas de scénario ici.
+
+**Chiffres.** 1 610 scénarios dans la suite (13 de plus) ; 37 pour les workflows.
+
+**Trois piliers.**
+- Recherche : l'écart entre les deux branches est mesuré commit par commit ; les scénarios repris sont éprouvés par des fichiers cassés ; deux affirmations fausses de la documentation sont corrigées par une lecture du dépôt.
+- SSDLC : aucune surface nouvelle, les trois fichiers sont ceux de `main` ; le script refuse désormais d'écrire hors du répertoire temporaire du runner ; le ruleset de la conception, absent, est nommé comme tel et reste au propriétaire.
+- Opérationnel : prévu à l'avance de `main`, sur accord du propriétaire : porte à chaque push, trois contrôles planifiés le lundi, secret du broker réservé à l'environnement de `main` ; IRB sans objet.

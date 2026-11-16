@@ -71,3 +71,51 @@ Feature: GitHub workflows
   Scenario: a gate workflow with broader permissions is rejected
     Given the committed workflow "gate.yml"
     Then a gate workflow with broader permissions is rejected
+
+  Scenario Outline: a merge that waits ends the resolver of pipeline-after-merge.yml green: <refusal>
+    Given the committed workflow "pipeline-after-merge.yml"
+    When its resolver is refused "<refusal>"
+    Then the resolver ends green with the notice of the refusal, and writes no output
+
+    Examples:
+      | refusal                                                  |
+      | merge held: Pipeline has not succeeded on this head      |
+      | merge held: no Claude review ran on this head            |
+      | merge held: Claude has not posted a verdict on this head |
+      | merge held: Claude review verdict is block               |
+      | PR head advanced after testing                           |
+
+  Scenario Outline: a refusal that is not a wait still fails the resolver of pipeline-after-merge.yml: <refusal>
+    Given the committed workflow "pipeline-after-merge.yml"
+    When its resolver is refused "<refusal>"
+    Then the resolver fails with the refusal on its error stream, and writes no output
+
+    Examples:
+      | refusal                                  |
+      | PR label holds merge                     |
+      | GitHub did not confirm a completed merge |
+      | PR is closed or draft                    |
+
+  Scenario: the waits proven are every held merge the resolver of pipeline-after-merge.yml can raise
+    Given the committed workflow "pipeline-after-merge.yml"
+    Then the held merges its resolver can raise are:
+      | merge held: Pipeline has not succeeded on this head      |
+      | merge held: no Claude review ran on this head            |
+      | merge held: Claude has not posted a verdict on this head |
+      | merge held: Claude review verdict is block               |
+
+  Scenario: no job of pipeline-after-merge.yml runs after a resolver that waits
+    Given the committed workflow "pipeline-after-merge.yml"
+    Then its only job after the resolver runs for a pull request number alone
+
+  Scenario: a copy of pipeline-after-merge.yml where a held merge is a failure is rejected
+    Given the committed workflow "pipeline-after-merge.yml"
+    Then a copy whose resolver waits for nothing fails when refused "merge held: Pipeline has not succeeded on this head"
+
+  Scenario: the prompt of claude-review.yml links the review run in every comment that carries the verdict
+    Given the committed workflow "claude-review.yml"
+    Then its prompt puts the link of the run in every comment that carries the verdict
+
+  Scenario: a claude-review.yml without the link of the run is rejected
+    Given the committed workflow "claude-review.yml"
+    Then a review workflow without the link of the run is rejected
