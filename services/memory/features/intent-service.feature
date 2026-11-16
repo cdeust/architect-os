@@ -8,6 +8,19 @@ Feature: IntentService
     And the recorded run events are "run.created, worker.started, worker.exited, output.validated, run.completed"
     And the recorded run status is "ok"
 
+  Scenario Outline: records each event of a run with what it says: <case>
+    Given an intent service over a worker that <worker>
+    When the intent service handles "recall" with input '{"query":"q"}'
+    Then the recorded run events, with what each says, are '<events>'
+
+    Examples:
+      | case              | worker                              | events                                                                                                                                                                                                                                                                          |
+      | an ok output      | prints the ok recall output         | [["run.created",{"tool":"recall"}],["worker.started",{}],["worker.exited",{"exit_code":0}],["output.validated",{}],["run.completed",{"status":"ok"}]]                                                                                                                    |
+      | a non-zero exit   | exits with code 137 and prints ''   | [["run.created",{"tool":"recall"}],["worker.started",{}],["worker.exited",{"exit_code":137}],["run.completed",{"status":"failed"}]]                                                                                                                                      |
+      | a timeout         | exceeds its timeout                 | [["run.created",{"tool":"recall"}],["worker.started",{}],["worker.exited",{"error":"WORKER_TIMEOUT"}],["run.completed",{"status":"failed"}]]                                                                                                                             |
+      | no worker         | cannot start because 'no docker'    | [["run.created",{"tool":"recall"}],["worker.started",{}],["worker.exited",{"error":"WORKER_UNAVAILABLE"}],["run.completed",{"status":"failed"}]]                                                                                                                         |
+      | an output not JSON | exits with code 0 and prints 'oops' | [["run.created",{"tool":"recall"}],["worker.started",{}],["worker.exited",{"exit_code":0}],["output.invalid",{"detail":"worker stdout is not JSON"}],["run.completed",{"status":"failed"}]]                                                                              |
+
   Scenario: rejects an invalid input without creating a run
     Given an intent service over a worker that prints the ok recall output
     When the intent service handles "recall" with input '{"query":""}'
@@ -25,11 +38,12 @@ Feature: IntentService
     Given an intent service over a worker that exits with code 0 and prints '<stdout>'
     When the intent service handles "recall" with input '{"query":"q"}'
     Then the intent result error code is "WORKER_OUTPUT_INVALID"
+    And the intent result error message contains "<says>"
 
     Examples:
-      | case             | stdout            |
-      | not JSON         | oops              |
-      | wrong envelope   | {"hello":"world"} |
+      | case             | stdout            | says                      |
+      | not JSON         | oops              | worker stdout is not JSON |
+      | wrong envelope   | {"hello":"world"} | evidence                  |
 
   Scenario: names a non-zero exit as WORKER_FAILED
     Given an intent service over a worker that exits with code 137 and prints ''
@@ -52,6 +66,33 @@ Feature: IntentService
     Given an intent service over a worker that exits with code 0 and prints '{"status":"needs_clarification","data":null,"evidence":[],"cost":{"input_tokens":10,"output_tokens":5,"usd":0.001},"error":{"code":"NEEDS_CLARIFICATION","message":"which project?"}}'
     When the intent service handles "recall" with input '{"query":"q"}'
     Then the intent result matches '{"status":"needs_clarification","error":{"message":"which project?"}}'
+
+  Scenario Outline: names what a worker reports without a code the service knows: <case>
+    Given an intent service over a worker that exits with code 0 and prints '{"status":"<status>","data":null,"evidence":[],"cost":{"input_tokens":10,"output_tokens":5,"usd":0.001}<error>}'
+    When the intent service handles "recall" with input '{"query":"q"}'
+    Then the intent result matches '{"status":"<status>","error":{"code":"<code>","message":"<message>"}}'
+
+    Examples:
+      | case                               | status              | error                                             | code                | message                    |
+      | a failure with no error            | failed              |                                                   | WORKER_FAILED       | worker reported no message |
+      | a clarification with no error      | needs_clarification |                                                   | NEEDS_CLARIFICATION | worker reported no message |
+      | a failure with an unknown code     | failed              | ,"error":{"code":"NOPE","message":"it broke"}     | WORKER_FAILED       | it broke                   |
+      | a clarification, an unknown code   | needs_clarification | ,"error":{"code":"NOPE","message":"which one?"}   | NEEDS_CLARIFICATION | which one?                 |
+      | a failure with a code of the contract | failed           | ,"error":{"code":"WORKER_TIMEOUT","message":"late"} | WORKER_TIMEOUT    | late                       |
+
+  Scenario: a runner that fails outside its contract ends the call as INTERNAL, with its token retired
+    Given an intent service over a worker whose runner throws the plain error "boom"
+    When the intent service handles "recall" with input '{"query":"q"}'
+    Then the intent result matches '{"status":"failed","data":null,"run_id":"run-1","error":{"code":"INTERNAL","message":"boom"}}'
+    And the recorded run events are "run.created, worker.started"
+    And the token of the run was retired once
+
+  Scenario: a registry lost while the exit of the worker is recorded ends the call as DATA_UNAVAILABLE, and records nothing more
+    Given an intent service over a run registry that fails once, when the exit of the worker is recorded
+    When the intent service handles "recall" with input '{"query":"q"}'
+    Then the intent result matches '{"status":"failed","data":null,"run_id":"run-1","error":{"code":"DATA_UNAVAILABLE","message":"data down"}}'
+    And the recorded run events are "run.created, worker.started"
+    And the token of the run was retired once
 
   Scenario: answers DATA_UNAVAILABLE when the registry is down
     Given an intent service over a run registry that is down

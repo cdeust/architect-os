@@ -107,6 +107,31 @@ Given('an intent service over a run registry that is down', function () {
   s.service = new IntentService(down, runner(okWorker), s.tokens, LIMITS);
 });
 
+Given(
+  'an intent service over a worker whose runner throws the plain error {string}',
+  function (message: string) {
+    scenario(this).over(runner(new Error(message)));
+  },
+);
+
+Given(
+  'an intent service over a run registry that fails once, when the exit of the worker is recorded',
+  function () {
+    const s = scenario(this);
+    s.over(runner(okWorker));
+    const registry = s.registry;
+    const append = registry.appendEvent.bind(registry);
+    let failed = false;
+    registry.appendEvent = async (runId, type, payload) => {
+      if (type === 'worker.exited' && !failed) {
+        failed = true;
+        throw new ServiceError('DATA_UNAVAILABLE', 'data down');
+      }
+      return append(runId, type, payload);
+    };
+  },
+);
+
 Given('an intent service over a worker that records its request', function () {
   const s = scenario(this);
   s.over(s.recordingWorker());
@@ -156,6 +181,12 @@ Then('the intent result error message contains {string}', function (part: string
 
 Then('the recorded run events are {string}', function (types: string) {
   assert.deepEqual(scenario(this).runEvents(), types.split(', '));
+});
+
+Then('the recorded run events, with what each says, are {string}', function (expected: string) {
+  const s = scenario(this);
+  const events = s.registry.get(s.lastResult.run_id ?? '').events.map((e) => [e.type, e.payload]);
+  assert.deepEqual(events, JSON.parse(expected));
 });
 
 Then('the recorded run events include {string}', function (type: string) {

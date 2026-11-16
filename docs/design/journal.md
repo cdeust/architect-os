@@ -2484,3 +2484,35 @@ Ni la construction ni la revue ne pouvaient lancer le binaire : leur sandbox n'�
 - Recherche : la question du propriétaire (« voir si ça marche ») a reçu une mesure, et la mesure dit non avant de dire oui ; le défaut est rapporté avec le moment où il a été vu et par quoi.
 - SSDLC : le jeton d'un run ne passe ni par une ligne de commande, ni par une image, ni par un événement ; il est retiré sur tous les chemins, et un scénario par chemin l'affirme ; le worker ne présente que lui, même quand son environnement tient une autre clé.
 - Opérationnel : un run dont le jeton ne peut pas être accordé échoue par son nom sans lancer de conteneur ; IRB sans objet.
+
+## 60. 1b.7, premier pas : la porte était rouge sur la dette de mutation ; la dette des fichiers touchés est payée, pas déplacée, 16 novembre 2026
+
+**La porte du §59 (`e77fc04`) : rouge, sur une seule règle.** 1 921 scénarios exécutés (1 904 + 19 − 2), 17 mutants du périmètre, 17 tués. Règle 6 : seize entrées du registre de dette « introuvables (code supprimé ou déplacé), à retirer dans la même PR ». Même résultat en CI sur Linux ; macOS, `rootless` et `compose` verts. Le commit n'a pas été poussé sur la branche.
+
+**La cause.** Le registre (`tools/test-gate/mutation-debt.json`) désigne chaque survivant connu par sa ligne et sa colonne. Le pas a inséré des lignes dans deux fichiers endettés (le cas d'usage de memory et ses adaptateurs en mémoire) : toutes leurs entrées ont glissé, et la porte a vu celles qui tombaient dans les lignes changées. La règle demande de les retirer ; les retirer sans rien mesurer aurait effacé seize survivants des comptes sans en tuer un.
+
+**Mesure avant tout retrait.** Mutation des deux fichiers entiers : 28 mutants en vie dans le cas d'usage (19 survivants, 9 non couverts), 9 dans les adaptateurs en mémoire. La dette était donc vraie. Ce que rien n'affirmait : ce que dit chaque événement d'un run (l'outil, le code de sortie, l'erreur, le détail, le statut), le message d'une sortie qui n'est pas du JSON, le nom donné à un échec ou à une demande de précision que le worker rapporte sans code connu, ce que devient un lanceur qui échoue hors de son contrat, et un registre perdu au moment d'enregistrer la sortie du worker.
+
+**Payée.** Quatorze scénarios pour ces deux fichiers ; mutation rejouée : 99 mutants sur 99 tués dans le cas d'usage, 44 sur 44 dans les adaptateurs en mémoire.
+
+**Les deux autres fichiers endettés que le pas touche.** L'agent d'origine (`sdk-agent.ts`, 59 entrées) n'avait aucun scénario avant le §59 ; le cœur du worker (`run-worker.ts`, 7 entrées) taisait la cause de ses refus dans ses scénarios. Mutés en entier eux aussi. Chaque refus du cœur du worker affirme maintenant sa cause : 35 tués, 2 erreurs d'exécution, aucun survivant. Pour l'agent, avec le vrai binaire : la tâche donnée au modèle, la réponse de l'outil reçue par le modèle, le tri des preuves (un enregistrement sans identifiant n'en est pas une, un contenu qui n'est pas du texte ne donne pas d'extrait), et l'arrêt par la borne de tours, rendu par le worker comme un échec nommé.
+
+| Fichier | Entrées avant | Mutants en vie mesurés avant | Après | Entrées gardées |
+|---|---|---|---|---|
+| `services/memory/src/application/intent-service.ts` | 29 | 28 | 0 sur 99 | 0 |
+| `services/memory/src/infrastructure/in-memory.ts` | 10 | 9 | 0 sur 44 | 0 |
+| `services/memory/worker/run-worker.ts` | 7 | 7 | 0 sur 37 | 0 |
+| `services/memory/worker/sdk-agent.ts` | 59 | 20 (premier passage, avec les scénarios du §59) | 8 sur 60 | 8 |
+
+Le registre passe de 597 à 500 entrées. Le nouveau est une sous-suite de l'ancien, vérifiée entrée par entrée : aucune entrée ajoutée, aucune déplacée.
+
+**Les huit qui restent, et pourquoi.** Quatre options de l'agent dont l'effet ne se voit pas devant un modèle factice dans un dossier de configuration vide (`strictMcpConfig`, `tools: []`, `permissionMode`, `persistSession`) ; le filtre des outils internes par propriétaire, sans effet tant que tous sont à memory (deux mutants) ; une réponse d'outil qui n'est pas une liste, et un flux qui se termine sans message de résultat, que rien ne joue. Ils restent au registre, à leur place : ce fichier n'a pas été décalé.
+
+**Ce que la mesure dit du registre entier.** 114 de ses 597 entrées ne désignaient déjà plus leur code avant ce pas (91 des 102 de `srt-runner.ts`, 22 des 45 de `profile.ts`, 1 de `port.ts`) : la porte ne le voit que lorsqu'une ligne changée tombe dessus. Le registre reste à refaire pour ces fichiers ; la règle suivie ici vaut d'ici là : un pas qui touche un fichier endetté le mute en entier, tue ce qu'il peut par des scénarios, et ne retire que ce que le rapport montre mort. La consigne du pas suivant le dira à la boucle : ni la construction ni la revue n'ont vu ce rouge, la porte ne tournant pas dans leur sandbox.
+
+**Chiffres.** 1 938 scénarios dans la suite (17 de plus qu'au §59). La porte et la CI de ce commit sont rapportées au paragraphe suivant.
+
+**Trois piliers.**
+- Recherche : la dette a été mesurée avant d'être touchée, et le tableau donne l'avant et l'après par fichier ; les huit survivants gardés sont nommés avec leur raison.
+- SSDLC : aucun retrait du registre sans mutant mort au rapport ; la règle qui interdit d'ajouter une entrée est respectée, vérifiée par comparaison des deux registres.
+- Opérationnel : un run garde maintenant, affirmé par scénario, ce que dit chacun de ses événements, y compris quand le registre est perdu en cours de run ; IRB sans objet.

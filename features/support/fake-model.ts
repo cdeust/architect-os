@@ -30,7 +30,7 @@ export interface FakeModel {
 type Event = [string, unknown];
 
 /** The text of the last tool result a request carries, "" when it carries none. */
-function lastToolResult(body: ModelRequest['body']): string {
+export function lastToolResult(body: ModelRequest['body']): string {
   const blocks = (body.messages ?? []).flatMap((message) => {
     const content = (message as { content?: unknown }).content;
     return Array.isArray(content) ? (content as Record<string, unknown>[]) : [];

@@ -6,7 +6,7 @@ import type { WorkerOutput } from '@architect-os/contracts';
 import { loadPrompts, PROMPTS_DIR } from '../../services/memory/worker/prompts.js';
 import { runWorker } from '../../services/memory/worker/run-worker.js';
 import { ClaudeSdkAgent } from '../../services/memory/worker/sdk-agent.js';
-import { startFakeModel, type FakeModel } from '../support/fake-model.js';
+import { lastToolResult, startFakeModel, type FakeModel, type ModelRequest } from '../support/fake-model.js';
 import type { ArchitectWorld } from '../support/world.js';
 import { Given, Then, When, stored } from './helpers.js';
 
@@ -40,41 +40,54 @@ Given(
   },
 );
 
+/** Runs the worker core on one WorkerInput, with the real agent before the fake model of the scene. */
+async function runOnce(world: ArchitectWorld, tool: string, input: string, answer: string, maxTurns: number) {
+  const scene = sceneOf(world);
+  const config = mkdtempSync(join(tmpdir(), 'aos-worker-of-the-stack-'));
+  world.cleanups.push(() => rmSync(config, { recursive: true, force: true }));
+  const stdin = JSON.stringify({
+    run_id: 'run-1',
+    tool,
+    input: JSON.parse(input),
+    limits: { max_turns: maxTurns, max_budget_usd: 0.5 },
+    token: RUN_TOKEN,
+  });
+  const result = await runWorker(stdin, {
+    agent: new ClaudeSdkAgent({
+      PATH: process.env['PATH'],
+      HOME: config,
+      ANTHROPIC_BASE_URL: scene.model.url,
+      ANTHROPIC_API_KEY: OTHER_KEY,
+      CLAUDE_CONFIG_DIR: config,
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+      DISABLE_AUTOUPDATER: '1',
+      DISABLE_TELEMETRY: '1',
+    }),
+    tools: {
+      call: async (name, args) => {
+        scene.relays.push([name, args]);
+        return JSON.parse(answer) as unknown;
+      },
+    },
+    prompts: await loadPrompts(PROMPTS_DIR),
+  });
+  scene.exitCode = result.exitCode;
+  scene.output = JSON.parse(result.stdout) as WorkerOutput;
+}
+
 When(
   'the worker of the stack runs {string} with {string} under the token of its run, its environment holding another key, its internal tool answering {string}',
   { timeout: 120_000 },
-  async function (tool: string, input: string, answer: string) {
-    const scene = sceneOf(this);
-    const config = mkdtempSync(join(tmpdir(), 'aos-worker-of-the-stack-'));
-    this.cleanups.push(() => rmSync(config, { recursive: true, force: true }));
-    const stdin = JSON.stringify({
-      run_id: 'run-1',
-      tool,
-      input: JSON.parse(input),
-      limits: { max_turns: 4, max_budget_usd: 0.5 },
-      token: RUN_TOKEN,
-    });
-    const result = await runWorker(stdin, {
-      agent: new ClaudeSdkAgent({
-        PATH: process.env['PATH'],
-        HOME: config,
-        ANTHROPIC_BASE_URL: scene.model.url,
-        ANTHROPIC_API_KEY: OTHER_KEY,
-        CLAUDE_CONFIG_DIR: config,
-        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-        DISABLE_AUTOUPDATER: '1',
-        DISABLE_TELEMETRY: '1',
-      }),
-      tools: {
-        call: async (name, args) => {
-          scene.relays.push([name, args]);
-          return JSON.parse(answer) as unknown;
-        },
-      },
-      prompts: await loadPrompts(PROMPTS_DIR),
-    });
-    scene.exitCode = result.exitCode;
-    scene.output = JSON.parse(result.stdout) as WorkerOutput;
+  function (tool: string, input: string, answer: string) {
+    return runOnce(this, tool, input, answer, 4);
+  },
+);
+
+When(
+  'the worker of the stack runs {string} with {string} under the token of its run, bounded to {int} turn, its internal tool answering {string}',
+  { timeout: 120_000 },
+  function (tool: string, input: string, turns: number, answer: string) {
+    return runOnce(this, tool, input, answer, turns);
   },
 );
 
@@ -113,3 +126,30 @@ Then(
     assert.deepEqual([...new Set(requests.map((request) => request.apiKey))], [RUN_TOKEN]);
   },
 );
+
+/** The texts a request carries in the messages of its user: plain contents and text blocks. */
+function userTexts(body: ModelRequest['body']): string[] {
+  return (body.messages ?? []).flatMap((message) => {
+    const { role, content } = message as { role?: unknown; content?: unknown };
+    if (role !== 'user') return [];
+    if (typeof content === 'string') return [content];
+    return (content as { type?: unknown; text?: unknown }[]).flatMap((block) =>
+      block.type === 'text' ? [String(block.text)] : [],
+    );
+  });
+}
+
+const messagesOf = (world: ArchitectWorld) =>
+  sceneOf(world).model.requests.filter((request) => request.path === '/v1/messages');
+
+Then('the fake model was first given the task {string}', function (task: string) {
+  const first = messagesOf(this)[0];
+  assert.ok(first !== undefined, 'the model was never asked for messages');
+  assert.ok(userTexts(first.body).includes(task), JSON.stringify(userTexts(first.body)));
+});
+
+Then('the fake model was last given the answer of the tool, {string}', function (answer: string) {
+  const last = messagesOf(this).at(-1);
+  assert.ok(last !== undefined, 'the model was never asked for messages');
+  assert.equal(lastToolResult(last.body), answer);
+});
