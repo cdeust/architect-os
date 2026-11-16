@@ -20,20 +20,19 @@ Feature: Architecture guard (dependency-cruiser)
       | gateway/src/application/zz-fixture-pg.ts                | import 'pg';                                              | pg-only-in-data-infrastructure                |
       | gateway/src/infrastructure/zz-fixture-sdk.ts            | import '@anthropic-ai/claude-agent-sdk';                  | agent-sdk-only-in-worker                      |
       | gateway/src/domain/zz-fixture-mcp.ts                    | import '@modelcontextprotocol/sdk/server/mcp.js';         | mcp-sdk-only-in-presentation-and-infrastructure |
-      | services/memory/worker/zz-fixture-worker.ts             | import '../src/domain/ports.js';                          | worker-is-self-contained                      |
       | services/memory/worker/zz-fixture-mcp.ts                | import '@modelcontextprotocol/sdk/client/index.js';       | mcp-sdk-only-in-presentation-and-infrastructure |
       | packages/contracts/src/zz-fixture-contracts.ts          | import '../../../gateway/src/domain/ports.js';            | contracts-has-no-component-dependency         |
       | gateway/src/infrastructure/zz-fixture-spawn.ts          | import 'node:child_process';                              | child-process-only-in-sandbox                 |
-      | services/memory/src/infrastructure/zz-fixture-spawn.ts  | import 'child_process';                                   | child-process-only-in-sandbox                 |
+      | modules/memory/src/infrastructure/zz-fixture-spawn.ts  | import 'child_process';                                   | child-process-only-in-sandbox                 |
       | tools/test-gate/src/infrastructure/zz-fixture-spawn.ts | import 'node:child_process';                              | child-process-only-in-sandbox                 |
-      | services/memory/src/domain/zz-fixture-sandbox.ts        | import '@architect-os/sandbox';                           | domain-imports-only-domain-and-contracts      |
-      | services/memory/src/application/zz-fixture-sandbox.ts   | import '@architect-os/sandbox';                           | application-imports-only-domain               |
+      | modules/memory/src/domain/zz-fixture-sandbox.ts        | import '@architect-os/sandbox';                           | domain-imports-only-domain-and-contracts      |
+      | modules/memory/src/application/zz-fixture-sandbox.ts   | import '@architect-os/sandbox';                           | application-imports-only-domain               |
       | tools/test-gate/src/domain/zz-fixture-domain.ts         | import '../infrastructure/git.js';                        | domain-imports-only-domain-and-contracts      |
       | gateway/src/infrastructure/zz-fixture-srt.ts            | import '@anthropic-ai/sandbox-runtime';                   | sandbox-runtime-only-in-sandbox               |
       | modules/broker/src/domain/zz-fixture-sandbox.ts         | import '@architect-os/sandbox';                           | domain-imports-only-domain-and-contracts      |
       | modules/broker/src/domain/zz-fixture-mcp.ts             | import '@modelcontextprotocol/sdk/server/mcp.js';         | mcp-sdk-only-in-presentation-and-infrastructure |
       | modules/broker/src/main-fixture/zz-fixture-mcp.ts       | import '@modelcontextprotocol/sdk/server/stdio.js';       | mcp-sdk-only-in-presentation-and-infrastructure |
-      | modules/broker/src/application/zz-fixture-cross.ts      | import '../../../../services/memory/src/domain/ports.js'; | no-import-between-components                  |
+      | modules/broker/src/application/zz-fixture-cross.ts      | import '../../../../data/src/domain/ports.js'; | no-import-between-components                  |
       | modules/broker/src/infrastructure/zz-fixture-spawn.ts   | import 'node:child_process';                              | child-process-only-in-sandbox                 |
       | data/src/domain/zz-fixture-mcp.ts                       | import '@modelcontextprotocol/sdk/server/mcp.js';         | mcp-sdk-only-in-presentation-and-infrastructure |
       | data/src/application/zz-fixture-mcp.ts                  | import '@modelcontextprotocol/sdk/server/stdio.js';       | mcp-sdk-only-in-presentation-and-infrastructure |

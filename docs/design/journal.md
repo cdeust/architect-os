@@ -2546,3 +2546,37 @@ Le dernier scénario tue un mutant que le changement d'ordre avait rendu surviva
 - Recherche : la brique arrêtée est rapportée avec ses mesures et avec les erreurs du mainteneur, pas seulement ses résultats.
 - SSDLC : le modèle de menaces précède le code, et son absence est ce qui a laissé passer la socket ; le broker ne se déclare plus prêt avant de l'être.
 - Opérationnel : un broker qui ne peut pas écouter ne répond jamais à son parent, qui le voit comme non démarré ; IRB sans objet.
+
+## 62. La première réalisation est retirée : la brique 1b.6 telle qu'elle était écrite, 16 novembre 2026
+
+Le §61 a été poussé (`fab893d`) : porte de l'hôte verte (1 941 scénarios = 1 938 + 4 − 1 ; 2 mutants dans le périmètre, 2 tués), CI verte sur `gate`, `rootless` et `compose`, runs retrouvés par le SHA du commit.
+
+**La décision (21), dans les mots du propriétaire.** « Mais memory ne devrait pas avoir droit de lancer quoi que ce soit. Memory n'est qu'une brique de données à consommer. » « Je veux que tu respectes l'architecture pas que tu en inventes une nouvelle. Si docker apporte des problèmes y a pas de docker c'est simple. » « La brique 1.6 était censé simplifié en retirant des choses. » « Tu reviens à ce qui marchait donc tu retires ta pile. » Elle remplace les décisions 19 et 20.
+
+**Ce qui part.**
+
+| Quoi | Fichiers |
+|---|---|
+| La pile en conteneurs | `compose.yaml`, les deux `Dockerfile`, `compose/smoke.mjs`, le workflow `compose.yml`, `.env.example`, `.dockerignore`, les scénarios qui lisaient `compose.yaml` |
+| Le premier adaptateur Docker, par lequel le service memory lançait ses workers | `packages/sandbox/src/docker-runner.ts` et ses scénarios |
+| Le service memory qui possédait `recall` et `remember`, tenait le registre des runs et lançait son worker | `services/memory/src`, ses scénarios, le bout en bout en processus qui le composait |
+| Son worker en conteneur | `services/memory/worker/{main,run-worker,sdk-agent,agent-port,internal-tools,prompts}.ts` et ses invites |
+| Les chemins HTTP entre composants | les connexions de la gateway vers un service (`mcp-service-client.ts`, `mcp-connect.ts`, la première composition de `gateway/src/main.ts`), l'API HTTP de `data` |
+
+Le proxy va dans `deploy/edge/Caddyfile` : un exemple de bord devant le port local de la gateway, que rien dans le dépôt ne démarre ; il vise maintenant la boucle locale, plus un nom de conteneur.
+
+**Ce qui ne bouge pas.** Le module memory, l'agent memory, le worker par tâche, `data` sur stdio, le broker, la gateway lancée par son fichier d'entrée, et le mode Docker sans root du chemin natif, qui est une autre question (voir plus bas).
+
+**Chiffres.** 62 fichiers supprimés, 4 354 lignes en moins dans ces fichiers. La suite passe de 1 941 à 1 822 scénarios. Le registre de dette de mutation passe de 500 à 295 entrées : 171 désignaient un fichier retiré, 34 du code retiré de la composition de la gateway ; la seule entrée de la composition de `data` reste à sa place, la ligne qu'elle désigne n'ayant pas bougé. Une règle du garde d'architecture part avec sa frontière (un worker n'importe pas les sources de son service : il n'y a plus de sources de service) ; quatre de ses cas d'essai, qui posaient leur fichier dans le dossier retiré, le posent dans le module memory ou visent `data`.
+
+**Vérifié avant la porte.** Compilation ; règles d'architecture (246 modules, 1 004 dépendances) ; aucun step sans définition ; 565 scénarios des zones touchées (gateway, data, worker, garde, descriptifs, intégration, contrats) rejoués sur l'hôte. Plus aucun fichier de code, de scénario ni de configuration ne nomme un fichier retiré.
+
+**Ce qui reste, et dans quel ordre.**
+- Le mode Docker sans root du chemin natif (décision 18) : 956 lignes de production, 112 scénarios, un workflow sur deux architectures, pour un moyen dont aucun des trois hôtes pris en charge n'a besoin puisque srt tourne sur les trois, et qui isole moins bien que srt sur deux points (isolation des sous-processus de l'agent coupée en conteneur, AppArmor qui ne confine pas le conteneur). Il part dans son propre commit.
+- La mise à niveau du binaire de l'agent (2.1.312 épinglé, 2.1.325 publié, dont un correctif de sécurité) et une veille du changelog.
+- Le registre de dette de mutation : 114 de ses 295 entrées ne désignent plus leur code, parce qu'une entrée est repérée par sa ligne et sa colonne.
+
+**Trois piliers.**
+- Recherche : le retrait est chiffré avant et après, et ce qui a mené à garder puis à réparer cette pile est écrit au §61 avec les erreurs du mainteneur.
+- SSDLC : il n'y a plus de composant qui reçoive la socket d'un démon, ni de zone où le composant exposé joint des services sans authentification ; une seule architecture, celle dont le modèle de menaces est écrit (§4.1 de la conception).
+- Opérationnel : la plateforme se lance par un seul fichier d'entrée, sans pile à construire ; IRB sans objet.

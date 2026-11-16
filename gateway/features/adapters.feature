@@ -56,7 +56,6 @@ Feature: Gateway port adapters
     Examples:
       | adapter   |
       | in-memory |
-      | mcp       |
 
   Scenario Outline: ServiceClient contract: throws SERVICE_UNAVAILABLE for a service it cannot reach
     Given the "<adapter>" service client where "memory/recall" answers '{"ok":true}'
@@ -66,21 +65,12 @@ Feature: Gateway port adapters
     Examples:
       | adapter   |
       | in-memory |
-      | mcp       |
 
   Scenario: InMemoryQuota window resets after the window elapses
     Given an in-memory quota policy with a limit of 1 call per 1000 ms on a manual clock
     When subject "a" consumes "t" 1 times
     And the quota clock moves to 1001 ms
     Then subject "a" can consume "t"
-
-  Scenario: McpServiceClient failures wraps transport errors and keeps the service error flag
-    Given an MCP service client whose "memory" client fails with 'down'
-    When the service client invokes "memory" tool "recall" with arguments '{}'
-    Then the service client invocation is rejected with a message containing "down"
-    Given an MCP service client whose "memory" client answers an error with the text 'boom'
-    When the service client invokes "memory" tool "recall" with arguments '{}'
-    Then the service client response matches '{"isError":true,"text":"boom"}'
 
   Scenario Outline: TaskRegistry contract: a task opened is ended with its reason
     Given the "<adapter>" task registry

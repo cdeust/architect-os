@@ -73,13 +73,6 @@ module.exports = {
       to: { path: COMPONENT },
     },
     {
-      name: 'worker-is-self-contained',
-      comment: 'A worker image contains the worker and contracts only, never the service sources.',
-      severity: 'error',
-      from: { path: '^services/[^/]+/worker/' },
-      to: { path: '^services/[^/]+/(src|test)/' },
-    },
-    {
       name: 'pg-only-in-data-infrastructure',
       comment: 'Only data/src/infrastructure may import pg. No database access outside data.',
       severity: 'error',
@@ -88,7 +81,7 @@ module.exports = {
     },
     {
       name: 'agent-sdk-only-in-worker',
-      comment: 'The Claude Agent SDK runs only inside a worker image: services/<name>/worker.',
+      comment: 'The Claude Agent SDK runs only inside a worker: services/<name>/worker.',
       severity: 'error',
       from: { pathNot: '^services/[^/]+/worker/' },
       to: { path: '(^|/)node_modules/@anthropic-ai/claude-agent-sdk(/|$)' },

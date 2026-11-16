@@ -31,20 +31,12 @@ client -> gateway -> module (sandbox, MCP on stdio)
                \-> data (child, MCP on stdio) -> postgres (pgvector)
 ```
 
-The first realisation, kept (design, decision 19): one container per component behind a proxy, over HTTP. Its stack is started in CI (`compose.yml`); it serves its catalogue and runs no agent.
-
-```
-client -> proxy -> gateway -> services/<name> -> worker (container, exec network)
-                                   |
-                                   +-> data -> postgres (pgvector)
-```
-
 | Dir                    | Role                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `proxy/`               | Caddyfile. Only exposed component: `/mcp` to the gateway, `/healthz`.                                                                                                                                                                                                                                                                                                     |
+| `deploy/edge/`         | An example of an edge in front of the gateway's loopback port (Caddyfile). Nothing in this tree starts it.                                                                                                                                                                                                                                                                |
 | `gateway/`             | The single MCP server for clients. Auth, tool catalogue, routing per tool, quotas, audit. Nothing else.                                                                                                                                                                                                                                                                   |
-| `services/memory/`     | Intent tools `recall` / `remember`. `worker/task-serve.ts` is the worker of the native path (one sandbox per task); `src/` is the MCP service of the first realisation and `worker/main.ts` its worker image.                                                                                                                                                             |
-| `data/`                | Only component that imports `pg`. Typed operations served from `sql/` by one executor, over HTTP and as MCP tools generated from `DATA_OPS` (`src/serve-mcp.ts`, stdio); migrations.                                                                                                                                                                                      |
+| `services/memory/`     | The worker of a task: `worker/task-serve.ts`, one sandbox per task, started by the gateway. It runs the task profile of `agents/<name>.md`.                                                                                                                                                                                                                               |
+| `data/`                | Only component that imports `pg`. Typed operations served from `sql/` by one executor, as MCP tools generated from `DATA_OPS` (`src/serve-mcp.ts`, stdio); migrations.                                                                                                                                                                                                    |
 | `packages/contracts/`  | Only shared package: `Result<T>`, `Run`, `RunEvent`, zod schemas of tools and data operations, the evidence desk contract (`evidence.ts`). No logic.                                                                                                                                                                                                                      |
 | `packages/sandbox/`    | `SandboxRunner` port; the srt adapter and the Docker adapter of the native path (`docker-process-runner.ts`, its check at start), chosen by `platformSandboxes`; the profile templates; the launcher of the native children; the host auth proxy; `npm run code`, `npm run review` and `npm run step`. `docker-runner.ts` is the Docker adapter of the first realisation. |
 | `modules/broker/`      | The broker (1b.2): sole holder of the API key, task tokens granted and revoked by MCP on its stdio, one usage record per answer.                                                                                                                                                                                                                                          |
@@ -54,7 +46,6 @@ client -> proxy -> gateway -> services/<name> -> worker (container, exec network
 | `tools/evidence/`      | The evidence desk (`npm run evidence`): questions for a librarian (Claude Science, or a session under srt), answers verified on the host against the DOI registry. Layers `domain`, `application`, `infrastructure`, composition root `src/main.ts`, entry `src/cli.ts`, the skill in `skill/`.                                                                           |
 | `features/`            | End-to-end and cross-cutting scenarios (`integration`, `arch`, `descriptive`, `infra`, `repository`, `sandbox`).                                                                                                                                                                                                                                                          |
 | `rootless/`            | Scenarios that need a real rootless Docker daemon (Linux only), outside the gate: `npm run test:rootless`, workflow `rootless.yml`. `image.json` names their image by its digest.                                                                                                                                                                                         |
-| `compose/`             | `smoke.mjs`: what the stack of `compose.yaml` answers once started (workflow `compose.yml`).                                                                                                                                                                                                                                                                              |
 | `bench/`               | Outside production: nothing in production imports it, the gate neither counts nor mutates it (DC-8). No dependency-cruiser rule.                                                                                                                                                                                                                                          |
 
 Details: `docs/architecture.md`, `docs/infrastructure.md`, `docs/design.md`, `docs/agents.md`, `docs/testing.md`.
@@ -91,7 +82,7 @@ Every descriptive file has a scenario that loads the committed file, checks it a
 - `@modelcontextprotocol/sdk` only in `presentation` and `infrastructure` of `gateway`, `services/*`, `modules/*` and `data`, and in their `features/` (step definitions).
 - `node:child_process` only in `packages/sandbox`, the `SandboxRunner` port through which every process is launched (component infrastructure may import it), with two named exceptions in `.dependency-cruiser.cjs`: `tools/test-gate/src/infrastructure/git.ts` (the one file through which the gate runs git) and `tools/test-gate/src/infrastructure/replay.ts` (the one through which it replays mutation verdicts). `@anthropic-ai/sandbox-runtime` only in `packages/sandbox`, no exception.
 - No import cycles.
-- The gateway and the proxy contain no business logic: the gateway runs no agent, and reaches data only through its typed operations: to write the registry (tasks, usage) and to forward the data operations of a module, refused outside its `writes_tables` (docs/design/platform-v3-srt.md, §2).
+- The gateway contains no business logic: the gateway runs no agent, and reaches data only through its typed operations: to write the registry (tasks, usage) and to forward the data operations of a module, refused outside its `writes_tables` (docs/design/platform-v3-srt.md, §2).
 
 ## Adding a brick
 
@@ -101,7 +92,7 @@ Tests are Gherkin scenarios (`@cucumber/cucumber`; steps in TypeScript, step tex
 
 1. Unit scenarios per layer it touches, in `<component>/features/` (steps in `<component>/features/steps/`).
 2. A contract for each port it defines: a `Scenario Outline` with one `Examples` row per adapter, the in-memory one included.
-3. If it is on the path of a call, an end-to-end scenario in `features/integration/` (client -> gateway -> service -> worker with a scripted agent -> data in memory).
+3. If it is on the path of a call, an end-to-end scenario in `features/integration/` (client -> gateway -> module or worker -> data in memory, through the entry file of the gateway).
 4. If it adds a boundary, a rule in `.dependency-cruiser.cjs` and a fixture scenario row in `features/arch/`.
 5. If it adds a descriptive file, a load-and-schema scenario with a rejected broken copy.
 6. A changed production line has 0 surviving mutant (the gate, doc §7). An equivalent mutant is marked `// Stryker disable next-line <Mutator>: équivalent: <invariant>`.
@@ -129,7 +120,7 @@ Request changes on a PR that has any of these:
 - A brick without tests (see "Adding a brick"), or a port without a contract test, or a path-of-call change without an end-to-end case.
 - An import that violates the guard, or a change that weakens `.dependency-cruiser.cjs` or removes a guard fixture.
 - Any database access (`pg`, SQL strings) outside `data/` (`sql/`, `migrations/`, `src/infrastructure`), or a data operation that accepts free-form SQL.
-- Business logic in `gateway/` or `proxy/` (anything beyond auth, catalogue, routing, quota, audit).
+- Business logic in `gateway/` (anything beyond auth, catalogue, routing, quota, audit).
 - Agent execution outside `services/*/worker`, or a worker that gets a secret, the Docker socket, or a route to `data`/`postgres`.
 - A Result path that throws instead of returning a named failure, or worker output used without schema validation.
 - Behaviour written in code where a descriptive file can express it (see "Descriptive files before code"), or a descriptive file without its load-and-schema scenario.

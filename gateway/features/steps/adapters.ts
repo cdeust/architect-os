@@ -6,7 +6,6 @@ import {
   InMemoryQuota,
   InMemoryServiceClient,
 } from '../../src/infrastructure/in-memory.js';
-import { McpServiceClient } from '../../src/infrastructure/mcp-service-client.js';
 import { JsonLinesAuditLog } from '../../src/infrastructure/stdout-audit-log.js';
 import {
   Given,
@@ -145,44 +144,9 @@ Given(
       s.services = new InMemoryServiceClient(
         new Map([[route, async () => ({ structured: body, text: structured, isError: false })]]),
       );
-    } else if (adapter === 'mcp') {
-      const service = route.split('/')[0] ?? '';
-      s.services = new McpServiceClient(
-        new Map([
-          [
-            service,
-            {
-              callTool: async () => ({
-                content: [{ type: 'text', text: structured }],
-                structuredContent: body,
-              }),
-            } as never,
-          ],
-        ]),
-      );
     } else {
       assert.fail(`unknown ServiceClient adapter: ${adapter}`);
     }
-  },
-);
-
-Given(
-  'an MCP service client whose {string} client fails with {string}',
-  function (service: string, message: string) {
-    scenario(this).services = new McpServiceClient(
-      new Map([[service, { callTool: async () => Promise.reject(new Error(message)) } as never]]),
-    );
-  },
-);
-
-Given(
-  'an MCP service client whose {string} client answers an error with the text {string}',
-  function (service: string, text: string) {
-    scenario(this).services = new McpServiceClient(
-      new Map([
-        [service, { callTool: async () => ({ content: [{ type: 'text', text }], isError: true }) } as never],
-      ]),
-    );
   },
 );
 

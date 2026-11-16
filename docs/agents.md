@@ -4,9 +4,9 @@ Two kinds of agents exist in this repository: worker agents that serve users at 
 
 ## Worker agents
 
-A worker agent is a Claude Agent SDK `query()`, created per execution by `services/<name>/worker`, with no state between runs. There are two, one per realisation of the platform ([architecture.md](architecture.md)): the worker of the native path, in a sandbox, and the worker of the first realisation, in a container image of its own.
+A worker agent is a Claude Agent SDK `query()`, created per execution by `services/<name>/worker`, with no state between runs. There is one: the worker of a task, in a sandbox, started and stopped by the gateway ([architecture.md](architecture.md)).
 
-### The worker of the native path (`services/memory/worker/task-serve.ts`)
+### The worker of a task (`services/memory/worker/task-serve.ts`)
 
 | Aspect       | Value                                                                                                                                                                                                                          |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -22,34 +22,13 @@ A worker agent is a Claude Agent SDK `query()`, created per execution by `servic
 
 Proven with the real Claude Code binary against a fake model: `features/integration/agent-worker.feature`; end to end through the entry file of the gateway: `features/sandbox/gateway-entry.feature`, `rootless/gateway-entry.feature`.
 
-### The worker of the first realisation (`services/memory/worker/main.ts`)
+### Adding an agent
 
-| Aspect         | Value                                                                                                                                                                                                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Role           | Answer `recall` (ground a summary in stored memories) and perform `remember` (store one memory).                                                                                                                                                                                                 |
-| Entry point    | `main.ts`: reads one `WorkerInput` JSON on stdin, writes one `WorkerOutput` JSON on stdout, exit code 0 (result written) or 2 (input unusable).                                                                                                                                                  |
-| Core           | `run-worker.ts`: pure with respect to I/O; takes an `AgentPort`, `InternalTools` and the prompts. `sdk-agent.ts` is the only file importing the SDK.                                                                                                                                             |
-| System prompt  | `prompts/<tool>.md`, one file per intent tool, loaded by `prompts.ts` at start (a missing or empty file stops the worker). The image copies `prompts/` next to `dist/worker`.                                                                                                                    |
-| Internal tools | The entries of `INTERNAL_TOOLS` owned by `memory` (`memory_search`, `memory_insert`), exposed to the agent as an in-process SDK MCP server (`createSdkMcpServer`, `tool`) by one loop. They call `InternalTools`, whose HTTP adapter posts to memory's `/internal/<tool>` on the `exec` network. |
-| Built-in tools | None: `tools: []`, `allowedTools` lists the internal tools, `permissionMode: 'dontAsk'`, `settingSources: []`, `strictMcpConfig: true`, `persistSession: false`. These stay in code: they are the security floor, not behaviour.                                                                 |
-| Limits         | Turns (`maxTurns`, default 8), cost (`maxBudgetUsd`, default 0.5), wall time (runner timeout, default 120 s). Defaults live in `services/memory/src/main.ts` only; the service always sends turns and budget in `WorkerInput.limits` (required).                                                 |
-| Output schema  | Passed to the SDK as `outputFormat: { type: 'json_schema', schema }`, generated from the tool's data schema in `packages/contracts` (`RecallDataSchema`, `RememberDataSchema`).                                                                                                                  |
-| Validation     | The worker does not decide trust. The service parses stdout with `WorkerOutputSchema` then validates `data` with the tool schema; a violation is `WORKER_OUTPUT_INVALID` and the run is recorded as failed.                                                                                      |
-| Cost           | `total_cost_usd` and `usage` from the SDK result message become `Result.cost`.                                                                                                                                                                                                                   |
-| Secrets        | None in the container. `ANTHROPIC_BASE_URL` targets the secrets broker.                                                                                                                                                                                                                          |
+An agent is declared, not coded: the worker is the same for every agent.
 
-Why the prompt is a plain `.md` read by the worker rather than a `.claude/agents/<tool>.md` subagent file loaded by the SDK: the documented loading path needs `settingSources: ['project']`, which also loads `CLAUDE.md` files from `cwd` and its parents and the project `settings.json` with its hooks (code.claude.com/docs/en/agent-sdk/claude-code-features, table "What it loads"), and the same page recommends `settingSources: []` for multi-tenant isolation. The worker keeps `settingSources: []` and passes the file body as `systemPrompt` (a `string`, per `Options.systemPrompt` in `sdk.d.ts`).
-
-SDK facts used (checked in `node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts`): `query`, `tool`, `createSdkMcpServer`, `Options.tools`, `Options.allowedTools`, `Options.maxTurns`, `Options.maxBudgetUsd`, `Options.outputFormat`, `Options.permissionMode`, `Options.settingSources`, `Options.persistSession`, `Options.strictMcpConfig`, `Options.env`, and the `result` message (`subtype`, `structured_output`, `total_cost_usd`, `usage`).
-
-Not covered by the default test suite: a live run of `sdk-agent.ts` against Anthropic (it needs the broker and a key). Tests inject a scripted `AgentPort`.
-
-### Adding a worker agent for a new service
-
-1. Define the tool schemas in `packages/contracts` (and add the tool to `TOOLS` with its owner), and write `services/<name>/worker/prompts/<tool>.md`.
-2. Create `services/<name>/` with the same layers and a `worker/` directory.
-3. Give the agent only the internal tools it needs (entries of `INTERNAL_TOOLS` with its owner); keep the built-in tools off.
-4. Register tests per [testing.md](testing.md) and add the service to `compose.yaml` and `features/infra/compose.feature`.
+1. Write its task profile, `agents/<name>.md`: its prompt, the tools of the platform it may call, its bounds.
+2. Declare its tools in `topology/catalog.json`, with their input and output schemas; the topology is loaded whole or refused before anything is launched.
+3. Add its scenarios per [testing.md](testing.md): the tool end to end through the entry file of the gateway, with the real Claude Code binary against a fake model.
 
 ## Review subagents (`.claude/agents/`)
 

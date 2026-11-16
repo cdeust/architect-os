@@ -1,0 +1,18 @@
+# An edge in front of the gateway, which serves its clients on the loopback only (docs/operating.md, GATEWAY_PORT). It
+# forwards two paths and answers nothing else. Nothing in this tree starts it. Plain HTTP on :8080 as written: replace
+# :8080 with the site address to get automatic HTTPS, and {$GATEWAY_PORT} is read from the environment of caddy.
+:8080 {
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle /mcp {
+		reverse_proxy 127.0.0.1:{$GATEWAY_PORT}
+	}
+
+	handle {
+		respond "not found" 404
+	}
+
+	header -Server
+}

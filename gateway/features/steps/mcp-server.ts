@@ -7,7 +7,7 @@ import {
   InMemoryQuota,
   InMemoryServiceClient,
 } from '../../src/infrastructure/in-memory.js';
-import { compose, routes } from '../../src/main.js';
+import { compose } from '../../src/main.js';
 import { Given, Then, When, assertMatches, required, slot, type GatewayWorld } from './helpers.js';
 
 const clock = { now: () => new Date('2026-01-01T00:00:00Z') };
@@ -26,7 +26,6 @@ class GatewayScenario {
   audit = new InMemoryAuditLog();
   tools: string[] = [];
   result: CallResult | undefined;
-  routes: unknown;
 }
 
 const scenario = (world: GatewayWorld) => slot(world, 'gateway-mcp', () => new GatewayScenario());
@@ -89,10 +88,6 @@ When(
   },
 );
 
-When('the gateway routes are derived', function () {
-  scenario(this).routes = routes();
-});
-
 Then('the gateway tool names are {string}', function (names: string) {
   assert.deepEqual(scenario(this).tools, names.split(', '));
 });
@@ -118,8 +113,4 @@ Then('the gateway answer contains {string}', function (code: string) {
     JSON.stringify(lastResult(scenario(this)).content).includes(code),
     `the answer does not contain ${code}`,
   );
-});
-
-Then('the gateway routes are {string}', function (expected: string) {
-  assert.deepEqual(scenario(this).routes, JSON.parse(expected));
 });

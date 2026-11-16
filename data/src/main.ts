@@ -5,30 +5,22 @@ import { InMemoryDataStore } from './infrastructure/in-memory.js';
 import { migrate } from './infrastructure/migrate.js';
 import { connectPostgres } from './infrastructure/pg-pool.js';
 import { loadStatementTable, SqlDataStore } from './infrastructure/sql-store.js';
-import { createDataApi } from './presentation/http-api.js';
+import { serveDataMcp, stdioTransport } from './presentation/mcp-server.js';
 
-/** The package root (data/) from src/main.ts under tsx and from dist/src/main.js in the image. */
+/** The package root (data/) from src/main.ts under tsx and from dist/src/main.js once built. */
 const ROOT = new URL(import.meta.url.includes('/dist/') ? '../../' : '../', import.meta.url);
 export const SQL_DIR = fileURLToPath(new URL('sql/', ROOT));
 export const MIGRATIONS_DIR = fileURLToPath(new URL('migrations/', ROOT));
 
 /** Composition root. All wiring of the data component happens here. */
 export function compose(store: DataStore) {
-  const operations = new DataOperations(store);
-  return { operations, createServer: () => createDataApi(operations) };
-}
-
-export function composeInMemory() {
-  return compose(new InMemoryDataStore());
+  return { operations: new DataOperations(store) };
 }
 
 // The imports of the process entries (brick 1b.3) come after the declarations above, whose positions the mutation debt
 // register names (tools/test-gate/mutation-debt.json, rule 6): an import added on top would move them.
 import { once } from 'node:events';
-import type { Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import type { Readable, Writable } from 'node:stream';
-import { serveDataMcp, stdioTransport } from './presentation/mcp-server.js';
 
 /**
  * The store of `DATABASE_URL`, migrated, or the in-memory store without it. `log` is stderr: stdout may carry MCP.
@@ -72,20 +64,4 @@ export async function serveStdio(
   await server.close();
   await opened.close();
   return 0;
-}
-
-/**
- * The HTTP API of data on `PORT` (8082 by default), until compose is retired (brick 1b.6); its process is
- * src/serve-http.ts. Resolves once it listens.
- */
-export async function serveHttp(
-  env: Readonly<Record<string, string | undefined>>,
-  log: (line: string) => void,
-): Promise<Server> {
-  const { store } = await openStore(env, log);
-  const server = compose(store).createServer();
-  server.listen(Number(env['PORT'] ?? 8082));
-  await once(server, 'listening');
-  log(`data listening on :${(server.address() as AddressInfo).port}`);
-  return server;
 }

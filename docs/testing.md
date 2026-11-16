@@ -48,6 +48,8 @@ Brick 1a replaced vitest. One vitest `it` became one `Scenario`, one `it.each` r
 | root (`features/`)   |     68 |      68 | `descriptive/builder-guard` 51, `descriptive/claude-files` 6, `infra/compose` 6, `integration/end-to-end` 3, `arch/guard` 2          |
 | **Total migrated**   |    224 |     224 |                                                                                                                                      |
 
+The scenarios of the first realisation in that table (`http-api`, those of `services/memory` but `task-worker`, `infra/compose`, `integration/end-to-end`) left with it (design, decision 21).
+
 Added after the migration: `tools/test-gate` 99 (`configuration` 20, `count` 9, `diff` 2, `mutation` 37, `outcome` 14, `outputs` 10, `sets` 7), the Postgres watchdog 1 (`infra/postgres-watchdog`), `features/sandbox/srt-runner` 5 (real srt; the old `runIf(darwin)` suite), and `features/repository` 2 (typecheck, format). The suite holds 326 pickles. On 4 November 2026 the move to `claude --bare` removed `descriptive/builder-guard` (51): under `--bare` no hook runs, and its rules became `permissions.deny` of the session settings (`packages/sandbox/profiles/builder.json`).
 
 ## `@postgres`: a disposable database
@@ -88,9 +90,6 @@ Each descriptive file is loaded by its scenarios exactly as production loads it,
 | `tools/evidence/skill/SKILL.md`                                                                 | `tools/evidence/features/skill.feature` (front matter and the codes of its table, equal to the contract's), `tools/evidence/features/command.feature` (copied by `ask`) | no front matter, empty body, another name, no description, description of 1025 characters, another license, no license, a code missing, an unknown code, two codes swapped, no table of reasons                                 |
 | `tools/evidence/fixtures/doi-org/*.json` (the answers of doi.org, recorded on 14 November 2026) | `tools/evidence/features/registry.feature`, `tools/evidence/features/command.feature` (served by a fake `fetch`)                                                        | none: they are recorded answers, not a descriptive file; the registry feature feeds its adapter degraded bodies                                                                                                                 |
 | `.claude/agents/*.md`, `.claude/commands/*.md`, `.claude/settings.json`                         | `features/descriptive/claude-files.feature`                                                                                                                             | no frontmatter, missing `description`, misspelt field                                                                                                                                                                           |
-| `compose.yaml`                                                                                  | `features/infra/compose.feature`                                                                                                                                        | (zone assertions)                                                                                                                                                                                                               |
-
-The end-to-end scenarios load the committed prompts and assert the agent received them.
 
 ## Repository and architecture guard
 
@@ -105,8 +104,7 @@ rm gateway/src/application/zz-tmp.ts && npm run arch                      # gree
 
 ## Known gaps
 
-- Both agents run with the real Claude Code binary against a fake model: the one of the native path (`features/integration/agent-worker.feature`) and the one of the first realisation (`features/integration/worker-of-the-stack.feature`). Neither is exercised against the real API in the gate (it needs a key); `modules/broker/live/` is the owner's command for that.
-- The stack of `compose.yaml` is built and started by the workflow `compose.yml`, which asserts what it answers through the proxy (`compose/smoke.mjs`). That is a smoke test, not scenarios: it is outside the gate. The stack runs no agent, and the test says so.
+- The agent runs with the real Claude Code binary against a fake model (`features/integration/agent-worker.feature`). It is not exercised against the real API in the gate (it needs a key); `modules/broker/live/` is the owner's command for that.
 - The Docker mode of the native path is proven on hosted Linux runners only; under WSL2 it has not been run yet.
 
 ## Checklist for a new brick

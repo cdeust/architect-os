@@ -32,7 +32,3 @@ Feature: Gateway MCP server
     Given a connected gateway client with token "good"
     When the gateway client calls "recall" with arguments '{"query":"q"}'
     Then the gateway answer contains "SERVICE_UNAVAILABLE"
-
-  Scenario: derives one route per owning service, with the URL variable compose.yaml sets
-    When the gateway routes are derived
-    Then the gateway routes are '[{"service":"memory","urlVariable":"MEMORY_URL"}]'

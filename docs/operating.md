@@ -1,6 +1,6 @@
 # Operating the platform as one process
 
-This page is for whoever runs the platform on a host: what the process needs, what it refuses, how it stops, and what it leaves. It describes the native path (`docs/design/platform-v3-srt.md`, §2 and §6): one process, started by `node gateway/dist/src/serve.js`, which starts `data` and the broker as its children and isolates every module and worker. Each statement names the scenario or the measure that holds it. The first realisation (`compose.yaml`) is described in [infrastructure.md](infrastructure.md).
+This page is for whoever runs the platform on a host: what the process needs, what it refuses, how it stops, and what it leaves. It describes the native path (`docs/design/platform-v3-srt.md`, §2 and §6): one process, started by `node gateway/dist/src/serve.js`, which starts `data` and the broker as its children and isolates every module and worker. Each statement names the scenario or the measure that holds it.
 
 ## Hosts
 
@@ -21,7 +21,7 @@ Every variable is required unless said otherwise, and none has a default. A refu
 | Variable                   | What it is                                                                                                                                      |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GATEWAY_TOKENS`           | `token=subject` pairs separated by `;`. A token has at least 32 characters among letters, digits and `-._~+/`; a subject has no blank           |
-| `GATEWAY_PORT`             | The port of the clients, on the loopback only. Put a reverse proxy in front of it to serve another interface (`proxy/Caddyfile`)                |
+| `GATEWAY_PORT`             | The port of the clients, on the loopback only. Put a reverse proxy in front of it to serve another interface (`deploy/edge/Caddyfile`)          |
 | `GATEWAY_QUOTA_PER_MINUTE` | Calls per minute, for one subject and one tool, a whole number of at least 1                                                                    |
 | `GATEWAY_PROFILE`          | The client profile of `topology/clients.json`. One exists, `owner`: every authenticated client has its rights                                   |
 | `GATEWAY_SANDBOX`          | `srt` or `docker`                                                                                                                               |
