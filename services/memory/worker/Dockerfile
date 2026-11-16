@@ -1,16 +1,18 @@
 # Worker image for the memory service. Build context: repository root.
 #   docker build -f services/memory/worker/Dockerfile -t architect-os/memory-worker .
-FROM node:26-slim AS build
+FROM node:26-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1 AS build
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/contracts packages/contracts
+# Compiled with the service, which references it; nothing of it reaches the image below.
+COPY packages/sandbox packages/sandbox
 COPY services/memory services/memory
 COPY data/package.json data/package.json
 COPY gateway/package.json gateway/package.json
 RUN npm ci --ignore-scripts --workspace @architect-os/memory --include-workspace-root \
  && npx tsc -b services/memory
 
-FROM node:26-slim
+FROM node:26-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app/package.json /app/package-lock.json ./

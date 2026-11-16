@@ -8,9 +8,12 @@ docker compose build        # builds gateway, memory, data images (root Dockerfi
 docker compose --profile build-only build memory-worker   # worker image launched by memory
 docker compose up
 curl http://127.0.0.1:8080/healthz
+node compose/smoke.mjs http://127.0.0.1:8080 dev-token   # what the stack answers, as the workflow compose.yml asks it
 ```
 
-Services: `proxy` (Caddy), `gateway`, `memory`, `data`, `postgres` (`pgvector/pgvector:pg17`). Every long-running service drops all capabilities and sets `no-new-privileges`; `proxy`, `gateway` and `data` run with a read-only root filesystem.
+This is the first realisation. The platform also runs as one process, without this stack: see [operating.md](operating.md). What this stack does, measured by the workflow `compose.yml` on every change: it builds, it starts, the proxy answers, the catalogue is listed, a call without a token is refused. What it does not: it runs no agent. The image of `memory` holds no Docker client, so the worker container described below is never launched (`WORKER_UNAVAILABLE`), and no broker is part of the stack. The sections on the worker containers and on the broker describe the design of this realisation and the components that exist, not something this stack does today.
+
+Services: `proxy` (Caddy), `gateway`, `memory`, `data`, `postgres` (`pgvector/pgvector:pg17`). Every long-running service drops all capabilities and sets `no-new-privileges`; the proxy alone is given one back, `NET_BIND_SERVICE`, without which the kernel refuses to execute the caddy binary of its image (it carries that file capability); `proxy`, `gateway` and `data` run with a read-only root filesystem.
 
 `docker compose config` validates the file. `features/infra/compose.feature` parses it and asserts the network zones in CI (CI does not start Docker).
 

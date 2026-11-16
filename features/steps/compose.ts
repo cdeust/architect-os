@@ -11,6 +11,7 @@ interface Service {
   profiles?: string[];
   volumes?: string[];
   cap_drop?: string[];
+  cap_add?: string[];
 }
 interface Compose {
   services: Record<string, Service>;
@@ -57,6 +58,16 @@ Then('the compose network {string} is not internal', function (network: string) 
 Then('the compose network {string} is internal', function (network: string) {
   assert.equal(compose(this).networks[network]?.internal, true);
 });
+
+Then(
+  'no compose service is given a capability back, but {string}, given {string} alone',
+  function (name: string, capability: string) {
+    const given = Object.entries(compose(this).services).flatMap(([service, { cap_add }]) =>
+      cap_add === undefined ? [] : [[service, cap_add]],
+    );
+    assert.deepEqual(given, [[name, [capability]]]);
+  },
+);
 
 Then('every compose service drops all capabilities, except the build-only ones and postgres', function () {
   for (const [name, service] of Object.entries(compose(this).services)) {

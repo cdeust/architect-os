@@ -16,6 +16,7 @@ Feature: GitHub workflows
       | broker-live.yml          |
       | claude-review.yml        |
       | claude.yml               |
+      | compose.yml              |
       | gate.yml                 |
       | mutation-full.yml        |
       | pipeline-after-merge.yml |

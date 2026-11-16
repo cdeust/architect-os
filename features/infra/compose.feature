@@ -26,3 +26,6 @@ Feature: compose.yaml network zones
 
   Scenario: compose.yaml drops all capabilities on every long-running service
     Then every compose service drops all capabilities, except the build-only ones and postgres
+
+  Scenario: compose.yaml gives one capability back, to the proxy: without it the kernel refuses to execute its binary
+    Then no compose service is given a capability back, but "proxy", given "NET_BIND_SERVICE" alone

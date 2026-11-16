@@ -20,3 +20,34 @@ Le §55 a été poussé (`2053099`) : porte de l'hôte verte (1 893 scénarios =
 - Recherche : le guide ne dit que ce qu'un scénario ou une mesure tient, et le dit ; ses trois erreurs de première rédaction sont rapportées ; l'inventaire vient d'un calcul rejouable sur le graphe des imports, pas d'une lecture.
 - SSDLC : la preuve du mode Docker couvre les deux architectures de Linux ; les deux archives d'outils sont vérifiées contre leur empreinte ; un échec de worker ne coûte plus un diagnostic sur mesure ; le guide écrit la règle qui découle de la mesure (aucun secret lisible par les autres dans la racine de la plateforme).
 - Opérationnel : la décision du propriétaire sur la première réalisation est citée dans ses mots et appliquée, rien n'en est retiré ; le délai d'arrêt et l'exclusion du dossier des relais des nettoyeurs de fichiers temporaires sont écrits pour l'opérateur ; IRB sans objet.
+
+## 57. 1b.6c selon la décision 19 : la première réalisation reste, et pour la première fois elle démarre en CI ; ce qu'on garde, on le prouve, 16 novembre 2026
+
+Le §56 a été poussé (`78fb6da`) : porte de l'hôte verte (1 895 scénarios = 1 893 + 2 ; 42 mutants, 38 tués, 4 erreurs d'exécution, 0 survivant), CI verte sur `gate` (Linux et macOS) et sur `rootless` (41 scénarios sur 41, en x86-64 et en arm64), runs retrouvés par le SHA du commit.
+
+**La décision, et ce que j'en tire.** La conception prévoyait de retirer la première réalisation une fois le mode Docker prouvé. Le propriétaire a tranché autrement sur l'inventaire (décision 19, §56) : ne part que ce qui fait sens, et on ne tue pas une solution qui fonctionne. Une seule chose était morte, atteinte ni par un point d'entrée ni par un scénario : `BrokerTaskTokens`, que le relais d'usage remplace depuis 1b.6a. Elle part. Tout le reste reste. Mais garder n'est pas croire : si le dépôt garde la première réalisation comme une solution, il doit pouvoir dire, preuve à l'appui, ce qu'elle fait. Ses composants sont tenus par leurs scénarios dans la porte. Sa pile (`compose.yaml`) n'avait jamais été démarrée en CI : `features/infra/compose.feature` lit le fichier, rien ne le lance.
+
+**Mesurer avant de l'affirmer : cinq passes en CI** (workflow `compose.yml`, sur une branche d'essai que lui seul écoute).
+
+| Passe | Résultat | Ce qu'elle a appris |
+|---|---|---|
+| 1 | La construction échoue | Le `Dockerfile` compile tout le dépôt (`tsc -b`), dont les modules, les outils et les scénarios, qu'il ne copie pas. Cassé depuis l'arrivée des modules, plusieurs briques plus tôt, sans que rien le dise |
+| 2 | La construction de l'image du worker échoue | Même cause : le service référence `packages/sandbox`, que cette image ne copiait pas |
+| 3 | La pile démarre, sauf le proxy | `exec /usr/bin/caddy: operation not permitted` : le binaire de l'image porte une capacité de fichier, et le noyau refuse de l'exécuter sous `cap_drop: ALL` avec `no-new-privileges`. Le proxy, seul composant exposé, n'a donc jamais pu démarrer tel qu'il était écrit |
+| 4 | La pile répond | Mon essai attendait qu'un client sans jeton ne liste aucun outil : c'est le contrat de la gateway native, pas celui de cette réalisation, dont le catalogue est public et dont seul un appel exige un jeton. Essai corrigé, pas le code |
+| 5 | Vert | La pile se construit, démarre, et répond comme son contrat le dit |
+
+**Ce que la pile fait, et ne fait pas** (affirmé par `compose/smoke.mjs`, au travers du proxy, seul port publié). Le proxy répond à `/healthz` et à rien d'autre que `/mcp` ; un appel sans jeton est refusé (`UNAUTHORIZED`) ; le catalogue est listé (`recall`, `remember`) ; un appel avec jeton traverse le proxy, la gateway et memory, et échoue par son nom là où un worker démarrerait : `WORKER_UNAVAILABLE`, « client Docker introuvable ». L'image de memory ne contient pas de client Docker, et la pile n'a pas de broker : **cette pile n'a jamais pu lancer un agent**. L'essai l'affirme tel quel, pour que le jour où elle le pourra, cette ligne le dise.
+
+**Ce que j'ai réparé, et ce que j'ai laissé.** Réparé, parce que c'est le minimum pour qu'une chose gardée soit vraie : les deux constructions (les trois composants de la pile et ce qu'ils référencent, pas tout le dépôt), l'exécution du proxy (la seule capacité que son binaire exige, `NET_BIND_SERVICE`, avec un scénario qui affirme qu'aucun autre service n'en reçoit), les images désignées par leur empreinte (node, caddy, pgvector), la documentation de cette pile, qui décrivait comme existant ce qu'elle ne fait pas. Laissé, parce que c'est une décision et non une réparation : donner à cette pile un client Docker et un broker. Le broker de la plateforme (1b.2) est piloté par la gateway native sur son entrée standard ; le brancher à un service HTTP est une conception à faire, pour un chemin où memory monte la socket du démon, ce que le mode Docker du chemin natif s'interdit. Mon avis de mainteneur, soumis au propriétaire : garder cette pile comme elle est, démarrée et gardée par la CI, et ne pas y investir tant qu'un besoin ne le demande pas ; l'agent tourne sur le chemin natif.
+
+**Leçon.** Une chose que rien n'exécute pourrit sans bruit. Cette pile a cessé de se construire à l'arrivée des modules, et le dépôt a continué de dire, dans son README et sa documentation, comment la lancer. La règle qui en sort est celle de la décision 19 : ce que le dépôt garde, la CI le démarre.
+
+**Chiffres.** Cinq passes de CI de deux à quatre minutes. À la porte : un scénario de plus pour `compose.yaml` (7), une ligne de plus pour les workflows vérifiés. Aucune session de modèle pour ce pas. Un fichier de production retiré, aucun ajouté. La porte et la CI de ce commit sont rapportées au paragraphe suivant.
+
+**Ce qui n'est pas prouvé.** La pile sur arm64, et sous un démon sans root (elle monte la socket du démon). Qu'elle serve un agent : elle ne le peut pas. Postgres y démarre et `data` y applique ses migrations, mais aucun appel de l'essai n'écrit ni ne lit une mémoire à travers la pile.
+
+**Trois piliers.**
+- Recherche : l'affirmation « la première réalisation fonctionne » a été mesurée avant d'être écrite, et la mesure l'a démentie sur trois points ; les cinq passes sont rapportées, dont celle où l'essai avait tort ; ce que la pile ne fait pas est affirmé par le même essai que ce qu'elle fait.
+- SSDLC : les images de la pile sont désignées par leur empreinte ; la capacité rendue au proxy est la seule, nommée, avec un scénario qui interdit d'en rendre une autre ; le workflow n'a ni secret ni droit d'écriture, et ses deux valeurs d'environnement ne valent rien ; le risque connu de cette pile (la socket du démon montée dans memory) est redit, pas masqué.
+- Opérationnel : rien de fonctionnel n'est retiré ; un fichier mort l'est ; la documentation de la pile dit ce qui tourne et ce qui ne tourne pas ; la pile est arrêtée et ses volumes retirés à la fin de chaque passe ; IRB sans objet.

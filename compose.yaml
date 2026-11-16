@@ -9,13 +9,17 @@ name: architect-os
 
 services:
   proxy:
-    image: caddy:2.11.7-alpine
+    image: caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
     ports:
       - '127.0.0.1:8080:8080'
     volumes:
       - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
     read_only: true
     cap_drop: [ALL]
+    # The caddy binary of this image carries the file capability to bind a low port. With every capability dropped and
+    # no new privileges, the kernel refuses to execute it at all (`exec /usr/bin/caddy: operation not permitted`,
+    # measured by the workflow compose.yml). This one capability, of no use on port 8080, is what lets it start.
+    cap_add: [NET_BIND_SERVICE]
     security_opt: ['no-new-privileges:true']
     depends_on: [gateway]
     networks: [public, app]
@@ -74,7 +78,7 @@ services:
     networks: [app, data]
 
   postgres:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
     environment:
       POSTGRES_USER: agentic
       POSTGRES_DB: agentic
