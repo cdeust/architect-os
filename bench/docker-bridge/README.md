@@ -67,6 +67,27 @@ DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock sh bench/docker-bridge/lifecycle
 | A mounted folder whose name holds a double quote, or a comma | Refused by the client, exit 125 (`parse error`, `invalid field`) |
 | The root of the host mounted on the root of the container | Refused by the daemon: `destination can't be '/'` |
 
+## What a container reads of its own confinement, 16 November 2026
+
+The check at start of the adapter judges a canary container on what it reports of itself. `canary.sh` asks what such a container can read, before the same rootless daemon (played four times, the rounding of the memory bound twice, same results).
+
+```bash
+DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock sh bench/docker-bridge/canary.sh
+```
+
+| Container | uid | Interfaces | `192.0.2.1:80` | Write at `/` | `memory.max` | `memory.swap.max` | `pids.max` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| The options of the adapter, 256 MiB, 64 processes | 10001 | `lo` | `ENETUNREACH` | `EROFS` | `268435456` | `0` | `64` |
+| Without the bounds | 10001 | `lo` | `ENETUNREACH` | `EROFS` | `max` | `max` | `2299` |
+| Without `--read-only` | 10001 | `lo` | `ENETUNREACH` | `EACCES` | `max` | `max` | `2299` |
+| Without `--user` | 0 | `lo` | `ENETUNREACH` | `EROFS` | `max` | `max` | `2299` |
+
+The daemon says of itself, by `docker info --format '{{json .SecurityOptions}}'`: `["name=seccomp,profile=builtin","name=rootless","name=cgroupns"]`.
+
+The kernel rounds a memory bound down to a page (4,096 bytes on this host): `--memory 268435457` and `268439551` both read back `268435456`, `268439552` reads back itself. Docker refuses a bound under 6 MB (`Minimum memory limit allowed is 6MB`, exit 125). So the adapter takes its memory bound in mebibytes, at least 6, and reads back the very number it asked for.
+
+This daemon was started without a bridge, as the design asks of the operator, so a container without `--network none` has no network either: the trial cannot show the probe seeing a network.
+
 ## Joining the two connections of a relay, 16 November 2026
 
 The first relay destroyed one connection as soon as the other closed. `join.mjs` shows what that loses, with no Docker at all: a client that reads nothing until the relay has taken the whole answer.

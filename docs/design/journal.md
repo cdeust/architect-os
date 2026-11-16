@@ -2155,3 +2155,82 @@ Aucun de ces trois défauts n'avait été vu par les deux revues ni par la mutat
 - Recherche : chaque option ajoutée est mesurée devant un démon sans root, deux fois, par un script déposé ; une affirmation faite de mémoire (le format de `--mount`) est mesurée avant d'entrer dans le code ; un scénario qui ne prouvait pas son titre est retiré et remplacé par un banc ; ce qui n'est pas prouvé est listé.
 - SSDLC : fuite d'information (jeton hors de la ligne de commande, aucun journal du démon), déni de service (zombies, bornes validées, swap borné, conteneur retiré à toute fin du client), falsification (variables réservées, chemins qu'un montage ne peut pas porter) ; aucune dépendance ajoutée ; revue indépendante et entrées inédites avant le commit.
 - Opérationnel : démon sans root seulement ; la VM d'essai est celle du projet, arrêtée après usage, contexte du poste vérifié ; du texte produit dans une sandbox n'est exécuté sur l'hôte qu'après lecture ; IRB sans objet.
+
+## 52. 1b.6b, deuxième pas : le contrôle au démarrage du mode Docker ; première consigne nourrie par le pas précédent, 16 novembre 2026
+
+Le §51 a été poussé (`5cf257a`) : porte de l'hôte verte (1 718 scénarios = 1 624 + 94 ; 244 mutants, 198 tués, 36 délais dépassés, 10 erreurs d'exécution, 0 survivant ; les deux survivants sont ceux du canari de l'outil de mutation, attendus), CI verte sur Linux et macOS, run retrouvé par le SHA du commit.
+
+**Un fichier laissé par le rejeu des verdicts.** À la fin de la porte, l'arbre contenait un fichier non suivi nommé `x*`, 44 octets : `/bin/sh: uid=501(<utilisateur>): command not found`. Lu avant d'être retiré. Cause : le scénario qui prouve qu'aucun shell ne lit la commande d'une sandbox lui donne `` $(id);`id`&>x* `` ; rejoué sous le mutant qui met `shell: true`, un shell l'exécute, ce qui tue le mutant, et écrit le fichier dans le dossier courant. Sous Stryker ce dossier est sa copie de travail ; au rejeu, c'est l'arbre. La charge redirige maintenant vers `/dev/null` : un scénario ne laisse rien derrière lui, même quand il échoue.
+
+**Mesurer avant de concevoir** (`bench/docker-bridge/canary.sh`, même VM, démon sans root, quatre passes identiques). La conception demandait que le conteneur de contrôle soit tué par sa borne de mémoire. Avant d'écrire la consigne, j'ai mesuré ce qu'un conteneur lit de lui-même :
+
+| Conteneur | uid | Interfaces | `192.0.2.1:80` | Écriture à `/` | `memory.max` | `memory.swap.max` | `pids.max` |
+|---|---|---|---|---|---|---|---|
+| Options de l'adaptateur, 256 Mio, 64 processus | 10001 | `lo` | `ENETUNREACH` | `EROFS` | `268435456` | `0` | `64` |
+| Sans les bornes | 10001 | `lo` | `ENETUNREACH` | `EROFS` | `max` | `max` | `2299` |
+| Sans `--read-only` | 10001 | `lo` | `ENETUNREACH` | `EACCES` | `max` | `max` | `2299` |
+| Sans `--user` | 0 | `lo` | `ENETUNREACH` | `EROFS` | `max` | `max` | `2299` |
+
+Les fichiers de son cgroup disent ce que le noyau applique : le contrôle peut les lire au lieu d'allouer plusieurs centaines de mébioctets à chaque démarrage. Le §6 est amendé en ce sens (la revue a relevé l'écart avec sa première rédaction, à raison). Limite de la mesure : ce démon est lancé sans pont, donc un conteneur sans `--network none` n'y a pas de réseau non plus ; la sonde ne peut pas y être vue détectant un réseau.
+
+**Ce qui est livré.** `DockerProcessRunner.check()`, que chaque lancement demande d'abord. `docker info` doit dire le démon sans root. Puis un conteneur de contrôle, lancé par le même code qu'une sandbox (une seule fonction construit les options de `docker run`), exécute une sonde (`container-probe.ts`) qui rapporte et ne décide rien ; `docker-isolation.ts` juge : la valeur lue par le relais, l'uid, `lo` seule, `ENETUNREACH` vers l'extérieur, `EROFS` aux trois endroits qui ne doivent pas s'écrire, une écriture réussie dans chaque `tmpfs`, les trois bornes. La première condition qui manque est nommée, avec ce qui a été lu et ce qui était attendu. Un contrôle réussi n'est pas rejoué ; un refus n'est jamais retenu ; des demandes simultanées partagent un contrôle. Rien du contrôle ne lui survit (conteneur retiré, relais fermé, écouteur fermé).
+
+**La boucle, avec une consigne nourrie par le pas précédent.** La consigne portait une section « ce que le premier pas a appris » (dix règles tirées du §51) et les mesures ci-dessus. Construction (Sonnet 5.5, effort moyen) : 756 s, 1,53 $. Revue (Opus 5.5, effort élevé) : 1,21 $, `request_changes`, sept constats, dont un de justesse et une contradiction avec la conception.
+
+| | Premier pas (§51) | Ce pas |
+|---|---|---|
+| Constats de la revue de la boucle | 8, dont 4 de justesse | 7, dont 1 de justesse |
+| Le constat de justesse | Un jeton sur une ligne de commande, trois lignes sans preuve | Un step de test à quatre paramètres pour cinq : cinq scénarios qui ne pouvaient pas tourner |
+| Seconde revue nécessaire | Oui, 13 constats | Non lancée : la reprise est restée petite |
+
+C'est un seul point de comparaison, sur deux pas qui ne sont pas de même taille ni de même nature : il ne prouve pas que la consigne nourrie en est la cause. Il est relevé ici parce que c'est la mesure que le pas de réflexion devra faire proprement (`orchestration-fable-5-2.md`, §4).
+
+**Ma reprise.** Le step fautif et deux motifs de test corrigés ; sur l'hôte, tous les scénarios que la sandbox n'avait pas pu lancer passent. La borne de la sonde est la moitié de celle du contrôle (elle était un quart, sans raison écrite). Un scénario prouve qu'une connexion remise à zéro par un autre processus de l'hôte sur le port du contrôle ne fait pas tomber la gateway : il échoue sans la ligne qui le garantit (`read ECONNRESET`).
+
+**Relecture de mainteneur, avant la mutation.** Le code passait ses scénarios, les entrées inédites et la revue. Relu comme celui qui recevra les questions, quatre points n'étaient pas à livrer tels quels :
+
+- Un conteneur de contrôle qui n'imprimait rien était refusé par `the probe printed ""`. C'est l'échec le plus probable d'un premier démarrage (image absente, `node` introuvable à ce chemin, racine de la plateforme non compilée), et sa raison est sur la sortie d'erreur, que le contrôle ne lisait pas. Il lit maintenant les deux sorties, chacune bornée, et cite la sortie d'erreur quand rien n'est imprimé. Un avertissement du client sur sa sortie d'erreur ne change pas le jugement d'un rapport bon.
+- Le lancement recevait l'environnement du conteneur sous deux formes qui devaient s'accorder (les options `--env`, et les valeurs à donner au client) : un seul objet les porte.
+- Le contrôle tenait en une fonction de soixante-cinq lignes : deux maintenant, le démon, puis le conteneur de contrôle.
+- Un retrait du conteneur de contrôle qui ne peut pas être lancé fait échouer le contrôle en nommant le conteneur, quoi que la sonde ait rapporté : un conteneur peut rester. Ce n'était écrit nulle part ; c'est au contrat de `check()`, avec son scénario.
+- Le contrôle réussi était retenu par lanceur, et les variables d'une sandbox étaient une option du lanceur. Or la gateway construit un lanceur par module et par tâche de worker (`runners`, `gateway/src/main.ts`) : chaque tâche aurait lancé son conteneur de contrôle, et la règle « un contrôle réussi n'est pas rejoué » n'aurait rien valu en usage réel. L'adaptateur est maintenant construit une fois par plateforme ; `withVariables` rend le lanceur d'un module ou d'une tâche, et tous partagent le contrôle. Deux scénarios : un module et un worker lancés avec leurs variables propres ne contrôlent qu'une fois ; un worker lancé avec les variables d'un module est refusé.
+
+Les quatre premiers points ne sont pas des défauts de justesse que les contrôles auraient dû voir : ils jugent ce que le code fait contre ce que la conception demande, et la conception ne demandait pas qu'un refus dise sa cause. Elle le demande maintenant (§6). Le cinquième est un défaut de conception que ni la revue ni les entrées inédites ne pouvaient voir : il ne se lit que dans le code de l'appelant, qui n'était pas dans le périmètre du pas. Leçon pour la consigne d'un pas qui livre une brique sans son appelant : y joindre le code qui l'appellera.
+
+**Entrées inédites** (principe validé par le propriétaire au §51, appliqué à la main). Session neuve (Opus 5.5, effort élevé, 430 s, 1,51 $) : 71 scénarios avec les seuls steps existants. Lus, puis joués sur l'hôte.
+
+| | |
+|---|---|
+| Entrées inventées | 71 |
+| Échecs sur l'hôte | 2, exactement ceux annoncés |
+| Défaut | `check()` appelé deux fois, ou après un lancement, rejouait un contrôle déjà réussi, contre son propre contrat |
+| Signalé comme possible, non mesuré par elle | Une borne de mémoire qui n'est pas un multiple de la page ne se relirait jamais telle quelle |
+| Mesuré ensuite (deux passes) | Vrai : `--memory 268435457` se relit `268435456` ; et Docker refuse moins de 6 Mo |
+| Piège de test signalé | Deux steps du faux client ignoraient en silence un champ remplacé en entier |
+| Après correction | 71 passent |
+| Gardés dans le dépôt | 7 scénarios ou lignes d'exemples, dont 3 qu'elle n'avait pas pu écrire et que la correction du faux client a rendus exprimables |
+
+Le second point aurait fait refuser pour toujours le démarrage d'une plateforme réglée avec une borne non alignée, sans que rien dans les scénarios ne le montre. Décision : la borne de mémoire se donne en mébioctets, au moins 6, et le contrôle relit exactement le nombre demandé.
+
+**Ce qui n'est pas prouvé.** La sonde n'a tourné que sur l'hôte, appelée par les scénarios : dans un vrai conteneur, seul le script du banc a lu ces valeurs. L'image doit être présente : un premier `docker run` qui la télécharge dépasserait la borne du contrôle (consigne de déploiement, 1b.6d). Le contrôle est demandé au premier lancement d'une sandbox, pas au démarrage de la gateway : c'est le pas suivant qui l'appelle au démarrage, avec le champ de configuration. Un contrôle réussi vaut pour la vie de la gateway : un démon remplacé ensuite par un démon avec root, sous la même adresse, n'est pas revu (il faut les droits de l'opérateur pour le faire).
+
+**Mutation, avant la porte** (les cinq fichiers, 136 minutes). 482 mutants : 416 tués, 21 délais dépassés, 33 erreurs d'exécution, 11 survivants, 1 non couvert. Aucun survivant n'était un défaut ; chacun montrait une ligne que rien ne prouvait. Réponse : retirer du code, pas ajouter des tests de circonstance.
+
+| Ligne sans preuve | Ce qu'elle est devenue |
+|---|---|
+| Minuterie de la sonde, à annuler à chaque fin de connexion | Délai de silence de la socket elle-même (`setTimeout` de la socket), détruit avec elle ; deux scénarios affirment que chaque connexion de la sonde est fermée |
+| Minuterie du contrôle, à annuler dans un `finally` | `AbortSignal.timeout` : rien à annuler, et elle ne retient pas le processus |
+| Fichier d'essai écrit avec un contenu et une option | Créé en mode exclusif, sans contenu ; un scénario prouve qu'un fichier déjà là n'est ni écrit ni retiré |
+| Décodage du texte lu, par un nom d'encodage | Décodé une fois entier, sans nom |
+| Deux `catch` qui rendaient la valeur qu'un `catch` vide rend aussi | Une seule fonction qui lit du JSON |
+| Nom de gabarit donné au conteneur de contrôle, pour un refus impossible | Le refus des variables réservées est sorti de la construction de l'environnement |
+| Le fichier lancé dans le conteneur (non couvert : la mutation ne suit pas un processus enfant) | Une ligne, comme l'entrée du relais ; tout son code est dans une fonction appelée par les scénarios avec son hôte en argument |
+
+Trois casses faites à la main sur la sonde (connexion non détruite, création non exclusive, option vide) rendent ses scénarios rouges. La seconde passe est celle de la porte, rapportée au paragraphe suivant.
+
+**Chiffres.** 201 scénarios pour l'adaptateur (89), son contrôle (94, dont 10 de la relecture de mainteneur), l'entrée (10) et la sonde (8), rejoués trois fois de suite. Les 71 entrées inédites, rejouées après chaque reprise, passent. Sessions de ce pas : 4,25 $ (construction 1,53 ; revue 1,21 ; entrées inédites 1,51). La porte et la CI de ce commit sont rapportées au paragraphe suivant.
+
+**Trois piliers.**
+- Recherche : la conception du contrôle part d'une mesure, et s'amende quand la mesure contredit sa première rédaction ; une hypothèse d'une session (l'arrondi à la page) est mesurée avant d'entrer dans le code ; la comparaison des deux pas est donnée pour ce qu'elle est, un point.
+- SSDLC : élévation de privilèges (démon avec root refusé, sans option pour l'accepter), fuite et sortie (réseau, écritures), déni de service (bornes relues) : chaque ligne de la table des menaces du §6 a maintenant une condition du contrôle ; aucun repli ; aucune dépendance ajoutée.
+- Opérationnel : le contrôle ne laisse rien derrière lui ; la VM d'essai est arrêtée après chaque mesure, contexte du poste vérifié ; les entrées inventées sont lues avant d'être jouées sur l'hôte ; IRB sans objet.

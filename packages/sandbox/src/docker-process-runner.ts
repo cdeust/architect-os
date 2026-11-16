@@ -1,9 +1,13 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { chmodSync, mkdtempSync, rmdirSync } from 'node:fs';
+import { createServer, type AddressInfo } from 'node:net';
 import { basename, join } from 'node:path';
+import { readCapped } from './capped.js';
+import type { ProbeTargets } from './container-probe.js';
 import { LOOPBACK, RELAY_SOCKET_VARIABLE, relayServer } from './container-relay.js';
+import { firstLine, firstUnmet, isRootless, securityOptions } from './docker-isolation.js';
 import {
   SandboxError,
   type Sandbox,
@@ -35,12 +39,19 @@ export interface DockerProcessRunnerOptions {
   readonly root: string;
   /** The parent of the temporary folders of the host, as for the srt adapter; the folder of each relay lives in its `aos-sb`. */
   readonly tmpRoot: string;
-  /** Memory bound of the container, in bytes, swap included: a whole number of at least 1. */
-  readonly memoryBytes: number;
+  /**
+   * Memory bound of the container, in mebibytes, swap included: a whole number of at least 6, the least Docker accepts.
+   * Mebibytes and not bytes: the kernel rounds a bound down to a page, and the check at start reads back the very bound
+   * it asked for (measured, `bench/docker-bridge/canary.sh`).
+   */
+  readonly memoryMiB: number;
   /** Bound of the number of processes of the container: a whole number of at least 1. */
   readonly pidsLimit: number;
-  /** Variables of the launcher: `callbackPort` for a module; `brokerPort` and `taskToken` for a worker. */
-  readonly variables: Readonly<Record<string, string>>;
+  /**
+   * The bound of the check at start, in milliseconds: of `docker info`, and of the canary container, which must have
+   * printed its report by then. A whole number of at least 1.
+   */
+  readonly checkTimeoutMs: number;
 }
 
 /** What the Docker client is given of the host, a closed list (the same as the first Docker adapter): what finds the daemon. */
@@ -72,26 +83,56 @@ const HOME = '/home/aos';
 const SANDBOXES = '/sandboxes';
 const RELAY = '/relay';
 const SOCKET = 's';
-const USER = '10001:10001';
+const UID = 10001;
+/** Docker refuses a memory bound under 6 MB (measured); a mebibyte in bytes, to read the bound back from the cgroup. */
+const MEMORY_MIB_MIN = 6;
+const MIB = 1048576;
+const USER = `${UID}:${UID}`;
+
+/** What the canary container tries: an address outside (TEST-NET-1, which nothing answers), and the cgroup files of Linux. */
+const PROBE_OUTSIDE = { host: '192.0.2.1', port: 80 };
+const CGROUP = '/sys/fs/cgroup';
+/** The longest output of the canary, its report or its error output: one line of JSON, a few hundred bytes. */
+const PROBE_OUTPUT_MAX = 16384;
 
 /** A `tmpfs` that the non-root user of the container owns and nothing can execute from. */
 const tmpfs = (path: string): string[] => [
   '--tmpfs',
-  `${path}:rw,noexec,nosuid,size=64m,uid=10001,gid=10001,mode=0700`,
+  `${path}:rw,noexec,nosuid,size=64m,uid=${UID},gid=${UID},mode=0700`,
 ];
 const bind = (source: string, target: string): string[] => [
   '--mount',
   `type=bind,source=${source},target=${target},readonly`,
 ];
 
+interface ContainerEnv {
+  /** What the docker client must hold in its own environment: the values of the variables passed by name. */
+  readonly client: Readonly<Record<string, string>>;
+  /** The `--env` options of `docker run`. */
+  readonly args: readonly string[];
+}
+
 /**
  * The environment of the container. What the template sets is passed by name (`--env NAME`), its value in the
  * environment of the docker client: an argv is readable by every user of the host (`ps`), an environment by its owner
  * alone, and for a worker one of these values is the token of its task. What the adapter sets itself is no secret and
- * is passed by value. A template that sets a variable of the client, or one the adapter sets itself, is refused: it
- * would change the client, or leave to Docker which of two values the container gets.
+ * is passed by value.
  */
-function containerEnv(profile: string, set: Readonly<Record<string, string>>) {
+function containerEnv(set: Readonly<Record<string, string>>): ContainerEnv {
+  return {
+    client: set,
+    args: [
+      ...Object.keys(set).flatMap((name) => ['--env', name]),
+      ...['--env', `HOME=${HOME}`, '--env', `${RELAY_SOCKET_VARIABLE}=${RELAY}/${SOCKET}`],
+    ],
+  };
+}
+
+/**
+ * Refuses a template that sets a variable of the docker client, or one the adapter sets itself: it would change the
+ * client, or leave to Docker which of two values the container gets.
+ */
+function refuseReserved(profile: string, set: Readonly<Record<string, string>>): void {
   const clash = Object.keys(set).find(
     (name) => name.startsWith(CLIENT_PREFIX) || RESERVED_ENV.includes(name),
   );
@@ -100,10 +141,6 @@ function containerEnv(profile: string, set: Readonly<Record<string, string>>) {
       'PROFILE_INVALID',
       `${profile} : ${clash} is a variable of the docker client or of the adapter`,
     );
-  return {
-    byName: Object.keys(set).flatMap((name) => ['--env', name]),
-    byValue: ['--env', `HOME=${HOME}`, '--env', `${RELAY_SOCKET_VARIABLE}=${RELAY}/${SOCKET}`],
-  };
 }
 
 /** The one port the template allows: exactly one entry `127.0.0.1:<port>`, a port from 1 to 65535, nothing denied. */
@@ -120,6 +157,69 @@ function relayPort(profile: string, network: SrtSettings['network']): number {
       `${profile} : the network must be exactly one entry 127.0.0.1:<port>, port 1 to 65535, and no denied domain`,
     );
   return port;
+}
+
+/** A file of the compiled sandbox package, under the platform root mounted in the container. */
+const compiled = (root: string, file: string): string =>
+  join(root, 'packages', 'sandbox', 'dist', 'src', file);
+
+/**
+ * The arguments of `docker run` of a container: the one place where the options of confinement are written, for a
+ * sandbox and for the canary of the check alike. `args` is what the program is given after the node of the image.
+ */
+function dockerRunArgs(
+  o: DockerProcessRunnerOptions,
+  run: { name: string; relayFolder: string; port: number; env: ContainerEnv; args: readonly string[] },
+): string[] {
+  return [
+    'run',
+    '--rm',
+    '-i',
+    // The entry is not the first process of the container: Docker's init is, and reaps the orphans of the program.
+    '--init',
+    // The daemon keeps no copy of what the container writes: its stdout is the MCP stream of a module.
+    '--log-driver',
+    'none',
+    '--name',
+    run.name,
+    '--network',
+    'none',
+    '--read-only',
+    '--cap-drop',
+    'ALL',
+    '--security-opt',
+    'no-new-privileges',
+    // Rootless Docker does not support AppArmor (docs.docker.com/engine/security/rootless/troubleshoot, known
+    // limitations), and on a host where AppArmor is on its daemon refuses a container without this: there is no
+    // profile to lose. The adapter runs before a rootless daemon only (design, §6).
+    '--security-opt',
+    'apparmor=unconfined',
+    '--user',
+    USER,
+    '--memory',
+    `${o.memoryMiB}m`,
+    // Equal to the memory bound: no swap beyond it.
+    '--memory-swap',
+    `${o.memoryMiB}m`,
+    '--pids-limit',
+    String(o.pidsLimit),
+    ...tmpfs(WORK),
+    ...tmpfs(CONFIG),
+    ...tmpfs(TMP),
+    ...tmpfs(HOME),
+    ...bind(o.root, o.root),
+    ...bind(run.relayFolder, RELAY),
+    '--workdir',
+    WORK,
+    ...run.env.args,
+    o.image,
+    o.node,
+    compiled(o.root, 'container-entry.js'),
+    String(run.port),
+    '--',
+    o.node,
+    ...run.args,
+  ];
 }
 
 interface Relay {
@@ -166,7 +266,14 @@ async function openRelay(tmpRoot: string, port: number): Promise<Relay> {
   return { folder, close };
 }
 
-export class DockerProcessRunner implements SandboxRunner {
+/**
+ * Built once for a platform: its options do not change from one sandbox to the next. A module and each task of a worker
+ * have variables of their own, and a runner of their own (`withVariables`); all of them share the one check at start.
+ */
+export class DockerProcessRunner {
+  /** The check under way or the check that succeeded, shared by whoever asks; a check that failed is forgotten. */
+  private checked: Promise<void> | undefined;
+
   /**
    * @throws SandboxError ISOLATION_UNAVAILABLE when the image does not carry a digest, when a bound does not bound, when
    * a path cannot be mounted.
@@ -180,29 +287,41 @@ export class DockerProcessRunner implements SandboxRunner {
         'ISOLATION_UNAVAILABLE',
         `image without a digest (name@sha256:<64 hexadecimal characters>): ${options.image}`,
       );
-    for (const [name, bound] of [
-      ['memoryBytes', options.memoryBytes],
-      ['pidsLimit', options.pidsLimit],
+    for (const [name, bound, least] of [
+      ['memoryMiB', options.memoryMiB, MEMORY_MIB_MIN],
+      ['pidsLimit', options.pidsLimit, 1],
+      ['checkTimeoutMs', options.checkTimeoutMs, 1],
     ] as const)
       // Docker reads 0 and -1 as "no bound"; beyond the exact whole numbers, the text of a number is no longer digits.
-      if (!Number.isSafeInteger(bound) || bound < 1)
+      if (!Number.isSafeInteger(bound) || bound < least)
         throw new SandboxError(
           'ISOLATION_UNAVAILABLE',
-          `${name} is not a whole number of at least 1: ${bound}`,
+          `${name} is not a whole number of at least ${least}: ${bound}`,
         );
     for (const path of [options.root, options.tmpRoot])
       if (!MOUNTABLE.test(path))
         throw new SandboxError('ISOLATION_UNAVAILABLE', `not a path a mount can carry: ${path}`);
   }
 
+  /**
+   * The runner of the sandboxes that hold these variables of the launcher: `callbackPort` for a module; `brokerPort`
+   * and `taskToken` for a worker.
+   */
+  withVariables(variables: Readonly<Record<string, string>>): SandboxRunner {
+    return { start: (request) => this.start(request, variables) };
+  }
+
   /** `request.cwd` is not used: the working directory is a `tmpfs` of the container, the root is an option. */
-  async start(request: SandboxRequest): Promise<Sandbox> {
+  private async start(
+    request: SandboxRequest,
+    variables: Readonly<Record<string, string>>,
+  ): Promise<Sandbox> {
     const o = this.options;
     const [program, ...args] = request.command;
     if (program !== 'node')
       throw new SandboxError('COMMAND_NOT_FOUND', `argv[0] must be node, the node of the image: ${program}`);
     const profile = resolveProfile(loadTemplate(o.profilesDir, request.profile), {
-      ...o.variables,
+      ...variables,
       home: HOME,
       repo: o.root,
       worktree: WORK,
@@ -221,64 +340,150 @@ export class DockerProcessRunner implements SandboxRunner {
     // The environment of the container is what the template sets, its home and the relay socket, nothing of the host:
     // the `pass` list of the template names host variables, which under Docker are not passed, and `unset` has nothing
     // to remove.
-    const env = containerEnv(request.profile, profile.env.set);
-    const relay = await openRelay(o.tmpRoot, port);
+    refuseReserved(request.profile, profile.env.set);
+    await this.check();
+    return this.launch({ port, env: containerEnv(profile.env.set), args });
+  }
+
+  /** What the Docker client is given of the host. */
+  private clientEnv() {
+    return Object.fromEntries(CLIENT_ENV.map((key) => [key, this.hostEnv[key]]));
+  }
+
+  /**
+   * The check at start, which every start asks for first (docs/design/platform-v3-srt.md, §6): the daemon is rootless,
+   * and a canary container, launched as a sandbox is, is confined as the design says. A check that succeeded is not
+   * run again; a refusal is not remembered, and a daemon that was down may come back. Concurrent calls share one check.
+   *
+   * @throws SandboxError ISOLATION_UNAVAILABLE naming the first condition that does not hold, what was read and what
+   * was expected; COMMAND_NOT_FOUND naming the canary container when its removal could not be run, whatever the
+   * canary reported: a container may be left.
+   */
+  check(): Promise<void> {
+    this.checked ??= this.requireRootless()
+      .then(() => this.requireConfined())
+      .catch((error: unknown) => {
+        this.checked = undefined;
+        throw error;
+      });
+    return this.checked;
+  }
+
+  /** `docker info` must end within the bound of the check, and name a rootless daemon. */
+  private async requireRootless(): Promise<void> {
+    const o = this.options;
+    const { error, stdout, stderr } = await new Promise<{
+      error: Error | null;
+      stdout: string;
+      stderr: string;
+    }>((done) =>
+      execFile(
+        o.docker,
+        ['info', '--format', '{{json .SecurityOptions}}'],
+        { env: this.clientEnv(), timeout: o.checkTimeoutMs, encoding: 'utf8' },
+        (error, stdout, stderr) => done({ error, stdout, stderr }),
+      ),
+    );
+    if (error !== null)
+      throw new SandboxError('ISOLATION_UNAVAILABLE', `docker info: ${firstLine(stderr) || error.message}`);
+    const entries = securityOptions(stdout);
+    if (entries === null)
+      throw new SandboxError(
+        'ISOLATION_UNAVAILABLE',
+        `docker info printed ${JSON.stringify(firstLine(stdout))}, not a JSON array of strings`,
+      );
+    if (!isRootless(entries))
+      throw new SandboxError(
+        'ISOLATION_UNAVAILABLE',
+        `the daemon is not rootless: ${JSON.stringify(entries)}`,
+      );
+  }
+
+  /** The canary container must report, within the bound of the check, what the adapter asked of Docker. */
+  private async requireConfined(): Promise<void> {
+    const o = this.options;
+    // The listener answers a value of its own, to be read through the relay by the probe of the container.
+    const value = randomUUID();
+    const listener = createServer((socket) => {
+      socket.on('error', () => undefined);
+      socket.end(value);
+    });
+    let canary: Sandbox | undefined;
+    try {
+      await once(listener.listen(0, LOOPBACK), 'listening');
+      const port = (listener.address() as AddressInfo).port;
+      const targets: ProbeTargets = {
+        port,
+        outside: PROBE_OUTSIDE,
+        // Half the bound of the check: a connection that gets no answer is named by the probe before the check gives up.
+        boundMs: Math.ceil(o.checkTimeoutMs / 2),
+        unwritable: ['/', o.root, RELAY],
+        writable: [WORK, CONFIG, TMP, HOME],
+        cgroup: CGROUP,
+      };
+      canary = await this.launch({
+        port,
+        env: containerEnv({}),
+        args: [compiled(o.root, 'container-probe-entry.js'), JSON.stringify(targets)],
+      });
+      const [report, said] = await this.outputs(canary);
+      // The probe did not run to its end (no such image, no node at that path, a platform root that is not built):
+      // the reason is on the error output, of the client or of the container.
+      if (report.trim() === '')
+        throw new SandboxError(
+          'ISOLATION_UNAVAILABLE',
+          `canary: the container printed nothing; its error output: ${JSON.stringify(said.trim())}`,
+        );
+      const unmet = firstUnmet(report, {
+        value,
+        uid: UID,
+        targets,
+        memory: o.memoryMiB * MIB,
+        pids: o.pidsLimit,
+      });
+      if (unmet !== null) throw new SandboxError('ISOLATION_UNAVAILABLE', `canary: ${unmet}`);
+    } finally {
+      listener.close();
+      // The client killed, the container removed by its name, the relay closed and its folder removed.
+      await canary?.stop();
+    }
+  }
+
+  /**
+   * What the canary wrote, on its output and on its error output: each up to its end and within the bound of an
+   * output, both within the bound of the check.
+   */
+  private outputs(canary: Sandbox): Promise<[string, string]> {
+    const ms = this.options.checkTimeoutMs;
+    // The timer of such a signal does not keep the process alive, and there is nothing to clear once the canary ended.
+    const late = new Promise<never>((_, fail) =>
+      AbortSignal.timeout(ms).addEventListener('abort', () =>
+        fail(new SandboxError('ISOLATION_UNAVAILABLE', `canary: the probe has not ended within ${ms} ms`)),
+      ),
+    );
+    const written = Promise.all([
+      readCapped(canary.stdout, PROBE_OUTPUT_MAX),
+      readCapped(canary.stderr, PROBE_OUTPUT_MAX),
+    ]).catch((error: Error) => {
+      throw new SandboxError('ISOLATION_UNAVAILABLE', `canary: ${error.message}`);
+    });
+    return Promise.race([written, late]);
+  }
+
+  /**
+   * Opens a relay to `port` of the host and launches a container in which the entry relays the same port to it and
+   * runs `node <args>`: the one way a container is started, for a sandbox and for the canary.
+   */
+  private async launch(run: { port: number; env: ContainerEnv; args: readonly string[] }): Promise<Sandbox> {
+    const o = this.options;
+    const relay = await openRelay(o.tmpRoot, run.port);
     const name = `aos-sandbox-${randomUUID()}`;
-    const dockerArgs = [
-      'run',
-      '--rm',
-      '-i',
-      // The entry is not the first process of the container: Docker's init is, and reaps the orphans of the program.
-      '--init',
-      // The daemon keeps no copy of what the container writes: its stdout is the MCP stream of a module.
-      '--log-driver',
-      'none',
-      '--name',
-      name,
-      '--network',
-      'none',
-      '--read-only',
-      '--cap-drop',
-      'ALL',
-      '--security-opt',
-      'no-new-privileges',
-      // Rootless Docker does not support AppArmor (docs.docker.com/engine/security/rootless/troubleshoot, known
-      // limitations), and on a host where AppArmor is on its daemon refuses a container without this: there is no
-      // profile to lose. The adapter runs before a rootless daemon only (design, §6).
-      '--security-opt',
-      'apparmor=unconfined',
-      '--user',
-      USER,
-      '--memory',
-      String(o.memoryBytes),
-      // Equal to the memory bound: no swap beyond it.
-      '--memory-swap',
-      String(o.memoryBytes),
-      '--pids-limit',
-      String(o.pidsLimit),
-      ...tmpfs(WORK),
-      ...tmpfs(CONFIG),
-      ...tmpfs(TMP),
-      ...tmpfs(HOME),
-      ...bind(o.root, o.root),
-      ...bind(relay.folder, RELAY),
-      '--workdir',
-      WORK,
-      ...env.byName,
-      ...env.byValue,
-      o.image,
-      o.node,
-      join(o.root, 'packages', 'sandbox', 'dist', 'src', 'container-entry.js'),
-      String(port),
-      '--',
-      o.node,
-      ...args,
-    ];
-    const clientEnv = Object.fromEntries(CLIENT_ENV.map((key) => [key, this.hostEnv[key]]));
+    const dockerArgs = dockerRunArgs(o, { name, relayFolder: relay.folder, ...run });
+    const clientEnv = this.clientEnv();
     let child: ChildProcessWithoutNullStreams;
     try {
       child = spawn(o.docker, dockerArgs, {
-        env: { ...clientEnv, ...profile.env.set },
+        env: { ...clientEnv, ...run.env.client },
         detached: true,
         shell: false,
       });

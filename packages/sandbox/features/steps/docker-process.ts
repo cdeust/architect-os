@@ -22,20 +22,74 @@ const IMAGE = `node:22-alpine@sha256:${'a'.repeat(64)}`;
 
 /**
  * A fake docker client, in a folder whose name holds a space: appends its argv and its environment (names, and values)
- * to calls.jsonl in DOCKER_CONFIG. For `run` it prints `started`, then, by the last argument of the command: `exit` exits
- * with 7; `close-stdin` closes its stdin and exits with 0; any other never ends.
+ * to calls.jsonl in DOCKER_CONFIG.
+ * - `info` answers what info.json says (`stdout`, `stderr`, `code`, or `hang`), a rootless daemon by default.
+ * - `run` of the canary (the probe file is in its arguments) connects to the socket of the mounted relay folder, reads
+ *   the value, and prints a probe line: the good values, drawn from its own arguments, changed by what probe.json says
+ *   (`mode`: `silent`, `hang`, `text` with its `text`, or a `size` in bytes for the line; `top`, `writes`, `cgroup`: fields replaced;
+ *   `reset`: it first connects straight to the port of the check and resets that connection; `stderr`: written first on
+ *   its error output; `removeClient`: it removes its own file, and no later call of the client can be run).
+ * - any other `run` prints `started`, then, by the last argument of the command: `exit` exits with 7; `close-stdin`
+ *   closes its stdin and exits with 0; any other never ends.
  */
 const FAKE_DOCKER = `#!${process.execPath}
-const { appendFileSync } = require('node:fs');
+const { appendFileSync, existsSync, readFileSync, unlinkSync } = require('node:fs');
+const { connect } = require('node:net');
 const { join } = require('node:path');
 const args = process.argv.slice(2);
 appendFileSync(join(process.env.DOCKER_CONFIG, 'calls.jsonl'), JSON.stringify({ args, env: Object.keys(process.env).sort(), values: process.env }) + '\\n');
-if (args[0] !== 'run') process.exit(0);
-process.stdout.write('started\\n');
-const mode = args.at(-1);
-if (mode === 'exit') process.exit(7);
-else if (mode === 'close-stdin') { process.stdin.destroy(); setTimeout(() => process.exit(0), 200); }
-else setInterval(() => {}, 1000);
+const setting = (name, fallback) => existsSync(join(process.env.DOCKER_CONFIG, name)) ? JSON.parse(readFileSync(join(process.env.DOCKER_CONFIG, name), 'utf8')) : fallback;
+const flag = (name) => args[args.indexOf(name) + 1];
+function probe() {
+  const state = setting('probe.json', {});
+  if (state.stderr) process.stderr.write(state.stderr);
+  if (state.removeClient) unlinkSync(__filename);
+  if (state.mode === 'silent') return;
+  if (state.mode === 'hang') return void setInterval(() => {}, 1000);
+  if (state.mode === 'text') return void process.stdout.write(state.text + '\\n');
+  const mount = ',target=/relay,readonly';
+  const folder = args.find((arg) => arg.endsWith(mount)).slice('type=bind,source='.length, -mount.length);
+  const targets = JSON.parse(args.at(-1));
+  if (!state.reset) return probeThrough(folder, targets, state);
+  // Another process of the host: straight to the port of the check, not through the relay, and gone with a reset.
+  const direct = connect({ host: '127.0.0.1', port: targets.port }, () => direct.resetAndDestroy());
+  direct.on('error', () => {});
+  direct.on('close', () => probeThrough(folder, targets, state));
+}
+function probeThrough(folder, targets, state) {
+  let text = '';
+  const socket = connect(join(folder, 's'));
+  socket.setEncoding('utf8');
+  socket.on('data', (chunk) => (text += chunk));
+  socket.on('error', () => {});
+  socket.on('close', () => {
+    const good = {
+      read: { content: text },
+      uid: Number(flag('--user').split(':')[0]),
+      interfaces: ['lo'],
+      outside: { error: 'ENETUNREACH' },
+      writes: Object.fromEntries([...targets.unwritable.map((p) => [p, { error: 'EROFS' }]), ...targets.writable.map((p) => [p, { content: 'written' }])]),
+      cgroup: { 'memory.max': { content: String(parseInt(flag('--memory'), 10) * 1048576) }, 'memory.swap.max': { content: '0' }, 'pids.max': { content: flag('--pids-limit') } },
+    };
+    // A field replaced as a whole (top) wins over its entries replaced one by one.
+    let line = JSON.stringify({ ...good, writes: { ...good.writes, ...state.writes }, cgroup: { ...good.cgroup, ...state.cgroup }, ...state.top });
+    if (state.size) line += ' '.repeat(state.size - line.length - 1);
+    process.stdout.write(line + '\\n');
+  });
+}
+if (args[0] === 'info') {
+  const info = setting('info.json', { stdout: '["name=seccomp,profile=builtin","name=rootless","name=cgroupns"]' });
+  if (info.hang) setInterval(() => {}, 1000);
+  else { process.stdout.write(info.stdout); process.stderr.write(info.stderr ?? ''); process.exitCode = info.code ?? 0; }
+} else if (args[0] !== 'run') process.exit(0);
+else if (args.some((arg) => arg.endsWith('container-probe-entry.js'))) probe();
+else {
+  process.stdout.write('started\\n');
+  const mode = args.at(-1);
+  if (mode === 'exit') process.exit(7);
+  else if (mode === 'close-stdin') { process.stdin.destroy(); setTimeout(() => process.exit(0), 200); }
+  else setInterval(() => {}, 1000);
+}
 `;
 
 /** A loopback listener, and what it saw. */
@@ -61,6 +115,9 @@ interface Harness {
   profilesDir: string;
   variables: Record<string, string>;
   hostEnv: Record<string, string | undefined>;
+  /** The runner the starts of the scenario share, built by the first of them. */
+  runner?: DockerProcessRunner;
+  checkTimeoutMs: number;
   sandbox?: Sandbox;
   started?: Promise<void>;
   exit?: SandboxExit;
@@ -96,6 +153,7 @@ function makeHarness(world: SandboxWorld, variables: Record<string, string>): vo
     tmpRoot,
     profilesDir: join(PKG, 'profiles'),
     variables,
+    checkTimeoutMs: 10_000,
     hostEnv: {
       PATH: process.env['PATH'],
       HOME: process.env['HOME'],
@@ -108,6 +166,10 @@ function makeHarness(world: SandboxWorld, variables: Record<string, string>): vo
 
 Given('a Docker process harness with the variables {string}', function (variables: string) {
   makeHarness(this, Object.fromEntries(pairs(variables)));
+});
+
+Given('the Docker process harness now starts with the variables {string}', function (variables: string) {
+  harness(this).variables = Object.fromEntries(pairs(variables));
 });
 
 Given('the host environment also holds {string}', function (variables: string) {
@@ -224,9 +286,9 @@ const runnerOf = (h: Harness, changed: Partial<DockerProcessRunnerOptions> = {})
       node: '/usr/local/bin/node',
       root: '/srv/platform',
       tmpRoot: h.tmpRoot,
-      memoryBytes: 268435456,
+      memoryMiB: 256,
       pidsLimit: 64,
-      variables: h.variables,
+      checkTimeoutMs: h.checkTimeoutMs,
       ...changed,
     },
     h.hostEnv,
@@ -244,7 +306,8 @@ function build(h: Harness, changed: Partial<DockerProcessRunnerOptions>): void {
 
 async function begin(world: SandboxWorld, profile: string, command: string): Promise<Sandbox> {
   const h = harness(world);
-  const sandbox = await runnerOf(h).start({
+  h.runner ??= runnerOf(h);
+  const sandbox = await h.runner.withVariables(h.variables).start({
     profile,
     cwd: h.tmpRoot,
     // `[nul]` stands for the character no argument of a process can hold.
@@ -312,7 +375,7 @@ When(
 When(
   'I build a Docker process runner whose bound {word} is {float}',
   function (which: string, value: number) {
-    build(harness(this), which === 'memoryBytes' ? { memoryBytes: value } : { pidsLimit: value });
+    build(harness(this), { [which]: value } as Partial<DockerProcessRunnerOptions>);
   },
 );
 
@@ -339,7 +402,8 @@ Given('the profile {string} also declares the file {string}', function (profile:
 });
 
 type Call = { args: string[]; env: string[]; values: Record<string, string> };
-const calls = (h: Harness): Call[] => {
+/** Every call of the docker client, the check at start included. */
+const allCalls = (h: Harness): Call[] => {
   const file = join(h.dockerDir, 'calls.jsonl');
   return existsSync(file)
     ? readFileSync(file, 'utf8')
@@ -347,6 +411,22 @@ const calls = (h: Harness): Call[] => {
         .filter(Boolean)
         .map((line) => JSON.parse(line) as Call)
     : [];
+};
+
+const PROBE_FILE = 'container-probe-entry.js';
+const isCanaryRun = (call: Call) =>
+  call.args[0] === 'run' && call.args.some((arg) => arg.endsWith(PROBE_FILE));
+/** The calls of the check at start: `info`, the run of the canary, and the removal of its container. */
+const canaryRuns = (h: Harness): Call[] => allCalls(h).filter(isCanaryRun);
+const ofCheck = (call: Call, canaries: Call[]) =>
+  call.args[0] === 'info' ||
+  isCanaryRun(call) ||
+  (call.args[0] === 'rm' && canaries.some((canary) => nameOf(canary.args) === call.args[2]));
+
+/** The calls of the sandboxes: everything but the check. */
+const calls = (h: Harness): Call[] => {
+  const canaries = canaryRuns(h);
+  return allCalls(h).filter((call) => !ofCheck(call, canaries));
 };
 
 const runArgs = (h: Harness): string[] => {
@@ -644,5 +724,225 @@ Then('the connection through the relay is cut and the listener sees it closed', 
   await until(
     () => stored<Listener>(this, 'first').closed === 1,
     'the listener to see the connection closed',
+  );
+});
+
+/** The state files of the fake client: what `info` and the probe of the canary do. */
+const stateFile = (h: Harness, name: 'info' | 'probe') => join(h.dockerDir, `${name}.json`);
+const stateOf = (h: Harness, name: 'info' | 'probe'): Record<string, unknown> =>
+  existsSync(stateFile(h, name))
+    ? (JSON.parse(readFileSync(stateFile(h, name), 'utf8')) as Record<string, unknown>)
+    : {};
+const setState = (h: Harness, name: 'info' | 'probe', changes: Record<string, unknown>) =>
+  writeFileSync(stateFile(h, name), JSON.stringify({ ...stateOf(h, name), ...changes }));
+
+Given(
+  'the fake docker client answers info with the output {string}, the error output {string} and the exit code {int}',
+  function (stdout: string, stderr: string, code: number) {
+    setState(harness(this), 'info', {
+      stdout: stdout.replaceAll('[newline]', '\n'),
+      stderr: stderr.replaceAll('[newline]', '\n'),
+      code,
+    });
+  },
+);
+
+Given('the fake docker client never ends info', function () {
+  setState(harness(this), 'info', { hang: true });
+});
+
+Given('the fake docker client answers info as a rootless daemon again', function () {
+  rmSync(stateFile(harness(this), 'info'));
+});
+
+Given('the probe of the fake docker client prints nothing', function () {
+  setState(harness(this), 'probe', { mode: 'silent' });
+});
+
+Given('the fake docker client first resets a connection of its own to the port of the check', function () {
+  setState(harness(this), 'probe', { reset: true });
+});
+
+Given('the probe of the fake docker client never ends', function () {
+  setState(harness(this), 'probe', { mode: 'hang' });
+});
+
+Given('the probe of the fake docker client prints the text {string}', function (text: string) {
+  setState(harness(this), 'probe', { mode: 'text', text });
+});
+
+Given('the probe of the fake docker client prints a line of {int} bytes', function (size: number) {
+  setState(harness(this), 'probe', { size });
+});
+
+Given('the canary of the fake docker client writes {string} on its error output', function (text: string) {
+  setState(harness(this), 'probe', { stderr: text.replaceAll('[newline]', '\n') });
+});
+
+Given('the canary of the fake docker client writes {int} bytes on its error output', function (size: number) {
+  setState(harness(this), 'probe', { stderr: 'e'.repeat(size) });
+});
+
+Given('the canary of the fake docker client removes the docker client of the harness', function () {
+  setState(harness(this), 'probe', { removeClient: true });
+});
+
+Given('the probe of the fake docker client is good again', function () {
+  rmSync(stateFile(harness(this), 'probe'));
+});
+
+/** Replaces, in one of the three parts of the probe line of the fake client, the value under `key`. */
+function reports(world: SandboxWorld, part: 'top' | 'writes' | 'cgroup', key: string, json: string): void {
+  const h = harness(world);
+  const state = stateOf(h, 'probe');
+  setState(h, 'probe', {
+    [part]: { ...(state[part] as object | undefined), [key]: JSON.parse(json) as unknown },
+  });
+}
+
+Given(
+  'the probe of the fake docker client reports {string} as {string}',
+  function (field: string, json: string) {
+    reports(this, 'top', field, json);
+  },
+);
+
+Given(
+  'the probe of the fake docker client reports the write in {string} as {string}',
+  function (path: string, json: string) {
+    reports(this, 'writes', path, json);
+  },
+);
+
+Given(
+  'the probe of the fake docker client reports the cgroup file {string} as {string}',
+  function (file: string, json: string) {
+    reports(this, 'cgroup', file, json);
+  },
+);
+
+Given('the Docker process harness bounds the check to {int} ms', function (ms: number) {
+  harness(this).checkTimeoutMs = ms;
+});
+
+When('I check the Docker process runner', async function () {
+  const h = harness(this);
+  h.runner ??= runnerOf(h);
+  h.refusal = await h.runner.check().then(
+    () => null,
+    (error: Error) => error,
+  );
+});
+
+When(
+  'I start the Docker process profile {string} with the command {string} twice at once and wait for the clients',
+  async function (profile: string, command: string) {
+    await Promise.all([begin(this, profile, command), begin(this, profile, command)]);
+    await harness(this).started;
+  },
+);
+
+Then('the Docker process check succeeded', function () {
+  assert.equal(harness(this).refusal, null);
+});
+
+Then(
+  'the Docker client was asked for info {int} time(s) and ran the canary {int} time(s)',
+  function (info: number, canaries: number) {
+    const h = harness(this);
+    assert.equal(allCalls(h).filter((call) => call.args[0] === 'info').length, info);
+    assert.equal(canaryRuns(h).length, canaries);
+  },
+);
+
+Then(
+  'the Docker client was asked for info exactly once, with only the environment {string}',
+  function (names: string) {
+    const asked = allCalls(harness(this)).filter((call) => call.args[0] === 'info');
+    assert.equal(asked.length, 1);
+    assert.deepEqual(asked[0]?.args, ['info', '--format', '{{json .SecurityOptions}}']);
+    assert.deepEqual(asked[0]?.env.filter(workerNoise), names.split(', '));
+  },
+);
+
+Then('no container was launched by the Docker client', function () {
+  assert.deepEqual(
+    allCalls(harness(this)).filter((call) => call.args[0] === 'run'),
+    [],
+  );
+});
+
+Then(
+  'every canary container was removed by its name, with only the environment {string}',
+  function (names: string) {
+    const h = harness(this);
+    const canaries = canaryRuns(h);
+    assert.ok(canaries.length > 0, 'no canary was run');
+    for (const canary of canaries) {
+      const removals = allCalls(h).filter(
+        (call) => call.args[0] === 'rm' && call.args[2] === nameOf(canary.args),
+      );
+      assert.equal(removals.length, 1, `removals of ${nameOf(canary.args)}`);
+      assert.deepEqual(removals[0]?.args, ['rm', '-f', nameOf(canary.args)]);
+      assert.deepEqual(removals[0]?.env.filter(workerNoise), names.split(', '));
+    }
+  },
+);
+
+const canaryPort = (canary: Call): number => Number(canary.args[canary.args.indexOf('--') - 1]);
+
+Then('the listener of the check is closed', async function () {
+  const canaries = canaryRuns(harness(this));
+  assert.ok(canaries.length > 0, 'no canary was run');
+  for (const canary of canaries) {
+    const code = await new Promise<string | undefined>((done) => {
+      const client = connect({ host: '127.0.0.1', port: canaryPort(canary) });
+      client.once('connect', () => {
+        client.destroy();
+        done(undefined);
+      });
+      client.once('error', (error: NodeJS.ErrnoException) => done(error.code));
+    });
+    assert.equal(code, 'ECONNREFUSED');
+  }
+});
+
+Then('the relay folder of every canary is gone', function () {
+  const canaries = canaryRuns(harness(this));
+  assert.ok(canaries.length > 0, 'no canary was run');
+  for (const canary of canaries) assert.ok(!existsSync(folderOf(canary.args)), folderOf(canary.args));
+});
+
+/** The options of a run up to its image, with what is the run's own (its name, its relay folder, the template's variables) left out. */
+function confinement(args: string[]): string[] {
+  const head = args.slice(0, args.indexOf(IMAGE));
+  const own = [nameOf(args) as string, folderOf(args)];
+  const kept: string[] = [];
+  for (let i = 0; i < head.length; i += 1) {
+    const arg = head[i] as string;
+    if (arg === '--env' && !(head[i + 1] as string).includes('=')) i += 1;
+    else kept.push(own.reduce((text, value) => text.replaceAll(value, '<own>'), arg));
+  }
+  return kept;
+}
+
+Then('the canary run has the options of the sandbox run, up to the image', function () {
+  const h = harness(this);
+  const [canary] = canaryRuns(h);
+  assert.ok(canary, 'no canary was run');
+  const sandbox = confinement(runArgs(h));
+  assert.ok(sandbox.includes('--read-only') && sandbox.includes('--network'));
+  assert.deepEqual(confinement(canary.args), sandbox);
+  assert.notEqual(nameOf(canary.args), nameOf(runArgs(h)));
+  assert.notEqual(folderOf(canary.args), folderOf(runArgs(h)));
+});
+
+Then('the canary run ends with', function (expected: string) {
+  const [canary] = canaryRuns(harness(this));
+  assert.ok(canary, 'no canary was run');
+  const port = String(canaryPort(canary));
+  assert.deepEqual(
+    canary.args.slice(canary.args.indexOf(IMAGE) + 1),
+    expected.split('\n').map((line) => line.replaceAll('<port>', port)),
   );
 });

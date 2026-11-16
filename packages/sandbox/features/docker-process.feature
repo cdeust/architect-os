@@ -6,7 +6,7 @@ Feature: the Docker adapter of a platform process
 
   Scenario: the module container gets exactly these arguments
     Given a Docker process harness with the variables "callbackPort=4100"
-    When I start the Docker process profile "module" with the command "node /srv/platform/modules/data/serve.js --flag $(id);`id`&>x*" and wait for the client
+    When I start the Docker process profile "module" with the command "node /srv/platform/modules/data/serve.js --flag $(id);`id`*&>/dev/null" and wait for the client
     Then the arguments of the Docker process run are exactly
       """
       run
@@ -29,9 +29,9 @@ Feature: the Docker adapter of a platform process
       --user
       10001:10001
       --memory
-      268435456
+      256m
       --memory-swap
-      268435456
+      256m
       --pids-limit
       64
       --tmpfs
@@ -66,7 +66,7 @@ Feature: the Docker adapter of a platform process
       /usr/local/bin/node
       /srv/platform/modules/data/serve.js
       --flag
-      $(id);`id`&>x*
+      $(id);`id`*&>/dev/null
       """
     And the container of the Docker process run has a unique name
     And the relay folder of the Docker process run is a folder of its own under the sandboxes parent
@@ -96,9 +96,9 @@ Feature: the Docker adapter of a platform process
       --user
       10001:10001
       --memory
-      268435456
+      256m
       --memory-swap
-      268435456
+      256m
       --pids-limit
       64
       --tmpfs
@@ -256,10 +256,12 @@ Feature: the Docker adapter of a platform process
       | sh -c id     |
       |              |
 
-  Scenario: a docker client that cannot be found is COMMAND_NOT_FOUND and leaves no relay folder
+  Scenario: a docker client that can no longer be found after the check is COMMAND_NOT_FOUND and leaves no relay folder
     Given a Docker process harness with the variables "callbackPort=4100"
-    And the Docker process harness has no docker client
-    When I try to start the Docker process profile "module" with the command "node serve.js"
+    When I check the Docker process runner
+    Then the Docker process check succeeded
+    When the docker client of the harness is removed
+    And I try to start the Docker process profile "module" with the command "node serve.js"
     Then the Docker process start is refused starting with "COMMAND_NOT_FOUND: docker client not started: spawn "
     And no relay folder exists
 
@@ -319,28 +321,33 @@ Feature: the Docker adapter of a platform process
   Scenario Outline: a bound that does not bound is refused: <which> <value>
     Given a Docker process harness with the variables "callbackPort=4100"
     When I build a Docker process runner whose bound <which> is <value>
-    Then the Docker process runner is refused with "ISOLATION_UNAVAILABLE: <which> is not a whole number of at least 1: <value>"
+    Then the Docker process runner is refused with "ISOLATION_UNAVAILABLE: <which> is not a whole number of at least <least>: <value>"
 
     Examples:
-      | which       | value |
-      | memoryBytes | 0     |
-      | memoryBytes | -1    |
-      | memoryBytes | 1.5   |
-      | pidsLimit   | 0     |
-      | pidsLimit   | -1    |
-      | pidsLimit   | 1.5   |
-      | memoryBytes | 9007199254740992 |
+      | which          | value            | least |
+      | memoryMiB      | 5                | 6     |
+      | memoryMiB      | 0                | 6     |
+      | memoryMiB      | -1               | 6     |
+      | memoryMiB      | 6.5              | 6     |
+      | memoryMiB      | 9007199254740992 | 6     |
+      | pidsLimit      | 0                | 1     |
+      | pidsLimit      | -1               | 1     |
+      | pidsLimit      | 1.5              | 1     |
+      | checkTimeoutMs | 0                | 1     |
+      | checkTimeoutMs | -1               | 1     |
+      | checkTimeoutMs | 1.5              | 1     |
 
-  Scenario Outline: a bound from 1 to the largest exact whole number is accepted: <which> <value>
+  Scenario Outline: a bound from its least value to the largest exact whole number is accepted: <which> <value>
     Given a Docker process harness with the variables "callbackPort=4100"
     When I build a Docker process runner whose bound <which> is <value>
     Then the Docker process runner is built
 
     Examples:
-      | which       | value            |
-      | memoryBytes | 1                |
-      | pidsLimit   | 1                |
-      | memoryBytes | 9007199254740991 |
+      | which          | value            |
+      | memoryMiB      | 6                |
+      | pidsLimit      | 1                |
+      | checkTimeoutMs | 1                |
+      | pidsLimit      | 9007199254740991 |
 
   Scenario Outline: a template that sets a variable of the docker client or of the adapter is refused, and nothing is launched: <name>
     Given a Docker process harness with the variables "callbackPort=4100"
