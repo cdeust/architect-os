@@ -21,7 +21,7 @@ import {
   type SandboxRunner,
 } from './port.js';
 import { killGroup } from './process-group.js';
-import { loadTemplate, resolveProfile, type SrtSettings } from './profile.js';
+import { loadTemplate, resolveProfile, substitute, type SrtSettings } from './profile.js';
 import { sandboxesParent } from './srt-runner.js';
 
 /**
@@ -340,8 +340,8 @@ export class DockerProcessRunner {
     const [program, ...args] = request.command;
     if (program !== 'node')
       throw new SandboxError('COMMAND_NOT_FOUND', `argv[0] must be node, the node of the image: ${program}`);
-    const profile = resolveProfile(loadTemplate(o.profilesDir, request.profile), {
-      ...variables,
+    // The paths of the container, which the adapter fixes.
+    const paths = {
       home: HOME,
       repo: o.root,
       worktree: WORK,
@@ -349,7 +349,21 @@ export class DockerProcessRunner {
       tmp: TMP,
       config: CONFIG,
       sandboxes: SANDBOXES,
+    };
+    const profile = resolveProfile(loadTemplate(o.profilesDir, request.profile), {
+      ...variables,
+      // What a template asks and a container cannot give is said by the template, not left out here: the subprocess
+      // isolation of the agent runs bubblewrap, hence a nested user namespace, which a container of this adapter is
+      // refused (no capability, the default seccomp profile). The container, which holds one task and its token, is the
+      // boundary; the agent binary starts no subprocess (worker.json, `${subprocessScrub}`; design, §6).
+      subprocessScrub: '0',
+      ...paths,
     });
+    // The arguments of the program take the paths, as under srt: the topology names the file of a module as
+    // `${repo}/...` (topology/modules.mcp.json). They take nothing of the launcher: an argv is read by every user of the
+    // host, and one variable of the launcher is the token of a task; the program gets those by its environment. Any
+    // other variable is refused, before the check and before anything is launched.
+    const resolved = args.map((argument) => substitute(argument, paths));
     const port = relayPort(request.profile, profile.settings.network);
     // What a template asks and this adapter cannot give is refused, never left out in silence.
     if (Object.keys(profile.files).length > 0)
@@ -362,7 +376,7 @@ export class DockerProcessRunner {
     // to remove.
     refuseReserved(request.profile, profile.env.set);
     await this.check();
-    return this.launch({ port, env: containerEnv(profile.env.set), args });
+    return this.launch({ port, env: containerEnv(profile.env.set), args: resolved });
   }
 
   /** What the Docker client is given of the host. */

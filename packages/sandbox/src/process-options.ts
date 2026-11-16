@@ -28,7 +28,9 @@ export function processRunnerOptions(
     home,
     hostEnv: { PATH: `${dirname(node)}:/usr/bin:/bin`, HOME: home },
     trusted: [],
-    variables,
+    // Under srt the agent of a worker strips the task token from the environment of whatever it starts, and isolates
+    // it with bubblewrap (worker.json, `${subprocessScrub}`); a container cannot (docker-process-runner.ts).
+    variables: { ...variables, subprocessScrub: '1' },
     workspace: 'disposable',
   };
 }

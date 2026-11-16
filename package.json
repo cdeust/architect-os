@@ -34,6 +34,8 @@
     "check": "npm test",
     "gate": "sh tools/test-gate/gate.sh",
     "broker:live": "cucumber-js --profile live",
+    "pretest:rootless": "tsc -b",
+    "test:rootless": "cucumber-js --profile rootless",
     "baseline:pilot": "node --import tsx baseline/run.ts",
     "baseline:campaign": "BASELINE_REPEATS=3 node --import tsx baseline/run.ts",
     "baseline:analyze": "node --import tsx baseline/analyze.ts",

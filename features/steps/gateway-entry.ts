@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
-import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { connect, createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { keyFile } from '../../modules/broker/features/steps/harness.js';
+import { pinnedImage } from '../../packages/sandbox/features/steps/rootless-image.js';
 import { startFakeModel, type FakeModel } from '../support/fake-model.js';
 import { BROKER_KEY, ROOT } from '../support/srt-platform.js';
 import { selfSigned } from '../support/tls.js';
@@ -60,78 +61,207 @@ const reach = (port: number): Promise<string> =>
     socket.once('error', (error: NodeJS.ErrnoException) => resolve(String(error.code)));
   });
 
+/** What the two calls of the scenario make the fake model do. */
+interface Script {
+  content: string;
+  tags: string;
+  query: string;
+  output: string;
+}
+
+/**
+ * Starts the process on the built entry file, before a fake model over HTTPS, with `sandbox` as the variables of its
+ * means of isolation, and waits until it serves.
+ */
+async function startEntry(
+  world: ArchitectWorld,
+  { content, tags, query, output }: Script,
+  sandbox: Record<string, string | undefined>,
+  until: 'it serves' | 'it ends' = 'it serves',
+): Promise<void> {
+  for (const file of BUILT)
+    if (!existsSync(join(ROOT, file))) throw new Error(`${file} is built by tsc -b before the suite`);
+  const dir = mkdtempSync(join(tmpdir(), 'gateway-entry-'));
+  world.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+  const tls = selfSigned(dir);
+  // One script for the two calls: each worker asks the model twice, a tool then its structured output.
+  const model = await startFakeModel(
+    [
+      { tool: 'mcp__platform__memory_insert', input: { content, tags: tags.split(',') } },
+      {
+        tool: 'StructuredOutput',
+        inputFrom: (result) => ({ memory_id: (/"id"\s*:\s*"([^"]+)"/.exec(result) ?? [])[1] }),
+      },
+      { tool: 'mcp__platform__memory_search', input: { query, limit: 5 } },
+      { tool: 'StructuredOutput', input: JSON.parse(output) },
+    ],
+    { tls },
+  );
+  world.cleanups.push(() => model.close());
+  const key = keyFile(BROKER_KEY);
+  world.cleanups.push(() => key.remove());
+  const port = await freePort();
+  const brokerPort = await freePort();
+  const brokerConfig = join(dir, 'broker.json');
+  const committed = JSON.parse(
+    readFileSync(join(ROOT, 'modules', 'broker', 'broker.json'), 'utf8'),
+  ) as object;
+  writeFileSync(
+    brokerConfig,
+    JSON.stringify({ ...committed, upstream: model.url, port: brokerPort, keyFile: key.file }),
+  );
+  // The process is given its configuration and nothing else of this environment.
+  const child = spawn(process.execPath, [join(ROOT, 'gateway', 'dist', 'src', 'serve.js')], {
+    env: {
+      GATEWAY_TOKENS: `${TOKEN}=${SUBJECT}`,
+      GATEWAY_PORT: String(port),
+      GATEWAY_QUOTA_PER_MINUTE: '100',
+      GATEWAY_PROFILE: 'owner',
+      ...sandbox,
+      BROKER_CONFIG: brokerConfig,
+      DATABASE_URL: 'memory',
+      NODE_EXTRA_CA_CERTS: tls.certFile,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const entry: Entry = {
+    child,
+    port,
+    brokerPort,
+    model,
+    stdout: '',
+    stderr: '',
+    over: false,
+    ended: new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal }))),
+  };
+  child.stdout.on('data', (chunk: Buffer) => (entry.stdout += String(chunk)));
+  child.stderr.on('data', (chunk: Buffer) => (entry.stderr += String(chunk)));
+  void entry.ended.then(() => (entry.over = true));
+  world.cleanups.push(async () => {
+    if (!entry.over) child.kill('SIGTERM');
+    await entry.ended;
+  });
+  world.state['gateway-entry'] = entry;
+  if (until === 'it ends') return void (await entry.ended);
+  // Served once its port answers; a process that ended instead says why on its stderr.
+  while ((await reach(port)) !== 'connected') {
+    assert.equal(entry.over, false, `the gateway process ended at its start: ${entry.stderr}`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 Given(
   'the gateway started by its entry file, with data in memory and the broker before a fake model over HTTPS that inserts the memory {string} tagged {string} and answers with the id it got, then searches the memory for {string} and answers {string}',
   { timeout: 120_000 },
-  async function (content: string, tags: string, query: string, output: string) {
-    for (const file of BUILT)
-      if (!existsSync(join(ROOT, file))) throw new Error(`${file} is built by tsc -b before the suite`);
-    const dir = mkdtempSync(join(tmpdir(), 'gateway-entry-'));
-    this.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
-    const tls = selfSigned(dir);
-    // One script for the two calls: each worker asks the model twice, a tool then its structured output.
-    const model = await startFakeModel(
-      [
-        { tool: 'mcp__platform__memory_insert', input: { content, tags: tags.split(',') } },
-        {
-          tool: 'StructuredOutput',
-          inputFrom: (result) => ({ memory_id: (/"id"\s*:\s*"([^"]+)"/.exec(result) ?? [])[1] }),
-        },
-        { tool: 'mcp__platform__memory_search', input: { query, limit: 5 } },
-        { tool: 'StructuredOutput', input: JSON.parse(output) },
-      ],
-      { tls },
-    );
-    this.cleanups.push(() => model.close());
-    const key = keyFile(BROKER_KEY);
-    this.cleanups.push(() => key.remove());
-    const port = await freePort();
-    const brokerPort = await freePort();
-    const brokerConfig = join(dir, 'broker.json');
-    const committed = JSON.parse(
-      readFileSync(join(ROOT, 'modules', 'broker', 'broker.json'), 'utf8'),
-    ) as object;
-    writeFileSync(
-      brokerConfig,
-      JSON.stringify({ ...committed, upstream: model.url, port: brokerPort, keyFile: key.file }),
-    );
-    // The process is given its configuration and nothing else of this environment.
-    const child = spawn(process.execPath, [join(ROOT, 'gateway', 'dist', 'src', 'serve.js')], {
-      env: {
-        GATEWAY_TOKENS: `${TOKEN}=${SUBJECT}`,
-        GATEWAY_PORT: String(port),
-        GATEWAY_QUOTA_PER_MINUTE: '100',
-        GATEWAY_PROFILE: 'owner',
-        GATEWAY_SANDBOX: 'srt',
-        BROKER_CONFIG: brokerConfig,
-        DATABASE_URL: 'memory',
-        NODE_EXTRA_CA_CERTS: tls.certFile,
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const entry: Entry = {
-      child,
-      port,
-      brokerPort,
-      model,
-      stdout: '',
-      stderr: '',
-      over: false,
-      ended: new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal }))),
-    };
-    child.stdout.on('data', (chunk: Buffer) => (entry.stdout += String(chunk)));
-    child.stderr.on('data', (chunk: Buffer) => (entry.stderr += String(chunk)));
-    void entry.ended.then(() => (entry.over = true));
-    this.cleanups.push(async () => {
-      if (!entry.over) child.kill('SIGTERM');
-      await entry.ended;
-    });
-    this.state['gateway-entry'] = entry;
-    // Served once its port answers; a process that ended instead says why on its stderr.
-    while ((await reach(port)) !== 'connected') {
-      assert.equal(entry.over, false, `the gateway process ended at its start: ${entry.stderr}`);
-      await new Promise((resolve) => setTimeout(resolve, 50));
+  function (content: string, tags: string, query: string, output: string) {
+    return startEntry(this, { content, tags, query, output }, { GATEWAY_SANDBOX: 'srt' });
+  },
+);
+
+// --- The same process with its module and its workers in containers (rootless/gateway-entry.feature) ---
+
+/** The container of a sandbox of the platform, as the Docker adapter names it. */
+const SANDBOX_NAME = /^aos-sandbox-[0-9a-f-]{36}$/;
+/** The daemon with root of the host, where there is one: the default socket of Docker. */
+const WITH_ROOT = '/var/run/docker.sock';
+const docker = (...args: string[]): string[] =>
+  execFileSync('docker', args, { encoding: 'utf8' })
+    .split('\n')
+    .filter((line) => line !== '');
+
+/** A script of the fake model that no scenario of a refused start reaches. */
+const UNUSED: Script = { content: 'unused', tags: 'unused', query: 'unused', output: '{}' };
+
+/**
+ * What an operator gives the process for the Docker mode: the means and its image, the bounds of a real task (the
+ * worker runs the binary of the agent), and what finds the client and its daemon. Nothing else of this environment.
+ */
+function inContainers(
+  world: ArchitectWorld,
+  dockerHost: string | undefined,
+): Record<string, string | undefined> {
+  const { image, node } = pinnedImage();
+  // Fractions of a second: a container another scenario started just before is not counted with these.
+  world.state['rootless'] = { image, since: (Date.now() / 1000).toFixed(3) };
+  return {
+    GATEWAY_SANDBOX: 'docker',
+    GATEWAY_DOCKER_IMAGE: image,
+    GATEWAY_DOCKER_NODE: node,
+    GATEWAY_DOCKER_MEMORY_MIB: '2048',
+    GATEWAY_DOCKER_PIDS: '512',
+    GATEWAY_DOCKER_CHECK_MS: '30000',
+    PATH: process.env['PATH'],
+    HOME: process.env['HOME'],
+    DOCKER_HOST: dockerHost,
+  };
+}
+
+Given(
+  'the gateway started by its entry file with its sandboxes in containers before the rootless daemon of this host, with data in memory and the broker before a fake model over HTTPS that inserts the memory {string} tagged {string} and answers with the id it got, then searches the memory for {string} and answers {string}',
+  { timeout: 180_000 },
+  function (content: string, tags: string, query: string, output: string) {
+    return startEntry(this, { content, tags, query, output }, inContainers(this, process.env['DOCKER_HOST']));
+  },
+);
+
+When(
+  'the gateway is started by its entry file with its sandboxes in containers before the daemon with root of this host, and its end is awaited',
+  { timeout: 120_000 },
+  function () {
+    // A host with a rootless daemon alone has nothing to refuse here.
+    if (!existsSync(WITH_ROOT)) return 'skipped';
+    return startEntry(this, UNUSED, inContainers(this, `unix://${WITH_ROOT}`), 'it ends');
+  },
+);
+
+Then(
+  'the gateway process ended with the code {int}, its standard error starting with {string}',
+  async function (code: number, prefix: string) {
+    const entry = entryOf(this);
+    assert.deepEqual(await entry.ended, { code, signal: null }, entry.stderr);
+    assert.ok(entry.stderr.startsWith(prefix), entry.stderr);
+  },
+);
+
+Then(
+  'the rootless daemon started exactly {int} container(s) of the platform since the gateway process started, each from the image of this repository',
+  function (count: number) {
+    const { image, since } = this.state['rootless'] as { image: string; since: string };
+    // Asked of the daemon itself, not of the gateway: the check at start, the module, and one worker for each call.
+    const started = docker(
+      'events',
+      '--since',
+      since,
+      '--until',
+      String(Math.ceil(Date.now() / 1000) + 1),
+      '--filter',
+      'type=container',
+      '--filter',
+      'event=start',
+      '--format',
+      '{{.Actor.Attributes.name}} {{.Actor.Attributes.image}}',
+    ).map((line) => line.split(' ') as [string, string]);
+    assert.equal(started.length, count, JSON.stringify(started));
+    for (const [name, from] of started) {
+      assert.match(name, SANDBOX_NAME);
+      assert.equal(from, image);
     }
+  },
+);
+
+Then(
+  'no container of the platform is left on the rootless daemon, and no relay folder under the temporary folder of this host',
+  function () {
+    assert.deepEqual(
+      docker('ps', '-a', '--format', '{{.Names}}').filter((name) => SANDBOX_NAME.test(name)),
+      [],
+    );
+    // The process was given no TMPDIR: its relays lived under the temporary folder of the host, as these do.
+    const parent = join(tmpdir(), 'aos-sb');
+    assert.deepEqual(
+      existsSync(parent) ? readdirSync(parent).filter((name) => name.startsWith('r-')) : [],
+      [],
+    );
   },
 );
 

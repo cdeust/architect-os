@@ -151,4 +151,4 @@ The first module-probe started 100 children that were node: under the bound of p
 
 ## What this does not show
 
-One host, one image. It does not show the platform's own module or worker running this way (the module of the trial is a probe), the agent's own binary in such a container, a host without AppArmor, a host where cgroup v2 is not delegated, an x86-64 host, Windows through WSL2, or Podman. A trial is played by hand: none of this is a scenario of the gate. Those belong to the end-to-end step of the brick (journal, §48, §50, §51).
+One host, one image, by hand: a trial is not a scenario. What these trials left open on the platform's side is now played by scenarios before a real rootless daemon, in CI on an x86-64 runner (`rootless/*.feature`, journal §55): the platform's own module and worker in containers, the agent's binary there, the escape test. Still not shown by anything: a host without AppArmor, a host where cgroup v2 is not delegated, Windows through WSL2, Podman (not supported).

@@ -151,8 +151,28 @@ Feature: the Docker adapter of a platform process
       /usr/local/bin/node
       /srv/platform/services/memory/worker/task-serve.js
       """
-    And the Docker client of the process run holds in its own environment "ANTHROPIC_API_KEY=tok-test, ANTHROPIC_BASE_URL=http://127.0.0.1:4200, CLAUDE_CONFIG_DIR=/config"
+    And the Docker client of the process run holds in its own environment "ANTHROPIC_API_KEY=tok-test, ANTHROPIC_BASE_URL=http://127.0.0.1:4200, CLAUDE_CONFIG_DIR=/config, CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=0"
     And no argument of the Docker process run holds "tok-test"
+
+  Scenario: the variables of the profile are resolved in the arguments of the program, as under srt
+    Given a Docker process harness with the variables "callbackPort=4100"
+    When I start the Docker process profile "module" with the command "node ${repo}/modules/memory/dist/src/serve.js ${worktree} ${worktreeName} ${tmp} ${config} ${home} ${sandboxes}" and wait for the client
+    Then the program of the Docker process run is given the arguments "/srv/platform/modules/memory/dist/src/serve.js /work work /tmp /config /home/aos /sandboxes"
+
+  Scenario Outline: a variable of the launcher in an argument of the program is refused, and nothing is launched: <variable>
+    Given a Docker process harness with the variables "brokerPort=4200, taskToken=tok-test"
+    When I try to start the Docker process profile "worker" with the command "node ${repo}/task-serve.js ${<variable>}"
+    Then the Docker process start is refused with "PROFILE_INVALID: variable inconnue : ${<variable>}"
+    And the Docker client was asked for info 0 times and ran the canary 0 times
+    And the Docker client was never run
+    And no relay folder exists
+
+    Examples:
+      | variable        |
+      | taskToken       |
+      | brokerPort      |
+      | subprocessScrub |
+      | nothingKnown    |
 
   Scenario: nothing of the host environment reaches the container
     Given a Docker process harness with the variables "callbackPort=4100"

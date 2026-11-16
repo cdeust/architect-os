@@ -1037,3 +1037,9 @@ Then('the entries of the Docker process runs are told the ports {string}', funct
     ports.split(', '),
   );
 });
+
+Then('the program of the Docker process run is given the arguments {string}', function (expected: string) {
+  const args = runArgs(harness(this));
+  // After the `--` of the entry comes the node of the image, then the arguments of the program.
+  assert.deepEqual(args.slice(args.indexOf('--') + 2), expected.split(' '));
+});
