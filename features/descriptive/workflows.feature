@@ -19,7 +19,6 @@ Feature: GitHub workflows
       | gate.yml                 |
       | mutation-full.yml        |
       | pipeline-after-merge.yml |
-      | rootless.yml             |
 
   Scenario: gate.yml follows the rules of the CI gate
     Given the committed workflow "gate.yml"

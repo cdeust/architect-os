@@ -69,8 +69,6 @@ const PLATFORM_VARS: ProfileVariables = {
   callbackPort: '8080',
   brokerPort: '8084',
   taskToken: 'task-token',
-  // What the means of isolation gives: srt here (process-options.ts).
-  subprocessScrub: '1',
 };
 
 When('I resolve the profile with the variables of a platform process', function () {

@@ -4,7 +4,6 @@
   "include": ["support", "steps"],
   "references": [
     { "path": "../packages/contracts" },
-    { "path": "../packages/sandbox" },
     { "path": "../data" },
     { "path": "../gateway" },
     { "path": "../services/memory" },

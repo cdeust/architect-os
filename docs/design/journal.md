@@ -2580,3 +2580,31 @@ Le proxy va dans `deploy/edge/Caddyfile` : un exemple de bord devant le port loc
 - Recherche : le retrait est chiffré avant et après, et ce qui a mené à garder puis à réparer cette pile est écrit au §61 avec les erreurs du mainteneur.
 - SSDLC : il n'y a plus de composant qui reçoive la socket d'un démon, ni de zone où le composant exposé joint des services sans authentification ; une seule architecture, celle dont le modèle de menaces est écrit (§4.1 de la conception).
 - Opérationnel : la plateforme se lance par un seul fichier d'entrée, sans pile à construire ; IRB sans objet.
+
+## 63. Le mode Docker du chemin natif est retiré : un seul moyen d'isolation, srt, 16 novembre 2026
+
+Le §62 a été poussé (`89911cd`) : porte de l'hôte verte (1 822 scénarios = 1 941 − 119 ; 1 mutant dans le périmètre, tué ; 295 entrées au registre de dette, aucune rencontrée), CI verte sur `gate` et `rootless`, runs retrouvés par le SHA du commit. Le workflow `compose` n'existe plus.
+
+**La décision (22).** Elle est du mainteneur, tirée des mots du propriétaire le même jour (« Si docker apporte des problèmes y a pas de docker c'est simple » ; « La brique 1.6 était censé simplifié en retirant des choses » ; « sois pragmatique ») et annoncée trois fois avant d'être exécutée. Elle remplace la décision 18, qui avait fait de Docker l'alternative à srt « au cas où ».
+
+**Pourquoi.**
+- srt tourne sur les trois hôtes pris en charge : macOS et Linux en CI à chaque changement, WSL2 mesuré (§38, §39). Aucun n'a besoin d'un second moyen.
+- Ce second moyen isolait moins bien que le premier sur deux points, écrits à la conception (§6) : en conteneur l'isolation des sous-processus de l'agent était coupée, bubblewrap ne pouvant pas y tourner, et AppArmor ne confinait pas le conteneur.
+- Son coût était réel : 956 lignes de production, 112 scénarios, un workflow sur deux architectures, une image et deux archives d'outils à tenir à jour.
+
+**Ce qui part.** L'adaptateur des processus en conteneur, son relais, sa sonde et son contrôle au démarrage (`docker-process-runner.ts`, `container-relay.ts`, `container-probe.ts`, `docker-isolation.ts`, les deux points d'entrée de conteneur) ; le choix du moyen (`platform-sandboxes.ts`, `GATEWAY_SANDBOX` et les cinq variables `GATEWAY_DOCKER_*`) ; les scénarios devant un vrai démon (`rootless/`), leur workflow et leur profil ; le banc `bench/docker-bridge`. Les fichiers que ce mode avait modifiés sans les créer (la configuration et la composition de la gateway native, les options de processus, le gabarit du worker, leurs scénarios) reviennent à leur état de la fin de 1b.6a, la première composition de la gateway restant retirée (§62).
+
+**Ce qui reste de cette période.** Ce que le travail sur ce mode avait apporté au chemin natif et qui ne dépend pas de Docker : un worker qui échoue cite la fin de la sortie d'erreur du binaire (§56), et le garde-fou du journal (§58).
+
+**Ce qui est perdu, dit tel quel.** La plateforme n'a plus de réponse pour un hôte Linux où srt ne peut pas tourner (pas d'espace de noms utilisateur sans privilège, ou une politique qui l'interdit). Aucun hôte de ce genre n'est pris en charge aujourd'hui. Le retrait tient en un commit : le revenir rétablit le mode, avec ses scénarios et son workflow.
+
+**Vérifié avant la porte.** Compilation ; règles d'architecture ; aucun step sans définition ; 786 scénarios rejoués sur l'hôte, dont le bout en bout par le fichier d'entrée sous srt réel et le test d'évasion. Plus aucun fichier de code de production ne nomme Docker.
+
+**Chiffres.** La suite passe de 1 822 à 1 553 scénarios. Depuis la fin de 1b.6a, le dépôt avait pris 6 616 lignes hors documentation ; les §62 et §63 en retirent l'essentiel. La porte et la CI de ce commit sont rapportées au paragraphe suivant.
+
+**Ensuite.** La mise à niveau du binaire de l'agent (2.1.312 épinglé, 2.1.325 publié, dont un correctif de sécurité) avec une veille du changelog ; puis le registre de dette de mutation, dont 114 entrées sur 295 ne désignent plus leur code.
+
+**Trois piliers.**
+- Recherche : le mode retiré avait été mesuré et prouvé ; ce que son retrait fait perdre est écrit, avec la façon de le rétablir.
+- SSDLC : un seul moyen d'isolation, celui dont le test d'évasion tourne à chaque changement sur les deux systèmes ; une image et deux archives de moins dans la chaîne d'approvisionnement.
+- Opérationnel : l'opérateur n'a plus de moyen à choisir ni de démon à préparer ; IRB sans objet.

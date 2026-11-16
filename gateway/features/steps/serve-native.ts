@@ -17,8 +17,6 @@ import {
   type NativeChild,
   type Sandbox,
   type SandboxExit,
-  type PlatformSandboxes,
-  type SandboxMeans,
   type SandboxRequest,
   type SandboxRunner,
 } from '@architect-os/sandbox';
@@ -138,13 +136,6 @@ interface Scene {
   code?: number;
   refusedAtStart: boolean;
   releaseLaunches?: () => void;
-  /** The calls to the host that matter to their order: `sandboxes`, `check`, `check ended`, `launch`. */
-  calls: string[];
-  /** The means the host was asked for. */
-  means: SandboxMeans[];
-  /** What the host throws when asked for the sandboxes, and what their check rejects with. */
-  sandboxesRefusal?: string;
-  checkRefusal?: string;
 }
 const scene = (world: GatewayWorld): Scene => world.state['serve-native'] as Scene;
 
@@ -206,7 +197,6 @@ Given(
         GATEWAY_PORT: String(port),
         GATEWAY_QUOTA_PER_MINUTE: '100',
         GATEWAY_PROFILE: 'owner',
-        GATEWAY_SANDBOX: 'srt',
         BROKER_CONFIG: brokerConfig,
         DATABASE_URL: 'memory',
       },
@@ -225,8 +215,6 @@ Given(
       scheduler: new GraceScheduler(),
       stop: () => {},
       refusedAtStart: false,
-      calls: [],
-      means: [],
     };
     this.state['serve-native'] = current;
     this.cleanups.push(async () => {
@@ -241,25 +229,6 @@ Given(
 
 Given('the environment of the native process lacks {word}', function (variable: string) {
   delete scene(this).env[variable];
-});
-
-Given('the host of the native process throws {string} when asked for the sandboxes', function (text: string) {
-  scene(this).sandboxesRefusal = text;
-});
-
-Given('the sandboxes of the native process reject their check with {string}', function (text: string) {
-  scene(this).checkRefusal = text;
-});
-
-Then(
-  'the host of the native process was asked for the sandboxes of exactly {string}',
-  function (means: string) {
-    assert.deepEqual(scene(this).means, [JSON.parse(means)]);
-  },
-);
-
-Then('the host of the native process was called in the order {string}', function (order: string) {
-  assert.deepEqual(scene(this).calls, order.split(', '));
 });
 
 Given('the broker double of the native process does not speak MCP', function () {
@@ -324,7 +293,6 @@ function startProcess(world: GatewayWorld): void {
     }),
     audit: current.audit,
     launch: (processes, log) => {
-      current.calls.push('launch');
       current.processes = processes;
       current.log = log;
       return {
@@ -351,27 +319,12 @@ function startProcess(world: GatewayWorld): void {
         },
       };
     },
-    sandboxes: (means) => {
-      current.calls.push('sandboxes');
-      current.means.push(means);
-      if (current.sandboxesRefusal !== undefined) throw new Error(current.sandboxesRefusal);
-      const sandboxes: PlatformSandboxes = {
-        check: async () => {
-          current.calls.push('check');
-          // The check ends after the turns a launch that did not wait for it would need to begin.
-          for (let turn = 0; turn < 5; turn += 1) await new Promise((resolve) => setImmediate(resolve));
-          if (current.checkRefusal !== undefined) throw new Error(current.checkRefusal);
-          current.calls.push('check ended');
-        },
-        runner: (variables) => ({
-          start: (request) => {
-            current.given.push({ profile: request.profile, variables });
-            return runner.start(request);
-          },
-        }),
-      };
-      return sandboxes;
-    },
+    runners: (variables) => ({
+      start: (request) => {
+        current.given.push({ profile: request.profile, variables });
+        return runner.start(request);
+      },
+    }),
     stopped,
     graceMs: GRACE_MS,
     scheduler: current.scheduler,
@@ -746,14 +699,10 @@ Then(
   },
 );
 
-Then(
-  'the sandboxes the host gives for srt run the srt runner for the variables {string}, and their check resolves',
-  async function (variables: string) {
-    const sandboxes = hostScene(this).host.sandboxes({ means: 'srt' });
-    await sandboxes.check();
-    assert.ok(sandboxes.runner(JSON.parse(variables) as Record<string, string>) instanceof SrtSandboxRunner);
-  },
-);
+Then('the runner the host gives for the variables {string} is the srt runner', function (variables: string) {
+  const runner = hostScene(this).host.runners(JSON.parse(variables) as Record<string, string>);
+  assert.ok(runner instanceof SrtSandboxRunner);
+});
 
 Then(
   'the host of the process bounds the stop at {int} ms and probes data every {int} ms, on timers, with the audit log on stdout',

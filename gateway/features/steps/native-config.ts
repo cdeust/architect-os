@@ -30,7 +30,6 @@ Given('a complete environment of the native gateway', function () {
       GATEWAY_PORT: '8080',
       GATEWAY_QUOTA_PER_MINUTE: '30',
       GATEWAY_PROFILE: 'owner',
-      GATEWAY_SANDBOX: 'srt',
       BROKER_CONFIG: written(this, '{"port":8084,"upstream":"https://api.anthropic.com"}'),
       DATABASE_URL: 'postgres://app@db/platform',
       NODE_EXTRA_CA_CERTS: '/etc/ssl/inspection.pem',
@@ -82,7 +81,6 @@ Then(
       quotaPerMinute: 30,
       profile: 'owner',
       brokerPort: 8084,
-      sandbox: { means: 'srt' },
       files: {
         catalog: `${root}/topology/catalog.json`,
         servers: `${root}/topology/modules.mcp.json`,
@@ -112,21 +110,6 @@ Then('the environment of the process {string} is {string}', function (name: stri
 
 Then('the native configuration field {string} is {int}', function (field: string, value: number) {
   assert.equal((config(this) as unknown as Record<string, unknown>)[field], value);
-});
-
-Then('the sandbox of the native configuration is {string}', function (expected: string) {
-  assert.deepEqual(config(this).sandbox, JSON.parse(expected));
-});
-
-Given('the environment of the native gateway chooses Docker with good values', function () {
-  Object.assign(scene(this).env, {
-    GATEWAY_SANDBOX: 'docker',
-    GATEWAY_DOCKER_IMAGE: `node@sha256:${'0'.repeat(64)}`,
-    GATEWAY_DOCKER_NODE: '/usr/local/bin/node',
-    GATEWAY_DOCKER_MEMORY_MIB: '512',
-    GATEWAY_DOCKER_PIDS: '64',
-    GATEWAY_DOCKER_CHECK_MS: '20000',
-  });
 });
 
 Then('the tokens of the native configuration are {string}', function (tokens: string) {

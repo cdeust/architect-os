@@ -14,13 +14,13 @@ A worker agent is a Claude Agent SDK `query()`, created per execution by `servic
 | Entry point  | `task-serve.ts`, given the task profile as its argument. The gateway is on its stdin and stdout: the worker is the MCP client, with the tools `task_input`, `call` and `task_complete` (`infrastructure/platform-channel.ts`). |
 | Task profile | `agents/<name>.md`, in the format of Claude Code: a frontmatter (`name`, `description`, `tools`, `model`) checked against `AgentFileSchema`, then the system prompt. Refused whole when it is outside its schema.              |
 | Tools        | The tools the profile lists, and they can only be MCP tools: the schema refuses any other name. They are served by one in-process MCP server and relayed to the gateway, which routes them. No built-in tool is offered.       |
-| Isolation    | The profile `worker` of `packages/sandbox/profiles`: one port, the broker; the token of the task as its only credential; its own folders. Under srt, or in a container before a rootless daemon.                               |
+| Isolation    | The profile `worker` of `packages/sandbox/profiles`: one port, the broker; the token of the task as its only credential; its own folders. Under srt.                                                                           |
 | Limits       | `maxTurns`, sent by the gateway with the task. No budget in dollars (design, decision 11): the gateway bounds a task by its calls and its deadline.                                                                            |
 | Output       | `outputFormat` with the JSON schema of the tool's data, generated from `packages/contracts`. The gateway validates what the worker gives; the worker does not decide trust.                                                    |
 | Failure      | A named code. When the Claude Code process itself fails, the message quotes the end of its error output, where the cause is (`infrastructure/sdk-task-agent.ts`).                                                              |
 | Secrets      | None. `ANTHROPIC_BASE_URL` is the broker on the loopback; `ANTHROPIC_API_KEY` is the token of the task, which the broker revokes when the task ends.                                                                           |
 
-Proven with the real Claude Code binary against a fake model: `features/integration/agent-worker.feature`; end to end through the entry file of the gateway: `features/sandbox/gateway-entry.feature`, `rootless/gateway-entry.feature`.
+Proven with the real Claude Code binary against a fake model: `features/integration/agent-worker.feature`; end to end through the entry file of the gateway: `features/sandbox/gateway-entry.feature`.
 
 ### Adding an agent
 

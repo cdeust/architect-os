@@ -79,7 +79,7 @@ Feature: module and worker profiles of the platform (docs/design/platform-v3-srt
       | CLAUDE_CONFIG_DIR                        | ${config}                      |
       | ANTHROPIC_BASE_URL                       | http://127.0.0.1:${brokerPort} |
       | ANTHROPIC_API_KEY                        | ${taskToken}                   |
-      | CLAUDE_CODE_SUBPROCESS_ENV_SCRUB         | ${subprocessScrub}             |
+      | CLAUDE_CODE_SUBPROCESS_ENV_SCRUB         | 1                              |
       | CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC | 1                              |
       | DISABLE_AUTOUPDATER                      | 1                              |
       | DISABLE_TELEMETRY                        | 1                              |
@@ -87,7 +87,6 @@ Feature: module and worker profiles of the platform (docs/design/platform-v3-srt
     Then the resolved network domains are exactly "127.0.0.1:8084"
     And the resolved environment sets "ANTHROPIC_API_KEY" to "task-token"
     And the resolved environment sets "ANTHROPIC_BASE_URL" to "http://127.0.0.1:8084"
-    And the resolved environment sets "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB" to "1"
     And the resolved profile contains no "${" placeholder
 
   Scenario Outline: the committed <name> profile, broken with <defect>, is refused

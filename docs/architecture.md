@@ -16,17 +16,17 @@ One process tree, started by `node gateway/dist/src/serve.js` with nothing but i
 - **data** and the **broker** are its two children outside any sandbox, started from a closed list of commands and variables with nothing inherited from the host. `data` alone holds the database URL; the broker alone holds the API key, and gives one token per task.
 - A **module** (`modules/memory`) is started in a sandbox at its first call and speaks MCP on its stdio. It reaches one port, a callback of the gateway, through which its data operations pass, refused outside the tables it declares.
 - A **worker** (`services/memory/worker/task-serve.ts`) is started in a sandbox once per task and stopped with it. It is the MCP client of the gateway on its own stdio, runs the task profile of `agents/<name>.md`, and reaches one port, the broker, with the token of its task.
-- The **means of isolation** is written by the operator and never detected: `srt`, or Docker before a rootless daemon (`packages/sandbox/src/platform-sandboxes.ts`). The same profile templates drive both. Before anything is launched the means is checked; a means that does not confine is a refusal to start.
+- The **means of isolation** is `srt` (`packages/sandbox/src/srt-runner.ts`), driven by the committed profile templates.
 - What exists is declared in `topology/`: the catalogue of the tools, the servers of the modules, the client profiles. The topology is loaded whole or refused before any module is launched.
 
-Proven by the entry file, not by a composition written for a test: `features/sandbox/gateway-entry.feature` under real srt on Linux and macOS, and `rootless/gateway-entry.feature` with the module and the workers in containers before a real rootless daemon, on x86-64 and arm64. No profile escapes its sandbox: `features/sandbox/escape.feature`, `rootless/escape.feature`.
+Proven by the entry file, not by a composition written for a test: `features/sandbox/gateway-entry.feature` under real srt on Linux and macOS. No profile escapes its sandbox: `features/sandbox/escape.feature`.
 
 ## Layers inside a component
 
 ```
 presentation  ->  application  ->  domain  <-  infrastructure
   (MCP/HTTP)      (use cases)     (entities,    (adapters: pg, MCP client,
-                                   ports)        Docker, in-memory)
+                                   ports)        srt, in-memory)
 src/main.ts: the composition root, the only place objects are built
 ```
 

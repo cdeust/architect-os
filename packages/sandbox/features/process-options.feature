@@ -15,7 +15,7 @@ Feature: the options of the srt runner of a platform process
         "home": "<home>",
         "hostEnv": { "PATH": "/opt/node/bin:/usr/bin:/bin", "HOME": "<home>" },
         "trusted": [],
-        "variables": { "callbackPort": "4100", "subprocessScrub": "1" },
+        "variables": { "callbackPort": "4100" },
         "workspace": "disposable"
       }
       """

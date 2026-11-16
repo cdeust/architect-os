@@ -9,5 +9,3 @@ export * from './auth-proxy.js';
 export * from './native-launcher.js';
 export * from './process-options.js';
 export * from './timer.js';
-export * from './docker-process-runner.js';
-export * from './platform-sandboxes.js';

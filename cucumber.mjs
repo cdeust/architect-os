@@ -60,9 +60,3 @@ export const live = {
   import: [...config.import, 'modules/broker/live/steps/**/*.ts'],
   format: ['progress'],
 };
-
-// The rootless profile runs before a real rootless Docker daemon, on a Linux host: `npm run test:rootless`, the job of
-// .github/workflows/rootless.yml. Never the gate nor `npm test`: the host of the owner is macOS, where no such daemon
-// runs. rootless/ is outside every path above (tools/test-gate/gate.json counts `features` folders only), so no other
-// profile counts it; its steps live with the others, where they are typechecked.
-export const rootless = { ...config, paths: ['rootless/**/*.feature'], format: ['progress'] };
