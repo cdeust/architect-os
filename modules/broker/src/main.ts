@@ -19,8 +19,9 @@ export interface StartedBroker {
 
 /**
  * Starts the broker (docs/design/platform-v3-srt.md, §2, Broker): its key file is checked first (a broker that cannot
- * spend does not start), then its MCP server on `transport`, then its one listener. A listener that cannot listen
- * closes the server.
+ * spend does not start), then its one listener, then its MCP server on `transport`. The server comes last so that its
+ * answer means the broker is whole: a parent that got an answer to `initialize` can send a worker to the listener at
+ * once, and a broker that cannot listen never answers. An MCP server that cannot open closes the listener.
  */
 export async function start(
   config: BrokerConfig,
@@ -29,12 +30,19 @@ export async function start(
 ): Promise<StartedBroker> {
   readKeyFile(config.keyFile);
   const service = new BrokerService(new TokenTable());
-  const channel = await openChannel(service, transport);
-  let relay: Relay;
+  // The channel opens after the listener, which reports each answer on it: no answer is relayed before a token is
+  // granted, and a token is granted over the channel.
+  let channel: Awaited<ReturnType<typeof openChannel>>;
+  const relay = await startBrokerRelay(
+    config,
+    (key) => service.authorize(key),
+    (record) => channel.notify(record),
+    port,
+  );
   try {
-    relay = await startBrokerRelay(config, (key) => service.authorize(key), channel.notify, port);
+    channel = await openChannel(service, transport);
   } catch (error) {
-    await channel.close();
+    await relay.close();
     throw error;
   }
   return {

@@ -25,11 +25,22 @@ Feature: starting the broker, its process, its descriptive file
     When I start a broker with that key file
     Then the broker started
 
-  Scenario: a port already taken refuses the start and closes the MCP server
+  Scenario: a port already taken refuses the start, and the MCP server never opened: nothing was read from its stdin
     Given a key file that is a valid one
-    When I start a broker with that key file on a port already taken
+    When I start a broker with that key file on a port already taken, an MCP request waiting on its stdin
     Then the start is refused with code "EADDRINUSE"
-    And the broker's MCP server no longer answers on its stdio
+    And the request that waited on the stdin of the broker is still there, unread, and nothing was written on its stdout
+
+  Scenario: an MCP server that cannot open refuses the start and closes the listener
+    Given a key file that is a valid one
+    When I start a broker with that key file on a free port and a transport that cannot start because "no stdio"
+    Then the start is refused with "no stdio"
+    And the port given to that broker refuses connections
+
+  Scenario: the broker listens before its MCP server answers: a token granted at the first answer is honoured at once
+    Given a key file that is a valid one
+    When I start a broker with that key file on a free port, and connect the gateway while it starts
+    Then at the answer of the MCP server to the gateway the port of the broker accepted a connection
 
   Scenario: serve runs the broker of BROKER_CONFIG on its stdio until its stdin ends, then gives 0
     Given a broker configuration file with a valid key file and a free port
@@ -42,6 +53,11 @@ Feature: starting the broker, its process, its descriptive file
   Scenario: serve over a stdin that ends while the broker starts gives 0 and frees its port
     Given a broker configuration file with a valid key file and a free port
     When I serve the broker with that configuration over a stdin that ends at once
+    Then serve of the broker gives 0 and its port refuses connections
+
+  Scenario: serve over a stdin whose end was read before the broker started does not wait for it: it gives 0 and frees its port
+    Given a broker configuration file with a valid key file and a free port
+    When I serve the broker with that configuration over a stdin that had ended, its end already read
     Then serve of the broker gives 0 and its port refuses connections
 
   Scenario: serve reports a broker that cannot start and gives 1

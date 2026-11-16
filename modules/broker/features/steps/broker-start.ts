@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:net';
+import { once } from 'node:events';
+import { connect, createServer } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -29,6 +30,7 @@ class StartScenario {
   client: Client | undefined;
   usage: unknown[] = [];
   raw: Record<string, unknown> = {};
+  acceptedAtAnswer: boolean | undefined;
 }
 const scenario = (world: BrokerWorld) => slot(world, 'broker-start', () => new StartScenario());
 
@@ -70,10 +72,11 @@ Given('a key file that is {}', function (kind: string) {
   scenario(this).key = makeKey(this, kind);
 });
 
-async function startWith(world: BrokerWorld, port: number) {
+async function startWith(world: BrokerWorld, port: number, waiting = '') {
   const s = scenario(world);
   const pair = stdioPair();
   s.pair = pair;
+  pair.stdin.write(waiting);
   try {
     s.started = await start(
       testConfig('https://upstream.invalid', s.key),
@@ -90,12 +93,83 @@ When('I start a broker with that key file', async function () {
   await startWith(this, 0);
 });
 
-When('I start a broker with that key file on a port already taken', async function () {
-  const taken = createServer();
-  await new Promise<void>((listening) => taken.listen(0, '127.0.0.1', listening));
-  this.cleanups.push(() => new Promise<void>((closed) => taken.close(() => closed())));
-  await startWith(this, (taken.address() as { port: number }).port);
+/** The bytes of an MCP request, as a gateway would write them on the stdin of the broker. */
+const WAITING = '{"jsonrpc":"2.0","id":1,"method":"ping"}\n';
+
+When(
+  'I start a broker with that key file on a port already taken, an MCP request waiting on its stdin',
+  async function () {
+    const taken = createServer();
+    await new Promise<void>((listening) => taken.listen(0, '127.0.0.1', listening));
+    this.cleanups.push(() => new Promise<void>((closed) => taken.close(() => closed())));
+    await startWith(this, (taken.address() as { port: number }).port, WAITING);
+  },
+);
+
+Then(
+  'the request that waited on the stdin of the broker is still there, unread, and nothing was written on its stdout',
+  function () {
+    const pair = scenario(this).pair as ReturnType<typeof stdioPair>;
+    // A server that had opened would have taken the request from the stream, and answered it.
+    assert.deepEqual([pair.stdin.read()?.toString('utf8'), pair.stdout.read()], [WAITING, null]);
+  },
+);
+
+When(
+  'I start a broker with that key file on a free port and a transport that cannot start because {string}',
+  async function (reason: string) {
+    const s = scenario(this);
+    s.port = await freePort();
+    const pair = stdioPair();
+    const transport = stdioTransport(pair.stdin, pair.stdout);
+    transport.start = async () => {
+      throw new Error(reason);
+    };
+    try {
+      s.started = await start(testConfig('https://upstream.invalid', s.key), transport, s.port);
+      this.cleanups.push(() => s.started?.close());
+    } catch (error) {
+      s.failure = error as Error;
+    }
+  },
+);
+
+/** Whether a connection to the port is accepted now. */
+const accepts = (port: number) =>
+  new Promise<boolean>((done) => {
+    const socket = connect({ port, host: '127.0.0.1' });
+    socket.once('connect', () => socket.end(() => done(true)));
+    socket.once('error', () => done(false));
+  });
+
+Then('the port given to that broker refuses connections', async function () {
+  assert.equal(await accepts(scenario(this).port), false);
 });
+
+When(
+  'I start a broker with that key file on a free port, and connect the gateway while it starts',
+  async function () {
+    const s = scenario(this);
+    s.port = await freePort();
+    const pair = stdioPair();
+    const starting = start(
+      testConfig('https://upstream.invalid', s.key),
+      stdioTransport(pair.stdin, pair.stdout),
+      s.port,
+    );
+    this.cleanups.push(async () => (await starting).close());
+    // The gateway is connected once the MCP server answered `initialize`: what the port does then is what is asked.
+    await gatewayClient(pair.client);
+    s.acceptedAtAnswer = await accepts(s.port);
+  },
+);
+
+Then(
+  'at the answer of the MCP server to the gateway the port of the broker accepted a connection',
+  function () {
+    assert.equal(scenario(this).acceptedAtAnswer, true);
+  },
+);
 
 Then('the start is refused with {string}', function (message: string) {
   const s = scenario(this);
@@ -109,14 +183,6 @@ Then('the start is refused with code {string}', function (code: string) {
 Then('the broker started', function () {
   const s = scenario(this);
   assert.deepEqual([s.failure, s.started?.relay.port !== undefined], [undefined, true]);
-});
-
-Then("the broker's MCP server no longer answers on its stdio", async function () {
-  const answered = await Promise.race([
-    gatewayClient(scenario(this).pair?.client as never).then(() => true),
-    new Promise<boolean>((silent) => setTimeout(() => silent(false), 300)),
-  ]);
-  assert.equal(answered, false);
 });
 
 /** A configuration file: the committed broker.json over a free port and a key file of the given kind. */
@@ -155,10 +221,26 @@ When('I serve the broker with that configuration over a pair of streams', async 
   if (typeof outcome !== 'number') Object.assign(s, outcome);
 });
 
+When(
+  'I serve the broker with that configuration over a stdin that had ended, its end already read',
+  async function () {
+    const s = scenario(this);
+    const pair = stdioPair();
+    // The 'end' of this stdin was emitted before serve: a serve that waited for it would wait for ever.
+    pair.stdin.end();
+    pair.stdin.resume();
+    await once(pair.stdin, 'end');
+    s.served = serve({ BROKER_CONFIG: s.config }, pair.stdin, pair.stdout, new PassThrough());
+    this.cleanups.push(async () => {
+      await s.served;
+    });
+  },
+);
+
 When('I serve the broker with that configuration over a stdin that ends at once', function () {
   const s = scenario(this);
   const pair = stdioPair();
-  // The stdin ends before the broker has listened: its 'end' is gone when serve would wait for it.
+  // The stdin ends before the broker reads it: its 'end' comes while the broker starts.
   pair.stdin.end();
   s.served = serve({ BROKER_CONFIG: s.config }, pair.stdin, pair.stdout, new PassThrough());
   this.cleanups.push(async () => {

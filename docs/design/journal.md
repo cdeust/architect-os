@@ -2516,3 +2516,33 @@ Le registre passe de 597 à 500 entrées. Le nouveau est une sous-suite de l'anc
 - Recherche : la dette a été mesurée avant d'être touchée, et le tableau donne l'avant et l'après par fichier ; les huit survivants gardés sont nommés avec leur raison.
 - SSDLC : aucun retrait du registre sans mutant mort au rapport ; la règle qui interdit d'ajouter une entrée est respectée, vérifiée par comparaison des deux registres.
 - Opérationnel : un run garde maintenant, affirmé par scénario, ce que dit chacun de ses événements, y compris quand le registre est perdu en cours de run ; IRB sans objet.
+
+## 61. La brique 1b.7 est arrêtée ; un défaut du broker, trouvé en chemin, est corrigé sur le chemin natif, 16 novembre 2026
+
+**Ce qui est arrêté, et pourquoi.** La brique 1b.7 donnait à la pile en conteneurs de la première réalisation un broker et un client Docker (décision 20). Le premier pas est publié (§59, §60). Le deuxième pas et l'empaquetage ont été écrits et mesurés, puis abandonnés avant tout commit sur la branche, sur trois remarques du propriétaire.
+
+- « C'est quoi l'intérêt de segregger pour chaque layer si l'introduction d'un docker instaure une faille aussi grosse ? » Dans cette pile, le service memory reçoit la socket du démon Docker pour lancer ses workers. Qui tient memory tient le démon.
+- « Mais memory ne devrait pas avoir droit de lancer quoi que ce soit. Memory n'est qu'une brique de données à consommer. » C'est ce que fait le chemin natif : memory y est un module de données, lancé par la gateway. La première réalisation fait l'inverse par construction.
+- « Je veux que tu respectes l'architecture pas que tu en inventes une nouvelle. Si docker apporte des problèmes y a pas de docker c'est simple. » Le mainteneur avait proposé tour à tour un lanceur séparé, un réseau par lien, un broker dans son conteneur : des composants ajoutés pour sauver une brique qui contredit l'architecture.
+
+**Ce que le mainteneur a mal fait.** Aucun modèle de menaces n'a été écrit pour la première réalisation avant de coder 1b.7 ; la conception en a un pour le chemin natif, aucun pour cette pile. La vérification faite après coup a montré plus que la socket : aucun composant interne de cette pile n'authentifie ses appelants, et sa zone `app` réunit le proxy, la gateway, memory et data, si bien que le proxy, seul exposé, a une route directe vers memory et vers data. Plus tôt, à la décision 19, le mainteneur avait classé cette pile comme fonctionnelle sans la mesurer ; mesurée (§57, §59), elle ne se construisait plus et son worker n'avait jamais démarré. La brique 1b.6 était écrite comme un retrait (« Retrait de `compose.yaml` ; `proxy/` vers `deploy/edge/` ; docs à jour ») ; depuis la fin de 1b.6a le dépôt a pris 6 616 lignes hors documentation et en a perdu 197.
+
+**Ce qui a été mesuré en CI avant l'arrêt, pour mémoire.** Sur des branches d'essai, sans broker : la pile sert `remember` puis `recall` avec un vrai conteneur worker par appel (771 et 694 ms) une fois trois variables posées dans l'image du worker (sans elles le binaire de l'agent envoie au modèle une requête hors de la tâche) ; devant un démon sans root, memory n'atteint la socket que comme utilisateur 0 de son conteneur. Ces mesures ne servent plus : la pile part (section suivante).
+
+**Ce qui est gardé : le broker écoute avant de répondre à son parent.** En sondant une ligne qui survivait à la mutation, le mainteneur a trouvé que le broker de la plateforme ouvrait son serveur MCP avant d'écouter sur son port : un parent qui recevait la réponse à `initialize` le croyait prêt alors que son port était encore fermé, et un broker dont le port était pris répondait quand même avant de mourir. C'est le broker du chemin natif ; la gateway native était exposée au même défaut. L'ordre est inversé : fichier de clé, écouteur, puis serveur MCP. Un serveur MCP qui ne peut pas s'ouvrir ferme l'écouteur.
+
+| Scénario | Ce qu'il affirme |
+|---|---|
+| Un port déjà pris refuse le démarrage | La requête qui attendait sur l'entrée du broker y est encore, non lue, et rien n'a été écrit sur sa sortie (l'ancien scénario attendait 300 ms sans réponse) |
+| Un transport MCP qui ne peut pas démarrer | Le démarrage est refusé et le port ne répond plus |
+| Le broker écoute avant de répondre | À la réponse du serveur MCP, le port accepte une connexion |
+| Une entrée déjà terminée avant le démarrage | `serve` n'attend pas une fin déjà lue : il rend 0 et libère son port |
+
+Le dernier scénario tue un mutant que le changement d'ordre avait rendu survivant (`if (!stdin.readableEnded)` remplacé par `true`), vérifié en posant le mutant à la main : rouge avec, vert sans.
+
+**Chiffres.** 1 941 scénarios dans la suite (3 de plus qu'au §60) ; 54 pour le broker, 30 pour la gateway native lancée par son fichier d'entrée et pour l'usage, rejoués sur l'hôte. La porte et la CI de ce commit sont rapportées au paragraphe suivant.
+
+**Trois piliers.**
+- Recherche : la brique arrêtée est rapportée avec ses mesures et avec les erreurs du mainteneur, pas seulement ses résultats.
+- SSDLC : le modèle de menaces précède le code, et son absence est ce qui a laissé passer la socket ; le broker ne se déclare plus prêt avant de l'être.
+- Opérationnel : un broker qui ne peut pas écouter ne répond jamais à son parent, qui le voit comme non démarré ; IRB sans objet.
