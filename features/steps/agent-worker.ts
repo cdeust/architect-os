@@ -217,12 +217,70 @@ Given('the task profile memory narrowed to the tool {string}', function (tool: s
 });
 
 Given('a Claude Code binary that exits without a word', function () {
-  const dir = mkdtempSync(join(tmpdir(), 'aos-fake-cli-'));
-  this.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
-  const file = join(dir, 'claude');
-  writeFileSync(file, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
-  sceneOf(this).executable = file;
+  fakeCli(this, 'exit 0');
 });
+
+/** A Claude Code binary of its own for the scenario: a shell script, removed with its folder. */
+function fakeCli(world: ArchitectWorld, script: string): void {
+  const dir = mkdtempSync(join(tmpdir(), 'aos-fake-cli-'));
+  world.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, 'claude');
+  writeFileSync(file, `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+  sceneOf(world).executable = file;
+}
+
+Given('a Claude Code binary that exits with the code {int} without a word', function (code: number) {
+  fakeCli(this, `exit ${code}`);
+});
+
+/** The first lines of the error output of the failing binary: a line of 400 characters, then 200 lines of "source". */
+const FIRST_LINES =
+  'printf \'%0400d\\n\' 0 >&2; i=0; while [ $i -lt 200 ]; do echo "source-line-$i of the binary" >&2; i=$((i+1)); done';
+
+Given(
+  'a Claude Code binary that writes a page of its own source on its error output, then {string}, and exits with the code {int}',
+  function (cause: string, code: number) {
+    fakeCli(this, `${FIRST_LINES}; echo "${cause}" >&2; exit ${code}`);
+  },
+);
+
+Then(
+  'the call failed with the code "WORKER_FAILED", its message naming the exit code {int} within its first 200 characters and ending with the end of that error output, {string}',
+  function (code: number, cause: string) {
+    const result = resultOf(this);
+    assert.equal(result.status, 'failed');
+    assert.equal(result.error?.code, 'WORKER_FAILED', String(result.error?.message));
+    const { message } = result.error;
+    const quoted = message.indexOf('; the error output of the agent ends with: "');
+    assert.ok(quoted > 0 && quoted <= 200, `${quoted}: ${message}`);
+    // What ended, in the words of the SDK, without the piece of the error output it carries.
+    assert.equal(message.slice(0, quoted), `Claude Code process exited with code ${code}`);
+    // The end of the error output, as a JSON string: its last line, with no new line after it.
+    assert.ok(message.endsWith(`${cause}"`), message);
+  },
+);
+
+Then(
+  'the message of the failure quotes at most 800 characters of that error output, and none of its first lines',
+  function () {
+    const { message } = resultOf(this).error as { message: string };
+    const quoted = JSON.parse(message.slice(message.indexOf('ends with: ') + 'ends with: '.length)) as string;
+    assert.ok(quoted.length <= 800, String(quoted.length));
+    // The page has 200 lines; 800 characters hold its last 25 or so: none of the first hundred.
+    assert.equal(/source-line-\d{1,2} /.test(message), false, message);
+    assert.equal(message.includes('0000000000'), false, message);
+  },
+);
+
+Then(
+  'the call failed with the code "WORKER_FAILED", its message being what the SDK says, the exit code {int}, and no quotation',
+  function (code: number) {
+    const result = resultOf(this);
+    assert.equal(result.error?.code, 'WORKER_FAILED', String(result.error?.message));
+    assert.ok(result.error.message.includes(`exited with code ${code}`), result.error.message);
+    assert.equal(result.error.message.includes('the error output of the agent'), false, result.error.message);
+  },
+);
 
 Then('the worker was the MCP client {string} version {string}', function (name: string, version: string) {
   assert.deepEqual(sceneOf(this).client, { name, version });

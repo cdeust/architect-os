@@ -64,6 +64,19 @@ Feature: An agent tool served by its worker through the Agent SDK (docs/design/p
     When the gateway serves the worker of "recall" with '{"query":"alpha"}' and 4 turns, its calls answered '[]'
     Then the call ended "failed" with the code "WORKER_FAILED" saying "agent produced no result message"
 
+  Scenario: a Claude Code that fails says why: the end of its error output, not its beginning
+    Given a fake model that answers only the text "unused"
+    And a Claude Code binary that writes a page of its own source on its error output, then "error: bubblewrap is required for subprocess isolation", and exits with the code 3
+    When the gateway serves the worker of "recall" with '{"query":"alpha"}' and 4 turns, its calls answered '[]'
+    Then the call failed with the code "WORKER_FAILED", its message naming the exit code 3 within its first 200 characters and ending with the end of that error output, "error: bubblewrap is required for subprocess isolation"
+    And the message of the failure quotes at most 800 characters of that error output, and none of its first lines
+
+  Scenario: a Claude Code that fails without a word leaves what the SDK says of it
+    Given a fake model that answers only the text "unused"
+    And a Claude Code binary that exits with the code 3 without a word
+    When the gateway serves the worker of "recall" with '{"query":"alpha"}' and 4 turns, its calls answered '[]'
+    Then the call failed with the code "WORKER_FAILED", its message being what the SDK says, the exit code 3, and no quotation
+
   Scenario: a worker launched without its task profile does not start: exit code 2
     When the worker is served without its agent file
     Then the worker ended with the exit code 2

@@ -19,8 +19,20 @@ permissions:
 
 jobs:
   rootless-linux:
-    name: rootless-linux
-    runs-on: ubuntu-24.04
+    name: rootless-linux (${{ matrix.arch }})
+    # Both architectures of a Linux host: the image is one digest for both, the agent binary and the rootless tools are
+    # not. `extras` is the sha256 of the static release of the rootless tools of Docker for that architecture.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+            extras: 0d0c2680d924671df0ac33d53dd71f410dfb253fb4fa5e8a0a231951234781c9
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            extras: ce155e65690fc1cbbd3656495458d3ca004af2404a35d37953ea2123d6c4bbf6
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -37,16 +49,19 @@ jobs:
       # bridge since no container of the platform has a network, as a unit of the user so that systemd bounds its
       # containers (cgroup v2).
       - name: Rootless Docker daemon, started by the user without a bridge
+        env:
+          ARCH: ${{ matrix.arch }}
+          EXTRAS_SHA256: ${{ matrix.extras }}
         run: |
           # The daemon itself is the one of the runner image, and these three packages are those of the distribution:
           # neither is pinned here, and the versions that ran are printed below.
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends uidmap slirp4netns dbus-user-session
           # The rootless tools of Docker (dockerd-rootless.sh, rootlesskit): the runner holds the daemon, not them. Its
-          # static release, checked against the digest written here.
+          # static release, checked against the digest of its architecture, written in the matrix above.
           curl -fsSL -o /tmp/rootless-extras.tgz \
-            https://download.docker.com/linux/static/stable/x86_64/docker-rootless-extras-28.0.4.tgz
-          echo "0d0c2680d924671df0ac33d53dd71f410dfb253fb4fa5e8a0a231951234781c9  /tmp/rootless-extras.tgz" | sha256sum -c -
+            "https://download.docker.com/linux/static/stable/$ARCH/docker-rootless-extras-28.0.4.tgz"
+          echo "$EXTRAS_SHA256  /tmp/rootless-extras.tgz" | sha256sum -c -
           mkdir -p "$HOME/.local/rootless"
           tar -xzf /tmp/rootless-extras.tgz -C "$HOME/.local/rootless" --strip-components 1
           grep -q "^$USER:" /etc/subuid || echo "$USER:100000:65536" | sudo tee -a /etc/subuid

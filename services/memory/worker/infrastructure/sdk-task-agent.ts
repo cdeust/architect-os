@@ -1,4 +1,10 @@
-import { createSdkMcpServer, query, tool } from '@anthropic-ai/claude-agent-sdk';
+import {
+  createSdkMcpServer,
+  query,
+  tool,
+  type SDKMessage,
+  type SDKResultMessage,
+} from '@anthropic-ai/claude-agent-sdk';
 import { INTERNAL_TOOLS, INTERNAL_TOOL_NAMES, type Evidence } from '@architect-os/contracts';
 import type { AgentEnd, AgentRun, TaskAgent } from '../task-worker.js';
 
@@ -11,6 +17,22 @@ const SERVER = 'platform';
  * fake upstream, journal §29), so the agent is given it with its own tools.
  */
 const STRUCTURED_OUTPUT = 'StructuredOutput';
+
+/** How much of the end of the error output of the Claude Code process a failure quotes, in characters. */
+const ERROR_OUTPUT_END = 800;
+
+/**
+ * Why the Claude Code process failed, as the worker says it. The SDK quotes the beginning of the error output of the
+ * process, and a process that refuses to start says why at its end (a missing bubblewrap after a page of its own
+ * source, journal §55): the failure keeps what the SDK says ended, cut short, and quotes the end of the error output. A process that wrote nothing leaves the message of the SDK as it is.
+ */
+function failureOf(error: Error, errorOutput: string): Error {
+  const end = errorOutput.trim();
+  if (end === '') return error;
+  // The SDK writes what ended, then `. stderr:` and a piece of the error output: the piece is dropped, the end is quoted.
+  const what = error.message.split('. stderr:', 1)[0] as string;
+  return new Error(`${what}; the error output of the agent ends with: ${JSON.stringify(end)}`);
+}
 
 /** Every record of a JSON array answer carrying a string `id` is evidence; its `content`, when text, the excerpt. */
 export function evidenceOf(source: string, text: string): Evidence[] {
@@ -26,6 +48,12 @@ export function evidenceOf(source: string, text: string): Evidence[] {
         ? [{ source, ref: item.id, ...(typeof item.content === 'string' ? { excerpt: item.content } : {}) }]
         : [],
   );
+}
+
+/** The result message of a run, the first one; undefined when the process ended without any. Rejects as the SDK does. */
+async function resultOf(stream: AsyncIterable<SDKMessage>): Promise<SDKResultMessage | undefined> {
+  for await (const message of stream) if (message.type === 'result') return message;
+  return undefined;
 }
 
 /**
@@ -66,6 +94,8 @@ export class SdkTaskAgent implements TaskAgent {
       ),
     });
     const { name, description, prompt, tools, model } = run.agent;
+    // The end of what the Claude Code process writes on its error output: what a failure of the process quotes.
+    let errorOutput = '';
     const stream = query({
       prompt: JSON.stringify({ tool: run.tool, input: run.input }),
       options: {
@@ -79,21 +109,24 @@ export class SdkTaskAgent implements TaskAgent {
         outputFormat: { type: 'json_schema', schema: run.outputSchema },
         env: this.env,
         pathToClaudeCodeExecutable: this.executable,
+        stderr: (data) => {
+          errorOutput = (errorOutput + data).slice(-ERROR_OUTPUT_END);
+        },
       },
     });
-    for await (const message of stream) {
-      if (message.type !== 'result') continue;
-      const cost = {
-        input_tokens: message.usage.input_tokens,
-        output_tokens: message.usage.output_tokens,
-        usd: message.total_cost_usd,
-      };
-      if (message.subtype === 'error_max_turns') return { maxTurnsReached: true, cost };
-      if (message.subtype !== 'success') throw new Error(`agent stopped: ${message.subtype}`);
-      if (message.is_error) throw new Error(`agent failed: ${message.result}`);
-      if (message.structured_output === undefined) throw new Error('agent gave no structured output');
-      return { structured: message.structured_output, evidence, cost };
-    }
-    throw new Error('agent produced no result message');
+    const message = await resultOf(stream).catch((error: Error) => {
+      throw failureOf(error, errorOutput);
+    });
+    if (message === undefined) throw new Error('agent produced no result message');
+    const cost = {
+      input_tokens: message.usage.input_tokens,
+      output_tokens: message.usage.output_tokens,
+      usd: message.total_cost_usd,
+    };
+    if (message.subtype === 'error_max_turns') return { maxTurnsReached: true, cost };
+    if (message.subtype !== 'success') throw new Error(`agent stopped: ${message.subtype}`);
+    if (message.is_error) throw new Error(`agent failed: ${message.result}`);
+    if (message.structured_output === undefined) throw new Error('agent gave no structured output');
+    return { structured: message.structured_output, evidence, cost };
   }
 }
