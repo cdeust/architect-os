@@ -2673,3 +2673,70 @@ Le jeton n'a pas expiré. Une session Claude Code du poste l'a renouvelé en ava
 - Recherche : la cause est établie par quatre dates de trois sources indépendantes, et la première explication donnée, fausse dans son mot (« expiré ») et non vérifiée, est rapportée.
 - SSDLC : le détenteur de l'identifiant ne renvoie plus un jeton révoqué ; un refus de l'amont ne déclenche qu'une relecture et qu'un seul nouvel essai ; aucun jeton n'entre dans un message ni dans le journal d'usage.
 - Opérationnel : une session de la boucle ne meurt plus au renouvellement du jeton du poste ; IRB sans objet.
+
+## 66. Le registre de dette désignait autre chose que son code : contrôle d'alignement, `debt realign`, 114 entrées traitées, 16 novembre 2026
+
+Le §65 a été poussé (`49a9aa7`) : porte de l'hôte verte (1 560 scénarios = 1 554 + 6 ; 49 mutants dans le périmètre : 32 tués, 15 délais dépassés, 2 erreurs d'exécution, aucun survivant), CI verte sur `gate` (Linux et macOS), run retrouvé par le SHA du commit.
+
+**Le défaut.** Une entrée du registre nomme un survivant par fichier, lignes, colonnes, mutateur, texte d'origine et remplacement. Une ligne insérée au-dessus d'elle décale le code et pas l'entrée ; tant que la porte ne mutait pas ces lignes, rien ne le disait (§35, §60). Mesuré sur `49a9aa7` : 114 des 295 entrées ne désignaient plus leur texte (91 des 102 de `packages/sandbox/src/srt-runner.ts`, 22 des 45 de `profile.ts`, la seule de `port.ts`). Un registre dans cet état accepte un survivant pour un autre, et le run complet du lundi le dirait rouge.
+
+**Ce qui change dans l'outil de la porte (`tools/test-gate`).**
+
+| Changement | Règle |
+|---|---|
+| Contrôle d'alignement (règle 6) | À chaque passage, sans dépendre de ce que le run a muté : le code du fichier entre le début et la fin de l'entrée est son `original`, sinon « désalignée (le code a bougé), lancer « test-gate debt realign » », rouge |
+| « Le registre ne peut que rétrécir » | Compté par sorte (fichier, mutateur, `original`, `remplacement`) et non par position : une entrée replacée n'est ni une entrée ajoutée ni une entrée retirée |
+| `test-gate debt realign` | Replace les entrées dont le code a seulement bougé ; n'en ajoute et n'en retire jamais ; ne déplace jamais une entrée alignée ; nomme celles qu'il laisse et sort en 1 |
+
+**La règle de placement, et celle qui était fausse.** Un candidat est une place où le texte de l'entrée se trouve aux mêmes colonnes et qu'aucune entrée ne tient déjà. Un seul candidat : l'entrée y va, sauf si une autre entrée de même sorte n'a que lui, auquel cas aucune des deux ne bouge. Plusieurs candidats : elle ne va que vers celui que désigne l'écart de sa voisine la plus proche, au-dessus ou au-dessous, parmi les entrées alignées ou replacées par le premier pas ; deux candidats désignés, aucun, ou un candidat désigné pour deux entrées, et elle reste. La première règle du mainteneur était « la première place libre, dans l'ordre du fichier » : la revue a montré trois entrées posées par elle sur un code qui n'était pas le leur. Elle est remplacée par l'écart des voisines, qui ne devine pas.
+
+**La boucle.** Trois passes, deux revues.
+
+| Passe | Construction (Sonnet 5.5) | Revue (Opus 5.5) | Issue |
+|---|---|---|---|
+| debt1 | 197 s, 0,40 $ | sans objet | Interrompue par le jeton révoqué du §65 |
+| debt2 | 902 s, 0,76 $ | 464 s, 1,28 $ | `request_changes`, 10 constats, dont la règle de placement |
+| debt3 | 527 s, 0,66 $ | 309 s, 0,78 $ | `request_changes`, 4 constats ; le dernier (une place donnée à deux entrées) corrigé à la main par le mainteneur, avec son scénario |
+
+**Le registre.** 295 entrées avant, 293 après, toutes alignées (`test-gate debt realign` : 0 déplacée, sortie 0).
+
+| Fichier | Entrées replacées | Écart de lignes |
+|---|---|---|
+| `packages/sandbox/src/srt-runner.ts` | 89 | −1 pour 50, +8 pour 1, +9 pour 38 |
+| `packages/sandbox/src/profile.ts` | 22 | +11 pour 12, +12 pour 10 |
+| `packages/sandbox/src/port.ts` | 1 | +5 |
+
+Deux entrées de `srt-runner.ts` sont retirées et non replacées (`pid === undefined` et `-pid`) : leur code a disparu au commit `8399053`. Chaque déplacement garde les colonnes ; aucune identité en double.
+
+**La preuve par mutation, avant la porte.** Les trois fichiers replacés mutés en entier, et les quatre fichiers changés de l'outil : 1 145 mutants, environ 3 h 20 sur l'hôte.
+
+| Fichier | Entrées | Mutant de même identité dans le rapport | En vie à ce run | En vie sans entrée |
+|---|---|---|---|---|
+| `srt-runner.ts` | 100 | 100 | 86 | 0 |
+| `profile.ts` | 45 | 45 | 39 | 0 |
+| `port.ts` | 1 | 1 | 1 | 0 |
+
+Vingt entrées n'ont pas survécu à ce run (14 tuées, 6 délais dépassés) : la règle les compte et les garde, les survivants variant d'un run à l'autre (§7 de la conception).
+
+Dans l'outil lui-même, ce run a laissé 7 survivants dans `domain/debt.ts`, tous dans le code de ce pas. Aucun n'entre au registre.
+
+| Survivant | Nature | Traitement |
+|---|---|---|
+| Corps de `kindOf` vidé ; son tableau vidé | Réels : aucun scénario ne distinguait deux sortes | Scénario : une entrée ajoutée à la place d'une entrée d'une autre sorte est dite ajoutée, et le retrait de l'autre est jugé |
+| `if (places.length < 2) continue` neutralisé | Réel : le scénario existant laissait les voisines désigner la place pour les deux entrées | Scénario : deux entrées qui n'ont que la même place ne bougent pas, même quand une voisine la désigne pour une seule |
+| Toute entrée prise pour voisine | Réel | Scénario : une entrée restée désalignée ne sert pas de voisine |
+| `entries.filter(pointing)` réduit à `entries` | Équivalent : une place qui porte l'identité d'une entrée tient son texte, donc cette entrée est alignée | Le filtre, inutile, est retiré |
+| Deux tableaux vides remplacés par un tableau d'une chaîne | Équivalents : la chaîne n'a ni fichier ni écart | Le code est réécrit sans ces tableaux |
+
+Mutation de contrôle après ces corrections : la fonction de réalignement (95 mutants : 77 tués, 18 erreurs d'exécution) et le calcul par sorte, aucun survivant.
+
+**Une machine saturée en chemin.** Les vingt dernières minutes du grand run et la mutation de contrôle ont tourné pendant que le poste était saturé par un autre travail du propriétaire (charge moyenne de 100 sur 10 cœurs pendant un quart d'heure) ; une relance a échoué avant de commencer, son passage initial ayant dépassé les cinq minutes. Un délai dépassé sous une telle charge ne prouve pas un mutant tué : le seul des trois fichiers replacés qui n'avait pas d'entrée hors de `srt-runner.ts` (`profile.ts`, ligne 162) a été rejoué seul, machine calme, et dépasse encore son délai ; `srt-runner.ts` est rejoué en entier par la porte de ce commit, à cause de ses deux entrées retirées. Six faux processus `docker` laissés par les scénarios du mode retiré au §63, vieux de quatorze à dix-huit heures, ont été arrêtés.
+
+**Ce qui n'est pas prouvé.** Que le registre tienne devant le run complet de Linux : il n'a été rejoué que sur macOS, et seulement pour les trois fichiers replacés ; le run complet (`mutation-full.yml`) ne tourne que depuis la branche par défaut. Les 14 entrées tuées à ce run ne sont pas retirées : un seul run ne prouve pas une dette payée.
+
+**Chiffres.** 1 597 scénarios dans la suite (37 de plus, tous dans l'outil de la porte) ; 112 scénarios pour le registre de dette (`tools/test-gate/features/debt.feature`).
+
+**Trois piliers.**
+- Recherche : chaque entrée replacée est comparée au rapport d'une mutation du fichier entier ; la règle de placement fausse du mainteneur et les sept survivants de son propre code sont rapportés avec leur traitement.
+- SSDLC : la porte refuse désormais une entrée qui ne désigne plus son code, sans dépendre du périmètre muté ; l'outil de la porte n'a aucun survivant sur ses lignes changées ; aucune surface nouvelle (une commande locale qui lit le registre et les sources, et n'écrit que le registre).
+- Opérationnel : le run complet du lundi compare ses survivants à un registre qui désigne le code réel ; il ne tournera qu'une fois la branche par défaut avancée, décision du propriétaire ; IRB sans objet.

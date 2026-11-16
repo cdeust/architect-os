@@ -1,4 +1,11 @@
-import { debtEntries, renderGenerated, type DebtInput, type DebtRegistry } from '../domain/debt.js';
+import {
+  debtEntries,
+  realign,
+  renderGenerated,
+  renderRealigned,
+  type DebtInput,
+  type DebtRegistry,
+} from '../domain/debt.js';
 import { isProduction } from '../domain/layout.js';
 import type { ReadFailure } from '../domain/violation.js';
 import { z } from 'zod';
@@ -31,6 +38,16 @@ export function parseDebtRegistry(text: string): DebtRegistry | ReadFailure {
   return parseJson(DebtRegistrySchema, text);
 }
 
+/** The text of the given files that exist in the working tree. */
+function sourcesOf(files: Iterable<string>, workspace: Workspace): Map<string, string> {
+  const sources = new Map<string, string>();
+  for (const file of files) {
+    const text = workspace.read(file);
+    if (text !== null) sources.set(file, text);
+  }
+  return sources;
+}
+
 /** The registry of the working tree and of the first parent, and which of their files exist in the tree. */
 export function readDebt(
   path: string,
@@ -48,7 +65,11 @@ export function readDebt(
     registry === null || 'failure' in registry ? [] : registry.survivors,
   );
   const present = new Set(entries.map((entry) => entry.file).filter((file) => workspace.exists(file)));
-  return { path, current, parent, present };
+  const sources = sourcesOf(
+    entries.map((entry) => entry.file),
+    workspace,
+  );
+  return { path, current, parent, present, sources };
 }
 
 /**
@@ -68,4 +89,29 @@ export function generateDebt(config: GateConfig, workspace: Workspace): { summar
   const survivors = debtEntries(report).filter((entry) => isProduction(config, entry.file));
   workspace.write(config.debt, jsonText({ survivors }));
   return { summary: renderGenerated(config.debt, survivors) };
+}
+
+/**
+ * `test-gate debt realign`: puts the entries of the registry back on their text and writes it when one moved. The
+ * summary to print and whether every entry points at its text afterwards, or the reason the gate refuses.
+ */
+export function realignDebt(
+  config: GateConfig,
+  workspace: Workspace,
+): { summary: string; aligned: boolean } | ReadFailure {
+  const text = workspace.read(config.debt);
+  const registry = text === null ? { failure: `${config.debt} absent` } : parseDebtRegistry(text);
+  if ('failure' in registry) return { failure: `registre de dette illisible : ${registry.failure}` };
+  const result = realign(
+    registry.survivors,
+    sourcesOf(
+      registry.survivors.map((entry) => entry.file),
+      workspace,
+    ),
+  );
+  if (result.moved > 0) workspace.write(config.debt, jsonText({ survivors: result.survivors }));
+  return {
+    summary: renderRealigned(config.debt, result.moved, result.stuck),
+    aligned: result.stuck.length === 0,
+  };
 }

@@ -11,7 +11,7 @@ import type { StaticSet } from '../domain/run.js';
 import { evaluate } from '../domain/verdict.js';
 import { jobOf, parseGateBase, parseGateConfig, parseReplayRecord, type GateConfig } from './config.js';
 import { parseCucumberReport } from './cucumber-report.js';
-import { generateDebt, readDebt } from './debt.js';
+import { generateDebt, readDebt, realignDebt } from './debt.js';
 import { GitRepository } from './git.js';
 import { compileFeature } from './gherkin.js';
 import { jsonText } from './json.js';
@@ -193,7 +193,7 @@ function gate(
 }
 
 /**
- * `test-gate plan|check [--job <name>]`, `test-gate debt` or `test-gate replay [--all]` run in `root`, the process argv as given by Node.
+ * `test-gate plan|check [--job <name>]`, `test-gate debt [realign]` or `test-gate replay [--all]` run in `root`, the process argv as given by Node.
  * Returns the exit code: 0 green (or plan or debt registry written), 1 red or unusable input. Never throws on a bad input: it is reported and red.
  */
 export async function runGate(
@@ -213,6 +213,12 @@ export async function runGate(
   if (text === null) return refuse(`${CONFIG_PATH} absent`);
   const config = parseGateConfig(text);
   if ('failure' in config) return refuse(`${CONFIG_PATH} : ${config.failure}`);
+  if (command.name === 'realign') {
+    const realigned = realignDebt(config, new Workspace(root));
+    if ('failure' in realigned) return refuse(realigned.failure);
+    out.write(realigned.summary);
+    return realigned.aligned ? 0 : 1;
+  }
   if (command.name === 'debt') {
     const written = generateDebt(config, new Workspace(root));
     if ('failure' in written) return refuse(written.failure);

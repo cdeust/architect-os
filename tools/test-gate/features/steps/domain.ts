@@ -30,6 +30,7 @@ const EMPTY_DEBT: DebtInput = {
   current: { survivors: [] },
   parent: null,
   present: new Set(),
+  sources: new Map(),
 };
 
 When(

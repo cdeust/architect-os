@@ -21,8 +21,11 @@ from 1 as in the Stryker report, end exclusive), `mutator`, `original` (the sour
 `replacement`; its identity is the text `file:l:c-l:c mutator "original" -> "replacement"`, never the mutant `id`.
 Creation is allowed when the first parent has no registry; afterwards it only shrinks. An entry with no mutant of that identity in the report (any status) is red, "introuvable"; one whose mutant exists
 but did not survive this run (Killed, Timeout, RuntimeError, CompileError, Ignored) is green and counted in the
-report, since Stryker survivors vary from run to run. Known limit: a shift of lines in a file with debt makes its
-entry not found and the moved mutant unregistered, so the entry is removed in the same PR. `test-gate debt` writes the registry from the mutation report, once.
+report, since Stryker survivors vary from run to run. An entry must hold its text: the code of its file
+between its start and its end is its `original`, checked on every run whatever the run mutated; otherwise it is red,
+"désalignée". "Only shrinks" is counted by kind (file, mutator, original, replacement) and not by position, so an
+entry put back on its code is neither added nor removed. `test-gate debt realign` puts back the entries whose code
+only moved (doc §7 gives its rule), names the ones it leaves and exits 1. `test-gate debt` writes the registry from the mutation report, once.
 
 ## Reports
 

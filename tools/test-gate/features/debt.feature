@@ -106,13 +106,32 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
 
     Examples:
       | field        | value                | identity                                                           |
+      | replacement  | n >= 1               | src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 1"       |
+      | mutator      | RelationalOperator   | src/math.mjs:7:10-7:15 RelationalOperator "n > 0" -> "n >= 0"      |
+
+  Scenario Outline: an entry whose text is not between its start and its end is misaligned, and by no other check: <field>
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 7 changed
+    And the gate debt registry is the fixture "survivor" with "<field>" of its entry 1 set to "<value>"
+    And the gate first parent is committed
+    And the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate head is committed
+    And the gate mutation report is the fixture "survivor"
+    When the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate violations are:
+      """
+      5: src/math.mjs:7 EqualityOperator #5 : Survived
+      6: <identity> : désalignée (le code a bougé), lancer « test-gate debt realign »
+      """
+
+    Examples:
+      | field        | value | identity                                                     |
       | end.column   | 16                   | src/math.mjs:7:10-7:16 EqualityOperator "n > 0" -> "n >= 0"       |
       | start.column | 9                    | src/math.mjs:7:9-7:15 EqualityOperator "n > 0" -> "n >= 0"        |
       | start.line   | 6                    | src/math.mjs:6:10-7:15 EqualityOperator "n > 0" -> "n >= 0"        |
       | end.line     | 8                    | src/math.mjs:7:10-8:15 EqualityOperator "n > 0" -> "n >= 0"        |
-      | replacement  | n >= 1               | src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 1"       |
-      | mutator      | RelationalOperator   | src/math.mjs:7:10-7:15 RelationalOperator "n > 0" -> "n >= 0"      |
       | original     | n > 1                | src/math.mjs:7:10-7:15 EqualityOperator "n > 1" -> "n >= 0"       |
+      | start.line   | 40    | src/math.mjs:40:10-7:15 EqualityOperator "n > 0" -> "n >= 0" |
 
   Scenario Outline: the original of a multi-line mutant is the text between its start and its end, lines included: <mutant>
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line <line> changed
@@ -536,7 +555,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : fichier absent, entrée à retirer dans la même PR
       """
 
-  Scenario: an entry whose code moved by one line is not found, and the registry says to remove it
+  Scenario: an entry whose code moved by one line is misaligned, and the registry says to realign
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
     And the gate debt registry is the fixture "survivor"
     And the gate first parent is committed
@@ -547,7 +566,215 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     Then the gate verdict is red
     And the gate violations are:
       """
-      6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : introuvable (code supprimé ou déplacé), à retirer dans la même PR
+      6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : désalignée (le code a bougé), lancer « test-gate debt realign »
+      """
+
+  Scenario: an entry whose code moved is misaligned although the run mutated nothing of its lines
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate debt registry is the fixture "survivor"
+    And the gate first parent is committed
+    And the gate mutation report is the fixture "survivor"
+    And the code of "src/math.mjs" moves down by one line from line 1 in the gate mutation report and in the working tree
+    And the gate head is committed
+    And the gate mutation report keeps only the mutants "1"
+    And the gate mutation report mutated "src/math.mjs:4-4"
+    When the gate checks the "linux" job
+    Then the gate violations of rule 6 are:
+      """
+      6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : désalignée (le code a bougé), lancer « test-gate debt realign »
+      """
+
+  Scenario: after debt realign the same tree is green, and the realigned entry is not an entry added
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate debt registry is the fixture "survivor"
+    And the gate first parent is committed
+    And the gate mutation report is the fixture "survivor"
+    And the code of "src/math.mjs" moves down by one line from line 7 in the gate mutation report and in the working tree
+    And the gate runs with the arguments "debt realign"
+    And the gate head is committed
+    When the gate checks the "linux" job
+    Then the gate verdict is green
+    And the gate reports no violation
+    And the gate debt section reads:
+      """
+      ## Dette de mutation
+
+      - registre : mutation-debt.json
+      - survivants au registre : 1
+      - rencontrés dans le périmètre de ce run : 0
+      - entrées dont le mutant n'a pas survécu à ce run : 0 (à retirer du registre quand la dette est payée)
+      - entrées ajoutées par ce diff : 0
+      - entrées retirées par ce diff : 0
+      """
+
+  Scenario: a misaligned entry that the diff adds is reported as misaligned only
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate first parent is committed
+    And the gate debt registry is the fixture "survivor" with "start.line" of its entry 1 set to "6"
+    And the gate mutation report is the fixture "survivor"
+    And the gate head is committed
+    When the gate checks the "linux" job
+    Then the gate violations of rule 6 are:
+      """
+      6: src/math.mjs:6:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : désalignée (le code a bougé), lancer « test-gate debt realign »
+      """
+    And the gate debt section reads:
+      """
+      ## Dette de mutation
+
+      - registre : mutation-debt.json
+      - survivants au registre : 1
+      - rencontrés dans le périmètre de ce run : 0
+      - entrées dont le mutant n'a pas survécu à ce run : 0 (à retirer du registre quand la dette est payée)
+      - entrées ajoutées par ce diff : 0
+      - entrées retirées par ce diff : 0
+      """
+
+  Scenario: an entry added next to an entry of the same kind that the first parent holds is the one reported
+    Given the gate repository file "src/math.mjs" reads:
+      """
+      // Production file of the fixture suite: the mutation fixtures are reports of Stryker runs on it.
+      export function sum(a, b) {
+        return a + b;
+      }
+
+      export function isPositive(n) {
+        return n > 0;
+      }
+
+      export function isStrictlyPositive(n) {
+        return n > 0;
+      }
+      """
+    And the gate debt registry is the fixture "survivor"
+    And the gate first parent is committed
+    And the gate debt registry holds these entries:
+      | file         | start | end   | mutator          | original | replacement |
+      | src/math.mjs | 7:10  | 7:15  | EqualityOperator | n > 0    | n >= 0      |
+      | src/math.mjs | 11:10 | 11:15 | EqualityOperator | n > 0    | n >= 0      |
+    And the gate mutation report is the fixture "survivor"
+    And the gate mutation report mutated "src/math.mjs:7-7"
+    And the gate head is committed
+    When the gate checks the "linux" job
+    Then the gate violations of rule 6 are:
+      """
+      6: src/math.mjs:11:10-11:15 EqualityOperator "n > 0" -> "n >= 0" : entrée ajoutée au registre, le registre ne peut que rétrécir
+      """
+
+  Scenario: an entry added in place of an entry of another kind is reported, and the removal of the other is judged
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate debt registry is the fixture "survivor"
+    And the gate first parent is committed
+    And the gate debt registry holds these entries:
+      | file         | start | end  | mutator            | original | replacement |
+      | src/math.mjs | 3:10  | 3:15 | ArithmeticOperator | a + b    | a - b       |
+    And the gate mutation report is the fixture "survivor"
+    And the gate head is committed
+    When the gate checks the "linux" job
+    Then the gate violations of rule 6 are:
+      """
+      6: src/math.mjs:3:10-3:15 ArithmeticOperator "a + b" -> "a - b" : entrée ajoutée au registre, le registre ne peut que rétrécir
+      6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : retrait refusé, le survivant existe toujours
+      """
+
+  Scenario: two entries added next to one of the same kind are both reported
+    Given the gate repository file "src/math.mjs" reads:
+      """
+      // Production file of the fixture suite: the mutation fixtures are reports of Stryker runs on it.
+      export function sum(a, b) {
+        return a + b;
+      }
+
+      export function isPositive(n) {
+        return n > 0;
+      }
+
+      export function isStrictlyPositive(n) {
+        return n > 0;
+      }
+
+      export function isAbove(n) {
+        return n > 0;
+      }
+      """
+    And the gate debt registry is the fixture "survivor"
+    And the gate first parent is committed
+    And the gate debt registry holds these entries:
+      | file         | start | end   | mutator          | original | replacement |
+      | src/math.mjs | 7:10  | 7:15  | EqualityOperator | n > 0    | n >= 0      |
+      | src/math.mjs | 11:10 | 11:15 | EqualityOperator | n > 0    | n >= 0      |
+      | src/math.mjs | 15:10 | 15:15 | EqualityOperator | n > 0    | n >= 0      |
+    And the gate mutation report is the fixture "survivor"
+    And the gate mutation report mutated "src/math.mjs:7-7"
+    And the gate head is committed
+    When the gate checks the "linux" job
+    Then the gate violations of rule 6 are:
+      """
+      6: src/math.mjs:11:10-11:15 EqualityOperator "n > 0" -> "n >= 0" : entrée ajoutée au registre, le registre ne peut que rétrécir
+      6: src/math.mjs:15:10-15:15 EqualityOperator "n > 0" -> "n >= 0" : entrée ajoutée au registre, le registre ne peut que rétrécir
+      """
+
+  Scenario: two entries at other places than the one entry of the first parent are one entry added
+    Given the gate repository file "src/math.mjs" reads:
+      """
+      // Production file of the fixture suite: the mutation fixtures are reports of Stryker runs on it.
+      export function sum(a, b) {
+        return a + b;
+      }
+
+      export function isPositive(n) {
+        return n > 0;
+        return n > 0;
+        return n > 0;
+      }
+      """
+    And the gate debt registry is the fixture "survivor"
+    And the gate first parent is committed
+    And the gate debt registry holds these entries:
+      | file         | start | end  | mutator          | original | replacement |
+      | src/math.mjs | 8:10  | 8:15 | EqualityOperator | n > 0    | n >= 0      |
+      | src/math.mjs | 9:10  | 9:15 | EqualityOperator | n > 0    | n >= 0      |
+    And the gate mutation report is the fixture "survivor"
+    And the gate mutation report mutated "src/math.mjs:7-7"
+    And the gate head is committed
+    When the gate checks the "linux" job
+    Then the gate violations of rule 6 are:
+      """
+      6: src/math.mjs:8:10-8:15 EqualityOperator "n > 0" -> "n >= 0" : entrée ajoutée au registre, le registre ne peut que rétrécir
+      """
+
+  Scenario: two entries of the first parent at other places than the one entry kept are one entry removed
+    Given the gate repository file "src/math.mjs" reads:
+      """
+      // Production file of the fixture suite: the mutation fixtures are reports of Stryker runs on it.
+      export function sum(a, b) {
+        return a + b;
+      }
+
+      export function isPositive(n) {
+        return n > 0;
+        return n > 0;
+        return n > 0;
+        return n > 0;
+        return n > 0;
+        return n > 0;
+      }
+      """
+    And the gate debt registry holds these entries:
+      | file         | start | end   | mutator          | original | replacement |
+      | src/math.mjs | 7:10  | 7:15  | EqualityOperator | n > 0    | n >= 0      |
+      | src/math.mjs | 11:10 | 11:15 | EqualityOperator | n > 0    | n >= 0      |
+    And the gate first parent is committed
+    And the gate debt registry holds these entries:
+      | file         | start | end   | mutator          | original | replacement |
+      | src/math.mjs | 12:10 | 12:15 | EqualityOperator | n > 0    | n >= 0      |
+    And the gate mutation report is the fixture "survivor"
+    And the gate mutation report mutated "src/math.mjs:7-7"
+    And the gate head is committed
+    When the gate checks the "linux" job
+    Then the gate violations of rule 6 are:
+      """
+      6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : retrait refusé, le survivant existe toujours
       """
 
   Scenario: an entry whose mutant is now killed is green and counted: survivors vary from one run to the next
@@ -857,14 +1084,14 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       """
     And the gate repository holds no file "mutation-debt.json"
 
-  Scenario Outline: debt takes no argument: <arguments>
+  Scenario Outline: debt takes no argument but realign, alone: <arguments>
     Given the gate debt registry is absent
     And the gate mutation report is the fixture "unsorted"
     When the gate runs with the arguments "<arguments>"
     Then the gate exits with 1
     And the gate output is:
       """
-      porte de test : usage : test-gate plan|check [--job <nom>] | debt | replay [--all]
+      porte de test : usage : test-gate plan|check [--job <nom>] | debt [realign] | replay [--all]
       """
     And the gate repository holds no file "mutation-debt.json"
 
@@ -872,6 +1099,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       | arguments       |
       | debt now        |
       | debt --job macos |
+      | debt realign now |
 
   Scenario: the registry that debt writes from a mutation report is accepted as it is by check on that same report
     Given the gate debt registry is absent
@@ -895,3 +1123,618 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       - entrées retirées par ce diff : 0
       - création du registre par ce diff (le premier parent n'en a pas)
       """
+
+  Scenario: debt realign moves an entry whose lines moved down
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      // two
+      const total = a + b;
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 1:15  | 1:20 | ArithmeticOperator | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 1
+      """
+    And the gate debt registry now holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 3:15  | 3:20 | ArithmeticOperator | a + b    | a - b       |
+
+  Scenario: debt realign moves an entry whose lines moved up
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      // two
+      const total = a + b;
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 6:15  | 6:20 | ArithmeticOperator | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate debt registry now holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 3:15  | 3:20 | ArithmeticOperator | a + b    | a - b       |
+
+  Scenario: debt realign leaves the registry byte for byte as it was when no entry is misaligned
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      // two
+      const total = a + b;
+      """
+    And the gate debt registry reads:
+      """
+      {"survivors": [{"file": "src/lines.mjs", "start": {"line": 3, "column": 15}, "end": {"line": 3, "column": 20}, "mutator": "ArithmeticOperator", "original": "a + b", "replacement": "a - b"}]}
+      """
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 0
+      """
+    And the gate repository file "mutation-debt.json" now reads:
+      """
+      {"survivors": [{"file": "src/lines.mjs", "start": {"line": 3, "column": 15}, "end": {"line": 3, "column": 20}, "mutator": "ArithmeticOperator", "original": "a + b", "replacement": "a - b"}]}
+      """
+
+  Scenario: debt realign writes the registry in the format debt writes
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      const total = a + b;
+      """
+    And the gate debt registry reads:
+      """
+      {"survivors": [{"file": "src/lines.mjs", "start": {"line": 1, "column": 15}, "end": {"line": 1, "column": 20}, "mutator": "ArithmeticOperator", "original": "a + b", "replacement": "a - b"}]}
+      """
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate repository file "mutation-debt.json" now reads:
+      """
+      {
+        "survivors": [
+          {
+            "file": "src/lines.mjs",
+            "start": {
+              "line": 2,
+              "column": 15
+            },
+            "end": {
+              "line": 2,
+              "column": 20
+            },
+            "mutator": "ArithmeticOperator",
+            "original": "a + b",
+            "replacement": "a - b"
+          }
+        ]
+      }
+      """
+
+  Scenario: debt realign moves an entry of several lines by the same columns and the same number of lines
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      const sum = [
+        a,
+        b,
+      ];
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end | mutator          | original        | replacement |
+      | src/lines.mjs | 1:13  | 4:2 | ArrayDeclaration | [\n  a,\n  b,\n] | []          |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate debt registry now holds these entries:
+      | file          | start | end | mutator          | original        | replacement |
+      | src/lines.mjs | 2:13  | 5:2 | ArrayDeclaration | [\n  a,\n  b,\n] | []          |
+
+  Scenario: debt realign does not move an entry whose text is gone from its file, and exits 1 naming it
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      const total = a * b;
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 1:15  | 1:20 | ArithmeticOperator | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 0
+      - non déplacée : src/lines.mjs:1:15-1:20 ArithmeticOperator "a + b" -> "a - b"
+      """
+    And the gate debt registry now holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 1:15  | 1:20 | ArithmeticOperator | a + b    | a - b       |
+
+  Scenario: debt realign does not move an entry whose file is gone, and exits 1 naming it
+    Given the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 1:15  | 1:20 | ArithmeticOperator | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 0
+      - non déplacée : src/lines.mjs:1:15-1:20 ArithmeticOperator "a + b" -> "a - b"
+      """
+
+  Scenario: debt realign moves neither of two identical entries that have two places and no neighbour
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      // two
+      const p = a + b;
+      const q = a + b;
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 1:11  | 1:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 2:11  | 2:16 | ArithmeticOperator | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 0
+      - non déplacée : src/lines.mjs:1:11-1:16 ArithmeticOperator "a + b" -> "a - b"
+      - non déplacée : src/lines.mjs:2:11-2:16 ArithmeticOperator "a + b" -> "a - b"
+      """
+    And the gate debt registry now holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 1:11  | 1:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 2:11  | 2:16 | ArithmeticOperator | a + b    | a - b       |
+
+  Scenario: debt realign gives a misaligned entry the only place that an aligned entry of the same identity does not hold
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      const p = a + b;
+      const q = a + b;
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 1:11  | 1:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 2:11  | 2:16 | ArithmeticOperator | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate debt registry now holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 3:11  | 3:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 2:11  | 2:16 | ArithmeticOperator | a + b    | a - b       |
+
+  Scenario: debt realign moves none of three entries that have the same two places and no neighbour
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      const p = a + b;
+      const q = a + b;
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 4:11  | 4:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 5:11  | 5:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 6:11  | 6:16 | ArithmeticOperator | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 0
+      - non déplacée : src/lines.mjs:4:11-4:16 ArithmeticOperator "a + b" -> "a - b"
+      - non déplacée : src/lines.mjs:5:11-5:16 ArithmeticOperator "a + b" -> "a - b"
+      - non déplacée : src/lines.mjs:6:11-6:16 ArithmeticOperator "a + b" -> "a - b"
+      """
+
+  Scenario: debt realign puts an entry on its own code when a decoy of the same text stands above it, the block having moved up by one line
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // head
+      const d = f(true);
+      const a = one();
+      const t = g(true);
+      const b = two();
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator        | original | replacement |
+      | src/lines.mjs | 4:11  | 4:16 | CallRemoval    | one()    | undefined   |
+      | src/lines.mjs | 5:13  | 5:17 | BooleanLiteral | true     | false       |
+      | src/lines.mjs | 6:11  | 6:16 | CallRemoval    | two()    | undefined   |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 3
+      """
+    And the gate debt registry now holds these entries:
+      | file          | start | end  | mutator        | original | replacement |
+      | src/lines.mjs | 3:11  | 3:16 | CallRemoval    | one()    | undefined   |
+      | src/lines.mjs | 4:13  | 4:17 | BooleanLiteral | true     | false       |
+      | src/lines.mjs | 5:11  | 5:16 | CallRemoval    | two()    | undefined   |
+
+  Scenario: debt realign puts an entry on its own code when a decoy of the same text stands above it, the block having moved down by two lines
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // head
+      const d = f(true);
+      // pad
+      // pad
+      const a = one();
+      const t = g(true);
+      const b = two();
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator        | original | replacement |
+      | src/lines.mjs | 3:11  | 3:16 | CallRemoval    | one()    | undefined   |
+      | src/lines.mjs | 4:13  | 4:17 | BooleanLiteral | true     | false       |
+      | src/lines.mjs | 5:11  | 5:16 | CallRemoval    | two()    | undefined   |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 3
+      """
+    And the gate debt registry now holds these entries:
+      | file          | start | end  | mutator        | original | replacement |
+      | src/lines.mjs | 5:11  | 5:16 | CallRemoval    | one()    | undefined   |
+      | src/lines.mjs | 6:13  | 6:17 | BooleanLiteral | true     | false       |
+      | src/lines.mjs | 7:11  | 7:16 | CallRemoval    | two()    | undefined   |
+
+  Scenario: debt realign moves no entry that has two places when its neighbours above and below name two different ones
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // head
+      const a = one();
+      const t = g(true);
+      // pad
+      // pad
+      const u = h(true);
+      const b = two();
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator        | original | replacement |
+      | src/lines.mjs | 4:11  | 4:16 | CallRemoval    | one()    | undefined   |
+      | src/lines.mjs | 5:13  | 5:17 | BooleanLiteral | true     | false       |
+      | src/lines.mjs | 6:11  | 6:16 | CallRemoval    | two()    | undefined   |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 2
+      - non déplacée : src/lines.mjs:5:13-5:17 BooleanLiteral "true" -> "false"
+      """
+
+  Scenario: debt realign gives to neither a place that the neighbours name for two entries of one kind
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // head
+      const d = f(true);
+      // pad
+      // pad
+      // pad
+      const m = mid();
+      const a = one();
+      // pad
+      const t = g(true);
+      // pad
+      const b = two();
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end   | mutator        | original | replacement |
+      | src/lines.mjs | 3:11  | 3:16  | CallRemoval    | one()    | undefined   |
+      | src/lines.mjs | 5:13  | 5:17  | BooleanLiteral | true     | false       |
+      | src/lines.mjs | 6:11  | 6:16  | CallRemoval    | mid()    | undefined   |
+      | src/lines.mjs | 8:13  | 8:17  | BooleanLiteral | true     | false       |
+      | src/lines.mjs | 10:11 | 10:16 | CallRemoval    | two()    | undefined   |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 2
+      - non déplacée : src/lines.mjs:5:13-5:17 BooleanLiteral "true" -> "false"
+      - non déplacée : src/lines.mjs:8:13-8:17 BooleanLiteral "true" -> "false"
+      """
+
+  Scenario: debt realign moves an entry that has two places by the nearest neighbour above, not by a farther one
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // head
+      // pad
+      const a = one();
+      // pad
+      const b = two();
+      // pad
+      const t = g(true);
+      // pad
+      // pad
+      // pad
+      const c = three();
+      const u = h(true);
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator        | original | replacement |
+      | src/lines.mjs | 1:11  | 1:16 | CallRemoval    | one()    | undefined   |
+      | src/lines.mjs | 8:11  | 8:16 | CallRemoval    | two()    | undefined   |
+      | src/lines.mjs | 10:13 | 10:17 | BooleanLiteral | true     | false       |
+      | src/lines.mjs | 11:11 | 11:18 | CallRemoval    | three()  | undefined   |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 3
+      """
+    And the gate debt registry now holds these entries:
+      | file          | start | end  | mutator        | original | replacement |
+      | src/lines.mjs | 3:11  | 3:16 | CallRemoval    | one()    | undefined   |
+      | src/lines.mjs | 5:11  | 5:16 | CallRemoval    | two()    | undefined   |
+      | src/lines.mjs | 7:13  | 7:17 | BooleanLiteral | true     | false       |
+      | src/lines.mjs | 11:11 | 11:18 | CallRemoval    | three()  | undefined   |
+
+  Scenario: debt realign moves an entry that has two places by the nearest neighbour below, not by a farther one
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // head
+      // pad
+      const u = h(true);
+      // pad
+      const c = three();
+      // pad
+      // pad
+      // pad
+      const t = g(true);
+      const b = two();
+      const a = one();
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end   | mutator        | original | replacement |
+      | src/lines.mjs | 5:11  | 5:18  | CallRemoval    | three()  | undefined   |
+      | src/lines.mjs | 6:13  | 6:17  | BooleanLiteral | true     | false       |
+      | src/lines.mjs | 8:11  | 8:16  | CallRemoval    | one()    | undefined   |
+      | src/lines.mjs | 13:11 | 13:16 | CallRemoval    | two()    | undefined   |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 3
+      """
+    And the gate debt registry now holds these entries:
+      | file          | start | end   | mutator        | original | replacement |
+      | src/lines.mjs | 5:11  | 5:18  | CallRemoval    | three()  | undefined   |
+      | src/lines.mjs | 9:13  | 9:17  | BooleanLiteral | true     | false       |
+      | src/lines.mjs | 11:11 | 11:16 | CallRemoval    | one()    | undefined   |
+      | src/lines.mjs | 10:11 | 10:16 | CallRemoval    | two()    | undefined   |
+
+  Scenario: debt realign takes no evidence from an entry of the same line, nor from another file
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // head
+      const p = a + b;
+      const q = a + b; one()
+      """
+    And the gate repository file "src/other.mjs" reads:
+      """
+      two()
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 5:11  | 5:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 5:18  | 5:23 | CallRemoval        | one()    | undefined   |
+      | src/other.mjs | 4:1   | 4:6  | CallRemoval        | two()    | undefined   |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 2
+      - non déplacée : src/lines.mjs:5:11-5:16 ArithmeticOperator "a + b" -> "a - b"
+      """
+
+  Scenario: debt realign moves neither of two entries that have the same only place, whatever their neighbours say
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // head
+      const a = one();
+      const p = a + b;
+      const b = two();
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 3:11  | 3:16 | CallRemoval        | one()    | undefined   |
+      | src/lines.mjs | 4:11  | 4:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 5:11  | 5:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 6:11  | 6:16 | CallRemoval        | two()    | undefined   |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 2
+      - non déplacée : src/lines.mjs:4:11-4:16 ArithmeticOperator "a + b" -> "a - b"
+      - non déplacée : src/lines.mjs:5:11-5:16 ArithmeticOperator "a + b" -> "a - b"
+      """
+
+  Scenario: debt realign moves neither of two entries that have the same only place, even when a neighbour names it for one alone
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // head
+      const a = one();
+      const p = a + b;
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 3:11  | 3:16 | CallRemoval        | one()    | undefined   |
+      | src/lines.mjs | 4:11  | 4:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 5:11  | 5:16 | ArithmeticOperator | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 1
+      - non déplacée : src/lines.mjs:4:11-4:16 ArithmeticOperator "a + b" -> "a - b"
+      - non déplacée : src/lines.mjs:5:11-5:16 ArithmeticOperator "a + b" -> "a - b"
+      """
+
+  Scenario: debt realign takes no evidence from an entry that stays misaligned
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // head
+      // pad
+      const a = one();
+      // pad
+      // pad
+      // pad
+      const t = g(true);
+      // pad
+      const u = h(true);
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator        | original | replacement |
+      | src/lines.mjs | 1:11  | 1:16 | CallRemoval    | one()    | undefined   |
+      | src/lines.mjs | 3:11  | 3:17 | CallRemoval    | gone()   | undefined   |
+      | src/lines.mjs | 5:13  | 5:17 | BooleanLiteral | true     | false       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 2
+      - non déplacée : src/lines.mjs:3:11-3:17 CallRemoval "gone()" -> "undefined"
+      """
+    And the gate debt registry now holds these entries:
+      | file          | start | end  | mutator        | original | replacement |
+      | src/lines.mjs | 3:11  | 3:16 | CallRemoval    | one()    | undefined   |
+      | src/lines.mjs | 3:11  | 3:17 | CallRemoval    | gone()   | undefined   |
+      | src/lines.mjs | 7:13  | 7:17 | BooleanLiteral | true     | false       |
+
+  Scenario: debt realign never moves an aligned entry, even when its text also stands elsewhere
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      const p = a + b;
+      const q = a + b;
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 3:11  | 3:16 | ArithmeticOperator | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate debt registry now holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 3:11  | 3:16 | ArithmeticOperator | a + b    | a - b       |
+
+  Scenario: debt realign makes no move that needs another column
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+        const total = a + b;
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 5:15  | 5:20 | ArithmeticOperator | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 0
+      - non déplacée : src/lines.mjs:5:15-5:20 ArithmeticOperator "a + b" -> "a - b"
+      """
+
+  Scenario: debt realign moves entries of one kind at different columns each to its own columns
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      const p = a + b;
+      const total = a + b;
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 7:11  | 7:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 8:15  | 8:20 | ArithmeticOperator | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate debt registry now holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 2:11  | 2:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 3:15  | 3:20 | ArithmeticOperator | a + b    | a - b       |
+
+  Scenario: debt realign moves entries of one kind that differ by the mutator or the replacement each to its own
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      const p = a + b;
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 7:11  | 7:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 8:11  | 8:16 | ArithmeticOperator | a + b    | a * b       |
+      | src/lines.mjs | 9:11  | 9:16 | OtherOperator      | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 0
+    And the gate debt registry now holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 2:11  | 2:16 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 2:11  | 2:16 | ArithmeticOperator | a + b    | a * b       |
+      | src/lines.mjs | 2:11  | 2:16 | OtherOperator      | a + b    | a - b       |
+
+  Scenario: debt realign does not let an entry that spans other lines than its text hold back another
+    Given the gate repository file "src/lines.mjs" reads:
+      """
+      // one
+      const total = a + b;
+      """
+    And the gate debt registry holds these entries:
+      | file          | start | end  | mutator            | original | replacement |
+      | src/lines.mjs | 7:15  | 8:20 | ArithmeticOperator | a + b    | a - b       |
+      | src/lines.mjs | 9:15  | 9:20 | ArithmeticOperator | a + b    | a - b       |
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      registre de dette réaligné : mutation-debt.json
+      - entrées déplacées : 1
+      - non déplacée : src/lines.mjs:7:15-8:20 ArithmeticOperator "a + b" -> "a - b"
+      """
+
+  Scenario Outline: debt realign refuses an unusable registry and writes nothing: <registry>
+    Given the gate debt registry reads:
+      """
+      <registry>
+      """
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : registre de dette illisible : <reason>
+      """
+
+    Examples:
+      | registry | reason                                                                  |
+      | []       | hors schéma : ✖ Invalid input: expected object, received array |
+
+  Scenario: debt realign refuses an absent registry
+    Given the gate debt registry is absent
+    When the gate runs with the arguments "debt realign"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : registre de dette illisible : mutation-debt.json absent
+      """
+    And the gate repository holds no file "mutation-debt.json"

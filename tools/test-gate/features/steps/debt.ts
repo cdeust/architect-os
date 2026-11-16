@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { DataTable } from '@cucumber/cucumber';
 import { DEBT_PATH, FIXTURES, Given, Then, repository, type GateRepository } from './repository.js';
 
 // Steps of debt.feature: the mutation debt registry of a disposable repository (fixtures/debt/), the code that
@@ -133,4 +134,40 @@ Then('the gate repository file {string} now reads:', function (path: string, tex
 
 Then('the gate repository holds no file {string}', function (path: string) {
   assert.equal(repository(this).exists(path), false);
+});
+
+// A registry written as a table: one row per entry, positions as `line:column`, `\n` in a cell is a newline.
+const COLUMNS = ['file', 'start', 'end', 'mutator', 'original', 'replacement'];
+
+function position(text: string): { line: number; column: number } {
+  const [line, column] = text.split(':').map(Number);
+  return { line: line as number, column: column as number };
+}
+
+Given('the gate debt registry holds these entries:', function (table: DataTable) {
+  const survivors = table.hashes().map((row) => ({
+    file: row['file'],
+    start: position(row['start'] as string),
+    end: position(row['end'] as string),
+    mutator: row['mutator'],
+    original: row['original'],
+    replacement: row['replacement'],
+  }));
+  repository(this).write(DEBT_PATH, `${JSON.stringify({ survivors }, null, 2)}\n`);
+});
+
+Then('the gate debt registry now holds these entries:', function (table: DataTable) {
+  const { survivors } = JSON.parse(repository(this).read(DEBT_PATH)) as {
+    survivors: { start: Entry['start']; end: Entry['end']; [field: string]: unknown }[];
+  };
+  const rows = survivors.map((entry) => [
+    entry['file'],
+    `${entry.start.line}:${entry.start.column}`,
+    `${entry.end.line}:${entry.end.column}`,
+    entry['mutator'],
+    entry['original'],
+    entry['replacement'],
+  ]);
+  assert.deepEqual(rows, table.raw().slice(1));
+  assert.deepEqual(table.raw()[0], COLUMNS);
 });
