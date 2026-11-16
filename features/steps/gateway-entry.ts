@@ -102,6 +102,7 @@ Given(
         GATEWAY_PORT: String(port),
         GATEWAY_QUOTA_PER_MINUTE: '100',
         GATEWAY_PROFILE: 'owner',
+        GATEWAY_SANDBOX: 'srt',
         BROKER_CONFIG: brokerConfig,
         DATABASE_URL: 'memory',
         NODE_EXTRA_CA_CERTS: tls.certFile,

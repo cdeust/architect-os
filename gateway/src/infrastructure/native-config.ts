@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
-import type { NativeProcess } from '@architect-os/sandbox';
+import type { NativeProcess, SandboxMeans } from '@architect-os/sandbox';
 import type { TopologyFiles } from './topology-files.js';
 
 /** What the process entry needs of its environment (docs/design/platform-v3-srt.md, §8, 1b.6a). */
@@ -14,6 +14,8 @@ export interface NativeConfig {
   /** The port of the broker, read from the file the broker is given. */
   brokerPort: number;
   files: TopologyFiles;
+  /** How the modules and the workers are isolated: chosen by the operator, never detected. */
+  sandbox: SandboxMeans;
   /** The closed list of `NativeLauncher`. */
   processes: { data: NativeProcess; broker: NativeProcess };
 }
@@ -35,6 +37,45 @@ function required(env: Env, variable: string, expected: string): string {
 
 /** A positive integer in its one spelling (digits, no sign, no leading zero, no blank), or NaN. */
 const whole = (text: string): number => (/^[1-9]\d*$/.test(text) ? Number(text) : NaN);
+
+const DOCKER_VARIABLES = [
+  'GATEWAY_DOCKER_IMAGE',
+  'GATEWAY_DOCKER_NODE',
+  'GATEWAY_DOCKER_MEMORY_MIB',
+  'GATEWAY_DOCKER_PIDS',
+  'GATEWAY_DOCKER_CHECK_MS',
+] as const;
+
+/** A required whole number of at least 1, a safe integer: one that a number holds exactly, and its neighbours too. */
+function count(env: Env, variable: string): number {
+  const expected = 'an integer of at least 1';
+  const value = whole(required(env, variable, expected));
+  if (!Number.isSafeInteger(value)) throw refusal(variable, expected);
+  return value;
+}
+
+/**
+ * The means of isolation, written by the operator: `srt`, or `docker` with its image and its bounds. What is asked and
+ * cannot be given is refused: a Docker variable beside `srt` is not left out in silence. The rules of the Docker options
+ * (digest, least memory, path of node) are those of the adapter, which refuses them in its own words.
+ */
+function sandboxOf(env: Env): SandboxMeans {
+  const means = env['GATEWAY_SANDBOX'];
+  if (means === 'srt') {
+    for (const variable of DOCKER_VARIABLES)
+      if (env[variable] !== undefined) throw refusal(variable, 'absent when GATEWAY_SANDBOX is srt');
+    return { means };
+  }
+  if (means !== 'docker') throw refusal('GATEWAY_SANDBOX', 'srt or docker');
+  return {
+    means,
+    image: required(env, 'GATEWAY_DOCKER_IMAGE', 'the image of the sandboxes, name@sha256:<digest>'),
+    node: required(env, 'GATEWAY_DOCKER_NODE', 'the absolute path of node in the image'),
+    memoryMiB: count(env, 'GATEWAY_DOCKER_MEMORY_MIB'),
+    pidsLimit: count(env, 'GATEWAY_DOCKER_PIDS'),
+    checkTimeoutMs: count(env, 'GATEWAY_DOCKER_CHECK_MS'),
+  };
+}
 
 /**
  * One client: a bearer token as RFC 6750 writes it (letters, digits and `-._~+/`, then `=` only at its end, as
@@ -103,15 +144,16 @@ function brokerEnvOf(env: Env): Record<string, string> {
  * Reads the configuration of the native gateway from its environment; launches nothing. `root` is the absolute
  * platform root, `node` the absolute path of the interpreter of the children (the entry passes `process.execPath`).
  * No default: every variable is required but `NODE_EXTRA_CA_CERTS`. A child is given its own variables, nothing else.
+ * One refusal is thrown, the first met: when several variables are refused, which one is named is not part of the
+ * contract.
  */
 export function readNativeConfig(env: Env, root: string, node: string): NativeConfig {
   const tokens = tokensOf(env);
   const port = whole(required(env, 'GATEWAY_PORT', 'an integer from 1 to 65535'));
   if (!(port <= 65535)) throw refusal('GATEWAY_PORT', 'an integer from 1 to 65535');
-  const quotaPerMinute = whole(required(env, 'GATEWAY_QUOTA_PER_MINUTE', 'an integer of at least 1'));
-  if (!Number.isSafeInteger(quotaPerMinute))
-    throw refusal('GATEWAY_QUOTA_PER_MINUTE', 'an integer of at least 1');
+  const quotaPerMinute = count(env, 'GATEWAY_QUOTA_PER_MINUTE');
   const profile = required(env, 'GATEWAY_PROFILE', 'the name of a client profile');
+  const sandbox = sandboxOf(env);
   const brokerPort = brokerPortOf(env);
   return {
     tokens,
@@ -119,6 +161,7 @@ export function readNativeConfig(env: Env, root: string, node: string): NativeCo
     quotaPerMinute,
     profile,
     brokerPort,
+    sandbox,
     files: {
       catalog: join(root, 'topology', 'catalog.json'),
       servers: join(root, 'topology', 'modules.mcp.json'),

@@ -14,6 +14,47 @@ Feature: The process of the native gateway
       """
     And the native process launched nothing
 
+  Scenario: the host is asked for the sandboxes of exactly the configured means, and the check comes before the launcher
+    Given a native process with doubles for data, the broker and the sandboxes, on a free port
+    When the native process is started and serving
+    Then the host of the native process was asked for the sandboxes of exactly '{"means":"srt"}'
+    And the host of the native process was called in the order "sandboxes, check, check ended, launch"
+
+  Scenario: the means of Docker are asked for as the operator wrote them
+    Given a native process with doubles for data, the broker and the sandboxes, on a free port
+    And the environment of the native process has GATEWAY_SANDBOX set to "docker"
+    And the environment of the native process has GATEWAY_DOCKER_IMAGE set to "node@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    And the environment of the native process has GATEWAY_DOCKER_NODE set to "/usr/local/bin/node"
+    And the environment of the native process has GATEWAY_DOCKER_MEMORY_MIB set to "512"
+    And the environment of the native process has GATEWAY_DOCKER_PIDS set to "64"
+    And the environment of the native process has GATEWAY_DOCKER_CHECK_MS set to "20000"
+    When the native process is started and serving
+    Then the host of the native process was asked for the sandboxes of exactly '{"means":"docker","image":"node@sha256:0000000000000000000000000000000000000000000000000000000000000000","node":"/usr/local/bin/node","memoryMiB":512,"pidsLimit":64,"checkTimeoutMs":20000}'
+
+  Scenario: a host that refuses the sandboxes gives the code 1 and launches nothing
+    Given a native process with doubles for data, the broker and the sandboxes, on a free port
+    And the host of the native process throws "image without a digest" when asked for the sandboxes
+    When the native process is started and its end is awaited
+    Then the native process gave the code 1
+    And the native process wrote on its standard error:
+      """
+      gateway: image without a digest
+      """
+    And the native process launched nothing
+    And the host of the native process was called in the order "sandboxes"
+
+  Scenario: a check that rejects gives the code 1 and launches nothing
+    Given a native process with doubles for data, the broker and the sandboxes, on a free port
+    And the sandboxes of the native process reject their check with "the daemon is not rootless"
+    When the native process is started and its end is awaited
+    Then the native process gave the code 1
+    And the native process wrote on its standard error:
+      """
+      gateway: the daemon is not rootless
+      """
+    And the native process launched nothing
+    And the host of the native process was called in the order "sandboxes, check"
+
   Scenario: served, it lists the tools for a client with a token, refuses one without, and listens on the loopback only
     Given a native process with doubles for data, the broker and the sandboxes, on a free port
     When the native process is started and serving
@@ -201,5 +242,5 @@ Feature: The process of the native gateway
     Given the host of a process whose entry is the built serve.js of the gateway of this repository
     When the launcher of the host starts a child that writes "ready" on its stderr, then closes it
     Then the log of the launcher received "ready" from that child, and the child ended with the code 0
-    And the runner the host gives for the variables '{"callbackPort":"4100"}' is the srt runner
+    And the sandboxes the host gives for srt run the srt runner for the variables '{"callbackPort":"4100"}', and their check resolves
     And the host of the process bounds the stop at 10000 ms and probes data every 1000 ms, on timers, with the audit log on stdout

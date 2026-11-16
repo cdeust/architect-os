@@ -158,6 +158,99 @@ Feature: the native gateway reads its configuration from its environment, with n
       | a port beyond range | {"port":65536} |
       | a fractional port | {"port":8084.5} |
 
+  Scenario Outline: a sandbox means that is not srt or docker is refused: <case>
+    Given a complete environment of the native gateway
+    And the variable "GATEWAY_SANDBOX" is "<value>"
+    When the native configuration is read for the root "/opt/platform" and the node "/opt/node/bin/node"
+    Then the native configuration is refused with "GATEWAY_SANDBOX must be srt or docker"
+
+    Examples:
+      | case | value |
+      | empty |  |
+      | another case | Docker |
+      | a blank after it | srt[blank] |
+      | another means | podman |
+
+  Scenario: a sandbox means that is absent is refused
+    Given a complete environment of the native gateway
+    And the variable "GATEWAY_SANDBOX" is absent
+    When the native configuration is read for the root "/opt/platform" and the node "/opt/node/bin/node"
+    Then the native configuration is refused with "GATEWAY_SANDBOX must be srt or docker"
+
+  Scenario: srt is the means srt, and nothing else
+    Given a complete environment of the native gateway
+    When the native configuration is read for the root "/opt/platform" and the node "/opt/node/bin/node"
+    Then the sandbox of the native configuration is '{"means":"srt"}'
+
+  Scenario Outline: srt with a Docker variable is refused, naming it: <variable>
+    Given a complete environment of the native gateway
+    And the variable "<variable>" is "x"
+    When the native configuration is read for the root "/opt/platform" and the node "/opt/node/bin/node"
+    Then the native configuration is refused with "<variable> must be absent when GATEWAY_SANDBOX is srt"
+
+    Examples:
+      | variable |
+      | GATEWAY_DOCKER_IMAGE |
+      | GATEWAY_DOCKER_NODE |
+      | GATEWAY_DOCKER_MEMORY_MIB |
+      | GATEWAY_DOCKER_PIDS |
+      | GATEWAY_DOCKER_CHECK_MS |
+
+  Scenario: srt with a Docker variable that is empty is refused all the same
+    Given a complete environment of the native gateway
+    And the variable "GATEWAY_DOCKER_PIDS" is ""
+    When the native configuration is read for the root "/opt/platform" and the node "/opt/node/bin/node"
+    Then the native configuration is refused with "GATEWAY_DOCKER_PIDS must be absent when GATEWAY_SANDBOX is srt"
+
+  Scenario: docker with five good values holds exactly them, the numbers as numbers
+    Given a complete environment of the native gateway
+    And the environment of the native gateway chooses Docker with good values
+    When the native configuration is read for the root "/opt/platform" and the node "/opt/node/bin/node"
+    Then the sandbox of the native configuration is '{"means":"docker","image":"node@sha256:0000000000000000000000000000000000000000000000000000000000000000","node":"/usr/local/bin/node","memoryMiB":512,"pidsLimit":64,"checkTimeoutMs":20000}'
+
+  Scenario Outline: docker without one of its variables is refused, naming it: <variable>
+    Given a complete environment of the native gateway
+    And the environment of the native gateway chooses Docker with good values
+    And the variable "<variable>" is absent
+    When the native configuration is read for the root "/opt/platform" and the node "/opt/node/bin/node"
+    Then the native configuration is refused with "<message>"
+
+    Examples:
+      | variable | message |
+      | GATEWAY_DOCKER_IMAGE | GATEWAY_DOCKER_IMAGE must be the image of the sandboxes, name@sha256:<digest> |
+      | GATEWAY_DOCKER_NODE | GATEWAY_DOCKER_NODE must be the absolute path of node in the image |
+      | GATEWAY_DOCKER_MEMORY_MIB | GATEWAY_DOCKER_MEMORY_MIB must be an integer of at least 1 |
+      | GATEWAY_DOCKER_PIDS | GATEWAY_DOCKER_PIDS must be an integer of at least 1 |
+      | GATEWAY_DOCKER_CHECK_MS | GATEWAY_DOCKER_CHECK_MS must be an integer of at least 1 |
+
+  Scenario Outline: docker with a number that is not a positive integer is refused, naming it: <variable> <value>
+    Given a complete environment of the native gateway
+    And the environment of the native gateway chooses Docker with good values
+    And the variable "<variable>" is "<value>"
+    When the native configuration is read for the root "/opt/platform" and the node "/opt/node/bin/node"
+    Then the native configuration is refused with "<variable> must be an integer of at least 1"
+
+    Examples:
+      | variable | value |
+      | GATEWAY_DOCKER_MEMORY_MIB | 0 |
+      | GATEWAY_DOCKER_MEMORY_MIB | -1 |
+      | GATEWAY_DOCKER_MEMORY_MIB | 1.5 |
+      | GATEWAY_DOCKER_MEMORY_MIB | 08 |
+      | GATEWAY_DOCKER_MEMORY_MIB | 1e3 |
+      | GATEWAY_DOCKER_MEMORY_MIB | 90071992547409930 |
+      | GATEWAY_DOCKER_PIDS | 0 |
+      | GATEWAY_DOCKER_PIDS | -1 |
+      | GATEWAY_DOCKER_PIDS | 1.5 |
+      | GATEWAY_DOCKER_PIDS | 08 |
+      | GATEWAY_DOCKER_PIDS | 1e3 |
+      | GATEWAY_DOCKER_PIDS | 90071992547409930 |
+      | GATEWAY_DOCKER_CHECK_MS | 0 |
+      | GATEWAY_DOCKER_CHECK_MS | -1 |
+      | GATEWAY_DOCKER_CHECK_MS | 1.5 |
+      | GATEWAY_DOCKER_CHECK_MS | 08 |
+      | GATEWAY_DOCKER_CHECK_MS | 1e3 |
+      | GATEWAY_DOCKER_CHECK_MS | 90071992547409930 |
+
   Scenario Outline: a refusal does not contain the value that caused it: <variable>
     Given a complete environment of the native gateway
     And the variable "<variable>" is "<value>"
@@ -172,3 +265,4 @@ Feature: the native gateway reads its configuration from its environment, with n
       | DATABASE_URL | mysql://app:s3cret@db/platform | s3cret |
       | BROKER_CONFIG | relative/s3cret.json | s3cret |
       | NODE_EXTRA_CA_CERTS | relative/s3cret.pem | s3cret |
+      | GATEWAY_SANDBOX | s3cret | s3cret |

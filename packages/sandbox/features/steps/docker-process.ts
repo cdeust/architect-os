@@ -16,7 +16,8 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { DockerProcessRunner, type DockerProcessRunnerOptions } from '../../src/docker-process-runner.js';
 import type { Sandbox, SandboxExit } from '../../src/port.js';
-import { Given, PKG, Then, When, stored, type SandboxWorld } from './helpers.js';
+import { platformSandboxes, type PlatformSandboxes } from '../../src/platform-sandboxes.js';
+import { Given, PKG, ROOT, Then, When, stored, type SandboxWorld } from './helpers.js';
 
 const IMAGE = `node:22-alpine@sha256:${'a'.repeat(64)}`;
 
@@ -117,6 +118,8 @@ interface Harness {
   hostEnv: Record<string, string | undefined>;
   /** The runner the starts of the scenario share, built by the first of them. */
   runner?: DockerProcessRunner;
+  /** The sandboxes of the platform, when the scenario asks `platformSandboxes` for them. */
+  platform?: PlatformSandboxes;
   checkTimeoutMs: number;
   sandbox?: Sandbox;
   started?: Promise<void>;
@@ -306,8 +309,8 @@ function build(h: Harness, changed: Partial<DockerProcessRunnerOptions>): void {
 
 async function begin(world: SandboxWorld, profile: string, command: string): Promise<Sandbox> {
   const h = harness(world);
-  h.runner ??= runnerOf(h);
-  const sandbox = await h.runner.withVariables(h.variables).start({
+  const runner = h.platform?.runner(h.variables) ?? (h.runner ??= runnerOf(h)).withVariables(h.variables);
+  const sandbox = await runner.start({
     profile,
     cwd: h.tmpRoot,
     // `[nul]` stands for the character no argument of a process can hold.
@@ -944,5 +947,93 @@ Then('the canary run ends with', function (expected: string) {
   assert.deepEqual(
     canary.args.slice(canary.args.indexOf(IMAGE) + 1),
     expected.split('\n').map((line) => line.replaceAll('<port>', port)),
+  );
+});
+
+// --- platformSandboxes, with the fake client of this harness ---
+
+const PLATFORM_IMAGE = `registry.example/aos-node@sha256:${'b'.repeat(64)}`;
+
+Given(
+  'the Docker process harness reaches its fake client as docker through the PATH of its environment',
+  function () {
+    const h = harness(this);
+    h.hostEnv['PATH'] = `${h.dockerDir}:${process.env['PATH']}`;
+  },
+);
+
+Given('the PATH of the environment of the Docker process harness holds no docker', function () {
+  const h = harness(this);
+  h.hostEnv['PATH'] = h.tmpRoot;
+});
+
+/** Asks for the sandboxes of this repository's platform by Docker, and keeps what it gives or refuses. */
+function ask(world: SandboxWorld, image: string): void {
+  const h = harness(world);
+  try {
+    h.platform = platformSandboxes(
+      ROOT,
+      '/host/bin/node',
+      {
+        means: 'docker',
+        image,
+        node: '/image/bin/node',
+        memoryMiB: 300,
+        pidsLimit: 48,
+        checkTimeoutMs: h.checkTimeoutMs,
+      },
+      h.hostEnv,
+    );
+    h.refusal = null;
+  } catch (error) {
+    h.refusal = error as Error;
+  }
+}
+
+When('I ask for the sandboxes of the platform by Docker with its good means', function () {
+  ask(this, PLATFORM_IMAGE);
+});
+
+When('I ask for the sandboxes of the platform by Docker with the image {string}', function (image: string) {
+  ask(this, image);
+});
+
+When('I check the sandboxes of the platform', async function () {
+  const h = harness(this);
+  h.refusal = await h.platform!.check().then(
+    () => null,
+    (error: Error) => error,
+  );
+});
+
+When('I ask for the sandboxes of the platform by srt and check them', async function () {
+  const h = harness(this);
+  h.platform = platformSandboxes(ROOT, process.execPath, { means: 'srt' }, h.hostEnv);
+  h.refusal = await h.platform.check().then(
+    () => null,
+    (error: Error) => error,
+  );
+});
+
+Then('the canary run holds the means of the platform and the root of this repository', function () {
+  const [canary] = canaryRuns(harness(this));
+  assert.ok(canary, 'no canary was run');
+  const { args } = canary;
+  const after = (option: string) => args[args.indexOf(option) + 1];
+  assert.equal(after('--memory'), '300m');
+  assert.equal(after('--pids-limit'), '48');
+  assert.equal(args[args.indexOf(PLATFORM_IMAGE) + 1], '/image/bin/node');
+  assert.ok(args.includes(`type=bind,source=${ROOT},target=${ROOT},readonly`), args.join(' '));
+});
+
+Then('the sandbox of the Docker process run holds the image of the platform', function () {
+  assert.ok(runArgs(harness(this)).includes(PLATFORM_IMAGE));
+});
+
+Then('the entries of the Docker process runs are told the ports {string}', function (ports: string) {
+  const runs = calls(harness(this)).filter((call) => call.args[0] === 'run');
+  assert.deepEqual(
+    runs.map(({ args }) => args[args.indexOf('--') - 1]),
+    ports.split(', '),
   );
 });

@@ -3,6 +3,9 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { ProcessRunnerOptions } from './srt-runner.js';
 
+/** The committed profile templates of the platform at `root`, the same for every means of isolation. */
+export const platformProfiles = (root: string): string => join(root, 'packages', 'sandbox', 'profiles');
+
 /**
  * The options of the srt runner of a platform process (a module, a worker), for the platform at `root`: the committed
  * profiles and the canary of this package, the pinned srt, a disposable working directory, nothing trusted, and of the
@@ -17,7 +20,7 @@ export function processRunnerOptions(
 ): ProcessRunnerOptions {
   const home = homedir();
   return {
-    profilesDir: join(root, 'packages', 'sandbox', 'profiles'),
+    profilesDir: platformProfiles(root),
     srtCli: createRequire(import.meta.url).resolve('@anthropic-ai/sandbox-runtime/dist/cli.js'),
     node,
     canaryProbe: join(root, 'packages', 'sandbox', 'src', 'canary-probe.mjs'),

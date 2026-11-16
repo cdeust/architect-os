@@ -244,7 +244,10 @@ export interface NativeHost {
     processes: import('./infrastructure/native-config.js').NativeConfig['processes'],
     log: (name: string, text: string) => void,
   ): { start(name: string): Promise<import('@architect-os/sandbox').NativeChild> };
-  runners: NativeDependencies['runners'];
+  /** The sandboxes of the platform, by the means its operator chose; a refusal of the means is thrown. */
+  sandboxes(
+    means: import('@architect-os/sandbox').SandboxMeans,
+  ): import('@architect-os/sandbox').PlatformSandboxes;
   /** Resolves when the process is asked to stop. */
   stopped: Promise<void>;
   /** The bound of the stop, from its beginning, on `scheduler`. */
@@ -258,14 +261,16 @@ export interface NativeHost {
  * The process of the native gateway (docs/design/platform-v3-srt.md, §8, 1b.6a): data and the broker as children
  * on their stdio, the composition, the HTTP host of the clients on the loopback; it runs until it is asked to stop or
  * a child exits (the gateway does not outlive them, §2). Resolves with the exit code, once the children have exited:
- * 0 when asked to stop, 1 for a refused configuration, a failed start, a child that exited or a stop that failed.
+ * 0 when asked to stop, 1 for a refused configuration, means of isolation that are refused or do not confine, a failed
+ * start, a child that exited or a stop that failed.
  *
  * The stop is the same whatever led to it: the HTTP host ends its connections and the composition closes; once that
  * is over, or `graceMs` after the stop began, every sandbox still alive is killed; then the children are closed. Past
  * the bound the composition is left behind, not cancelled: it goes on as long as the process lives, stops a
  * sandbox whose launch ends later (ModuleHost.close waits for the launches; a worker whose call is cancelled stops
  * itself). A stop asked while the process starts waits for the start: nothing but the two children exists until then,
- * and they end with their stdin if the process is killed.
+ * and they end with their stdin if the process is killed. The start begins with the check of the means of isolation,
+ * before the children: under Docker it lasts as long as its operator bounded it, and removes its own canary container.
  */
 export async function serveNative(host: NativeHost): Promise<number> {
   const { readNativeConfig } = await import('./infrastructure/native-config.js');
@@ -275,8 +280,12 @@ export async function serveNative(host: NativeHost): Promise<number> {
 
   const say = (text: string): void => void host.stderr.write(`${text}\n`);
   let config;
+  let sandboxes;
   try {
     config = readNativeConfig(host.env, host.root, host.node);
+    // Nothing is launched before the means of isolation are given and have proved that they confine.
+    sandboxes = host.sandboxes(config.sandbox);
+    await sandboxes.check();
   } catch (error) {
     say(`gateway: ${(error as Error).message}`);
     return 1;
@@ -298,7 +307,7 @@ export async function serveNative(host: NativeHost): Promise<number> {
   // gateway if nobody kills it.
   const live = new Set<import('@architect-os/sandbox').Sandbox>();
   const runners: NativeDependencies['runners'] = (variables) => {
-    const runner = host.runners(variables);
+    const runner = sandboxes.runner(variables);
     return {
       start: async (request) => {
         const sandbox = await runner.start(request);
@@ -395,8 +404,7 @@ export interface GatewayProcess {
 export async function nativeHost(proc: GatewayProcess, entry: string): Promise<NativeHost> {
   const { realpathSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
-  const { NativeLauncher, SrtSandboxRunner, processRunnerOptions, timer } =
-    await import('@architect-os/sandbox');
+  const { NativeLauncher, platformSandboxes, timer } = await import('@architect-os/sandbox');
   const { TimerScheduler } = await import('./infrastructure/usage-adapters.js');
   const root = realpathSync(fileURLToPath(new URL('../../../', entry)));
   return {
@@ -407,9 +415,10 @@ export async function nativeHost(proc: GatewayProcess, entry: string): Promise<N
     audit: new JsonLinesAuditLog(),
     // A child is given 5 s between the end of its stdin and its kill; the stop of the gateway 10 s before it kills
     // the sandboxes that are left (srt then gives a group 2 s): 17 s at worst from the signal to the end, under the
-    // 20 s a supervisor such as launchd leaves by default. The usage forwarder probes data every second while down.
+    // 20 s a supervisor such as launchd leaves by default; a signal that comes during the start waits for the start
+    // first. The usage forwarder probes data every second while down.
     launch: (processes, log) => new NativeLauncher(processes, { graceMs: 5000, schedule: timer, log }),
-    runners: (variables) => new SrtSandboxRunner(processRunnerOptions(root, proc.execPath, variables)),
+    sandboxes: (means) => platformSandboxes(root, proc.execPath, means, proc.env),
     // The listeners stay: a second signal during the stop (a double Ctrl-C) is ignored instead of ending the
     // process by its default action, with its sandboxes left behind.
     stopped: new Promise<void>((resolve) => {

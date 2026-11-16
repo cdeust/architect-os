@@ -2234,3 +2234,56 @@ Trois casses faites à la main sur la sonde (connexion non détruite, création 
 - Recherche : la conception du contrôle part d'une mesure, et s'amende quand la mesure contredit sa première rédaction ; une hypothèse d'une session (l'arrondi à la page) est mesurée avant d'entrer dans le code ; la comparaison des deux pas est donnée pour ce qu'elle est, un point.
 - SSDLC : élévation de privilèges (démon avec root refusé, sans option pour l'accepter), fuite et sortie (réseau, écritures), déni de service (bornes relues) : chaque ligne de la table des menaces du §6 a maintenant une condition du contrôle ; aucun repli ; aucune dépendance ajoutée.
 - Opérationnel : le contrôle ne laisse rien derrière lui ; la VM d'essai est arrêtée après chaque mesure, contexte du poste vérifié ; les entrées inventées sont lues avant d'être jouées sur l'hôte ; IRB sans objet.
+
+## 53. 1b.6b, troisième pas : la gateway native choisit son moyen d'isolation et le contrôle avant de lancer quoi que ce soit, 16 novembre 2026
+
+Le §52 a été poussé (`8dd8cee`) : porte de l'hôte verte (1 825 scénarios = 1 718 + 118 − 11 ; 280 mutants sur quatre fichiers, 250 tués, 7 délais dépassés, 23 erreurs d'exécution, 0 survivant, 0 non couvert), CI verte sur Linux et macOS, run retrouvé par le SHA du commit. L'arbre était propre à la fin de la porte.
+
+**Ce qui est livré.** Le champ `GATEWAY_SANDBOX` (`srt` ou `docker`, sans valeur par défaut) et, avec `docker`, cinq variables requises (image avec empreinte, chemin de `node` dans l'image, mémoire, processus, borne du contrôle) ; avec `srt`, chacune doit être absente. `platformSandboxes` (`packages/sandbox/src/platform-sandboxes.ts`) est le seul endroit qui transforme ce choix en lanceurs : un adaptateur Docker construit une fois pour la plateforme, ou un lanceur srt par module et par tâche. `serveNative` demande les sandboxes à son hôte puis attend leur contrôle avant de lancer quoi que ce soit : un refus s'écrit sur la sortie d'erreur, code 1, aucun enfant, aucun port. Le §52 avait noté ce manque (« le contrôle est demandé au premier lancement d'une sandbox, pas au démarrage de la gateway ») : il est comblé.
+
+**La consigne portait le code de l'appelant**, leçon du §52 : la boucle a reçu `composeNative`, `serveNative` et `nativeHost` avec la brique à brancher, et les règles tirées des deux pas précédents. Construction (Sonnet 5.5, effort moyen) : 203 s, 0,62 $. Revue (Opus 5.5, effort élevé) : 196 s, 0,67 $, `accept`, trois propositions, aucune de justesse.
+
+| | Premier pas (§51) | Deuxième pas (§52) | Ce pas |
+|---|---|---|---|
+| Construction | 733 s, 1,59 $ | 756 s, 1,53 $ | 203 s, 0,62 $ |
+| Verdict de la revue | `request_changes` | `request_changes` | `accept` |
+| Constats, dont de justesse | 8, dont 4 | 7, dont 1 | 3, dont 0 |
+| Seconde revue ou reprise ensuite | seconde revue, 13 constats dont 7 de justesse | reprise, cinq points de mainteneur dont un défaut de conception | reprise, un scénario rouge sur l'hôte, aucun défaut du code |
+
+Trois points ne font pas une courbe, et ce pas est le plus petit des trois (du branchement, pas de mécanisme neuf). La table est tenue pour que le pas de réflexion de la boucle ait un historique à mesurer (`orchestration-fable-5-2.md`, §4).
+
+**Ce que la boucle ne pouvait pas voir : un scénario rouge sur l'hôte.** La sandbox de construction ne peut pas écouter sur un port : 21 scénarios n'y ont pas tourné, et le rapport le disait. Sur l'hôte, un seul échouait : il comptait les lancements du client Docker sans attendre que le client ait écrit son appel. Réécrit avec les steps existants, qui attendent le client, et il affirme maintenant ce qu'il devait prouver : les deux lanceurs, de deux jeux de variables, lancent chacun avec son propre port, après un seul contrôle.
+
+**Relecture de mainteneur.**
+
+- `platformSandboxes` avait été posé dans `process-options.ts`, le fichier des options de srt. Il a son fichier : c'est le seul endroit où un moyen devient des lanceurs, et il se trouve par son nom.
+- Le chemin des gabarits était écrit deux fois, une par moyen. Une fonction (`platformProfiles`) le donne aux deux.
+- La configuration lisait un entier positif à deux endroits, avec le même message : une seule fonction (`count`), que le quota utilise aussi.
+- `serveNative` avait deux blocs de refus identiques à la suite (configuration, puis sandboxes) : un seul.
+- Trois lignes d'exemples « le refus ne contient pas la valeur » passaient par le refus « doit être absente sous srt », déjà prouvé par son message exact : retirées. La revue proposait d'en ajouter sous `docker` ; le message exact de chaque refus de nombre le prouve déjà.
+- La revue relevait qu'un arrêt demandé pendant le contrôle attend la fin du contrôle, donc que les 17 secondes annoncées ne tiennent plus sous Docker. C'est la règle déjà écrite pour tout le démarrage (« un arrêt demandé pendant le démarrage attend le démarrage ») : abandonner un contrôle en cours laisserait son conteneur. Décision : garder la règle, et l'écrire (commentaires de `serveNative` et de `nativeHost`, §6 de la conception). Le chiffre réel est à mesurer devant un vrai démon, au pas suivant.
+
+**Une casse à la main.** La mutation ne retire pas un `await`. Remplacer `await sandboxes.check()` par un appel non attendu rend rouges deux scénarios (l'ordre des appels `sandboxes, check, check ended, launch`, et le contrôle refusé qui ne lance rien). Source restaurée, comparée octet pour octet.
+
+**Entrées inédites.** Session neuve (Opus 5.5, effort élevé, 482 s, 1,90 $) : 94 cas avec les seuls steps existants, lus puis joués sur l'hôte.
+
+| | |
+|---|---|
+| Entrées inventées | 94 |
+| Échecs sur l'hôte | 2, exactement ceux annoncés |
+| Premier | Mon commentaire de `count` disait « un nombre qu'un nombre tient exactement » ; 2^53 l'est et il est refusé. Le code est juste (un entier sûr), le commentaire disait plus : corrigé |
+| Second | Deux variables refusées à la fois : rien n'écrivait laquelle est nommée. Le contrat le dit maintenant : la première rencontrée, et l'ordre n'en fait pas partie |
+| Gardés dans le dépôt | Aucun : aucun ne prouve un comportement que les scénarios du pas ne prouvent pas déjà |
+
+Les deux échecs sont des contrats flous, pas des défauts du code. C'est la première fois que cette étape ne trouve pas de défaut ; elle a coûté plus que la construction et la revue réunies. À porter au pas de réflexion : son rendement dépend de la part de mécanisme neuf du pas, et ce pas n'en avait presque pas.
+
+**Mutation, avant la porte** (les lignes changées de quatre fichiers, 4 min 39 s). 56 mutants : 48 tués, 8 erreurs d'exécution, 0 délai dépassé, 0 survivant, 0 non couvert. Aucune reprise : le pas ne porte ni minuterie, ni valeur par défaut, ni branche sans scénario, règles que la consigne tenait des deux pas précédents.
+
+**Ce qui n'est pas prouvé.** Rien de ce pas n'a tourné devant un vrai démon : le faux client répond à `docker info` et joue le conteneur de contrôle. Le bout en bout de 1b.6a (`remember` puis `recall`) n'est pas rejoué avec `GATEWAY_SANDBOX=docker`, ni le test d'évasion : c'est le pas suivant, en CI sur Linux, le poste étant sous macOS. Que `nativeHost` donne bien l'environnement du processus à l'adaptateur n'est prouvé que par lecture (la mutation ne permute pas deux arguments) ; le pas suivant le prouvera, le client n'y étant trouvé que par ce `PATH`.
+
+**Chiffres.** 143 scénarios pour la configuration (116), le processus (21) et `platformSandboxes` (6) ; avec ceux de l'adaptateur et de son contrôle, 326, rejoués trois fois de suite ; le bout en bout réel sous srt (4 scénarios, fichier d'entrée, enfants et sandboxes réels) passe avec `GATEWAY_SANDBOX=srt`. Sessions de ce pas : 3,19 $ (construction 0,62 ; revue 0,67 ; entrées inédites 1,90). La porte et la CI de ce commit sont rapportées au paragraphe suivant.
+
+**Trois piliers.**
+- Recherche : les trois pas sont tenus dans une même table, donnée pour ce qu'elle est ; l'étape des entrées inédites est rapportée aussi quand elle ne trouve rien, avec son coût.
+- SSDLC : le moyen d'isolation n'a pas de valeur par défaut et n'est jamais détecté (élévation de privilèges, déni de service par bascule silencieuse) ; une variable de l'autre moyen est refusée, pas ignorée ; aucun refus ne cite une valeur de l'environnement ; rien n'est lancé avant le contrôle ; aucune dépendance ajoutée.
+- Opérationnel : un refus au démarrage ne laisse ni enfant ni port ; la règle d'arrêt pendant le démarrage est écrite avec sa conséquence sous Docker ; IRB sans objet.
