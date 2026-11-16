@@ -131,7 +131,7 @@ export type DataOpOutput<Op extends DataOpName> = z.output<(typeof DATA_OPS)[Op]
 export const DATA_OP_NAMES = Object.keys(DATA_OPS) as DataOpName[];
 
 /**
- * Tools a worker agent may call back into, served by the owning service on the exec network.
+ * Tools the agent of a task may call through the gateway, served by the module that owns them (modules/memory).
  * Each one is a restricted view of one data operation: its input is a subset of that operation's input.
  */
 export const INTERNAL_TOOLS = {

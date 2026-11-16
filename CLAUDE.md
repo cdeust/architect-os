@@ -20,7 +20,7 @@ npm run evidence -- verify <ledger> <desk>                   # evidence desk: ve
 
 ## What This Is
 
-An MCP platform for agent work. A client calls one tool; the gateway authenticates, counts, audits and routes; an agent tool is served by a sandboxed Claude Agent SDK worker, a data tool by a module; every answer is a validated `Result`. One architecture, two realisations in this tree (`docs/architecture.md`).
+An MCP platform for agent work. A client calls one tool; the gateway authenticates, counts, audits and routes; an agent tool is served by a sandboxed Claude Agent SDK worker, a data tool by a module; every answer is a validated `Result`. One architecture, one realisation (`docs/architecture.md`).
 
 The platform is one process (`node gateway/dist/src/serve.js`), which isolates what it runs under srt.
 
@@ -57,19 +57,20 @@ Each component has `src/domain`, `src/application`, `src/infrastructure`, `src/p
 - `infrastructure` imports `domain` and `application`. **Adapters**, with an in-memory adapter for every port.
 - `presentation` imports `application`. MCP or HTTP translation only.
 - `src/main.ts` is the only place that builds objects. No service locator, no global singleton, nothing imports `main.ts` but its tests and, where there is one, the process entry `src/serve.ts`, which only hands it `process.env` and `process.stderr` and sets the exit code.
-- No import between components. They talk over the network; the only shared code is `@architect-os/contracts`.
+- No import between components. They talk by MCP on the stdio of a child, or over the loopback; the only shared code is `@architect-os/contracts`.
 
 ## Descriptive files before code
 
-A behaviour that a descriptive file can express is not written in code. Code is reserved for what a file cannot carry: protocol translation (MCP, HTTP), process and container control, validation against a schema, security floors (tool allow-lists, isolation flags, secrets), and one generic loader or executor per kind of file.
+A behaviour that a descriptive file can express is not written in code. Code is reserved for what a file cannot carry: protocol translation (MCP, HTTP), process control, validation against a schema, security floors (tool allow-lists, isolation flags, secrets), and one generic loader or executor per kind of file.
 
-| Behaviour                           | Descriptive file                                               | Read by                                    |
-| ----------------------------------- | -------------------------------------------------------------- | ------------------------------------------ |
-| Data operation (SQL)                | `data/sql/<op>.sql` + one row in `data/sql/operations.json`    | `data/src/infrastructure/sql-store.ts`     |
-| Database invariant                  | `data/migrations/NNNN_name.sql` (constraint, trigger)          | `data/src/infrastructure/migrate.ts`       |
-| Worker system prompt per tool       | `services/<name>/worker/prompts/<tool>.md`                     | `services/<name>/worker/prompts.ts`        |
-| Intent tool, internal tool, data op | declarative zod tables in `packages/contracts` (single source) | generic loops in gateway, services, worker |
-| Review agents and commands          | `.claude/agents/*.md`, `.claude/commands/*.md`                 | Claude Code                                |
+| Behaviour                                                       | Descriptive file                                                              | Read by                                        |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
+| Data operation (SQL)                                            | `data/sql/<op>.sql` + one row in `data/sql/operations.json`                   | `data/src/infrastructure/sql-store.ts`         |
+| Database invariant                                              | `data/migrations/<NNNN>_<name>.sql` (constraint, trigger)                     | `data/src/infrastructure/migrate.ts`           |
+| Task profile of an agent: prompt, tools, model                  | `agents/<name>.md`                                                            | `services/memory/worker/agent-file.ts`         |
+| Catalogue of the tools, servers of the modules, client profiles | `topology/catalog.json`, `topology/modules.mcp.json`, `topology/clients.json` | `gateway/src/infrastructure/topology-files.ts` |
+| Intent tool, internal tool, data op                             | declarative zod tables in `packages/contracts` (single source)                | generic loops in gateway, services, worker     |
+| Review agents and commands                                      | `.claude/agents/*.md`, `.claude/commands/*.md`                                | Claude Code                                    |
 
 Every descriptive file has a scenario that loads the committed file, checks it against its schema, and shows that a broken copy is rejected; a broken file makes `npm run check` red.
 
@@ -97,7 +98,7 @@ Tests are Gherkin scenarios (`@cucumber/cucumber`; steps in TypeScript, step tex
 
 Common bricks need no new TypeScript:
 
-- Intent tool: its zod schemas and owner in `TOOLS` (`packages/contracts/src/tools.ts`) and `services/<owner>/worker/prompts/<tool>.md`. The gateway catalogue, the gateway route and the service registration are derived.
+- Agent tool: its zod schemas and owner in `TOOLS` (`packages/contracts/src/tools.ts`), its declaration in `topology/catalog.json` and the task profile of its agent, `agents/<name>.md` (`docs/agents.md`, Adding an agent). The gateway catalogue and the gateway route are derived; the worker is the same for every agent.
 - Internal tool: one entry in `INTERNAL_TOOLS` (`packages/contracts/src/data-ops.ts`) naming the data operation it is a view of.
 - Data operation: its schemas and the tables it writes (`writes`, checked against its SQL when the statement table loads) in `DATA_OPS`, `data/sql/<op>.sql`, a row in `data/sql/operations.json`, and, for the in-memory store, one handler in `data/src/infrastructure/in-memory.ts`. The shared `DataStore` contract runs on both stores.
 

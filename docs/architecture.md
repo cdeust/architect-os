@@ -34,7 +34,7 @@ src/main.ts: the composition root, the only place objects are built
 - `application` imports `domain`. `infrastructure` imports `domain` and `application`. `presentation` imports `application`.
 - Dependencies are injected by constructor. There is no service locator and no global singleton.
 - Every port has a real adapter and an in-memory adapter; the in-memory ones make the whole system runnable in a single test process.
-- Components never import each other. They call each other over the network.
+- Components never import each other. They call each other by MCP on the stdio of a child, or over the loopback.
 
 The rules are enforced by `npm run arch` (`.dependency-cruiser.cjs`) and proved by `features/arch/guard.feature`, which writes temporary violating files and checks the guard turns red.
 

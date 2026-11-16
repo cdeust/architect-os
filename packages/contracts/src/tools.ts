@@ -65,19 +65,7 @@ export const TOOLS = {
 export type ToolName = keyof typeof TOOLS;
 export const TOOL_NAMES = Object.keys(TOOLS) as ToolName[];
 
-/** Wire contract between a service and its worker (one JSON document each way). */
-export const WorkerInputSchema = z.object({
-  run_id: z.string(),
-  tool: z.string(),
-  input: z.unknown(),
-  /** The token of this run at the broker: the worker's only credential, never the API key. */
-  token: z.string().min(32),
-  /** Set by the service (services/<name>/src/main.ts DEFAULT_LIMITS); the worker has no defaults of its own. */
-  limits: z.object({ max_turns: z.number().int().positive(), max_budget_usd: z.number().positive() }),
-});
-export type WorkerInput = z.infer<typeof WorkerInputSchema>;
-
-/** The worker reports a free-form error code; the service maps it to a named ErrorCode. */
+/** What the worker of a task reports; its error code is free-form, and the gateway maps it to a named ErrorCode. */
 export const WorkerOutputSchema = z.object({
   status: ResultStatusSchema,
   data: z.unknown(),

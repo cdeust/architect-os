@@ -2771,3 +2771,40 @@ Les deux tests de `main` étaient écrits pour vitest, que la branche n'a plus :
 - Recherche : l'écart entre les deux branches est mesuré commit par commit ; les scénarios repris sont éprouvés par des fichiers cassés ; deux affirmations fausses de la documentation sont corrigées par une lecture du dépôt.
 - SSDLC : aucune surface nouvelle, les trois fichiers sont ceux de `main` ; le script refuse désormais d'écrire hors du répertoire temporaire du runner ; le ruleset de la conception, absent, est nommé comme tel et reste au propriétaire.
 - Opérationnel : prévu à l'avance de `main`, sur accord du propriétaire : porte à chaque push, trois contrôles planifiés le lundi, secret du broker réservé à l'environnement de `main` ; IRB sans objet.
+
+## 68. `main` avancée, et ce que les retraits avaient laissé de périmé dans la documentation, 17 novembre 2026
+
+Le §67 a été poussé (`38c29cd`) : porte de l'hôte verte (1 610 scénarios = 1 597 + 13, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS). Puis le commit de fusion `8437f42`, qui enregistre `main` (`f699c89`) comme incluse sans changer l'arbre : porte verte (1 610, rien d'ajouté ni de supprimé), CI verte.
+
+**`main` est avancée.** Le propriétaire : « bon pour avancer main ». `main` est passée de `f699c89` à `8437f42` par avance rapide ; `feat/gate-1a` est au même SHA et reste en place ; la branche par défaut n'a pas changé.
+
+| Déclenché par ce push | Résultat |
+|---|---|
+| `gate.yml` | En cours à l'écriture de cette section ; rapporté à la suivante |
+| `broker-live.yml` | Rouge à l'étape de la clé, avec son propre message : l'environnement n'a pas de secret `ANTHROPIC_TEST_KEY` |
+| `pipeline-after-merge.yml` | Ignoré (`skipped`) : le run de la porte qui le réveille vient d'un push, et son résolveur ne tourne que pour une PR |
+
+**Un effet de bord, constaté.** L'environnement `broker-live` n'existait pas ; GitHub l'a créé de lui-même au premier run qui le nommait, sans aucune politique de branches. `docs/infrastructure.md` disait « le propriétaire crée l'environnement avec une politique qui n'autorise que `main`, et y met le secret » : l'ordre compte désormais. La politique d'abord, le secret ensuite ; un secret posé dans un environnement sans politique serait lisible par un workflow de n'importe quelle branche. La phrase est réécrite ainsi.
+
+**Ce que mes retraits avaient laissé.** `main` avancée, le `CLAUDE.md` que lit toute session est celui de la branche. À sa relecture : « One architecture, two realisations in this tree ». La première réalisation est retirée depuis le §62, Docker depuis le §63, et le mainteneur avait écrit dans ces deux sections que la documentation était réécrite. Elle ne l'était qu'en partie. La règle du dépôt range ce cas parmi ce qu'une revue refuse (« Docs left stale by a change that alters architecture »), et aucun contrôle ne le lisait.
+
+| Document | Ce qui était périmé |
+|---|---|
+| `CLAUDE.md` | « two realisations » ; les composants « talk over the network » ; « process and container control » ; le prompt du worker par outil (`services/<name>/worker/prompts/`), remplacé depuis 1b.5 par le profil de tâche `agents/<name>.md` ; l'ajout d'un outil d'intention par ce même prompt |
+| `docs/architecture.md` | Les composants « call each other over the network » |
+| `docs/testing.md` | La section « End to end » décrivait `features/support/harness.ts`, supprimé ; une ligne de la table des fichiers descriptifs nommait un fichier de scénarios supprimé ; la règle `worker self-containment`, retirée |
+| `packages/sandbox/README.md` | Trois paragraphes sur les adaptateurs Docker et `platformSandboxes`, dont les fichiers n'existent plus |
+| `packages/contracts/src/tools.ts` | `WorkerInputSchema`, le contrat du worker de la première réalisation : plus aucun appelant. Retiré, avec deux commentaires qui parlaient du « service » et du « réseau d'exécution » |
+
+**Le contrôle qui manquait.** `features/descriptive/doc-paths.feature` : chaque chemin que `CLAUDE.md`, `CONTRIBUTING.md`, `README.md` et les documents de `docs/` qui décrivent l'arbre citent entre accents graves, depuis la racine, existe. Un motif ou un emplacement à remplir (`services/<name>/worker`, `data/sql/*.sql`) n'est pas un chemin ; un chemin dans un dossier qu'une construction ou un run écrit (`dist`, `node_modules`, `reports`) dépend de l'hôte : ni l'un ni l'autre n'est contrôlé. Le journal et la conception gardent les chemins de ce qui a été retiré, et n'en font pas partie. 22 scénarios : 10 documents, 5 copies refusées, 7 citations qui ne sont pas des chemins du dépôt. Le scénario, joué sur le `docs/testing.md` d'avant ce commit, est rouge et nomme `features/support/harness.ts`, `services/memory/features/run-worker.feature` et `features/sandbox/srt-runner`, un nom écrit sans son extension.
+
+**Ce que ce contrôle ne voit pas.** Une phrase fausse qui ne cite aucun chemin : « two realisations » n'aurait pas été vue. Ces phrases-là ont été trouvées par relecture, et la relecture n'a porté que sur les documents nommés ci-dessus.
+
+**Ce qui reste au propriétaire, dans les réglages du dépôt.** Le ruleset sur `main` (§67) ; la politique de branches de l'environnement `broker-live`, puis son secret.
+
+**Chiffres.** 1 632 scénarios dans la suite (22 de plus) ; 146 scénarios descriptifs.
+
+**Trois piliers.**
+- Recherche : le défaut est rapporté avec sa cause (une réécriture annoncée et faite en partie, sans contrôle) ; le contrôle ajouté est éprouvé par des copies refusées et par l'arbre d'avant.
+- SSDLC : un contrat mort retiré ; aucune surface nouvelle ; l'ordre politique puis secret de l'environnement est écrit, l'environnement ayant été créé sans politique par GitHub.
+- Opérationnel : `main` porte le code réel et sa porte tourne à chaque push ; le ruleset et le secret restent au propriétaire ; IRB sans objet.

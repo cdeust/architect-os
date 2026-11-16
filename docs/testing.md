@@ -49,7 +49,7 @@ Brick 1a replaced vitest. One vitest `it` became one `Scenario`, one `it.each` r
 
 The scenarios of the first realisation in that table (`http-api`, those of `services/memory` but `task-worker`, `infra/compose`, `integration/end-to-end`) left with it (design, decision 21).
 
-Added after the migration: `tools/test-gate` 99 (`configuration` 20, `count` 9, `diff` 2, `mutation` 37, `outcome` 14, `outputs` 10, `sets` 7), the Postgres watchdog 1 (`infra/postgres-watchdog`), `features/sandbox/srt-runner` 5 (real srt; the old `runIf(darwin)` suite), and `features/repository` 2 (typecheck, format). The suite holds 326 pickles. On 4 November 2026 the move to `claude --bare` removed `descriptive/builder-guard` (51): under `--bare` no hook runs, and its rules became `permissions.deny` of the session settings (`packages/sandbox/profiles/builder.json`).
+Added after the migration: `tools/test-gate` 99 (`configuration` 20, `count` 9, `diff` 2, `mutation` 37, `outcome` 14, `outputs` 10, `sets` 7), the Postgres watchdog 1 (`infra/postgres-watchdog`), `features/sandbox/srt-runner.feature` 5 (real srt; the old `runIf(darwin)` suite), and `features/repository` 2 (typecheck, format). The suite holds 326 pickles. On 4 November 2026 the move to `claude --bare` removed `descriptive/builder-guard` (51): under `--bare` no hook runs, and its rules became `permissions.deny` of the session settings (`packages/sandbox/profiles/builder.json`).
 
 ## `@postgres`: a disposable database
 
@@ -57,13 +57,13 @@ Scenarios tagged `@postgres` (the `postgres` rows of the data-store contract) ge
 
 ## End to end
 
-`features/support/harness.ts` builds the stack:
+Nothing here is composed for a test where the production code can compose it:
 
-- client to gateway and gateway to memory use the SDK's `InMemoryTransport` (real MCP framing);
-- memory reaches data over a real local HTTP server (port 0) running the data API with the in-memory store;
-- the `ContainerRunner` is `InProcessContainerRunner`, which executes the real worker core (`runWorker`) with a scripted agent instead of a container and instead of the SDK.
+- `features/sandbox/gateway-entry.feature`: the process is `node gateway/dist/src/serve.js`, given only its configuration. It starts `data` and the broker as its children, the module and the worker under a real srt, and serves a real MCP client over HTTP, before a fake model over HTTPS.
+- `features/sandbox/gateway-native.feature`, `features/sandbox/recall.feature`, `features/sandbox/remember.feature`: the platform composed by the production code, under a real srt.
+- `features/integration/gateway.feature`, `features/integration/agent-worker.feature`, `features/integration/usage.feature`: the same paths in one process over streams, the sandboxes replaced by in-memory runners; the worker runs the real Claude Code binary against a fake model on the loopback.
 
-Cases: `recall` after `remember` returns `status: ok` with validated data, evidence and cost, and the run holds the events `run.created, worker.started, worker.exited, output.validated, run.completed`; an invalid worker output returns `status: failed`, `error.code: WORKER_OUTPUT_INVALID`, and the run holds `output.invalid`; an agent crash returns `WORKER_FAILED`.
+No scenario calls the real API: `modules/broker/live/` is the owner's command for that, outside the gate.
 
 ## Port contracts
 
@@ -76,7 +76,6 @@ Each descriptive file is loaded by its scenarios exactly as production loads it,
 | File                                                                                            | Scenarios                                                                                                                                                               | Broken copies rejected                                                                                                                                                                                                          |
 | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `data/sql/operations.json` and `data/sql/*.sql`                                                 | `data/features/sql-store.feature`                                                                                                                                       | missing or unknown operation, `$n` count different from `params`, unknown field, missing file, not JSON                                                                                                                         |
-| `services/memory/worker/prompts/<tool>.md`                                                      | `services/memory/features/run-worker.feature`                                                                                                                           | missing prompt, empty prompt                                                                                                                                                                                                    |
 | `packages/sandbox/profiles/builder.json`, `packages/sandbox/code.json`                          | `packages/sandbox/features/profile.feature`, `packages/sandbox/features/tool.feature`                                                                                   | misspelt or weakening srt key, literal token, foreign base URL, plain-http upstream, unanchored route, empty command                                                                                                            |
 | `packages/sandbox/profiles/reviewer.json`                                                       | `packages/sandbox/features/reviewer-profile.feature`                                                                                                                    | weakening option, misspelt key, `filesystem.disabled`, `allowGitConfig`, API key passed through, config dir set, `NO_PROXY` passed through, literal token, foreign base URL, literal API key                                    |
 | `packages/sandbox/profiles/module.json`, `packages/sandbox/profiles/worker.json`                | `packages/sandbox/features/platform-profiles.feature`                                                                                                                   | weakening option, misspelt key, API key passed through, `NO_PROXY` passed through, literal token (both); config dir set, foreign base URL, literal API key (worker)                                                             |
@@ -92,9 +91,11 @@ Each descriptive file is loaded by its scenarios exactly as production loads it,
 
 ## Repository and architecture guard
 
+`features/descriptive/doc-paths.feature`: every path that `CLAUDE.md`, `CONTRIBUTING.md`, `README.md` and the documents of `docs/` that describe the tree cite between backticks exists; a pattern, a placeholder or a path into a generated directory is not checked. `features/descriptive/journal.feature`: the journal keeps every section.
+
 `features/repository/repository.feature`: "the repository typechecks" runs `tsc -b` on the root `tsconfig.json`, "the repository is formatted" runs `prettier --check .`; both show the tool output when they fail. Validation of the Claude Code plugin (`claude plugin validate --strict`) needs the Claude Code binary, which CI runners do not have: it belongs to brick 1c.
 
-`.dependency-cruiser.cjs` holds the rules (layers, no cross-component import, `pg` / agent SDK / MCP SDK / `child_process` / srt confinement, no cycles, worker self-containment). `features/arch/guard.feature` writes one temporary violating file per rule under the real component directories, runs the guard, asserts each rule fires on its file, deletes the files and asserts the tree is green again. To see it by hand:
+`.dependency-cruiser.cjs` holds the rules (layers, no cross-component import, `pg` / agent SDK / MCP SDK / `child_process` / srt confinement, no cycles). `features/arch/guard.feature` writes one temporary violating file per rule under the real component directories, runs the guard, asserts each rule fires on its file, deletes the files and asserts the tree is green again. To see it by hand:
 
 ```bash
 echo "import 'pg';" > gateway/src/application/zz-tmp.ts && npm run arch   # red
