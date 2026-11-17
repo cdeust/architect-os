@@ -1,5 +1,7 @@
 // Steps of features/sandbox/checker.feature: the check of a step (`sandboxCheck`) on the real srt adapter.
 import assert from 'node:assert/strict';
+import { rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Sandbox, SandboxRunner } from '../../src/port.js';
 import type { CheckOutcome } from '../../src/step-checks.js';
 import { sandboxCheck } from '../../src/step-tool.js';
@@ -56,29 +58,17 @@ When(
   'the check of a step runs a command that exits with code 0 and leaves a detached descendant holding its outputs, its limit fired once the command has exited',
   async function () {
     // The descendant is its own session: the kill of the group at the end of the process does not reach it (T-06b), and
-    // it holds the two pipes it inherited. It prints its pid first, so that the scenario ends it afterwards.
+    // it holds the two pipes it inherited. It lives as long as the file `keep` of the worktree, two minutes at most:
+    // the scenario removes the file, and so does the removal of the repository. The host never acts on a pid a sandbox
+    // printed.
+    const keep = join(stored<string>(this, 'cwd'), 'keep');
+    writeFileSync(keep, '');
+    this.cleanups.push(() => rmSync(keep, { force: true }));
+    const wait = 'i=0; while [ -e keep ] && [ $i -lt 600 ]; do sleep 0.2; i=$((i+1)); done';
     const script =
-      "const c=require('child_process').spawn('sleep',['120'],{detached:true,stdio:'inherit'});c.unref();" +
-      "console.log('pid '+c.pid);console.log('started')";
-    let printed = '';
-    this.cleanups.push(() => {
-      const pid = Number(/pid (\d+)/.exec(printed)?.[1]);
-      // Already gone is fine: only a descendant left behind is the scenario's to end.
-      if (pid > 1) {
-        try {
-          process.kill(pid, 'SIGKILL');
-        } catch {
-          // The descendant ended on its own.
-        }
-      }
-    });
-    await play(this, ['node', '-e', script], (sandbox, fire) => {
-      sandbox.stdout.on('data', (chunk: Buffer) => (printed += String(chunk)));
-      void sandbox.exited.then(fire);
-    });
-    // The pid line is the scenario's own plumbing: the Then step reads what follows it.
-    const result = outcome(this);
-    this.state['checkOutcome'] = { ...result, output: result.output.replace(/^pid \d+\n/, '') };
+      `require('child_process').spawn('sh',['-c',${JSON.stringify(wait)}],{detached:true,stdio:'inherit'}).unref();` +
+      "console.log('started')";
+    await play(this, ['node', '-e', script], (sandbox, fire) => void sandbox.exited.then(fire));
   },
 );
 

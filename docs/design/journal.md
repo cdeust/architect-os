@@ -3337,3 +3337,32 @@ La note de la boucle (§4) porte ce qu'elles donnent contre l'état du dépôt e
 - Recherche : conception avant le code ; un témoin pour le scénario qui prouve la correction ; les délais dépassés de la mutation relus ; ce qui n'est pas prouvé est dit, et le pilote qui le mesurera est nommé.
 - SSDLC : menaces avant le code ; un profil de plus sous le schéma strict et contre les attaques réelles ; aucun réseau, aucun secret ; une sortie de commande bornée et encodée avant d'entrer dans une consigne ; un défaut de disponibilité trouvé par la revue et corrigé à la cause ; aucune dépendance ajoutée ; aucun commentaire de désactivation.
 - Opérationnel : privilège minimum pour une commande de contrôle ; un contrôle ne remplace ni le rejeu sur l'hôte ni la porte ; IRB sans objet.
+
+## 83. Un défaut du mainteneur dans son propre scénario réel : l'hôte agissait sur un numéro de processus imprimé par une sandbox, 17 novembre 2026
+
+Le commit du §82 (`f45de12`) n'a pas été publié. Sa porte de l'hôte était verte (2 151 scénarios ; 120 ajoutés, 1 supprimé, qui est un scénario du prompt de revue renommé parce qu'il vérifie davantage ; 136 mutants dans le périmètre, aucun survivant), sa CI verte sur Linux et macOS à la première tentative. C'est en relisant son propre code, pendant que la porte tournait, que le mainteneur a trouvé le défaut.
+
+**Le défaut.** Le scénario réel du descendant détaché (`features/sandbox/checker.feature`) devait arrêter ce processus à sa fin. Le mainteneur lui faisait imprimer son numéro de processus, et le nettoyage du scénario envoyait un signal d'arrêt à ce numéro, sur l'hôte.
+
+| Ce qui était faux | Pourquoi |
+|---|---|
+| L'hôte agissait sur un texte venu d'une sandbox | C'est ce que la règle du dépôt interdit sans lecture ; une commande sous srt qui imprime un autre numéro aurait fait arrêter un autre processus de l'utilisateur |
+| Le numéro n'est pas celui de l'hôte partout | Là où la sandbox a sa propre numérotation de processus, il désigne autre chose |
+
+**Classe d'erreur, pour la base à venir** : technique. Trouvée par relecture, par aucun contrôle : la porte et la CI étaient vertes sur les deux systèmes. Cause : le mainteneur a traité un scénario de test comme hors du modèle de menaces, alors qu'il lance de vrais processus sous srt et lit leur sortie. Contrôle qui l'attraperait : aucun aujourd'hui ; candidat, un contrôle sans modèle qui refuse `process.kill` dans les définitions de pas hors d'une liste nommée.
+
+**La correction.** Le descendant vit tant qu'un fichier `keep` du worktree existe, deux minutes au plus ; le scénario retire le fichier, et le retrait du dépôt jetable le retire aussi. L'hôte ne lit plus aucun numéro. Une première correction (un fichier `stop` à faire apparaître) laissait le processus tourner deux minutes, parce que le dépôt jetable était retiré avant qu'il ait vu le fichier : elle a été jouée, vue fausse au relevé des processus restants, et remplacée.
+
+| Preuve, sur l'hôte | Résultat |
+|---|---|
+| Les six scénarios réels | Verts ; aucun processus restant après la fin |
+| Témoin : la fermeture des sorties retirée | Le scénario dépasse son délai de 30 s ; aucun processus restant |
+
+**Une alerte de CI, de même cause qu'au §80.** La porte de `main` sur `cfa9c0a` a vu son job macOS annulé sans runner ; relancée.
+
+**Chiffres.** 2 151 scénarios dans la suite, inchangé depuis le §82.
+
+**Trois piliers.**
+- Recherche : un défaut trouvé par relecture est rapporté avec sa classe, sa cause et le contrôle qui manque ; la première correction, fausse, est rapportée aussi ; un témoin pour la seconde.
+- SSDLC : l'hôte n'agit sur aucun texte venu d'une sandbox, y compris dans un scénario ; un commit vert n'a pas été publié parce qu'il portait un défaut connu.
+- Opérationnel : aucun processus laissé sur le poste par la suite ; IRB sans objet.
