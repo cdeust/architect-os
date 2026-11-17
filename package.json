@@ -18,7 +18,8 @@
     "modules/memory",
     "tools/test-gate",
     "tools/evidence",
-    "tools/watch"
+    "tools/watch",
+    "tools/deliver"
   ],
   "scripts": {
     "code": "node --import tsx packages/sandbox/src/code.ts",

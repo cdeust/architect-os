@@ -1,0 +1,15 @@
+{
+  "description": "La commande de livraison : les branches à publier dans l'ordre, la branche d'essai, le workflow et ses jobs exigés, les fichiers en ajout seul, le verdict de la porte et les bornes d'attente (docs/design/orchestration-fable-5-2.md §14, « Étape 1, la commande de livraison »).",
+  "remote": "origin",
+  "repository": "cdeust/architect-os",
+  "branches": ["feat/gate-1a", "main"],
+  "trialPrefix": "sentinel/gate-1a-",
+  "workflow": "gate",
+  "requiredJobs": ["gate-linux", "gate-macos"],
+  "appendOnly": ["docs/design/journal.md"],
+  "gateVerdict": "reports/gate-base.json",
+  "ciAttempts": 6,
+  "pollSeconds": 30,
+  "ciPolls": 90,
+  "ruleSuitePolls": 10
+}

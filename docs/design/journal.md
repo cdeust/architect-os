@@ -3600,3 +3600,62 @@ Le §88 a été poussé (`00a0742`) : porte de l'hôte verte (2 170 scénarios, 
 - Recherche : un fait dont la conception dépend est lu dans le code et dans un fichier réel avant d'être utilisé ; la mesure d'avant et d'après est nommée.
 - SSDLC : menaces écrites avant le code ; l'empreinte comme seule identité d'un commit à travers les phases ; aucun shell, aucune dépendance prévue ; la limite de la commande est dite.
 - Opérationnel : ce qui est propre à la forge est derrière un port, pour qu'une autre forge soit un autre adaptateur ; IRB sans objet.
+
+## 90. La commande de livraison, première tranche : ses décisions et ses six phases sur des ports ; trois passes de la boucle, deux défauts de reprise, et les contrôles sans modèle sur une vraie étape, 18 novembre 2026
+
+Le §89 a été poussé (`19256b8`) : porte de l'hôte verte (2 170 scénarios, rien d'ajouté ni de supprimé, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS) à la première tentative ; `main` a suivi ; ruleset `pass` sur les deux branches.
+
+**Ce qui est construit** (conception : note de la boucle, §14, « Étape 1, la commande de livraison »). Un nouvel outil, `tools/deliver/`, dans la forme de l'outil de veille. Ce n'est pas encore une commande.
+
+| Pièce | Ce qu'elle fait |
+|---|---|
+| `deliver.json` et son schéma | Le dépôt distant, les branches, le préfixe des branches d'essai, les jobs exigés, les fichiers en ajout seul, les bornes. Un préfixe d'essai ne peut pas désigner une branche à publier ; un chemin de dépôt ne peut pas remonter |
+| Cinq ports | `Repository`, `Forge`, `Gate`, `Clock`, `DeliveryLog`, chacun avec un contrat qu'un adaptateur réel rejoindra, et un double en mémoire |
+| Trois décisions pures | Le nom d'une branche d'essai ; l'état d'une CI (absente, en cours, verte, échouée, sans runner) ; ce qui reste à publier |
+| La séquence | Les six phases, liées à une empreinte relevée une fois et vérifiée avant tout acte ; la première phase qui échoue arrête tout avec une raison prise dans une liste fermée |
+
+**Ce qui n'est pas construit.** Les adaptateurs sur `git`, la forge et la porte, le point d'entrée et `npm run deliver` : la tranche suivante. Le point reste marqué `next` dans le README et dans le schéma de la vérification.
+
+**La boucle : trois passes.**
+
+| Passe | Construction, Sonnet 5.5 | Contrôles sans modèle | Revue, Opus 5.5 | Constats |
+|---|---|---|---|---|
+| 1 | 491 s, 1,14 $, 68 185 jetons relus par réponse | Types, scénarios : verts, 5 s | 278 s, 1,19 $ | 9, dont 4 de correction |
+| 2 | 407 s, 0,96 $, 63 119 | Types, format, architecture, scénarios : verts, 10 s | 1,37 $ | 10, dont 7 de correction |
+| 3 | 293 s, 0,67 $, 56 278 | Les mêmes quatre : verts, 10 s | 0,94 $ | 3, dont 2 de correction |
+
+Coût des trois passes : 6,27 $. Les constructions relisent 56 000 à 68 000 jetons par réponse, contre 87 000 à 102 000 sur les étapes de la veille : la tranche est plus petite, ce que le découpage en deux visait.
+
+**Les contrôles sans modèle, pour la première fois sur une vraie étape** (§82 : « seuls les scénarios l'ont jouée »). Ils ont tourné dans la sandbox sans réseau, en lecture seule, à chaque passe. La première revue n'a relancé ni les types ni les scénarios ; elle a lancé d'elle-même le format et l'architecture, que le mainteneur n'avait pas mis dans les contrôles, et qui y sont depuis la deuxième passe. C'est une observation sur une étape, pas le pilote de HR2 : aucune cellule témoin.
+
+**Deux défauts de sécurité, une seule cause.**
+
+| Passe | Défaut trouvé par la revue | Correction |
+|---|---|---|
+| 1 | Une livraison arrêtée parce que le ruleset n'avait pas rendu `pass` sur la première branche repartait en relançant la commande : la branche déjà à l'empreinte n'était plus interrogée, et `main` était poussée | L'évaluation du ruleset est lue pour chaque branche, poussée par cette exécution ou non |
+| 2 | La correction lisait cette évaluation sans relire la branche : une branche déjà à l'empreinte qui aurait bougé depuis laissait passer la suivante | Toutes les branches sont relues juste avant de publier, sans exception |
+
+La cause est à la conception : elle décrivait six phases et ne disait rien de la reprise d'une livraison interrompue. Le code a comblé ce vide à sa façon, deux fois. La règle est maintenant écrite dans la note, avant la troisième passe : relancer la commande ne permet rien qu'une première exécution n'aurait permis. Classe d'erreur : compréhension, du mainteneur, dans sa consigne.
+
+**La mutation, jouée par l'hôte entre les passes.** La revue de la deuxième passe annonçait des survivants en raisonnant sur le code, et le disait. Le mainteneur a joué la mutation réelle sur tout l'outil au lieu de corriger d'après un raisonnement.
+
+| Moment | Mutants | Tués | Survivants | Non couverts |
+|---|---|---|---|---|
+| Après la passe 2 | 510 | 472 | 10 | 4 |
+| Après la passe 3 | 538 | 498 | 10 | 0 |
+| Après les corrections du mainteneur | 510 | 480 | 0 | 0 |
+
+Les survivants annoncés par la revue étaient tous réels ; la mutation en a trouvé deux de plus. Après la troisième passe, les dix restants étaient tous dans un seul fichier, le double en mémoire du dépôt, qui est de la production pour la porte. Le mainteneur les a retirés à la main, en simplifiant le double et non en écrivant des scénarios autour de son code : la coupe d'un lien d'historique est supprimée (deux scénarios placent la branche distante sur un commit inconnu, ce qui dit la même chose), le déplacement et la suppression d'une branche sont deux opérations sans condition entre elles, les listes internes sont des tables. Les deux délais dépassés ont été relus : la boucle d'attente de la CI, qui ne finit plus quand on la casse. Aucun commentaire de désactivation.
+
+**Un double qui ne respectait pas son contrat.** Celui qui compte les lignes retirées d'un fichier comparait deux ensembles de lignes : une ligne retirée parmi deux identiques comptait pour zéro. Le journal, plein de lignes vides, est le fichier que cette règle protège. Le double additionne maintenant des nombres donnés par le scénario, commit par commit ; il n'imite plus un diff.
+
+**Ce qui n'est pas prouvé.** Rien de réel : aucun `git`, aucune forge, aucune porte n'a été appelé par ce code. La tranche suivante le fera, sur des dépôts jetables et un exécutable de forge scripté, et la première livraison faite par la commande sera sa preuve.
+
+**Schémas et README.** Aucun schéma ne change : le point reste `next`. Le README dit ce qui est construit du point « Delivery as a command » ; sa table des dossiers reçoit l'outil, et l'outil de veille qui y manquait. `CLAUDE.md` reçoit le composant et son fichier descriptif.
+
+**Chiffres.** 2 423 scénarios dans la suite (253 de plus, tous pour l'outil).
+
+**Trois piliers.**
+- Recherche : trois passes rapportées avec leurs coûts et leurs constats ; la mutation réelle jouée plutôt qu'un raisonnement cru ; la cause commune de deux défauts remontée à la conception ; ce qui n'est pas prouvé est dit.
+- SSDLC : menaces avant le code ; deux défauts de sécurité trouvés par la revue avant qu'aucune ligne ne touche une branche ; une empreinte vérifiée avant tout acte ; raisons en liste fermée ; aucune dépendance ajoutée.
+- Opérationnel : la forge est derrière un port ; les contrôles sans modèle épargnent à la revue ce qu'une commande établit ; IRB sans objet.

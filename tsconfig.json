@@ -32,6 +32,9 @@
       "path": "tools/watch"
     },
     {
+      "path": "tools/deliver"
+    },
+    {
       "path": "features"
     }
   ]

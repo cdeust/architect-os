@@ -682,6 +682,14 @@ Les pilotes du §13 (HR2 à HR4) gardent leur place : ils mesurent des pièces q
 
 Elle s'arrête sur demande avant la phase 5 (`--until ci`) : c'est la couture où un gate humain se pose, la publication devenant alors l'acte d'une personne.
 
+**La reprise d'une livraison interrompue** (ajouté le 18 novembre 2026, après deux constats de revue sur la même cause : la conception ne la décrivait pas). Relancer la commande sur le même commit est la reprise ; elle ne doit rien permettre qu'une première exécution n'aurait permis.
+
+| Moment | Règle |
+|---|---|
+| Phase 1 | Chaque branche est relevée soit « à l'empreinte » (une exécution précédente l'y a amenée), soit « au parent ». Toutes à l'empreinte : rien à livrer |
+| Juste avant de publier | Toutes les branches sont relues, sans exception : une branche relevée à l'empreinte doit y être encore, une branche relevée au parent doit y être encore. Sinon la livraison s'arrête : une branche a bougé |
+| Phase 5, pour chaque branche, dans l'ordre | Si elle est au parent, elle est poussée. Dans les deux cas, l'évaluation du ruleset du push qui l'a amenée à l'empreinte est lue et doit être `pass` avant de passer à la branche suivante. Une livraison arrêtée sur `bypass` ou `fail` ne repart donc pas en la relançant |
+
 **Où.** `tools/deliver/`, dans la forme de `tools/watch` : le domaine décide, sans rien lancer ; `git`, la forge et la porte sont des ports, avec un adaptateur à processus enfant (argv fixe, jamais de shell) et un double en mémoire pour les scénarios. Tout ce qui est propre à GitHub (run par empreinte, relance, évaluation du ruleset) est derrière le port de la forge : sur site, c'est un autre adaptateur.
 
 **Menaces.**
