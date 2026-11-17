@@ -3180,3 +3180,43 @@ Le §77 a été poussé (`78a8a1d`) : porte de l'hôte verte (2 032 scénarios =
 - Recherche : un protocole pré-enregistré est amendé avant toute mesure, avec la raison ; la référence est désormais rejouable par un tiers ; le bruit est mesuré avant l'effet.
 - SSDLC : sans objet, aucun code ne change.
 - Opérationnel : sans objet ; IRB sans objet.
+
+## 79. Premier pilote du routage : de vrais éclaireurs, justes et presque gratuits, qui ne rendent pas une construction moins chère, 17 novembre 2026
+
+Le §78 a été poussé (`6082afb`) : porte de l'hôte verte (2 032 scénarios, rien d'ajouté ni de supprimé, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS) ; `main` a suivi ; ruleset `pass` sur les deux branches. Le commit de l'amendement est daté de 17 h 48 ; la première cellule du pilote a démarré à 17 h 56.
+
+**Ce qui a été joué.** L'hypothèse HR1 de la note de la boucle (§13) : avec des citations d'éclaireurs vérifiées dans sa consigne, une construction relit moins de jetons par réponse et coûte moins, éclaireurs compris, à acceptation égale. Deux cellules à la suite, depuis le commit de départ de la référence (`4c13d20`), dans un arbre jetable : la consigne sans éclaireur, une seconde fois ; puis la même avec trois éclaireurs sur le plus petit modèle, leurs questions écrites d'avance. Les trois constructions sont acceptées : types, format et scénarios de la liste de contrôle verts sur l'hôte (423 pour le témoin, 416 avec éclaireurs).
+
+| Construction | Durée | Coût | Réponses | Jetons relus par réponse | Regarder, lancer, écrire |
+|---|---|---|---|---|---|
+| Référence, sans éclaireur | 534 s | 1,44 $ | 40 | 89 343 | 14, 17, 10 |
+| Témoin, sans éclaireur | 532 s | 1,33 $ | 33 | 87 850 | 9, 15, 9 |
+| Avec trois éclaireurs | 473 s | 1,34 $, plus 0,016 $ | 32 | 87 374 | 9, 15, 9 |
+
+**Le résultat.** L'hypothèse n'est pas soutenue. Deux constructions de la même consigne diffèrent déjà de 8 % en coût et de 7 réponses ; la cellule avec éclaireurs ne s'écarte du témoin que de moins de 2 % en coût et de 0,5 % en jetons relus, et la session y regarde le dépôt autant de fois. Seule la durée s'écarte, sur une seule session. Sans la cellule témoin, le coût de 1,34 $ aurait passé pour un gain sur les 1,44 $ de la référence : il est dans le bruit.
+
+**Ce que le pilote établit quand même.** C'était la première fois que de vrais éclaireurs tournaient.
+
+| Mesure | Valeur |
+|---|---|
+| Durée d'un éclaireur | 16, 29 et 29 secondes |
+| Coût des trois | 0,016 $ |
+| Citations rendues | 104, sur 11 fichiers |
+| Rejetées par l'hôte | 0 |
+| Justes à un contrôle indépendant de l'outil, relues une à une contre le commit de départ | 104 sur 104 |
+| Ce qu'ils disent ne pas avoir trouvé ou cité | 9 phrases ; deux ont atteint le plafond de 40 faits et l'ont dit |
+
+**Une lecture, qui n'est pas une conclusion.** Une construction lit en entier les fichiers qu'elle modifie et les sorties des commandes qu'elle lance, quinze fois ici ; la ligne de déclaration d'une fonction ne remplace ni l'un ni l'autre. Son contexte se traite ailleurs : par le découpage des étapes, que la note pose en premier, et par ce que ses lancements lui renvoient. Un éclaireur, lui, cite juste pour un demi-centime : c'est le travail que demande la lecture de la veille, faite de passages à extraire et à classer, et celui de la revue de la règle du dépôt. L'éclairage avant construction reste dans l'outil sans être recommandé par défaut.
+
+**Limites.** Une session par cellule ; une seule étape ; des questions écrites par le mainteneur, dont d'autres auraient pu mieux servir ; un écart de durée que rien ne permet d'attribuer.
+
+**Coût du pilote.** 2,68 $ : 1,33 $ pour le témoin, 1,35 $ pour la cellule avec éclaireurs. Les flux, les mesures, les citations et les deux diffs sont gardés dans les dossiers d'état `hr1-a` et `hr1-b`.
+
+**Schémas et README.** Aucun élément nouveau : pas de schéma à changer. Le paragraphe de la boucle dit le résultat, et la ligne O.3 du tableau aussi.
+
+**Chiffres.** 2 032 scénarios dans la suite, inchangé ; ce commit ne touche que la note de la boucle, le README et ce journal.
+
+**Trois piliers.**
+- Recherche : un protocole fixé et publié avant l'essai, un témoin pour le bruit, un résultat négatif publié avec ses limites, un contrôle des citations indépendant de l'outil qui les avait vérifiées.
+- SSDLC : sans objet, aucun code ne change ; les textes produits par les éclaireurs ne sont entrés dans une consigne qu'après vérification, comme le §77 le construit.
+- Opérationnel : 2,68 $ de sessions sur le forfait du propriétaire, rapportés ; un arbre jetable, retiré ; IRB sans objet.

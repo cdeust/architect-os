@@ -412,6 +412,33 @@ Les hypothèses se lisent donc ainsi : HR1, moins de jetons relus par réponse q
 
 Pilote de HR1, fixé avant d'être joué : la même consigne, depuis `4c13d20`, dans un arbre jetable ; trois éclaireurs sur Haiku 5.5 `low` (les fonctions et les fichiers de l'outil d'étape ; les steps qui existent ; ce qu'un nouvel outil et un nouveau prompt doivent suivre), leurs questions gardées dans le dossier d'état `hr1-b` ; la construction sur Sonnet 5.5 `medium`, comme la référence ; aucune revue. Deux constructions de la même consigne ne se ressemblent pas, et leur écart n'a jamais été mesuré : le pilote joue donc deux cellules à la suite, la consigne sans éclaireur une seconde fois (dossier d'état `hr1-a`), puis avec (dossier `hr1-b`). L'écart entre la référence et sa seconde construction est le bruit ; un écart du pilote qui ne le dépasse pas ne dit rien. Une session par cellule : aucune conclusion statistique, quel que soit le résultat.
 
+### Résultat du pilote de HR1, 17 novembre 2026 : l'hypothèse n'est pas soutenue
+
+Les deux cellules ont été jouées à la suite, depuis `4c13d20`, dans un arbre jetable, après la publication de l'amendement. Les trois constructions sont acceptées : types, format et scénarios de la liste de contrôle verts sur l'hôte.
+
+| Construction | Durée | Coût | Réponses | Jetons relus par réponse | Appels d'outil : regarder, lancer, écrire |
+|---|---|---|---|---|---|
+| Référence, sans éclaireur (`o3b`) | 534 s | 1,44 $ | 40 | 89 343 | 14, 17, 10 |
+| Témoin, sans éclaireur (`hr1-a`) | 532 s | 1,33 $ | 33 | 87 850 | 9, 15, 9 |
+| Avec trois éclaireurs (`hr1-b`) | 473 s | 1,34 $, plus 0,016 $ d'éclaireurs | 32 | 87 374 | 9, 15, 9 |
+
+Le bruit, lu entre la référence et le témoin : 8 % sur le coût, 7 réponses, 2 % sur les jetons relus. La cellule avec éclaireurs ne s'écarte du témoin que de moins de 2 % sur le coût, éclaireurs compris, et de 0,5 % sur les jetons relus, et la construction y regarde le dépôt autant de fois. HR1 n'est pas soutenue : rien ne montre que des citations données d'avance font relire moins ou coûter moins. Seule la durée s'écarte (473 s contre 532 s et 534 s), sur une seule session.
+
+Ce que le pilote établit par ailleurs, pour la première fois avec de vrais éclaireurs :
+
+| Mesure | Valeur |
+|---|---|
+| Durée d'un éclaireur | 16 à 29 s |
+| Coût des trois | 0,016 $ |
+| Citations rendues | 104 |
+| Rejetées par l'hôte | 0 |
+| Justes à un contrôle indépendant de l'outil, contre le commit de départ | 104 sur 104 |
+| Ce qu'ils disent ne pas avoir trouvé ou cité | 9 phrases, dont le plafond de 40 faits atteint deux fois |
+
+Lecture, qui n'est pas une conclusion : une construction lit en entier les fichiers qu'elle modifie et les sorties des commandes qu'elle lance (15 lancements) ; la ligne de déclaration d'une fonction ne remplace ni l'un ni l'autre. Le contexte d'une construction se traite donc ailleurs : par le découpage des étapes (§1), et par ce que ses lancements de commandes lui renvoient. En revanche un éclaireur est presque gratuit et cite juste : c'est ce que demande la lecture de la veille (HR4), où le travail est d'extraire et de classer des passages, et la revue de la règle du dépôt (HR3). L'éclairage avant construction reste dans l'outil, sans être recommandé par défaut : il coûte un centime et demi, et rien ne montre qu'il rapporte.
+
+Limites : une session par cellule ; une seule étape ; des questions d'éclaireur écrites par le mainteneur, dont d'autres auraient pu mieux servir.
+
 ### Construction, dans l'ordre
 
 | Étape | Contenu |
