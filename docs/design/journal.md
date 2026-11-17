@@ -3253,3 +3253,34 @@ De là l'hypothèse HR5, écrite avant tout essai : une revue sur le grand modè
 - Recherche : la cause d'une alerte est lue dans les annotations du job ; une hypothèse et son protocole sont écrits avant l'essai, avec un spécimen dont les défauts sont vérifiés.
 - SSDLC : un changement du workflow de la porte est expliqué, et ne retire aucun contrôle ; un commit n'a pas été publié tant qu'un contrôle exigé manquait, même pour de la documentation.
 - Opérationnel : une alerte d'infrastructure traitée avant le reste ; un tiers de jobs de CI en moins par commit ; IRB sans objet.
+
+## 81. Le deuxième pilote du routage : une revue en une lecture trouve les deux défauts connus sur le grand modèle, et ne voit pas ce qu'un changement a laissé intact, 17 novembre 2026
+
+Le §80 a été poussé (`52faed4`) : porte de l'hôte verte (2 032 scénarios, rien d'ajouté ni de supprimé, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS) à la première tentative ; `main` a suivi ; ruleset `pass` sur les deux branches. Le retrait du déclencheur est observé : le push sur `feat/gate-1a` n'a lancé aucun run, celui sur `main` en a lancé un.
+
+**Le pilote** (protocole : §13 de la note de la boucle, publié avant tout essai). Trois revues du même changement, le diff de la construction témoin du §79, qui porte deux défauts de sécurité connus du mainteneur et dont les sessions n'ont rien su : un refus de `.git/` par le seul préfixe, une lecture de fichier qui lève une erreur quand le fichier n'est pas lisible.
+
+| Cellule | Durée | Coût | Réponses | Verdict | Fichier illisible | Contournement de `.git` |
+|---|---|---|---|---|---|---|
+| Revue qui explore, Opus 5.5 `high` | 194 s | 0,86 $ | 26 | `request_changes`, 5 constats | Nommé, en proposition | Nommé, en proposition |
+| Une lecture sans outil, Opus 5.5 `high` | 99 s | 0,56 $ | 1 | `request_changes`, 3 constats | Nommé, en défaut de correction | Nommé, en proposition |
+| Une lecture sans outil, Sonnet 5.5 `medium` | 15 s | 0,19 $ | 1 | `accept`, 1 constat | Nommé, en proposition | Manqué |
+
+Une lecture reçoit sur son entrée la consigne de l'étape et le diff entier, 175 475 octets ; elle est lancée comme une revue, avec le même profil en lecture seule, et n'a qu'un outil, celui qui rend le verdict.
+
+**Ce que l'hypothèse disait, et ce qui en est.** La lecture sur le grand modèle nomme les deux défauts avec leur fichier pour 35 % de moins que la revue qui explore, en moitié moins de temps : soutenue, sur ce spécimen. Sur le modèle moyen, elle manque le contournement de `.git` : réfutée pour ce défaut.
+
+**Ce que l'hypothèse ne nommait pas.** La revue qui explore a rendu deux défauts de correction qu'aucune lecture n'a vus : le schéma de la boucle et le README laissés tels quels par le changement, contre la règle du dépôt. Un diff ne montre que ce qui a changé ; une règle qui porte sur ce qui est resté intact ne s'y lit pas. Les deux lectures ont écrit d'elles-mêmes qu'elles n'avaient ni la règle du dépôt ni la conception. La revue qui explore a aussi joué les types et 423 scénarios, ce qu'une commande établit. Et le même défaut est un défaut de correction pour une session du grand modèle, une proposition pour l'autre : le niveau d'un constat, qui fait le verdict, varie d'une session à l'autre.
+
+**Ce que le mainteneur en tire, sans en faire une conclusion.** La lecture prend une part de la revue, elle ne la remplace pas. La forme à mesurer à l'étape O.3d est en trois pièces : des commandes pour ce qu'une commande établit ; une lecture sur le grand modèle, avec la règle et les décisions dans son entrée ; une exploration pour ce que la lecture dit n'avoir pas pu voir. Le modèle moyen n'a pas tenu sur un défaut de sécurité, ce que la règle « la sécurité ne descend pas de niveau » supposait sans l'avoir mesuré.
+
+**Limites.** Une session par cellule ; le bruit d'une revue n'est pas mesuré ; un seul spécimen ; l'en-tête de l'entrée est écrit par celui qui connaissait les défauts. Coût du pilote : 1,60 $.
+
+**Schémas et README.** Rien n'est construit : aucun schéma ne change. Le README dit le résultat, dans le paragraphe de la boucle et à la ligne O.3.
+
+**Chiffres.** 2 032 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : protocole publié avant l'essai, spécimen aux défauts vérifiés d'avance, trois cellules sur la même entrée, résultat rapporté avec ce qu'il réfute et ce que l'hypothèse n'avait pas prévu.
+- SSDLC : les lectures tournent sous le profil en lecture seule, sans outil ; l'arbre revu est resté tel quel ; le niveau bon marché est écarté pour un défaut de sécurité sur une mesure et non sur une opinion.
+- Opérationnel : aucun changement d'infrastructure ; l'arbre jetable est retiré ; IRB sans objet.

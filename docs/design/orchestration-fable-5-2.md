@@ -464,6 +464,32 @@ Spécimen : le diff de la construction témoin `hr1-a` (gardé, 163 795 octets),
 
 Relevés : coût, durée, nombre de réponses, constats, et pour chacun des deux défauts s'il est nommé avec son fichier. Une cellule qui manque l'un des deux est réfutée pour ce défaut, quel que soit son prix. Limites écrites d'avance : une session par cellule ; un seul spécimen ; une lecture sans outil ne peut rien exécuter, donc ne peut pas confirmer ce qu'elle avance.
 
+### Résultat du pilote de HR5, 17 novembre 2026 : soutenue sur le grand modèle, réfutée sur le modèle moyen, et une limite que l'hypothèse ne nommait pas
+
+Les trois cellules ont été jouées après la publication du protocole (`52faed4`), sur le même spécimen, dans un arbre jetable à `4c13d20` qui portait le diff de `hr1-a`. Les sessions n'ont rien su des deux défauts. Les deux lectures ont été lancées comme une revue (même profil en lecture seule, même prompt du lanceur, même schéma de verdict), avec `--tools ""` : la session n'a alors qu'un outil, celui qui rend le verdict. L'arbre est resté tel quel après la revue qui explore.
+
+| Cellule | Durée | Coût | Réponses | Verdict | Fichier illisible | Contournement de `.git` |
+|---|---|---|---|---|---|---|
+| 1. Revue qui explore, Opus 5.5 `high` | 194 s | 0,86 $ | 26 | `request_changes`, 5 constats | Nommé, `step-tool.ts`, en proposition | Nommé, `scout-facts.ts`, en proposition |
+| 2. Une lecture, Opus 5.5 `high` | 99 s | 0,56 $ | 1 | `request_changes`, 3 constats | Nommé, `step-tool.ts`, en défaut de correction | Nommé, `scout-facts.ts`, en proposition |
+| 3. Une lecture, Sonnet 5.5 `medium` | 15 s | 0,19 $ | 1 | `accept`, 1 constat | Nommé, `step-tool.ts`, en proposition | Manqué |
+
+Sur ce spécimen, la lecture sur Opus nomme les deux défauts avec leur fichier pour 35 % de moins et en moitié moins de temps que la revue qui explore : l'hypothèse est soutenue pour elle. La lecture sur Sonnet manque le contournement de `.git` : elle est réfutée pour ce défaut, quel que soit son prix.
+
+Ce que le pilote montre et que l'hypothèse ne nommait pas :
+
+| Constat | Ce qu'il dit |
+|---|---|
+| La revue qui explore rend deux défauts de correction qu'aucune lecture ne voit : le schéma de la boucle et le README laissés tels quels, contre la règle du dépôt | Un diff ne montre que ce qui a changé. Une règle qui porte sur ce qu'un changement a laissé intact ne se lit pas dans un diff |
+| Les deux lectures écrivent d'elles-mêmes, dans ce qu'elles n'ont pas pu contrôler, qu'elles n'avaient ni la règle du dépôt ni la conception | L'entrée d'une lecture doit porter la règle et les décisions, pas seulement la consigne et le diff |
+| La revue qui explore a joué les types et 423 scénarios, et le dit | C'est ce qu'une commande établit : la place de O.3c, payée à aucun modèle |
+| Le même défaut (fichier illisible) est un défaut de correction pour une session d'Opus et une proposition pour l'autre | Le niveau d'un constat varie d'une session à l'autre du même modèle, et c'est lui qui fait le verdict |
+| Toute l'entrée d'une lecture (67 991 jetons) est facturée comme une écriture de cache que rien ne relit | À regarder dans l'inventaire : une requête unique n'a rien à gagner à un cache |
+
+Ce que j'en tire, sans en faire une conclusion : la lecture ne remplace pas la revue, elle en prend une part. La forme à mesurer en O.3d est en trois pièces : des commandes pour ce qu'une commande établit, dont « ce changement touche du code et aucun schéma » ; une lecture sur le grand modèle, avec la règle et les décisions dans son entrée, pour les défauts des lignes changées ; une exploration seulement pour ce que la lecture dit n'avoir pas pu voir. Le niveau bon marché n'a pas tenu sur un défaut de sécurité, ce qui va dans le sens de la règle 3.
+
+Limites : une session par cellule, et le bruit d'une revue n'est pas mesuré (celui d'une construction est de 8 %) ; un seul spécimen, dont les défauts étaient connus de celui qui a écrit l'en-tête de l'entrée ; une lecture ne peut rien exécuter. Coût du pilote : 1,60 $. Dossier d'état : `hr5`.
+
 ### Construction, dans l'ordre
 
 | Étape | Contenu |
@@ -471,5 +497,5 @@ Relevés : coût, durée, nombre de réponses, constats, et pour chacun des deux
 | O.3a | `step.json` décrit des phases (rôle, profil, modèle, effort, prompt du lanceur, schéma de sortie, groupe parallèle) ; `step-tool.ts` les enchaîne ; le coût par modèle entre dans les mesures (`modelUsage`) |
 | O.3b | L'éclairage et la vérification des citations ; pilote de HR1 |
 | O.3c | Les contrôles sans modèle, sous srt, avant la revue ; pilote de HR2 |
-| O.3d | La revue par niveaux ; pilote de HR3 |
+| O.3d | La revue par niveaux ; pilote de HR3 ; la forme en trois pièces que le pilote de HR5 désigne (commandes, une lecture, exploration à la demande) y est mesurée sur un second spécimen |
 | O.3e | La lecture de la veille ; pilote de HR4, puis la première lecture des 22 pages et l'inventaire |
