@@ -1,10 +1,13 @@
 Feature: the broker against the real upstream, with a test key (T-04R, docs/design/platform-v3-srt.md, §2, Broker)
   The one scenario that reaches api.anthropic.com. It is a command of the owner, never the gate nor `npm test`:
-  gate.yml holds no secret (§7), since the gate runs the code of every branch. The key is a test key of the owner, with
-  a low spending limit, in a file only its owner reads (0600), named by ANTHROPIC_TEST_KEY_FILE; without it the
-  scenario fails. Each request asks for one token of the smallest model.
+  gate.yml holds no secret (§7), since the gate runs the code of every branch. The credential is in a file only its
+  owner reads (0600), named by ANTHROPIC_TEST_KEY_FILE; without it the scenario fails. It is either a test key of the
+  owner, with a low spending limit, sent in x-api-key, or the short-lived access token that broker-live.yml obtains by
+  identity federation, sent as a bearer (ANTHROPIC_TEST_KEY_SCHEME=bearer). Each request asks for one token of the
+  smallest model.
 
       ANTHROPIC_TEST_KEY_FILE=<file 0600> npm run broker:live
+      ANTHROPIC_TEST_KEY_FILE=<file 0600> ANTHROPIC_TEST_KEY_SCHEME=bearer npm run broker:live
 
   Background:
     Given a broker over api.anthropic.com with the test key of ANTHROPIC_TEST_KEY_FILE

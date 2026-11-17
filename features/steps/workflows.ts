@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import type { DataTable } from '@cucumber/cucumber';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
@@ -86,13 +87,18 @@ function assertGate(text: string): void {
 }
 
 /** The environment that holds the test key of T-04R, and its one secret (docs/infrastructure.md, Secrets broker). */
-const LIVE_ENVIRONMENT = 'broker-live';
-const LIVE_SECRET = '${{ secrets.ANTHROPIC_TEST_KEY }}';
+/** A workflow that may ask GitHub for the identity token of a run. */
+const ASKS_IDENTITY = /\bid-token\b/;
+
+/** What exchanges an identity token at Anthropic, or names the owner's federation rule. */
+const EXCHANGES =
+  /ACTIONS_ID_TOKEN_REQUEST|ANTHROPIC_(FEDERATION_RULE|ORGANIZATION|SERVICE_ACCOUNT|WORKSPACE)_ID|\/v1\/oauth\/token/;
 
 /**
- * broker-live.yml: the only workflow with a secret of the broker. It runs on main only (push, schedule, dispatch; never
- * a pull request), with contents: read, in the environment whose branch policy the owner restricts to main, and the
- * secret enters one step by its env, never a run line or an action input.
+ * broker-live.yml: the only workflow that reaches the real upstream. It stores no secret: it exchanges the identity
+ * token of its run (`id-token: write`, the only permission beside `contents: read`) for a short-lived access token. It
+ * runs on main only (push, schedule, dispatch; never a pull request) and names no environment: the owner's rule
+ * accepts the subject of a run on refs/heads/main, and an environment would change that subject.
  */
 function assertLive(text: string): void {
   const doc = workflow(text);
@@ -101,17 +107,15 @@ function assertLive(text: string): void {
     assert.ok(['push', 'schedule', 'workflow_dispatch'].includes(trigger), `trigger refused: ${trigger}`);
   }
   assert.deepEqual((doc.on['push'] as { branches?: unknown } | undefined)?.branches, ['main']);
-  assert.deepEqual(doc.permissions, { contents: 'read' });
+  assert.deepEqual(doc.permissions, { contents: 'read', 'id-token': 'write' });
   assert.deepEqual(Object.keys(doc.jobs), ['broker-live']);
   const job = doc.jobs['broker-live'];
-  assert.equal(job?.environment, LIVE_ENVIRONMENT);
+  assert.equal(job?.environment, undefined, 'an environment changes the subject of the identity token');
   assert.equal(job?.if, "github.ref == 'refs/heads/main'");
-  const secrets = (job?.steps ?? []).flatMap((step) => {
-    assert.ok(!(step.run ?? '').includes('secrets.'), 'a secret in a run line');
-    assert.ok(!JSON.stringify(step.with ?? {}).includes('secrets.'), 'a secret in an action input');
-    return Object.values(step.env ?? {}).filter((value) => value.includes('secrets.'));
-  });
-  assert.deepEqual(secrets, [LIVE_SECRET]);
+  assert.ok(!text.includes('secrets.'), 'a stored secret');
+  for (const step of job?.steps ?? []) {
+    assert.ok(!/\bset -[a-z]*x|\bxtrace\b/.test(step.run ?? ''), 'a traced run line would print a token');
+  }
 }
 
 Given('the committed workflow {string}', function (name: string) {
@@ -144,15 +148,19 @@ Then('it satisfies the live workflow rules', function () {
 const LIVE_BREAKS: Record<string, (yaml: string) => string> = {
   'triggered by pull_request': (yaml) => yaml.replace(/^on:\n/m, 'on:\n  pull_request:\n'),
   'pushed from another branch': (yaml) => yaml.replace('      - main\n', '      - main\n      - feat/x\n'),
-  'without its environment': (yaml) => yaml.replace('    environment: broker-live\n', ''),
+  'with an environment': (yaml) =>
+    yaml.replace('    runs-on: ubuntu-24.04\n', '    runs-on: ubuntu-24.04\n    environment: broker-live\n'),
   'without its main-only condition': (yaml) => yaml.replace("    if: github.ref == 'refs/heads/main'\n", ''),
   'with broader permissions': (yaml) => yaml.replace('  contents: read\n', '  contents: write\n'),
-  'with the secret in a run line': (yaml) =>
-    yaml.replace('run: npm run broker:live', () => `run: echo "${LIVE_SECRET}" && npm run broker:live`),
-  'with another secret': (yaml) =>
-    yaml.replace(`ANTHROPIC_TEST_KEY: ${LIVE_SECRET}\n`, () => {
-      return `ANTHROPIC_TEST_KEY: ${LIVE_SECRET}\n          OTHER: ${LIVE_SECRET.replace('ANTHROPIC_TEST_KEY', 'OTHER')}\n`;
-    }),
+  'with one more permission': (yaml) =>
+    yaml.replace('  id-token: write\n', '  id-token: write\n  actions: read\n'),
+  'with a stored secret': (yaml) =>
+    yaml.replace(
+      'run: npm run broker:live',
+      () => 'run: echo "${{ secrets.ANTHROPIC_TEST_KEY }}" && npm run broker:live',
+    ),
+  'with a traced run line': (yaml) =>
+    yaml.replace('          set -euo pipefail\n', '          set -euxo pipefail\n'),
 };
 
 Then('a live workflow {} is rejected', function (kind: string) {
@@ -163,14 +171,31 @@ Then('a live workflow {} is rejected', function (kind: string) {
   assert.throws(() => assertLive(broken));
 });
 
-Then('no other workflow names the environment or the secret of broker-live', function () {
+const workflowFiles = (): { file: string; text: string }[] => {
   const dir = join(ROOT, '.github/workflows');
-  const others = readdirSync(dir).filter(
-    (file) =>
-      file !== 'broker-live.yml' &&
-      /\b(broker-live|ANTHROPIC_TEST_KEY)\b/.test(readFileSync(join(dir, file), 'utf8')),
-  );
+  return readdirSync(dir).map((file) => ({ file, text: readFileSync(join(dir, file), 'utf8') }));
+};
+
+Then('the workflows that ask for the identity token of a run are exactly:', function (table: DataTable) {
+  const asking = workflowFiles()
+    .filter(({ text }) => ASKS_IDENTITY.test(text))
+    .map(({ file }) => file);
+  assert.deepEqual(asking.sort(), table.raw().flat().sort());
+});
+
+Then('no other workflow exchanges an identity token at Anthropic or names the federation rule', function () {
+  const others = workflowFiles()
+    .filter(({ file, text }) => file !== 'broker-live.yml' && EXCHANGES.test(text))
+    .map(({ file }) => file);
   assert.deepEqual(others, []);
+});
+
+Then('a line that exchanges an identity token or names the rule is seen: {}', function (line: string) {
+  assert.equal(EXCHANGES.test(line), true);
+});
+
+Then('a line that does neither is not seen: {}', function (line: string) {
+  assert.equal(EXCHANGES.test(line), false);
 });
 
 Then('a workflow with an unpinned action is rejected', function () {

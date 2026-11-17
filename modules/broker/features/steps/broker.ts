@@ -48,6 +48,24 @@ Given('a broker over that upstream with the key {string}', async function (key: 
   this.cleanups.push(() => started.broker.close());
 });
 
+Given(
+  'a broker over that upstream that sends the credential {string} as a bearer',
+  async function (key: string) {
+    const s = scenario(this);
+    const file = keyFile(key);
+    this.cleanups.push(file.remove);
+    s.key = key;
+    s.keyPath = file.file;
+    const config = {
+      ...testConfig(must(s.upstream, 'an upstream').url, file.file),
+      scheme: 'bearer' as const,
+    };
+    const started = await startTestBroker(config);
+    Object.assign(s, { broker: started.broker, client: started.client, usage: started.usage });
+    this.cleanups.push(() => started.broker.close());
+  },
+);
+
 const ANSWER_NAMES: Record<string, UpstreamAnswer> = {
   'a JSON message': 'json',
   'a stream of events': 'sse',
@@ -187,6 +205,14 @@ Then(
     );
   },
 );
+
+Then('the upstream request carried the bearer {string} and no x-api-key', function (key: string) {
+  const [request] = upstreamRequests(this);
+  assert.deepEqual(
+    [request?.headers['authorization'], request?.headers['x-api-key']],
+    [`Bearer ${key}`, undefined],
+  );
+});
 
 Then(
   'the upstream request carried the key {string} in x-api-key and no authorization',

@@ -3443,3 +3443,59 @@ Ce que le retrait coûte en preuve : un changement de ce que le broker importe n
 - Recherche : l'état de l'environnement, le coût de la preuve en requêtes et le nombre de déclenchements sont lus avant d'être dits ; ce que le retrait d'un déclencheur coûte en preuve est écrit.
 - SSDLC : un défaut de borne dans la politique du broker est nommé avec sa menace, avant que la clé existe ; la politique de branches passe avant le secret ; le secret ne passe par aucune ligne de commande.
 - Opérationnel : moindre usage d'une clé payée à l'usage ; aucun réglage de l'environnement changé sans le mot du propriétaire ; IRB sans objet.
+
+## 86. Plus de clé : la preuve réelle du broker par fédération d'identité, et deux défauts de la règle trouvés avant le premier essai, 17 novembre 2026
+
+Le §85 a été poussé (`2cc434a`) : porte de l'hôte verte (2 151 scénarios, rien d'ajouté ni de supprimé, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS) à la première tentative ; `main` a suivi ; ruleset `pass` sur les deux branches.
+
+**Le mot du propriétaire.** Au moment de créer une clé d'API pour la preuve réelle du broker, devant la console d'Anthropic : « il existe aussi le système d'identity federation ». Le mainteneur a lu la documentation du mécanisme et celle de son fournisseur GitHub Actions, puis a recommandé de ne créer aucune clé.
+
+| | Clé d'API | Fédération d'identité |
+|---|---|---|
+| Stocké chez GitHub | Un secret de longue durée | Rien de secret |
+| Ce qu'un vol rapporte | Une clé valable jusqu'à sa révocation | Un jeton de dix minutes |
+| Qui l'obtient | Qui lit le secret | Une exécution que GitHub signe, et que la règle du propriétaire accepte |
+| Sur site | À refaire | Le même mécanisme, avec un autre émetteur |
+
+**Ce qui est construit.**
+
+| Pièce | Avant | Après |
+|---|---|---|
+| `broker.json` | La clé du fichier part en `x-api-key` | `scheme`, facultatif : `x-api-key` par défaut, ou `bearer`. Un jeton d'accès obtenu par fédération n'est accepté qu'en `Bearer` ; le relais du paquet de la sandbox savait déjà le faire |
+| `broker-live.yml` | Un secret d'environnement, écrit dans un fichier 0600 | Aucun secret, aucun environnement. Le job demande à GitHub le jeton d'identité de son exécution, l'échange chez Anthropic, écrit le jeton d'accès dans le fichier 0600, le retire à la fin. Aucun des deux jetons n'est imprimé ; chacun est masqué dès qu'il existe |
+| Le garde-fou du workflow | Un seul secret, dans une seule étape | Aucun secret stocké ; une seule permission de plus que la lecture ; aucun environnement ; aucune ligne de commande tracée ; liste fermée des workflows qui demandent une identité ; un seul qui l'échange |
+| Les quatre identifiants de la règle | | Variables du dépôt : ce ne sont pas des secrets, et ils restent hors des fichiers |
+
+**Deux défauts de la règle, trouvés avant le premier essai.** Le propriétaire a créé l'émetteur, le compte de service et la règle par l'assistant de la console, capture après capture. Deux choses que l'assistant ne pouvait pas savoir :
+
+| Défaut | Comment il a été trouvé | Correction, donnée au propriétaire |
+|---|---|---|
+| Le sujet pré-rempli (`repo:<propriétaire>/<dépôt>:ref:…`) ne correspond à aucun jeton de ce dépôt, qui émet la forme immuable de GitHub, avec les identifiants numériques | En lisant la documentation de GitHub pour vérifier une revendication, puis la configuration du dépôt par l'API | Le sujet sous sa forme immuable |
+| Deux autres workflows demandent déjà un jeton d'identité, ceux de l'action Claude Code ; l'un s'exécute dans le contexte de `main`, avec le même sujet. La règle l'aurait accepté | Par le garde-fou réécrit, qui a échoué sur eux | La revendication `workflow_ref` épinglée à `broker-live.yml` sur `main` |
+
+Le second est le plus sérieux : sans lui, « seul le workflow du broker » n'était vrai que dans les fichiers du dépôt. Il l'est maintenant dans la règle, côté fournisseur.
+
+**Un écart de méthode, à dire.** Le tableau des menaces de la fédération (conception de la plateforme, §2) a été écrit après le premier jet du workflow et du broker, non avant. C'est en écrivant le garde-fou que la seconde ligne d'usurpation est apparue ; un tableau écrit d'abord, en relevant qui demande déjà une identité dans le dépôt, l'aurait montrée plus tôt. Classe d'erreur : technique, de procédé. Contrôle qui l'attrape : le scénario de la liste fermée, désormais.
+
+**Ce que l'assistant de la console proposait et qui n'est pas repris.** Un workflow d'essai qui part à chaque push de toute branche, avec une action non épinglée et les identifiants dans le fichier. L'échange est fait par `curl` et `jq`, sans action de plus.
+
+**Preuves.**
+
+| Preuve | Résultat |
+|---|---|
+| `modules/broker/features/broker-scheme.feature` : un broker configuré en `bearer` envoie l'identifiant de son fichier en `Bearer` et aucun `x-api-key` ; l'`Authorization` qu'un worker présenterait ne le remplace pas | Vert |
+| `broker-start.feature` : sans `scheme`, `x-api-key` ; les deux valeurs connues acceptées ; une valeur inconnue, une autre casse, une valeur vide refusées | Vert |
+| `features/descriptive/workflows.feature` : le workflow tel qu'il est ; huit copies cassées refusées ; la liste fermée ; ce qu'une ligne d'échange est et n'est pas | Vert |
+| `actionlint` sur le workflow | Aucun constat |
+| Types, format, architecture | Verts |
+
+**Ce qui n'est pas prouvé.** L'échange réel : il ne peut l'être que par une exécution sur `main`, après la publication de ce commit et la correction de la règle par le propriétaire. Le résultat, et ce que la preuve a consommé, iront au journal.
+
+**Schémas et README.** Le schéma de l'isolation ne montre pas la CI ; aucun schéma ne décrit ce workflow. `docs/infrastructure.md`, `CLAUDE.md`, la conception de la plateforme et la note de la boucle sont à jour.
+
+**Chiffres.** 2 170 scénarios dans la suite (19 de plus).
+
+**Trois piliers.**
+- Recherche : deux documentations lues à la source avant de recommander ; deux défauts trouvés par vérification et non par l'échec d'un essai ; l'écart de méthode est rapporté ; ce qui n'est pas prouvé est dit.
+- SSDLC : aucun secret de longue durée ; un jeton de dix minutes, masqué, jamais imprimé ; une règle épinglée au fichier du workflow ; un garde-fou en liste fermée ; aucune action ni dépendance ajoutée.
+- Opérationnel : privilège minimum (un compte de service, un espace de travail plafonné, la portée d'un développeur) ; le mécanisme est celui d'un broker sur site ; IRB sans objet.

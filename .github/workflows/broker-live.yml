@@ -1,12 +1,15 @@
-# T-04R (docs/design/platform-v3-srt.md §2, Broker): the real call of the broker with a test key, so that no owner
-# command is needed. Off the path of a change: gate.yml holds no secret (§7) and a pull request never reaches this file.
-# The key is the secret ANTHROPIC_TEST_KEY of the environment broker-live, created by the owner with a deployment
-# branch policy that allows main only; the job also runs on refs/heads/main only. The key is written to a 0600 file
-# of the runner's temporary directory, read by the broker alone (as modules/broker/broker.json reads its own), and
-# removed at the end. Cost: four requests to the smallest model, two answered with one token each and two refused
-# before any generation. The owner pays for this key: the workflow starts on a change of the broker itself or of this
-# file, once a week, or by hand, and on nothing else. A change of what the broker imports is seen by the scenarios of
-# the gate at once, and by the real upstream within the week.
+# T-04R (docs/design/platform-v3-srt.md §2, Broker): the real call of the broker, so that no owner command is needed.
+# Off the path of a change: gate.yml holds no secret (§7) and a pull request never reaches this file.
+# No secret is stored for it. The job asks GitHub for the identity token of this run and exchanges it at Anthropic for
+# an access token of a few minutes (workload identity federation). The owner's rule, on Anthropic's side, accepts the
+# token of this repository on refs/heads/main only; the job also runs on refs/heads/main only, and it names no
+# environment, since an environment would change the subject of the token and the rule would refuse it. The four
+# identifiers of the rule are repository variables: they are not secrets, and they stay out of the files. The access
+# token is written to a 0600 file of the runner's temporary directory, read by the broker alone, and removed at the end.
+# Cost: four requests to the smallest model, two answered with one token each and two refused before any generation.
+# The owner pays for them: the workflow starts on a change of the broker itself or of this file, once a week, or by
+# hand, and on nothing else. A change of what the broker imports is seen by the scenarios of the gate at once, and by
+# the real upstream within the week.
 name: broker-live
 
 on:
@@ -23,6 +26,8 @@ on:
 
 permissions:
   contents: read
+  # The identity token of the run, exchanged below. No other workflow of this repository asks for it.
+  id-token: write
 
 concurrency:
   group: broker-live
@@ -33,7 +38,6 @@ jobs:
     name: broker-live
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    environment: broker-live
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -49,21 +53,55 @@ jobs:
       - name: Install (lockfile, scripts disabled)
         run: npm ci --ignore-scripts
 
-      - name: Key file, 0600, from the secret of the environment
+      - name: Access token file, 0600, from the identity of this run
         env:
-          ANTHROPIC_TEST_KEY: ${{ secrets.ANTHROPIC_TEST_KEY }}
+          FEDERATION_RULE_ID: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          ORGANIZATION_ID: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          SERVICE_ACCOUNT_ID: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
         run: |
+          set -euo pipefail
           umask 077
-          if [ -z "$ANTHROPIC_TEST_KEY" ]; then
-            echo "the environment broker-live has no secret ANTHROPIC_TEST_KEY: the owner creates it (docs/infrastructure.md)"
+          for name in FEDERATION_RULE_ID ORGANIZATION_ID SERVICE_ACCOUNT_ID WORKSPACE_ID; do
+            if [ -z "${!name}" ]; then
+              echo "the repository variable ANTHROPIC_$name is not set: the owner sets it (docs/infrastructure.md)"
+              exit 1
+            fi
+          done
+          # Neither token is ever printed: each is masked as soon as it exists, and lives in a variable or a 0600 file.
+          identity=$(curl -sS --fail -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.anthropic.com" | jq -r '.value // empty')
+          if [ -z "$identity" ]; then
+            echo "GitHub gave no identity token to this run"
             exit 1
           fi
-          printf '%s' "$ANTHROPIC_TEST_KEY" > "$RUNNER_TEMP/anthropic-test-key"
+          echo "::add-mask::$identity"
+          exchange="$RUNNER_TEMP/anthropic-exchange.json"
+          if ! jq -n --arg assertion "$identity" --arg rule "$FEDERATION_RULE_ID" --arg organization "$ORGANIZATION_ID" \
+            --arg account "$SERVICE_ACCOUNT_ID" --arg workspace "$WORKSPACE_ID" \
+            '{grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: $assertion,
+              federation_rule_id: $rule, organization_id: $organization, service_account_id: $account,
+              workspace_id: $workspace}' |
+            curl -sS --fail https://api.anthropic.com/v1/oauth/token -H 'content-type: application/json' \
+              --data @- -o "$exchange"; then
+            rm -f "$exchange"
+            echo "Anthropic refused the exchange: the authentication history of the rule, in the Claude Console, says why"
+            exit 1
+          fi
+          access=$(jq -r '.access_token // empty' "$exchange")
+          rm -f "$exchange"
+          if [ -z "$access" ]; then
+            echo "the exchange gave no access token"
+            exit 1
+          fi
+          echo "::add-mask::$access"
+          printf '%s' "$access" > "$RUNNER_TEMP/anthropic-test-key"
           echo "ANTHROPIC_TEST_KEY_FILE=$RUNNER_TEMP/anthropic-test-key" >> "$GITHUB_ENV"
+          echo "ANTHROPIC_TEST_KEY_SCHEME=bearer" >> "$GITHUB_ENV"
 
       - name: T-04R, the broker against api.anthropic.com
         run: npm run broker:live
 
-      - name: Remove the key file
+      - name: Remove the access token file
         if: always()
-        run: rm -f "$RUNNER_TEMP/anthropic-test-key"
+        run: rm -f "$RUNNER_TEMP/anthropic-test-key" "$RUNNER_TEMP/anthropic-exchange.json"

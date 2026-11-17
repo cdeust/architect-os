@@ -82,6 +82,19 @@ Feature: starting the broker, its process, its descriptive file
     Then it relays to "https://api.anthropic.com" on port 8084 the routes "^/v1/messages(/count_tokens)?(\?[^#]*)?$"
     And its key file is under the home directory
 
+  Scenario: the committed broker.json names no scheme: the key of the file goes upstream in x-api-key
+    Given the committed broker.json
+    Then the committed broker.json names no scheme, and its scheme is then "x-api-key"
+
+  Scenario Outline: a copy of broker.json that names a scheme the broker knows is accepted: <scheme>
+    Given the committed broker.json
+    Then a copy where scheme is "<scheme>" is accepted with that scheme
+
+    Examples:
+      | scheme    |
+      | x-api-key |
+      | bearer    |
+
   Scenario Outline: a broken copy of broker.json is rejected: <case>
     Given the committed broker.json
     Then a copy where <change> is rejected
@@ -97,6 +110,9 @@ Feature: starting the broker, its process, its descriptive file
       | a scheme led by x  | upstream is "xhttps://api.anthropic.com" |
       | a scheme ended by x | upstream is "httpsx://api.anthropic.com" |
       | an empty beta    | betas is [""]                         |
+      | an unknown scheme | scheme is "basic"                    |
+      | a scheme in another case | scheme is "Bearer"            |
+      | an empty scheme  | scheme is ""                          |
 
   Scenario: a copy of broker.json that names a beta is accepted, and relays with it
     Given the committed broker.json

@@ -377,6 +377,16 @@ Then(
   },
 );
 
+Then('the committed broker.json names no scheme, and its scheme is then {string}', function (scheme: string) {
+  const raw = scenario(this).raw;
+  assert.equal('scheme' in raw, false);
+  assert.equal(parseBrokerConfig(raw).scheme, scheme);
+});
+
+Then('a copy where scheme is {string} is accepted with that scheme', function (scheme: string) {
+  assert.equal(parseBrokerConfig({ ...scenario(this).raw, scheme }).scheme, scheme);
+});
+
 Then('a copy where {word} is {} is rejected', function (field: string, value: string) {
   const copy = { ...scenario(this).raw, [field]: JSON.parse(value) as unknown };
   assert.throws(() => parseBrokerConfig(copy));

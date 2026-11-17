@@ -16,6 +16,11 @@ export const BrokerConfigSchema = z.strictObject({
   port: z.number().int().min(1024).max(65535),
   /** `${home}` alone is resolved. */
   keyFile: z.string().min(1),
+  /**
+   * Where the credential of the file goes upstream: an API key in `x-api-key`, the default, or a bearer. A short-lived
+   * access token obtained by identity federation is accepted as a bearer only.
+   */
+  scheme: z.enum(['x-api-key', 'bearer']).default('x-api-key'),
 });
 export type BrokerConfig = z.infer<typeof BrokerConfigSchema>;
 

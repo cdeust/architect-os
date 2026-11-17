@@ -591,23 +591,26 @@ Le playbook pose que « the agent that wrote the code has no way to approve it �
 | Derrière chaque règle, du déterministe : une commande ou un contrôle d'abord, une skill seulement là où il faut un jugement. « The skill makes violations rare and the hook makes them close to impossible » | Playbook ; règle 1 du §13 | Étape 1 ; la livraison devient une commande |
 | Les scénarios sont écrits depuis la spec par une session qui ne voit pas le code, puis rendus non inscriptibles au constructeur par son profil srt | ADLC rapporté par SFEIR (« une contrainte qui vit dans la couche outil est un fait ») ; playbook (« stop the agent editing test files ») ; la borne sans preuve du §82 du journal | Pilote, puis étape 3 |
 | Une grille de revue par dimension (défauts, sécurité, conformité à la spec et au plan), et un constat de correction rendu avec le scénario qui échoue, que l'hôte rejoue | Playbook (`REVIEW.md`, trois passes) ; ADLC rapporté par SFEIR | O.3d |
-| Les evals d'un prompt : un spécimen, un résultat attendu, rejoués quand le prompt ou le modèle change ; un seuil qui bloque | Playbook ; bonnes pratiques rapportées (§4) | Étape 2 ; sur le poste, par les sessions de la boucle, donc sans clé d'API (voir « La clé d'API, au plus juste ») |
+| Les evals d'un prompt : un spécimen, un résultat attendu, rejoués quand le prompt ou le modèle change ; un seuil qui bloque | Playbook ; bonnes pratiques rapportées (§4) | Étape 2 ; sur le poste, par les sessions de la boucle, donc sans clé d'API (voir « L'identifiant payé à l'usage, au plus juste ») |
 | Un prompt de phase liste d'avance les excuses probables et leurs réponses | SFEIR | Avec les evals, pour en mesurer l'effet |
 | Aux mesures d'une session : la part du prompt lue en cache, et le coût par étape acceptée | Exposé d'ingénieurs d'Anthropic rapporté par SFEIR (non lu à la source) ; nos constructions relisent 87 000 à 102 000 jetons par réponse | Étape 1, après lecture de la documentation du cache |
 | La phase Define par l'outil de spécification du propriétaire, joué par l'hôte ; la couture est son gate d'implémentation | Décision du propriétaire | Voir « La vérification de bout en bout » |
 | Un juge d'un autre fournisseur pour la spec | Demande du propriétaire | Voir « Le juge » |
 
-### La clé d'API, au plus juste
+### L'identifiant payé à l'usage, au plus juste
 
-Le propriétaire, le 17 novembre 2026, en acceptant de créer la clé de l'environnement `broker-live` : « pour le broker on limite son utilisation ». La clé d'API est payée à l'usage ; les sessions de la boucle, elles, passent par l'identifiant de l'hôte et ne la consomment pas.
+Le propriétaire, le 17 novembre 2026, en acceptant de créer une clé pour la preuve réelle du broker : « pour le broker on limite son utilisation ». Puis, devant la console : « il existe aussi le système d'identity federation ». Ce qui est payé à l'usage est l'API ; les sessions de la boucle, elles, passent par l'identifiant de l'hôte et ne la consomment pas.
 
 | Décision | État |
 |---|---|
-| La clé ne sert qu'à la preuve réelle du broker (T-04R) : quatre requêtes au plus petit modèle, deux servies d'un jeton chacune, deux refusées avant toute génération | Fait |
+| Aucune clé : la preuve réelle du broker (T-04R) échange l'identité de son exécution contre un jeton de dix minutes. Rien de secret n'est stocké, et un vol ne rapporte qu'un jeton qui expire | Fait (journal §86 ; menaces : conception de la plateforme, §2) |
+| Cette preuve fait quatre requêtes au plus petit modèle : deux servies d'un jeton chacune, deux refusées avant toute génération | Fait |
 | Son workflow ne part que sur un changement du broker ou du workflow, une fois par semaine, ou à la main. Il partait aussi sur tout changement du paquet de la sandbox, des contrats et du verrou : sept fois le 17 novembre | Fait (journal §85) |
 | Les evals de prompts tournent sur le poste, par les sessions de la boucle ; la CI garde la porte, qui n'a aucun secret | Décidé ; étape 2 |
-| Un plafond de dépense sur la clé, chez le fournisseur | Au propriétaire, à la création de la clé |
-| Le broker borne ce qu'un jeton de tâche peut dépenser : une liste fermée de modèles, un plafond de `max_tokens`, un nombre de requêtes par jeton. Aujourd'hui sa politique admet tout modèle et tout `max_tokens` : un jeton détourné dépense sans limite. C'est un fusible contre l'abus d'un secret (menace D), pas une gestion du coût (décision 12) | À concevoir avec ses menaces, avant que la clé serve à autre chose que T-04R |
+| Un plafond de dépense sur l'espace de travail du compte de service, chez le fournisseur | Au propriétaire |
+| Le broker borne ce qu'un jeton de tâche peut dépenser : une liste fermée de modèles, un plafond de `max_tokens`, un nombre de requêtes par jeton. Aujourd'hui sa politique admet tout modèle et tout `max_tokens` : un jeton détourné dépense sans limite. C'est un fusible contre l'abus d'un identifiant (menace D), pas une gestion du coût (décision 12) | À concevoir avec ses menaces, avant que le broker serve autre chose que T-04R |
+
+La fédération est aussi la réponse à la ligne « Identifiant du modèle » du tableau de portabilité plus bas : sur site, le broker obtient son jeton de la même façon, avec l'émetteur du lieu.
 
 ### La vérification de bout en bout, pré-enregistrée
 

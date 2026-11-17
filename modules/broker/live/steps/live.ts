@@ -47,7 +47,13 @@ Given('a broker over api.anthropic.com with the test key of ANTHROPIC_TEST_KEY_F
     file !== undefined && file !== '',
     'ANTHROPIC_TEST_KEY_FILE is not set: this command needs a test key of the owner, in a 0600 file',
   );
-  const broker = await startTestBroker(testConfig('https://api.anthropic.com', file));
+  // An API key goes in x-api-key, the default; the access token of identity federation is a bearer (broker-live.yml).
+  const scheme = process.env['ANTHROPIC_TEST_KEY_SCHEME'] ?? 'x-api-key';
+  assert.ok(
+    scheme === 'x-api-key' || scheme === 'bearer',
+    'ANTHROPIC_TEST_KEY_SCHEME is neither x-api-key nor bearer',
+  );
+  const broker = await startTestBroker({ ...testConfig('https://api.anthropic.com', file), scheme });
   this.cleanups.push(() => broker.broker.close());
   // Read here only to check that no answer reflects it; it is never printed (assertion messages name no secret).
   this.state['live'] = { broker, key: readKeyFile(file), token: '', answers: [] } satisfies Live;

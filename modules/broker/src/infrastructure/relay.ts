@@ -3,8 +3,9 @@ import type { BrokerConfig } from './config.js';
 import { readKeyFile } from './key-file.js';
 
 /**
- * The listener of the broker: the relay of packages/sandbox with the API key in `x-api-key`, read from its file at each
- * request (503 if it cannot be), and a key worth what `authorize` says.
+ * The listener of the broker: the relay of packages/sandbox with the credential of its file sent as `config.scheme`
+ * says (an API key in `x-api-key`, or a bearer), read from the file at each request (503 if it cannot be), and a key
+ * worth what `authorize` says.
  */
 export function startBrokerRelay(
   config: BrokerConfig,
@@ -17,7 +18,7 @@ export function startBrokerRelay(
     routes: config.routes,
     betas: config.betas,
     policy: config.policy,
-    scheme: 'x-api-key',
+    scheme: config.scheme,
     credential: async () => ({ accessToken: readKeyFile(config.keyFile) }),
     credentialUnavailable: 'broker key unavailable: see the key file of the broker',
     authorize,
