@@ -3499,3 +3499,51 @@ Le second est le plus sérieux : sans lui, « seul le workflow du broker » n'é
 - Recherche : deux documentations lues à la source avant de recommander ; deux défauts trouvés par vérification et non par l'échec d'un essai ; l'écart de méthode est rapporté ; ce qui n'est pas prouvé est dit.
 - SSDLC : aucun secret de longue durée ; un jeton de dix minutes, masqué, jamais imprimé ; une règle épinglée au fichier du workflow ; un garde-fou en liste fermée ; aucune action ni dépendance ajoutée.
 - Opérationnel : privilège minimum (un compte de service, un espace de travail plafonné, la portée d'un développeur) ; le mécanisme est celui d'un broker sur site ; IRB sans objet.
+
+## 87. La preuve réelle du broker par fédération d'identité : deux refus, puis verte ; aucun secret, aucun jeton dans le journal du run, 17 novembre 2026
+
+Le §86 a été poussé (`a9b42ab`) : porte de l'hôte verte (2 170 scénarios ; 23 ajoutés, 4 supprimés, qui sont les scénarios du garde-fou remplacés par ceux de la fédération ; 4 mutants dans le périmètre, aucun survivant), CI verte sur `gate` (Linux et macOS) à la première tentative ; `main` a suivi ; ruleset `pass` sur les deux branches. Le propriétaire avait corrigé la règle selon les deux défauts du §86, et posé un plafond de dépense sur l'espace de travail dédié.
+
+**Trois exécutions de `broker-live.yml` sur `main`.**
+
+| Exécution | Déclencheur | Issue | Raison, lue par le propriétaire dans l'historique d'authentification de sa console |
+|---|---|---|---|
+| 1 | Le push du §86 | Échange refusé, 401 | `workspace_not_enabled` |
+| 2 | À la main | Échange refusé, 401 | `sa_not_in_workspace` |
+| 3 | À la main | Verte : un scénario, douze pas | `success` |
+
+Aucun des deux refus n'a rien dépensé : aucun jeton n'a été émis.
+
+**Les deux causes.**
+
+| Refus | Cause | Correction |
+|---|---|---|
+| `workspace_not_enabled` | L'identifiant d'espace de travail posé en variable du dépôt par le mainteneur venait de l'exemple de l'assistant de la console, généré quand la règle visait encore l'espace par défaut | La variable porte l'identifiant de l'espace dédié, donné par le propriétaire |
+| `sa_not_in_workspace` | Le compte de service, créé par l'assistant avec les espaces de la règle d'alors, n'était pas membre de l'espace dédié que la règle vise désormais | Le propriétaire l'y a ajouté, avec le rôle de développeur |
+
+Le mainteneur avait annoncé chacune des deux comme sa piste avant que la console la confirme. Classe d'erreur de la première : technique, la sienne. Il a posé un identifiant pris dans un exemple sans vérifier qu'il désignait l'espace que la règle autorisait. Contrôle qui l'attrape : aucun dans le dépôt, l'identifiant n'étant vérifiable que chez le fournisseur ; l'échec a été net et sans coût, ce qui est le comportement voulu.
+
+**Ce que l'exécution verte établit.**
+
+| Fait | Preuve |
+|---|---|
+| Le jeton d'identité de l'exécution porte le sujet immuable et `workflow_ref` sur `broker-live.yml` : les deux corrections de la règle étaient nécessaires | Les revendications du jeton, dans l'historique de la console, pour les trois exécutions |
+| L'échange rend un jeton d'accès, et le broker le présente en `Bearer` au vrai amont | Les deux requêtes servies (200), dont une en flux, avec un enregistrement d'usage au nom du plus petit modèle |
+| Les requêtes invalides sont refusées par l'amont et enregistrées | 404 pour un modèle inconnu, 400 sans `max_tokens` |
+| Aucune réponse ne reflète l'identifiant ni le jeton de tâche | Le dernier pas du scénario |
+| Aucun jeton n'apparaît dans le journal du run | Recherche dans ses 270 lignes : aucun jeton d'accès, aucun jeton d'identité |
+
+**Ce que le journal du run montre, et qu'il faut dire.** Les quatre identifiants de la règle (organisation, compte de service, règle, espace de travail) y paraissent : GitHub imprime l'environnement d'une étape, et le journal d'un dépôt public est public. Ce ne sont pas des identifiants de connexion : sans un jeton signé par GitHub pour ce workflow sur `main`, ils n'ouvrent rien, et l'exemple du fournisseur les met dans le fichier même. Le mainteneur avait dit vouloir les tenir hors des fichiers ; ils le sont, mais pas hors des journaux. Laissé tel quel, et dit au propriétaire.
+
+**Ce qui n'est pas mesuré.** Ce que l'exécution a consommé en jetons : le scénario vérifie que l'enregistrement d'usage existe et compte des jetons d'entrée, il n'imprime pas les compteurs. La console du propriétaire l'affichera. Par construction : deux requêtes servies, limitées à un jeton de sortie chacune, sur le plus petit modèle.
+
+**Ce qui reste.** L'environnement GitHub `broker-live`, créé par GitHub lors d'une ancienne exécution, est inutilisé : sa suppression est au propriétaire. Le compte de service est encore membre de l'espace par défaut, qui n'a pas de plafond : son retrait est au propriétaire.
+
+**Schémas et README.** Aucun élément du système n'est ajouté ; `docs/infrastructure.md` dit les deux conditions que l'assistant de la console ne remplit pas seul.
+
+**Chiffres.** 2 170 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : deux refus rapportés avec leur raison lue à la source et leur cause ; ce qui n'est pas mesuré est dit ; la piste a précédé la confirmation, et les deux sont rapportées.
+- SSDLC : la preuve réelle tourne sans aucun secret stocké ; un jeton de dix minutes, absent du journal ; la règle du fournisseur a refusé tout ce qui ne lui correspondait pas exactement ; une erreur du mainteneur sur un identifiant est nommée.
+- Opérationnel : espace de travail dédié et plafonné ; le workflow ne part que sur un changement du broker, chaque lundi ou à la main ; IRB sans objet.
