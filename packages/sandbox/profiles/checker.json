@@ -1,0 +1,38 @@
+{
+  "description": "Profil checker de l'étape O.3c (docs/design/orchestration-fable-5-2.md, §13, O.3c, et règle 1) : une commande que le fichier de l'étape nomme, jouée par l'hôte après la construction, sans modèle. Le worktree et le .git du dépôt sont en lecture seule ; aucun domaine n'est joignable, aucun proxy d'authentification, aucun secret ni variable du lanceur ; le dossier temporaire de la sandbox (${tmp}) est le seul inscriptible et sert de TMPDIR et de cache npm, hors ligne. Les secrets de l'hôte et les dossiers des autres sandboxes (${sandboxes}) sont refusés en lecture, les dossiers inscriptibles propres à la sandbox rouverts par allowRead. Aucun terminal. Variables : ${home}, ${repo}, ${worktree}, ${worktreeName}, ${tmp}, ${config} et ${sandboxes} (adaptateur) seulement.",
+  "srt": {
+    "network": {
+      "allowedDomains": [],
+      "deniedDomains": []
+    },
+    "filesystem": {
+      "denyRead": [
+        "${home}/.ssh",
+        "${home}/.aws",
+        "${home}/.gnupg",
+        "${home}/.config/gh",
+        "${home}/.config/architect-os",
+        "${home}/.npmrc",
+        "${home}/.netrc",
+        "${home}/.claude",
+        "${home}/.claude.json",
+        "${home}/Library/Keychains",
+        "${sandboxes}"
+      ],
+      "allowRead": ["${tmp}"],
+      "allowWrite": ["${tmp}"],
+      "denyWrite": []
+    }
+  },
+  "env": {
+    "pass": ["HOME", "USER", "LOGNAME", "PATH", "SHELL", "LANG", "LC_ALL", "LC_CTYPE"],
+    "set": {
+      "TMPDIR": "${tmp}",
+      "npm_config_cache": "${tmp}/npm",
+      "npm_config_offline": "true",
+      "npm_config_update_notifier": "false"
+    },
+    "unset": ["NO_PROXY", "no_proxy"]
+  },
+  "files": {}
+}

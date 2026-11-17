@@ -3284,3 +3284,56 @@ Une lecture reçoit sur son entrée la consigne de l'étape et le diff entier, 1
 - Recherche : protocole publié avant l'essai, spécimen aux défauts vérifiés d'avance, trois cellules sur la même entrée, résultat rapporté avec ce qu'il réfute et ce que l'hypothèse n'avait pas prévu.
 - SSDLC : les lectures tournent sous le profil en lecture seule, sans outil ; l'arbre revu est resté tel quel ; le niveau bon marché est écarté pour un défaut de sécurité sur une mesure et non sur une opinion.
 - Opérationnel : aucun changement d'infrastructure ; l'arbre jetable est retiré ; IRB sans objet.
+
+## 82. Le troisième pas du routage : les contrôles sans modèle, un cinquième profil, et ce que la revue a trouvé ; quatre règles de Sfeir, 17 novembre 2026
+
+Le §81 a été poussé (`cfa9c0a`) : porte de l'hôte verte (2 032 scénarios, rien d'ajouté ni de supprimé, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS) à la première tentative ; `main` a suivi ; ruleset `pass` sur les deux branches.
+
+**O.3c** (conception et menaces écrites avant le code : §13 de la note de la boucle, « O.3c, conception »).
+
+| Avant | Après |
+|---|---|
+| Une étape joue des éclaireurs, une construction, des revues | Entre la construction et les revues, elle joue les contrôles que `step.json` nomme (`checks` : au plus 8, un nom, un argv, une limite) : des commandes sans modèle, l'une après l'autre |
+| Quatre profils srt | Un cinquième, `checker` : worktree et `.git` en lecture seule, aucun domaine joignable, aucun proxy d'authentification, aucun secret, son dossier temporaire seul inscriptible |
+| La revue relançait elle-même les types et les scénarios | Elle reçoit, après la consigne, un bloc « Checks played by the host » : argv, code de sortie, durée et les 4 000 derniers octets de la sortie de chaque commande, chacun encodé en chaîne JSON ; son prompt le dit donnée, indication et non preuve |
+| Une revue était payée même quand les types ne passaient pas | Le premier contrôle qui échoue ou est arrêté met fin à la phase : aucune revue n'est lancée, l'étape rend 1 |
+| | Dans le dossier d'état : `check.<nom>.json`, `review.brief.md` ; dans le résumé : `checks` |
+
+Un contrôle vert n'est pas une preuve : la construction a écrit le worktree, ses dépendances comprises. Le rejeu sur l'hôte et la porte ne changent pas.
+
+**La boucle, et son coût.** Une passe : construction sur Sonnet 5.5, 653 s, 1,79 $, 54 réponses ; revue sur Opus 5.5, 206 s, 0,93 $, `request_changes`, quatre constats de correction, tous justes.
+
+| Constat de la revue | Ce qui en a été fait, à la main |
+|---|---|
+| Rien ne bornait l'attente des sorties d'un contrôle après la fin de sa commande : un descendant sorti du groupe de processus, que l'arrêt du groupe n'atteint pas (T-06b), les tient ouvertes, et l'étape attend sans fin | La limite ferme aussi les deux sorties ; le contrôle finit à sa limite, dit arrêté, donc non réussi. Deux scénarios à faux lanceur, un scénario réel sous srt |
+| La borne de mémoire de la sortie gardée n'était prouvée par aucun scénario : la fonction recoupait à la fin, si bien que tout mutant de la boucle qui lâche les morceaux aurait survécu | La fonction ne garde plus qu'un tampon, recoupé à chaque morceau : ce qui est gardé est exactement ce qui est rendu |
+| Le schéma de la boucle laissé tel quel | Réécrit : huit cases, dont « 4 · Checks », la flèche de refus depuis les contrôles, les fichiers gardés |
+| Le schéma de l'isolation et la conception disaient quatre profils | Cinq, dans les deux |
+
+Les deux derniers étaient la part du mainteneur, que la consigne lui laissait ; la revue les a rendus parce que la règle du dépôt les refuse tant qu'ils ne sont pas faits. C'est la deuxième revue de la journée à rendre ce constat.
+
+**Ce que la sandbox de construction ne peut pas jouer, écrit et joué par le mainteneur sur l'hôte.**
+
+| Preuve | Résultat |
+|---|---|
+| `features/sandbox/checker.feature`, six scénarios réels sous srt : le profil lit le worktree et ne l'écrit pas ; le contrôle d'une étape rend le code et la sortie d'une vraie commande, sur ses deux sorties ; une commande qui ne finit pas est arrêtée à sa limite ; un vrai descendant détaché qui tient les sorties ne retient pas le contrôle | Verts |
+| Témoin du dernier : la fermeture des sorties retirée | Le scénario dépasse son délai de 30 s : il prouve bien la correction |
+| `features/sandbox/escape.feature` : le profil `checker` contre les huit attaques, et son contrôle positif | 9 verts ; l'ensemble passe à 40 attaques et 10 contrôles positifs |
+| Types, format, architecture ; 806 scénarios du paquet, de la sandbox réelle et descriptifs | Verts |
+
+**La mutation.** Lignes changées des trois fichiers de production : 136 mutants, 107 tués, 7 erreurs d'exécution, 22 délais dépassés, aucun survivant, aucun non couvert, en 13 minutes 31. Les 22 délais dépassés ont été relus : tous sont un scénario qui attend un contrôle ou une fin de sortie qui ne vient plus (un contrôle jamais lancé parce que le schéma mutant refuse l'étape, une sortie jamais fermée parce que la fermeture est retirée). Ils sont détectés ; ils disent aussi que ces scénarios attendent au lieu d'échouer vite quand l'étape est refusée, ce qui coûte du temps à la mutation et rien à l'usage.
+
+**Quatre règles de Sfeir, rapportées par le propriétaire pendant l'étape.** « Les prompts doivent être réutilisables et rejouables, si le résultat reste prévisible il peut rester dans la base de connaissance. » « Si une tâche est effectuée plusieurs fois ou est répétée plusieurs fois, [elle] doit être [transformée] en skill. » « Les erreurs et les coquilles vues doivent servir dans la base de connaissance à améliorer les skills et les hooks de vérification pour devenir de plus en plus prédictible. » « Selon eux une solution ne devient une solution que si elle est [réplicable] avec un résultat constant. »
+
+La note de la boucle (§4) porte ce qu'elles donnent contre l'état du dépôt et ce que le mainteneur en décide : un prompt entre dans la base avec son spécimen, son résultat attendu et le nombre de rejeux où il l'a tenu ; ce qui est répété et déterministe devient une commande du dépôt, une skill seulement là où il faut un jugement, la livraison d'abord (une quinzaine de fois à la main ce jour-là) ; trois défauts vus deux fois deviennent des contrôles, le premier étant le schéma laissé tel quel ; et les résultats des pilotes de HR1 et de HR5, une session par cellule, sont des observations et non des solutions tant qu'ils ne sont pas rejoués.
+
+**Ce qui n'est pas prouvé.** Une étape réelle avec des contrôles : seuls les scénarios, réels pour le contrôle lui-même, l'ont jouée ; le pilote de HR2 le fera, et dira ce que ces contrôles retirent au coût d'une revue. Une observation à écrire dans son protocole avant de mesurer : sur les 26 appels d'outil de la revue témoin, 4 sont des lancements de commandes, les 22 autres de la lecture. Rien des quatre règles n'est construit.
+
+**Schémas et README.** `docs/diagrams/orchestration-loop.svg` et `docs/diagrams/isolation.svg`, rendus contrôlés à l'œil ; le README dit la phase, le cinquième profil, les 40 attaques.
+
+**Chiffres.** 2 151 scénarios dans la suite (119 de plus).
+
+**Trois piliers.**
+- Recherche : conception avant le code ; un témoin pour le scénario qui prouve la correction ; les délais dépassés de la mutation relus ; ce qui n'est pas prouvé est dit, et le pilote qui le mesurera est nommé.
+- SSDLC : menaces avant le code ; un profil de plus sous le schéma strict et contre les attaques réelles ; aucun réseau, aucun secret ; une sortie de commande bornée et encodée avant d'entrer dans une consigne ; un défaut de disponibilité trouvé par la revue et corrigé à la cause ; aucune dépendance ajoutée ; aucun commentaire de désactivation.
+- Opérationnel : privilège minimum pour une commande de contrôle ; un contrôle ne remplace ni le rejeu sur l'hôte ni la porte ; IRB sans objet.

@@ -9,6 +9,13 @@ const sessionSchema = () =>
     limitSeconds: z.number().int().min(1).max(7200),
   });
 
+/** Le nom d'une session ou d'un contrôle : il entre dans des noms de fichiers, l'expression est ce qui les rend sûrs. */
+const nameSchema = () =>
+  z
+    .string()
+    .max(32)
+    .regex(/^[a-z][a-z0-9-]*$/);
+
 /** Les noms que plus d'une session porte, une fois chacun, dans l'ordre du fichier. */
 const duplicated = (sessions: readonly { name: string }[]): string[] => [
   ...new Set(
@@ -19,17 +26,34 @@ const duplicated = (sessions: readonly { name: string }[]): string[] => [
 /** Une liste de sessions nommées (revues ou éclaireurs), au plus 8, chaque nom une seule fois dans la liste. */
 const namedSessions = (kind: string) =>
   z
-    .array(
-      sessionSchema().extend({
-        name: z
-          .string()
-          .max(32)
-          .regex(/^[a-z][a-z0-9-]*$/),
-      }),
-    )
+    .array(sessionSchema().extend({ name: nameSchema() }))
     .max(8)
     .refine((sessions) => duplicated(sessions).length === 0, {
       error: (issue) => `duplicate ${kind} name: ${duplicated(issue.input as { name: string }[]).join(', ')}`,
+    })
+    .default([]);
+
+/** Un argument de commande : 1 à 300 caractères, sans NUL, saut de ligne ni retour chariot. */
+const argumentSchema = () =>
+  z
+    .string()
+    .min(1)
+    .max(300)
+    .regex(/^[^\0\n\r]*$/);
+
+/** Les contrôles de l'étape (§13, O.3c) : au plus 8, chacun un nom (unique parmi eux), un argv et une limite. */
+const checksSchema = () =>
+  z
+    .array(
+      z.strictObject({
+        name: nameSchema(),
+        command: z.array(argumentSchema()).min(1).max(32),
+        limitSeconds: z.number().int().min(1).max(7200),
+      }),
+    )
+    .max(8)
+    .refine((checks) => duplicated(checks).length === 0, {
+      error: (issue) => `duplicate check name: ${duplicated(issue.input as { name: string }[]).join(', ')}`,
     })
     .default([]);
 
@@ -43,6 +67,7 @@ export const stepFileSchema = () =>
   z.strictObject({
     build: sessionSchema(),
     scouts: namedSessions('scout'),
+    checks: checksSchema(),
     reviews: namedSessions('review'),
     parallel: z.number().int().min(1).max(8).default(2),
   });

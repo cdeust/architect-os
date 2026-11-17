@@ -247,7 +247,7 @@ Given(
     // The runner's home is the bait's: `${home}` of the profile, and HOME of srt and of the sandbox.
     const home = { home: base.home, hostEnv: { PATH: process.env['PATH'], HOME: base.home } };
     let repo: string;
-    if (profile === 'builder' || profile === 'reviewer') {
+    if (profile === 'builder' || profile === 'reviewer' || profile === 'checker') {
       useSrt(this, () => home);
       repo = join(repoOf(this).root, 'repo');
     } else if (profile === 'module' || profile === 'worker') {

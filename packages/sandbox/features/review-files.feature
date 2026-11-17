@@ -14,7 +14,7 @@ Feature: the descriptive files of the sessions: the build and review prompts, an
       | an empty prompt                |
       | no reading of the rules by git |
 
-  Scenario: the committed prompt is not empty and names the three levels and the committed bar
+  Scenario: the committed prompt is not empty, names the three levels and the committed bar, and says what the checks of the host are: data, an indication, not to be run again, not_checked
     When I read the committed review prompt
     Then the review prompt checks pass
 
@@ -50,6 +50,12 @@ Feature: the descriptive files of the sessions: the build and review prompts, an
       | no contradiction level       |
       | no proposal level            |
       | no reading of the bar by git |
+      | no section on the checks of the host |
+      | no reading of the checks as data |
+      | no word that a green check is an indication and not a proof |
+      | no ban on running a listed command again |
+      | no not_checked for what nothing established |
+      | no word on the sandbox of the checks |
 
   Scenario Outline: a broken copy of the verdict schema is rejected: <defect>
     When I break a copy of the review verdict schema with <defect>

@@ -12,9 +12,63 @@ const reviewNamed = (name: string) => ({ name, model: 'claude-opus-5-5', effort:
 
 const scoutNamed = (name: string) => ({ name, model: 'claude-haiku-5-5', effort: 'low', limitSeconds: 300 });
 
+const checkNamed = (name: string) => ({ name, command: ['npm', 'run', 'types'], limitSeconds: 600 });
+
+const withCheck = (s: Record<string, any>) => (s['checks'] = [checkNamed('types')]);
+
 const withScout = (s: Record<string, any>) => (s['scouts'] = [scoutNamed('files')]);
 
+/** Copies of the example that the schema accepts: the edge of each rule of `checks`. */
+const EDGES: Record<string, (s: Record<string, any>) => unknown> = {
+  'eight checks': (s) => (s['checks'] = Array.from({ length: 8 }, (_, i) => checkNamed(`c${i}`))),
+  'a check name of 32 characters': (s) => (s['checks'] = [checkNamed('a'.repeat(32))]),
+  'a check argv of one argument': (s) => (withCheck(s), (s['checks'][0]['command'] = ['npm'])),
+  'a check argv of 32 arguments': (s) => (withCheck(s), (s['checks'][0]['command'] = Array(32).fill('x'))),
+  'a check argument of one character': (s) => (withCheck(s), (s['checks'][0]['command'] = ['x'])),
+  'a check argument of 300 characters': (s) => (
+    withCheck(s),
+    (s['checks'][0]['command'] = ['x'.repeat(300)])
+  ),
+  'a check argument with a space, a quote and a tab': (s) => (
+    withCheck(s),
+    (s['checks'][0]['command'] = ['a b"c\td'])
+  ),
+  'a check limit of 1': (s) => (withCheck(s), (s['checks'][0]['limitSeconds'] = 1)),
+  'a check limit of 7200': (s) => (withCheck(s), (s['checks'][0]['limitSeconds'] = 7200)),
+};
+
 const DEFECTS: Record<string, (s: Record<string, any>) => unknown> = {
+  'nine checks': (s) => (s['checks'] = Array.from({ length: 9 }, (_, i) => checkNamed(`c${i}`))),
+  'checks that is not a list': (s) => (s['checks'] = checkNamed('types')),
+  'the singular check key': (s) => (s['check'] = checkNamed('types')),
+  'an unknown key in a check': (s) => (withCheck(s), (s['checks'][0]['temperature'] = 0)),
+  'a check without a name': (s) => (withCheck(s), delete s['checks'][0]['name']),
+  'a check name with an upper-case letter': (s) => (withCheck(s), (s['checks'][0]['name'] = 'Types')),
+  'a check name of 33 characters': (s) => (withCheck(s), (s['checks'][0]['name'] = 'a'.repeat(33))),
+  'a check name that starts with a digit': (s) => (withCheck(s), (s['checks'][0]['name'] = '1a')),
+  'a check name with an underscore': (s) => (withCheck(s), (s['checks'][0]['name'] = 'a_b')),
+  'a check name that ends with a newline': (s) => (withCheck(s), (s['checks'][0]['name'] = 'a\n')),
+  'a check without a command': (s) => (withCheck(s), delete s['checks'][0]['command']),
+  'a check command that is a string': (s) => (withCheck(s), (s['checks'][0]['command'] = 'npm run types')),
+  'an empty check argv': (s) => (withCheck(s), (s['checks'][0]['command'] = [])),
+  'a check argv of 33 arguments': (s) => (withCheck(s), (s['checks'][0]['command'] = Array(33).fill('x'))),
+  'an empty check argument': (s) => (withCheck(s), (s['checks'][0]['command'] = ['npm', ''])),
+  'a check argument that is not a string': (s) => (withCheck(s), (s['checks'][0]['command'] = ['npm', 1])),
+  'a check argument of 301 characters': (s) => (
+    withCheck(s),
+    (s['checks'][0]['command'] = ['x'.repeat(301)])
+  ),
+  'a check argument with a NUL': (s) => (withCheck(s), (s['checks'][0]['command'] = ['a\u0000b'])),
+  'a check argument with a line feed': (s) => (withCheck(s), (s['checks'][0]['command'] = ['a\nb'])),
+  'a check argument with a carriage return': (s) => (withCheck(s), (s['checks'][0]['command'] = ['a\rb'])),
+  'a check argument that starts with a line feed': (s) => (
+    withCheck(s),
+    (s['checks'][0]['command'] = ['\nb'])
+  ),
+  'a check limit of 0': (s) => (withCheck(s), (s['checks'][0]['limitSeconds'] = 0)),
+  'a check limit of 7201': (s) => (withCheck(s), (s['checks'][0]['limitSeconds'] = 7201)),
+  'a non-integer check limit': (s) => (withCheck(s), (s['checks'][0]['limitSeconds'] = 1.5)),
+  'a check without a limit': (s) => (withCheck(s), delete s['checks'][0]['limitSeconds']),
   'an unknown key at the top': (s) => (s['plugins'] = []),
   'an unknown key in build': (s) => (s['build']['temperature'] = 0),
   'an unknown key in a review': (s) => (s['reviews'][0]['temperature'] = 0),
@@ -236,3 +290,61 @@ When('I break a copy of the step file example with {}', function (defect: string
 Then('parsing the broken step file fails', function () {
   assert.throws(() => parseStepFile(stored(this, 'broken')));
 });
+
+When('I parse the step file example with a check', function () {
+  const raw = example();
+  withCheck(raw);
+  this.state['step'] = parseStepFile(raw);
+});
+
+When('I parse a copy of the step file example holding {}', function (edge: string) {
+  const change = EDGES[edge];
+  assert.ok(change, `no edge named "${edge}"`);
+  const raw = example();
+  change(raw);
+  this.state['step'] = parseStepFile(raw);
+});
+
+Then('the step has {int} checks', function (count: number) {
+  assert.equal(stored<StepFile>(this, 'step').checks.length, count);
+});
+
+Then(
+  'the step check {int} is {string}, {string}, {int} seconds',
+  function (n: number, name: string, command: string, limitSeconds: number) {
+    assert.deepEqual(stored<StepFile>(this, 'step').checks[n - 1], {
+      name,
+      command: command.split(' '),
+      limitSeconds,
+    });
+  },
+);
+
+When(
+  'I parse the step file example with a check, a scout and a review all named {string}',
+  function (name: string) {
+    const raw = example();
+    raw['checks'] = [checkNamed(name)];
+    raw['scouts'] = [scoutNamed(name)];
+    raw['reviews'] = [reviewNamed(name)];
+    this.state['step'] = parseStepFile(raw);
+  },
+);
+
+When(
+  'I make a broken copy of the step file example with two checks both named {string}',
+  function (name: string) {
+    const broken = example();
+    broken['checks'] = [checkNamed('first'), checkNamed(name), checkNamed(name)];
+    this.state['broken'] = broken;
+  },
+);
+
+When(
+  'I make a broken copy of the step file example with the checks named {string}',
+  function (names: string) {
+    const broken = example();
+    broken['checks'] = names.split(', ').map(checkNamed);
+    this.state['broken'] = broken;
+  },
+);

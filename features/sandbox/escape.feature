@@ -1,5 +1,5 @@
 Feature: no profile escapes its srt sandbox (platform-v3-srt.md, §8, exit of brick 1b)
-  Every kind of profile, builder, reviewer, module and worker, runs eight attacks, each a real command inside a real
+  Every kind of profile, builder, reviewer, checker, module and worker, runs eight attacks, each a real command inside a real
   srt sandbox, over a throwaway home. Every attack fails, and the failure is observed on the host, not trusted from an
   exit code: the marker of the secret never appears in the output, the file written outside or the hook does not exist
   on the host afterwards, the host's listener on the Postgres socket accepted no connection, curl obtained no HTTP
@@ -43,6 +43,14 @@ Feature: no profile escapes its srt sandbox (platform-v3-srt.md, §8, exit of br
       | reviewer | reaches the Postgres socket                                            |
       | reviewer | reads the folder of another task                                       |
       | reviewer | makes a nested user namespace                                          |
+      | checker  | reads the fake secret of the home                                      |
+      | checker  | writes a file directly under the home                                  |
+      | checker  | writes the pre-commit hook of the repository                           |
+      | checker  | reaches example.com, through the proxy of its environment and directly |
+      | checker  | reaches 169.254.169.254 on port 80                                     |
+      | checker  | reaches the Postgres socket                                            |
+      | checker  | reads the folder of another task                                       |
+      | checker  | makes a nested user namespace                                          |
       | module   | reads the fake secret of the home                                      |
       | module   | writes a file directly under the home                                  |
       | module   | writes the pre-commit hook of the repository                           |
@@ -84,6 +92,7 @@ Feature: no profile escapes its srt sandbox (platform-v3-srt.md, §8, exit of br
       | builder  | config     |
       | reviewer | tmp        |
       | reviewer | config     |
+      | checker  | tmp        |
       | module   | tmp        |
       | module   | disposable |
       | worker   | tmp        |

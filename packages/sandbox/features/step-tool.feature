@@ -170,7 +170,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the step folder has no file "scout.a.facts.json"
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}}
+      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}}
       """
       And the step stderr is empty
 
@@ -223,7 +223,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
+      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
       """
 
     Scenario: a review that accepts with a proposal does not block
@@ -235,7 +235,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       Then the step exits with 0
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
+      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
       """
 
     Scenario: a review that requests changes
@@ -247,7 +247,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       Then the step exits with 1
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"request_changes","blocks":true,"findings":2,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
+      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"request_changes","blocks":true,"findings":2,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
       """
       And the step file "review.correctness.verdict.json" is:
       """
@@ -284,7 +284,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       Then the step exits with 1
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","blocks":true,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
+      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","blocks":true,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
       """
 
     Scenario: a review without structured output is invalid
@@ -302,7 +302,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"invalid","blocks":true,"findings":0,"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}}},"costUsd":0.1541816,"costByModel":{"claude-haiku-4-5":0.0141816,"claude-sonnet-5-5":0.14}}
+      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"invalid","blocks":true,"findings":0,"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}}},"costUsd":0.1541816,"costByModel":{"claude-haiku-4-5":0.0141816,"claude-sonnet-5-5":0.14}}
       """
 
     Scenario: a review with an invalid verdict is invalid
@@ -320,7 +320,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"invalid","blocks":true,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
+      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"invalid","blocks":true,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
       """
 
     Scenario: a review refused for two reasons at once gives both, separated by a semicolon
@@ -399,7 +399,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the step folder has no file "review.verdict.json"
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}},"beta":{"model":"claude-sonnet-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.125,"costByModel":{"claude-sonnet-5-5":0.125}}},"costUsd":0.9375,"costByModel":{"claude-haiku-4-5":0.0625,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.625}}
+      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}},"beta":{"model":"claude-sonnet-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.125,"costByModel":{"claude-sonnet-5-5":0.125}}},"costUsd":0.9375,"costByModel":{"claude-haiku-4-5":0.0625,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.625}}
       """
 
     Scenario: one review accepts and one requests changes: the step does not pass, both verdicts are written
@@ -445,7 +445,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}},"beta":{"model":"claude-opus-5-5","verdict":"request_changes","blocks":true,"findings":2,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":1.0625,"costByModel":{"claude-haiku-4-5":0.0625,"claude-opus-5-5":0.5,"claude-sonnet-5-5":0.5}}
+      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}},"beta":{"model":"claude-opus-5-5","verdict":"request_changes","blocks":true,"findings":2,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":1.0625,"costByModel":{"claude-haiku-4-5":0.0625,"claude-opus-5-5":0.5,"claude-sonnet-5-5":0.5}}
       """
 
     Scenario: a review without structured output is invalid and blocks, the other one is still reported
@@ -472,7 +472,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"invalid","blocks":true,"findings":0,"costUsd":0.5625,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"beta":{"model":"claude-sonnet-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.125,"costByModel":{"claude-sonnet-5-5":0.125}}},"costUsd":1.25,"costByModel":{"claude-haiku-4-5":0.125,"claude-sonnet-5-5":1.125}}
+      {"scouts":{},"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"invalid","blocks":true,"findings":0,"costUsd":0.5625,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"beta":{"model":"claude-sonnet-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.125,"costByModel":{"claude-sonnet-5-5":0.125}}},"costUsd":1.25,"costByModel":{"claude-haiku-4-5":0.125,"claude-sonnet-5-5":1.125}}
       """
 
   Rule: at most `parallel` reviews run at the same time, started in the order of the file
@@ -848,7 +848,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"scouts":{"alpha":{"model":"claude-haiku-5-5","completed":true,"verified":2,"rejected":0,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}},"beta":{"model":"claude-haiku-5-5","completed":true,"verified":0,"rejected":4,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}}},"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.9375,"costByModel":{"claude-haiku-4-5":0.0625,"claude-haiku-5-5":0.125,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.5}}
+      {"scouts":{"alpha":{"model":"claude-haiku-5-5","completed":true,"verified":2,"rejected":0,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}},"beta":{"model":"claude-haiku-5-5","completed":true,"verified":0,"rejected":4,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}}},"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.9375,"costByModel":{"claude-haiku-4-5":0.0625,"claude-haiku-5-5":0.125,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.5}}
       """
 
     Scenario: a scout whose facts are all rejected adds nothing, and its file holds each fact with its reason
@@ -1034,7 +1034,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"scouts":{"a":{"model":"claude-haiku-5-5","completed":false,"verified":0,"rejected":0,"open":0,"costUsd":0.5,"costByModel":{"claude-sonnet-5-5":0.5}},"b":{"model":"claude-haiku-5-5","completed":false,"verified":0,"rejected":0,"open":0,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}},"c":{"model":"claude-haiku-5-5","completed":true,"verified":2,"rejected":0,"open":0,"costUsd":0.125,"costByModel":{"claude-haiku-5-5":0.125}}},"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"reviews":{},"costUsd":1.25,"costByModel":{"claude-haiku-4-5":0.0625,"claude-haiku-5-5":0.1875,"claude-sonnet-5-5":1}}
+      {"scouts":{"a":{"model":"claude-haiku-5-5","completed":false,"verified":0,"rejected":0,"open":0,"costUsd":0.5,"costByModel":{"claude-sonnet-5-5":0.5}},"b":{"model":"claude-haiku-5-5","completed":false,"verified":0,"rejected":0,"open":0,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}},"c":{"model":"claude-haiku-5-5","completed":true,"verified":2,"rejected":0,"open":0,"costUsd":0.125,"costByModel":{"claude-haiku-5-5":0.125}}},"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{},"reviews":{},"costUsd":1.25,"costByModel":{"claude-haiku-4-5":0.0625,"claude-haiku-5-5":0.1875,"claude-sonnet-5-5":1}}
       """
 
     Scenario: a scout that throws while another is running: the other ends and writes its files, then exit 2, and no build starts
@@ -1148,7 +1148,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":false,"stopped":false,"answers":1,"turns":4,"durationSeconds":12,"costUsd":0.5,"cacheReadPerAnswer":1000,"costByModel":{"claude-sonnet-5-5":0.5}},"reviews":{},"costUsd":0.5,"costByModel":{"claude-sonnet-5-5":0.5}}
+      {"scouts":{},"build":{"completed":false,"stopped":false,"answers":1,"turns":4,"durationSeconds":12,"costUsd":0.5,"cacheReadPerAnswer":1000,"costByModel":{"claude-sonnet-5-5":0.5}},"checks":{},"reviews":{},"costUsd":0.5,"costByModel":{"claude-sonnet-5-5":0.5}}
       """
 
     Scenario: a build stopped at its limit
@@ -1190,7 +1190,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":true,"stopped":true,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}}
+      {"scouts":{},"build":{"completed":true,"stopped":true,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}}
       """
 
     Scenario: a build whose stream has no result
@@ -1225,7 +1225,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"scouts":{},"build":{"completed":false,"stopped":false,"answers":2,"turns":0,"durationSeconds":0,"costUsd":0,"cacheReadPerAnswer":0,"costByModel":{}},"reviews":{},"costUsd":0,"costByModel":{}}
+      {"scouts":{},"build":{"completed":false,"stopped":false,"answers":2,"turns":0,"durationSeconds":0,"costUsd":0,"cacheReadPerAnswer":0,"costByModel":{}},"checks":{},"reviews":{},"costUsd":0,"costByModel":{}}
       """
 
   Rule: a failure of the tool is reported like npm run code, with exit code 2
@@ -1286,9 +1286,14 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       Then the step dependencies read the folder arguments "/a/b" and the streams of the process
       And the step dependencies write, append and read files of a folder, and read a missing one as undefined
       And the step dependencies session is a function
+      And the step dependencies clock is the time of the host in milliseconds
       And the tool dependencies of a process for "review.json" describe the tool "reviewer" in "/target"
       And the tool dependencies of a process for "code.json" describe the tool "builder" in "/target"
       And the tool dependencies of a process for "scout.json" describe the tool "reviewer" in "/target"
+
+    Scenario: the real check of the process dependencies runs the profile checker in the folder the process names
+      When I build the step dependencies of a process whose INIT_CWD is a folder that is not a worktree
+      Then the real check of the step dependencies is refused by the real runner, before any process
 
   Rule: the real readSource gives a file of the worktree, and nothing that is not one
 

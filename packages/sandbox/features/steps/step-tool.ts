@@ -38,6 +38,11 @@ interface Behaviour {
   failure?: Error;
   /** The session does not return until the scenario ends it. */
   held?: boolean;
+  /** A check: what it returns, and how long it lasts on the clock of the step. */
+  exitCode?: number | null;
+  output?: string;
+  cut?: boolean;
+  durationMs?: number;
 }
 /** A promise the scenario resolves itself: no delay, no timer. */
 interface Deferred {
@@ -72,6 +77,11 @@ interface Step {
   calls: Call[];
   behaviours: Record<ToolFile, Behaviour>;
   phases: Record<Phased, Phase>;
+  /** The checks, which the step plays one at a time: they differ by the order in which they start (1 is the first). */
+  checks: Phase;
+  checkCalls: { command: readonly string[]; limitSeconds: number }[];
+  /** The clock of the step, in milliseconds: only a check moves it. */
+  clock: number;
   /** The files of the worktree the step runs in, as `readSource` gives them. */
   source: Map<string, string>;
   finished: boolean;
@@ -100,6 +110,9 @@ Given('a step folder', function () {
     calls: [],
     behaviours: { 'code.json': {}, 'review.json': {}, 'scout.json': {} },
     phases: { 'scout.json': newPhase(), 'review.json': newPhase() },
+    checks: newPhase(),
+    checkCalls: [],
+    clock: 0,
     source: new Map(),
     finished: false,
     stdout: '',
@@ -127,6 +140,7 @@ const writeStep = (
   reviews: readonly ReviewRow[],
   parallel?: number,
   scouts: readonly ReviewRow[] = [],
+  checks: readonly string[] = [],
 ) => {
   writeFileSync(
     join(s.folder, 'step.json'),
@@ -134,6 +148,11 @@ const writeStep = (
       build: { model: 'claude-sonnet-5-5', effort: 'medium', limitSeconds: 2400 },
       ...(scouts.length > 0
         ? { scouts: scouts.map((scout) => ({ ...scout, effort: 'low', limitSeconds: 300 })) }
+        : {}),
+      ...(checks.length > 0
+        ? {
+            checks: checks.map((name) => ({ name, command: ['npm', 'run', name], limitSeconds: 120 })),
+          }
         : {}),
       ...(reviews.length > 0
         ? { reviews: reviews.map((review) => ({ ...review, effort: 'high', limitSeconds: 900 })) }
@@ -232,6 +251,69 @@ Given(
   },
 );
 
+Given('the step folder holds a step.json with a build and the checks {string}', function (names: string) {
+  writeStep(step(this), [], undefined, [], names.split(' '));
+});
+
+Given(
+  'the step folder holds a step.json with a build, the checks {string} and the reviews {string}',
+  function (names: string, reviews: string) {
+    writeStep(step(this), rows(reviews), undefined, [], names.split(' '));
+  },
+);
+
+Given(
+  'the step folder holds a step.json with a build, the scouts {string}, the checks {string} and the reviews {string}',
+  function (scouts: string, names: string, reviews: string) {
+    writeStep(step(this), rows(reviews), undefined, rows(scouts), names.split(' '));
+  },
+);
+
+const checkBehaviour = (s: Step, n: number): Behaviour => {
+  const known = s.checks.behaviours.get(n);
+  if (known !== undefined) return known;
+  const created: Behaviour = {};
+  s.checks.behaviours.set(n, created);
+  return created;
+};
+
+Given('the check {int} ends with the exit code {int}', function (n: number, code: number) {
+  checkBehaviour(step(this), n).exitCode = code;
+});
+
+Given('the check {int} ends on a signal, with no exit code', function (n: number) {
+  checkBehaviour(step(this), n).exitCode = null;
+});
+
+Given('the check {int} is stopped by its limit', function (n: number) {
+  const own = checkBehaviour(step(this), n);
+  own.exitCode = null;
+  own.stopped = true;
+});
+
+Given('the check {int} prints {string}', function (n: number, output: string) {
+  checkBehaviour(step(this), n).output = JSON.parse(`"${output}"`);
+});
+
+Given('the check {int} cuts its output', function (n: number) {
+  checkBehaviour(step(this), n).cut = true;
+});
+
+Given('the check {int} lasts {int} milliseconds', function (n: number, ms: number) {
+  checkBehaviour(step(this), n).durationMs = ms;
+});
+
+Given('the check {int} is held until I end it', function (n: number) {
+  checkBehaviour(step(this), n).held = true;
+});
+
+Given(
+  'the check {int} fails with the sandbox error {string} {string}',
+  function (n: number, code: string, message: string) {
+    checkBehaviour(step(this), n).failure = new SandboxError(code as 'ISOLATION_UNAVAILABLE', message);
+  },
+);
+
 Given('the step folder holds the questions of the scouts {string}', function (names: string) {
   for (const name of names.split(' ')) {
     writeFileSync(join(step(this).folder, `scout.${name}.md`), `Question of ${name}.\n`);
@@ -276,6 +358,22 @@ const start = (s: Step, args: string): Promise<void> => {
     readSource: (path) => s.source.get(path),
     writeFile: (path, content) => writeFileSync(path, content),
     appendFile: (path, content) => writeFileSync(path, content, { flag: 'a' }),
+    check: async (command, limitSeconds) => {
+      s.checkCalls.push({ command, limitSeconds });
+      const n = s.checkCalls.length;
+      const own = s.checks.behaviours.get(n) ?? {};
+      gate(s.checks.started, n).resolve();
+      if (own.held) await gate(s.checks.ended, n).promise;
+      if (own.failure) throw own.failure;
+      s.clock += own.durationMs ?? 0;
+      return {
+        exitCode: own.exitCode === undefined ? 0 : own.exitCode,
+        stopped: own.stopped ?? false,
+        output: own.output ?? '',
+        cut: own.cut ?? false,
+      };
+    },
+    now: () => s.clock,
     session: async (tool, argv, brief, limitSeconds, onOutput) => {
       s.calls.push({ tool, argv, brief, limitSeconds });
       const phase = tool === 'code.json' ? undefined : s.phases[tool];
@@ -332,6 +430,15 @@ When('I wait for the review session {int} to start', async function (n: number) 
   await turn();
 });
 
+When('I end the check {int}', function (n: number) {
+  gate(step(this).checks.ended, n).resolve();
+});
+
+When('I wait for the check {int} to start', async function (n: number) {
+  await gate(step(this).checks.started, n).promise;
+  await turn();
+});
+
 When('I end the scout session {int}', function (n: number) {
   gate(step(this).phases['scout.json'].ended, n).resolve();
 });
@@ -340,6 +447,28 @@ When('I wait for the scout session {int} to start', async function (n: number) {
   await gate(step(this).phases['scout.json'].started, n).promise;
   await turn();
 });
+
+Then('the checks started were {string}', function (commands: string) {
+  assert.equal(
+    step(this)
+      .checkCalls.map((call) => call.command.join(' '))
+      .join(', '),
+    commands,
+  );
+});
+
+Then('no check was started', function () {
+  assert.deepEqual(step(this).checkCalls, []);
+});
+
+Then(
+  'the check {int} was started with the argv {string} and the limit {int}',
+  function (n: number, argv: string, limit: number) {
+    const call = step(this).checkCalls[n - 1];
+    assert.equal(call?.command.join(' '), argv);
+    assert.equal(call.limitSeconds, limit);
+  },
+);
 
 Then('the step is still running', function () {
   assert.equal(step(this).finished, false);
@@ -475,6 +604,25 @@ Then('the step file {string} is:', function (name: string, content: string) {
 
 Then('the step file {string} is exactly {string}', function (name: string, content: string) {
   assert.equal(readFileSync(join(step(this).folder, name), 'utf8'), content);
+});
+
+Given(
+  'the step folder holds the file {string} with the escaped content {string}',
+  function (name: string, content: string) {
+    writeFileSync(join(step(this).folder, name), JSON.parse(`"${content}"`));
+  },
+);
+
+Then('the step file {string} contains {string}', function (name: string, text: string) {
+  assert.ok(readFileSync(join(step(this).folder, name), 'utf8').includes(text));
+});
+
+Then('the step file {string} does not contain {string}', function (name: string, text: string) {
+  assert.ok(!readFileSync(join(step(this).folder, name), 'utf8').includes(text));
+});
+
+Then('the brief of the session {int} does not contain {string}', function (n: number, text: string) {
+  assert.ok(!(step(this).calls[n - 1]?.brief ?? '').includes(text));
 });
 
 Then('the step folder has no file {string}', function (name: string) {
@@ -658,6 +806,44 @@ Then('the step dependencies session is a function', function () {
   assert.equal(typeof deps.session, 'function');
 });
 
+Then('the step dependencies clock is the time of the host in milliseconds', function () {
+  const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+  const before = Date.now();
+  const now = deps.now();
+  assert.ok(now >= before && now <= Date.now());
+});
+
+When(
+  'I build the step dependencies of a process whose INIT_CWD is a folder that is not a worktree',
+  function () {
+    const folder = mkdtempSync(join(tmpdir(), 'aos-step-'));
+    this.cleanups.push(() => rmSync(folder, { recursive: true, force: true }));
+    const proc = {
+      argv: ['node', 'step.ts', '/a/b'],
+      env: { INIT_CWD: folder },
+      cwd: () => '/elsewhere',
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+    } as unknown as CodeProcess;
+    this.state['stepDeps'] = { deps: stepDependencies(proc), proc };
+  },
+);
+
+Then(
+  'the real check of the step dependencies is refused by the real runner, before any process',
+  async function () {
+    const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+    // The real runner loads the profile `checker` first (a wrong name is PROFILE_INVALID), then makes its folder (refused
+    // as ISOLATION_UNAVAILABLE where the temporary directory is too long for a Unix socket), then resolves the folder
+    // INIT_CWD names: a folder that is no worktree is NOT_A_WORKTREE, while `/elsewhere`, the cwd of the process, does not
+    // exist and would be a plain ENOENT. Either refusal is a SandboxError, before any process.
+    await assert.rejects(
+      () => deps.check(['true'], 1),
+      (error: unknown) =>
+        error instanceof SandboxError && ['NOT_A_WORKTREE', 'ISOLATION_UNAVAILABLE'].includes(error.code),
+    );
+  },
+);
 Then(
   'the tool dependencies of a process for {string} describe the tool {string} in {string}',
   function (file: string, profile: string, cwd: string) {

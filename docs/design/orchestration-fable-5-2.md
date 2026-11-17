@@ -143,6 +143,22 @@ Source signalée par le propriétaire le 17 novembre 2026 : le processus de Sfei
 
 Le propriétaire, le même jour : « Et la base de connaissances qu'on doit alimenter des erreurs que ça soit niveau compréhension comme technique est importante aussi. » Ce que cela fixe pour la note de méthodologie : l'enregistrement du pas de réflexion est une base d'erreurs à deux classes. Une erreur de compréhension porte ce qui était demandé, ce qui a été compris ou fait, la correction dans les mots du propriétaire et la règle qui en sort ; une erreur technique porte le défaut, la façon dont il a été trouvé, sa cause et le contrôle qui l'attrape désormais, ou « aucun ». Aujourd'hui ces erreurs vivent dans le journal, écrit pour une personne, et dans la mémoire de session du mainteneur, qu'aucune session de la boucle ne lit. La base vit dans le dépôt, versionnée ; chaque entrée a une portée (chemins, phase), pour n'être donnée qu'aux sessions qu'elle concerne et en nombre plafonné ; une erreur vue deux fois devient un contrôle automatique. Le début d'une phase, que le §13 construit, est l'endroit où elle se relit.
 
+Le propriétaire, le 17 novembre 2026 au soir, rapporte quatre bonnes pratiques énoncées par Sfeir, dans ses mots :
+
+1. « Les prompts doivent être réutilisables et rejouables, si le résultat reste prévisible il peut rester dans la base de connaissance. »
+2. « Si une tâche est effectuée plusieurs fois ou est répétée plusieurs fois, [elle] doit être [transformée] en skill. »
+3. « Les erreurs et les coquilles vues doivent servir dans la base de connaissance à améliorer les skills et les hooks de vérification pour devenir de plus en plus prédictible. »
+4. « Selon eux une solution ne devient une solution que si elle est [réplicable] avec un résultat constant. »
+
+Ce qu'elles donnent contre l'état du dépôt ce jour-là, et ce que le mainteneur en décide :
+
+| Pratique | État | Décision |
+|---|---|---|
+| Prompt rejouable, gardé si son résultat est prévisible | Les prompts du lanceur sont versionnés et testés sur leur forme ; les consignes d'étape vivent hors dépôt, et une étape (`watch1`) n'a pas pu être rejouée ; aucun prompt n'a de spécimen au résultat attendu | Un prompt entre dans la base avec sa preuve : son spécimen, le résultat attendu, le nombre de rejeux où il l'a tenu. Premier spécimen : le changement aux deux défauts connus de HR5 |
+| Tâche répétée → skill | Répété à la main le 17 novembre : la livraison (une quinzaine de fois), la mutation ciblée sur les lignes changées, le contrôle du rendu d'un schéma, le lancement d'une cellule de pilote, l'ajout au journal avec contrôle du compte | Ce qui est déterministe devient une commande du dépôt (règle 1 du §13 : aucun modèle là où une commande suffit) ; une skill, qui est un prompt, seulement là où il faut un jugement. La livraison d'abord : la plus répétée, et celle où le droit de contournement du ruleset rend une erreur de manipulation coûteuse |
+| Erreurs vues → base → skills et hooks de vérification | La base d'erreurs à deux classes est conçue plus haut, non construite. Vus deux fois le 17 novembre et pas encore des contrôles : un schéma ou le README laissés tels quels par un changement (deux revues) ; un littéral au niveau module, qui coûte un rejeu complet à la mutation ; une borne qu'aucun scénario ne distingue de sa voisine | Chacun devient un contrôle. Le premier a sa place dans les contrôles sans modèle d'une étape (O.3c) |
+| Solution = réplicable, à résultat constant | Les pilotes de HR1 et de HR5 ont une session par cellule, et le disent | Leurs résultats sont des observations. Une forme de routage n'est adoptée qu'après plusieurs rejeux sur au moins deux spécimens, le « résultat constant » étant écrit d'avance (même verdict, mêmes défauts de l'ancre nommés) ; le coût varie de toute façon, son bruit se mesure |
+
 **Entrées inédites à la vérification, demandées par le propriétaire le 16 novembre 2026, essayées à la main, utilité validée par lui le même jour, non construites.** Du même plugin (`modernize-verify`, §4), le mécanisme de test que cette boucle n'avait pas ; ses mots : « ça serait pertinent de l'ajouter ». À la vérification, une session neuve invente des entrées que le développement n'a pas utilisées (bornes, vide, énorme, ordre inhabituel, caractères inhabituels, le même appel deux fois), et tout écart est un constat qu'une personne tranche.
 
 Essai sur le premier pas de 1b.6b, sans code neuf (journal §51) : 57 scénarios écrits avec les seuls steps existants, 1,64 $ ; 4 échecs sur l'hôte, 3 défauts que ni deux revues ni la mutation n'avaient vus ; 14 gardés dans le dépôt.
@@ -272,13 +288,14 @@ Détail et preuves : journal, §32 et §33.
 
 Jusqu'au 14 novembre 2026, la boucle tenait à des scripts de l'orchestrateur, hors dépôt : personne d'autre ne pouvait la rejouer. O.1 la fait entrer dans `packages/sandbox`, à côté de `npm run code` et `npm run review`.
 
-`npm --prefix <lanceur> run step -- <dossier>`, depuis le worktree visé. Le dossier, hors dépôt, contient `step.json` (modèle, effort et limite en secondes de la session de construction ; les éclaireurs et les revues de l'étape, au plus 8 de chaque, chacun avec son nom, son modèle, son effort et sa limite ; et `parallel`, le nombre de sessions d'une même phase qui tournent en même temps, 2 par défaut), `brief.md` et, pour chaque éclaireur, `scout.<nom>.md`, sa question (O.3b). La commande lance d'abord les éclaireurs (au plus `parallel` à la fois), chacun avec sa question sur son entrée standard ; l'hôte lit les fichiers du worktree et ne garde que les faits dont la citation se retrouve à sa ligne (§13, règle 2) ; la session de construction reçoit `brief.md` suivi de ces faits, comme données, avec le brief sur son entrée standard ; puis chaque session de revue (au plus `parallel` à la fois), qui reçoit `brief.md` seul, si la construction a abouti sans être arrêtée. Elle laisse dans le dossier le flux `stream-json` de chaque session, ses mesures (calculées depuis le flux seul : réponses, tours, durée, coût et coût par modèle, tokens, cache lu par réponse), les faits de chaque éclaireur, vérifiés et rejetés avec leur raison (`scout.<nom>.*`), le brief de la construction (`build.brief.md`), le rapport de la construction et le verdict de chaque revue (`review.<nom>.*`). Le résumé donne, par éclaireur, ses faits vérifiés, rejetés et ses `open`, puis le coût total et par modèle, éclaireurs compris. Un éclaireur invalide, non terminé ou arrêté ne donne aucun fait et ne change pas le code de sortie ; un éclaireur dont la session lève le met à 2 avant la construction. Elle écrit une ligne JSON de résumé et sort en 0 (construction aboutie, revue non bloquante), 1 (construction non aboutie ou arrêtée à sa limite, une revue bloquante ou un verdict invalide) ou 2 (refus avant toute session, panne de l'outil).
+`npm --prefix <lanceur> run step -- <dossier>`, depuis le worktree visé. Le dossier, hors dépôt, contient `step.json` (modèle, effort et limite en secondes de la session de construction ; les éclaireurs et les revues de l'étape, au plus 8 de chaque, chacun avec son nom, son modèle, son effort et sa limite ; les contrôles, `checks`, au plus 8, chacun un nom, un argv et une limite (O.3c) ; et `parallel`, le nombre de sessions d'une même phase qui tournent en même temps, 2 par défaut), `brief.md` et, pour chaque éclaireur, `scout.<nom>.md`, sa question (O.3b). La commande lance d'abord les éclaireurs (au plus `parallel` à la fois), chacun avec sa question sur son entrée standard ; l'hôte lit les fichiers du worktree et ne garde que les faits dont la citation se retrouve à sa ligne (§13, règle 2) ; la session de construction reçoit `brief.md` suivi de ces faits, comme données, avec le brief sur son entrée standard ; puis, si la construction a abouti sans être arrêtée, les contrôles de `checks`, un à la fois dans l'ordre du fichier, que l'hôte joue sous srt dans le profil `checker` (worktree en lecture seule, aucun réseau ; les 4 000 derniers octets de leurs sorties et leur code, dans `check.<nom>.json`) ; le premier qui ne passe pas (code autre que 0, arrêt à la limite) arrête l'étape en 1 avant toute revue ; enfin chaque session de revue (au plus `parallel` à la fois), qui reçoit `brief.md`, suivi du bloc « Checks played by the host » quand il y a des contrôles (`review.brief.md`). Elle laisse dans le dossier le flux `stream-json` de chaque session, ses mesures (calculées depuis le flux seul : réponses, tours, durée, coût et coût par modèle, tokens, cache lu par réponse), les faits de chaque éclaireur, vérifiés et rejetés avec leur raison (`scout.<nom>.*`), le brief de la construction (`build.brief.md`), le rapport de la construction et le verdict de chaque revue (`review.<nom>.*`). Le résumé donne, par éclaireur, ses faits vérifiés, rejetés et ses `open`, par contrôle joué son code, sa durée et s'il a passé (`checks`), puis le coût total et par modèle, éclaireurs compris. Un éclaireur invalide, non terminé ou arrêté ne donne aucun fait et ne change pas le code de sortie ; un éclaireur dont la session lève le met à 2 avant la construction. Elle écrit une ligne JSON de résumé et sort en 0 (construction aboutie, revue non bloquante), 1 (construction non aboutie ou arrêtée à sa limite, un contrôle qui ne passe pas, une revue bloquante ou un verdict invalide) ou 2 (refus avant toute session, panne de l'outil, contrôle que le port ne peut pas démarrer).
 
 Elle ne rejoue rien sur l'hôte, ne lance pas la porte et ne commite pas : ces pas restent à l'orchestrateur (§4, pas 4 et 6).
 
 | Pièce | Fichier |
 |---|---|
-| Fichier descriptif de l'étape | `src/step-file.ts`, schéma strict : `build`, `scouts` et `reviews` nommés, `parallel` |
+| Fichier descriptif de l'étape | `src/step-file.ts`, schéma strict : `build`, `scouts`, `checks` et `reviews` nommés, `parallel` |
+| Contrôles sans modèle | `src/step-checks.ts`, pur : `outputTail` (les 4 000 derniers octets), `passed`, `renderChecks` ; `profiles/checker.json` ; `sandboxCheck` dans `src/step-tool.ts`, sur un `SandboxRunner` |
 | Faits d'un éclaireur | `src/scout-facts.ts`, pur : le schéma (draft-07 pour `--json-schema`), `verifyFacts` (l'hôte lit le fichier par `readSource`), `renderFacts` ; `scout.json` et `prompts/scout.md` |
 | Mesures d'une session | `src/measure.ts`, pur |
 | Contrat du verdict | `src/review-verdict.ts` ; `prompts/review-verdict.schema.json` est exactement ce qu'il génère, en draft-07 (Claude Code refuse le `$schema` 2020-12, mesuré) |
@@ -490,12 +507,42 @@ Ce que j'en tire, sans en faire une conclusion : la lecture ne remplace pas la r
 
 Limites : une session par cellule, et le bruit d'une revue n'est pas mesuré (celui d'une construction est de 8 %) ; un seul spécimen, dont les défauts étaient connus de celui qui a écrit l'en-tête de l'entrée ; une lecture ne peut rien exécuter. Coût du pilote : 1,60 $. Dossier d'état : `hr5`.
 
+### O.3c, conception : les contrôles sans modèle (17 novembre 2026, avant le code)
+
+**Ce que c'est.** Entre la construction et les revues, l'hôte joue des commandes que le fichier de l'étape nomme : les types, le format, des scénarios. Leur résultat va à la revue comme une donnée, et une commande qui échoue arrête l'étape avant qu'une revue soit payée.
+
+| Point | Décision | Raison |
+|---|---|---|
+| Où elles sont décrites | `step.json`, `checks` : au plus 8, chacune un nom (même expression que les revues), un argv, une limite en secondes | L'orchestrateur écrit ce fichier, comme il choisit les modèles ; une session n'y écrit pas |
+| Où elles tournent | Sous srt, dans le worktree de l'étape, par un profil `checker` : worktree et `.git` en lecture seule, aucun domaine joignable, aucun secret, aucun proxy d'authentification, un dossier temporaire à elle | Une commande charge la configuration et le code que la construction vient d'écrire (R-2) ; elle n'a besoin ni d'écrire ni de sortir |
+| Dans quel ordre | L'une après l'autre, dans l'ordre du fichier | Deux suites à ports fixes ne tournent pas ensemble |
+| Ce qui en est gardé | Code de sortie, durée, arrêt à la limite, et les 4 000 derniers octets des deux sorties mêlées, dans `check.<nom>.json` | La fin d'une sortie dit l'échec ou le compte ; une sortie sans borne faisait tomber l'hôte (décision 3 de la plateforme) |
+| Ce que la revue reçoit | La consigne, puis un bloc « Checks played by the host » : pour chaque commande son argv, son code, sa durée et sa sortie, chacun encodé comme une chaîne JSON | La sortie est du texte produit par le code du worktree : bornée, encodée, dite donnée dans le prompt du lanceur |
+| Une commande échoue ou est arrêtée | Les suivantes ne sont pas jouées, aucune revue n'est lancée, l'étape rend 1 et son résumé nomme la commande | Règle 1 : ce qu'une commande constate n'est payé à aucun modèle ; la consigne suivante cite la sortie |
+
+**Ce qu'un contrôle vert ne prouve pas.** Le worktree, ses dépendances installées comprises, a été écrit par la session de construction : elle a pu changer la configuration d'un outil, ou l'outil. Un contrôle vert est une indication donnée à la revue, pas une preuve. Le rejeu sur l'hôte après lecture du diff et la porte restent les juges ; rien ici ne les remplace ni ne les allège.
+
+**Menaces.**
+
+| | Menace | Parade |
+|---|---|---|
+| **S** | Une sortie de commande se donne pour un verdict de revue ou une consigne | Elle n'entre que dans le bloc des contrôles, encodée ; le verdict d'une revue vient de sa sortie structurée, lue par l'hôte |
+| **T** | Le code du worktree imprime du texte hostile, qui entre dans la consigne de la revue | Borné à 4 000 octets, encodé en chaîne JSON (aucun saut de ligne ni séquence de terminal ne passe tel quel), dit donnée ; la revue lit déjà le worktree |
+| **T** | La construction a faussé l'outil pour qu'il passe | Dit plus haut : le rejeu sur l'hôte et la porte ne changent pas |
+| **R** | Qui a constaté quoi | `check.<nom>.json`, écrit par l'hôte seul |
+| **I** | Une commande lit un secret et le sort | Aucun réseau ; les secrets de l'hôte sont refusés en lecture comme pour une revue ; sa sortie ne va qu'au dossier d'état et à la revue |
+| **D** | Une commande ne finit pas, ou imprime sans fin | La limite arrête le groupe de processus ; seule la fin de la sortie est gardée en mémoire |
+| **D** | Un descendant sorti du groupe (sa propre session, que l'arrêt du groupe n'atteint pas : T-06b de la plateforme) tient les sorties ouvertes après la fin de la commande | La limite ferme aussi les deux sorties : le contrôle finit à sa limite, dit arrêté, donc non réussi. Trouvé par la revue de l'étape, prouvé par un scénario réel sous srt |
+| **E** | Une commande écrit le worktree, `.git` ou un hook | Profil en lecture seule, prouvé par les attaques réelles de `features/sandbox/escape.feature`, où le profil entre |
+
+**Trois piliers.** Recherche : pilote de HR2 sur le spécimen de HR5, dont la cellule 1 est le témoin (0,86 $, 26 réponses). SSDLC : menaces ci-dessus avant le code ; un profil de plus dans le schéma strict et dans les attaques réelles ; aucune dépendance ajoutée. Opérationnel : aucun réseau, aucun secret, privilège minimum ; IRB sans objet.
+
 ### Construction, dans l'ordre
 
 | Étape | Contenu |
 |---|---|
 | O.3a | `step.json` décrit des phases (rôle, profil, modèle, effort, prompt du lanceur, schéma de sortie, groupe parallèle) ; `step-tool.ts` les enchaîne ; le coût par modèle entre dans les mesures (`modelUsage`) |
 | O.3b | L'éclairage et la vérification des citations ; pilote de HR1 |
-| O.3c | Les contrôles sans modèle, sous srt, avant la revue ; pilote de HR2 |
+| O.3c | Les contrôles sans modèle, sous srt, avant la revue (construits, journal §82) ; pilote de HR2 |
 | O.3d | La revue par niveaux ; pilote de HR3 ; la forme en trois pièces que le pilote de HR5 désigne (commandes, une lecture, exploration à la demande) y est mesurée sur un second spécimen |
 | O.3e | La lecture de la veille ; pilote de HR4, puis la première lecture des 22 pages et l'inventaire |

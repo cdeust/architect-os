@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 560" width="980" height="560" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 586" width="980" height="586" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="t">One sandbox per session: what a session can touch</title>
-  <desc id="d">Claude Code runs inside an srt sandbox with a random session token. The only route out is an authentication proxy on the host, which alone holds the credential. Secrets of the home folder and the folders of other sandboxes cannot be read. Four profiles set what a session may write and reach.</desc>
+  <desc id="d">Claude Code runs inside an srt sandbox with a random session token. The only route out is an authentication proxy on the host, which alone holds the credential. Secrets of the home folder and the folders of other sandboxes cannot be read. Five profiles set what a session, or a command the host runs for a step, may write and reach.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
   </defs>
-  <rect x="0.5" y="0.5" width="979" height="559" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="0.5" y="0.5" width="979" height="585" rx="10" fill="#ffffff" stroke="#d0d7de"/>
   <text x="24" y="34" font-size="17" font-weight="600" fill="#1f2328">One sandbox per session: what a session can touch</text>
   <text x="24" y="54" font-size="12.5" fill="#57606a">packages/sandbox, on srt (@anthropic-ai/sandbox-runtime): Seatbelt on macOS, bubblewrap on Linux</text>
 
@@ -64,24 +64,26 @@
   <text x="330" y="364" font-size="12" fill="#57606a">the session never holds the credential: it holds a token the proxy alone accepts</text>
 
   <!-- profiles -->
-  <text x="24" y="412" font-size="13" font-weight="600" fill="#1f2328">Four profiles (packages/sandbox/profiles)</text>
+  <text x="24" y="412" font-size="13" font-weight="600" fill="#1f2328">Five profiles (packages/sandbox/profiles)</text>
   <g font-size="12">
     <rect x="20" y="422" width="940" height="26" fill="#f6f8fa" stroke="#d0d7de"/>
     <rect x="20" y="448" width="940" height="26" fill="#ffffff" stroke="#d0d7de"/>
     <rect x="20" y="474" width="940" height="26" fill="#ffffff" stroke="#d0d7de"/>
     <rect x="20" y="500" width="940" height="26" fill="#ffffff" stroke="#d0d7de"/>
     <rect x="20" y="526" width="940" height="26" fill="#ffffff" stroke="#d0d7de"/>
+    <rect x="20" y="552" width="940" height="26" fill="#ffffff" stroke="#d0d7de"/>
     <g font-weight="600" fill="#1f2328">
       <text x="32" y="440">Profile</text><text x="132" y="440">Runs</text><text x="392" y="440">May write</text><text x="682" y="440">May reach</text>
     </g>
     <g fill="#1f2328">
-      <text x="32" y="466">builder</text><text x="32" y="492">reviewer</text><text x="32" y="518">module</text><text x="32" y="544">worker</text>
+      <text x="32" y="466">builder</text><text x="32" y="492">reviewer</text><text x="32" y="518">checker</text><text x="32" y="544">module</text><text x="32" y="570">worker</text>
     </g>
     <g fill="#57606a">
       <text x="132" y="466">a build session</text><text x="392" y="466">its worktree and that worktree's git data</text><text x="682" y="466">the authentication proxy, the npm registry</text>
       <text x="132" y="492">a review session</text><text x="392" y="492">only its own config and tmp folders</text><text x="682" y="492">the authentication proxy</text>
-      <text x="132" y="518">a platform module, MCP on its stdio</text><text x="392" y="518">a disposable working folder</text><text x="682" y="518">the gateway's callback</text>
-      <text x="132" y="544">the agent worker of one task</text><text x="392" y="544">a disposable working folder</text><text x="682" y="544">the broker, with the task's token</text>
+      <text x="132" y="518">a check of a step: a command, no model</text><text x="392" y="518">only its own tmp folder</text><text x="682" y="518">nothing</text>
+      <text x="132" y="544">a platform module, MCP on its stdio</text><text x="392" y="544">a disposable working folder</text><text x="682" y="544">the gateway's callback</text>
+      <text x="132" y="570">the agent worker of one task</text><text x="392" y="570">a disposable working folder</text><text x="682" y="570">the broker, with the task's token</text>
     </g>
   </g>
 </svg>

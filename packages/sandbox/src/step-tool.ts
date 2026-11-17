@@ -1,18 +1,20 @@
 // `npm run step -- <dossier>` : une étape de la boucle d'orchestration (docs/design/orchestration-fable-5-2.md, §4).
 // Les éclaireurs (au plus `parallel` à la fois), dont l'hôte vérifie chaque citation en lisant le fichier ; la session de
-// construction avec le brief et les faits vérifiés, puis les sessions de revue (au plus `parallel` à la fois), chacune
-// sous srt par l'outil de code ; tout ce
-// qu'il faut pour relire l'étape reste dans le dossier. Ni rejeu sur l'hôte, ni porte, ni commit : ils restent à
+// construction avec le brief et les faits vérifiés, puis les contrôles sans modèle (§13, O.3c), un à la fois, sous srt
+// par le profil `checker`, puis les sessions de revue (au plus `parallel` à la fois), chacune sous srt par l'outil de
+// code ; tout ce qu'il faut pour relire l'étape reste dans le dossier. Ni rejeu sur l'hôte, ni porte, ni commit : ils restent à
 // l'orchestrateur. `step.ts` ne fait que lui passer le processus.
 import { appendFileSync, existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { Readable, Writable } from 'node:stream';
+import { finished } from 'node:stream/promises';
 import { isatty } from 'node:tty';
 import { z } from 'zod';
 import {
   failureReporter,
   processDependencies,
   runCodeTool,
+  srtOptions,
   timer,
   type CodeProcess,
   type CodeToolDependencies,
@@ -20,6 +22,9 @@ import {
 import { measureSession, type SessionMeasure } from './measure.js';
 import { blocks, parseReviewVerdict, ReviewVerdictSchema } from './review-verdict.js';
 import { factsJsonSchema, parseFacts, renderFacts, verifyFacts, type Fact } from './scout-facts.js';
+import { SrtSandboxRunner } from './srt-runner.js';
+import type { SandboxRunner } from './port.js';
+import { outputTail, passed, renderChecks, type CheckOutcome, type CheckReport } from './step-checks.js';
 import { parseStepFile, type StepFile } from './step-file.js';
 
 export type ToolFile = 'code.json' | 'review.json' | 'scout.json';
@@ -33,6 +38,9 @@ export type StepSession = (
   onOutput: (chunk: Uint8Array) => void,
 ) => Promise<{ exitCode: number; stopped: boolean }>;
 
+/** Un contrôle : la commande jouée sous srt (profil `checker`), sa limite en secondes ; ce qu'elle a rendu. */
+export type StepCheck = (command: readonly string[], limitSeconds: number) => Promise<CheckOutcome>;
+
 export interface StepDependencies {
   /** Les arguments après le nom du script. */
   readonly folderArguments: readonly string[];
@@ -43,6 +51,9 @@ export interface StepDependencies {
   readonly writeFile: (path: string, content: string) => void;
   readonly appendFile: (path: string, content: Uint8Array) => void;
   readonly session: StepSession;
+  readonly check: StepCheck;
+  /** L'heure, en millisecondes : la durée d'un contrôle est mesurée par l'étape. */
+  readonly now: () => number;
   readonly stdout: Writable;
   readonly stderr: Writable;
 }
@@ -118,6 +129,24 @@ async function play(
   deps.writeFile(join(folder, `${prefix}.measure.json`), json({ ...measure, stopped }));
   if (tool === 'code.json') deps.writeFile(join(folder, 'build.report.md'), report);
   return { measure: { ...measure, report, structuredOutput: _structured }, stopped };
+}
+
+/** La borne, en octets, de la sortie gardée d'un contrôle ; celle de `outputTail` et celle que le bloc des revues annonce. */
+const outputBound = () => 4000;
+
+type CheckConfig = StepFile['checks'][number];
+
+/** Un contrôle : joué, sa durée mesurée en secondes entières, son résultat écrit dans `check.<nom>.json`. */
+async function playCheck(deps: StepDependencies, folder: string, config: CheckConfig): Promise<CheckReport> {
+  const before = deps.now();
+  const outcome = await deps.check(config.command, config.limitSeconds);
+  const durationSeconds = Math.round((deps.now() - before) / 1000);
+  const { exitCode, stopped, cut, output } = outcome;
+  deps.writeFile(
+    join(folder, `check.${config.name}.json`),
+    json({ command: config.command, exitCode, stopped, durationSeconds, cut, output }),
+  );
+  return { name: config.name, command: config.command, exitCode, stopped, durationSeconds, cut, output };
 }
 
 type StepSessionConfig = StepFile['build'];
@@ -298,9 +327,34 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     deps.writeFile(join(folder, 'build.brief.md'), forBuild);
     const build = await play(deps, folder, 'build', 'code.json', step.build, [], forBuild);
     const built = build.measure.completed && !build.stopped;
-    const outcomes = built
-      ? await playBounded(step.reviews, step.parallel, (config) => review(deps, folder, config, brief))
-      : [];
+    // Les contrôles, l'un après l'autre ; le premier qui ne passe pas met fin à la phase.
+    const played: CheckReport[] = [];
+    if (built) {
+      for (const config of step.checks) {
+        const report = await playCheck(deps, folder, config);
+        played.push(report);
+        if (!passed(report)) break;
+      }
+    }
+    const checked = played.every(passed);
+    const forReviews =
+      played.length === 0 ? brief : `${brief.trimEnd()}\n\n${renderChecks(played, outputBound())}`;
+    if (built && checked) deps.writeFile(join(folder, 'review.brief.md'), forReviews);
+    const outcomes =
+      built && checked
+        ? await playBounded(step.reviews, step.parallel, (config) => review(deps, folder, config, forReviews))
+        : [];
+    const checks = Object.fromEntries(
+      played.map((report) => [
+        report.name,
+        {
+          exitCode: report.exitCode,
+          stopped: report.stopped,
+          durationSeconds: report.durationSeconds,
+          passed: passed(report),
+        },
+      ]),
+    );
     const reviews = Object.fromEntries(
       outcomes.map(({ config, verdict, measure }) => [
         config.name,
@@ -331,12 +385,13 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         cacheReadPerAnswer: build.measure.cacheReadPerAnswer,
         costByModel: build.measure.costByModel,
       },
+      checks,
       reviews,
       costUsd: measures.reduce((sum, measure) => sum + measure.costUsd, 0),
       costByModel: sumByModel(measures.map((measure) => measure.costByModel)),
     };
     deps.stdout.write(`${JSON.stringify(summary)}\n`);
-    return built && !outcomes.some(({ verdict }) => verdict.blocks) ? 0 : 1;
+    return built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 0 : 1;
   } catch (error) {
     if (error instanceof Refusal) {
       deps.stderr.write(`architect-os step: ${error.message}\n`);
@@ -376,6 +431,42 @@ export function codeToolSession(
   };
 }
 
+/**
+ * Un contrôle réel, sur un `SandboxRunner` : le profil `checker` dans `cwd`, l'entrée fermée aussitôt, les deux sorties
+ * mêlées dans l'ordre d'arrivée et gardées par leur fin (`outputTail`) ; rendu quand le processus a fini et que ses
+ * sorties sont closes. La limite borne les deux : elle arrête le groupe et ferme les sorties, qu'un descendant sorti du
+ * groupe (sa propre session) tiendrait ouvertes après la fin du processus. Le minuteur est annulé quand tout a fini
+ * avant elle.
+ */
+export function sandboxCheck(
+  runner: SandboxRunner,
+  cwd: string,
+  schedule: (fire: () => void, ms: number) => () => void = timer,
+): StepCheck {
+  return async (command, limitSeconds) => {
+    const sandbox = await runner.start({ profile: 'checker', cwd, command });
+    sandbox.stdin.end();
+    const tail = outputTail(outputBound());
+    sandbox.stdout.on('data', tail.push);
+    sandbox.stderr.on('data', tail.push);
+    let stopped = false;
+    const cancel = schedule(() => {
+      stopped = true;
+      void sandbox.stop();
+      sandbox.stdout.destroy();
+      sandbox.stderr.destroy();
+    }, limitSeconds * 1000);
+    // `exited` peut précéder la fin des tubes : la fin de la sortie est ce qu'on garde. Une sortie fermée par la limite
+    // finit en erreur, ce que `allSettled` prend pour une fin.
+    const [exit] = await Promise.all([
+      sandbox.exited,
+      Promise.allSettled([finished(sandbox.stdout), finished(sandbox.stderr)]),
+    ]);
+    cancel();
+    return { exitCode: exit.code, stopped, ...tail.result() };
+  };
+}
+
 /** Les dépendances de l'outil de code d'un fichier de description, pour le processus. */
 export const toolDependencies =
   (proc: CodeProcess) =>
@@ -401,14 +492,17 @@ const sourceReader =
 
 /** Les dépendances réelles : les fichiers du disque, les sessions sous srt, les flux du processus. */
 export function stepDependencies(proc: CodeProcess): StepDependencies {
+  const cwd = proc.env['INIT_CWD'] ?? proc.cwd();
   return {
     folderArguments: proc.argv.slice(2),
     readFile: (path) =>
       existsSync(path) && statSync(path).isFile() ? readFileSync(path, 'utf8') : undefined,
-    readSource: sourceReader(proc.env['INIT_CWD'] ?? proc.cwd()),
+    readSource: sourceReader(cwd),
     writeFile: (path, content) => writeFileSync(path, content),
     appendFile: (path, content) => appendFileSync(path, content),
     session: codeToolSession(toolDependencies(proc)),
+    check: sandboxCheck(new SrtSandboxRunner(srtOptions(proc, {})), cwd),
+    now: () => Date.now(),
     stdout: proc.stdout,
     stderr: proc.stderr,
   };

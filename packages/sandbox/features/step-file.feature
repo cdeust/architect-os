@@ -93,6 +93,45 @@ Feature: step.json, the descriptive file of a step
     When I make a broken copy of the step file example with the scouts named "pair, solo, pair, twin, twin, pair"
     Then parsing the broken step file fails with "scouts: duplicate scout name: pair, twin"
 
+  Scenario: a step file without checks loads, with no check
+    When I parse the step file example without scouts
+    Then the step has 0 checks
+
+  Scenario: a check loads with its name, its argv and its limit
+    When I parse the step file example with a check
+    Then the step has 1 checks
+    And the step check 1 is "types", "npm run types", 600 seconds
+
+  Scenario Outline: the edge of a rule of the checks is accepted: <edge>
+    When I parse a copy of the step file example holding <edge>
+    Then the step has <count> checks
+
+    Examples:
+      | edge                                             | count |
+      | eight checks                                     | 8     |
+      | a check name of 32 characters                    | 1     |
+      | a check argv of one argument                     | 1     |
+      | a check argv of 32 arguments                     | 1     |
+      | a check argument of one character                | 1     |
+      | a check argument of 300 characters               | 1     |
+      | a check argument with a space, a quote and a tab | 1     |
+      | a check limit of 1                               | 1     |
+      | a check limit of 7200                            | 1     |
+
+  Scenario: a check, a scout and a review may share a name
+    When I parse the step file example with a check, a scout and a review all named "correctness"
+    Then the step check 1 is "correctness", "npm run types", 600 seconds
+    And the step scout 1 is "correctness", "claude-haiku-5-5", "low", 300 seconds
+    And the step review 1 is "correctness", "claude-opus-5-5", "high", 900 seconds
+
+  Scenario: two checks with the same name are refused, and the refusal names it
+    When I make a broken copy of the step file example with two checks both named "twin"
+    Then parsing the broken step file fails with "checks: duplicate check name: twin"
+
+  Scenario: two names each used twice among the checks are both named, once each, in the order of the file
+    When I make a broken copy of the step file example with the checks named "pair, solo, pair, twin, twin, pair"
+    Then parsing the broken step file fails with "checks: duplicate check name: pair, twin"
+
   Scenario Outline: a parallel from 1 to 8 is accepted: <parallel>
     When I parse the step file example with the parallel <parallel>
     Then the step parallel is <parallel>
@@ -176,3 +215,28 @@ Feature: step.json, the descriptive file of a step
       | a parallel of 9                        |
       | a non-integer parallel                 |
       | a parallel that is a string            |
+      | nine checks |
+      | checks that is not a list |
+      | the singular check key |
+      | an unknown key in a check |
+      | a check without a name |
+      | a check name with an upper-case letter |
+      | a check name of 33 characters |
+      | a check name that starts with a digit |
+      | a check name with an underscore |
+      | a check name that ends with a newline |
+      | a check without a command |
+      | a check command that is a string |
+      | an empty check argv |
+      | a check argv of 33 arguments |
+      | an empty check argument |
+      | a check argument that is not a string |
+      | a check argument of 301 characters |
+      | a check argument with a NUL |
+      | a check argument with a line feed |
+      | a check argument with a carriage return |
+      | a check argument that starts with a line feed |
+      | a check limit of 0 |
+      | a check limit of 7201 |
+      | a non-integer check limit |
+      | a check without a limit |
