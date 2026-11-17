@@ -133,5 +133,6 @@ Request changes on a PR that has any of these:
 - A `Stryker disable` that lacks the justified form `// Stryker disable next-line <Mutator>: équivalent: <invariant>`.
 - A change to `tools/test-gate` or `.github/workflows/gate.yml` that the PR does not explain (R-6).
 - Docs (`docs/`, this file) left stale by a change that alters architecture, boundaries or commands.
+- A change that adds or changes an element of the system and leaves its diagram (`docs/diagrams/`) or the text of the README that describes it as they were. The table of bricks and the count of the suite are not enough.
 
 Reviewers: use `/review-pr` (`.claude/commands/review-pr.md`); it delegates to `architecture-reviewer`, `test-reviewer` and `security-reviewer` in `.claude/agents/`.

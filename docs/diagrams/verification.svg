@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 470" width="980" height="470" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="t">How a step is tested and verified</title>
-  <desc id="d">Five checks come before the gate: scenarios written with the code, mutation of the changed lines, an independent review in a read-only sandbox, fresh inputs invented by another session, and a measure before the real system. A finding of any of them goes back to the code. When all are green, the gate runs on the host and in CI, and the host commits and pushes. Under each check, what it gave on one step, the Docker adapter of 16 November 2026.</desc>
+  <desc id="d">Five checks come before the gate: scenarios written with the code, mutation of the changed lines, an independent review in a read-only sandbox, fresh inputs invented by another session, and a measure before the real system. A finding of any of them goes back to the code. When all are green, the gate runs on the host and in CI, and the host commits and delivers the same commit to the branch and then to main, both held by a ruleset that requires the gate. Under each check, what it gave on one step, the Docker adapter of 16 November 2026.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
     <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#cf222e"/></marker>
@@ -85,18 +85,19 @@
 
   <!-- 6 gate -->
   <g font-size="12" fill="#57606a">
-    <rect x="20" y="332" width="760" height="76" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+    <rect x="20" y="332" width="700" height="76" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
     <text x="36" y="355" font-weight="600" font-size="13" fill="#1f2328">6 · The gate: npm run gate on the host, then CI on Linux and macOS</text>
-    <text x="36" y="376">every scenario run once, none skipped or filtered · executed = base + added − removed, read from the runner's report</text>
+    <text x="36" y="376">every scenario run once, none skipped or filtered · executed = base + added − removed, from the runner's report</text>
     <text x="36" y="394">no surviving mutant on the changed lines · each verdict of the mutation tool replayed outside it</text>
 
     <!-- 7 commit -->
-    <rect x="800" y="332" width="160" height="76" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
-    <text x="880" y="355" text-anchor="middle" font-weight="600" font-size="13" fill="#1f2328">7 · Commit, push</text>
-    <text x="880" y="376" text-anchor="middle">by the host; the journal</text>
-    <text x="880" y="394" text-anchor="middle">says what is not proven</text>
+    <rect x="740" y="332" width="220" height="76" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+    <text x="850" y="355" text-anchor="middle" font-weight="600" font-size="13" fill="#1f2328">7 · Commit and delivery</text>
+    <text x="850" y="372" text-anchor="middle" font-size="11.5">by the host: to the branch, then</text>
+    <text x="850" y="385" text-anchor="middle" font-size="11.5">to main, a ruleset on both; the</text>
+    <text x="850" y="398" text-anchor="middle" font-size="11.5">journal says what is not proven</text>
   </g>
-  <path d="M780 370H798" stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <path d="M720 370H738" stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
 
   <!-- legend -->
   <rect x="20" y="430" width="16" height="16" rx="3" fill="#f6f8fa" stroke="#8c959f"/>

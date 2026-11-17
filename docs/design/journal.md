@@ -3066,3 +3066,49 @@ Le nom d'une revue entre dans des noms de fichiers : une expression stricte est 
 - Recherche : la validation du ruleset est une évaluation lue chez GitHub, avec ce qu'elle ne prouve pas ; le coût de la passe et les deux passages de mutation sont rapportés.
 - SSDLC : un nom qui devient un nom de fichier est tenu par une expression et prouvé par des noms hostiles ; une somme indexée par un texte venu d'une session ne passe plus par un objet ; aucun commentaire de désactivation.
 - Opérationnel : un plafond de sessions simultanées est dans le fichier de l'étape ; le ruleset tient la branche de livraison ; IRB sans objet.
+
+## 76. Le ruleset répliqué sur `main`, et trois apports du propriétaire : schémas tenus à jour, une source, une base d'erreurs, 17 novembre 2026
+
+Le §75 a été poussé (`5481ce7`) : porte de l'hôte verte (1 906 scénarios = 1 861 + 48 − 3 ; trois fichiers de production dans le périmètre, 118 mutants : 105 tués, 11 erreurs d'exécution, 2 délais dépassés, aucun survivant), CI verte sur `gate` (Linux et macOS) ; `main` a suivi. Cette porte a duré 49 minutes, dont 10 de mutation et 35 de rejeu des verdicts hors de l'outil de mutation.
+
+**Le ruleset sur `main`.** Devant l'évaluation du §75, le propriétaire : « Oui réplique sur main. » Le ruleset de `docs/design/ruleset-main.json` y est créé tel qu'il est écrit. Le push de `5481ce7` était son premier, et le deuxième sur la branche ; l'évaluation de GitHub pour chacune :
+
+| Branche | `required_status_checks` | `non_fast_forward` | `deletion` | `secret_scanning` | Résultat |
+|---|---|---|---|---|---|
+| `feat/gate-1a` | pass | pass | pass | pass | pass |
+| `main` | pass | pass | pass | pass | pass |
+
+Les deux branches de livraison refusent désormais une suppression, une réécriture, et un commit sur lequel les deux jobs de la porte ne sont pas verts. Limite inchangée : le compte qui livre a le rôle du propriétaire, donc le droit de contournement ; le ruleset enregistre chaque push, il n'arrête pas ce compte. Ce qui tient, c'est la procédure : aucun push sans porte et CI vertes sur ce commit.
+
+**Les schémas et le README.** Le propriétaire : « Lorsqu'on rajoute des nouveaux éléments on met à jour les diagrammes et le readme. » Le commit du §75 avait ajouté plusieurs revues à la fois et le coût par modèle en ne changeant qu'une ligne du tableau des briques : le schéma de la boucle et son paragraphe disaient encore « une session de revue ». Corrigé ici, pour tout ce que la journée a ajouté :
+
+| Schéma | Ce qui y entre |
+|---|---|
+| `orchestration-loop.svg` | Les revues de l'étape, plusieurs à la fois, chacune dans sa sandbox et sur son modèle ; un verdict par revue ; le coût par modèle parmi les mesures ; la livraison du même commit sur la branche puis sur `main`, sous ruleset |
+| `verification.svg` | La livraison sur la branche puis sur `main`, sous ruleset |
+| `anthropic-watch.svg` | Les avis de sécurité demandés chaque lundi à côté de la veille |
+
+Le rendu des trois a été contrôlé à l'œil, partie modifiée par partie modifiée. Le paragraphe de la boucle dit le routage et le ruleset ; celui de la veille dit le second job. Et la règle entre dans la grille que les revues appliquent (`CLAUDE.md`, « What the review must refuse ») : un changement qui ajoute ou change un élément du système en laissant son schéma ou le texte du README qui le décrit comme ils étaient est refusé ; le tableau des briques et le compte de la suite ne suffisent pas.
+
+**Une source.** Le propriétaire a signalé le processus de Sfeir pour Claude Code (quatre diapositives d'une présentation, gardées hors dépôt) : « Si tu prends le processus de sfeir notre modèle local first reste relativement proche. Il apporte quelques éléments supplémentaires qu'on a pas encore. » La note de la boucle (§4) porte désormais ce qui s'y recoupe et ce qu'il a en plus : deux moments de leçons avec leurs règles, des evals rejouées quand un texte donné au modèle change, l'élagage par ablation, les règles par chemin, trois validations humaines, l'exploitation et la fin de vie, la promotion par preuve entre niveaux.
+
+**Une base d'erreurs.** Le propriétaire : « Et la base de connaissances qu'on doit alimenter des erreurs que ça soit niveau compréhension comme technique est importante aussi. » Inscrit à la même note : l'enregistrement du pas de réflexion est une base d'erreurs à deux classes, dans le dépôt, chaque entrée avec sa portée, relue au début d'une phase ; une erreur vue deux fois devient un contrôle automatique. Les erreurs de la journée en donnent la matière.
+
+| Classe | Erreur du mainteneur, ce 17 novembre | Section |
+|---|---|---|
+| Compréhension | « Sécurité ou coût » pris pour un filtre de la veille | §70 |
+| Compréhension | Une page sans décision proposée à la sortie du registre | §70 |
+| Compréhension | Des durées limites présentées comme une gestion du coût, contre la décision 11 | §70, §73 |
+| Technique | Une affirmation sur une option écrite sans mesure, trouvée fausse | §74 |
+| Technique | Des contrôles automatiques confiés à l'hôte dans une conception, donc du code du worktree exécuté avant lecture du diff | §74 |
+| Technique | De la documentation restée périmée après un retrait, trois fois | §68, §71 |
+| Technique | Un élément ajouté sans son schéma ni son paragraphe du README | Cette section |
+
+**Ce qui n'est pas fait.** La base d'erreurs n'existe pas : ce commit ne fait qu'en fixer la forme dans la note. `broker-live` reste rouge : le propriétaire créera la clé à son retour.
+
+**Chiffres.** 1 906 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : l'évaluation des deux rulesets est lue chez GitHub ; les erreurs de la journée sont classées avec leur section ; une source est inscrite avec ce qu'elle a que la boucle n'a pas.
+- SSDLC : les deux branches de livraison exigent la porte et refusent la réécriture ; la grille des revues gagne une règle.
+- Opérationnel : deux réglages du dépôt créés depuis un fichier commité, sur le mot du propriétaire ; la limite du contournement est écrite ; IRB sans objet.

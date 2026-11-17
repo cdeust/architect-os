@@ -8,7 +8,7 @@
   </defs>
   <rect x="0.5" y="0.5" width="979" height="551" rx="10" fill="#ffffff" stroke="#d0d7de"/>
   <text x="24" y="34" font-size="17" font-weight="600" fill="#1f2328">The watch of Anthropic: a source that moved is seen, read and decided</text>
-  <text x="24" y="54" font-size="12.5" fill="#57606a">tools/watch · npm run watch -- check | read · register in tools/watch/watch.json · every Monday in CI</text>
+  <text x="24" y="54" font-size="12.5" fill="#57606a">tools/watch · npm run watch -- check | read · register in tools/watch/watch.json · every Monday in CI, beside the advisories on the locked dependencies</text>
 
   <!-- sources -->
   <rect x="20" y="72" width="290" height="300" rx="8" fill="#fff8e1" stroke="#bf8700"/>
