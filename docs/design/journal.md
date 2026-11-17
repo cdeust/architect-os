@@ -2955,3 +2955,42 @@ C'est la différence entre écarter une évolution et la prendre : elle est lue 
 - Recherche : la décision du matin est rapportée comme une erreur de critère et de source ; la sonde est décrite avec ce qu'elle a joué, et n'est pas gardée dans le code.
 - SSDLC : une épingle à la fois, avec son verrouillage ; la règle de sécurité d'une option est écrite là où elle s'appliquera ; aucune ligne sans effet n'entre dans le code.
 - Opérationnel : des quatre sources de paquets et de changelogs, une seule était à jour ; les quatre le sont ; IRB sans objet.
+
+## 73. La table de routage de la boucle : quatre modèles, par l'hôte, conçue avant d'être construite, 17 novembre 2026
+
+Le §72 a été poussé : porte de l'hôte verte sur l'épingle du SDK (1 861 scénarios, rien d'ajouté ni de supprimé ; un fichier de production dans le périmètre, aucun mutant : le changement n'y ajoute qu'un commentaire), CI verte sur `gate` (Linux et macOS) ; `main` a suivi.
+
+**La demande.** Le propriétaire, devant un tableau où le mainteneur rangeait des durées limites et un modèle fixé parmi les « bornes de coût » : « Pour moi les bornes de temps ou les bornes par le modèle sont un pansement. […] La boucle d'orchestration pourrait évoluer pour utiliser les 4 modèles au lieu de gérer les coûts par une borne de temps. Pareil pour la boucle de vérification. Elle pourrait évoluer pour paralléliser et utiliser les 4 modèles. »
+
+**Ce que la note de la boucle disait déjà.** « Le premier levier est donc le découpage des étapes ; la table de routage vient après » (§1 de `docs/design/orchestration-fable-5-2.md`). Elle n'avait jamais été écrite. Et la décision 11 de la plateforme disait déjà que le coût se mesure et ne se plafonne pas.
+
+**Ce qui a été établi avant de concevoir.**
+
+| Fait | Comment |
+|---|---|
+| Une session lancée comme la boucle la lance (`--bare`) n'a aucun outil de délégation | Trois essais, de trois façons, 0,014 $ |
+| Une session `--bare` démarre avec 2 346 jetons : en ouvrir une de plus ne coûte presque rien | Mesuré aux mêmes essais |
+| La revue de l'outil de veille a passé 42 de ses 44 appels d'outil à lire des fichiers et à lancer des commandes, sur le modèle le plus cher de la boucle | Flux de la revue |
+| Le plus petit modèle coûte plus par jeton au-delà de 100 000 jetons de prompt ; l'outil advisor est coupé par les variables que posent les profils | Documentation, citations vérifiées |
+
+**La conception** (§13 de la note). Le routage se fait par l'hôte : une étape devient une suite de phases, chacune une session neuve avec son profil, son modèle et son effort, en parallèle quand elles sont indépendantes. C'est la forme que la boucle a déjà, répétée à l'intérieur d'une étape.
+
+| Règle | Ce qu'elle tient |
+|---|---|
+| Aucun modèle là où une commande suffit | Types, format, verrouillage, gardes : une commande sous srt, en lecture seule, dont le résultat est donné comme un fait ; rien du worktree ne s'exécute sur l'hôte avant la lecture du diff |
+| Un fait d'éclaireur est une citation que l'hôte vérifie | Un petit modèle peut se tromper, pas faire passer une erreur pour un fait |
+| La sécurité ne descend pas de niveau | La revue de correction et de sécurité reste sur le même modèle ; un niveau s'ajoute, il ne remplace rien |
+| L'escalade remplace la coupure | Une phase qui ne conclut pas passe la main avec ce qu'elle a ; le délai reste un fusible |
+
+La décision 3 de la note (un contrôleur sur le plus petit modèle, retiré) tient pour ce qu'elle retirait : ce contrôleur jugeait une condition que l'hôte vérifie déjà. Les rôles rouverts n'ont rien à juger que l'hôte ne contrôle.
+
+**La mesure, fixée avant tout essai.** Référence : l'étape qui a construit l'outil de veille, rejouée depuis son commit de départ, dont le coût et les constats sont connus. Ancre : les deux défauts réels que sa revue a trouvés. Une variante qui ne les retrouve pas est réfutée, quel que soit son prix. Quatre hypothèses, une par pièce : l'éclairage, les contrôles sans modèle, la revue par niveaux, la lecture de la veille.
+
+**Ce qui n'est pas fait.** Rien n'est construit : ce commit ne contient que la conception, la ligne O.3 du README et cette section. La première lecture des 22 pages de la veille et l'inventaire des ajouts non utilisés attendent l'étape O.3e, puisqu'ils doivent passer par ce moteur ; d'ici là le contrôle de veille reste rouge sur ces pages, et le dit.
+
+**Chiffres.** 1 861 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : les faits qui portent la conception sont des mesures ou des citations vérifiées ; la mesure est pré-enregistrée, avec l'ancre qui la réfute.
+- SSDLC : le modèle de menaces de ce qui change est écrit avant le code ; la revue de sécurité garde son niveau ; aucune session ne délègue hors de la vue de l'hôte.
+- Opérationnel : mêmes profils, même proxy, même journal d'usage ; un plafond de sessions simultanées est prévu au fichier de l'étape ; IRB sans objet.
