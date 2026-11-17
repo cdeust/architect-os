@@ -2833,3 +2833,69 @@ Le §68 a été poussé (`acd1b14`) : porte de l'hôte verte (1 632 scénarios =
 - Recherche : les deux portes annoncées « en cours » aux sections précédentes sont rapportées ; celle de `main` sur `acd1b14` le sera à la suivante.
 - SSDLC : la règle de livraison est écrite là où un contributeur la lit ; `main` ne reçoit que des commits dont la porte et la CI sont vertes ; le ruleset, absent, reste au propriétaire.
 - Opérationnel : la branche par défaut porte le code réel et le suit ; les contrôles planifiés tournent sur lui dès lundi ; IRB sans objet.
+
+## 70. La veille d'Anthropic, vérifiée : un registre, une commande, et ce que le propriétaire a corrigé en chemin, 17 novembre 2026
+
+Le §69 a été poussé (`359886c`) : porte de l'hôte verte (1 632 scénarios, rien d'ajouté ni de supprimé, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS) ; `main` a suivi au même commit, selon la décision 23. La porte de `main` est verte sur ses trois commits : `8437f42`, `acd1b14`, `359886c`.
+
+**La demande.** Le propriétaire : « Il serait utile d'introduire la vérification des changelog Claude code et la doc de Claude et d'anthropic pour maintenir à jour les mécanismes de l'architecture à niveau avec les dernières fonctionnalités et assurer une concordance avec ce que Anthropic amène à dispo. Le point suivant après sera de faire un inventaire des ajouts non utilisés qui ont une pertinence. »
+
+**L'existant.** La brique 1b.8 surveillait deux épingles et rien d'autre : ni jusqu'où le changelog avait été lu, ni aucune des pages dont les mécanismes dépendent. Le jour même, le SDK de l'agent 0.3.326 était publié depuis la veille, l'épingle à 0.3.325.
+
+**Ce qui est construit** (conception et modèle de menaces écrits avant le code : `docs/design/anthropic-watch.md`).
+
+| Pièce | Ce qu'elle fait |
+|---|---|
+| `tools/watch/watch.json` | 28 sources : 2 épingles, 2 changelogs, 2 index de documentation (205 et 916 pages), 22 pages. Chaque page nomme les fichiers du dépôt qui s'appuient sur elle, et sur quoi ; chacun de ces chemins a été vérifié |
+| `npm run watch -- check` | Compare le registre aux sources : à jour, en retard, illisible ; sorties 0, 1, 2, 3. Aucun modèle. Cinq secondes contre les sources réelles |
+| `npm run watch -- read <id>` | Consigne une lecture : empreinte et date d'une page, version et date d'un changelog, liste des adresses d'un index. Refuse une épingle, qui se déplace dans son manifeste |
+| `--keep <dossier>` | Garde hors du dépôt le texte lu et le texte nouveau, pour lire la différence et non la page |
+| `watch.yml` | Remplace `pins.yml` : chaque lundi, sans secret, `contents: read` |
+
+Le plancher de sécurité : le texte lu n'est pas de confiance. Quatre hôtes, en liste fermée dans le code ; HTTPS seul ; redirections suivies seulement dans cette liste ; délai et taille bornés ; aucun texte distant imprimé ni écrit dans le dépôt, seulement des identifiants, des versions et des adresses passées par une expression stricte, des empreintes et des comptes. Des scénarios le prouvent devant un changelog, une page et un index hostiles (commandes de workflow GitHub, séquences de terminal, adresses d'un autre hôte).
+
+**Joué contre le réel.** Rouge, à raison : le SDK en retard d'une version, le changelog de Claude Code lu jusqu'à 2.1.325 alors que 2.1.326 est publié, les pages jamais lues. Les redirections réelles (308, 302) sont suivies dans la liste, un hôte hors liste est refusé.
+
+**La boucle, et ses coûts.**
+
+| Passe | Construction (Sonnet 5.5) | Revue (Opus 5.5) | Issue |
+|---|---|---|---|
+| watch1 | 576 s, 1,39 $ | 301 s, 1,63 $ | `request_changes`, 7 constats |
+| watch2 | 434 s, 1,19 $ | 422 s, 1,84 $ | `request_changes`, 6 constats, dont 2 de correction |
+
+Ce que la première revue a trouvé et que le mainteneur avait laissé passer dans sa consigne : `--keep` acceptait un dossier du dépôt dont le nom commence par deux points, et y aurait écrit du texte distant ; `read` réécrivait le registre dans une autre forme que celle du formateur, si bien qu'une lecture aurait changé tout le fichier. Le premier est corrigé par un contrôle du premier segment du chemin ; le second par une décision : le registre et ses listes restent dans la forme que l'outil écrit, hors du formateur, et un scénario le vérifie.
+
+**La mutation, que la sandbox ne peut pas jouer.** Premier passage sur l'outil entier : 784 mutants, 691 tués, 53 survivants, 14 non couverts, 6 délais dépassés. Aucun n'entre au registre de dette. Relus un par un par le mainteneur : une vingtaine disaient un comportement que rien ne prouvait (une page à jour dont le texte aurait été gardé, un index dont on ne fait que retirer des pages, une version donnée comme un tableau, une redirection sans corps, l'en-tête envoyé) ; les autres disaient du code qui ne servait à rien (des valeurs par défaut jamais atteintes, des tests de type redondants à l'exécution, des tableaux vides jamais lus). Les premiers reçoivent un scénario, les seconds sont retirés avec leur code ; un index n'a plus de date au registre, son état est sa liste commitée et rien d'autre. Second passage, après la seconde passe de la boucle : 650 mutants, 638 tués, 7 erreurs d'exécution, 5 délais dépassés, aucun survivant, aucun non couvert. Les cinq délais dépassés ont été relus : trois boucles qui ne finissent plus, une requête partie sans son signal d'arrêt, une remontée de dossiers sans fin. La seconde revue avait trouvé, par lecture de l'arbre syntaxique, deux survivants que la seconde passe laissait : un commentaire de désactivation posé là où l'outil de mutation ne le lit pas, et un test d'état redondant à l'exécution. Le mainteneur les a retirés tous deux par le code (un `catch` sans corps, un champ déclaré absent), sans commentaire de désactivation : il n'y en a aucun dans l'outil.
+
+**Un coût mesuré : les constantes de module.** Ce premier passage a pris 3 h 34, presque entièrement pour 78 mutants de constantes de module (une expression régulière, une liste d'hôtes, un schéma), chacun rejouant toute la suite, environ 2 min 20 pièce. Ces constantes sont maintenant construites dans des fonctions. Second passage : 32 minutes, 10 mutants statiques.
+
+**Trois corrections du propriétaire, le même jour.**
+
+1. *Ce que la veille garde.* Le mainteneur avait fait de « sécurité ou coût » un filtre, et écarté par lui la nouvelle voie de livraison des serveurs MCP au binaire, dont l'ancienne est dépréciée. Le propriétaire : « Pourquoi sortir une évolution qui est plus mandatory qu'un apport ? […] On garde tout ce [qui] est pertinent qu'il apporte sécurité ou non, coûts ou non. » Le relevé classe désormais chaque changement : obligatoire, pertinent, sans objet avec sa raison.
+2. *Aucune source ne sort du registre.* Le mainteneur proposait de retirer une page dont les changements ne mènent à aucune décision. Le propriétaire : « elle est fetch une fois, après son coût est relatif et ça nous permet de comparer au registre réel pas à un registre filtré. »
+3. *Le coût ne se plafonne pas.* Le mainteneur avait présenté des durées limites et un modèle fixé comme une gestion du coût. Le propriétaire : « Pour moi les bornes de temps ou les bornes par le modèle sont un pansement. […] La boucle d'orchestration pourrait évoluer pour utiliser les 4 modèles au lieu de gérer les coûts par une borne de temps. Pareil pour la boucle de vérification. Elle pourrait évoluer pour paralléliser et utiliser les 4 modèles. » C'était déjà la décision 11. Le relevé global du coût est à la conception (`platform-v3-srt.md`, §2).
+
+**Ce qui a été lu et mesuré pour la suite (routage par modèle).** Neuf pages de la documentation de Claude Code, environ 1 Mo, lues par trois lecteurs sur le plus petit modèle, en parallèle, chacun avec ses questions, rendant des citations avec leur ligne ; les citations qui portent une décision ont été vérifiées dans les pages. Puis trois essais d'une session de la boucle avec deux sous-agents sur d'autres modèles, 0,014 $ au total.
+
+| Fait | Source |
+|---|---|
+| Une session lancée en `--bare` n'a que trois outils : aucune délégation, même avec `--agents`, `--tools "…,Agent"` ou `--tools default` | Mesuré, Claude Code 2.1.325 |
+| `--bare` deviendra le défaut de `-p` | Documentation, `headless.md` |
+| Une session `--bare` démarre avec 2 346 jetons de contexte | Mesuré |
+| La ligne de résultat porte le coût par modèle (`modelUsage`) | Mesuré |
+| Hors `--bare`, l'éclaireur intégré tourne sur Opus derrière une passerelle | Documentation, `sub-agents.md` |
+
+Conclusion : le routage par modèle se fait par l'hôte, une session par phase, ce qui est déjà la forme de la boucle. La table de routage annoncée par la note de la boucle reste à écrire, avec un protocole de mesure fixé avant tout essai.
+
+**Une réserve.** Les trois lecteurs ont tourné dans la session du mainteneur, pas sous la sandbox de la boucle : pour du texte distant, c'est une isolation plus faible que le profil en lecture seule du dépôt. L'inventaire passera par les sessions de la boucle.
+
+**Ce qui n'est pas prouvé.** Que le registre nomme tout ce dont un mécanisme dépend. La première lecture des 22 pages et l'inventaire ne sont pas faits : `check` est rouge et le restera jusque-là. `watch.yml` n'a pas encore tourné en CI.
+
+**Ce qui vient, chacun dans son commit.** Les trois avis de sécurité que `npm audit` signale sur des dépendances indirectes ; l'épingle du SDK à 0.3.326, avec la nouvelle livraison des serveurs MCP ; la table de routage de la boucle ; la première lecture et l'inventaire.
+
+**Chiffres.** 1 860 scénarios dans la suite (228 de plus, tous pour l'outil) ; 146 scénarios descriptifs, inchangé.
+
+**Trois piliers.**
+- Recherche : l'existant et les sources sont relevés avant de concevoir ; chaque fait qui porte une décision est une citation vérifiée ou une mesure ; les trois corrections du propriétaire sont rapportées avec ce que le mainteneur avait écrit.
+- SSDLC : modèle de menaces avant le code ; aucun texte distant imprimé ni écrit, prouvé par des sources hostiles ; aucun secret, aucune dépendance ajoutée ; un défaut d'écriture dans le dépôt trouvé par la revue et corrigé ; mutation de tout l'outil.
+- Opérationnel : un workflow hebdomadaire sans secret remplace celui des épingles ; il sera rouge tant que les pages ne sont pas lues, et dit lesquelles ; IRB sans objet.

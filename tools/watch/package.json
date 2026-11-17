@@ -1,0 +1,11 @@
+{
+  "name": "@architect-os/watch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "La veille d'Anthropic : un registre commité des sources, comparé à ce qui est publié (docs/design/anthropic-watch.md).",
+  "dependencies": {
+    "zod": "4.6.7"
+  }
+}

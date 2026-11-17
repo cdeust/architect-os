@@ -29,6 +29,9 @@
       "path": "tools/evidence"
     },
     {
+      "path": "tools/watch"
+    },
+    {
       "path": "features"
     }
   ]

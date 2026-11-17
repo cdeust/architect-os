@@ -1,17 +1,19 @@
-# The watch of Claude Code
+# The watch of Anthropic
 
-The platform runs on two packages of Anthropic, pinned to exact versions: the Claude Agent SDK, whose package holds the Claude Code binary that the workers and the orchestration loop launch, and the sandbox runtime (srt). This page records what was read of their changelog and what was decided, so that a pin moves for a reason and with a proof. The workflow `pins.yml` turns red when a published version is ahead of a pin.
-
-Sources: the changelog of Claude Code, `https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md`; the release notes of the sandbox runtime, `https://github.com/anthropics/sandbox-runtime/releases`; the documentation index, `https://code.claude.com/docs/llms.txt`; a page, `https://code.claude.com/docs/en/<page>.md`.
+The platform holds things of Anthropic: two pinned packages (the Claude Agent SDK, whose package holds the Claude Code binary that the workers and the orchestration loop launch, and the sandbox runtime), and the behaviours its mechanisms rely on, described in the documentation of Claude Code and of the API. `tools/watch/watch.json` names each of these sources, the files that rely on it, and what was read of it (design: `docs/design/anthropic-watch.md`). This page records what was read and what was decided, so that a pin moves, or a mechanism changes, for a reason and with a proof.
 
 ## State
 
-| Package                          | Pinned  | Read up to | Read on          |
-| -------------------------------- | ------- | ---------- | ---------------- |
-| `@anthropic-ai/claude-agent-sdk` | 0.3.325 | 2.1.325    | 16 November 2026 |
-| `@anthropic-ai/sandbox-runtime`  | 0.0.83  | 0.0.83     | 16 November 2026 |
+The state is the register, not a table here. `npm run watch -- check` compares it with the sources and says, source by source, `à jour`, `en retard` or `illisible`; the workflow `watch.yml` runs it every Monday.
 
-The SDK 0.3.N holds the Claude Code binary 2.1.N.
+## How a reading is done
+
+1. `npm run watch -- check --keep <a folder outside the repository>`: for each page or changelog that moved, the new text is kept beside the one read last time. Read the difference, not the page.
+2. Classify each change. **Mandatory**: a deprecation, a change of default, a removal, a migration, a security fix; it is taken, at a named step, before the platform is forced to. **Pertinent**: it touches a mechanism of the platform or offers it something; it is kept, with its decision. **Not applicable**: it touches nothing of the platform; it is recorded with its reason. A change is kept because it is pertinent, whether or not it brings security or lowers a cost (the owner's decision, 17 November 2026): security and cost order what is done first, they filter nothing out. For a page, `check` names the files to read again.
+3. Add a section to this page: the source, the range or the date, the entries that apply and the decision for each, and what the reading cost.
+4. `npm run watch -- read <id>...` records the reading in the register. A pin is not recorded this way: it moves in its manifest (below).
+
+No source leaves the register because its changes led to no decision: it costs one comparison a week, and taking it out would mean reading it whole again the day it matters (the owner's decision, 17 November 2026).
 
 ## From 2.1.313 to 2.1.325 (1,043 entries)
 
@@ -41,7 +43,7 @@ What proves the pin: the gate, whose scenarios launch the real binary before a f
 
 ## How to move a pin
 
-1. Read the changelog between the pinned version and the published one, for what touches a headless run, the Agent SDK, the sandbox, hooks, and what a session sends to the API.
-2. Add a section to this page: the range, the entries that apply, and the decision for each.
+1. Read the changelog between the pinned version and the published one (`check` gives both), for what touches a headless run, the Agent SDK, the sandbox, hooks, and what a session sends to the API.
+2. Add a section to this page: the range, the entries that apply, and the decision for each; record the reading of the changelog with `npm run watch -- read`.
 3. Move one pin at a time, `npm install --ignore-scripts`, and replay the scenarios that launch the binary or srt before moving the other.
-4. Update the table of the state, then the gate and the CI as for any change.
+4. `npm run watch -- check` says the pin is up to date; then the gate and the CI as for any change.

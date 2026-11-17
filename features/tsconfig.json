@@ -9,6 +9,7 @@
     { "path": "../services/memory" },
     { "path": "../modules/broker" },
     { "path": "../modules/memory" },
-    { "path": "../tools/evidence" }
+    { "path": "../tools/evidence" },
+    { "path": "../tools/watch" }
   ]
 }

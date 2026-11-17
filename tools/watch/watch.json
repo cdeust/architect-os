@@ -1,0 +1,273 @@
+{
+  "sources": [
+    {
+      "id": "agent-sdk",
+      "kind": "pin",
+      "package": "@anthropic-ai/claude-agent-sdk",
+      "manifests": [
+        "services/memory/package.json",
+        "bench/package.json"
+      ]
+    },
+    {
+      "id": "sandbox-runtime",
+      "kind": "pin",
+      "package": "@anthropic-ai/sandbox-runtime",
+      "manifests": [
+        "packages/sandbox/package.json",
+        "bench/package.json"
+      ]
+    },
+    {
+      "id": "claude-code-changelog",
+      "kind": "changelog",
+      "url": "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md",
+      "read": {
+        "version": "2.1.325",
+        "on": "2026-11-16"
+      }
+    },
+    {
+      "id": "agent-sdk-changelog",
+      "kind": "changelog",
+      "url": "https://raw.githubusercontent.com/anthropics/claude-agent-sdk-typescript/main/CHANGELOG.md"
+    },
+    {
+      "id": "claude-code-docs",
+      "kind": "index",
+      "url": "https://code.claude.com/docs/llms.txt",
+      "pages": "tools/watch/indexes/claude-code-docs.txt"
+    },
+    {
+      "id": "platform-docs",
+      "kind": "index",
+      "url": "https://platform.claude.com/llms.txt",
+      "pages": "tools/watch/indexes/platform-docs.txt"
+    },
+    {
+      "id": "headless",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/headless.md",
+      "mechanisms": [
+        "packages/sandbox/src/step-tool.ts",
+        "packages/sandbox/code.json",
+        "packages/sandbox/review.json"
+      ],
+      "relies": "The loop runs `claude -p` with `--output-format stream-json` and `--json-schema`, and reads the `result` line of the stream."
+    },
+    {
+      "id": "cli-reference",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/cli-reference.md",
+      "mechanisms": [
+        "packages/sandbox/code.json",
+        "packages/sandbox/review.json",
+        "packages/sandbox/src/step-tool.ts"
+      ],
+      "relies": "The flags of the command: `--bare`, `--settings`, `--strict-mcp-config`, `--model`, `--effort`, `--verbose`."
+    },
+    {
+      "id": "settings",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/settings.md",
+      "mechanisms": [
+        "packages/sandbox/profiles/builder.json",
+        "packages/sandbox/profiles/reviewer.json",
+        ".claude/settings.json"
+      ],
+      "relies": "The keys of the `settings.json` a profile writes for its session, and of the committed one."
+    },
+    {
+      "id": "permissions",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/permissions.md",
+      "mechanisms": [
+        "packages/sandbox/profiles/builder.json",
+        "packages/sandbox/profiles/reviewer.json"
+      ],
+      "relies": "The syntax of the `permissions` rules a profile gives its session."
+    },
+    {
+      "id": "env-vars",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/env-vars.md",
+      "mechanisms": [
+        "packages/sandbox/profiles/builder.json",
+        "packages/sandbox/profiles/reviewer.json",
+        "packages/sandbox/profiles/worker.json"
+      ],
+      "relies": "The variables a profile sets: `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_TMPDIR`, `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, `DISABLE_AUTOUPDATER`, `DISABLE_TELEMETRY`."
+    },
+    {
+      "id": "authentication",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/authentication.md",
+      "mechanisms": [
+        "packages/sandbox/code.json",
+        "packages/sandbox/src/auth-proxy.ts"
+      ],
+      "relies": "Where Claude Code keeps the credential of the host, which the auth proxy reads, and how it is renewed."
+    },
+    {
+      "id": "llm-gateway",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/llm-gateway.md",
+      "mechanisms": [
+        "packages/sandbox/src/auth-proxy.ts",
+        "modules/broker/src/infrastructure/relay.ts"
+      ],
+      "relies": "What Claude Code expects of an endpoint named by `ANTHROPIC_BASE_URL`: the auth proxy and the broker are such endpoints."
+    },
+    {
+      "id": "sandboxing",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/sandboxing.md",
+      "mechanisms": [
+        "packages/sandbox/src/srt-runner.ts",
+        "packages/sandbox/profiles/builder.json",
+        "packages/sandbox/profiles/reviewer.json"
+      ],
+      "relies": "What the sandbox of Claude Code itself does, beside the srt the platform starts around the whole process."
+    },
+    {
+      "id": "sub-agents",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/sub-agents.md",
+      "mechanisms": [
+        "agents/memory.md",
+        "services/memory/worker/agent-file.ts",
+        ".claude/agents/architecture-reviewer.md"
+      ],
+      "relies": "The front matter of an agent file: `name`, `description`, `tools`, `model`."
+    },
+    {
+      "id": "skills",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/skills.md",
+      "mechanisms": [
+        ".claude/skills/ub-mode/SKILL.md",
+        "tools/evidence/skill/SKILL.md"
+      ],
+      "relies": "The front matter and the layout of a skill."
+    },
+    {
+      "id": "github-actions",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/github-actions.md",
+      "mechanisms": [
+        ".github/workflows/claude.yml",
+        ".github/workflows/claude-review.yml"
+      ],
+      "relies": "The inputs of `anthropics/claude-code-action` the two workflows give."
+    },
+    {
+      "id": "agent-sdk-typescript",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/agent-sdk/typescript.md",
+      "mechanisms": [
+        "services/memory/worker/infrastructure/sdk-task-agent.ts"
+      ],
+      "relies": "The options of `query()` the worker sets (`agent`, `agents`, `mcpServers`, `allowedTools`, `settingSources`, `persistSession`, `maxTurns`, `outputFormat`, `env`, `pathToClaudeCodeExecutable`, `stderr`) and the messages it reads."
+    },
+    {
+      "id": "agent-sdk-structured-outputs",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/agent-sdk/structured-outputs.md",
+      "mechanisms": [
+        "services/memory/worker/infrastructure/sdk-task-agent.ts",
+        "packages/sandbox/src/step-tool.ts"
+      ],
+      "relies": "`outputFormat` of type `json_schema`, the JSON Schema dialect it accepts, and where the structured output arrives."
+    },
+    {
+      "id": "agent-sdk-custom-tools",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/agent-sdk/custom-tools.md",
+      "mechanisms": [
+        "services/memory/worker/infrastructure/sdk-task-agent.ts"
+      ],
+      "relies": "`createSdkMcpServer` and `tool`: the tools of the platform served to the agent in process."
+    },
+    {
+      "id": "agent-sdk-cost-tracking",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/agent-sdk/cost-tracking.md",
+      "mechanisms": [
+        "services/memory/worker/infrastructure/sdk-task-agent.ts"
+      ],
+      "relies": "`total_cost_usd` and the usage of a result message."
+    },
+    {
+      "id": "api-messages",
+      "kind": "page",
+      "url": "https://platform.claude.com/docs/en/api/messages.md",
+      "mechanisms": [
+        "packages/sandbox/code.json",
+        "packages/sandbox/review.json",
+        "packages/sandbox/src/request-policy.ts"
+      ],
+      "relies": "The fields of a Messages request body: the policy of the auth proxy admits a closed list of them."
+    },
+    {
+      "id": "api-errors",
+      "kind": "page",
+      "url": "https://platform.claude.com/docs/en/api/errors.md",
+      "mechanisms": [
+        "packages/sandbox/src/auth-proxy.ts"
+      ],
+      "relies": "The status and the type of an error of the API: a 401 makes the relay read the credential again."
+    },
+    {
+      "id": "api-beta-headers",
+      "kind": "page",
+      "url": "https://platform.claude.com/docs/en/api/beta-headers.md",
+      "mechanisms": [
+        "packages/sandbox/code.json",
+        "packages/sandbox/review.json",
+        "packages/sandbox/src/auth-proxy.ts"
+      ],
+      "relies": "The `anthropic-beta` header: the relay adds the values its credential needs."
+    },
+    {
+      "id": "api-streaming",
+      "kind": "page",
+      "url": "https://platform.claude.com/docs/en/build-with-claude/streaming.md",
+      "mechanisms": [
+        "packages/sandbox/src/auth-proxy.ts"
+      ],
+      "relies": "The events `message_start` and `message_delta` of a streamed answer and their `usage`, from which the relay writes one usage record per answer."
+    },
+    {
+      "id": "model-ids",
+      "kind": "page",
+      "url": "https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions.md",
+      "mechanisms": [
+        "agents/memory.md",
+        "topology/catalog.json",
+        "topology/clients.json"
+      ],
+      "relies": "The model names and aliases the task profiles and the topology give."
+    },
+    {
+      "id": "model-deprecations",
+      "kind": "page",
+      "url": "https://platform.claude.com/docs/en/about-claude/model-deprecations.md",
+      "mechanisms": [
+        "agents/memory.md",
+        "topology/catalog.json",
+        "topology/clients.json"
+      ],
+      "relies": "The retirement dates of the models the platform names."
+    },
+    {
+      "id": "api-release-notes",
+      "kind": "page",
+      "url": "https://platform.claude.com/docs/en/release-notes/overview.md",
+      "mechanisms": [
+        "modules/broker/src/infrastructure/relay.ts",
+        "packages/sandbox/src/auth-proxy.ts"
+      ],
+      "relies": "What changes in the API the broker and the auth proxy relay."
+    }
+  ]
+}
