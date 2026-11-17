@@ -3155,3 +3155,28 @@ Total 2,41 $, somme par modèle dans le résumé de l'étape. Les deux constats 
 - Recherche : le coût de chaque session et la comparaison des deux revues sont rapportés avec leur limite ; ce qui a rendu la mutation propre est nommé ; ce qui n'a pas tourné est dit.
 - SSDLC : un texte produit par une session n'entre dans le brief d'une autre qu'après une vérification mécanique, borné et échappé ; aucun chemin hors du worktree ni vers les données de git n'est lu ; deux défauts de la consigne trouvés par la revue et corrigés.
 - Opérationnel : même profil en lecture seule, même proxy, même plafond de sessions simultanées ; IRB sans objet.
+
+## 78. La référence de la mesure ne pouvait pas être rejouée : amendement du protocole, avant tout essai, 17 novembre 2026
+
+Le §77 a été poussé (`78a8a1d`) : porte de l'hôte verte (2 032 scénarios = 1 906 + 126 ; trois fichiers de production dans le périmètre, 217 mutants : 210 tués, 7 erreurs d'exécution, aucun survivant), CI verte sur `gate` (Linux et macOS) ; `main` a suivi ; l'évaluation du ruleset dit `pass` pour les deux branches. La porte a duré 26 minutes.
+
+**Le défaut du protocole.** Le §73 fixait la mesure du routage contre l'étape qui avait construit l'outil de veille, « rejouée depuis son commit de départ, avec sa consigne ». En préparant le premier pilote, le mainteneur a constaté qu'elle ne peut pas l'être : cette étape avait deux entrées qui n'étaient pas commitées quand elle a tourné, la note de conception de la veille et son registre, et toutes deux ont été réécrites avant leur premier commit. Leur état d'alors n'existe plus. Le protocole nommait donc une référence dont on ne peut pas redonner les entrées, ce qui la disqualifie. Aucun essai n'avait été joué contre elle.
+
+**L'amendement** (note de la boucle, §13).
+
+| | Avant | Après |
+|---|---|---|
+| Référence | L'étape `watch1` depuis `359886c` | L'étape `o3b` depuis `4c13d20` : son commit de départ, sa consigne et son fichier d'étape sont tous gardés |
+| Mesures de la référence | Construction 1,39 $, revue 1,63 $ | Construction 534 s, 1,44 $, 40 réponses, 89 343 jetons relus par réponse ; revue sur Opus 0,90 $ |
+| Ancre | Un dossier `--keep` du dépôt accepté ; un registre réécrit hors de sa forme | Le refus de `.git/` qui se contournait ; un fichier illisible qui arrêtait l'étape. La revue sur Sonnet, avec le même prompt, n'a trouvé ni l'un ni l'autre |
+
+**Le pilote de HR1, fixé avant d'être joué.** Deux cellules à la suite, dans un arbre jetable au commit de départ. D'abord la consigne sans éclaireur, une seconde fois : deux constructions de la même consigne ne se ressemblent pas, et leur écart n'a jamais été mesuré ; c'est le bruit. Puis la même consigne avec trois éclaireurs sur le plus petit modèle, dont les questions sont écrites et gardées. Un écart qui ne dépasse pas le bruit ne dit rien. Une session par cellule : aucune conclusion statistique, quel que soit le résultat, et le résultat est publié quel qu'il soit.
+
+**Ce que ce défaut apprend.** Une étape n'est rejouable que si toutes ses entrées sont commitées ou gardées avec elle. La consigne et le fichier d'étape le sont, dans le dossier d'état ; un fichier non commité que la consigne cite ne l'est pas. C'est une erreur technique à verser à la base d'erreurs, et une règle pour l'outil : une étape devrait garder l'empreinte de l'arbre qu'elle a vu.
+
+**Chiffres.** 2 032 scénarios dans la suite, inchangé ; ce commit ne touche que la note de la boucle et ce journal.
+
+**Trois piliers.**
+- Recherche : un protocole pré-enregistré est amendé avant toute mesure, avec la raison ; la référence est désormais rejouable par un tiers ; le bruit est mesuré avant l'effet.
+- SSDLC : sans objet, aucun code ne change.
+- Opérationnel : sans objet ; IRB sans objet.

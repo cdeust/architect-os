@@ -393,6 +393,25 @@ Référence : l'étape `watch1`, rejouée depuis son commit de départ (`359886c
 
 Relevés par phase : modèle, coût, jetons lus en cache par réponse, appels d'outil par sorte, durée, faits rejetés par l'hôte. Méthode du §10 : une variable à la fois, pilote d'abord (une session par cellule, aucune conclusion statistique), tout résultat publié. Limites écrites d'avance : une seule étape de référence, un seul dépôt, des sessions qui ne se rejouent pas à l'identique.
 
+### Amendement du 17 novembre 2026, avant tout essai : la référence change
+
+La référence écrite plus haut ne peut pas être rejouée à l'identique. L'étape `watch1` avait deux entrées qui n'étaient pas commitées quand elle a tourné, la note de conception de la veille et son registre ; toutes deux ont été réécrites avant leur premier commit, et leur état d'alors n'existe plus nulle part. Une étape dont on ne peut pas redonner les entrées n'est pas une référence. Aucun essai n'a été joué contre elle.
+
+Nouvelle référence : l'étape `o3b`, qui a construit les éclaireurs. Toutes ses entrées sont gardées : son commit de départ (`4c13d20`), sa consigne et son fichier d'étape (dossier d'état `o3b`).
+
+| Mesure de la référence | Valeur |
+|---|---|
+| Construction, Sonnet 5.5 `medium`, sans éclaireur | 534 s, 1,44 $, 40 réponses, 89 343 jetons relus par réponse |
+| Revue, Opus 5.5 `high` | 226 s, 0,90 $, 6 constats |
+| Revue, Sonnet 5.5 `medium`, même prompt | 23 s, 0,07 $, 1 proposition, `accept` |
+| Acceptation | Les scénarios de la liste de contrôle de la consigne, verts sur l'hôte |
+
+Nouvelle ancre, pour HR2 et HR3 : les deux défauts réels que la revue sur Opus a trouvés dans cette étape. Le refus de `.git/` qui ne tenait qu'au préfixe (`./.git/config` et `.GIT/config` passaient) ; un fichier illisible pour le processus qui arrêtait toute l'étape. La revue sur Sonnet, avec le même prompt, n'a trouvé ni l'un ni l'autre : une variante qui ne les retrouve pas est réfutée.
+
+Les hypothèses se lisent donc ainsi : HR1, moins de jetons relus par réponse qu'à 89 343 et un coût de construction, éclaireurs compris, sous 1,44 $, à acceptation égale ; HR2, moins de 3 lancements de commandes dans la revue et un coût sous 0,90 $, l'ancre retrouvée ; HR3, l'ancre et les constats de règle retrouvés pour moins de 0,90 $ au total ; HR4 inchangée.
+
+Pilote de HR1, fixé avant d'être joué : la même consigne, depuis `4c13d20`, dans un arbre jetable ; trois éclaireurs sur Haiku 5.5 `low` (les fonctions et les fichiers de l'outil d'étape ; les steps qui existent ; ce qu'un nouvel outil et un nouveau prompt doivent suivre), leurs questions gardées dans le dossier d'état `hr1-b` ; la construction sur Sonnet 5.5 `medium`, comme la référence ; aucune revue. Deux constructions de la même consigne ne se ressemblent pas, et leur écart n'a jamais été mesuré : le pilote joue donc deux cellules à la suite, la consigne sans éclaireur une seconde fois (dossier d'état `hr1-a`), puis avec (dossier `hr1-b`). L'écart entre la référence et sa seconde construction est le bruit ; un écart du pilote qui ne le dépasse pas ne dit rien. Une session par cellule : aucune conclusion statistique, quel que soit le résultat.
+
 ### Construction, dans l'ordre
 
 | Étape | Contenu |
