@@ -1,103 +1,152 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 462" width="980" height="462" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 568" width="980" height="568" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="t">One step of the orchestration loop</title>
-  <desc id="d">A brief is written by the orchestrator. Scouts, read-only sessions on a small model, each answer one question by quoting lines of the repository, and the host keeps only the quotations it finds at those lines. A build session in a sandbox gets the brief and the checked quotations. Then the checks of the step, commands without a model, run one after the other in a sandbox with no network and a read-only worktree; one that fails stops the step before any review. The host reads the diff and runs what the sandbox cannot. The reviews of the step, each a read-only session in its own sandbox and on its own model, run at the same time, receive the results of the checks and each return a verdict. The gate runs the scenarios and the mutation, and the host commits and delivers the same commit to the branch and then to main, both held by a ruleset. A refusal becomes a new brief that names what failed.</desc>
+  <desc id="d">A brief is written by the orchestrator. Scouts, read-only sessions on a small model, each answer one question by quoting lines of the repository, and the host keeps only the quotations it finds at those lines. A build session in a sandbox gets the brief and the checked quotations. Then the checks of the step, commands without a model, run one after the other in a sandbox with no network and a read-only worktree; one that fails stops the step before any review. The host reads the diff and runs what the sandbox cannot. The reviews of the step, each a read-only session in its own sandbox and on its own model, run at the same time, receive the results of the checks and each return a verdict. The gate runs the scenarios and the mutation, and the host commits and delivers the same commit to the branch and then to main, both held by a ruleset. A refusal becomes a new brief that names what failed. Decided and not built, marked next, each above the phase it joins: Define and Plan with a human signature before the brief; scenarios written by another session and frozen for the build; inputs invented by a fresh session at the replay; one review grid per dimension, a finding given with its failing scenario; a reflection that records errors for the next brief; and a human gate at delivery, the orchestrator having an identity of its own and no bypass.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
     <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#cf222e"/></marker>
+    <marker id="n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#218bff"/></marker>
   </defs>
-  <rect x="0.5" y="0.5" width="979" height="461" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="0.5" y="0.5" width="979" height="567" rx="10" fill="#ffffff" stroke="#d0d7de"/>
   <text x="24" y="34" font-size="17" font-weight="600" fill="#1f2328">One step of the orchestration loop</text>
   <text x="24" y="54" font-size="12.5" fill="#57606a">npm run step -- &lt;folder&gt; plays 2, 3, 4 and 6 from step.json and its briefs, and keeps their files; the rest is the host's</text>
 
+  <!-- next: decided or designed, not built, above the phase each joins -->
+  <g font-size="11" fill="#57606a">
+    <rect x="20" y="70" width="106" height="100" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+    <rect x="55" y="77" width="36" height="16" rx="8" fill="#ddf4ff" stroke="#218bff"/><text x="73" y="88.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#0969da">next</text>
+    <text x="73" y="110" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">Define, Plan</text>
+    <text x="73" y="126" text-anchor="middle">questions until a</text>
+    <text x="73" y="139" text-anchor="middle">score; a spec, a</text>
+    <text x="73" y="152" text-anchor="middle">plan; a human</text>
+    <text x="73" y="165" text-anchor="middle">signs each</text>
+    <rect x="258" y="70" width="106" height="100" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+    <rect x="293" y="77" width="36" height="16" rx="8" fill="#ddf4ff" stroke="#218bff"/><text x="311" y="88.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#0969da">next</text>
+    <text x="311" y="110" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">Scenarios apart</text>
+    <text x="311" y="126" text-anchor="middle">written by another</text>
+    <text x="311" y="139" text-anchor="middle">session, frozen</text>
+    <text x="311" y="152" text-anchor="middle">for the build</text>
+    <rect x="496" y="70" width="106" height="100" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+    <rect x="531" y="77" width="36" height="16" rx="8" fill="#ddf4ff" stroke="#218bff"/><text x="549" y="88.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#0969da">next</text>
+    <text x="549" y="110" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">Invented inputs</text>
+    <text x="549" y="126" text-anchor="middle">a fresh session</text>
+    <text x="549" y="139" text-anchor="middle">invents inputs</text>
+    <text x="549" y="152" text-anchor="middle">the build did</text>
+    <text x="549" y="165" text-anchor="middle">not use</text>
+    <rect x="615" y="70" width="106" height="100" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+    <rect x="650" y="77" width="36" height="16" rx="8" fill="#ddf4ff" stroke="#218bff"/><text x="668" y="88.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#0969da">next</text>
+    <text x="668" y="110" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">By dimension</text>
+    <text x="668" y="126" text-anchor="middle">one grid each; a</text>
+    <text x="668" y="139" text-anchor="middle">finding comes</text>
+    <text x="668" y="152" text-anchor="middle">with its failing</text>
+    <text x="668" y="165" text-anchor="middle">scenario</text>
+    <rect x="734" y="70" width="106" height="100" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+    <rect x="769" y="77" width="36" height="16" rx="8" fill="#ddf4ff" stroke="#218bff"/><text x="787" y="88.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#0969da">next</text>
+    <text x="787" y="110" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">Reflection</text>
+    <text x="787" y="126" text-anchor="middle">errors recorded,</text>
+    <text x="787" y="139" text-anchor="middle">read again at</text>
+    <text x="787" y="152" text-anchor="middle">the next brief</text>
+    <rect x="853" y="70" width="106" height="100" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+    <rect x="888" y="77" width="36" height="16" rx="8" fill="#ddf4ff" stroke="#218bff"/><text x="906" y="88.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#0969da">next</text>
+    <text x="906" y="110" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">Human gate</text>
+    <text x="906" y="126" text-anchor="middle">an identity of its</text>
+    <text x="906" y="139" text-anchor="middle">own, no bypass;</text>
+    <text x="906" y="152" text-anchor="middle">a human approves</text>
+  </g>
+  <g stroke="#218bff" stroke-width="1.4" stroke-dasharray="4 3" fill="none" marker-end="url(#n)">
+    <path d="M73 170V190"/><path d="M311 170V190"/><path d="M549 170V190"/><path d="M668 170V190"/><path d="M787 170V190"/><path d="M906 170V190"/>
+  </g>
+
   <g font-size="11" fill="#1f2328">
-    <rect x="20" y="86" width="106" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
-    <text x="73" y="110" text-anchor="middle" font-weight="600" font-size="13">1 · Brief</text>
-    <text x="73" y="131" text-anchor="middle" fill="#57606a">written by the</text>
-    <text x="73" y="146" text-anchor="middle" fill="#57606a">orchestrator,</text>
-    <text x="73" y="161" text-anchor="middle" fill="#57606a">given on stdin:</text>
-    <text x="73" y="176" text-anchor="middle" fill="#57606a">only what this</text>
-    <text x="73" y="191" text-anchor="middle" fill="#57606a">step needs</text>
-    <rect x="139" y="86" width="106" height="132" rx="8" fill="#fff8e1" stroke="#bf8700"/>
-    <text x="192" y="110" text-anchor="middle" font-weight="600" font-size="13">2 · Scouts</text>
-    <text x="192" y="131" text-anchor="middle" fill="#57606a">small model,</text>
-    <text x="192" y="146" text-anchor="middle" fill="#57606a">read-only srt;</text>
-    <text x="192" y="161" text-anchor="middle" fill="#57606a">one question</text>
-    <text x="192" y="176" text-anchor="middle" fill="#57606a">each; they quote</text>
-    <text x="192" y="191" text-anchor="middle" fill="#57606a">lines of the</text>
-    <text x="192" y="206" text-anchor="middle" fill="#57606a">repository</text>
-    <rect x="258" y="86" width="106" height="132" rx="8" fill="#fff8e1" stroke="#bf8700"/>
-    <text x="311" y="110" text-anchor="middle" font-weight="600" font-size="13">3 · Build</text>
-    <text x="311" y="131" text-anchor="middle" fill="#57606a">Claude Code in</text>
-    <text x="311" y="146" text-anchor="middle" fill="#57606a">srt, profile</text>
-    <text x="311" y="161" text-anchor="middle" fill="#57606a">builder: writes</text>
-    <text x="311" y="176" text-anchor="middle" fill="#57606a">its worktree, from</text>
-    <text x="311" y="191" text-anchor="middle" fill="#57606a">the brief and the</text>
-    <text x="311" y="206" text-anchor="middle" fill="#57606a">checked quotes</text>
-    <rect x="377" y="86" width="106" height="132" rx="8" fill="#fff8e1" stroke="#bf8700"/>
-    <text x="430" y="110" text-anchor="middle" font-weight="600" font-size="13">4 · Checks</text>
-    <text x="430" y="131" text-anchor="middle" fill="#57606a">commands of the</text>
-    <text x="430" y="146" text-anchor="middle" fill="#57606a">step, no model:</text>
-    <text x="430" y="161" text-anchor="middle" fill="#57606a">srt, no network,</text>
-    <text x="430" y="176" text-anchor="middle" fill="#57606a">read-only; a</text>
-    <text x="430" y="191" text-anchor="middle" fill="#57606a">failure stops</text>
-    <text x="430" y="206" text-anchor="middle" fill="#57606a">before a review</text>
-    <rect x="496" y="86" width="106" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
-    <text x="549" y="110" text-anchor="middle" font-weight="600" font-size="13">5 · Replay</text>
-    <text x="549" y="131" text-anchor="middle" fill="#57606a">the host reads</text>
-    <text x="549" y="146" text-anchor="middle" fill="#57606a">the diff and runs</text>
-    <text x="549" y="161" text-anchor="middle" fill="#57606a">what no sandbox</text>
-    <text x="549" y="176" text-anchor="middle" fill="#57606a">can: real srt,</text>
-    <text x="549" y="191" text-anchor="middle" fill="#57606a">Postgres,</text>
-    <text x="549" y="206" text-anchor="middle" fill="#57606a">mutation</text>
-    <rect x="615" y="86" width="106" height="132" rx="8" fill="#fff8e1" stroke="#bf8700"/>
-    <text x="668" y="110" text-anchor="middle" font-weight="600" font-size="13">6 · Reviews</text>
-    <text x="668" y="131" text-anchor="middle" fill="#57606a">several at once,</text>
-    <text x="668" y="146" text-anchor="middle" fill="#57606a">each in its srt,</text>
-    <text x="668" y="161" text-anchor="middle" fill="#57606a">on its model;</text>
-    <text x="668" y="176" text-anchor="middle" fill="#57606a">cannot write; get</text>
-    <text x="668" y="191" text-anchor="middle" fill="#57606a">the check results</text>
-    <text x="668" y="206" text-anchor="middle" fill="#57606a">and give verdicts</text>
-    <rect x="734" y="86" width="106" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
-    <text x="787" y="110" text-anchor="middle" font-weight="600" font-size="13">7 · Gate</text>
-    <text x="787" y="131" text-anchor="middle" fill="#57606a">every scenario</text>
-    <text x="787" y="146" text-anchor="middle" fill="#57606a">run, count = base</text>
-    <text x="787" y="161" text-anchor="middle" fill="#57606a">+ added − removed</text>
-    <text x="787" y="176" text-anchor="middle" fill="#57606a">0 surviving</text>
-    <text x="787" y="191" text-anchor="middle" fill="#57606a">mutant on changed</text>
-    <text x="787" y="206" text-anchor="middle" fill="#57606a">lines</text>
-    <rect x="853" y="86" width="106" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
-    <text x="906" y="110" text-anchor="middle" font-weight="600" font-size="13">8 · Delivery</text>
-    <text x="906" y="131" text-anchor="middle" fill="#57606a">commit by the</text>
-    <text x="906" y="146" text-anchor="middle" fill="#57606a">host only; same</text>
-    <text x="906" y="161" text-anchor="middle" fill="#57606a">commit to the</text>
-    <text x="906" y="176" text-anchor="middle" fill="#57606a">branch, then</text>
-    <text x="906" y="191" text-anchor="middle" fill="#57606a">main; a ruleset</text>
-    <text x="906" y="206" text-anchor="middle" fill="#57606a">on both</text>
+    <rect x="20" y="192" width="106" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+    <text x="73" y="216" text-anchor="middle" font-weight="600" font-size="13">1 · Brief</text>
+    <text x="73" y="237" text-anchor="middle" fill="#57606a">written by the</text>
+    <text x="73" y="252" text-anchor="middle" fill="#57606a">orchestrator,</text>
+    <text x="73" y="267" text-anchor="middle" fill="#57606a">given on stdin:</text>
+    <text x="73" y="282" text-anchor="middle" fill="#57606a">only what this</text>
+    <text x="73" y="297" text-anchor="middle" fill="#57606a">step needs</text>
+    <rect x="139" y="192" width="106" height="132" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+    <text x="192" y="216" text-anchor="middle" font-weight="600" font-size="13">2 · Scouts</text>
+    <text x="192" y="237" text-anchor="middle" fill="#57606a">small model,</text>
+    <text x="192" y="252" text-anchor="middle" fill="#57606a">read-only srt;</text>
+    <text x="192" y="267" text-anchor="middle" fill="#57606a">one question</text>
+    <text x="192" y="282" text-anchor="middle" fill="#57606a">each; they quote</text>
+    <text x="192" y="297" text-anchor="middle" fill="#57606a">lines of the</text>
+    <text x="192" y="312" text-anchor="middle" fill="#57606a">repository</text>
+    <rect x="258" y="192" width="106" height="132" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+    <text x="311" y="216" text-anchor="middle" font-weight="600" font-size="13">3 · Build</text>
+    <text x="311" y="237" text-anchor="middle" fill="#57606a">Claude Code in</text>
+    <text x="311" y="252" text-anchor="middle" fill="#57606a">srt, profile</text>
+    <text x="311" y="267" text-anchor="middle" fill="#57606a">builder: writes</text>
+    <text x="311" y="282" text-anchor="middle" fill="#57606a">its worktree, from</text>
+    <text x="311" y="297" text-anchor="middle" fill="#57606a">the brief and the</text>
+    <text x="311" y="312" text-anchor="middle" fill="#57606a">checked quotes</text>
+    <rect x="377" y="192" width="106" height="132" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+    <text x="430" y="216" text-anchor="middle" font-weight="600" font-size="13">4 · Checks</text>
+    <text x="430" y="237" text-anchor="middle" fill="#57606a">commands of the</text>
+    <text x="430" y="252" text-anchor="middle" fill="#57606a">step, no model:</text>
+    <text x="430" y="267" text-anchor="middle" fill="#57606a">srt, no network,</text>
+    <text x="430" y="282" text-anchor="middle" fill="#57606a">read-only; a</text>
+    <text x="430" y="297" text-anchor="middle" fill="#57606a">failure stops</text>
+    <text x="430" y="312" text-anchor="middle" fill="#57606a">before a review</text>
+    <rect x="496" y="192" width="106" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+    <text x="549" y="216" text-anchor="middle" font-weight="600" font-size="13">5 · Replay</text>
+    <text x="549" y="237" text-anchor="middle" fill="#57606a">the host reads</text>
+    <text x="549" y="252" text-anchor="middle" fill="#57606a">the diff and runs</text>
+    <text x="549" y="267" text-anchor="middle" fill="#57606a">what no sandbox</text>
+    <text x="549" y="282" text-anchor="middle" fill="#57606a">can: real srt,</text>
+    <text x="549" y="297" text-anchor="middle" fill="#57606a">Postgres,</text>
+    <text x="549" y="312" text-anchor="middle" fill="#57606a">mutation</text>
+    <rect x="615" y="192" width="106" height="132" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+    <text x="668" y="216" text-anchor="middle" font-weight="600" font-size="13">6 · Reviews</text>
+    <text x="668" y="237" text-anchor="middle" fill="#57606a">several at once,</text>
+    <text x="668" y="252" text-anchor="middle" fill="#57606a">each in its srt,</text>
+    <text x="668" y="267" text-anchor="middle" fill="#57606a">on its model;</text>
+    <text x="668" y="282" text-anchor="middle" fill="#57606a">cannot write; get</text>
+    <text x="668" y="297" text-anchor="middle" fill="#57606a">the check results</text>
+    <text x="668" y="312" text-anchor="middle" fill="#57606a">and give verdicts</text>
+    <rect x="734" y="192" width="106" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+    <text x="787" y="216" text-anchor="middle" font-weight="600" font-size="13">7 · Gate</text>
+    <text x="787" y="237" text-anchor="middle" fill="#57606a">every scenario</text>
+    <text x="787" y="252" text-anchor="middle" fill="#57606a">run, count = base</text>
+    <text x="787" y="267" text-anchor="middle" fill="#57606a">+ added − removed</text>
+    <text x="787" y="282" text-anchor="middle" fill="#57606a">0 surviving</text>
+    <text x="787" y="297" text-anchor="middle" fill="#57606a">mutant on changed</text>
+    <text x="787" y="312" text-anchor="middle" fill="#57606a">lines</text>
+    <rect x="853" y="192" width="106" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+    <text x="906" y="216" text-anchor="middle" font-weight="600" font-size="13">8 · Delivery</text>
+    <text x="906" y="237" text-anchor="middle" fill="#57606a">commit by the</text>
+    <text x="906" y="252" text-anchor="middle" fill="#57606a">host only; same</text>
+    <text x="906" y="267" text-anchor="middle" fill="#57606a">commit to the</text>
+    <text x="906" y="282" text-anchor="middle" fill="#57606a">branch, then</text>
+    <text x="906" y="297" text-anchor="middle" fill="#57606a">main; a ruleset</text>
+    <text x="906" y="312" text-anchor="middle" fill="#57606a">on both</text>
   </g>
 
   <g stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)">
-    <path d="M126 152H137"/><path d="M245 152H256"/><path d="M364 152H375"/><path d="M483 152H494"/><path d="M602 152H613"/><path d="M721 152H732"/><path d="M840 152H851"/>
+    <path d="M126 258H137"/><path d="M245 258H256"/><path d="M364 258H375"/><path d="M483 258H494"/><path d="M602 258H613"/><path d="M721 258H732"/><path d="M840 258H851"/>
   </g>
 
   <!-- refusal loop: a failed check, a review that refuses, a red gate -->
   <g stroke="#cf222e" stroke-width="1.6" fill="none">
-    <path d="M668 218V262H73V220" marker-end="url(#r)"/>
-    <path d="M787 218V262H668"/>
-    <path d="M430 218V262"/>
+    <path d="M668 324V368H73V326" marker-end="url(#r)"/>
+    <path d="M787 324V368H668"/>
+    <path d="M430 324V368"/>
   </g>
-  <rect x="112" y="250" width="252" height="24" rx="12" fill="#ffffff" stroke="#cf222e"/>
-  <text x="238" y="266" text-anchor="middle" font-size="12" fill="#cf222e">refused: a new brief names what failed</text>
+  <rect x="112" y="356" width="252" height="24" rx="12" fill="#ffffff" stroke="#cf222e"/>
+  <text x="238" y="372" text-anchor="middle" font-size="12" fill="#cf222e">refused: a new brief names what failed</text>
 
   <!-- kept -->
-  <rect x="20" y="302" width="940" height="84" rx="8" fill="#ffffff" stroke="#d0d7de"/>
-  <text x="36" y="323" font-size="12.5" font-weight="600" fill="#1f2328">Left in the step folder, for every step</text>
-  <text x="36" y="342" font-size="12" fill="#57606a">every session stream · measures read from it (answers, tokens, cache, cost, cost by model) · the quotes of each scout, checked or rejected with</text>
-  <text x="36" y="358" font-size="12" fill="#57606a">the reason · the brief the build received · the build report · each check: its command, exit code, duration and the end of its output ·</text>
-  <text x="36" y="374" font-size="12" fill="#57606a">the brief the reviews received · one verdict per review · exit code 0, 1 or 2</text>
+  <rect x="20" y="408" width="940" height="84" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="36" y="429" font-size="12.5" font-weight="600" fill="#1f2328">Left in the step folder, for every step</text>
+  <text x="36" y="448" font-size="12" fill="#57606a">every session stream · measures read from it (answers, tokens, cache, cost, cost by model) · the quotes of each scout, checked or rejected with</text>
+  <text x="36" y="464" font-size="12" fill="#57606a">the reason · the brief the build received · the build report · each check: its command, exit code, duration and the end of its output ·</text>
+  <text x="36" y="480" font-size="12" fill="#57606a">the brief the reviews received · one verdict per review · exit code 0, 1 or 2</text>
 
   <!-- legend -->
-  <rect x="20" y="412" width="16" height="16" rx="3" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="44" y="425" font-size="12" fill="#57606a">on the host</text>
-  <rect x="150" y="412" width="16" height="16" rx="3" fill="#fff8e1" stroke="#bf8700"/>
-  <text x="174" y="425" font-size="12" fill="#57606a">inside an srt sandbox, one per session or command, destroyed at the end</text>
+  <rect x="20" y="518" width="16" height="16" rx="3" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="44" y="531" font-size="12" fill="#57606a">on the host</text>
+  <rect x="150" y="518" width="16" height="16" rx="3" fill="#fff8e1" stroke="#bf8700"/>
+  <text x="174" y="531" font-size="12" fill="#57606a">inside an srt sandbox, one per session or command, destroyed at the end</text>
+  <rect x="640" y="518" width="36" height="16" rx="8" fill="#ddf4ff" stroke="#218bff"/><text x="658" y="529.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#0969da">next</text>
+  <text x="684" y="531" font-size="12" fill="#57606a">decided or designed, not built yet</text>
 </svg>

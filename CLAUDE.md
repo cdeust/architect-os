@@ -134,5 +134,6 @@ Request changes on a PR that has any of these:
 - A change to `tools/test-gate` or `.github/workflows/gate.yml` that the PR does not explain (R-6).
 - Docs (`docs/`, this file) left stale by a change that alters architecture, boundaries or commands.
 - A change that adds or changes an element of the system and leaves its diagram (`docs/diagrams/`) or the text of the README that describes it as they were. The table of bricks and the count of the suite are not enough.
+- A change that builds a point marked `next` and leaves the mark, in the README or in a diagram, or that records a decision of design without building it and leaves it out of the roadmap of the README (« What comes next ») and of the diagram it belongs to.
 
 Reviewers: use `/review-pr` (`.claude/commands/review-pr.md`); it delegates to `architecture-reviewer`, `test-reviewer` and `security-reviewer` in `.claude/agents/`.

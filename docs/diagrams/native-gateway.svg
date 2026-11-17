@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 636" width="980" height="636" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 769" width="980" height="769" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="t">The native gateway: one process tree, each process given only what it needs</title>
-  <desc id="d">A client calls the gateway over HTTP on the loopback with a bearer token. The gateway starts two native children on stdio, data and the broker, and starts modules and workers in srt sandboxes. A module calls back the gateway with its call identifier. A worker reaches only the broker, with the token of its task. The broker alone holds the API key and reaches api.anthropic.com.</desc>
+  <desc id="d">A client calls the gateway over HTTP on the loopback with a bearer token. The gateway starts two native children on stdio, data and the broker, and starts modules and workers in srt sandboxes. A module calls back the gateway with its call identifier. A worker reaches only the broker, with the token of its task. The broker alone holds the API key and reaches api.anthropic.com. Decided and not built, marked next: the orchestration loop as a service of the gateway, the state of a step in the data module, governance and rights per client, the bricks of the platform, and the cost per client.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
   </defs>
-  <rect x="0.5" y="0.5" width="979" height="635" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="0.5" y="0.5" width="979" height="768" rx="10" fill="#ffffff" stroke="#d0d7de"/>
   <text x="24" y="34" font-size="17" font-weight="600" fill="#1f2328">The native gateway: one process tree, each process given only what it needs</text>
   <text x="24" y="54" font-size="12.5" fill="#57606a">gateway/src/main.ts (composeNative), packages/sandbox (NativeLauncher, srt adapter)</text>
 
@@ -119,4 +119,31 @@
     <text x="286" y="592" fill="#57606a">data: the database URL · broker: its configuration file and the operator's certificate authority</text>
     <text x="286" y="608" fill="#57606a">module: the port of the callback · worker: the port of the broker and the token of its task</text>
   </g>
+  <!-- next: decided or designed, not built -->
+  <path d="M20 632H960" stroke="#d0d7de"/>
+  <rect x="20" y="642" width="36" height="16" rx="8" fill="#ddf4ff" stroke="#218bff"/><text x="38" y="653.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#0969da">next</text>
+  <text x="64" y="654" font-size="12.5" font-weight="600" fill="#1f2328">Decided or designed, not built yet</text>
+  <rect x="20" y="666" width="178" height="87" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+  <text x="32" y="686" font-size="12" font-weight="600" fill="#1f2328">Loop as a service</text>
+  <text x="32" y="704" font-size="11.5" fill="#57606a">O.2: the orchestrator is</text>
+  <text x="32" y="719" font-size="11.5" fill="#57606a">started by the gateway,</text>
+  <text x="32" y="734" font-size="11.5" fill="#57606a">not by the maintainer</text>
+  <rect x="210" y="666" width="178" height="87" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+  <text x="222" y="686" font-size="12" font-weight="600" fill="#1f2328">State of a step</text>
+  <text x="222" y="704" font-size="11.5" fill="#57606a">in the data module, not</text>
+  <text x="222" y="719" font-size="11.5" fill="#57606a">a folder of one machine</text>
+  <rect x="401" y="666" width="178" height="87" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+  <text x="413" y="686" font-size="12" font-weight="600" fill="#1f2328">Governance</text>
+  <text x="413" y="704" font-size="11.5" fill="#57606a">managed settings, a</text>
+  <text x="413" y="719" font-size="11.5" fill="#57606a">validated catalogue,</text>
+  <text x="413" y="734" font-size="11.5" fill="#57606a">rights per client</text>
+  <rect x="591" y="666" width="178" height="87" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+  <text x="603" y="686" font-size="12" font-weight="600" fill="#1f2328">Bricks 1c, 2 to 8, D</text>
+  <text x="603" y="704" font-size="11.5" fill="#57606a">marketplace, catalogue,</text>
+  <text x="603" y="719" font-size="11.5" fill="#57606a">code front, memory split,</text>
+  <text x="603" y="734" font-size="11.5" fill="#57606a">server deployment</text>
+  <rect x="782" y="666" width="178" height="87" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+  <text x="794" y="686" font-size="12" font-weight="600" fill="#1f2328">Cost per client</text>
+  <text x="794" y="704" font-size="11.5" fill="#57606a">usage, cost by model and</text>
+  <text x="794" y="719" font-size="11.5" fill="#57606a">per accepted task</text>
 </svg>

@@ -3547,3 +3547,33 @@ Le mainteneur avait annoncé chacune des deux comme sa piste avant que la consol
 - Recherche : deux refus rapportés avec leur raison lue à la source et leur cause ; ce qui n'est pas mesuré est dit ; la piste a précédé la confirmation, et les deux sont rapportées.
 - SSDLC : la preuve réelle tourne sans aucun secret stocké ; un jeton de dix minutes, absent du journal ; la règle du fournisseur a refusé tout ce qui ne lui correspondait pas exactement ; une erreur du mainteneur sur un identifiant est nommée.
 - Opérationnel : espace de travail dédié et plafonné ; le workflow ne part que sur un changement du broker, chaque lundi ou à la main ; IRB sans objet.
+
+## 88. La feuille de route dans le README et dans les schémas, sous une pastille `next` ; l'environnement inutilisé supprimé, 17 novembre 2026
+
+**La demande du propriétaire.** « J'aimerais qu'on mette dans le readme avec une pastille {next} les points de l'architecture qui ne sont pas encore faits, mais pour qu'on garde en tête ce qui doit être fait sans perdre cette feuille de route. »
+
+Puis, en voyant la section : « les diagrammes devraient déjà embarquer les next avec la pastille correspondante, pour qu'on ait l'architecture complète visée ».
+
+**Ce qui est fait.**
+
+| Endroit | Changement |
+|---|---|
+| README, « Where it stands » | La pastille `next` ouvre l'état des sept lignes qui ne sont pas finies : la veille (lecture et inventaire), la boucle par la gateway, le pas de réflexion, le routage, le cycle, le guichet des preuves, les briques de la plateforme |
+| README, « What comes next », nouvelle section | Vingt points, chacun avec ce qui manque et l'endroit de la conception où il est écrit, en huit groupes dans l'ordre du travail : rejouable ; bornes de ce qui est payé à l'usage ; evals ; une boucle qui apprend ; le routage ; le cycle complet ; du poste au serveur ; la plateforme |
+| Les six schémas de `docs/diagrams/` | Chacun porte ses points à venir, en pointillés bleus avec la même pastille. Dans celui de la boucle, chaque point est au-dessus de la phase qu'il rejoint, relié à elle : Define et Plan avant la consigne, les scénarios écrits à part avant la construction, les entrées inédites au rejeu, la revue par dimension, la réflexion, le gate humain à la livraison. Dans les cinq autres, une bande en bas du schéma. La description textuelle de chaque schéma les nomme |
+| `CLAUDE.md`, ce que la revue refuse | Une ligne de plus : un changement qui construit un point marqué `next` et laisse la marque, dans le README ou dans un schéma, ou qui consigne une décision de conception sans la construire et ne l'inscrit ni à la feuille de route ni au schéma auquel elle appartient |
+
+La pastille est du code en ligne, sans image ni service extérieur : elle se lit dans le fichier comme sur la page, et se cherche d'une commande.
+
+**Ce qui tient la feuille de route à jour.** La règle de revue, et rien d'autre. Aucun scénario ne vérifie qu'une brique non finie porte la marque : dire « non finie » par un motif de texte serait fragile. C'est une règle de la couche de la consigne, dite telle.
+
+**L'environnement `broker-live`.** Le propriétaire, la preuve passée : « Tu peux supprimer broker-live, vu qu'on peut utiliser ce moyen maintenant. » Lu avant de le retirer : aucun secret, aucune variable, aucun workflow qui le nomme. Supprimé ; `docs/infrastructure.md` le dit. Le propriétaire précise que l'espace de travail par défaut de sa console sert à d'autres usages : le compte de service y reste, sans effet, la règle n'étant activée que dans l'espace dédié.
+
+**Rendus.** Les schémas sont générés par un script, puis rendus et contrôlés à l'œil : celui de la boucle en entier, les bandes les plus denses (gateway, vérification). Deux bandes avaient des lignes trop longues à la première génération ; elles ont été recoupées avant le rendu.
+
+**Chiffres.** 2 170 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : chaque point de la feuille de route renvoie à l'endroit où il est conçu ; ce qui la tient à jour, et sa faiblesse, sont dits.
+- SSDLC : les deux points de sécurité ouverts (la borne de dépense du broker, la porte de livraison) sont en tête de liste et non dans une note ; une ressource inutilisée est retirée après lecture de son contenu.
+- Opérationnel : aucune dépendance à un service extérieur pour une marque du README ; IRB sans objet.
