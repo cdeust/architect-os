@@ -3366,3 +3366,42 @@ Le commit du §82 (`f45de12`) n'a pas été publié. Sa porte de l'hôte était 
 - Recherche : un défaut trouvé par relecture est rapporté avec sa classe, sa cause et le contrôle qui manque ; la première correction, fausse, est rapportée aussi ; un témoin pour la seconde.
 - SSDLC : l'hôte n'agit sur aucun texte venu d'une sandbox, y compris dans un scénario ; un commit vert n'a pas été publié parce qu'il portait un défaut connu.
 - Opérationnel : aucun processus laissé sur le poste par la suite ; IRB sans objet.
+
+## 84. Le cap : un cycle complet, rejouable, portable ; lu contre le playbook d'Anthropic, et un écart nommé à la livraison, 17 novembre 2026
+
+Les §82 et §83 ont été poussés ensemble (`f45de12`, `b65aa2b`) : porte de l'hôte verte sur chacun (2 151 scénarios), CI verte sur `gate` pour chacun, sur Linux et macOS, à la troisième tentative du job macOS pour le second (aucun runner attribué, même cause qu'au §80) ; `main` a suivi ; ruleset `pass` sur les deux branches ; plus aucune branche d'essai.
+
+**Ce que le propriétaire a apporté dans la soirée.** Un cap : que la boucle devienne un processus proche de ceux qu'une équipe déploie autour de Claude Code, en local d'abord, sur site ensuite, puis dans le nuage par une évolution simple. Ce qu'il a vu d'un tel processus : des agents neufs à chaque phase ; une phase de départ faite de questions jusqu'à un score de confiance, proche de son propre outil de spécification ; une skill qui lance plusieurs outils, chacun avec un agent au contexte neuf ; des tests écrits par un autre agent que le code, « pour éviter les biais » ; un modèle d'un autre fournisseur pour juger la spec. Une proposition : son outil de spécification pour la phase initiale, cette boucle pour la suite, à condition de vérifier de bout en bout que le résultat se rejoue. Et deux adresses, la série d'articles de SFEIR sur son cycle.
+
+**Ce qui a été lu.**
+
+| Source | Lu | Gardé |
+|---|---|---|
+| La série de SFEIR : 22 articles | La tête de série et l'amont en entier ; les autres par extraits ciblés sur les mécanismes | Copie datée hors du dépôt, avec empreintes |
+| Le playbook *The AI-native SDLC* d'Anthropic, que la série cite | À la source : définition, table des étapes, gouvernance, evals, hooks, réglages gérés, maintenance | Copie datée hors du dépôt, avec empreinte |
+| Le README de l'outil de spécification du propriétaire | Le pipeline, ce qu'il ne fait pas, la calibration ; rien n'y a été exécuté ni modifié | |
+
+**Ce que la lecture établit, contre la boucle.**
+
+| Constat | D'où il vient |
+|---|---|
+| Alignés : une phase par contexte, des artefacts sur disque entre les phases, la sortie réelle capturée et jamais la déclaration d'une session, du déterministe derrière chaque règle (porte, mutation, contrôles sans modèle), un contexte neuf pour vérifier | Playbook, SFEIR |
+| Le constructeur écrit le code et ses scénarios. Ailleurs, les tests sont écrits depuis la spec, à part, puis mis hors de portée de l'agent qui code | SFEIR rapportant le cadre ADLC ; le playbook le dit des hooks ; le §82 en donne un cas (une borne que les scénarios du constructeur ne prouvaient pas) |
+| Les prompts du lanceur ne sont testés que sur leur forme. Le playbook veut des evals rejouées quand un prompt ou un modèle change | Playbook |
+| Les consignes d'étape vivent hors du dépôt. Le playbook veut un artefact commité par étape | Playbook ; l'étape qui n'a pas pu être rejouée (§78) |
+| **L'orchestrateur pousse lui-même sur `main`**, avec le compte du propriétaire et son droit de contournement. Le playbook : « the agent may act up to the production gate and cannot pass it » | Playbook |
+
+Le dernier est un écart de séparation des tâches. Ce qui retient l'orchestrateur aujourd'hui est une règle qu'il s'applique, donc une contrainte de consigne et non d'outil. Il est nommé dans la note de la boucle, avec ce que le fermer demande : une identité propre à l'orchestrateur, sans contournement, et une approbation humaine avant `main`. Le choix de ce gate est au propriétaire.
+
+**Ce qui est écrit, et rien de plus** (§14 de la note de la boucle) : le cycle phase par phase avec ce qui manque ; les décisions du mainteneur et l'étape où chacune se construit ; la vérification de bout en bout, fixée avant tout essai, dont le critère central est une matrice croisée (les scénarios écrits depuis la spec d'un rejeu passent sur le code construit depuis la spec d'un autre) ; le juge d'un autre fournisseur, coupé par défaut, avec la menace de fuite qu'il ouvre ; les règles qui gardent simple le passage au serveur, et les deux endroits où la boucle s'en écarte aujourd'hui (l'état d'une étape, l'orchestrateur).
+
+**Ce qui n'est pas établi.** Douze articles de la série ne sont lus que par extraits. Le cadre ADLC et l'exposé d'Anthropic sur le cache ne sont pas lus à la source : ce qui en est dit vient de SFEIR. Un chiffre de l'ADLC (une pile de modèles moyens en trois passes retrouve davantage de défauts plantés qu'un modèle de pointe en une) va contre la seule mesure faite ici au §81 ; l'un est le chiffre d'un tiers, l'autre une session unique. La stabilité d'une spec d'un rejeu à l'autre n'est mesurée nulle part. Le coût d'une spec est inconnu.
+
+**Schémas et README.** Rien n'est construit : aucun schéma ne change. Le README porte une ligne « Cycle » dans l'état des briques.
+
+**Chiffres.** 2 151 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : sources nommées avec ce qui en a été lu ; protocole de bout en bout et résultat constant écrits avant tout essai ; ce qui vient d'un tiers rapporté par un autre est dit tel.
+- SSDLC : un écart de séparation des tâches à la livraison, trouvé en lisant la référence d'Anthropic, est nommé au lieu d'être tu ; la menace de fuite d'un juge externe est posée avant toute ligne de code.
+- Opérationnel : règles de portabilité écrites, avec les deux écarts d'aujourd'hui ; rien n'a été exécuté ni modifié dans l'outil de spécification ; IRB sans objet.

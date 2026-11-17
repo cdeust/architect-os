@@ -546,3 +546,108 @@ Limites : une session par cellule, et le bruit d'une revue n'est pas mesuré (ce
 | O.3c | Les contrôles sans modèle, sous srt, avant la revue (construits, journal §82) ; pilote de HR2 |
 | O.3d | La revue par niveaux ; pilote de HR3 ; la forme en trois pièces que le pilote de HR5 désigne (commandes, une lecture, exploration à la demande) y est mesurée sur un second spécimen |
 | O.3e | La lecture de la veille ; pilote de HR4, puis la première lecture des 22 pages et l'inventaire |
+
+## 14. Le cycle visé : complet, rejouable, portable (cap donné le 17 novembre 2026 ; conçu, rien de construit)
+
+### Le cap et les sources
+
+Le propriétaire, le 17 novembre 2026 : la boucle doit devenir un processus proche de ceux qu'une équipe déploie autour de Claude Code, et « pour nous aujourd'hui c'est du local first, plus tard ça sera du on premise, avec une évolution normalement simplifiée pour faire du cloud ».
+
+| Source | Ce que c'est | Lu |
+|---|---|---|
+| *The AI-native SDLC playbook*, Anthropic (`claude.com/blog/the-ai-native-sdlc-playbook`) | La référence première : six étapes, un artefact commité par étape | Le 17 novembre 2026, à la source : la définition, la table des étapes, les considérations de gouvernance, les evals, les hooks, les réglages gérés, la maintenance |
+| La série « SDLC piloté par l'IA » de SFEIR (`sfeir.com/articles/sdlc-ai/`) | Un cycle à onze phases, trois gates humains, deux capitalisations, pratiqué et mesuré par eux | Le même jour, la tête de série et l'amont en entier, le reste par extraits |
+| Le cadre ADLC (Chris Williams) | Tests gelés, revue en accusation | Non lu à la source : seulement ce que SFEIR en rapporte |
+
+L'hôte `claude.com` n'est pas dans la liste fermée de la veille (`docs/design/anthropic-watch.md`) : y faire entrer le playbook est une décision de cette veille, à prendre avec ses menaces.
+
+### Le cycle, phase par phase
+
+| Phase (SFEIR ; étape du playbook) | Ce que la boucle a | Ce qui manque |
+|---|---|---|
+| Setup | Le dépôt, ses profils, sa porte | Rien de propre à un projet tiers |
+| Define (Plan, Design) : une idée devient un contrat ; gate humain | La brique « Spec » est à la conception de la plateforme, non construite | Les questions, la spec dont chaque critère nomme sa vérification, la signature |
+| Plan (Build, mode plan) : trois explorations, un plan ; gate humain | Les éclaireurs et la vérification de leurs citations (O.3b) | Le plan comme artefact, le gate |
+| Build | La construction sous srt | Les scénarios écrits par une autre session et gelés |
+| Verify (Test) | Les contrôles sans modèle (O.3c), le rejeu sur l'hôte, la porte et sa mutation | Des evals rejouées quand un prompt ou un modèle change |
+| Review (Deploy, revue de PR) | Des revues en parallèle, chacune sur son modèle (O.3a) | Une grille par dimension ; un constat reproduit par un test rouge |
+| Compound-1 | Le pas de réflexion est conçu (§4), non construit | La base d'erreurs, relue en début de phase |
+| Ship (Deploy) ; gate humain | La porte, la CI, un ruleset sur les deux branches | Voir « Un écart nommé » |
+| Ops, Compound-2, Deprecation (Maintain) | Rien : la plateforme n'est pas en service | À concevoir avec la mise en service |
+
+### Un écart nommé
+
+Le playbook pose que « the agent that wrote the code has no way to approve it », que la protection de branche ne laisse à l'agent « no direct path to main », et que « the agent may act up to the production gate and cannot pass it ». Ici, l'orchestrateur pousse lui-même sur `feat/gate-1a` puis sur `main`, avec le compte du propriétaire et son droit de contournement du ruleset ; ce qui le retient est une règle qu'il s'applique (porte et CI vertes par commit, évaluation du ruleset relue). C'est une contrainte de la couche du prompt, pas de la couche de l'outil. La fermer demande une identité propre à l'orchestrateur, sans droit de contournement, et une approbation humaine avant `main`. Le choix du gate est au propriétaire ; il lui est posé.
+
+### Ce que le mainteneur retient, et où cela se construit
+
+| Décision | Source | Où |
+|---|---|---|
+| Un artefact commité par phase : l'intention, la spec, le plan, la consigne de l'étape, le diff, les verdicts. Les consignes d'étape cessent de vivre hors du dépôt | Playbook ; l'étape `watch1`, qui n'a pas pu être rejouée (§13) | Étape 1 |
+| Derrière chaque règle, du déterministe : une commande ou un contrôle d'abord, une skill seulement là où il faut un jugement. « The skill makes violations rare and the hook makes them close to impossible » | Playbook ; règle 1 du §13 | Étape 1 ; la livraison devient une commande |
+| Les scénarios sont écrits depuis la spec par une session qui ne voit pas le code, puis rendus non inscriptibles au constructeur par son profil srt | ADLC rapporté par SFEIR (« une contrainte qui vit dans la couche outil est un fait ») ; playbook (« stop the agent editing test files ») ; la borne sans preuve du §82 du journal | Pilote, puis étape 3 |
+| Une grille de revue par dimension (défauts, sécurité, conformité à la spec et au plan), et un constat de correction rendu avec le scénario qui échoue, que l'hôte rejoue | Playbook (`REVIEW.md`, trois passes) ; ADLC rapporté par SFEIR | O.3d |
+| Les evals d'un prompt : un spécimen, un résultat attendu, rejoués quand le prompt ou le modèle change ; un seuil qui bloque | Playbook ; bonnes pratiques rapportées (§4) | Étape 2 ; il y faut une clé, donc l'environnement du broker |
+| Un prompt de phase liste d'avance les excuses probables et leurs réponses | SFEIR | Avec les evals, pour en mesurer l'effet |
+| Aux mesures d'une session : la part du prompt lue en cache, et le coût par étape acceptée | Exposé d'ingénieurs d'Anthropic rapporté par SFEIR (non lu à la source) ; nos constructions relisent 87 000 à 102 000 jetons par réponse | Étape 1, après lecture de la documentation du cache |
+| La phase Define par l'outil de spécification du propriétaire, joué par l'hôte ; la couture est son gate d'implémentation | Décision du propriétaire | Voir « La vérification de bout en bout » |
+| Un juge d'un autre fournisseur pour la spec | Demande du propriétaire | Voir « Le juge » |
+
+### La vérification de bout en bout, pré-enregistrée
+
+Le propriétaire : il faut « s'assurer que [l'outil de spécification] est suffisamment robuste pour pouvoir produire des specs suffisamment bonnes pour avoir un résultat rejouable et du coup vérifier de bout en bout la solution ».
+
+| Point | Ce qui est fixé avant tout essai |
+|---|---|
+| Sujets | Deux, dont le dépôt a besoin : la commande de livraison ; le contrôle « un changement de code qui laisse son schéma tel quel » |
+| Entrées | L'intention, et les réponses aux questions, enregistrées une fois comme des données et resservies à chaque rejeu |
+| Rejeux | Trois par sujet, de l'intention à la porte |
+| Résultat constant, sans modèle | (A) chaque spec passe les règles déterministes de l'outil ; (B) les scénarios écrits depuis la spec du rejeu *i* passent sur le code construit depuis la spec du rejeu *j*, pour tout *i* et *j* ; (C) la porte est verte et la revue accepte, à chaque rejeu |
+| Verdict | « Réutilisable » si A, B et C tiennent sur les deux sujets. Sinon : ce qui casse, et de quel côté de la couture |
+| Paliers | Sans modèle d'abord (le contrat des actions de l'outil, sa suite, son vérificateur) ; un rejeu pour mesurer le coût d'une spec, inconnu à ce jour ; puis les rejeux |
+
+Le critère B est celui qui mesure une spec : deux rejeux qui donnent des implémentations incompatibles disent ce qu'elle laissait indéterminé, et les cases rouges disent où.
+
+### Le juge d'un autre fournisseur
+
+| | |
+|---|---|
+| Forme | Un port, un adaptateur par fournisseur ; une requête, sans outil ; l'entrée est la spec et la grille, jamais le code ; la sortie est un verdict structuré, lu comme une donnée |
+| Menace nouvelle (I) | La spec sort chez un second fournisseur. Coupé par défaut ; activé par le propriétaire, plus tard par client |
+| Secret | Une clé de plus, détenue hors de toute sandbox, posée par le propriétaire ; l'hôte du fournisseur entre dans une liste fermée |
+| Chaîne d'approvisionnement | Aucun SDK ajouté : un appel HTTPS |
+| Mesure avant adoption | Des specs où des défauts sont plantés, jugées par un modèle de la maison seul, par l'autre seul, par les deux, en plusieurs rejeux |
+
+### Ce qui garde le passage au serveur simple
+
+Règle : tout ce qu'une session atteint passe par un port et son adaptateur ; rien ne lit le poste du mainteneur hors d'un adaptateur ; la configuration est faite de fichiers descriptifs ; l'identité du client accompagne chaque requête ; les mesures et la piste d'audit sont écrites par l'hôte seul.
+
+| Élément | En local, aujourd'hui | On-premise | Cloud |
+|---|---|---|---|
+| Isolation | srt sur le poste | srt sur un serveur Linux, déjà prouvé en CI | Un autre adaptateur du même port |
+| Identifiant du modèle | Trousseau du poste, lu par le proxy de l'hôte | Le broker | Un gestionnaire de secrets derrière le broker |
+| Identité et droits | Un profil, celui du propriétaire | Des droits par client | Les mêmes, par locataire |
+| État d'une étape | Un dossier du poste, **hors de tout adaptateur** | Le module de données | Une base gérée |
+| Protection de la branche | Un ruleset GitHub | L'équivalent de la forge interne | Inchangé |
+| Qui orchestre | Le mainteneur, dans une session, **hors de tout port** | Un service lancé par la gateway (O.2) | Le même |
+
+Les deux écarts en gras sont à fermer avant l'on-premise.
+
+### Ordre
+
+| Étape | Contenu |
+|---|---|
+| 1. Rejouable | La commande de livraison ; les consignes d'étape versionnées avec l'empreinte de l'arbre qu'elles ont vu ; les mesures de cache et de coût par étape acceptée |
+| 2. Evals | Les prompts du lanceur sur spécimens, rejoués à chaque changement |
+| 3. Capitalisation | La base d'erreurs à deux classes et le pas de réflexion (§4) ; les scénarios gelés |
+| 4. Cycle | Define et Plan avec leurs gates ; le gate de Ship ; la vérification de bout en bout |
+| 5. Gouvernance et distribution | Réglages gérés, catalogue validé, droits par client, paquet distribuable, promotion sur preuve, élagage ; nourrie par l'inventaire de la veille (O.3e) |
+| 6. Mesures d'un engagement | Usage, coût par modèle, coût par tâche acceptée, par client |
+
+Les pilotes du §13 (HR2 à HR4) gardent leur place : ils mesurent des pièces que les étapes 2 à 4 emploient.
+
+### Trois piliers
+
+- Recherche : les sources sont nommées avec ce qui en a été lu ; la vérification de bout en bout et son résultat constant sont écrits avant tout essai ; ce qui vient d'un tiers rapporté par un autre est dit tel.
+- SSDLC : l'écart de séparation des tâches à la livraison est nommé ; chaque étape construite aura ses menaces avant son code ; la menace de fuite du juge externe est posée.
+- Opérationnel : les règles de portabilité sont écrites, avec les deux écarts d'aujourd'hui ; IRB sans objet.
