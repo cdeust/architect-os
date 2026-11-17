@@ -3,7 +3,10 @@
 # The key is the secret ANTHROPIC_TEST_KEY of the environment broker-live, created by the owner with a deployment
 # branch policy that allows main only; the job also runs on refs/heads/main only. The key is written to a 0600 file
 # of the runner's temporary directory, read by the broker alone (as modules/broker/broker.json reads its own), and
-# removed at the end. Cost: four requests of one token or less to the smallest model.
+# removed at the end. Cost: four requests to the smallest model, two answered with one token each and two refused
+# before any generation. The owner pays for this key: the workflow starts on a change of the broker itself or of this
+# file, once a week, or by hand, and on nothing else. A change of what the broker imports is seen by the scenarios of
+# the gate at once, and by the real upstream within the week.
 name: broker-live
 
 on:
@@ -12,12 +15,8 @@ on:
       - main
     paths:
       - modules/broker/**
-      - packages/sandbox/src/**
-      - packages/contracts/src/**
-      - package-lock.json
-      - .nvmrc
       - .github/workflows/broker-live.yml
-  # Weekly, so that a change of the upstream is seen without a change of the repository.
+  # Weekly, so that a change of the upstream, or of what the broker imports, is seen without a change of the broker.
   schedule:
     - cron: '0 4 * * 1'
   workflow_dispatch:

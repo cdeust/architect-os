@@ -575,6 +575,10 @@ L'hôte `claude.com` n'est pas dans la liste fermée de la veille (`docs/design/
 | Ship (Deploy) ; gate humain | La porte, la CI, un ruleset sur les deux branches | Voir « Un écart nommé » |
 | Ops, Compound-2, Deprecation (Maintain) | Rien : la plateforme n'est pas en service | À concevoir avec la mise en service |
 
+### Ce qui est propre à cette boucle, et se garde
+
+Le propriétaire, le 17 novembre 2026, après la lecture : le processus de revue de SFEIR « n'a pas de mutation testing ni de scénario inventé. Ça nous est propre et on doit le maintenir ». Deux pièces ne s'alignent donc sur aucun cycle externe et ne s'allègent pas : la mutation des lignes changées, avec le rejeu de ses verdicts (porte, règles 5 à 7), et les entrées inédites à la vérification, qu'une session neuve invente (§4, essayées, non construites). Elles mesurent ce que ni une revue ni des scénarios écrits avec le code ne mesurent : si les tests échoueraient quand le code est faux.
+
 ### Un écart nommé
 
 Le playbook pose que « the agent that wrote the code has no way to approve it », que la protection de branche ne laisse à l'agent « no direct path to main », et que « the agent may act up to the production gate and cannot pass it ». Ici, l'orchestrateur pousse lui-même sur `feat/gate-1a` puis sur `main`, avec le compte du propriétaire et son droit de contournement du ruleset ; ce qui le retient est une règle qu'il s'applique (porte et CI vertes par commit, évaluation du ruleset relue). C'est une contrainte de la couche du prompt, pas de la couche de l'outil. La fermer demande une identité propre à l'orchestrateur, sans droit de contournement, et une approbation humaine avant `main`. Le choix du gate est au propriétaire ; il lui est posé.
@@ -587,11 +591,23 @@ Le playbook pose que « the agent that wrote the code has no way to approve it �
 | Derrière chaque règle, du déterministe : une commande ou un contrôle d'abord, une skill seulement là où il faut un jugement. « The skill makes violations rare and the hook makes them close to impossible » | Playbook ; règle 1 du §13 | Étape 1 ; la livraison devient une commande |
 | Les scénarios sont écrits depuis la spec par une session qui ne voit pas le code, puis rendus non inscriptibles au constructeur par son profil srt | ADLC rapporté par SFEIR (« une contrainte qui vit dans la couche outil est un fait ») ; playbook (« stop the agent editing test files ») ; la borne sans preuve du §82 du journal | Pilote, puis étape 3 |
 | Une grille de revue par dimension (défauts, sécurité, conformité à la spec et au plan), et un constat de correction rendu avec le scénario qui échoue, que l'hôte rejoue | Playbook (`REVIEW.md`, trois passes) ; ADLC rapporté par SFEIR | O.3d |
-| Les evals d'un prompt : un spécimen, un résultat attendu, rejoués quand le prompt ou le modèle change ; un seuil qui bloque | Playbook ; bonnes pratiques rapportées (§4) | Étape 2 ; il y faut une clé, donc l'environnement du broker |
+| Les evals d'un prompt : un spécimen, un résultat attendu, rejoués quand le prompt ou le modèle change ; un seuil qui bloque | Playbook ; bonnes pratiques rapportées (§4) | Étape 2 ; sur le poste, par les sessions de la boucle, donc sans clé d'API (voir « La clé d'API, au plus juste ») |
 | Un prompt de phase liste d'avance les excuses probables et leurs réponses | SFEIR | Avec les evals, pour en mesurer l'effet |
 | Aux mesures d'une session : la part du prompt lue en cache, et le coût par étape acceptée | Exposé d'ingénieurs d'Anthropic rapporté par SFEIR (non lu à la source) ; nos constructions relisent 87 000 à 102 000 jetons par réponse | Étape 1, après lecture de la documentation du cache |
 | La phase Define par l'outil de spécification du propriétaire, joué par l'hôte ; la couture est son gate d'implémentation | Décision du propriétaire | Voir « La vérification de bout en bout » |
 | Un juge d'un autre fournisseur pour la spec | Demande du propriétaire | Voir « Le juge » |
+
+### La clé d'API, au plus juste
+
+Le propriétaire, le 17 novembre 2026, en acceptant de créer la clé de l'environnement `broker-live` : « pour le broker on limite son utilisation ». La clé d'API est payée à l'usage ; les sessions de la boucle, elles, passent par l'identifiant de l'hôte et ne la consomment pas.
+
+| Décision | État |
+|---|---|
+| La clé ne sert qu'à la preuve réelle du broker (T-04R) : quatre requêtes au plus petit modèle, deux servies d'un jeton chacune, deux refusées avant toute génération | Fait |
+| Son workflow ne part que sur un changement du broker ou du workflow, une fois par semaine, ou à la main. Il partait aussi sur tout changement du paquet de la sandbox, des contrats et du verrou : sept fois le 17 novembre | Fait (journal §85) |
+| Les evals de prompts tournent sur le poste, par les sessions de la boucle ; la CI garde la porte, qui n'a aucun secret | Décidé ; étape 2 |
+| Un plafond de dépense sur la clé, chez le fournisseur | Au propriétaire, à la création de la clé |
+| Le broker borne ce qu'un jeton de tâche peut dépenser : une liste fermée de modèles, un plafond de `max_tokens`, un nombre de requêtes par jeton. Aujourd'hui sa politique admet tout modèle et tout `max_tokens` : un jeton détourné dépense sans limite. C'est un fusible contre l'abus d'un secret (menace D), pas une gestion du coût (décision 12) | À concevoir avec ses menaces, avant que la clé serve à autre chose que T-04R |
 
 ### La vérification de bout en bout, pré-enregistrée
 

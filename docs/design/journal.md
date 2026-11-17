@@ -3405,3 +3405,41 @@ Le dernier est un écart de séparation des tâches. Ce qui retient l'orchestrat
 - Recherche : sources nommées avec ce qui en a été lu ; protocole de bout en bout et résultat constant écrits avant tout essai ; ce qui vient d'un tiers rapporté par un autre est dit tel.
 - SSDLC : un écart de séparation des tâches à la livraison, trouvé en lisant la référence d'Anthropic, est nommé au lieu d'être tu ; la menace de fuite d'un juge externe est posée avant toute ligne de code.
 - Opérationnel : règles de portabilité écrites, avec les deux écarts d'aujourd'hui ; rien n'a été exécuté ni modifié dans l'outil de spécification ; IRB sans objet.
+
+## 85. La clé d'API tenue au plus juste : le workflow du broker ne part plus à chaque changement de la sandbox, 17 novembre 2026
+
+Le §84 a été poussé (`bb2e312`) : porte de l'hôte verte (2 151 scénarios, rien d'ajouté ni de supprimé, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS) à la première tentative ; `main` a suivi ; ruleset `pass` sur les deux branches.
+
+**Deux mots du propriétaire.** Sur ce qui est propre à cette boucle : le processus de revue de SFEIR « n'a pas de mutation testing ni de scénario inventé. Ça nous est propre et on doit le maintenir ». Sur la clé de l'environnement `broker-live`, qu'il accepte de créer : « pour le broker on limite son utilisation ».
+
+**Ce que le mainteneur a lu avant de répondre.**
+
+| Fait | D'où |
+|---|---|
+| L'environnement `broker-live` existe, sans politique de branches et sans secret | L'API de GitHub, lue le 17 novembre |
+| La preuve réelle du broker fait quatre requêtes au plus petit modèle : deux servies, d'un jeton chacune, deux refusées avant toute génération | `modules/broker/live/` |
+| Son workflow est parti sept fois le 17 novembre, à chaque livraison qui touchait le paquet de la sandbox ; sept échecs, faute de secret | La liste des runs |
+| La politique du broker admet tout modèle et tout `max_tokens` : un jeton de tâche détourné dépenserait sans limite | `modules/broker/broker.json`, `packages/sandbox/src/request-policy.ts` |
+
+Les sessions de la boucle passent par l'identifiant de l'hôte : elles ne consomment pas cette clé. Elle n'est payée que par ce workflow.
+
+**Ce qui change.**
+
+| Avant | Après |
+|---|---|
+| `broker-live.yml` partait sur un changement du broker, du paquet de la sandbox, des contrats, du verrou des dépendances, de la version de Node, du workflow ; chaque lundi ; à la main | Sur un changement du broker ou du workflow ; chaque lundi ; à la main |
+
+Ce que le retrait coûte en preuve : un changement de ce que le broker importe n'est plus joué contre le vrai amont à la livraison, mais dans la semaine. Les scénarios du broker qui n'appellent pas l'amont restent joués par la porte à chaque commit.
+
+**Ce qui est décidé et pas construit** (note de la boucle, §14, « La clé d'API, au plus juste »). Les evals de prompts tourneront sur le poste, par les sessions de la boucle, et non en CI avec une clé : la phrase du §84 qui les envoyait à l'environnement du broker est corrigée. Le broker bornera ce qu'un jeton peut dépenser (liste fermée de modèles, plafond de `max_tokens`, nombre de requêtes), comme un fusible contre l'abus d'un secret, à concevoir avec ses menaces avant que la clé serve à autre chose. La note dit aussi les deux pièces qui ne s'alignent sur aucun cycle externe : la mutation, et les entrées inédites à la vérification.
+
+**L'ordre de création, donné au propriétaire.** La politique de branches de l'environnement (`main` seule), puis le secret, saisi masqué dans son terminal ; un plafond de dépense sur la clé chez le fournisseur. Rien n'a été changé à l'environnement par le mainteneur.
+
+**Schémas et README.** Aucun élément du système n'est ajouté ; `docs/infrastructure.md` disait déjà « push touching the broker ».
+
+**Chiffres.** 2 151 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : l'état de l'environnement, le coût de la preuve en requêtes et le nombre de déclenchements sont lus avant d'être dits ; ce que le retrait d'un déclencheur coûte en preuve est écrit.
+- SSDLC : un défaut de borne dans la politique du broker est nommé avec sa menace, avant que la clé existe ; la politique de branches passe avant le secret ; le secret ne passe par aucune ligne de commande.
+- Opérationnel : moindre usage d'une clé payée à l'usage ; aucun réglage de l'environnement changé sans le mot du propriétaire ; IRB sans objet.
