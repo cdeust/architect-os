@@ -2808,3 +2808,28 @@ Le §67 a été poussé (`38c29cd`) : porte de l'hôte verte (1 610 scénarios =
 - Recherche : le défaut est rapporté avec sa cause (une réécriture annoncée et faite en partie, sans contrôle) ; le contrôle ajouté est éprouvé par des copies refusées et par l'arbre d'avant.
 - SSDLC : un contrat mort retiré ; aucune surface nouvelle ; l'ordre politique puis secret de l'environnement est écrit, l'environnement ayant été créé sans politique par GitHub.
 - Opérationnel : `main` porte le code réel et sa porte tourne à chaque push ; le ruleset et le secret restent au propriétaire ; IRB sans objet.
+
+## 69. `main` suit la branche à chaque commit vert : décision 23, 17 novembre 2026
+
+Le §68 a été poussé (`acd1b14`) : porte de l'hôte verte (1 632 scénarios = 1 610 + 22 ; deux fichiers de production dans le périmètre, aucun mutant : le changement n'y retire que du code et réécrit des commentaires), CI verte sur `gate` (Linux et macOS). La porte que le push de `8437f42` a lancée sur `main` est verte sur ses deux jobs : c'est le premier run vert de `main` sur le code de la plateforme.
+
+**La décision.** À la question posée au §68 de savoir si `main` devait suivre, le propriétaire : « Oui main doit suivre à chaque commit vert ». `main` est passée de `8437f42` à `acd1b14` par avance rapide. La règle est inscrite à la conception (décision 23) et au guide de contribution, qui disait « never push to `main` directly » sans cette exception : le travail du mainteneur arrive sur `feat/gate-1a`, un commit à la fois, poussé quand la porte de l'hôte et la CI de son SHA sont vertes ; `main` suit alors par avance rapide jusqu'au même commit ; rien d'autre n'y est poussé.
+
+**Ce que chaque push sur `main` lance.**
+
+| Workflow | Quand | État |
+|---|---|---|
+| `gate.yml` | À chaque push | Verte sur `8437f42` ; en cours sur `acd1b14` à l'écriture de cette section |
+| `broker-live.yml` | Quand le push touche le broker, `packages/sandbox/src`, `packages/contracts/src` ou le fichier de verrouillage | Rouge deux fois, à l'étape de la clé : le secret n'existe pas |
+| `pipeline-after-merge.yml` | Réveillé par chaque fin de porte | Ignoré : son résolveur ne tourne que pour une PR |
+
+`broker-live` restera rouge à chaque push qui touche ces chemins tant que le secret n'est pas posé. Ce rouge dit vrai : l'appel réel du broker n'est pas prouvé en CI.
+
+**Ce qui reste au propriétaire, dans les réglages du dépôt.** La politique de branches de l'environnement `broker-live` (`main` seule), puis son secret ; le ruleset sur `main`. Et une décision : lancer à la main la mutation complète, qui dira si le registre de dette tient sur Linux, ou attendre son passage planifié du lundi.
+
+**Chiffres.** 1 632 scénarios dans la suite, inchangé ; ce commit ne touche que la conception, le guide de contribution et ce journal.
+
+**Trois piliers.**
+- Recherche : les deux portes annoncées « en cours » aux sections précédentes sont rapportées ; celle de `main` sur `acd1b14` le sera à la suivante.
+- SSDLC : la règle de livraison est écrite là où un contributeur la lit ; `main` ne reçoit que des commits dont la porte et la CI sont vertes ; le ruleset, absent, reste au propriétaire.
+- Opérationnel : la branche par défaut porte le code réel et le suit ; les contrôles planifiés tournent sur lui dès lundi ; IRB sans objet.

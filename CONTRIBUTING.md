@@ -11,6 +11,10 @@ Thank you for contributing. Read `CLAUDE.md` first: it is the contract the revie
 5. Open a pull request. A pull request is mandatory for every change. The CI gate (`.github/workflows/gate.yml`, `npm run gate`) runs in two jobs, `gate-linux` and `gate-macos` (the ruleset on `main` that requires both is the owner's to create, see `docs/infrastructure.md`); the Claude review runs on the pull request and applies `CLAUDE.md`.
 6. Address review comments with new commits on the same branch.
 
+## The maintainer's line
+
+The steps above are for a contribution. The maintainer's work lands on `feat/gate-1a`, a branch that is kept because the journal (`docs/design/journal.md`) is cited from outside by its sections: one commit at a time, pushed once `npm run gate` is green on the host and the gate is green in CI for that commit. `main` then follows by fast-forward to the same commit (design, decision 23), so both branches carry the same history. Nothing else is pushed to `main`: no commit of its own, no rewrite.
+
 ## Rules that are checked
 
 - Layers and boundaries are enforced by `npm run arch`; do not weaken `.dependency-cruiser.cjs` without a documented reason.
