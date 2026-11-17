@@ -7,9 +7,9 @@ on:
   push:
     branches:
       - main
-      # TEMPORARY, for the proofs of brick 1a only: the owner removes the next two entries at merge
-      # (the builder opens no PR, and workflow_dispatch only works once the file is on the default branch).
-      - feat/gate-1a
+      # The delivery (CONTRIBUTING.md, the maintainer's line): a commit is pushed to a trial branch first, where
+      # this gate gives it the two checks the rulesets of feat/gate-1a and of main require; it then reaches both
+      # branches as it is. feat/gate-1a is not listed: it would run the same commit a second time.
       - sentinel/gate-1a-*
 
 permissions:

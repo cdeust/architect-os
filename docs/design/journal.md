@@ -3220,3 +3220,36 @@ Le §78 a été poussé (`6082afb`) : porte de l'hôte verte (2 032 scénarios, 
 - Recherche : un protocole fixé et publié avant l'essai, un témoin pour le bruit, un résultat négatif publié avec ses limites, un contrôle des citations indépendant de l'outil qui les avait vérifiées.
 - SSDLC : sans objet, aucun code ne change ; les textes produits par les éclaireurs ne sont entrés dans une consigne qu'après vérification, comme le §77 le construit.
 - Opérationnel : 2,68 $ de sessions sur le forfait du propriétaire, rapportés ; un arbre jetable, retiré ; IRB sans objet.
+
+## 80. Des runners macOS que GitHub n'attribue pas : la porte ne tourne plus trois fois par commit ; et une hypothèse de plus, la revue en une lecture, 17 novembre 2026
+
+Le §79 a été poussé (`6777852`) : porte de l'hôte verte (2 032 scénarios, rien d'ajouté ni de supprimé, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS) à la quatrième tentative du job macOS ; `main` a suivi ; ruleset `pass` sur les deux branches.
+
+**L'alerte.** Le job `gate-macos` a été annulé sans jamais recevoir de runner, quinze minutes après sa création, sur trois runs : la branche d'essai de `6777852`, et les portes de `main` sur `78a8a1d` et `6082afb`, deux commits dont la CI était verte avant leur publication. `gate-linux` était vert à chaque fois. Le commit du §79 n'a pas été publié tant que ce contrôle manquait.
+
+**La cause, lue et non supposée.** Les annotations que GitHub attache au job : « The job was not acquired by Runner of type hosted even after multiple attempts », et « Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times ». La page d'état de GitHub ne signalait rien. Le dépôt n'est pas en cause.
+
+| Run | Tentatives du job macOS | Issue |
+|---|---|---|
+| Porte de `main` sur `78a8a1d` | 2 | Verte à la relance |
+| Porte de `main` sur `6082afb` | 2 | Verte à la relance |
+| Branche d'essai de `6777852` | 4 | Verte à la quatrième, près d'une heure après la première |
+
+**Ce qui dépend du dépôt.** En cherchant, le mainteneur a lu ce qu'il n'avait pas regardé : `gate.yml` se déclenchait sur `main`, sur `feat/gate-1a` et sur les branches d'essai, deux entrées que son commentaire disait temporaires depuis la brique 1a. Chaque commit faisait donc tourner la porte trois fois en CI, six jobs dont trois sur macOS, pour le même contenu. Sur les quatorze commits de la journée, cela a pesé sur une file déjà contrainte.
+
+Le déclencheur de `feat/gate-1a` est retiré. Celui des branches d'essai reste : c'est ce run qui donne au commit les deux contrôles que les rulesets exigent, avant qu'il atteigne `feat/gate-1a` puis `main`. Celui de `main` reste : un commit de fusion fait par GitHub n'a pas été vu ailleurs. Un tiers des jobs en moins par commit. C'est un changement de `gate.yml`, que la règle R-6 demande d'expliquer : il ne retire aucune exigence, le même commit étant vérifié avant et après ; la documentation de la livraison (guide de contribution, infrastructure, conception §7) dit maintenant le rôle de la branche d'essai.
+
+**Ce que ce changement ne règle pas.** La capacité des runners macOS reste celle de GitHub : un job peut encore attendre et être annulé. La parade reste la relance, et la règle de ne rien publier sans ce contrôle.
+
+**Une hypothèse de plus.** Le propriétaire a montré une image de l'orchestration qu'il a en tête : un modèle moyen mène et écrit, des sous-agents sur le petit modèle explorent en parallèle, le grand modèle conseille à trois moments en lisant toute la session, sans écrire de code. « C'est un peu l'idée de l'orchestration multi modèle. » C'est l'outil advisor de Claude Code et ses sous-agents ; ni l'un ni l'autre n'existe dans une session de la boucle, par deux choix de sécurité du dépôt (aucun outil de délégation en `--bare`, mesuré ; pas de drapeaux de fonctionnalité quand la télémétrie est coupée, documentation lue). La note de la boucle (§13) porte ce que l'image a et que la conception n'avait pas : le conseil à trois moments et non à la fin seulement ; l'escalade comme avis et non comme reprise du travail ; l'exploration demandée par le meneur ; et un avis fait d'une seule lecture.
+
+De là l'hypothèse HR5, écrite avant tout essai : une revue sur le grand modèle qui reçoit en une requête, sans outil, la grille, la consigne et le diff retrouve les deux défauts de l'ancre pour moins cher que la revue qui explore. Trois cellules sur un même spécimen, le diff de la construction témoin du §79, dont le mainteneur a vérifié à la main qu'il porte les deux défauts : la revue d'aujourd'hui, la revue en une lecture sur le grand modèle, la même sur le modèle moyen.
+
+**Schémas et README.** Aucun élément du système n'est ajouté : le schéma de vérification dit déjà « CI sur Linux et macOS », ce qui reste vrai.
+
+**Chiffres.** 2 032 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : la cause d'une alerte est lue dans les annotations du job ; une hypothèse et son protocole sont écrits avant l'essai, avec un spécimen dont les défauts sont vérifiés.
+- SSDLC : un changement du workflow de la porte est expliqué, et ne retire aucun contrôle ; un commit n'a pas été publié tant qu'un contrôle exigé manquait, même pour de la documentation.
+- Opérationnel : une alerte d'infrastructure traitée avant le reste ; un tiers de jobs de CI en moins par commit ; IRB sans objet.

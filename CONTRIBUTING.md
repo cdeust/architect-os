@@ -13,7 +13,7 @@ Thank you for contributing. Read `CLAUDE.md` first: it is the contract the revie
 
 ## The maintainer's line
 
-The steps above are for a contribution. The maintainer's work lands on `feat/gate-1a`, a branch that is kept because the journal (`docs/design/journal.md`) is cited from outside by its sections: one commit at a time, pushed once `npm run gate` is green on the host and the gate is green in CI for that commit. `main` then follows by fast-forward to the same commit (design, decision 23), so both branches carry the same history. Nothing else is pushed to `main`: no commit of its own, no rewrite.
+The steps above are for a contribution. The maintainer's work lands on `feat/gate-1a`, a branch that is kept because the journal (`docs/design/journal.md`) is cited from outside by its sections: one commit at a time, pushed once `npm run gate` is green on the host and the gate is green in CI for that commit. CI sees the commit on a trial branch, `sentinel/gate-1a-<name>`, pushed first and deleted afterwards: that run is what gives the commit the two checks the rulesets require, and it is the only one a push to `feat/gate-1a` needs. `main` then follows by fast-forward to the same commit (design, decision 23), so both branches carry the same history. Nothing else is pushed to `main`: no commit of its own, no rewrite.
 
 ## Rules that are checked
 

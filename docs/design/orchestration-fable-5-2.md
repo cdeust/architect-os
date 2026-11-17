@@ -439,6 +439,31 @@ Lecture, qui n'est pas une conclusion : une construction lit en entier les fichi
 
 Limites : une session par cellule ; une seule étape ; des questions d'éclaireur écrites par le mainteneur, dont d'autres auraient pu mieux servir.
 
+### HR5, la revue en une lecture : hypothèse ajoutée le 17 novembre 2026, avant tout essai
+
+Le propriétaire a montré le même jour une image de l'orchestration qu'il a en tête : un modèle moyen mène et écrit, des sous-agents sur le petit modèle explorent en parallèle, et le grand modèle conseille à trois moments (avant un plan, quand la même erreur revient, avant de finir), en lisant toute la session, sans jamais écrire de code. Ses mots : « C'est un peu l'idée de l'orchestration multi modèle. » C'est l'outil advisor de Claude Code (`claude --model sonnet --advisor opus`) et ses sous-agents. Ni l'un ni l'autre n'existe dans une session de la boucle telle qu'elle est lancée : `--bare` n'a aucun outil de délégation (mesuré), et l'advisor exige des drapeaux de fonctionnalité qu'une session à télémétrie coupée ne va pas chercher (documentation de l'outil, lue le même jour). Le routage par l'hôte est la forme que cette idée prend ici.
+
+L'image a trois choses que ce §13 n'avait pas.
+
+| Dans l'image | Ici jusqu'à présent | Ce qui en est pris |
+|---|---|---|
+| Le conseiller intervient à trois moments | Un seul : la revue, à la fin | L'avis avant la construction, sur la consigne ; l'avis quand une construction bute deux fois sur la même erreur ; à concevoir avec le moteur de phases |
+| Il donne un avis, le meneur l'applique | Une étape qui échoue est relancée par l'orchestrateur avec une nouvelle consigne | La règle 4 se précise : l'escalade est d'abord un avis du modèle au-dessus, pas la reprise du travail par lui |
+| Un avis est une seule lecture de la session, sans outil | La revue est une session qui relit des fichiers et lance des commandes : 25 à 44 réponses, 0,90 $ à 1,84 $ | L'hypothèse HR5 |
+| L'exploration est demandée par le meneur quand il en a besoin | Des questions d'éclaireur écrites d'avance, dont le pilote de HR1 n'a montré aucun effet | Un outil servi par l'hôte, que le meneur appelle (`--mcp-config` est accepté en `--bare`) : rejoint O.2 |
+
+**HR5.** Une revue sur Opus 5.5 `high` qui reçoit en une seule requête, sans aucun outil, la grille de revue, la consigne et le diff retrouve les deux défauts de l'ancre pour moins cher que la revue qui explore.
+
+Spécimen : le diff de la construction témoin `hr1-a` (gardé, 163 795 octets), qui porte les deux défauts de l'ancre, vérifiés à la main avant l'essai : un refus de `.git/` par le seul préfixe, et une lecture de fichier qui lève une erreur quand le fichier n'est pas lisible. Ce n'est pas le diff que les revues de la référence ont lu : le pilote rejoue donc aussi la revue qui explore, sur ce spécimen.
+
+| Cellule | Modèle, effort | Forme |
+|---|---|---|
+| 1 | Opus 5.5 `high` | La revue d'aujourd'hui : une session en lecture seule dans un arbre qui porte le diff |
+| 2 | Opus 5.5 `high` | Une lecture : grille, consigne et diff sur l'entrée, aucun outil |
+| 3 | Sonnet 5.5 `medium` | Une lecture, même entrée |
+
+Relevés : coût, durée, nombre de réponses, constats, et pour chacun des deux défauts s'il est nommé avec son fichier. Une cellule qui manque l'un des deux est réfutée pour ce défaut, quel que soit son prix. Limites écrites d'avance : une session par cellule ; un seul spécimen ; une lecture sans outil ne peut rien exécuter, donc ne peut pas confirmer ce qu'elle avance.
+
 ### Construction, dans l'ordre
 
 | Étape | Contenu |
