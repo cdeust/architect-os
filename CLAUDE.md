@@ -109,7 +109,7 @@ Common bricks need no new TypeScript:
 ## Conventions
 
 - TypeScript strict, ESM, `.js` suffix in relative imports. Prettier formats (`npm run format`).
-- Dependencies are pinned to exact versions; verify with `npm view <pkg> version`; commit `package-lock.json`.
+- Dependencies are pinned to exact versions; verify with `npm view <pkg> version`; commit `package-lock.json`. `watch.yml` asks every Monday for the advisories on the locked dependencies (`npm audit`, red from a moderate one); one is fixed in the lockfile, then the gate.
 - The Claude Agent SDK (which holds the Claude Code binary) and the sandbox runtime move by `docs/claude-code-watch.md`: the changelog read between the two versions, a decision per entry that applies, one pin at a time. `tools/watch/watch.json` names every source the platform holds of Anthropic (pins, changelogs, documentation indexes, the pages its mechanisms rely on) and what was read of it; the workflow `watch.yml` is red when one moved since.
 - Never invent an SDK API: read the published `.d.ts` under `node_modules/<pkg>` and cite the file in the comment.
 - Failures are values: a tool call returns `Result` with `status: 'failed'` and a named `error.code`; do not throw across a service boundary.

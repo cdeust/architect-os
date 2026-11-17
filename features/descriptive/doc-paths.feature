@@ -15,6 +15,7 @@ Feature: the documents cite paths that exist
       | CLAUDE.md                 |
       | CONTRIBUTING.md           |
       | README.md                 |
+      | SECURITY.md               |
       | docs/agents.md            |
       | docs/architecture.md      |
       | docs/claude-code-watch.md |

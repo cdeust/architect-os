@@ -2899,3 +2899,30 @@ Conclusion : le routage par modèle se fait par l'hôte, une session par phase, 
 - Recherche : l'existant et les sources sont relevés avant de concevoir ; chaque fait qui porte une décision est une citation vérifiée ou une mesure ; les trois corrections du propriétaire sont rapportées avec ce que le mainteneur avait écrit.
 - SSDLC : modèle de menaces avant le code ; aucun texte distant imprimé ni écrit, prouvé par des sources hostiles ; aucun secret, aucune dépendance ajoutée ; un défaut d'écriture dans le dépôt trouvé par la revue et corrigé ; mutation de tout l'outil.
 - Opérationnel : un workflow hebdomadaire sans secret remplace celui des épingles ; il sera rouge tant que les pages ne sont pas lues, et dit lesquelles ; IRB sans objet.
+
+## 71. Trois avis de sécurité sur des dépendances indirectes, et une politique de sécurité qui décrivait l'ancienne architecture, 17 novembre 2026
+
+Le §70 a été poussé (`520f599`) : porte de l'hôte verte (1 860 scénarios = 1 632 + 229 − 1 ; 16 fichiers de production dans le périmètre, 650 mutants : 638 tués, 7 erreurs d'exécution, 5 délais dépassés, aucun survivant, les mêmes chiffres que la mutation jouée avant le commit), CI verte sur `gate` (Linux et macOS) ; `main` a suivi au même commit. Le workflow `watch.yml`, lancé une fois à la main sur `main`, a tourné : rouge, comme sur l'hôte et avec la même sortie (le SDK en retard d'une version, les pages jamais lues). `broker-live` reste rouge à l'étape de la clé : le secret n'existe pas.
+
+**Les avis.** `npm audit` en signalait trois, de gravité modérée, tous sur des dépendances que le dépôt ne nomme pas lui-même. Avant de corriger, l'exposition a été lue dans le code.
+
+| Paquet | Vient de | Ce que disent les avis | La plateforme est-elle exposée ? |
+|---|---|---|---|
+| `@hono/node-server` 2.1.5 | `@modelcontextprotocol/sdk` : son transport HTTP convertit par lui une requête de Node | Une barre oblique inverse du chemin lue comme un séparateur, qui contourne un contrôle d'accès par chemin ; un arrêt du processus pendant une montée en WebSocket | Non. La gateway route elle-même, par égalité stricte du chemin (`/mcp`, `/healthz`), avant de donner la requête au transport ; elle n'ouvre aucun WebSocket |
+| `hono` 4.13.14 | Idem | `mount()`, le routeur par expressions, les aides `css`, `csrf` et `validator` | Non. Aucune de ces fonctions n'est appelée : le SDK ne prend de ce paquet que la conversion de la requête |
+| `node-forge` 1.4.2 | `@anthropic-ai/sandbox-runtime` : son autorité de certification pour l'interception TLS | Vérification de signature Ed25519, arrêts du client TLS, une expression lente | Non. Aucun profil de la plateforme n'allume l'interception (`mitmProxy`) |
+
+Non exposée ne veut pas dire laissée : les correctifs existent dans les plages que ces deux paquets acceptent. Le fichier de verrouillage passe à `@hono/node-server` 2.1.9, `hono` 4.13.19, `node-forge` 1.4.3 (`npm audit fix --package-lock-only --ignore-scripts`) ; `npm audit` ne signale plus rien. Aucune épingle du dépôt ne bouge.
+
+**Le contrôle qui manquait.** Rien ne demandait ces avis : ils ont été vus parce qu'une installation les a affichés. `watch.yml` a désormais un second job, `advisories`, qui lance `npm audit` chaque lundi et sort rouge à partir d'un avis modéré. Il rejoint la veille parce que c'est la même question : qu'est-ce qui a bougé dehors depuis la dernière lecture.
+
+**Une politique de sécurité périmée.** `SECURITY.md` disait encore : « Only the proxy is exposed », « Workers run in read-only, capability-dropped, non-root containers on an isolated network », et listait `proxy` parmi les composants. C'est la première réalisation, retirée au §62. La relecture du §68 avait porté sur une liste de documents où ce fichier n'était pas ; le garde des chemins ne l'aurait pas vu non plus, puisqu'il ne cite aucun chemin disparu. Il est réécrit pour l'architecture en place (la gateway seule entrée, sur la boucle locale ; modules et workers sous srt ; le broker seul détenteur de la clé ; `data` seule devant la base ; dépendances épinglées et avis demandés chaque semaine), et il entre dans la liste des documents du garde.
+
+**Ce qui n'est pas prouvé.** Qu'aucun autre document du dépôt ne décrit encore ce qui a été retiré : deux relectures en ont chacune trouvé. Le job `advisories` n'a pas encore tourné en CI.
+
+**Chiffres.** 1 861 scénarios dans la suite (1 de plus : `SECURITY.md` dans le garde des chemins) ; 390 rejoués sur l'hôte avec les versions corrigées (scénarios descriptifs et ceux de la gateway, dont son hôte HTTP).
+
+**Trois piliers.**
+- Recherche : l'exposition à chaque avis est lue dans le code avant de conclure, et rapportée même quand elle est nulle ; le document périmé est rapporté avec la raison pour laquelle deux contrôles l'avaient manqué.
+- SSDLC : chaîne d'approvisionnement : trois dépendances indirectes corrigées au verrouillage, et un contrôle hebdomadaire des avis là où il n'y en avait aucun ; la politique de sécurité dit l'architecture réelle.
+- Opérationnel : un job de plus dans le workflow hebdomadaire, sans secret ; IRB sans objet.
