@@ -1,17 +1,28 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mock } from 'node:test';
 import { PassThrough } from 'node:stream';
 import type { CodeProcess, CodeToolDependencies } from '../../src/code-tool.js';
 import { SandboxError } from '../../src/port.js';
+import { factsJsonSchema } from '../../src/scout-facts.js';
 import {
   codeToolSession,
   runStep,
   stepDependencies,
   toolDependencies,
   type StepDependencies,
+  type ToolFile,
 } from '../../src/step-tool.js';
 import { Given, PKG, Then, When, stored, type SandboxWorld } from './helpers.js';
 
@@ -38,17 +49,31 @@ const deferred = (): Deferred => {
   const promise = new Promise<void>((done) => (resolve = done));
   return { promise, resolve };
 };
-interface Step {
-  folder: string;
-  calls: Call[];
-  behaviours: Record<'code.json' | 'review.json', Behaviour>;
-  /** The review sessions differ from the default one by the order in which they start (1 is the first). */
-  reviewBehaviours: Map<number, Behaviour>;
+/** What one phase of sessions (the scouts, the reviews) shows: the sessions differ by the order in which they start (1 is the first). */
+interface Phase {
+  behaviours: Map<number, Behaviour>;
   started: Map<number, Deferred>;
   ended: Map<number, Deferred>;
   running: number;
   maxRunning: number;
   runningWhenStarted: number[];
+}
+type Phased = 'scout.json' | 'review.json';
+const newPhase = (): Phase => ({
+  behaviours: new Map(),
+  started: new Map(),
+  ended: new Map(),
+  running: 0,
+  maxRunning: 0,
+  runningWhenStarted: [],
+});
+interface Step {
+  folder: string;
+  calls: Call[];
+  behaviours: Record<ToolFile, Behaviour>;
+  phases: Record<Phased, Phase>;
+  /** The files of the worktree the step runs in, as `readSource` gives them. */
+  source: Map<string, string>;
   finished: boolean;
   run?: Promise<void>;
   stdout: string;
@@ -73,13 +98,9 @@ Given('a step folder', function () {
   this.state['step'] = {
     folder,
     calls: [],
-    behaviours: { 'code.json': {}, 'review.json': {} },
-    reviewBehaviours: new Map(),
-    started: new Map(),
-    ended: new Map(),
-    running: 0,
-    maxRunning: 0,
-    runningWhenStarted: [],
+    behaviours: { 'code.json': {}, 'review.json': {}, 'scout.json': {} },
+    phases: { 'scout.json': newPhase(), 'review.json': newPhase() },
+    source: new Map(),
     finished: false,
     stdout: '',
     stderr: '',
@@ -101,11 +122,19 @@ interface ReviewRow {
   name: string;
   model: string;
 }
-const writeStep = (s: Step, reviews: readonly ReviewRow[], parallel?: number) => {
+const writeStep = (
+  s: Step,
+  reviews: readonly ReviewRow[],
+  parallel?: number,
+  scouts: readonly ReviewRow[] = [],
+) => {
   writeFileSync(
     join(s.folder, 'step.json'),
     JSON.stringify({
       build: { model: 'claude-sonnet-5-5', effort: 'medium', limitSeconds: 2400 },
+      ...(scouts.length > 0
+        ? { scouts: scouts.map((scout) => ({ ...scout, effort: 'low', limitSeconds: 300 })) }
+        : {}),
       ...(reviews.length > 0
         ? { reviews: reviews.map((review) => ({ ...review, effort: 'high', limitSeconds: 900 })) }
         : {}),
@@ -133,28 +162,85 @@ Given(
   },
 );
 
-const reviewBehaviour = (s: Step, n: number): Behaviour => {
-  const known = s.reviewBehaviours.get(n);
+const behaviour = (s: Step, phase: Phased, n: number): Behaviour => {
+  const known = s.phases[phase].behaviours.get(n);
   if (known !== undefined) return known;
   const created: Behaviour = {};
-  s.reviewBehaviours.set(n, created);
+  s.phases[phase].behaviours.set(n, created);
   return created;
 };
 
 Given('the review session {int} writes the fixture {string}', function (n: number, name: string) {
-  reviewBehaviour(step(this), n).fixture = name;
+  behaviour(step(this), 'review.json', n).fixture = name;
 });
 
 Given('the review session {int} is held until I end it', function (n: number) {
-  reviewBehaviour(step(this), n).held = true;
+  behaviour(step(this), 'review.json', n).held = true;
 });
 
 Given(
   'the review session {int} fails with the sandbox error {string} {string}',
   function (n: number, code: string, message: string) {
-    reviewBehaviour(step(this), n).failure = new SandboxError(code as 'ISOLATION_UNAVAILABLE', message);
+    behaviour(step(this), 'review.json', n).failure = new SandboxError(
+      code as 'ISOLATION_UNAVAILABLE',
+      message,
+    );
   },
 );
+
+Given('the scout session {int} writes the fixture {string}', function (n: number, name: string) {
+  behaviour(step(this), 'scout.json', n).fixture = name;
+});
+
+Given('the scout session {int} is held until I end it', function (n: number) {
+  behaviour(step(this), 'scout.json', n).held = true;
+});
+
+Given('the scout session {int} is stopped by its limit', function (n: number) {
+  behaviour(step(this), 'scout.json', n).stopped = true;
+});
+
+Given(
+  'the scout session {int} fails with the sandbox error {string} {string}',
+  function (n: number, code: string, message: string) {
+    behaviour(step(this), 'scout.json', n).failure = new SandboxError(
+      code as 'ISOLATION_UNAVAILABLE',
+      message,
+    );
+  },
+);
+
+Given('the scout session writes the fixture {string}', function (name: string) {
+  step(this).behaviours['scout.json'].fixture = name;
+});
+
+Given('the step folder holds a step.json with a build and the scouts {string}', function (text: string) {
+  writeStep(step(this), [], undefined, rows(text));
+});
+
+Given(
+  'the step folder holds a step.json with a build, the scouts {string} and the reviews {string}',
+  function (scouts: string, reviews: string) {
+    writeStep(step(this), rows(reviews), undefined, rows(scouts));
+  },
+);
+
+Given(
+  'the step folder holds a step.json with a build, the scouts {string} and the parallel {int}',
+  function (text: string, parallel: number) {
+    writeStep(step(this), [], parallel, rows(text));
+  },
+);
+
+Given('the step folder holds the questions of the scouts {string}', function (names: string) {
+  for (const name of names.split(' ')) {
+    writeFileSync(join(step(this).folder, `scout.${name}.md`), `Question of ${name}.\n`);
+  }
+});
+
+Given('the worktree of the step holds the file {string}:', function (path: string, content: string) {
+  step(this).source.set(path, content);
+});
 
 Given('the build session writes the fixture {string}', function (name: string) {
   step(this).behaviours['code.json'].fixture = name;
@@ -187,29 +273,30 @@ const start = (s: Step, args: string): Promise<void> => {
   const deps: StepDependencies = {
     folderArguments: args === '' ? [] : args.split(' ').map((arg) => arg.replace('<folder>', s.folder)),
     readFile: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined),
+    readSource: (path) => s.source.get(path),
     writeFile: (path, content) => writeFileSync(path, content),
     appendFile: (path, content) => writeFileSync(path, content, { flag: 'a' }),
     session: async (tool, argv, brief, limitSeconds, onOutput) => {
       s.calls.push({ tool, argv, brief, limitSeconds });
-      const isReview = tool === 'review.json';
-      const n = s.calls.filter((call) => call.tool === 'review.json').length;
-      const behaviour = { ...s.behaviours[tool], ...(isReview ? s.reviewBehaviours.get(n) : undefined) };
-      if (isReview) {
-        s.runningWhenStarted.push(s.running);
-        s.running++;
-        s.maxRunning = Math.max(s.maxRunning, s.running);
-        gate(s.started, n).resolve();
+      const phase = tool === 'code.json' ? undefined : s.phases[tool];
+      const n = s.calls.filter((call) => call.tool === tool).length;
+      const own = { ...s.behaviours[tool], ...phase?.behaviours.get(n) };
+      if (phase !== undefined) {
+        phase.runningWhenStarted.push(phase.running);
+        phase.running++;
+        phase.maxRunning = Math.max(phase.maxRunning, phase.running);
+        gate(phase.started, n).resolve();
       }
       try {
-        if (behaviour.held) await gate(s.ended, n).promise;
-        if (behaviour.failure) throw behaviour.failure;
-        const text = behaviour.fixture === undefined ? '' : fixture(behaviour.fixture);
+        if (own.held) await gate((phase as Phase).ended, n).promise;
+        if (own.failure) throw own.failure;
+        const text = own.fixture === undefined ? '' : fixture(own.fixture);
         // In two chunks, as a stream arrives.
         onOutput(Buffer.from(text.slice(0, 10)));
         onOutput(Buffer.from(text.slice(10)));
-        return { exitCode: 0, stopped: behaviour.stopped ?? false };
+        return { exitCode: 0, stopped: own.stopped ?? false };
       } finally {
-        if (isReview) s.running--;
+        if (phase !== undefined) phase.running--;
       }
     },
     stdout,
@@ -237,11 +324,20 @@ When('I wait for the step to finish', async function () {
 });
 
 When('I end the review session {int}', function (n: number) {
-  gate(step(this).ended, n).resolve();
+  gate(step(this).phases['review.json'].ended, n).resolve();
 });
 
 When('I wait for the review session {int} to start', async function (n: number) {
-  await gate(step(this).started, n).promise;
+  await gate(step(this).phases['review.json'].started, n).promise;
+  await turn();
+});
+
+When('I end the scout session {int}', function (n: number) {
+  gate(step(this).phases['scout.json'].ended, n).resolve();
+});
+
+When('I wait for the scout session {int} to start', async function (n: number) {
+  await gate(step(this).phases['scout.json'].started, n).promise;
   await turn();
 });
 
@@ -250,11 +346,26 @@ Then('the step is still running', function () {
 });
 
 Then('the review sessions saw {string} review sessions running when they started', function (counts: string) {
-  assert.equal(step(this).runningWhenStarted.join(' '), counts);
+  assert.equal(step(this).phases['review.json'].runningWhenStarted.join(' '), counts);
 });
 
 Then('at most {int} review sessions ran at the same time', function (count: number) {
-  assert.equal(step(this).maxRunning, count);
+  assert.equal(step(this).phases['review.json'].maxRunning, count);
+});
+
+Then('the scout sessions saw {string} scout sessions running when they started', function (counts: string) {
+  assert.equal(step(this).phases['scout.json'].runningWhenStarted.join(' '), counts);
+});
+
+Then('at most {int} scout sessions ran at the same time', function (count: number) {
+  assert.equal(step(this).phases['scout.json'].maxRunning, count);
+});
+
+Then('the scout sessions started with the models {string}', function (models: string) {
+  const asked = step(this)
+    .calls.filter((call) => call.tool === 'scout.json')
+    .map((call) => call.argv[call.argv.indexOf('--model') + 1]);
+  assert.equal(asked.join(' '), models);
 });
 
 Then('the review sessions started with the models {string}', function (models: string) {
@@ -300,6 +411,10 @@ Then('the sessions started were {string}', function (tools: string) {
   );
 });
 
+Then('the session {int} got exactly the brief:', function (n: number, brief: string) {
+  assert.equal(step(this).calls[n - 1]?.brief, `${brief}\n`);
+});
+
 Then(
   'the session {int} got the brief {string} and the limit {int}',
   function (n: number, brief: string, limit: number) {
@@ -326,6 +441,29 @@ Then(
     assert.equal((schema as Record<string, unknown>)['$schema'], 'http://json-schema.org/draft-07/schema#');
   },
 );
+
+Then(
+  'the session {int} got the arguments {string} and then the draft-07 schema of the facts',
+  function (n: number, args: string) {
+    const argv = step(this).calls[n - 1]?.argv ?? [];
+    assert.deepEqual(argv.slice(0, -1), args.split(' '));
+    const schema = JSON.parse(argv.at(-1) as string) as Record<string, any>;
+    assert.equal(schema['$schema'], 'http://json-schema.org/draft-07/schema#');
+    assert.deepEqual(schema, JSON.parse(factsJsonSchema()));
+    assert.equal(schema['properties']['facts']['maxItems'], 40);
+  },
+);
+
+Then('the step file {string} is the same as the step file {string}', function (name: string, other: string) {
+  assert.equal(
+    readFileSync(join(step(this).folder, name), 'utf8'),
+    readFileSync(join(step(this).folder, other), 'utf8'),
+  );
+});
+
+Then('the step file {string} is the brief of the session {int}', function (name: string, n: number) {
+  assert.equal(readFileSync(join(step(this).folder, name), 'utf8'), step(this).calls[n - 1]?.brief);
+});
 
 Then('the step file {string} is the fixture {string}', function (name: string, file: string) {
   assert.equal(readFileSync(join(step(this).folder, name), 'utf8'), fixture(file));
@@ -481,6 +619,8 @@ Then(
 When('I build the step dependencies of a process with the arguments {string}', function (args: string) {
   const proc = {
     argv: args.split(' '),
+    env: {},
+    cwd: () => '/elsewhere',
     stdout: new PassThrough(),
     stderr: new PassThrough(),
   } as unknown as CodeProcess;
@@ -534,3 +674,59 @@ Then(
     assert.equal(deps.cwd, cwd);
   },
 );
+
+// --- readSource, the real one ---------------------------------------------------------------------------------
+
+Given('a worktree folder with a file, a directory, a link inside and links outside', function () {
+  const root = mkdtempSync(join(tmpdir(), 'aos-source-'));
+  this.cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+  const worktree = join(root, 'worktree');
+  mkdirSync(join(worktree, 'src'), { recursive: true });
+  writeFileSync(join(worktree, 'src', 'a.ts'), 'export const a = 1;\n');
+  writeFileSync(join(root, 'outside.txt'), 'secret\n');
+  mkdirSync(join(root, 'outside-dir'));
+  writeFileSync(join(root, 'outside-dir', 'b.txt'), 'secret\n');
+  // A sibling whose name begins with the name of the worktree is not inside it.
+  mkdirSync(join(root, 'worktree-sibling'));
+  writeFileSync(join(root, 'worktree-sibling', 's.txt'), 'secret\n');
+  symlinkSync('src/a.ts', join(worktree, 'link-in.ts'));
+  symlinkSync(join(root, 'outside.txt'), join(worktree, 'link-out.txt'));
+  symlinkSync(join(root, 'outside-dir'), join(worktree, 'link-out-dir'));
+  symlinkSync('missing.txt', join(worktree, 'link-dangling.txt'));
+  // A file this process may not read is not a source.
+  writeFileSync(join(worktree, 'locked.txt'), 'secret\n');
+  chmodSync(join(worktree, 'locked.txt'), 0o000);
+  // The worktree reached through a link: its real path is what a file is compared with.
+  symlinkSync(worktree, join(root, 'worktree-link'));
+  this.state['worktree'] = worktree;
+});
+
+When(
+  'I build the step dependencies of a process running in that worktree, which it names by {string}',
+  function (how: string) {
+    const worktree = stored<string>(this, 'worktree');
+    const proc = {
+      argv: ['node', 'step.ts', '/a/b'],
+      env: how === 'INIT_CWD' ? { INIT_CWD: worktree } : {},
+      cwd: () =>
+        how === 'INIT_CWD'
+          ? '/elsewhere'
+          : how === 'a link'
+            ? join(worktree, '..', 'worktree-link')
+            : worktree,
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+    } as unknown as CodeProcess;
+    this.state['stepDeps'] = { deps: stepDependencies(proc), proc };
+  },
+);
+
+Then('the step dependencies read the source {string} as {string}', function (path: string, text: string) {
+  const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+  assert.equal(deps.readSource(path), text.replaceAll('\\n', '\n'));
+});
+
+Then('the step dependencies read the source {string} as undefined', function (path: string) {
+  const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+  assert.equal(deps.readSource(path), undefined);
+});

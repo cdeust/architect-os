@@ -3112,3 +3112,46 @@ Le rendu des trois a été contrôlé à l'œil, partie modifiée par partie mod
 - Recherche : l'évaluation des deux rulesets est lue chez GitHub ; les erreurs de la journée sont classées avec leur section ; une source est inscrite avec ce qu'elle a que la boucle n'a pas.
 - SSDLC : les deux branches de livraison exigent la porte et refusent la réécriture ; la grille des revues gagne une règle.
 - Opérationnel : deux réglages du dépôt créés depuis un fichier commité, sur le mot du propriétaire ; la limite du contournement est écrite ; IRB sans objet.
+
+## 77. Les éclaireurs : des citations que l'hôte vérifie, et la première étape à deux revues en même temps, 17 novembre 2026
+
+Le §76 a été poussé (`4c13d20`) : porte de l'hôte verte (1 906 scénarios, rien d'ajouté ni de supprimé, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS) ; `main` a suivi ; l'évaluation du ruleset dit `pass` pour les deux branches.
+
+**O.3b, le deuxième pas du routage** (conception : §13 de `docs/design/orchestration-fable-5-2.md`, règle 2).
+
+| Pièce | Ce qu'elle fait |
+|---|---|
+| `scouts` dans `step.json` | Jusqu'à 8 éclaireurs nommés, chacun avec son modèle, son effort et sa limite ; la question de chacun est le fichier `scout.<nom>.md` du dossier de l'étape, exigé avant toute session |
+| `scout.json`, `prompts/scout.md` | Le profil en lecture seule ; un prompt qui ne demande que des faits : un fichier, une ligne, une citation copiée caractère pour caractère, une note |
+| `scout-facts.ts` | La sortie structurée et ses bornes (40 faits, 300 caractères par citation, aucun saut de ligne) ; la vérification ; le bloc ajouté au brief |
+| L'hôte | Lit chaque fichier cité et rejette, avec une raison d'une liste fermée, ce qui ne s'y trouve pas : `chemin refusé`, `fichier absent`, `ligne absente`, `citation absente de la ligne` |
+| La construction | Reçoit le brief suivi des seules citations vérifiées, marquées comme données ; le texte reçu est gardé dans `build.brief.md` ; les revues reçoivent le brief seul |
+
+Un éclaireur sans sortie valide n'apporte rien et l'étape continue : le brief se suffit. Aucun résultat d'éclaireur ne change le code de sortie.
+
+**Ce qui tient la frontière.** Un chemin absolu, remontant, ou dont un segment nomme les données de git n'est jamais lu. Le fichier doit être un fichier ordinaire dont le chemin réel, liens suivis, est sous le chemin réel du worktree : un lien qui en sort donne `fichier absent`. La citation et la note entrent dans le brief par `JSON.stringify` : ni saut de ligne ni titre ne peut s'y glisser.
+
+**La boucle, pour la première fois à deux revues en même temps.** C'est la première étape jouée par l'outil du §75, et ce que ce §75 disait non prouvé : deux vraies sessions de revue sous srt, chacune avec son proxy et son dossier de configuration, ont tourné ensemble et rendu chacune son verdict.
+
+| Session | Modèle, effort | Durée | Coût | Résultat |
+|---|---|---|---|---|
+| Construction | Sonnet 5.5, medium | 534 s | 1,44 $ | Aboutie |
+| Revue `correctness` | Opus 5.5, high | 226 s | 0,90 $ | `request_changes`, 6 constats |
+| Revue `second` | Sonnet 5.5, medium | 23 s | 0,07 $ | `accept`, 1 proposition |
+
+Total 2,41 $, somme par modèle dans le résumé de l'étape. Les deux constats de correction de la première revue portaient sur le schéma de la boucle et le README, que la consigne réservait au mainteneur parce qu'une session ne peut pas contrôler un rendu : ils sont faits dans ce commit. Ses quatre propositions étaient justes, dont deux de sécurité que le mainteneur avait laissées dans sa consigne : le refus de `.git/` ne tenait qu'au préfixe (`./.git/config`, `.GIT/config` sur un volume qui ne distingue pas la casse le contournaient) ; un fichier illisible pour le processus arrêtait toute l'étape au lieu de donner `fichier absent`. Le refus se fait maintenant segment par segment, sans égard à la casse ; la lecture d'un fichier illisible rend « absent ».
+
+**Une donnée pour la suite, sans conclusion.** Sur le même diff et avec le même prompt, la revue sur Sonnet a rendu en 23 secondes une proposition mineure et a accepté ; celle sur Opus a trouvé le contournement. Une session par cellule : rien de statistique. Mais c'est ce que l'hypothèse HR3 devra regarder : un niveau de revue moins cher ne s'obtient pas en donnant la même grille à un modèle moins cher. Il lui faut la sienne, bornée à ce qui se lit sur le diff.
+
+**La mutation, propre au premier passage.** 235 mutants sur les lignes changées de l'outil d'étape et sur les deux fichiers du schéma et des faits : 225 tués, 10 erreurs d'exécution, aucun survivant, aucun délai dépassé, en 15 minutes. Les pas précédents en avaient laissé au premier passage (53 pour l'outil de veille, 5 pour O.3a). La différence tient à la consigne : elle nommait ce que la mutation avait trouvé jusque-là (aucune valeur jamais lue, aucun test de type redondant à l'exécution, aucun `catch` qui rend ce que la suite rendrait, aucun littéral mutable au niveau du module). C'est une leçon recopiée à la main dans une consigne, donc exactement ce que le pas de réflexion doit remplacer ; elle est notée ici pour la base d'erreurs.
+
+**Le schéma et le README**, dans ce commit comme la règle du §76 le demande : le schéma de la boucle a sept cases, les éclaireurs avant la construction, et la liste de ce qui reste dans le dossier de l'étape porte leurs citations ; le paragraphe du README dit les deux pièces construites du routage. Rendu contrôlé à l'œil sur ses deux moitiés.
+
+**Ce qui n'est pas prouvé.** Aucun éclaireur réel n'a encore tourné : cette étape a été construite par l'outil d'avant, qui n'en avait pas. Le prompt de l'éclaireur n'est contrôlé que sur sa forme. L'hypothèse HR1 (une construction qui relit moins, pour moins cher, éclaireurs compris) n'est pas mesurée : son pilote est le pas suivant.
+
+**Chiffres.** 2 032 scénarios dans la suite (126 de plus).
+
+**Trois piliers.**
+- Recherche : le coût de chaque session et la comparaison des deux revues sont rapportés avec leur limite ; ce qui a rendu la mutation propre est nommé ; ce qui n'a pas tourné est dit.
+- SSDLC : un texte produit par une session n'entre dans le brief d'une autre qu'après une vérification mécanique, borné et échappé ; aucun chemin hors du worktree ni vers les données de git n'est lu ; deux défauts de la consigne trouvés par la revue et corrigés.
+- Opérationnel : même profil en lecture seule, même proxy, même plafond de sessions simultanées ; IRB sans objet.

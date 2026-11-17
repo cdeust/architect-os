@@ -6,8 +6,8 @@ import type { AuthProxyOptions, CredentialSource } from '../../src/auth-proxy.js
 import { authProxyOptions, loadTool, parseTool, type Tool } from '../../src/tool.js';
 import { PKG, Then, When, stored } from './helpers.js';
 
-const committed = (): Record<string, any> =>
-  JSON.parse(readFileSync(join(PKG, 'code.json'), 'utf8')) as Record<string, any>;
+const committed = (file = 'code.json'): Record<string, any> =>
+  JSON.parse(readFileSync(join(PKG, file), 'utf8')) as Record<string, any>;
 
 // Named defects of the committed file, one per row of the "rejects a broken copy" Examples.
 const DEFECTS: Record<string, (t: Record<string, any>) => unknown> = {
@@ -65,6 +65,24 @@ When('I load the committed review.json', function () {
 
 Then('the tool launcher prompt file is {string}', function (file: string) {
   assert.equal(stored<Tool>(this, 'tool').launcherPromptFile, file);
+});
+
+When('I load the committed scout.json', function () {
+  this.state['tool'] = loadTool(join(PKG, 'scout.json'));
+});
+
+When('I break a copy of the committed scout.json with {}', function (defect: string) {
+  const breakIt = DEFECTS[defect];
+  assert.ok(breakIt, `no defect named "${defect}"`);
+  const broken = committed('scout.json');
+  breakIt(broken);
+  this.state['broken'] = broken;
+});
+
+Then('the scout.json auth proxy and command are those of review.json', function () {
+  const { description: _scout, launcherPromptFile: _scoutPrompt, ...scout } = committed('scout.json');
+  const { description: _review, launcherPromptFile: _reviewPrompt, ...review } = committed('review.json');
+  assert.deepEqual(scout, review);
 });
 
 When('I load the committed code.json', function () {

@@ -43,6 +43,56 @@ Feature: step.json, the descriptive file of a step
       |                                   |
       | abcdefghijklmnopqrstuvwxyzabcdefg |
 
+  Scenario: a step file without scouts loads, with no scout
+    When I parse the step file example without scouts
+    Then the step has 0 scout sessions
+
+  Scenario Outline: a number of scouts up to eight is accepted: <count>
+    When I parse the step file example with <count> scouts
+    Then the step has <count> scout sessions
+
+    Examples:
+      | count |
+      | 0     |
+      | 1     |
+      | 8     |
+
+  Scenario Outline: a scout name is accepted: <name>
+    When I parse the step file example with the scout name "<name>"
+    Then the step scout 1 is "<name>", "claude-haiku-5-5", "low", 300 seconds
+
+    Examples:
+      | name                             |
+      | a                                |
+      | files                            |
+      | a-1-b                            |
+      | abcdefghijklmnopqrstuvwxyzabcdef |
+
+  Scenario Outline: a scout name that would escape is refused: <name>
+    When I parse the step file example with the scout name "<name>" refused
+    Then parsing the step file fails
+
+    Examples:
+      | name                              |
+      | ../x                              |
+      | a/b                               |
+      | A                                 |
+      |                                   |
+      | abcdefghijklmnopqrstuvwxyzabcdefg |
+
+  Scenario: a scout and a review may share a name
+    When I parse the step file example with a scout and a review both named "correctness"
+    Then the step scout 1 is "correctness", "claude-haiku-5-5", "low", 300 seconds
+    And the step review 1 is "correctness", "claude-opus-5-5", "high", 900 seconds
+
+  Scenario: two scouts with the same name are refused, and the refusal names it
+    When I make a broken copy of the step file example with two scouts both named "twin"
+    Then parsing the broken step file fails with "scouts: duplicate scout name: twin"
+
+  Scenario: two names each used twice among the scouts are both named, once each, in the order of the file
+    When I make a broken copy of the step file example with the scouts named "pair, solo, pair, twin, twin, pair"
+    Then parsing the broken step file fails with "scouts: duplicate scout name: pair, twin"
+
   Scenario Outline: a parallel from 1 to 8 is accepted: <parallel>
     When I parse the step file example with the parallel <parallel>
     Then the step parallel is <parallel>
@@ -108,6 +158,20 @@ Feature: step.json, the descriptive file of a step
       | a review name that is not a string     |
       | nine reviews                           |
       | reviews that is not a list             |
+      | an unknown key in a scout              |
+      | the singular scout key                 |
+      | a scout without a name                 |
+      | a scout name that starts with a digit  |
+      | a scout name with an underscore        |
+      | a scout name that ends with a newline  |
+      | a scout name that is not a string      |
+      | nine scouts                            |
+      | scouts that is not a list              |
+      | a scout effort not in list             |
+      | a scout limit of 0                     |
+      | a scout limit of 7201                  |
+      | an empty scout model                   |
+      | a scout without a model                |
       | a parallel of 0                        |
       | a parallel of 9                        |
       | a non-integer parallel                 |

@@ -52,3 +52,30 @@ Feature: code.json, the descriptive file of the 1a.0 tool
     Then the tool profile is "reviewer"
     And the tool launcher prompt file is "prompts/review.md"
     And the tool command is exactly "claude --bare --settings ${config}/settings.json --strict-mcp-config"
+
+  Scenario: scout.json loads against the strict schema: reviewer profile, the prompt of the scouts, the same command and proxy as review.json
+    When I load the committed scout.json
+    Then the tool profile is "reviewer"
+    And the tool launcher prompt file is "prompts/scout.md"
+    And the tool command is exactly "claude --bare --settings ${config}/settings.json --strict-mcp-config"
+    And the scout.json auth proxy and command are those of review.json
+
+  Scenario Outline: rejects a broken copy of scout.json with <defect>
+    When I break a copy of the committed scout.json with <defect>
+    Then parsing the broken code.json fails
+
+    Examples:
+      | defect                                     |
+      | a misspelt key                             |
+      | an empty command                           |
+      | a plain-http upstream                      |
+      | an xhttps upstream                         |
+      | an httpsx upstream                         |
+      | an unanchored route                        |
+      | no body field                              |
+      | a zero body size limit                     |
+      | a fractional body size                     |
+      | an absolute launcher prompt file           |
+      | a launcher prompt file outside the package |
+      | an empty launcher prompt file              |
+      | no launcher prompt file                    |

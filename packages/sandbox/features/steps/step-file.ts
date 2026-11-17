@@ -10,6 +10,10 @@ const example = (): Record<string, any> => ({
 
 const reviewNamed = (name: string) => ({ name, model: 'claude-opus-5-5', effort: 'high', limitSeconds: 900 });
 
+const scoutNamed = (name: string) => ({ name, model: 'claude-haiku-5-5', effort: 'low', limitSeconds: 300 });
+
+const withScout = (s: Record<string, any>) => (s['scouts'] = [scoutNamed('files')]);
+
 const DEFECTS: Record<string, (s: Record<string, any>) => unknown> = {
   'an unknown key at the top': (s) => (s['plugins'] = []),
   'an unknown key in build': (s) => (s['build']['temperature'] = 0),
@@ -22,6 +26,20 @@ const DEFECTS: Record<string, (s: Record<string, any>) => unknown> = {
   'a review name that is not a string': (s) => (s['reviews'][0]['name'] = 1),
   'nine reviews': (s) => (s['reviews'] = Array.from({ length: 9 }, (_, i) => reviewNamed(`r${i}`))),
   'reviews that is not a list': (s) => (s['reviews'] = reviewNamed('a')),
+  'an unknown key in a scout': (s) => (withScout(s), (s['scouts'][0]['temperature'] = 0)),
+  'the singular scout key': (s) => (s['scout'] = scoutNamed('files')),
+  'a scout without a name': (s) => (withScout(s), delete s['scouts'][0]['name']),
+  'a scout name that starts with a digit': (s) => (withScout(s), (s['scouts'][0]['name'] = '1a')),
+  'a scout name with an underscore': (s) => (withScout(s), (s['scouts'][0]['name'] = 'a_b')),
+  'a scout name that ends with a newline': (s) => (withScout(s), (s['scouts'][0]['name'] = 'a\n')),
+  'a scout name that is not a string': (s) => (withScout(s), (s['scouts'][0]['name'] = 1)),
+  'nine scouts': (s) => (s['scouts'] = Array.from({ length: 9 }, (_, i) => scoutNamed(`s${i}`))),
+  'scouts that is not a list': (s) => (s['scouts'] = scoutNamed('a')),
+  'a scout effort not in list': (s) => (withScout(s), (s['scouts'][0]['effort'] = 'extreme')),
+  'a scout limit of 0': (s) => (withScout(s), (s['scouts'][0]['limitSeconds'] = 0)),
+  'a scout limit of 7201': (s) => (withScout(s), (s['scouts'][0]['limitSeconds'] = 7201)),
+  'an empty scout model': (s) => (withScout(s), (s['scouts'][0]['model'] = '')),
+  'a scout without a model': (s) => (withScout(s), delete s['scouts'][0]['model']),
   'a parallel of 0': (s) => (s['parallel'] = 0),
   'a parallel of 9': (s) => (s['parallel'] = 9),
   'a non-integer parallel': (s) => (s['parallel'] = 1.5),
@@ -41,6 +59,64 @@ const DEFECTS: Record<string, (s: Record<string, any>) => unknown> = {
 When('I parse the step file example', function () {
   this.state['step'] = parseStepFile(example());
 });
+
+When('I parse the step file example with {int} scouts', function (count: number) {
+  const raw = example();
+  raw['scouts'] = Array.from({ length: count }, (_, i) => scoutNamed(`scout-${i}`));
+  this.state['step'] = parseStepFile(raw);
+});
+
+When('I parse the step file example without scouts', function () {
+  this.state['step'] = parseStepFile(example());
+});
+
+When('I parse the step file example with the scout name {string}', function (name: string) {
+  const raw = example();
+  raw['scouts'] = [scoutNamed(name)];
+  this.state['step'] = parseStepFile(raw);
+});
+
+When('I parse the step file example with the scout name {string} refused', function (name: string) {
+  const raw = example();
+  raw['scouts'] = [scoutNamed(name)];
+  this.state['broken'] = raw;
+});
+
+When('I parse the step file example with a scout and a review both named {string}', function (name: string) {
+  const raw = example();
+  raw['scouts'] = [scoutNamed(name)];
+  raw['reviews'] = [reviewNamed(name)];
+  this.state['step'] = parseStepFile(raw);
+});
+
+Then('the step has {int} scout sessions', function (count: number) {
+  assert.equal(stored<StepFile>(this, 'step').scouts.length, count);
+});
+
+Then(
+  'the step scout {int} is {string}, {string}, {string}, {int} seconds',
+  function (n: number, name: string, model: string, effort: string, limitSeconds: number) {
+    assert.deepEqual(stored<StepFile>(this, 'step').scouts[n - 1], { name, model, effort, limitSeconds });
+  },
+);
+
+When(
+  'I make a broken copy of the step file example with two scouts both named {string}',
+  function (name: string) {
+    const broken = example();
+    broken['scouts'] = [scoutNamed('first'), scoutNamed(name), scoutNamed(name)];
+    this.state['broken'] = broken;
+  },
+);
+
+When(
+  'I make a broken copy of the step file example with the scouts named {string}',
+  function (names: string) {
+    const broken = example();
+    broken['scouts'] = names.split(', ').map(scoutNamed);
+    this.state['broken'] = broken;
+  },
+);
 
 When('I parse the step file example without reviews', function () {
   const raw = example();

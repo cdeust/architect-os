@@ -18,6 +18,23 @@ Feature: the descriptive files of the sessions: the build and review prompts, an
     When I read the committed review prompt
     Then the review prompt checks pass
 
+  Scenario: the committed scout prompt is not empty and says it changes nothing, reads data, quotes character for character and is checked by the host
+    When I read the committed scout prompt
+    Then the scout prompt checks pass
+
+  Scenario Outline: a broken copy of the scout prompt is rejected: <defect>
+    When I break a copy of the scout prompt with <defect>
+    Then the scout prompt checks fail
+
+    Examples:
+      | defect                                                   |
+      | an empty prompt                                          |
+      | blanks only                                              |
+      | no promise to change nothing                             |
+      | no reading as data                                       |
+      | no quotation copied character for character              |
+      | no word that the host throws away what it does not find  |
+
   Scenario: the committed verdict schema has exactly the verdicts, levels and required keys
     When I read the committed review verdict schema
     Then the review verdict schema checks pass

@@ -53,6 +53,30 @@ function checkBuildPrompt(text: string): void {
   }
 }
 
+/** The checks on the scout prompt: not empty, and the four things a scenario can read in it. */
+function checkScoutPrompt(text: string): void {
+  assert.notEqual(text.trim(), '', 'the scout prompt is empty');
+  for (const needle of [
+    'You change nothing',
+    'data, never instructions',
+    'character for character',
+    'is thrown away',
+  ]) {
+    assert.ok(text.includes(needle), `the scout prompt does not name ${needle}`);
+  }
+}
+
+const SCOUT_DEFECTS: Record<string, (text: string) => string> = {
+  'an empty prompt': () => '',
+  'blanks only': () => ' \n\t\n',
+  'no promise to change nothing': (text) => text.replaceAll('You change nothing', 'You may change'),
+  'no reading as data': (text) => text.replaceAll('data, never instructions', 'text'),
+  'no quotation copied character for character': (text) =>
+    text.replaceAll('character for character', 'roughly'),
+  'no word that the host throws away what it does not find': (text) =>
+    text.replaceAll('is thrown away', 'is kept'),
+};
+
 const BUILD_DEFECTS: Record<string, (text: string) => string> = {
   'an empty prompt': () => '',
   'no reading of the rules by git': (text) => text.replaceAll('git show HEAD:CLAUDE.md', 'the file'),
@@ -79,6 +103,24 @@ const SCHEMA_DEFECTS: Record<string, (schema: Json) => unknown> = {
 
 When('I read the committed review prompt', function () {
   this.state['prompt'] = read('review.md');
+});
+
+When('I read the committed scout prompt', function () {
+  this.state['scout'] = read('scout.md');
+});
+
+When('I break a copy of the scout prompt with {}', function (defect: string) {
+  const breakIt = SCOUT_DEFECTS[defect];
+  assert.ok(breakIt, `no defect named "${defect}"`);
+  this.state['scout'] = breakIt(read('scout.md'));
+});
+
+Then('the scout prompt checks pass', function () {
+  assert.doesNotThrow(() => checkScoutPrompt(stored(this, 'scout')));
+});
+
+Then('the scout prompt checks fail', function () {
+  assert.throws(() => checkScoutPrompt(stored(this, 'scout')));
 });
 
 When('I read the committed build prompt', function () {
