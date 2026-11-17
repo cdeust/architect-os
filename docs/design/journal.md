@@ -2994,3 +2994,36 @@ La décision 3 de la note (un contrôleur sur le plus petit modèle, retiré) ti
 - Recherche : les faits qui portent la conception sont des mesures ou des citations vérifiées ; la mesure est pré-enregistrée, avec l'ancre qui la réfute.
 - SSDLC : le modèle de menaces de ce qui change est écrit avant le code ; la revue de sécurité garde son niveau ; aucune session ne délègue hors de la vue de l'hôte.
 - Opérationnel : mêmes profils, même proxy, même journal d'usage ; un plafond de sessions simultanées est prévu au fichier de l'étape ; IRB sans objet.
+
+## 74. Deux décisions du propriétaire : la nouvelle livraison des serveurs MCP est posée, le ruleset commence par la branche, 17 novembre 2026
+
+Le §73 a été poussé (`db9a6d4`) : porte de l'hôte verte (1 861 scénarios, rien d'ajouté ni de supprimé, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS) ; `main` a suivi. Ce commit avait été amendé avant d'être publié : sa première version faisait lancer par l'hôte les contrôles sans modèle, donc exécuter sur l'hôte le code du worktree avant toute lecture du diff ; ils tournent sous srt en lecture seule.
+
+**Première décision.** Au §72 le mainteneur n'avait pas posé `mcpServersDelivery` dans le worker, en écrivant qu'elle n'y avait aucun effet et qu'« aucun scénario ne pourrait la prouver, et la mutation de sa valeur survivrait ». Il avait laissé le choix au propriétaire, qui a répondu : « Oui pour la livraison des serveurs mcp. »
+
+L'option est posée à `'initialize'`. Et l'affirmation du §72 a été mesurée au lieu d'être supposée : avec une valeur que le SDK ne connaît pas, celle que la mutation met à la place, 11 des 12 scénarios qui lancent le vrai binaire échouent. Le SDK lit et vérifie l'option même quand le seul serveur est en processus. La ligne est donc prouvée par les scénarios existants, sans commentaire de désactivation ; l'affirmation était fausse, et elle avait été écrite sans mesure.
+
+| Ce que l'option change | Aujourd'hui | Demain |
+|---|---|---|
+| La voie par laquelle un serveur que Claude Code lance ou joint lui parvient | Rien : le seul serveur du worker est en processus | Un serveur d'une autre sorte n'arrivera jamais par une ligne de commande, où ses variables et ses en-têtes sont lisibles par les autres utilisateurs de la machine |
+| La position du worker face au défaut annoncé | Déjà sur le futur défaut | Rien à changer le jour où il bascule |
+
+**Seconde décision.** Le ruleset prévu à la conception (décision 4 des workflows) n'existait pas (§67). Le propriétaire : « Le ruleset main on met sur feat et on réplique sur main après validation. » Il est créé sur `feat/gate-1a` depuis le fichier de la conception, `docs/design/ruleset-main.json`, son nom et sa branche remplacés ; la commande est dans `docs/infrastructure.md`.
+
+| Règle | Ce qu'elle tient sur `feat/gate-1a` |
+|---|---|
+| `deletion` | La branche ne peut pas être supprimée : son journal est cité de l'extérieur |
+| `non_fast_forward` | Elle ne peut pas être réécrite |
+| `required_status_checks` | `gate-linux` et `gate-macos` verts sur le commit poussé |
+| Contournement | Le rôle du propriétaire, toujours, comme la conception l'écrit |
+
+Ce que la validation doit montrer : que la livraison telle qu'elle se fait (un commit poussé d'abord sur une branche d'essai, où la porte tourne, puis le même commit poussé sur la branche) satisfait la règle des contrôles sans passer par le contournement. Le push de ce commit-ci est le premier sous le ruleset ; ce que GitHub en dit sera rapporté à la section suivante. `main` n'a toujours aucune règle : la réplique attend la validation du propriétaire.
+
+**Ce qui n'est pas prouvé.** Que le ruleset laisse passer la livraison sans contournement : c'est l'objet du prochain push. Le compte du mainteneur est celui du propriétaire, qui a le droit de contournement : un push refusé par la règle passerait quand même, et seul le message de GitHub le dirait.
+
+**Chiffres.** 1 861 scénarios dans la suite, inchangé ; 12 rejoués avec le vrai binaire, avec l'option puis avec une valeur inconnue.
+
+**Trois piliers.**
+- Recherche : une affirmation de la section précédente est mesurée, trouvée fausse et rapportée ; la validation du ruleset est définie avant d'être observée.
+- SSDLC : la livraison qui garde variables et en-têtes hors de la ligne de commande est posée avant qu'un serveur en ait besoin ; la branche de livraison ne peut plus être supprimée ni réécrite, et exige la porte.
+- Opérationnel : un réglage du dépôt créé depuis un fichier commité, par une commande écrite ; sa réplique sur `main` reste au propriétaire ; IRB sans objet.

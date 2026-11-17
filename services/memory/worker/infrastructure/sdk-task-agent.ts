@@ -69,11 +69,12 @@ async function resultOf(stream: AsyncIterable<SDKMessage>): Promise<SDKResultMes
  * it was offered, a `.mcp.json` in the cwd was not loaded, and a call of Bash, never offered, was refused. Those three
  * options are not set: they would be code without an effect. The sandbox stays the boundary (profile `worker`).
  *
- * `mcpServersDelivery` is not set either, for the same reason: it decides how the servers that Claude Code runs or
- * connects to reach it, and the only server here is in process, which it does not affect (sdk.d.ts,
- * `Options.mcpServersDelivery`; docs/claude-code-watch.md). A server of another kind added here comes with
- * `'initialize'`: on the command line, the default until a future release, its `env` and `headers` can be read by the
- * other users of the machine.
+ * `mcpServersDelivery` is set to `'initialize'`, the delivery that a future release makes the default: the servers
+ * that Claude Code runs or connects to reach it in the initialize request, not on its command line, where their `env`
+ * and `headers` can be read by the other users of the machine (sdk.d.ts, `Options.mcpServersDelivery`). Today the
+ * only server is in process, which the option does not affect: it is set so that the worker is already on the
+ * coming default, and so that a server of another kind added here never reaches a command line (the owner's
+ * decision of 17 November 2026, docs/claude-code-watch.md).
  */
 export class SdkTaskAgent implements TaskAgent {
   /**
@@ -108,6 +109,7 @@ export class SdkTaskAgent implements TaskAgent {
         agent: name,
         agents: { [name]: { description, prompt, tools: [...tools, STRUCTURED_OUTPUT], model } },
         mcpServers: { [SERVER]: server },
+        mcpServersDelivery: 'initialize',
         allowedTools: [...tools, STRUCTURED_OUTPUT],
         settingSources: [],
         persistSession: false,
