@@ -23,14 +23,18 @@
       "kind": "changelog",
       "url": "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md",
       "read": {
-        "version": "2.1.325",
-        "on": "2026-11-16"
+        "version": "2.1.326",
+        "on": "2026-11-17"
       }
     },
     {
       "id": "agent-sdk-changelog",
       "kind": "changelog",
-      "url": "https://raw.githubusercontent.com/anthropics/claude-agent-sdk-typescript/main/CHANGELOG.md"
+      "url": "https://raw.githubusercontent.com/anthropics/claude-agent-sdk-typescript/main/CHANGELOG.md",
+      "read": {
+        "version": "0.3.326",
+        "on": "2026-11-17"
+      }
     },
     {
       "id": "claude-code-docs",

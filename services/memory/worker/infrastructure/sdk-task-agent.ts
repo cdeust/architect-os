@@ -68,6 +68,12 @@ async function resultOf(stream: AsyncIterable<SDKMessage>): Promise<SDKResultMes
  * with them and `settingSources: []`, neither `strictMcpConfig`, nor `tools: []`, nor `permissionMode` changed what
  * it was offered, a `.mcp.json` in the cwd was not loaded, and a call of Bash, never offered, was refused. Those three
  * options are not set: they would be code without an effect. The sandbox stays the boundary (profile `worker`).
+ *
+ * `mcpServersDelivery` is not set either, for the same reason: it decides how the servers that Claude Code runs or
+ * connects to reach it, and the only server here is in process, which it does not affect (sdk.d.ts,
+ * `Options.mcpServersDelivery`; docs/claude-code-watch.md). A server of another kind added here comes with
+ * `'initialize'`: on the command line, the default until a future release, its `env` and `headers` can be read by the
+ * other users of the machine.
  */
 export class SdkTaskAgent implements TaskAgent {
   /**

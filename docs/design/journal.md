@@ -2926,3 +2926,32 @@ Non exposée ne veut pas dire laissée : les correctifs existent dans les plages
 - Recherche : l'exposition à chaque avis est lue dans le code avant de conclure, et rapportée même quand elle est nulle ; le document périmé est rapporté avec la raison pour laquelle deux contrôles l'avaient manqué.
 - SSDLC : chaîne d'approvisionnement : trois dépendances indirectes corrigées au verrouillage, et un contrôle hebdomadaire des avis là où il n'y en avait aucun ; la politique de sécurité dit l'architecture réelle.
 - Opérationnel : un job de plus dans le workflow hebdomadaire, sans secret ; IRB sans objet.
+
+## 72. L'épingle du SDK à 0.3.326, et une évolution obligatoire lue à sa source, 17 novembre 2026
+
+Le §71 a été poussé (`fcde809`) : porte de l'hôte verte (1 861 scénarios = 1 860 + 1, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS) ; `main` a suivi. Lancé à la main sur `main`, `watch.yml` a joué ses deux jobs : `advisories` vert, `watch` rouge comme attendu. La porte de `main` sur `520f599` tourne encore à l'écriture de cette section : en CI aussi elle mute l'outil entier.
+
+**Ce que la veille disait.** Deux sources en retard qu'une lecture peut régler tout de suite : l'épingle du SDK de l'agent (0.3.325, publié 0.3.326) et le changelog de Claude Code (lu jusqu'à 2.1.325, publié 2.1.326). Le changelog propre au SDK n'avait jamais été lu en tant que tel.
+
+**La lecture.** Les 367 entrées de Claude Code 2.1.326, par les termes qui touchent un lancement sans interface, le SDK, la sandbox, les identifiants, l'API et les défauts ; toutes les entrées du changelog du SDK de 0.3.313 à 0.3.326. Le relevé (`docs/claude-code-watch.md`) porte la décision par entrée : une obligatoire dans son genre, neuf pertinentes prises avec l'épingle, une gardée pour l'inventaire, le reste sans objet avec sa raison (une vingtaine d'entrées sur la sandbox interne de Claude Code, que les profils coupent ; les hooks, les sessions gardées et les plugins, que le worker n'a pas).
+
+**L'évolution obligatoire, et ce que sa source dit.** Le SDK déprécie l'envoi des serveurs MCP par la ligne de commande du binaire ; une version à venir les enverra par défaut dans la requête d'initialisation (`mcpServersDelivery`). Le matin, le mainteneur l'avait écartée sur un mauvais critère (§70), sur la seule ligne du changelog. Reprise à la définition du paquet installé (`sdk.d.ts`), elle dit deux choses que la ligne ne disait pas : elle ne concerne que les serveurs que Claude Code lance ou joint lui-même, pas un serveur en processus ; et une application qui lance le binaire fourni avec le SDK ne reçoit aucun avertissement. Le worker n'a qu'un serveur, en processus, et lance le binaire du SDK.
+
+| Question | Réponse | Preuve |
+|---|---|---|
+| Le worker fonctionne-t-il sous le futur défaut ? | Oui | Sonde : les 12 scénarios de `features/integration/agent-worker.feature`, qui lancent le vrai binaire 2.1.326 devant un modèle factice, passent avec l'option à `'initialize'` comme sans elle |
+| L'option entre-t-elle dans le code ? | Non | Elle n'y a aucun effet : aucun scénario ne pourrait la prouver, et la mutation de sa valeur survivrait. Le fichier refuse déjà trois options pour cette raison |
+| Qu'est-ce qui la rendrait nécessaire ? | Un serveur d'une autre sorte donné au worker | La règle est écrite à cet endroit (`sdk-task-agent.ts`) : il vient avec `'initialize'`, parce que par la ligne de commande ses variables et ses en-têtes sont lisibles par les autres utilisateurs de la machine |
+
+C'est la différence entre écarter une évolution et la prendre : elle est lue à sa source, la plateforme est prouvée prête, et la règle attend là où elle servira.
+
+**L'épingle.** `@anthropic-ai/claude-agent-sdk` 0.3.326 dans ses deux manifestes (`services/memory`, `bench`), donc le binaire Claude Code 2.1.326 ; le verrouillage de `bench` reçoit aussi les correctifs des trois avis du §71. Les lectures des deux changelogs sont consignées au registre par `npm run watch -- read`. Après quoi `npm run watch -- check` dit les deux épingles et les deux changelogs à jour ; restent en retard les deux index et les 22 pages, jamais lus.
+
+**Ce qui n'est pas prouvé.** La boucle d'orchestration n'a pas encore tourné avec le binaire 2.1.326 : elle le fera à sa prochaine étape, depuis le lanceur. La lecture de 2.1.326 a porté sur les entrées retenues par une liste de termes, pas sur chacune des 367.
+
+**Chiffres.** 1 861 scénarios dans la suite, inchangé ; 12 rejoués avec le vrai binaire, deux fois.
+
+**Trois piliers.**
+- Recherche : la décision du matin est rapportée comme une erreur de critère et de source ; la sonde est décrite avec ce qu'elle a joué, et n'est pas gardée dans le code.
+- SSDLC : une épingle à la fois, avec son verrouillage ; la règle de sécurité d'une option est écrite là où elle s'appliquera ; aucune ligne sans effet n'entre dans le code.
+- Opérationnel : des quatre sources de paquets et de changelogs, une seule était à jour ; les quatre le sont ; IRB sans objet.
