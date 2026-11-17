@@ -665,6 +665,42 @@ Les deux écarts en gras sont à fermer avant l'on-premise.
 
 Les pilotes du §13 (HR2 à HR4) gardent leur place : ils mesurent des pièces que les étapes 2 à 4 emploient.
 
+### Étape 1, la commande de livraison : conception (17 novembre 2026, avant le code)
+
+**Ce qu'elle remplace.** Une suite que le mainteneur tape à la main à chaque commit, une vingtaine de fois le 17 novembre : amener le commit dans l'arbre de livraison, pousser une branche d'essai, jouer la porte, attendre la CI du commit, relancer un job resté sans runner, vérifier que les deux branches n'ont pas bougé, pousser, lire l'évaluation du ruleset, nettoyer. Une faute de frappe y pousse un autre commit que celui qui a été vérifié, avec un droit de contournement.
+
+**Ce qu'elle est.** `npm run deliver -- <nom>`, jouée depuis l'arbre de livraison sur un commit déjà fait. Six phases ; la première qui échoue arrête tout et dit laquelle. Aucun modèle.
+
+| Phase | Ce qu'elle établit | Comment |
+|---|---|---|
+| 1. Préalables | L'arbre est propre ; le commit avance les deux branches distantes sans les réécrire ; le journal ne fait que grandir | `git` seul : état, ascendance, `numstat` du journal ; le nom de la branche d'essai passe par une expression stricte |
+| 2. Branche d'essai | La CI voit le commit | Un push sans force vers `sentinel/gate-1a-<nom>` |
+| 3. Porte de l'hôte | Elle est verte pour ce commit exact | `npm run gate`, puis le fichier de verdict de la porte, qui n'existe que verte et porte l'empreinte du commit |
+| 4. CI | Les deux jobs exigés par le ruleset sont verts pour ce commit | Le run du workflow `gate` retrouvé par l'empreinte ; un job resté sans runner est relancé, en nombre borné ; un job qui a échoué sur une étape arrête la livraison |
+| 5. Publication | Le même commit, et lui seul, atteint `feat/gate-1a` puis `main` | Les deux branches sont relues juste avant : elles doivent être au parent relevé en phase 1 ; push sans force, par l'empreinte ; l'évaluation du ruleset est lue après chaque push et doit être `pass` |
+| 6. Rangement | Plus de branche d'essai ; le lanceur et le dépôt principal suivent | Suppression de la branche d'essai ; avance rapide des deux arbres |
+
+Elle s'arrête sur demande avant la phase 5 (`--until ci`) : c'est la couture où un gate humain se pose, la publication devenant alors l'acte d'une personne.
+
+**Où.** `tools/deliver/`, dans la forme de `tools/watch` : le domaine décide, sans rien lancer ; `git`, la forge et la porte sont des ports, avec un adaptateur à processus enfant (argv fixe, jamais de shell) et un double en mémoire pour les scénarios. Tout ce qui est propre à GitHub (run par empreinte, relance, évaluation du ruleset) est derrière le port de la forge : sur site, c'est un autre adaptateur.
+
+**Menaces.**
+
+| | Menace | Parade |
+|---|---|---|
+| **S** | Un autre commit que celui qui a été vérifié est publié | Tout passe par l'empreinte complète, relevée une fois en phase 1 : le verdict de la porte, le run de CI, le push (`<empreinte>:refs/heads/…`). Aucune phase ne relit `HEAD` |
+| **T** | Le fichier de verdict est périmé ou d'un autre commit | Il n'est cru que si son empreinte est celle de la phase 1 ; la CI, que l'hôte n'écrit pas, est la seconde preuve, indépendante |
+| **T** | Une branche distante a bougé entre la vérification et le push | Relecture juste avant ; push sans force ; le ruleset refuse de son côté toute réécriture |
+| **T** | Le nom de la branche d'essai porte une option ou un chemin | Expression stricte ; argv fixe, sans shell ; le nom n'est jamais en première position |
+| **R** | Ce qui a été livré, quand, sur quelle preuve | Une ligne par livraison dans un journal de l'hôte : empreinte, run de CI, tentatives, résultat de chaque évaluation du ruleset |
+| **I** | Un jeton de la forge paraît dans une sortie | La commande n'en lit aucun : `git` et `gh` portent leur propre identifiant ; elle n'imprime ni leur sortie brute ni un journal de CI |
+| **D** | La CI n'obtient jamais de runner ; la porte ne finit pas | Relances bornées, puis arrêt qui le dit ; la porte garde ses propres limites |
+| **E** | La commande se sert du droit de contournement du compte qui la lance | Elle ne pousse que si les deux contrôles exigés sont verts pour l'empreinte, donc sans avoir besoin du contournement ; une évaluation du ruleset autre que `pass` après le premier push arrête tout avant `main` |
+
+**Ce qu'elle ne ferme pas.** L'écart nommé plus haut : elle rend la livraison exacte et rejouable, elle reste lancée par l'orchestrateur avec le compte du propriétaire. Le gate humain est une décision du propriétaire, et `--until ci` est l'endroit où il se pose.
+
+**Mesure.** Avant : le nombre de commandes tapées par livraison et les erreurs relevées au journal (un push oublié de vérifier, une branche d'essai laissée). Après : une commande, et le journal de l'hôte.
+
 ### Trois piliers
 
 - Recherche : les sources sont nommées avec ce qui en a été lu ; la vérification de bout en bout et son résultat constant sont écrits avant tout essai ; ce qui vient d'un tiers rapporté par un autre est dit tel.

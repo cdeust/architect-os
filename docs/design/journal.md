@@ -3577,3 +3577,26 @@ La pastille est du code en ligne, sans image ni service extérieur : elle se lit
 - Recherche : chaque point de la feuille de route renvoie à l'endroit où il est conçu ; ce qui la tient à jour, et sa faiblesse, sont dits.
 - SSDLC : les deux points de sécurité ouverts (la borne de dépense du broker, la porte de livraison) sont en tête de liste et non dans une note ; une ressource inutilisée est retirée après lecture de son contenu.
 - Opérationnel : aucune dépendance à un service extérieur pour une marque du README ; IRB sans objet.
+
+## 89. La commande de livraison, conçue avant son code : six phases, une empreinte, et ce qu'elle ne ferme pas, 17 novembre 2026
+
+Le §88 a été poussé (`00a0742`) : porte de l'hôte verte (2 170 scénarios, rien d'ajouté ni de supprimé, aucun mutant dans le périmètre), CI verte sur `gate` (Linux et macOS) à la première tentative ; `main` a suivi ; ruleset `pass` sur les deux branches. Le §87 (`774a6c1`) l'avait été de même.
+
+**Pourquoi maintenant.** C'est le premier point de la feuille de route du README. La livraison est ce que le mainteneur a le plus répété à la main dans la journée, une vingtaine de fois, et c'est la suite de commandes où une faute pousserait un autre commit que celui qui a été vérifié, avec un droit de contournement.
+
+**Ce qui est écrit** (note de la boucle, §14, « Étape 1, la commande de livraison »). Six phases, dont la première qui échoue arrête tout : préalables, branche d'essai, porte de l'hôte, CI, publication, rangement. Aucun modèle. Tout passe par l'empreinte complète du commit, relevée une fois ; aucune phase ne relit `HEAD`.
+
+**Un fait vérifié avant de concevoir.** La porte ne laisse son fichier de verdict que lorsqu'elle est verte, et ce fichier porte l'empreinte du commit : lu dans `tools/test-gate` et dans le fichier laissé par la porte du §88. La commande peut donc établir « verte pour ce commit exact » sans croire une sortie de terminal.
+
+**Les menaces, cette fois avant le code** (le §86 avait fait l'inverse, et l'avait dit). Huit lignes, dont celle qui compte : la commande ne pousse que si les deux contrôles exigés par le ruleset sont verts pour l'empreinte, donc sans avoir besoin du droit de contournement, et une évaluation du ruleset autre que `pass` après le premier push arrête tout avant `main`.
+
+**Ce qu'elle ne ferme pas.** L'écart de séparation des tâches nommé au §84 : elle rend la livraison exacte et rejouable, elle reste lancée par l'orchestrateur avec le compte du propriétaire. Elle s'arrête sur demande avant la publication, ce qui est l'endroit où un gate humain se posera quand le propriétaire l'aura décidé.
+
+**Schémas et README.** Rien n'est construit : le point reste marqué `next` dans le README et dans le schéma de la vérification.
+
+**Chiffres.** 2 170 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : un fait dont la conception dépend est lu dans le code et dans un fichier réel avant d'être utilisé ; la mesure d'avant et d'après est nommée.
+- SSDLC : menaces écrites avant le code ; l'empreinte comme seule identité d'un commit à travers les phases ; aucun shell, aucune dépendance prévue ; la limite de la commande est dite.
+- Opérationnel : ce qui est propre à la forge est derrière un port, pour qu'une autre forge soit un autre adaptateur ; IRB sans objet.
