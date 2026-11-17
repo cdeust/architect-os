@@ -25,15 +25,45 @@ interface Behaviour {
   fixture?: string;
   stopped?: boolean;
   failure?: Error;
+  /** The session does not return until the scenario ends it. */
+  held?: boolean;
 }
+/** A promise the scenario resolves itself: no delay, no timer. */
+interface Deferred {
+  promise: Promise<void>;
+  resolve: () => void;
+}
+const deferred = (): Deferred => {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => (resolve = done));
+  return { promise, resolve };
+};
 interface Step {
   folder: string;
   calls: Call[];
   behaviours: Record<'code.json' | 'review.json', Behaviour>;
+  /** The review sessions differ from the default one by the order in which they start (1 is the first). */
+  reviewBehaviours: Map<number, Behaviour>;
+  started: Map<number, Deferred>;
+  ended: Map<number, Deferred>;
+  running: number;
+  maxRunning: number;
+  runningWhenStarted: number[];
+  finished: boolean;
+  run?: Promise<void>;
   stdout: string;
   stderr: string;
   code?: number;
 }
+const gate = (gates: Map<number, Deferred>, n: number): Deferred => {
+  const known = gates.get(n);
+  if (known !== undefined) return known;
+  const created = deferred();
+  gates.set(n, created);
+  return created;
+};
+/** One turn of the event loop, so that what a wrong implementation would start by now has started. */
+const turn = () => new Promise((resolve) => setImmediate(resolve));
 const step = (world: SandboxWorld) => stored<Step>(world, 'step');
 const fixture = (name: string) => readFileSync(join(PKG, 'fixtures', name), 'utf8');
 
@@ -44,6 +74,13 @@ Given('a step folder', function () {
     folder,
     calls: [],
     behaviours: { 'code.json': {}, 'review.json': {} },
+    reviewBehaviours: new Map(),
+    started: new Map(),
+    ended: new Map(),
+    running: 0,
+    maxRunning: 0,
+    runningWhenStarted: [],
+    finished: false,
     stdout: '',
     stderr: '',
   } satisfies Step;
@@ -60,16 +97,64 @@ Given('the step folder holds the file {string}:', function (name: string, conten
   writeFileSync(join(step(this).folder, name), content);
 });
 
-const STEP_JSON = (review: boolean) =>
-  JSON.stringify({
-    build: { model: 'claude-sonnet-5-5', effort: 'medium', limitSeconds: 2400 },
-    ...(review ? { review: { model: 'claude-opus-5-5', effort: 'high', limitSeconds: 900 } } : {}),
-  });
+interface ReviewRow {
+  name: string;
+  model: string;
+}
+const writeStep = (s: Step, reviews: readonly ReviewRow[], parallel?: number) => {
+  writeFileSync(
+    join(s.folder, 'step.json'),
+    JSON.stringify({
+      build: { model: 'claude-sonnet-5-5', effort: 'medium', limitSeconds: 2400 },
+      ...(reviews.length > 0
+        ? { reviews: reviews.map((review) => ({ ...review, effort: 'high', limitSeconds: 900 })) }
+        : {}),
+      ...(parallel === undefined ? {} : { parallel }),
+    }),
+  );
+  writeFileSync(join(s.folder, 'brief.md'), 'Build the thing.\n');
+};
 
 Given('the step folder holds a step.json with a build and {string}', function (review: string) {
-  writeFileSync(join(step(this).folder, 'step.json'), STEP_JSON(review === 'a review'));
-  writeFileSync(join(step(this).folder, 'brief.md'), 'Build the thing.\n');
+  writeStep(step(this), review === 'a review' ? [{ name: 'correctness', model: 'claude-opus-5-5' }] : []);
 });
+
+const rows = (text: string): ReviewRow[] =>
+  text.split(' ').map((pair) => ({ name: pair.split('=')[0]!, model: pair.split('=')[1]! }));
+
+Given('the step folder holds a step.json with a build and the reviews {string}', function (text: string) {
+  writeStep(step(this), rows(text));
+});
+
+Given(
+  'the step folder holds a step.json with a build, the reviews {string} and the parallel {int}',
+  function (text: string, parallel: number) {
+    writeStep(step(this), rows(text), parallel);
+  },
+);
+
+const reviewBehaviour = (s: Step, n: number): Behaviour => {
+  const known = s.reviewBehaviours.get(n);
+  if (known !== undefined) return known;
+  const created: Behaviour = {};
+  s.reviewBehaviours.set(n, created);
+  return created;
+};
+
+Given('the review session {int} writes the fixture {string}', function (n: number, name: string) {
+  reviewBehaviour(step(this), n).fixture = name;
+});
+
+Given('the review session {int} is held until I end it', function (n: number) {
+  reviewBehaviour(step(this), n).held = true;
+});
+
+Given(
+  'the review session {int} fails with the sandbox error {string} {string}',
+  function (n: number, code: string, message: string) {
+    reviewBehaviour(step(this), n).failure = new SandboxError(code as 'ISOLATION_UNAVAILABLE', message);
+  },
+);
 
 Given('the build session writes the fixture {string}', function (name: string) {
   step(this).behaviours['code.json'].fixture = name;
@@ -94,8 +179,7 @@ Given('the build session fails with the plain error {string}', function (message
   step(this).behaviours['code.json'].failure = new Error(message);
 });
 
-When('I run the step with the arguments {string}', async function (args: string) {
-  const s = step(this);
+const start = (s: Step, args: string): Promise<void> => {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
   stdout.on('data', (chunk: Buffer) => (s.stdout += chunk.toString()));
@@ -107,19 +191,77 @@ When('I run the step with the arguments {string}', async function (args: string)
     appendFile: (path, content) => writeFileSync(path, content, { flag: 'a' }),
     session: async (tool, argv, brief, limitSeconds, onOutput) => {
       s.calls.push({ tool, argv, brief, limitSeconds });
-      const behaviour = s.behaviours[tool];
-      if (behaviour.failure) throw behaviour.failure;
-      const text = behaviour.fixture === undefined ? '' : fixture(behaviour.fixture);
-      // In two chunks, as a stream arrives.
-      onOutput(Buffer.from(text.slice(0, 10)));
-      onOutput(Buffer.from(text.slice(10)));
-      return { exitCode: 0, stopped: behaviour.stopped ?? false };
+      const isReview = tool === 'review.json';
+      const n = s.calls.filter((call) => call.tool === 'review.json').length;
+      const behaviour = { ...s.behaviours[tool], ...(isReview ? s.reviewBehaviours.get(n) : undefined) };
+      if (isReview) {
+        s.runningWhenStarted.push(s.running);
+        s.running++;
+        s.maxRunning = Math.max(s.maxRunning, s.running);
+        gate(s.started, n).resolve();
+      }
+      try {
+        if (behaviour.held) await gate(s.ended, n).promise;
+        if (behaviour.failure) throw behaviour.failure;
+        const text = behaviour.fixture === undefined ? '' : fixture(behaviour.fixture);
+        // In two chunks, as a stream arrives.
+        onOutput(Buffer.from(text.slice(0, 10)));
+        onOutput(Buffer.from(text.slice(10)));
+        return { exitCode: 0, stopped: behaviour.stopped ?? false };
+      } finally {
+        if (isReview) s.running--;
+      }
     },
     stdout,
     stderr,
   };
-  s.code = await runStep(deps);
-  await new Promise((resolve) => setImmediate(resolve));
+  s.run = runStep(deps).then((code) => {
+    s.code = code;
+    s.finished = true;
+  });
+  return s.run;
+};
+
+When('I run the step with the arguments {string}', async function (args: string) {
+  await start(step(this), args);
+  await turn();
+});
+
+When('I start the step with the arguments {string}', function (args: string) {
+  void start(step(this), args);
+});
+
+When('I wait for the step to finish', async function () {
+  await step(this).run;
+  await turn();
+});
+
+When('I end the review session {int}', function (n: number) {
+  gate(step(this).ended, n).resolve();
+});
+
+When('I wait for the review session {int} to start', async function (n: number) {
+  await gate(step(this).started, n).promise;
+  await turn();
+});
+
+Then('the step is still running', function () {
+  assert.equal(step(this).finished, false);
+});
+
+Then('the review sessions saw {string} review sessions running when they started', function (counts: string) {
+  assert.equal(step(this).runningWhenStarted.join(' '), counts);
+});
+
+Then('at most {int} review sessions ran at the same time', function (count: number) {
+  assert.equal(step(this).maxRunning, count);
+});
+
+Then('the review sessions started with the models {string}', function (models: string) {
+  const asked = step(this)
+    .calls.filter((call) => call.tool === 'review.json')
+    .map((call) => call.argv[call.argv.indexOf('--model') + 1]);
+  assert.equal(asked.join(' '), models);
 });
 
 const here = (s: Step, text: string) => text.replaceAll('<folder>', s.folder);

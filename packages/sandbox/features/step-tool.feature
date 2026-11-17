@@ -1,6 +1,6 @@
 Feature: npm run step, one step of the orchestration loop (fake sessions, a throwaway folder)
-  `npm run step -- <folder>` plays the build session with the brief, then the review session, and leaves in the
-  folder what a third party needs. step.ts only hands it the process; everything it does is here.
+  `npm run step -- <folder>` plays the build session with the brief, then the reviews of the step, several at the
+  same time, and leaves in the folder what a third party needs. step.ts only hands it the process; everything it does is here.
 
   Rule: refusals come before any session, with exit code 2 and one line on stderr
 
@@ -117,16 +117,20 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
           "claude-haiku-4-5",
           "claude-sonnet-5-5"
         ],
+        "costByModel": {
+          "claude-haiku-4-5": 0.0070908,
+          "claude-sonnet-5-5": 0.07
+        },
         "permissionDenials": 2,
         "ignoredLines": 1,
         "stopped": false
       }
       """
       And the step file "build.report.md" is exactly "Done: two files changed."
-      And the step folder has no file "review.stream.jsonl"
+      And the step folder has no file "review.correctness.stream.jsonl"
       And the step stdout is the line:
       """
-      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237}}
+      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}}
       """
       And the step stderr is empty
 
@@ -142,10 +146,10 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the sessions started were "code.json review.json"
       And the session 2 got the brief "Build the thing.\n" and the limit 900
       And the session 2 got the arguments "-p --verbose --output-format stream-json --model claude-opus-5-5 --effort high --json-schema" and then the draft-07 schema of the verdict
-      And the step file "review.stream.jsonl" is the fixture "structured.jsonl"
+      And the step file "review.correctness.stream.jsonl" is the fixture "structured.jsonl"
       And the step folder has no file "review.report.md"
       And the step file "build.report.md" is exactly "Done: two files changed."
-      And the step file "review.measure.json" is:
+      And the step file "review.correctness.measure.json" is:
       """
       {
         "completed": true,
@@ -161,12 +165,15 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "models": [
           "claude-opus-5-5"
         ],
+        "costByModel": {
+          "claude-opus-5-5": 0.25
+        },
         "permissionDenials": 0,
         "ignoredLines": 0,
         "stopped": false
       }
       """
-      And the step file "review.verdict.json" is:
+      And the step file "review.correctness.verdict.json" is:
       """
       {
         "verdict": "accept",
@@ -176,7 +183,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237},"review":{"verdict":"accept","blocks":false,"findings":0,"costUsd":0.25}}
+      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
       """
 
     Scenario: a review that accepts with a proposal does not block
@@ -188,7 +195,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       Then the step exits with 0
       And the step stdout is the line:
       """
-      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237},"review":{"verdict":"accept","blocks":false,"findings":1,"costUsd":0.25}}
+      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
       """
 
     Scenario: a review that requests changes
@@ -200,9 +207,9 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       Then the step exits with 1
       And the step stdout is the line:
       """
-      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237},"review":{"verdict":"request_changes","blocks":true,"findings":2,"costUsd":0.25}}
+      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"request_changes","blocks":true,"findings":2,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
       """
-      And the step file "review.verdict.json" is:
+      And the step file "review.correctness.verdict.json" is:
       """
       {
         "verdict": "request_changes",
@@ -237,7 +244,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       Then the step exits with 1
       And the step stdout is the line:
       """
-      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237},"review":{"verdict":"accept","blocks":true,"findings":1,"costUsd":0.25}}
+      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","blocks":true,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
       """
 
     Scenario: a review without structured output is invalid
@@ -247,7 +254,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the review session writes the fixture "session.jsonl"
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
-      And the step file "review.verdict.json" is:
+      And the step file "review.correctness.verdict.json" is:
       """
       {
         "invalid": "la session n’a donné aucune sortie structurée"
@@ -255,7 +262,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237},"review":{"verdict":"invalid","blocks":true,"findings":0,"costUsd":0.0770908}}
+      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"invalid","blocks":true,"findings":0,"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}}},"costUsd":0.1541816,"costByModel":{"claude-haiku-4-5":0.0141816,"claude-sonnet-5-5":0.14}}
       """
 
     Scenario: a review with an invalid verdict is invalid
@@ -265,7 +272,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the review session writes the fixture "review-invalid-verdict.jsonl"
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
-      And the step file "review.verdict.json" is:
+      And the step file "review.correctness.verdict.json" is:
       """
       {
         "invalid": "verdict: Invalid option: expected one of \"accept\"|\"request_changes\""
@@ -273,7 +280,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237},"review":{"verdict":"invalid","blocks":true,"findings":0,"costUsd":0.25}}
+      {"build":{"completed":true,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"invalid","blocks":true,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07}}
       """
 
     Scenario: a review refused for two reasons at once gives both, separated by a semicolon
@@ -283,10 +290,299 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the review session writes the fixture "review-two-reasons.jsonl"
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
-      And the step file "review.verdict.json" is:
+      And the step file "review.correctness.verdict.json" is:
       """
       {
         "invalid": "verdict: Invalid option: expected one of \"accept\"|\"request_changes\"; not_checked: Invalid input: expected array, received undefined"
+      }
+      """
+
+  Rule: several reviews, each with its own model and its own files
+
+    Scenario: two reviews that accept leave their files, and the costs are summed by model
+      Given a step folder
+      And the step folder holds a step.json with a build and the reviews "alpha=claude-opus-5-5 beta=claude-sonnet-5-5"
+      And the build session writes the fixture "build-exact.jsonl"
+      And the review session 1 writes the fixture "structured.jsonl"
+      And the review session 2 writes the fixture "review-sonnet.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 0
+      And the sessions started were "code.json review.json review.json"
+      And the review sessions started with the models "claude-opus-5-5 claude-sonnet-5-5"
+      And the session 2 got the arguments "-p --verbose --output-format stream-json --model claude-opus-5-5 --effort high --json-schema" and then the draft-07 schema of the verdict
+      And the session 3 got the arguments "-p --verbose --output-format stream-json --model claude-sonnet-5-5 --effort high --json-schema" and then the draft-07 schema of the verdict
+      And the session 3 got the brief "Build the thing.\n" and the limit 900
+      And the step file "review.alpha.stream.jsonl" is the fixture "structured.jsonl"
+      And the step file "review.beta.stream.jsonl" is the fixture "review-sonnet.jsonl"
+      And the step file "review.alpha.verdict.json" is:
+      """
+      {
+        "verdict": "accept",
+        "findings": [],
+        "not_checked": []
+      }
+      """
+      And the step file "review.beta.verdict.json" is:
+      """
+      {
+        "verdict": "accept",
+        "findings": [],
+        "not_checked": []
+      }
+      """
+      And the step file "review.beta.measure.json" is:
+      """
+      {
+        "completed": true,
+        "answers": 1,
+        "turns": 3,
+        "durationSeconds": 12,
+        "costUsd": 0.125,
+        "inputTokens": 3,
+        "outputTokens": 300,
+        "cacheReadTokens": 1000,
+        "cacheWriteTokens": 20,
+        "cacheReadPerAnswer": 1000,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "costByModel": {
+          "claude-sonnet-5-5": 0.125
+        },
+        "permissionDenials": 0,
+        "ignoredLines": 0,
+        "stopped": false
+      }
+      """
+      And the step folder has no file "review.stream.jsonl"
+      And the step folder has no file "review.measure.json"
+      And the step folder has no file "review.verdict.json"
+      And the step stdout is the line:
+      """
+      {"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}},"beta":{"model":"claude-sonnet-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.125,"costByModel":{"claude-sonnet-5-5":0.125}}},"costUsd":0.9375,"costByModel":{"claude-haiku-4-5":0.0625,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.625}}
+      """
+
+    Scenario: one review accepts and one requests changes: the step does not pass, both verdicts are written
+      Given a step folder
+      And the step folder holds a step.json with a build and the reviews "alpha=claude-opus-5-5 beta=claude-opus-5-5"
+      And the build session writes the fixture "build-exact.jsonl"
+      And the review session 1 writes the fixture "structured.jsonl"
+      And the review session 2 writes the fixture "review-request-changes.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 1
+      And the step file "review.alpha.verdict.json" is:
+      """
+      {
+        "verdict": "accept",
+        "findings": [],
+        "not_checked": []
+      }
+      """
+      And the step file "review.beta.verdict.json" is:
+      """
+      {
+        "verdict": "request_changes",
+        "findings": [
+          {
+            "level": "correctness",
+            "file": "src/a.ts",
+            "line": 3,
+            "quote": "x",
+            "reason": "wrong"
+          },
+          {
+            "level": "proposal",
+            "file": "src/a.ts",
+            "line": 3,
+            "quote": "x",
+            "reason": "wrong"
+          }
+        ],
+        "not_checked": [
+          "gate"
+        ]
+      }
+      """
+      And the step stdout is the line:
+      """
+      {"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}},"beta":{"model":"claude-opus-5-5","verdict":"request_changes","blocks":true,"findings":2,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":1.0625,"costByModel":{"claude-haiku-4-5":0.0625,"claude-opus-5-5":0.5,"claude-sonnet-5-5":0.5}}
+      """
+
+    Scenario: a review without structured output is invalid and blocks, the other one is still reported
+      Given a step folder
+      And the step folder holds a step.json with a build and the reviews "alpha=claude-opus-5-5 beta=claude-sonnet-5-5"
+      And the build session writes the fixture "build-exact.jsonl"
+      And the review session 1 writes the fixture "build-exact.jsonl"
+      And the review session 2 writes the fixture "review-sonnet.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 1
+      And the step file "review.alpha.verdict.json" is:
+      """
+      {
+        "invalid": "la session n’a donné aucune sortie structurée"
+      }
+      """
+      And the step file "review.beta.verdict.json" is:
+      """
+      {
+        "verdict": "accept",
+        "findings": [],
+        "not_checked": []
+      }
+      """
+      And the step stdout is the line:
+      """
+      {"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"invalid","blocks":true,"findings":0,"costUsd":0.5625,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"beta":{"model":"claude-sonnet-5-5","verdict":"accept","blocks":false,"findings":0,"costUsd":0.125,"costByModel":{"claude-sonnet-5-5":0.125}}},"costUsd":1.25,"costByModel":{"claude-haiku-4-5":0.125,"claude-sonnet-5-5":1.125}}
+      """
+
+  Rule: at most `parallel` reviews run at the same time, started in the order of the file
+
+    Scenario: parallel 1 with three reviews: one at a time, in file order
+      Given a step folder
+      And the step folder holds a step.json with a build, the reviews "a=claude-opus-5-5 b=claude-sonnet-5-5 c=claude-haiku-4-5" and the parallel 1
+      And the build session writes the fixture "session.jsonl"
+      And the review session writes the fixture "structured.jsonl"
+      And the review session 1 is held until I end it
+      And the review session 2 is held until I end it
+      And the review session 3 is held until I end it
+      When I start the step with the arguments "<folder>"
+      And I wait for the review session 1 to start
+      Then the sessions started were "code.json review.json"
+      When I end the review session 1
+      And I wait for the review session 2 to start
+      Then the sessions started were "code.json review.json review.json"
+      When I end the review session 2
+      And I wait for the review session 3 to start
+      And I end the review session 3
+      And I wait for the step to finish
+      Then the step exits with 0
+      And the review sessions started with the models "claude-opus-5-5 claude-sonnet-5-5 claude-haiku-4-5"
+      And the review sessions saw "0 0 0" review sessions running when they started
+      And at most 1 review sessions ran at the same time
+
+    Scenario: parallel 2 with three reviews: two at a time, the third when one has ended
+      Given a step folder
+      And the step folder holds a step.json with a build, the reviews "a=claude-opus-5-5 b=claude-sonnet-5-5 c=claude-haiku-4-5" and the parallel 2
+      And the build session writes the fixture "session.jsonl"
+      And the review session writes the fixture "structured.jsonl"
+      And the review session 1 is held until I end it
+      And the review session 2 is held until I end it
+      And the review session 3 is held until I end it
+      When I start the step with the arguments "<folder>"
+      And I wait for the review session 1 to start
+      And I wait for the review session 2 to start
+      Then the sessions started were "code.json review.json review.json"
+      And the step is still running
+      When I end the review session 2
+      And I wait for the review session 3 to start
+      Then the sessions started were "code.json review.json review.json review.json"
+      When I end the review session 1
+      And I end the review session 3
+      And I wait for the step to finish
+      Then the step exits with 0
+      And the review sessions started with the models "claude-opus-5-5 claude-sonnet-5-5 claude-haiku-4-5"
+      And the review sessions saw "0 1 1" review sessions running when they started
+      And at most 2 review sessions ran at the same time
+
+    Scenario: parallel absent behaves as 2
+      Given a step folder
+      And the step folder holds a step.json with a build and the reviews "a=claude-opus-5-5 b=claude-sonnet-5-5 c=claude-haiku-4-5"
+      And the build session writes the fixture "session.jsonl"
+      And the review session writes the fixture "structured.jsonl"
+      And the review session 1 is held until I end it
+      And the review session 2 is held until I end it
+      And the review session 3 is held until I end it
+      When I start the step with the arguments "<folder>"
+      And I wait for the review session 1 to start
+      And I wait for the review session 2 to start
+      Then the sessions started were "code.json review.json review.json"
+      When I end the review session 1
+      And I wait for the review session 3 to start
+      And I end the review session 2
+      And I end the review session 3
+      And I wait for the step to finish
+      Then the step exits with 0
+      And the review sessions saw "0 1 1" review sessions running when they started
+      And at most 2 review sessions ran at the same time
+
+    Scenario: parallel 8 with three reviews starts all three at once
+      Given a step folder
+      And the step folder holds a step.json with a build, the reviews "a=claude-opus-5-5 b=claude-sonnet-5-5 c=claude-haiku-4-5" and the parallel 8
+      And the build session writes the fixture "session.jsonl"
+      And the review session writes the fixture "structured.jsonl"
+      And the review session 1 is held until I end it
+      And the review session 2 is held until I end it
+      And the review session 3 is held until I end it
+      When I start the step with the arguments "<folder>"
+      And I wait for the review session 3 to start
+      Then the review sessions saw "0 1 2" review sessions running when they started
+      When I end the review session 1
+      And I end the review session 2
+      And I end the review session 3
+      And I wait for the step to finish
+      Then the step exits with 0
+      And at most 3 review sessions ran at the same time
+
+  Rule: every review is awaited, whatever happens to the others
+
+    Scenario: a review that throws while another is running: the other ends and writes its files, then exit 2
+      Given a step folder
+      And the step folder holds a step.json with a build and the reviews "alpha=claude-opus-5-5 beta=claude-sonnet-5-5"
+      And the build session writes the fixture "session.jsonl"
+      And the review session 1 writes the fixture "structured.jsonl"
+      And the review session 1 is held until I end it
+      And the review session 2 fails with the sandbox error "ISOLATION_UNAVAILABLE" "pas de srt"
+      When I start the step with the arguments "<folder>"
+      And I wait for the review session 2 to start
+      Then the step is still running
+      When I end the review session 1
+      And I wait for the step to finish
+      Then the step exits with 2
+      And the step stderr is "architect-os step: ISOLATION_UNAVAILABLE: pas de srt"
+      And the step stdout is empty
+      And the step file "review.alpha.stream.jsonl" is the fixture "structured.jsonl"
+      And the step file "review.alpha.verdict.json" is:
+      """
+      {
+        "verdict": "accept",
+        "findings": [],
+        "not_checked": []
+      }
+      """
+      And the step folder has no file "review.beta.verdict.json"
+
+    Scenario: two failures: the line is the one of the first review in file order, not the first to fail
+      Given a step folder
+      And the step folder holds a step.json with a build and the reviews "alpha=claude-opus-5-5 beta=claude-sonnet-5-5"
+      And the build session writes the fixture "session.jsonl"
+      And the review session 1 is held until I end it
+      And the review session 1 fails with the sandbox error "ISOLATION_UNAVAILABLE" "premier"
+      And the review session 2 fails with the sandbox error "ISOLATION_UNAVAILABLE" "second"
+      When I start the step with the arguments "<folder>"
+      And I wait for the review session 2 to start
+      Then the step is still running
+      When I end the review session 1
+      And I wait for the step to finish
+      Then the step exits with 2
+      And the step stderr is "architect-os step: ISOLATION_UNAVAILABLE: premier"
+      And the step stdout is empty
+
+    Scenario: with parallel 1, a review that throws does not keep the next ones from running
+      Given a step folder
+      And the step folder holds a step.json with a build, the reviews "a=claude-opus-5-5 b=claude-sonnet-5-5 c=claude-haiku-4-5" and the parallel 1
+      And the build session writes the fixture "session.jsonl"
+      And the review session 1 fails with the sandbox error "ISOLATION_UNAVAILABLE" "pas de srt"
+      And the review session writes the fixture "structured.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the sessions started were "code.json review.json review.json review.json"
+      And the step stderr is "architect-os step: ISOLATION_UNAVAILABLE: pas de srt"
+      And the step file "review.c.verdict.json" is:
+      """
+      {
+        "verdict": "accept",
+        "findings": [],
+        "not_checked": []
       }
       """
 
@@ -299,8 +595,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
       And the sessions started were "code.json"
-      And the step folder has no file "review.stream.jsonl"
-      And the step folder has no file "review.measure.json"
+      And the step folder has no file "review.correctness.stream.jsonl"
+      And the step folder has no file "review.correctness.measure.json"
       And the step file "build.stream.jsonl" is the fixture "result-error.jsonl"
       And the step file "build.measure.json" is:
       """
@@ -318,6 +614,9 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "models": [
           "claude-sonnet-5-5"
         ],
+        "costByModel": {
+          "claude-sonnet-5-5": 0.5
+        },
         "permissionDenials": 0,
         "ignoredLines": 0,
         "stopped": false
@@ -325,7 +624,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"build":{"completed":false,"stopped":false,"answers":1,"turns":4,"durationSeconds":12,"costUsd":0.5,"cacheReadPerAnswer":1000}}
+      {"build":{"completed":false,"stopped":false,"answers":1,"turns":4,"durationSeconds":12,"costUsd":0.5,"cacheReadPerAnswer":1000,"costByModel":{"claude-sonnet-5-5":0.5}},"reviews":{},"costUsd":0.5,"costByModel":{"claude-sonnet-5-5":0.5}}
       """
 
     Scenario: a build stopped at its limit
@@ -336,8 +635,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
       And the sessions started were "code.json"
-      And the step folder has no file "review.stream.jsonl"
-      And the step folder has no file "review.measure.json"
+      And the step folder has no file "review.correctness.stream.jsonl"
+      And the step folder has no file "review.correctness.measure.json"
       And the step file "build.stream.jsonl" is the fixture "session.jsonl"
       And the step file "build.measure.json" is:
       """
@@ -356,6 +655,10 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
           "claude-haiku-4-5",
           "claude-sonnet-5-5"
         ],
+        "costByModel": {
+          "claude-haiku-4-5": 0.0070908,
+          "claude-sonnet-5-5": 0.07
+        },
         "permissionDenials": 2,
         "ignoredLines": 1,
         "stopped": true
@@ -363,7 +666,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"build":{"completed":true,"stopped":true,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237}}
+      {"build":{"completed":true,"stopped":true,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}}
       """
 
     Scenario: a build whose stream has no result
@@ -373,8 +676,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
       And the sessions started were "code.json"
-      And the step folder has no file "review.stream.jsonl"
-      And the step folder has no file "review.measure.json"
+      And the step folder has no file "review.correctness.stream.jsonl"
+      And the step folder has no file "review.correctness.measure.json"
       And the step file "build.stream.jsonl" is the fixture "session-killed.jsonl"
       And the step file "build.measure.json" is:
       """
@@ -390,6 +693,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "cacheWriteTokens": 0,
         "cacheReadPerAnswer": 0,
         "models": [],
+        "costByModel": {},
         "permissionDenials": 0,
         "ignoredLines": 1,
         "stopped": false
@@ -397,7 +701,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"build":{"completed":false,"stopped":false,"answers":2,"turns":0,"durationSeconds":0,"costUsd":0,"cacheReadPerAnswer":0}}
+      {"build":{"completed":false,"stopped":false,"answers":2,"turns":0,"durationSeconds":0,"costUsd":0,"cacheReadPerAnswer":0,"costByModel":{}},"reviews":{},"costUsd":0,"costByModel":{}}
       """
 
   Rule: a failure of the tool is reported like npm run code, with exit code 2

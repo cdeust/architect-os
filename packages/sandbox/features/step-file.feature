@@ -1,13 +1,64 @@
 Feature: step.json, the descriptive file of a step
 
-  Scenario: the example loads with its build and review sessions
+  Scenario: the example loads with its build and its review
     When I parse the step file example
     Then the step build session is "claude-sonnet-5-5", "medium", 2400 seconds
-    And the step review session is "claude-opus-5-5", "high", 900 seconds
+    And the step review 1 is "correctness", "claude-opus-5-5", "high", 900 seconds
+    And the step parallel is 2
 
-  Scenario: a step file without review loads
-    When I parse the step file example without review
-    Then the step has no review session
+  Scenario: a step file without reviews loads, with no review
+    When I parse the step file example without reviews
+    Then the step has 0 review sessions
+
+  Scenario Outline: a number of reviews up to eight is accepted: <count>
+    When I parse the step file example with <count> reviews
+    Then the step has <count> review sessions
+
+    Examples:
+      | count |
+      | 0     |
+      | 1     |
+      | 8     |
+
+  Scenario Outline: a review name is accepted: <name>
+    When I parse the step file example with the review name "<name>"
+    Then the step review 1 is "<name>", "claude-opus-5-5", "high", 900 seconds
+
+    Examples:
+      | name                             |
+      | a                                |
+      | correctness                      |
+      | a-1-b                            |
+      | abcdefghijklmnopqrstuvwxyzabcdef |
+
+  Scenario Outline: a review name that would escape is refused: <name>
+    When I parse the step file example with the review name "<name>" refused
+    Then parsing the step file fails
+
+    Examples:
+      | name                              |
+      | ../x                              |
+      | a/b                               |
+      | A                                 |
+      |                                   |
+      | abcdefghijklmnopqrstuvwxyzabcdefg |
+
+  Scenario Outline: a parallel from 1 to 8 is accepted: <parallel>
+    When I parse the step file example with the parallel <parallel>
+    Then the step parallel is <parallel>
+
+    Examples:
+      | parallel |
+      | 1        |
+      | 8        |
+
+  Scenario: two reviews with the same name are refused, and the refusal names it
+    When I make a broken copy of the step file example with two reviews both named "twin"
+    Then parsing the broken step file fails with "reviews: duplicate review name: twin"
+
+  Scenario: two names each used twice are both named, once each, in the order of the file
+    When I make a broken copy of the step file example with the reviews named "pair, solo, pair, twin, twin, pair"
+    Then parsing the broken step file fails with "reviews: duplicate review name: pair, twin"
 
   Scenario Outline: the limits of a session are accepted: <limit>
     When I parse the step file example with the build limit <limit>
@@ -35,14 +86,29 @@ Feature: step.json, the descriptive file of a step
     Then parsing the broken step file fails
 
     Examples:
-      | defect                       |
-      | an unknown key at the top    |
-      | an unknown key in build      |
-      | an unknown key in review     |
-      | an effort not in the list    |
-      | a limit of 0                 |
-      | a limit of 7201              |
-      | a non-integer limit          |
-      | an empty model               |
-      | no build                     |
-      | a review effort not in list  |
+      | defect                                 |
+      | an unknown key at the top              |
+      | an unknown key in build                |
+      | an unknown key in a review             |
+      | the singular review key                |
+      | an effort not in the list              |
+      | a limit of 0                           |
+      | a limit of 7201                        |
+      | a non-integer limit                    |
+      | an empty model                         |
+      | no build                               |
+      | a review effort not in list            |
+      | a review limit of 0                    |
+      | a review limit of 7201                 |
+      | an empty review model                  |
+      | a review without a name                |
+      | a review name that starts with a digit |
+      | a review name with an underscore       |
+      | a review name that ends with a newline |
+      | a review name that is not a string     |
+      | nine reviews                           |
+      | reviews that is not a list             |
+      | a parallel of 0                        |
+      | a parallel of 9                        |
+      | a non-integer parallel                 |
+      | a parallel that is a string            |

@@ -258,13 +258,13 @@ Détail et preuves : journal, §32 et §33.
 
 Jusqu'au 14 novembre 2026, la boucle tenait à des scripts de l'orchestrateur, hors dépôt : personne d'autre ne pouvait la rejouer. O.1 la fait entrer dans `packages/sandbox`, à côté de `npm run code` et `npm run review`.
 
-`npm --prefix <lanceur> run step -- <dossier>`, depuis le worktree visé. Le dossier, hors dépôt, contient `step.json` (modèle, effort et limite en secondes de la session de construction, et de la revue si l'étape en a une) et `brief.md`. La commande lance la session de construction avec le brief sur son entrée standard, puis la session de revue si la construction a abouti sans être arrêtée. Elle laisse dans le dossier les deux flux `stream-json`, les mesures de chaque session (calculées depuis le flux seul : réponses, tours, durée, coût, tokens, cache lu par réponse), le rapport et le verdict. Elle écrit une ligne JSON de résumé et sort en 0 (construction aboutie, revue non bloquante), 1 (construction non aboutie ou arrêtée à sa limite, revue bloquante ou verdict invalide) ou 2 (refus avant toute session, panne de l'outil).
+`npm --prefix <lanceur> run step -- <dossier>`, depuis le worktree visé. Le dossier, hors dépôt, contient `step.json` (modèle, effort et limite en secondes de la session de construction ; les revues de l'étape, au plus 8, chacune avec son nom, son modèle, son effort et sa limite ; et `parallel`, le nombre de revues qui tournent en même temps, 2 par défaut) et `brief.md`. La commande lance la session de construction avec le brief sur son entrée standard, puis chaque session de revue (au plus `parallel` à la fois) si la construction a abouti sans être arrêtée. Elle laisse dans le dossier le flux `stream-json` de chaque session, ses mesures (calculées depuis le flux seul : réponses, tours, durée, coût et coût par modèle, tokens, cache lu par réponse), le rapport de la construction et le verdict de chaque revue (`review.<nom>.*`). Le résumé donne le coût total et par modèle. Elle écrit une ligne JSON de résumé et sort en 0 (construction aboutie, revue non bloquante), 1 (construction non aboutie ou arrêtée à sa limite, une revue bloquante ou un verdict invalide) ou 2 (refus avant toute session, panne de l'outil).
 
 Elle ne rejoue rien sur l'hôte, ne lance pas la porte et ne commite pas : ces pas restent à l'orchestrateur (§4, pas 4 et 6).
 
 | Pièce | Fichier |
 |---|---|
-| Fichier descriptif de l'étape | `src/step-file.ts`, schéma strict |
+| Fichier descriptif de l'étape | `src/step-file.ts`, schéma strict : `build`, `reviews` nommées, `parallel` |
 | Mesures d'une session | `src/measure.ts`, pur |
 | Contrat du verdict | `src/review-verdict.ts` ; `prompts/review-verdict.schema.json` est exactement ce qu'il génère, en draft-07 (Claude Code refuse le `$schema` 2020-12, mesuré) |
 | La commande | `src/step-tool.ts`, effets injectés ; limite de temps portée par l'outil de code (`limitMs`), sans attente réelle dans les scénarios |

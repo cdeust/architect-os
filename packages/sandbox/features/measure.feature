@@ -16,6 +16,7 @@ Feature: the measures of a claude stream-json session
         "cacheWriteTokens": 14827,
         "cacheReadPerAnswer": 39237,
         "models": ["claude-haiku-4-5", "claude-sonnet-5-5"],
+        "costByModel": { "claude-haiku-4-5": 0.0070908, "claude-sonnet-5-5": 0.07 },
         "permissionDenials": 2,
         "ignoredLines": 1,
         "report": "Done: two files changed."
@@ -38,6 +39,7 @@ Feature: the measures of a claude stream-json session
         "cacheWriteTokens": 0,
         "cacheReadPerAnswer": 0,
         "models": [],
+        "costByModel": {},
         "permissionDenials": 0,
         "ignoredLines": 1,
         "report": ""
@@ -60,6 +62,7 @@ Feature: the measures of a claude stream-json session
         "cacheWriteTokens": 9,
         "cacheReadPerAnswer": 1000,
         "models": ["claude-sonnet-5-5"],
+        "costByModel": { "claude-sonnet-5-5": 0.5 },
         "permissionDenials": 0,
         "ignoredLines": 0,
         "report": "Stopped."
@@ -82,6 +85,7 @@ Feature: the measures of a claude stream-json session
         "cacheWriteTokens": 9,
         "cacheReadPerAnswer": 1000,
         "models": ["claude-sonnet-5-5"],
+        "costByModel": { "claude-sonnet-5-5": 0.5 },
         "permissionDenials": 0,
         "ignoredLines": 0,
         "report": "Stopped."
@@ -104,6 +108,7 @@ Feature: the measures of a claude stream-json session
         "cacheWriteTokens": 0,
         "cacheReadPerAnswer": 0,
         "models": [],
+        "costByModel": {},
         "permissionDenials": 0,
         "ignoredLines": 0,
         "report": ""
@@ -126,6 +131,7 @@ Feature: the measures of a claude stream-json session
         "cacheWriteTokens": 0,
         "cacheReadPerAnswer": 0,
         "models": [],
+        "costByModel": {},
         "permissionDenials": 0,
         "ignoredLines": 0,
         "report": "Nothing to do."
@@ -148,6 +154,7 @@ Feature: the measures of a claude stream-json session
         "cacheWriteTokens": 20,
         "cacheReadPerAnswer": 333,
         "models": ["claude-opus-5-5"],
+        "costByModel": { "claude-opus-5-5": 0.25 },
         "permissionDenials": 0,
         "ignoredLines": 0,
         "report": "Verdict given.",
@@ -171,8 +178,32 @@ Feature: the measures of a claude stream-json session
         "cacheWriteTokens": 0,
         "cacheReadPerAnswer": 0,
         "models": [],
+        "costByModel": {},
         "permissionDenials": 0,
         "ignoredLines": 2,
         "report": ""
       }
       """
+
+  Scenario: the cost of each model is the costUSD of its modelUsage, two models give two keys
+    When I measure the fixture "build-exact.jsonl"
+    Then the measure costs by model
+      """
+      { "claude-haiku-4-5": 0.0625, "claude-sonnet-5-5": 0.5 }
+      """
+
+  Scenario: the cost of one model
+    When I measure the fixture "review-sonnet.jsonl"
+    Then the measure costs by model
+      """
+      { "claude-sonnet-5-5": 0.125 }
+      """
+
+  Scenario Outline: a result whose model has no usable costUSD is not a result: <fixture>
+    When I measure the fixture "<fixture>"
+    Then the measure is not completed, with no cost by model and no model
+
+    Examples:
+      | fixture                         |
+      | result-model-without-cost.jsonl |
+      | result-cost-string.jsonl        |

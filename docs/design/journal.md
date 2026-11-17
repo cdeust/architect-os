@@ -3027,3 +3027,42 @@ Ce que la validation doit montrer : que la livraison telle qu'elle se fait (un c
 - Recherche : une affirmation de la section précédente est mesurée, trouvée fausse et rapportée ; la validation du ruleset est définie avant d'être observée.
 - SSDLC : la livraison qui garde variables et en-têtes hors de la ligne de commande est posée avant qu'un serveur en ait besoin ; la branche de livraison ne peut plus être supprimée ni réécrite, et exige la porte.
 - Opérationnel : un réglage du dépôt créé depuis un fichier commité, par une commande écrite ; sa réplique sur `main` reste au propriétaire ; IRB sans objet.
+
+## 75. Le ruleset validé sur la branche, et le premier pas du routage : plusieurs revues à la fois, le coût par modèle, 17 novembre 2026
+
+Le §74 a été poussé (`9879059`) : porte de l'hôte verte (1 861 scénarios, rien d'ajouté ni de supprimé ; un fichier de production dans le périmètre, un mutant, tué : celui de la valeur de `mcpServersDelivery`, comme la mesure du §74 l'annonçait), CI verte sur `gate` (Linux et macOS) ; `main` a suivi.
+
+**Le ruleset, observé.** Ce push était le premier sous le ruleset de `feat/gate-1a`. GitHub l'a accepté sans rien signaler, et son évaluation, lue par l'API (`rulesets/rule-suites`) et non déduite du silence du message :
+
+| Règle | Résultat |
+|---|---|
+| `required_status_checks` : `gate-linux`, `gate-macos` | pass |
+| `non_fast_forward` | pass |
+| `deletion` | pass |
+| `secret_scanning`, la protection du dépôt | pass |
+
+La livraison telle qu'elle se fait (le commit passe d'abord par une branche d'essai où la porte tourne, puis il est poussé tel quel sur la branche) satisfait donc la règle des contrôles sans le droit de contournement du propriétaire. Ce que cette observation ne prouve pas : le refus d'un commit sans porte verte. Il n'a pas été essayé, parce que le compte qui pousse a le droit de contournement et que le commit serait entré sur la branche. La réplique sur `main` attend le mot du propriétaire.
+
+**O.3a, le premier pas du routage** (conception : §13 de `docs/design/orchestration-fable-5-2.md`).
+
+| Avant | Après |
+|---|---|
+| `step.json` : une construction, une revue au plus (`review`) | Une construction et jusqu'à 8 revues nommées (`reviews`), chacune avec son modèle, son effort et sa limite ; `review` au singulier est refusé |
+| La revue attendait la fin de la construction, seule | Les revues tournent ensemble, au plus `parallel` à la fois (2 par défaut), démarrées dans l'ordre du fichier dès qu'une place se libère ; toutes sont attendues, même quand l'une ne peut pas tourner |
+| Fichiers `review.*` | Fichiers `review.<nom>.*`, un jeu par revue |
+| Une session disait son coût | Elle dit aussi son coût par modèle (`costByModel`, pris de `modelUsage` dans la ligne de résultat) ; le résumé de l'étape porte le total et la somme par modèle |
+
+Le nom d'une revue entre dans des noms de fichiers : une expression stricte est ce qui les rend sûrs, et des lignes qui s'en échapperaient (`../x`, `a/b`) sont refusées. Rien d'autre du §13 n'est construit ici : ni éclaireur, ni contrôle sans modèle, ni second prompt de revue.
+
+**La boucle, et son coût.** Une passe : construction 593 s, 0,85 $ ; revue 272 s, 1,05 $, `request_changes`, un constat de correction (une ligne de `docs/testing.md` laissée à l'ancien schéma, que la consigne du mainteneur n'avait pas mise dans les fichiers permis) et cinq propositions. Le mainteneur les a tous repris à la main : la somme par modèle passait par un objet indexé par un nom venu du flux d'une session, où `constructor` ou `__proto__` auraient lu une valeur héritée ; elle passe par une Map.
+
+**La mutation, deux passages.** Premier passage sur les lignes changées de l'outil d'étape et sur les deux fichiers réécrits : 160 mutants, 139 tués, 14 erreurs d'exécution, 2 délais dépassés, 5 survivants, en 9 minutes. Les cinq étaient équivalents, et aucun n'est masqué par un commentaire : deux comparaisons de tri que des clés toutes différentes ne peuvent pas distinguer (le tri par défaut les remplace), un code de constat que rien ne lit (le contrôle des doublons passe par une règle dont le message nomme le doublon), un tableau préalloué (la file des revues est réécrite sans lui). Second passage après ces réécritures : un survivant, réel celui-là (le séparateur entre deux noms en double, qu'aucun scénario ne donnait à deux), tué par un scénario de plus. État final : 158 mutants, 140 tués, 16 erreurs d'exécution, 2 délais dépassés, aucun survivant. Les deux délais dépassés ont été relus : une attente d'une place sur un ensemble vide, qui ne finit jamais.
+
+**Ce qui n'est pas prouvé.** Deux vraies sessions de revue en même temps sous srt, chacune avec son proxy et son dossier de configuration : seuls des scénarios à sessions factices l'ont joué ; la première étape réelle à deux revues le montrera. Les hypothèses HR1 à HR4 ne sont pas mesurées : ce pas ne construit que ce qui permet de jouer plusieurs revues.
+
+**Chiffres.** 1 906 scénarios dans la suite (45 de plus, tous pour l'outil d'étape, son fichier descriptif et ses mesures).
+
+**Trois piliers.**
+- Recherche : la validation du ruleset est une évaluation lue chez GitHub, avec ce qu'elle ne prouve pas ; le coût de la passe et les deux passages de mutation sont rapportés.
+- SSDLC : un nom qui devient un nom de fichier est tenu par une expression et prouvé par des noms hostiles ; une somme indexée par un texte venu d'une session ne passe plus par un objet ; aucun commentaire de désactivation.
+- Opérationnel : un plafond de sessions simultanées est dans le fichier de l'étape ; le ruleset tient la branche de livraison ; IRB sans objet.

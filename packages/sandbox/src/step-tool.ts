@@ -1,5 +1,5 @@
 // `npm run step -- <dossier>` : une étape de la boucle d'orchestration (docs/design/orchestration-fable-5-2.md, §4).
-// La session de construction avec le brief, puis la session de revue, chacune sous srt par l'outil de code ; tout ce
+// La session de construction avec le brief, puis les sessions de revue (au plus `parallel` à la fois), chacune sous srt par l'outil de code ; tout ce
 // qu'il faut pour relire l'étape reste dans le dossier. Ni rejeu sur l'hôte, ni porte, ni commit : ils restent à
 // l'orchestrateur. `step.ts` ne fait que lui passer le processus.
 import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -77,13 +77,13 @@ function readStep(deps: StepDependencies): { folder: string; step: StepFile; bri
 async function play(
   deps: StepDependencies,
   folder: string,
-  name: 'build' | 'review',
+  prefix: string,
   tool: 'code.json' | 'review.json',
-  config: StepFile['build'],
+  config: StepSessionConfig,
   extra: readonly string[],
   brief: string,
 ): Promise<{ measure: SessionMeasure; stopped: boolean }> {
-  const streamFile = join(folder, `${name}.stream.jsonl`);
+  const streamFile = join(folder, `${prefix}.stream.jsonl`);
   deps.writeFile(streamFile, '');
   const chunks: Buffer[] = [];
   const argv = [...SESSION_ARGUMENTS, '--model', config.model, '--effort', config.effort, ...extra];
@@ -96,9 +96,69 @@ async function play(
     structuredOutput: _structured,
     ...measure
   } = measureSession(Buffer.concat(chunks).toString());
-  deps.writeFile(join(folder, `${name}.measure.json`), json({ ...measure, stopped }));
-  if (name === 'build') deps.writeFile(join(folder, 'build.report.md'), report);
+  deps.writeFile(join(folder, `${prefix}.measure.json`), json({ ...measure, stopped }));
+  if (tool === 'code.json') deps.writeFile(join(folder, 'build.report.md'), report);
   return { measure: { ...measure, report, structuredOutput: _structured }, stopped };
+}
+
+type StepSessionConfig = StepFile['build'];
+type ReviewConfig = StepFile['reviews'][number];
+
+interface ReviewOutcome {
+  config: ReviewConfig;
+  verdict: ReturnType<typeof verdictOf>;
+  measure: SessionMeasure;
+}
+
+/** Une revue : sa session, puis son verdict écrit dans son fichier. */
+async function review(
+  deps: StepDependencies,
+  folder: string,
+  config: ReviewConfig,
+  brief: string,
+): Promise<ReviewOutcome> {
+  const prefix = `review.${config.name}`;
+  const { measure } = await play(
+    deps,
+    folder,
+    prefix,
+    'review.json',
+    config,
+    ['--json-schema', verdictSchema()],
+    brief,
+  );
+  const verdict = verdictOf(measure.structuredOutput);
+  deps.writeFile(join(folder, `${prefix}.verdict.json`), json(verdict.file));
+  return { config, verdict, measure };
+}
+
+/**
+ * Les revues, au plus `parallel` en même temps, démarrées dans l'ordre du fichier dès qu'une place se libère. Toutes
+ * sont attendues, quoi qu'il arrive aux autres ; l'échec rendu est celui de la première en échec, dans l'ordre du fichier.
+ */
+async function playReviews(
+  deps: StepDependencies,
+  folder: string,
+  configs: readonly ReviewConfig[],
+  parallel: number,
+  brief: string,
+): Promise<ReviewOutcome[]> {
+  // Les places prises : chacune se libère quand sa revue a fini, qu'elle ait abouti ou non.
+  const places = new Set<Promise<unknown>>();
+  const started: Promise<PromiseSettledResult<ReviewOutcome>>[] = [];
+  for (const config of configs) {
+    if (places.size >= parallel) await Promise.race(places);
+    const ended = Promise.allSettled([review(deps, folder, config, brief)]).then(
+      ([outcome]) => outcome as PromiseSettledResult<ReviewOutcome>,
+    );
+    const place: Promise<unknown> = ended.then(() => places.delete(place));
+    places.add(place);
+    started.push(ended);
+  }
+  return (await Promise.all(started)).map((result) => {
+    if (result.status === 'rejected') throw result.reason;
+    return result.value;
+  });
 }
 
 /** Le verdict de la revue, ou ce qui l'invalide. */
@@ -118,12 +178,41 @@ function verdictOf(output: unknown): { file: unknown; verdict: string; blocks: b
 }
 const invalid = (why: string) => ({ file: { invalid: why }, verdict: 'invalid', blocks: true, findings: 0 });
 
+/**
+ * La somme par modèle, les modèles dans l'ordre alphabétique ; les dollars sont additionnés tels quels. Une Map et non
+ * un objet : un nom de modèle vient du flux d'une session, et `constructor` ou `__proto__` liraient une valeur héritée.
+ */
+function sumByModel(parts: readonly Record<string, number>[]): Record<string, number> {
+  const total = new Map<string, number>();
+  for (const part of parts) {
+    for (const [model, cost] of Object.entries(part)) total.set(model, (total.get(model) ?? 0) + cost);
+  }
+  // Les clés viennent de la Map : chacune y a sa somme.
+  return Object.fromEntries([...total.keys()].sort().map((model) => [model, total.get(model) as number]));
+}
+
 /** Une étape ; son code de sortie : 0, 1 (l'étape ne passe pas) ou 2 (refus, échec de l'outil). */
 export async function runStep(deps: StepDependencies): Promise<number> {
   try {
     const { folder, step, brief } = readStep(deps);
     const build = await play(deps, folder, 'build', 'code.json', step.build, [], brief);
-    const summary: Record<string, unknown> = {
+    const completed = build.measure.completed && !build.stopped;
+    const outcomes = completed ? await playReviews(deps, folder, step.reviews, step.parallel, brief) : [];
+    const reviews = Object.fromEntries(
+      outcomes.map(({ config, verdict, measure }) => [
+        config.name,
+        {
+          model: config.model,
+          verdict: verdict.verdict,
+          blocks: verdict.blocks,
+          findings: verdict.findings,
+          costUsd: measure.costUsd,
+          costByModel: measure.costByModel,
+        },
+      ]),
+    );
+    const measures = [build.measure, ...outcomes.map(({ measure }) => measure)];
+    const summary = {
       build: {
         completed: build.measure.completed,
         stopped: build.stopped,
@@ -132,31 +221,14 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         durationSeconds: build.measure.durationSeconds,
         costUsd: build.measure.costUsd,
         cacheReadPerAnswer: build.measure.cacheReadPerAnswer,
+        costByModel: build.measure.costByModel,
       },
+      reviews,
+      costUsd: measures.reduce((sum, measure) => sum + measure.costUsd, 0),
+      costByModel: sumByModel(measures.map((measure) => measure.costByModel)),
     };
-    let passes = build.measure.completed && !build.stopped;
-    if (step.review !== undefined && passes) {
-      const review = await play(
-        deps,
-        folder,
-        'review',
-        'review.json',
-        step.review,
-        ['--json-schema', verdictSchema()],
-        brief,
-      );
-      const verdict = verdictOf(review.measure.structuredOutput);
-      deps.writeFile(join(folder, 'review.verdict.json'), json(verdict.file));
-      summary['review'] = {
-        verdict: verdict.verdict,
-        blocks: verdict.blocks,
-        findings: verdict.findings,
-        costUsd: review.measure.costUsd,
-      };
-      passes = !verdict.blocks;
-    }
     deps.stdout.write(`${JSON.stringify(summary)}\n`);
-    return passes ? 0 : 1;
+    return completed && !outcomes.some(({ verdict }) => verdict.blocks) ? 0 : 1;
   } catch (error) {
     if (error instanceof Refusal) {
       deps.stderr.write(`architect-os step: ${error.message}\n`);
