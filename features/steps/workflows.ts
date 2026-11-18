@@ -95,10 +95,26 @@ const EXCHANGES =
   /ACTIONS_ID_TOKEN_REQUEST|ANTHROPIC_(FEDERATION_RULE|ORGANIZATION|SERVICE_ACCOUNT|WORKSPACE)_ID|\/v1\/oauth\/token/;
 
 /**
- * broker-live.yml: the only workflow that reaches the real upstream. It stores no secret: it exchanges the identity
- * token of its run (`id-token: write`, the only permission beside `contents: read`) for a short-lived access token. It
- * runs on main only (push, schedule, dispatch; never a pull request) and names no environment: the owner's rule
- * accepts the subject of a run on refs/heads/main, and an environment would change that subject.
+ * The four identifiers of the owner's rule. They give no access by themselves, but the log of a run is public and
+ * GitHub prints the environment of a step: the secret store is where a value is masked (platform-v3-srt.md, §2).
+ */
+const RULE_IDENTIFIERS = [
+  'secrets.ANTHROPIC_FEDERATION_RULE_ID',
+  'secrets.ANTHROPIC_ORGANIZATION_ID',
+  'secrets.ANTHROPIC_SERVICE_ACCOUNT_ID',
+  'secrets.ANTHROPIC_WORKSPACE_ID',
+];
+
+/** A GitHub expression, and what is between its braces. */
+const EXPRESSION = /\$\{\{(.*?)\}\}/g;
+
+/**
+ * broker-live.yml: the only workflow that reaches the real upstream. It stores no credential: it exchanges the
+ * identity token of its run (`id-token: write`, the only permission beside `contents: read`) for a short-lived access
+ * token. It runs on main only (push, schedule, dispatch; never a pull request) and names no environment: the owner's
+ * rule accepts the subject of a run on refs/heads/main, and an environment would change that subject. Its expressions
+ * are the four identifiers of the rule, once each, in the environment of a step and never in a command: any other
+ * expression (a repository variable, which the log prints; another secret; another context) is refused.
  */
 function assertLive(text: string): void {
   const doc = workflow(text);
@@ -112,9 +128,19 @@ function assertLive(text: string): void {
   const job = doc.jobs['broker-live'];
   assert.equal(job?.environment, undefined, 'an environment changes the subject of the identity token');
   assert.equal(job?.if, "github.ref == 'refs/heads/main'");
-  assert.ok(!text.includes('secrets.'), 'a stored secret');
+  const expressions = [...text.matchAll(EXPRESSION)].map((match) => (match[1] ?? '').trim());
+  assert.deepEqual(
+    expressions.sort(),
+    RULE_IDENTIFIERS,
+    'the expressions are the four identifiers of the rule',
+  );
+  assert.ok(
+    !/\b(secrets|vars)\b/.test(text.replace(EXPRESSION, '')),
+    'a secret or a variable outside an expression',
+  );
   for (const step of job?.steps ?? []) {
     assert.ok(!/\bset -[a-z]*x|\bxtrace\b/.test(step.run ?? ''), 'a traced run line would print a token');
+    assert.ok(!(step.run ?? '').includes('${{'), 'an expression in a command is printed with the command');
   }
 }
 
@@ -161,6 +187,27 @@ const LIVE_BREAKS: Record<string, (yaml: string) => string> = {
     ),
   'with a traced run line': (yaml) =>
     yaml.replace('          set -euo pipefail\n', '          set -euxo pipefail\n'),
+  'with an identifier read from a repository variable': (yaml) =>
+    yaml.replace('${{ secrets.ANTHROPIC_WORKSPACE_ID }}', () => '${{ vars.ANTHROPIC_WORKSPACE_ID }}'),
+  'with an identifier written into a command': (yaml) =>
+    yaml
+      .replace('          WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}\n', '')
+      .replace(
+        '--arg workspace "$WORKSPACE_ID"',
+        () => '--arg workspace "${{ secrets.ANTHROPIC_WORKSPACE_ID }}"',
+      ),
+  'with another context in an expression': (yaml) =>
+    yaml.replace(
+      '          WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}\n',
+      () =>
+        '          WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}\n          ACTOR: ${{ github.actor }}\n',
+    ),
+  'with an identifier named twice': (yaml) =>
+    yaml.replace(
+      '          WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}\n',
+      () =>
+        '          WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}\n          COPY: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}\n',
+    ),
 };
 
 Then('a live workflow {} is rejected', function (kind: string) {

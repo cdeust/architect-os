@@ -1,11 +1,13 @@
 # T-04R (docs/design/platform-v3-srt.md §2, Broker): the real call of the broker, so that no owner command is needed.
 # Off the path of a change: gate.yml holds no secret (§7) and a pull request never reaches this file.
-# No secret is stored for it. The job asks GitHub for the identity token of this run and exchanges it at Anthropic for
-# an access token of a few minutes (workload identity federation). The owner's rule, on Anthropic's side, accepts the
-# token of this repository on refs/heads/main only; the job also runs on refs/heads/main only, and it names no
+# No credential is stored for it. The job asks GitHub for the identity token of this run and exchanges it at Anthropic
+# for an access token of a few minutes (workload identity federation). The owner's rule, on Anthropic's side, accepts
+# the token of this repository on refs/heads/main only; the job also runs on refs/heads/main only, and it names no
 # environment, since an environment would change the subject of the token and the rule would refuse it. The four
-# identifiers of the rule are repository variables: they are not secrets, and they stay out of the files. The access
-# token is written to a 0600 file of the runner's temporary directory, read by the broker alone, and removed at the end.
+# identifiers of the rule give no access by themselves. They name the owner's account at Anthropic, and the log of a
+# run is public: they are kept in the repository's secret store for one reason, that GitHub masks their value wherever
+# it would be printed. They reach one step, through its environment, and no command line. The access token is written
+# to a 0600 file of the runner's temporary directory, read by the broker alone, and removed at the end.
 # Cost: four requests to the smallest model, two answered with one token each and two refused before any generation.
 # The owner pays for them: the workflow starts on a change of the broker itself or of this file, once a week, or by
 # hand, and on nothing else. A change of what the broker imports is seen by the scenarios of the gate at once, and by
@@ -55,16 +57,16 @@ jobs:
 
       - name: Access token file, 0600, from the identity of this run
         env:
-          FEDERATION_RULE_ID: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
-          ORGANIZATION_ID: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
-          SERVICE_ACCOUNT_ID: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
-          WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          FEDERATION_RULE_ID: ${{ secrets.ANTHROPIC_FEDERATION_RULE_ID }}
+          ORGANIZATION_ID: ${{ secrets.ANTHROPIC_ORGANIZATION_ID }}
+          SERVICE_ACCOUNT_ID: ${{ secrets.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
         run: |
           set -euo pipefail
           umask 077
           for name in FEDERATION_RULE_ID ORGANIZATION_ID SERVICE_ACCOUNT_ID WORKSPACE_ID; do
             if [ -z "${!name}" ]; then
-              echo "the repository variable ANTHROPIC_$name is not set: the owner sets it (docs/infrastructure.md)"
+              echo "ANTHROPIC_$name is not in the secret store of the repository: the owner sets it (docs/infrastructure.md)"
               exit 1
             fi
           done

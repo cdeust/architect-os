@@ -1,7 +1,7 @@
 Feature: GitHub workflows
   Every workflow pins its actions by commit SHA, installs without lifecycle scripts and checks out without
   credentials; gate.yml (docs/design/platform-v3-srt.md §7) has the narrow trigger, permission and secret rules of
-  the CI gate; broker-live.yml (T-04R) is the only one that reaches the real upstream: it stores no secret, exchanges the identity token of its run for a short-lived access token, and runs on main only. The Examples
+  the CI gate; broker-live.yml (T-04R) is the only one that reaches the real upstream: it stores no credential, exchanges the identity token of its run for a short-lived access token, runs on main only, and takes the four identifiers of the owner's rule from the secret store so that the public log of a run masks them. The Examples
   list the committed workflows: a new file in .github/workflows adds its row.
 
   Scenario Outline: workflow <file> pins its actions, installs without scripts and checks out without credentials
@@ -25,7 +25,7 @@ Feature: GitHub workflows
     Given the committed workflow "gate.yml"
     Then it satisfies the gate workflow rules
 
-  Scenario: broker-live.yml stores no secret, asks for the identity token of its run, and keeps it to main
+  Scenario: broker-live.yml stores no credential, asks for the identity token of its run, keeps it to main, and names nothing the log would print
     Given the committed workflow "broker-live.yml"
     Then it satisfies the live workflow rules
     And no other workflow exchanges an identity token at Anthropic or names the federation rule
@@ -44,10 +44,10 @@ Feature: GitHub workflows
     Examples:
       | line                                              |
       | curl $ACTIONS_ID_TOKEN_REQUEST_URL                |
-      | RULE: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}    |
-      | ORG: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}        |
+      | RULE: ${{ secrets.ANTHROPIC_FEDERATION_RULE_ID }} |
+      | ORG: ${{ secrets.ANTHROPIC_ORGANIZATION_ID }}     |
       | ACCOUNT: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }} |
-      | SPACE: ${{ vars.ANTHROPIC_WORKSPACE_ID }}         |
+      | SPACE: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}      |
       | curl https://api.anthropic.com/v1/oauth/token     |
 
   Scenario Outline: a line that does neither is not seen: <line>
@@ -64,15 +64,19 @@ Feature: GitHub workflows
     Then a live workflow <kind> is rejected
 
     Examples:
-      | kind                            |
-      | triggered by pull_request       |
-      | pushed from another branch      |
-      | with an environment             |
-      | without its main-only condition |
-      | with broader permissions        |
-      | with one more permission        |
-      | with a stored secret            |
-      | with a traced run line          |
+      | kind                                               |
+      | triggered by pull_request                          |
+      | pushed from another branch                         |
+      | with an environment                                |
+      | without its main-only condition                    |
+      | with broader permissions                           |
+      | with one more permission                           |
+      | with a stored secret                               |
+      | with an identifier read from a repository variable |
+      | with an identifier written into a command          |
+      | with another context in an expression              |
+      | with an identifier named twice                     |
+      | with a traced run line                             |
 
   Scenario: a workflow with an unpinned action is rejected
     Given the committed workflow "gate.yml"

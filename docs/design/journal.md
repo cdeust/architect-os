@@ -3905,3 +3905,37 @@ Ajouté parce que son absence était aussi une incohérence : la commande de liv
 - Recherche : chaque incohérence est donnée avec ce que l'arbre dit ; un contrôle annoncé et non appliqué est rapporté comme tel.
 - SSDLC : aucun code changé ; un contrôle de vérification manquant est nommé au lieu d'être laissé écrit comme fait.
 - Opérationnel : sans objet, aucun composant ni accès n'est touché ; IRB sans objet.
+
+## 97. Les quatre identifiants de la règle de fédération ne paraîtront plus dans le journal public d'une exécution, 18 novembre 2026
+
+Le §96 a été poussé (`faed469`) par `npm run deliver` : huit minutes et demie, porte jouée, CI verte au premier sondage, ruleset `pass` sur les deux branches, lu par la commande et par un contrôle indépendant.
+
+**La demande.** Le §87 notait que les quatre identifiants de la règle (organisation, compte de service, règle, espace de travail) paraissent dans le journal de chaque exécution de `broker-live`, public pour un dépôt public. Le propriétaire, le 18 novembre : « masque-les ».
+
+**D'où ils sortaient.** D'aucune ligne du workflow : GitHub imprime, en tête de chaque étape, l'environnement qu'elle reçoit, et les identifiants y entraient comme variables du dépôt. Relevé sur l'exécution du 17 novembre : quatre lignes, une par identifiant.
+
+**Les moyens écartés, et pourquoi.**
+
+| Moyen | Pourquoi il ne tient pas |
+|---|---|
+| Demander le masque par une commande de l'étape (`add-mask`) | L'environnement est imprimé avant que la première commande de l'étape ne s'exécute ; et une étape antérieure devrait recevoir la valeur, donc l'imprimer |
+| Écrire l'expression dans la ligne de commande | La commande est imprimée avec l'expression remplacée par sa valeur |
+| Lire les variables par l'API pendant l'exécution | Demande un droit de plus au jeton de l'exécution, que le garde-fou du workflow refuse, et que ce jeton n'a pas pour les variables |
+| Les mettre dans un fichier du dépôt | Plus public encore |
+
+**Ce qui est fait.** Les quatre identifiants sont pris du magasin de secrets du dépôt : GitHub masque la valeur d'un secret partout où elle serait imprimée. Ce ne sont toujours pas des identifiants d'accès, et le workflow n'en range aucun ; la phrase « ne range aucun secret » devient « ne range aucun identifiant d'accès », dans le workflow, `CLAUDE.md`, la doc d'infrastructure et les scénarios. La menace et sa parade ont été écrites dans la table STRIDE de la preuve réelle (`platform-v3-srt.md`, §2) avant le code, avec ce que ce rangement change : un secret du dépôt est remis à tout workflow de ce dépôt qui le nomme, jamais à une pull request d'un fork.
+
+**Le garde-fou, resserré.** Il refusait toute mention d'un secret. Il tient maintenant la liste des expressions du workflow à ces quatre noms, une fois chacun, et refuse une expression dans une ligne de commande. Quatre copies du workflow sont refusées de plus : un identifiant lu d'une variable du dépôt, un identifiant écrit dans une commande, un autre contexte dans une expression, un identifiant nommé deux fois. Témoin joué : le workflow d'avant, avec ses variables, est refusé par le nouveau garde-fou.
+
+**Ce que ce commit ne fait pas, et l'ordre qui s'impose.** Le masque n'existe que si les quatre secrets existent. Leur création a été refusée à l'orchestrateur par le garde-fou de sa session : c'est un geste du propriétaire, une commande qui copie chaque variable vers un secret par l'entrée standard, sans qu'aucune valeur ne paraisse sur une ligne de commande. Ce commit n'est livré qu'ensuite : livré avant, l'exécution qu'il déclenche s'arrêterait à l'échange, sans dépense, en disant quel secret manque.
+
+**Ce qui sera vérifié après la livraison, et consigné.** Le push sur `main` déclenche une exécution de `broker-live`, puisque le workflow change : quatre requêtes au plus petit modèle, comme celle du §87. Son journal sera lu : aucune des quatre valeurs ne doit y paraître, cherchée mot pour mot. Alors seulement les quatre variables seront supprimées, et les journaux des trois exécutions du 17 novembre, qui portent les valeurs, seront copiés hors du dépôt puis supprimés chez GitHub. D'ici là ces trois journaux restent publics.
+
+**Schémas et README.** Aucun élément du système n'est ajouté ni retiré. README relu en entier : seul le compte de la suite change.
+
+**Chiffres.** 2 610 scénarios dans la suite (4 de plus).
+
+**Trois piliers.**
+- Recherche : la source de la fuite est relevée sur une exécution réelle ; quatre moyens sont écartés avec leur raison ; un témoin prouve que le garde-fou refuse l'état d'avant ; la preuve sur une exécution réelle est annoncée avant d'être jouée.
+- SSDLC : menace écrite avant le code ; aucune valeur dans un fichier, une ligne de commande ou cette conversation ; un garde-fou plus strict que le précédent.
+- Opérationnel : moindre exposition d'identifiants de compte dans un journal public ; la création des secrets reste au propriétaire ; IRB sans objet.

@@ -141,7 +141,7 @@ Two pieces follow no external cycle and are kept: the mutation of the changed li
 | Claude Science answers the desk's questions without a gesture per question, once its session is started                      | Three questions, each verified at the first submission, in 7 to 19 minutes                                                                                                                                                                                                                                                                 | [`bench/evidence-remote`](bench/evidence-remote/README.md), with the app |
 | A commit reaches both branches by one command, and a run started again does not replay the gate                              | `tools/deliver/features/` (436 scenarios, none on the network), and two real deliveries: one stopped before publication then resumed, one in a single run; each checked again outside the command (§95)                                                                                                                                    | `npm run deliver -- <name>`                                              |
 
-The whole suite is 2,606 scenarios. On the four steps of the native gateway, none of the 404 mutants of the changed lines survived at the gate (44, 44, 206, 110); on the evidence desk, none of 645; on the worker's failure message, none of 42.
+The whole suite is 2,610 scenarios. On the four steps of the native gateway, none of the 404 mutants of the changed lines survived at the gate (44, 44, 206, 110); on the evidence desk, none of 645; on the worker's failure message, none of 42.
 
 ## What is not proven
 
