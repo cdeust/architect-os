@@ -12,6 +12,7 @@ import type {
   Forge,
   Gate,
   Phase,
+  Progress,
   Reason,
   Repository,
   RuleSuite,
@@ -29,6 +30,7 @@ export interface DeliverPorts {
   readonly gate: Gate;
   readonly clock: Clock;
   readonly log: DeliveryLog;
+  readonly progress: Progress;
 }
 
 /** A run stopped by a precondition: nothing was done, nothing is logged. */
@@ -55,7 +57,9 @@ interface Started {
 
 type Start = Started | { ok: false; reason: Reason };
 
-const refuse = (reason: Reason): Start => ({ ok: false, reason });
+function refuse(reason: Reason): Start {
+  return { ok: false, reason };
+}
 
 /** Phase 1. */
 function prerequisites(options: DeliverOptions, config: DeliverConfig, repository: Repository): Start {
@@ -203,17 +207,24 @@ async function play(
   config: DeliverConfig,
   ports: DeliverPorts,
 ): Promise<Stop | undefined> {
-  const stop =
-    pushTrial(entry, ports.repository) ??
-    (await playGate(entry, ports.gate)) ??
-    (await awaitCi(entry, config, ports.forge, ports.clock));
-  if (stop !== undefined) return stop;
+  const { progress } = ports;
+  progress.phase("branche d'essai");
+  const trial = pushTrial(entry, ports.repository);
+  if (trial !== undefined) return trial;
+  progress.phase('porte');
+  const gate = await playGate(entry, ports.gate);
+  if (gate !== undefined) return gate;
+  progress.phase('CI');
+  const ci = await awaitCi(entry, config, ports.forge, ports.clock);
+  if (ci !== undefined) return ci;
   if (options.until === 'ci') {
     entry.outcome = 'ready';
     return undefined;
   }
+  progress.phase('publication');
   const refused = await publish(entry, start.remotes, start.publish, config, ports);
   if (refused !== undefined) return refused;
+  progress.phase('rangement');
   ports.repository.deleteRemoteBranch(entry.trial);
   return undefined;
 }
@@ -223,6 +234,7 @@ export async function deliver(
   config: DeliverConfig,
   ports: DeliverPorts,
 ): Promise<Delivery> {
+  ports.progress.phase('préalables');
   const start = prerequisites(options, config, ports.repository);
   if (!start.ok) return { outcome: 'stopped', phase: 'préalables', reason: start.reason };
   const { entry } = start;

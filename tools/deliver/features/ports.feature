@@ -223,6 +223,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       Examples:
         | adapter   |
         | in-memory |
+        | gh        |
 
     Scenario Outline: a run is given back with its jobs
       Given a delivery forge of the <adapter> adapter
@@ -232,6 +233,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       Examples:
         | adapter   |
         | in-memory |
+        | gh        |
 
     Scenario Outline: a rerun is recorded, and the run is then not completed, without jobs
       Given a delivery forge of the <adapter> adapter
@@ -244,6 +246,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       Examples:
         | adapter   |
         | in-memory |
+        | gh        |
 
     Scenario Outline: a rerun changes the run it names and no other
       Given a delivery forge of the <adapter> adapter
@@ -259,6 +262,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       Examples:
         | adapter   |
         | in-memory |
+        | gh        |
 
     Scenario Outline: a rerun of a run the forge does not have changes nothing
       Given a delivery forge of the <adapter> adapter
@@ -270,6 +274,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       Examples:
         | adapter   |
         | in-memory |
+        | gh        |
 
     Scenario Outline: a rule suite of a push nobody made, and of one evaluated
       Given a delivery forge of the <adapter> adapter
@@ -281,8 +286,197 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       Examples:
         | adapter   | suite  |
         | in-memory | pass   |
+        | gh        | pass   |
         | in-memory | fail   |
+        | gh        | fail   |
         | in-memory | bypass |
+        | gh        | bypass |
+
+    Scenario: the gh adapter asks the exact arguments of each call
+      Given a delivery forge of the gh adapter
+      And the delivery forge holds for the commit "0000000000000000000000000000000000000021" the run 7, completed "yes", with the jobs '[]'
+      And the delivery forge evaluated the push of the commit "0000000000000000000000000000000000000021" to the branch "feat/gate-1a" as "pass"
+      When I ask the gh forge for the run
+      And I ask the gh forge to rerun the run 7
+      And I ask the gh forge for the rule suite of "feat/gate-1a"
+      Then the gh client was asked:
+        """
+        api repos/cdeust/architect-os/actions/runs?head_sha=0000000000000000000000000000000000000021&per_page=100
+        api repos/cdeust/architect-os/actions/runs/7/jobs?per_page=100
+        api --method POST repos/cdeust/architect-os/actions/runs/7/rerun-failed-jobs
+        api repos/cdeust/architect-os/rulesets/rule-suites?ref=refs%2Fheads%2Ffeat%2Fgate-1a&per_page=100
+        """
+
+    Scenario: two runs of the workflow for the commit: the one of the smaller id, whatever the order
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":8,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed"},{"id":3,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"in_progress"}]}'
+      And the gh forge answers the jobs of "3" with '{"jobs":[]}'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 3, completed "no", with the jobs '[]'
+
+    Scenario: a run of another workflow and a run of another commit are not the run of the commit
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":1,"name":"other","head_sha":"0000000000000000000000000000000000000021","status":"completed"},{"id":2,"name":"gate","head_sha":"0000000000000000000000000000000000000022","status":"completed"},{"id":5,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed"}]}'
+      And the gh forge answers the jobs of "5" with '{"jobs":[]}'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 5, completed "yes", with the jobs '[]'
+
+    Scenario: runs of another workflow and of another commit only: no run
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":1,"name":"other","head_sha":"0000000000000000000000000000000000000021","status":"completed"},{"id":2,"name":"gate","head_sha":"0000000000000000000000000000000000000022","status":"completed"}]}'
+      Then the delivery forge has no run of the commit "0000000000000000000000000000000000000021"
+
+    Scenario Outline: a job has a runner when its runner name is a string that is not empty
+      Given a delivery forge of the gh adapter
+      And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the gh forge answers the jobs of "7" with '{"jobs":[{"name":"gate-linux","conclusion":"success","runner_name":<runner>,"steps":[]}]}'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 7, completed "yes", with the jobs '[{"name":"gate-linux","conclusion":"success","hadRunner":<had>,"failedStep":false}]'
+
+      Examples:
+        | runner     | had   |
+        | null       | false |
+        | ""         | false |
+        | "runner-1" | true  |
+
+    Scenario: a job without steps has no failed step
+      Given a delivery forge of the gh adapter
+      And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the gh forge answers the jobs of "7" with '{"jobs":[{"name":"gate-linux","conclusion":"success","runner_name":"r"}]}'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 7, completed "yes", with the jobs '[{"name":"gate-linux","conclusion":"success","hadRunner":true,"failedStep":false}]'
+
+    Scenario Outline: a step that failed is a failed step, one that did not is not
+      Given a delivery forge of the gh adapter
+      And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the gh forge answers the jobs of "7" with '{"jobs":[{"name":"gate-linux","conclusion":"failure","runner_name":"r","steps":[{"conclusion":"success"},{"conclusion":<step>}]}]}'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 7, completed "yes", with the jobs '[{"name":"gate-linux","conclusion":"failure","hadRunner":true,"failedStep":<failed>}]'
+
+      Examples:
+        | step      | failed |
+        | "failure" | true   |
+        | "skipped" | false  |
+        | null      | false  |
+
+    Scenario Outline: a conclusion is one of the four, null, or other
+      Given a delivery forge of the gh adapter
+      And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the gh forge answers the jobs of "7" with '{"jobs":[{"name":"gate-linux","conclusion":<conclusion>,"runner_name":"r","steps":[]}]}'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 7, completed "yes", with the jobs '[{"name":"gate-linux","conclusion":<expected>,"hadRunner":true,"failedStep":false}]'
+
+      Examples:
+        | conclusion  | expected    |
+        | "success"   | "success"   |
+        | "failure"   | "failure"   |
+        | "cancelled" | "cancelled" |
+        | "skipped"   | "skipped"   |
+        | null        | null        |
+        | "timed_out" | "other"     |
+
+    Scenario: a run that is not completed is not completed, whatever its status says
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":4,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"queued"}]}'
+      And the gh forge answers the jobs of "4" with '{"jobs":[]}'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 4, completed "no", with the jobs '[]'
+
+    Scenario: the first evaluation of the commit counts, and an evaluation of another commit does not
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the suites of "main" with '[{"after_sha":"0000000000000000000000000000000000000022","result":"fail"},{"after_sha":"0000000000000000000000000000000000000021","result":"pass"},{"after_sha":"0000000000000000000000000000000000000021","result":"fail"}]'
+      Then the delivery forge rule suite of the branch "main" and the commit "0000000000000000000000000000000000000021" is "pass"
+
+    Scenario: an evaluation that is not finished is nothing
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the suites of "main" with '[{"after_sha":"0000000000000000000000000000000000000021","result":"queued"}]'
+      Then the delivery forge rule suite of the branch "main" and the commit "0000000000000000000000000000000000000021" is nothing
+
+    Scenario Outline: a program that exits non-zero: the fixed message with the exit code, and nothing it printed
+      Given a delivery forge of the gh adapter
+      And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the gh forge answers the <kind> of "<subject>" with the exit code 3 and the output "MARKER-9c2e"
+      When I ask the gh forge <call>
+      Then the gh forge failed with "the forge did not answer: <label> (exit code 3)"
+      And the message of the gh forge failure holds nothing of "MARKER-9c2e"
+
+      Examples:
+        | kind  | subject | call                          | label       |
+        | runs  | 0000000000000000000000000000000000000021  | for the run                   | runs        |
+        | jobs  | 7       | for the run                   | jobs        |
+        | rerun | 7       | to rerun the run 7            | rerun       |
+        | suites | main   | for the rule suite of "main"  | rule suites |
+
+    Scenario Outline: a program that prints what is not JSON: the fixed message, and nothing it printed
+      Given a delivery forge of the gh adapter
+      And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the gh forge answers the <kind> of "<subject>" with "MARKER-9c2e"
+      When I ask the gh forge <call>
+      Then the gh forge failed with "the forge did not answer: <label>"
+      And the message of the gh forge failure holds nothing of "MARKER-9c2e"
+
+      Examples:
+        | kind   | subject | call                 | label       |
+        | runs   | 0000000000000000000000000000000000000021  | for the run          | runs        |
+        | jobs   | 7       | for the run          | jobs        |
+        | suites | main    | for the rule suite of "main" | rule suites |
+
+    Scenario Outline: a program that prints JSON the schema refuses: the fixed message, and nothing it printed
+      Given a delivery forge of the gh adapter
+      And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the gh forge answers the <kind> of "<subject>" with '<output>'
+      When I ask the gh forge <call>
+      Then the gh forge failed with "the forge did not answer: <label>"
+      And the message of the gh forge failure holds nothing of "MARKER-9c2e"
+
+      Examples:
+        | kind   | subject | call                 | label       | output                                                                                       |
+        | runs   | 0000000000000000000000000000000000000021  | for the run          | runs        | {"marker":"MARKER-9c2e"}                                                                     |
+        | runs   | 0000000000000000000000000000000000000021  | for the run          | runs        | {"workflow_runs":[{"id":0,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"MARKER-9c2e"}]}        |
+        | runs   | 0000000000000000000000000000000000000021  | for the run          | runs        | {"workflow_runs":[{"id":1.5,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"MARKER-9c2e"}]}      |
+        | jobs   | 7       | for the run          | jobs        | {"marker":"MARKER-9c2e"}                                                                     |
+        | suites | main    | for the rule suite of "main" | rule suites | {"marker":"MARKER-9c2e"}                                                                     |
+
+    Scenario: a program that cannot be started
+      Given a delivery forge over the program "/nonexistent/gh"
+      When I ask the gh forge for the run
+      Then the gh forge failed with "the forge did not answer: runs"
+
+    Scenario Outline: an identifier that is not a positive integer never reaches the client
+      Given a delivery forge of the gh adapter
+      When I ask the gh forge to rerun the run <id>
+      Then the gh forge failed with "the forge did not answer: rerun"
+      And the gh client was asked nothing
+
+      Examples:
+        | id  |
+        | 0   |
+        | -4  |
+        | 1.5 |
+
+    Scenario: the output of a rerun is not read
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the rerun of "7" with "not JSON"
+      When I ask the gh forge to rerun the run 7
+      Then the gh client was asked:
+        """
+        api --method POST repos/cdeust/architect-os/actions/runs/7/rerun-failed-jobs
+        """
+
+  Rule: Progress
+
+    Scenario Outline: the phases are kept in order, each reported once
+      Given a delivery progress of the <adapter> adapter
+      When I report the phases "préalables, branche d'essai, porte" to the delivery progress
+      And I report the phases "CI, publication, rangement" to the delivery progress
+      Then the delivery progress holds the phases "préalables, branche d'essai, porte, CI, publication, rangement"
+
+      Examples:
+        | adapter   |
+        | in-memory |
+        | stream    |
+
+    Scenario: nothing reported, nothing written
+      Given a delivery progress of the stream adapter
+      Then the delivery progress holds the phases ""
+
+    Scenario: the stream gets a line per phase, as it is reported
+      Given a delivery progress of the stream adapter
+      When I report the phases "porte, CI" to the delivery progress
+      Then the stream of the delivery progress holds 2 lines, each ended by a line break
 
   Rule: Gate
 

@@ -19,6 +19,15 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         delete sentinel/gate-1a-step
         log delivered
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        rangement
+        """
       And the delivery calls named "isClean, head, remoteHead, isAncestor, deletedLines" are:
         """
         isClean
@@ -66,6 +75,15 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         delete sentinel/gate-1a-step
         log delivered
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        rangement
+        """
       And the delivery calls named "verdict, gate" are:
         """
         verdict
@@ -96,6 +114,13 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         gate
         log ready
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        """
       And the delivery result is:
         """
         {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
@@ -119,6 +144,15 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         push h1 main
         delete sentinel/gate-1a-step
         log delivered
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        rangement
         """
       And the delivery calls named "ruleSuite" are:
         """
@@ -149,6 +183,15 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         delete sentinel/gate-1a-step
         log delivered
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        rangement
+        """
 
     Scenario: no append-only file to watch
       Given the delivery append-only files are ""
@@ -170,6 +213,10 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       And the delivery acts are:
         """
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        """
       And the delivery calls named "isClean, head, remoteHead" are:
         """
         isClean
@@ -183,6 +230,10 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       And the delivery acts are:
         """
         fetch
+        """
+      And the delivery phases reported are:
+        """
+        préalables
         """
       And the delivery calls named "isAncestor, deletedLines" are:
         """
@@ -206,6 +257,10 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
         fetch
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        """
       And the delivery log holds no entry
 
     Scenario: the second branch is not an ancestor of the commit
@@ -227,6 +282,10 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
         fetch
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        """
       And the delivery calls named "deletedLines" are:
         """
         """
@@ -241,6 +300,10 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
         fetch
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        """
       And the delivery calls named "isAncestor, deletedLines, ruleSuite" are:
         """
         """
@@ -253,6 +316,10 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       And the delivery acts are:
         """
         fetch
+        """
+      And the delivery phases reported are:
+        """
+        préalables
         """
       And the delivery calls named "deletedLines" are:
         """
@@ -288,6 +355,10 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
         fetch
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        """
       And the delivery log holds no entry
 
     Scenario: a trial branch that is one of the branches to publish
@@ -298,6 +369,10 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       And the delivery acts are:
         """
         fetch
+        """
+      And the delivery phases reported are:
+        """
+        préalables
         """
       And the delivery log holds no entry
 
@@ -310,6 +385,10 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery acts are:
         """
+        """
+      And the delivery phases reported are:
+        """
+        préalables
         """
       And the delivery calls named "remoteHead" are:
         """
@@ -338,6 +417,11 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         push h1 sentinel/gate-1a-step
         log stopped
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        """
       And the delivery result is:
         """
         {"outcome":"stopped","phase":"branche d'essai","reason":"push de la branche d'essai refusé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"published":[],"ruleSuites":{}}
@@ -356,6 +440,12 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         push h1 sentinel/gate-1a-step
         gate
         log stopped
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
         """
       And the delivery calls named "ci" are:
         """
@@ -386,6 +476,12 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         gate
         log stopped
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        """
       And the delivery calls named "ci" are:
         """
         """
@@ -407,6 +503,13 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         push h1 sentinel/gate-1a-step
         gate
         log stopped
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
         """
       And the delivery result is:
         """
@@ -430,6 +533,15 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         push h1 main
         delete sentinel/gate-1a-step
         log delivered
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        rangement
         """
       And the delivery calls named "ci" are:
         """
@@ -464,6 +576,13 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         sleep 30
         sleep 30
         log stopped
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
         """
       And the delivery calls named "ci" are:
         """
@@ -513,6 +632,15 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         delete sentinel/gate-1a-step
         log delivered
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        rangement
+        """
       And the delivery result is:
         """
         {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
@@ -536,6 +664,13 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         sleep 30
         log stopped
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        """
       And the delivery result is:
         """
         {"outcome":"stopped","phase":"CI","reason":"aucun runner après le nombre de tentatives permis","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":[],"ruleSuites":{}}
@@ -553,6 +688,13 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         gate
         log stopped
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        """
 
     Scenario: no runner, then a job that failed on a step
       Given the delivery CI answers "no-runner, failed"
@@ -567,6 +709,13 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         sleep 30
         sleep 30
         log stopped
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
         """
 
     Scenario: no runner on the last poll: no rerun nobody would watch
@@ -584,6 +733,13 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         sleep 30
         sleep 30
         log stopped
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
         """
       And the delivery result is:
         """
@@ -624,6 +780,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         fetch
         log stopped
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        """
       And the delivery result is:
         """
         {"outcome":"stopped","phase":"publication","reason":"une branche distante a bougé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
@@ -641,6 +805,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         gate
         fetch
         log stopped
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
         """
 
     Scenario: every branch is read again before publication: the one at the hash too
@@ -668,6 +840,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         fetch
         log stopped
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        """
       And the delivery calls named "ruleSuite" are:
         """
         """
@@ -689,6 +869,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         fetch
         log stopped
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        """
       And the delivery calls named "ruleSuite" are:
         """
         """
@@ -706,6 +894,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         fetch
         log stopped
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        """
       And the delivery calls named "ruleSuite" are:
         """
         """
@@ -722,6 +918,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         fetch
         push h1 feat/gate-1a
         log stopped
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
         """
       And the delivery result is:
         """
@@ -741,6 +945,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         push h1 feat/gate-1a
         push h1 main
         log stopped
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
         """
       And the delivery result is:
         """
@@ -762,6 +974,15 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         push h1 main
         delete sentinel/gate-1a-step
         log delivered
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        rangement
         """
       And the delivery calls named "push, ruleSuite" are:
         """
@@ -789,6 +1010,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         sleep 30
         sleep 30
         log stopped
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
         """
       And the delivery calls named "ruleSuite" are:
         """
@@ -820,6 +1049,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         fetch
         push h1 feat/gate-1a
         log stopped
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
         """
       And the delivery result is:
         """
@@ -857,6 +1094,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         push h1 main
         log stopped
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        """
       And the delivery result is:
         """
         {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"fail"}}
@@ -887,6 +1132,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         fetch
         log stopped
         """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        """
       And the delivery calls named "push, ruleSuite" are:
         """
         push h1 sentinel/gate-1a-step
@@ -909,6 +1162,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         gate
         fetch
         log stopped
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
         """
       And the delivery calls named "push, ruleSuite" are:
         """
@@ -934,6 +1195,14 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         sleep 30
         sleep 30
         log stopped
+        """
+      And the delivery phases reported are:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
         """
       And the delivery calls named "push, ruleSuite" are:
         """

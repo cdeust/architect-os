@@ -4,7 +4,14 @@ import type { DeliveryEntry, RuleSuite } from '../../src/domain/ports.js';
 import { FileLog } from '../../src/infrastructure/file-log.js';
 import { ProcessGate } from '../../src/infrastructure/process-gate.js';
 import { TimerClock } from '../../src/infrastructure/timer-clock.js';
-import { temporaryDirectory, type ClockFixture, type GateFixture, type LogFixture } from './fixtures.js';
+import { StreamProgress } from '../../src/infrastructure/stream-progress.js';
+import {
+  temporaryDirectory,
+  type ClockFixture,
+  type GateFixture,
+  type LogFixture,
+  type ProgressFixture,
+} from './fixtures.js';
 import { REPOSITORY, type DeliverWorld } from './support.js';
 
 const FAKE_GATE = `${REPOSITORY}tools/deliver/fixtures/fake-gate.mjs`;
@@ -62,6 +69,22 @@ export function timerClock(): TimerClockFixture {
     handler();
   });
   return { clock, asked };
+}
+
+/** The progress of the `stream` row: a stream that keeps what is written to it, and shows it by line. */
+export interface StreamProgressFixture extends ProgressFixture {
+  /** Everything written to the stream, as written. */
+  written(): string;
+}
+
+export function streamProgress(): StreamProgressFixture {
+  let text = '';
+  const progress = new StreamProgress({
+    write(chunk: string) {
+      text += chunk;
+    },
+  });
+  return { progress, written: () => text, phases: () => text.split('\n').slice(0, -1) };
 }
 
 /** The log of the `file` row, under a home of its own. */

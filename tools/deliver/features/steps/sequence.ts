@@ -7,6 +7,7 @@ import { InMemoryForge } from '../../src/infrastructure/in-memory-forge.js';
 import { InMemoryGate } from '../../src/infrastructure/in-memory-gate.js';
 import { Journal } from '../../src/infrastructure/in-memory-journal.js';
 import { InMemoryLog } from '../../src/infrastructure/in-memory-log.js';
+import { InMemoryProgress } from '../../src/infrastructure/in-memory-progress.js';
 import { InMemoryRepository } from '../../src/infrastructure/in-memory-repository.js';
 import { Given, Then, When, type DeliverWorld } from './support.js';
 
@@ -21,6 +22,7 @@ interface Scene {
   gate: InMemoryGate;
   clock: InMemoryClock;
   log: InMemoryLog;
+  progress: InMemoryProgress;
   result?: Delivery;
 }
 /**
@@ -125,6 +127,7 @@ Given(
       gate,
       clock: new InMemoryClock(journal),
       log: new InMemoryLog(journal),
+      progress: new InMemoryProgress(),
     } satisfies Scene;
   },
 );
@@ -237,6 +240,10 @@ Then('the delivery acts are:', function (expected: string) {
     .journal.calls.filter((call) => ACTS.includes(call.split(' ')[0] as string))
     .map(named);
   assert.deepEqual(acts, lines(expected));
+});
+
+Then('the delivery phases reported are:', function (expected: string) {
+  assert.deepEqual(scene(this).progress.phases, lines(expected));
 });
 
 Then('the delivery calls named {string} are:', function (names: string, expected: string) {

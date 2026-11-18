@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 603" width="980" height="603" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="t">How a step is tested and verified</title>
-  <desc id="d">Five checks come before the gate: scenarios written with the code, mutation of the changed lines, an independent review in a read-only sandbox, fresh inputs invented by another session, and a measure before the real system. A finding of any of them goes back to the code. When all are green, the gate runs on the host and in CI, and the host commits and delivers the same commit to the branch and then to main, both held by a ruleset that requires the gate. Under each check, what it gave on one step, the Docker adapter of 16 November 2026. Decided and not built, marked next: scenarios written by another session and frozen, invented inputs as a phase, evals of prompts, findings given with a failing scenario, and a human gate at delivery.</desc>
+  <desc id="d">Five checks come before the gate: scenarios written with the code, mutation of the changed lines, an independent review in a read-only sandbox, fresh inputs invented by another session, and a measure before the real system. A finding of any of them goes back to the code. When all are green, the gate runs on the host and in CI, and one command, npm run deliver, bound to the hash of the commit, delivers that same commit to the branch and then to main, both held by a ruleset that requires the gate, whose evaluation it reads after each push. Under each check, what it gave on one step, the Docker adapter of 16 November 2026. Decided and not built, marked next: scenarios written by another session and frozen, invented inputs as a phase, evals of prompts, findings given with a failing scenario, and a human gate at delivery.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
     <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#cf222e"/></marker>
@@ -93,9 +93,9 @@
     <!-- 7 commit -->
     <rect x="740" y="332" width="220" height="76" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
     <text x="850" y="355" text-anchor="middle" font-weight="600" font-size="13" fill="#1f2328">7 · Commit and delivery</text>
-    <text x="850" y="372" text-anchor="middle" font-size="11.5">by the host: to the branch, then</text>
-    <text x="850" y="385" text-anchor="middle" font-size="11.5">to main, a ruleset on both; the</text>
-    <text x="850" y="398" text-anchor="middle" font-size="11.5">journal says what is not proven</text>
+    <text x="850" y="372" text-anchor="middle" font-size="11.5">npm run deliver: the gate and CI</text>
+    <text x="850" y="385" text-anchor="middle" font-size="11.5">for the hash, then the branch and</text>
+    <text x="850" y="398" text-anchor="middle" font-size="11.5">main, the ruleset read after each</text>
   </g>
   <path d="M720 370H738" stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
 
@@ -129,8 +129,8 @@
   <text x="603" y="553" font-size="11.5" fill="#57606a">comes with the scenario</text>
   <text x="603" y="568" font-size="11.5" fill="#57606a">that fails</text>
   <rect x="782" y="500" width="178" height="87" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
-  <text x="794" y="520" font-size="12" font-weight="600" fill="#1f2328">Delivery gate</text>
-  <text x="794" y="538" font-size="11.5" fill="#57606a">delivery as a command; a</text>
-  <text x="794" y="553" font-size="11.5" fill="#57606a">human approves before</text>
-  <text x="794" y="568" font-size="11.5" fill="#57606a">main</text>
+  <text x="794" y="520" font-size="12" font-weight="600" fill="#1f2328">Human gate</text>
+  <text x="794" y="538" font-size="11.5" fill="#57606a">a person approves before</text>
+  <text x="794" y="553" font-size="11.5" fill="#57606a">main; the orchestrator has</text>
+  <text x="794" y="568" font-size="11.5" fill="#57606a">no bypass</text>
 </svg>

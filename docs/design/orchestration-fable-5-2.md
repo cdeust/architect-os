@@ -656,7 +656,7 @@ Les deux écarts en gras sont à fermer avant l'on-premise.
 
 | Étape | Contenu |
 |---|---|
-| 1. Rejouable | La commande de livraison ; les consignes d'étape versionnées avec l'empreinte de l'arbre qu'elles ont vu ; les mesures de cache et de coût par étape acceptée |
+| 1. Rejouable | La commande de livraison (construite, journal §93) ; les consignes d'étape versionnées avec l'empreinte de l'arbre qu'elles ont vu ; les mesures de cache et de coût par étape acceptée |
 | 2. Evals | Les prompts du lanceur sur spécimens, rejoués à chaque changement |
 | 3. Capitalisation | La base d'erreurs à deux classes et le pas de réflexion (§4) ; les scénarios gelés |
 | 4. Cycle | Define et Plan avec leurs gates ; le gate de Ship ; la vérification de bout en bout |
@@ -706,6 +706,10 @@ Elle s'arrête sur demande avant la phase 5 (`--until ci`) : c'est la couture o�
 | **I** | Un jeton de la forge paraît dans une sortie | La commande n'en lit aucun : `git` et `gh` portent leur propre identifiant ; elle n'imprime ni leur sortie brute ni un journal de CI |
 | **D** | La CI n'obtient jamais de runner ; la porte ne finit pas | Relances bornées, puis arrêt qui le dit ; la porte garde ses propres limites |
 | **E** | La commande se sert du droit de contournement du compte qui la lance | Elle ne pousse que si les deux contrôles exigés sont verts pour l'empreinte, donc sans avoir besoin du contournement ; une évaluation du ruleset autre que `pass` après le premier push arrête tout avant `main` |
+
+**La portée d'une règle, précisée après une revue** (18 novembre 2026). La consigne de la dernière tranche disait : une valeur du fichier descriptif n'est jamais le premier élément d'un argv. La revue a relevé que la commande de la porte, `gateCommand`, vient de ce fichier et que son premier élément est un programme. La règle vaut pour ce qui entre dans un argv de `git` ou du client de la forge : un nom de branche, de dépôt, de workflow ne s'y trouve jamais en première position ni là où une option serait lue. La commande de la porte est autre chose : nommer ce programme est la fonction de cette clé, dans un fichier commité et relu, dont le schéma refuse tout caractère de contrôle ; c'est le même statut que la commande d'un contrôle sans modèle dans le fichier d'une étape.
+
+**Construite** (journal §89 à §93) : `npm run deliver -- <nom> [--until ci]`.
 
 **Ce qu'elle ne ferme pas.** L'écart nommé plus haut : elle rend la livraison exacte et rejouable, elle reste lancée par l'orchestrateur avec le compte du propriétaire. Le gate humain est une décision du propriétaire, et `--until ci` est l'endroit où il se pose.
 

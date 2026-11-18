@@ -1,7 +1,17 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Clock, DeliveryEntry, DeliveryLog, Gate, Repository } from '../../src/domain/ports.js';
+import type {
+  CiRun,
+  Clock,
+  DeliveryEntry,
+  DeliveryLog,
+  Forge,
+  Gate,
+  Progress,
+  Repository,
+  RuleSuite,
+} from '../../src/domain/ports.js';
 import type { DeliverWorld } from './support.js';
 
 // What a contract scenario needs to put the world of a port in a state (a history, a remote, a verdict), which no port
@@ -16,6 +26,20 @@ export interface RepositoryFixture {
   setRemote(branch: string, label: string): void;
   touchWorktree(): void;
   hashOf(label: string): string;
+}
+
+export interface ForgeFixture {
+  forge: Forge;
+  hasRun(hash: string, run: CiRun): void;
+  evaluated(branch: string, hash: string, suite: RuleSuite): void;
+  /** The reruns asked, as `rerun <id>`, in order. */
+  reruns(): string[];
+}
+
+export interface ProgressFixture {
+  progress: Progress;
+  /** What the adapter was told, in order, as the adapter shows it. */
+  phases(): string[];
 }
 
 export interface GateFixture {

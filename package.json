@@ -27,6 +27,7 @@
     "step": "node --import tsx packages/sandbox/src/step.ts",
     "evidence": "node --import tsx tools/evidence/src/cli.ts",
     "watch": "node --import tsx tools/watch/src/cli.ts",
+    "deliver": "node --import tsx tools/deliver/src/cli.ts",
     "typecheck": "tsc -b",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

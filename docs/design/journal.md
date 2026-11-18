@@ -3743,3 +3743,55 @@ Coût des deux passes : 2,24 $. Les cinq constats de la revue : deux mutants sur
 - Recherche : deux passes rapportées avec leurs coûts ; la mutation réelle jouée par l'hôte ; ce que les scénarios ne prouvent pas est dit.
 - SSDLC : argv fixe, jamais de shell ni d'option de force ; un seul fichier lance des processus ; un journal de l'hôte en 0600 ; aucune dépendance ajoutée ; aucun commentaire de désactivation.
 - Opérationnel : chaque contrat a une ligne par adaptateur, ce qui borne ce qu'un adaptateur d'une autre forge ou d'un autre stockage devra tenir ; IRB sans objet.
+
+## 93. La commande de livraison existe : `npm run deliver`, son adaptateur sur la forge, sa progression ; elle quitte la feuille de route, 18 novembre 2026
+
+Le §92 a été poussé (`67e2d0b`) : porte de l'hôte verte (2 530 scénarios, 87 ajoutés, aucun supprimé ; 6 fichiers et 128 mutants dans le périmètre, aucun survivant), CI verte sur `gate` (Linux et macOS) à la première tentative ; `main` a suivi ; ruleset `pass` sur les deux branches.
+
+**Ce qui est construit.**
+
+| Pièce | Ce qu'elle fait |
+|---|---|
+| `gh-forge.ts` | Le dernier adaptateur : le run de CI retrouvé par l'empreinte du commit (le plus petit identifiant, celui de la branche d'essai), ses jobs, la relance des jobs en échec, l'évaluation du ruleset retrouvée par l'empreinte poussée. Chaque sortie est du JSON vérifié par un schéma ; un échec lève un message fixe par méthode, qui ne porte rien de ce que le programme a imprimé |
+| `Progress`, sixième port | Chaque phase est dite quand elle commence ; une exécution arrêtée n'en dit aucune après celle où elle s'arrête |
+| `main.ts`, `cli.ts`, `npm run deliver -- <nom> [--until ci]` | La commande. Sortie standard : une ligne, le résultat. Sortie d'erreur : une ligne par phase, et la phase et la raison d'un arrêt. Codes : 0 livré ou prêt, 1 arrêté, 2 refus avant tout acte, 3 un programme en panne |
+
+La commande entière est jouée par des scénarios sur un vrai dépôt jetable avec un dépôt distant sur disque, un client de forge scripté et une porte de fixture : une livraison jusqu'au bout, un arrêt avant publication puis sa reprise sans rejouer la porte, une porte rouge, un arbre non propre, chaque liste d'arguments refusée, un fichier descriptif refusé, une forge qui ne répond pas. Aucun scénario ne touche le réseau.
+
+**Ce qui n'en fait pas partie, par décision.** Amener un commit dans l'arbre de livraison, et faire suivre les autres arbres après coup : le mainteneur continue de le faire à la main. Ces deux gestes ne touchent pas à ce qui est livré.
+
+**La boucle : une passe.** Construction sur Sonnet 5.5, 549 s, 1,11 $ ; les quatre contrôles sans modèle verts, 586 scénarios en 36 s ; revue sur Opus 5.5, 1,03 $, `request_changes`, douze constats.
+
+| Constat | Ce qui en a été fait, à la main |
+|---|---|
+| Une option placée avant le nom n'était jouée par aucun scénario | La lecture des arguments est réécrite : un nom, `--until ci` une fois, rien d'autre ; trois lignes refusées de plus |
+| Un argument d'encodage dont l'absence ne change rien ; un littéral au niveau du module ; une valeur du journal d'un double que rien ne lit | Retirés |
+| La commande de la porte vient du fichier descriptif et son premier élément est un programme, ce que la consigne interdisait à toute valeur du fichier | La consigne disait plus que la règle. Sa portée est écrite dans la note : elle vaut pour ce qui entre dans un argv de git ou du client de la forge ; nommer le programme de la porte est la fonction de cette clé, dans un fichier commité et relu |
+| Le README, `CLAUDE.md` et le schéma de la vérification disaient encore la commande non construite | Mis à jour, voir plus bas |
+| Trois propositions | Deux prises (un commentaire déplacé, `--until` répété refusé) ; la troisième écartée : tout port lève une erreur, le cas d'une autre valeur levée n'a aucun scénario possible |
+
+**La mutation, jouée par l'hôte.**
+
+| Passage | Mutants | Tués | Survivants | Statiques | Durée |
+|---|---|---|---|---|---|
+| Tout l'outil, après la revue | 856 | 795 | 5 | 8 | 43 min |
+| Les fichiers changés ensuite | 200 | 188 | 0 | 0 | 16 min |
+
+Les huit statiques étaient six schémas et deux fonctions fléchées écrits au niveau du module : chacun rejouait toute la suite. C'est la leçon du §70, qui était dans la consigne et que la construction n'a pas suivie pour ces fichiers ; les schémas sont maintenant construits dans des fonctions déclarées. Des cinq survivants, trois étaient équivalents (un tableau vide de repli, un `catch` qui levait ce que la ligne suivante lève, un mot que rien ne compare) et sont retirés par le code ; les deux autres sont tués par des scénarios, dont un qui lit ce que la commande comprend de ses arguments. Les vingt délais dépassés ont été relus : des boucles d'attente de la CI qui ne finissent plus quand on casse ce qui les termine, jouées cette fois avec de vrais processus.
+
+**Un fichier laissé dans l'arbre de livraison par un mutant, trouvé avant la porte.** En vérifiant ce commit seul dans l'arbre de livraison, le mainteneur y a trouvé un dossier `undefined/`, non suivi, daté de la porte du §92. Cause : un mutant de la ligne qui résout `${home}` dans le chemin du journal des livraisons rendait un chemin relatif, et le rejeu des verdicts par la porte l'a écrit dans le répertoire courant, l'arbre lui-même. Le code livré n'est pas en cause, mais deux choses l'étaient. Le journal acceptait un chemin relatif ; et un arbre que la porte laisse sale ferait refuser la commande à la reprise, par sa propre première phase. Le journal refuse maintenant, à sa construction, un chemin qui n'est pas absolu ; les adaptateurs sont construits dans le bloc qui rend un code de sortie, si bien que ce refus est un message et non une pile ; deux scénarios jouent un dossier personnel non absolu et vérifient que rien n'est écrit dans l'arbre. Le dossier a été retiré à la main. Classe d'erreur : technique, de conception d'un adaptateur. Contrôle qui l'attrape désormais : ces deux scénarios, et la première phase de la commande.
+
+**Et une seconde fois, par ces scénarios mêmes.** La porte de ce commit était verte, sa CI aussi, et l'arbre de livraison portait de nouveau un dossier `undefined/`. Le mainteneur avait fait relever l'état de l'arbre après la porte, et n'a pas publié. Cause : quand la mutation retire le refus du chemin relatif, les deux nouveaux scénarios, qui donnaient un dossier personnel relatif, échouent comme il faut, et écrivent en échouant sous le répertoire courant. Ils donnent maintenant un nom réservé aux fixtures et retirent, à leur fin, ce qui aurait été écrit sous ce nom, comme le font les scénarios d'architecture avec leurs fichiers. Témoin joué : le refus retiré, les deux scénarios échouent et l'arbre reste propre. Leçon : un scénario qui prouve un refus d'écrire doit rester sans effet quand ce refus tombe, puisque la mutation le fait tomber exprès.
+
+**Coût de la commande, de la conception à ce commit.** Six passes de construction et cinq revues : 6,27 $ pour les décisions et la séquence, 2,24 $ pour les adaptateurs, 2,15 $ pour la forge et la commande, soit 10,66 $. Une des six passes a été arrêtée par un contrôle sans modèle avant sa revue.
+
+**Ce qui n'est pas prouvé.** Rien de ce commit n'a parlé à la vraie forge : son adaptateur est prouvé contre un client scripté, dont les réponses ont la forme que le mainteneur a lue à la main pendant deux jours de livraisons, et non contre une réponse enregistrée. Le premier commit livré par la commande, le suivant, sera cette preuve, et son résultat ira au journal, y compris s'il échoue.
+
+**Schémas et README.** Le point « Delivery as a command » quitte la feuille de route du README ; la commande entre dans la description de la vérification, dans les commandes, dans la table des dossiers et dans l'état des briques. Dans le schéma de la vérification, la case de la livraison nomme la commande, et la boîte en pointillés ne garde que le gate humain ; rendu contrôlé à l'œil. `CLAUDE.md` reçoit la commande et les six ports.
+
+**Chiffres.** 2 606 scénarios dans la suite (76 de plus).
+
+**Trois piliers.**
+- Recherche : une passe rapportée avec ses constats et ce qui en a été fait, y compris ce qui est écarté et pourquoi ; deux passages de mutation ; ce qui n'est pas prouvé est dit, avec la preuve qui vient.
+- SSDLC : aucune sortie de programme n'entre dans un message ; un identifiant de run est vérifié avant d'entrer dans un chemin ; la portée d'une règle est écrite au lieu d'être tue ; aucun commentaire de désactivation ; aucune dépendance ajoutée.
+- Opérationnel : la livraison est une commande dont chaque phase se voit, qui s'arrête avant de publier sur demande ; IRB sans objet.

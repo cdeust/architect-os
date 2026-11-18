@@ -1,14 +1,23 @@
 import assert from 'node:assert/strict';
-import type { CiJob, CiRun, DeliveryEntry, Forge, RuleSuite } from '../../src/domain/ports.js';
+import type { CiJob, DeliveryEntry, RuleSuite, Stage } from '../../src/domain/ports.js';
 import { InMemoryClock } from '../../src/infrastructure/in-memory-clock.js';
 import { InMemoryForge } from '../../src/infrastructure/in-memory-forge.js';
 import { InMemoryGate } from '../../src/infrastructure/in-memory-gate.js';
 import { Journal } from '../../src/infrastructure/in-memory-journal.js';
 import { InMemoryLog } from '../../src/infrastructure/in-memory-log.js';
+import { InMemoryProgress } from '../../src/infrastructure/in-memory-progress.js';
 import { InMemoryRepository } from '../../src/infrastructure/in-memory-repository.js';
-import type { ClockFixture, GateFixture, LogFixture, RepositoryFixture } from './fixtures.js';
+import type {
+  ClockFixture,
+  ForgeFixture,
+  GateFixture,
+  LogFixture,
+  ProgressFixture,
+  RepositoryFixture,
+} from './fixtures.js';
+import { ghForge } from './gh-fixture.js';
 import { gitFixture } from './git-fixture.js';
-import { fileLog, processGate, timerClock } from './process-fixtures.js';
+import { fileLog, processGate, streamProgress, timerClock } from './process-fixtures.js';
 import { Given, Then, When, type DeliverWorld } from './support.js';
 
 // The contracts of the ports (ports.feature). Each adapter comes with a fixture (fixtures.ts): what a scenario needs to
@@ -41,13 +50,6 @@ function inMemoryRepository(): RepositoryFixture {
   };
 }
 
-interface ForgeFixture {
-  forge: Forge;
-  hasRun(hash: string, run: CiRun): void;
-  evaluated(branch: string, hash: string, suite: RuleSuite): void;
-  reruns(): string[];
-}
-
 function inMemoryForge(): ForgeFixture {
   const journal = new Journal();
   const forge = new InMemoryForge(journal);
@@ -57,6 +59,11 @@ function inMemoryForge(): ForgeFixture {
     evaluated: (branch, hash, suite) => forge.evaluate(branch, hash, [suite]),
     reruns: () => journal.calls.filter((call) => call.startsWith('rerun ')),
   };
+}
+
+function inMemoryProgress(): ProgressFixture {
+  const progress = new InMemoryProgress();
+  return { progress, phases: () => progress.phases };
 }
 
 function inMemoryGate(): GateFixture {
@@ -100,6 +107,7 @@ const repo = (world: DeliverWorld): RepositoryFixture => world.state['portReposi
 const forgeOf = (world: DeliverWorld): ForgeFixture => world.state['portForge'] as ForgeFixture;
 const clockOf = (world: DeliverWorld): ClockFixture => world.state['portClock'] as ClockFixture;
 const logOf = (world: DeliverWorld): LogFixture => world.state['portLog'] as LogFixture;
+const progressOf = (world: DeliverWorld): ProgressFixture => world.state['portProgress'] as ProgressFixture;
 const gateOf = (world: DeliverWorld): GateFixture => world.state['portGate'] as GateFixture;
 
 // Repository
@@ -206,7 +214,7 @@ Then(
 // Forge
 
 Given('a delivery forge of the {word} adapter', function (name: string) {
-  this.state['portForge'] = adapter(name, { 'in-memory': inMemoryForge }, this);
+  this.state['portForge'] = adapter(name, { 'in-memory': inMemoryForge, gh: ghForge }, this);
 });
 
 Given(
@@ -353,4 +361,18 @@ Then('the delivery log holds, in order and whole, what was appended', function (
   const read = logOf(this).entries();
   assert.equal(read.length, 2);
   assert.deepEqual(read, this.state['portAppended']);
+});
+
+// Progress
+
+Given('a delivery progress of the {word} adapter', function (name: string) {
+  this.state['portProgress'] = adapter(name, { 'in-memory': inMemoryProgress, stream: streamProgress }, this);
+});
+
+When('I report the phases {string} to the delivery progress', function (phases: string) {
+  for (const phase of phases.split(', ')) progressOf(this).progress.phase(phase as Stage);
+});
+
+Then('the delivery progress holds the phases {string}', function (phases: string) {
+  assert.equal(progressOf(this).phases().join(', '), phases);
 });

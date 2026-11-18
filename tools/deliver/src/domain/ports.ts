@@ -4,6 +4,9 @@
 /** Where a run stopped. */
 export type Phase = 'préalables' | "branche d'essai" | 'porte' | 'CI' | 'publication';
 
+/** What `Progress` is told: the phases a run can stop at, and the last one, which a run never stops at. */
+export type Stage = Phase | 'rangement';
+
 /** Why a run stopped: a closed list of fixed strings, never a text read from a port. */
 export type Reason =
   | 'arbre non propre'
@@ -93,4 +96,9 @@ export interface DeliveryEntry {
 
 export interface DeliveryLog {
   append(entry: DeliveryEntry): void;
+}
+
+export interface Progress {
+  /** Told when the phase starts. */
+  phase(phase: Stage): void;
 }
