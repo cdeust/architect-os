@@ -3863,3 +3863,45 @@ Résultat : `delivered`, code de sortie 0, dix secondes.
 - Recherche : la preuve annoncée au §94 est jouée et rapportée avec un contrôle fait hors de la commande ; ce qu'elle ne prouve pas est dit.
 - SSDLC : une publication n'a eu lieu qu'après la porte et la CI vertes pour l'empreinte, et l'évaluation du ruleset a été lue après chaque push, par la commande et par un contrôle indépendant.
 - Opérationnel : une livraison reprise sans rejouer la porte ; une trace par exécution, écrite par l'hôte ; IRB sans objet.
+
+## 96. Le README relu en entier : ce qui y contredisait l'arbre est retiré ou corrigé, et un contrôle annoncé n'était plus appliqué, 18 novembre 2026
+
+Le §95 a été poussé (`37abb0c`) par `npm run deliver`, d'une traite : huit minutes, porte jouée, CI verte au premier sondage, les deux branches publiées, ruleset `pass` lu par la commande et par un contrôle indépendant.
+
+**La demande du propriétaire.** « Il y a des incohérences dans le README, relis-le et supprime les parties incohérentes. Tu es propriétaire du code et mainteneur, tu autoriserais ce genre de choses ? » Non. Le mainteneur a mis ce fichier à jour par ajouts, à chaque pas, sans jamais le relire en entier : chaque ajout était juste le jour où il était écrit, et l'ensemble ne l'était plus.
+
+**Ce que la relecture a trouvé, confronté à l'arbre.**
+
+| Dans le README | Dans l'arbre | Ce qui est fait |
+|---|---|---|
+| « Chaque fait qui entre dans le travail est vérifié contre la littérature » | Le guichet des preuves est un essai hors production | La phrase dit ce qui est : un guichet, essayé hors production |
+| « État au 15 novembre 2026, branche `feat/gate-1a` » | `main` suit la branche depuis le 17 | La date et la branche sont retirées |
+| « Sur la dernière brique », deux fois | Ces chiffres sont ceux du guichet des preuves (§37), qui n'est plus la dernière | La brique est nommée |
+| Le schéma de la vérification et son texte donnent les chiffres d'une étape de l'adaptateur Docker (§51) | Ce code est supprimé (décision 22) | Les chiffres sont ceux de la commande de livraison (§89 à §95) |
+| Les entrées inédites « appliquées à la main à chaque étape qui change un comportement » | Jouées trois fois (§51 à §53), sur du code supprimé depuis, et plus jamais ensuite, commande de livraison comprise | Voir ci-dessous |
+| L'évasion : « quatre profils contre huit attaques » | Cinq profils, 40 attaques, 55 scénarios | Corrigé |
+| Trois lignes d'état sur Docker construit puis retiré, la brique 1b.7 arrêtée, un workflow remplacé | Rien de cela n'existe | Deux lignes retirées, une réduite à un renvoi ; l'histoire est dite une fois, dans la section de ce qui est retiré, et au journal |
+| O.2 « attend 1b.6 » | 1b.6 est faite | Ligne retirée : le point est dans la feuille de route |
+| Cinq points non commencés, à la fois dans la table d'état et dans la feuille de route | | Ils ne sont plus que dans la feuille de route, et son texte le dit |
+| Deux numéros de version des épingles | L'un est dépassé | Retirés : le registre de la veille les porte |
+| « 1 196 scénarios » sous WSL2, à côté d'une suite de 2 606 | Mesure du §38 | Datée comme telle |
+| `services/memory/` : « les outils d'intention et leur worker » ; `modules/` : « memory » sans plus | Le module sert les outils de données, le worker joue les outils d'intention | Corrigé |
+| « Un processus lancé hors de `packages/sandbox` » est refusé | La règle nomme trois fichiers en exception | Dit |
+| Une étape de la boucle : « construction, puis revue » | Éclaireurs, construction, contrôles, revues | Corrigé |
+
+Ajouté parce que son absence était aussi une incohérence : la commande de livraison dans ce qui est prouvé, et ses arrêts jamais rencontrés sur la vraie forge dans ce qui ne l'est pas.
+
+**Le défaut de fond que cette relecture a montré.** Le schéma présente cinq contrôles avant la porte. Le quatrième, les entrées inventées par une session neuve, n'a été appliqué à aucune étape depuis le §53. Le propriétaire a dit le 17 novembre que ce contrôle est propre à cette boucle et se garde ; il était écrit comme appliqué, et il ne l'était pas. Le README, le schéma et la feuille de route le disent maintenant sans détour : rien ne l'applique, la boucle le doit. La commande de livraison a donc été construite sans lui ; elle a eu des scénarios, la mutation, cinq revues et deux preuves réelles.
+
+**Classe d'erreur et contrôle.** Compréhension, de la part du mainteneur : un document tenu par ajouts dérive. Le contrôle existant ne lit que les chemins cités (§68). Un second est inscrit à la feuille de route, avec celui des schémas : un compte ou un état que le README donne et que l'arbre ne donne plus. D'ici là, la règle de travail est de relire le fichier en entier à chaque commit qui le touche.
+
+**Ce qui n'est pas fait ici.** La section du coût de référence et les sections de conception n'ont pas été réécrites : leurs chiffres sont ceux de mesures datées, et ils sont dits comme tels.
+
+**Schémas et README.** Le schéma de la vérification porte les chiffres de la commande de livraison, et dit en rouge que les entrées inventées n'y ont pas été appliquées ; rendu contrôlé à l'œil. Aucun élément du système n'est ajouté.
+
+**Chiffres.** 2 606 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : chaque incohérence est donnée avec ce que l'arbre dit ; un contrôle annoncé et non appliqué est rapporté comme tel.
+- SSDLC : aucun code changé ; un contrôle de vérification manquant est nommé au lieu d'être laissé écrit comme fait.
+- Opérationnel : sans objet, aucun composant ni accès n'est touché ; IRB sans objet.
