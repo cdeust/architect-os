@@ -18,6 +18,9 @@ function configSchema(): z.ZodType<DeliverConfig> {
       (value) => !value.startsWith('/') && !value.includes('\\') && !value.includes('..'),
       'a repository path is relative and has no .. nor backslash',
     );
+  const word = z
+    .string()
+    .regex(/^\P{Cc}{1,200}$/u, 'a word of the command is 1 to 200 characters, none a control character');
   const different = (values: string[]): boolean => new Set(values).size === values.length;
   const count = (max: number): z.ZodNumber => z.number().int().min(1).max(max);
 
@@ -37,6 +40,12 @@ function configSchema(): z.ZodType<DeliverConfig> {
     requiredJobs: z.array(label).min(1).max(8).refine(different, 'the jobs are all different'),
     appendOnly: z.array(path).max(8),
     gateVerdict: path,
+    gateCommand: z.array(word).min(1).max(16),
+    gateLog: path,
+    log: z
+      .string()
+      .startsWith('${home}/', 'the log path starts with ${home}/')
+      .refine((value) => !value.includes('..'), 'the log path has no ..'),
     ciAttempts: count(10),
     pollSeconds: count(300),
     ciPolls: count(600),

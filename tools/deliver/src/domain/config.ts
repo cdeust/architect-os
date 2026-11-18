@@ -13,6 +13,12 @@ export interface DeliverConfig {
   /** Files that may only grow between the parent and the commit. */
   appendOnly: string[];
   gateVerdict: string;
+  /** The gate as an argv, started in the delivery worktree. */
+  gateCommand: string[];
+  /** Where the two outputs of the gate are written, relative to the delivery worktree. */
+  gateLog: string;
+  /** The log of the deliveries, a path that starts with `${home}/`. */
+  log: string;
   ciAttempts: number;
   pollSeconds: number;
   ciPolls: number;

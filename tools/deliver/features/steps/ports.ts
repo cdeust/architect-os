@@ -1,37 +1,20 @@
 import assert from 'node:assert/strict';
-import type {
-  CiJob,
-  CiRun,
-  Clock,
-  DeliveryEntry,
-  DeliveryLog,
-  Forge,
-  Gate,
-  Repository,
-  RuleSuite,
-} from '../../src/domain/ports.js';
+import type { CiJob, CiRun, DeliveryEntry, Forge, RuleSuite } from '../../src/domain/ports.js';
 import { InMemoryClock } from '../../src/infrastructure/in-memory-clock.js';
 import { InMemoryForge } from '../../src/infrastructure/in-memory-forge.js';
 import { InMemoryGate } from '../../src/infrastructure/in-memory-gate.js';
 import { Journal } from '../../src/infrastructure/in-memory-journal.js';
 import { InMemoryLog } from '../../src/infrastructure/in-memory-log.js';
 import { InMemoryRepository } from '../../src/infrastructure/in-memory-repository.js';
+import type { ClockFixture, GateFixture, LogFixture, RepositoryFixture } from './fixtures.js';
+import { gitFixture } from './git-fixture.js';
+import { fileLog, processGate, timerClock } from './process-fixtures.js';
 import { Given, Then, When, type DeliverWorld } from './support.js';
 
-// The contracts of the ports (ports.feature). Each adapter comes with a fixture: what a scenario needs to put the
-// world of the port in a state (a history, a remote, a run, a verdict), which no port can do. The next adapters add
-// their fixture here and their row to the outlines.
-
-/** Commits are named by the scenario; their hashes are the adapter's. */
-interface RepositoryFixture {
-  repository: Repository;
-  /** `removal`: the lines the commit removed from a file, relative to its parent. */
-  commit(label: string, parent: string | undefined, removal?: { path: string; lines: number }): void;
-  checkout(label: string): void;
-  setRemote(branch: string, label: string): void;
-  touchWorktree(): void;
-  hashOf(label: string): string;
-}
+// The contracts of the ports (ports.feature). Each adapter comes with a fixture (fixtures.ts): what a scenario needs to
+// put the world of the port in a state (a history, a remote, a run, a verdict), which no port can do. The fixtures of
+// the real adapters are in git-fixture.ts and process-fixtures.ts; the scenarios of one adapter alone are in
+// real-adapters.ts.
 
 function inMemoryRepository(): RepositoryFixture {
   const repository = new InMemoryRepository(new Journal(), '0'.repeat(40));
@@ -76,12 +59,6 @@ function inMemoryForge(): ForgeFixture {
   };
 }
 
-interface GateFixture {
-  gate: Gate;
-  /** What the gate leaves, and how it exits, when it runs. */
-  willLeave(verdict: string | undefined, code: number): void;
-}
-
 function inMemoryGate(): GateFixture {
   const gate = new InMemoryGate(new Journal());
   return {
@@ -91,10 +68,6 @@ function inMemoryGate(): GateFixture {
       gate.code = code;
     },
   };
-}
-
-interface ClockFixture {
-  clock: Clock;
 }
 
 /** The in-memory clock also counts, which only its own scenario reads. */
@@ -107,20 +80,20 @@ function inMemoryClock(): InMemoryClockFixture {
   return { clock, slept: () => clock.slept };
 }
 
-interface LogFixture {
-  log: DeliveryLog;
-  /** What the log holds, in order. */
-  entries(): DeliveryEntry[];
-}
-
 function inMemoryLog(): LogFixture {
   const log = new InMemoryLog(new Journal());
   return { log, entries: () => log.entries };
 }
 
-function adapter<T>(name: string, fixtures: Record<'in-memory', () => T>): T {
-  assert.ok(name in fixtures, `no fixture for the adapter ${name}`);
-  return fixtures[name as 'in-memory']();
+/** The fixture of the adapter a scenario names; the real ones own a directory, released with the scenario. */
+function adapter<T>(
+  name: string,
+  fixtures: Record<string, (world: DeliverWorld) => T>,
+  world: DeliverWorld,
+): T {
+  const build = fixtures[name];
+  assert.ok(build !== undefined, `no fixture for the adapter ${name}`);
+  return build(world);
 }
 
 const repo = (world: DeliverWorld): RepositoryFixture => world.state['portRepository'] as RepositoryFixture;
@@ -132,7 +105,7 @@ const gateOf = (world: DeliverWorld): GateFixture => world.state['portGate'] as 
 // Repository
 
 Given('a delivery repository of the {word} adapter', function (name: string) {
-  this.state['portRepository'] = adapter(name, { 'in-memory': inMemoryRepository });
+  this.state['portRepository'] = adapter(name, { 'in-memory': inMemoryRepository, git: gitFixture }, this);
 });
 
 Given('the delivery repository holds the commit {string}', function (label: string) {
@@ -233,7 +206,7 @@ Then(
 // Forge
 
 Given('a delivery forge of the {word} adapter', function (name: string) {
-  this.state['portForge'] = adapter(name, { 'in-memory': inMemoryForge });
+  this.state['portForge'] = adapter(name, { 'in-memory': inMemoryForge }, this);
 });
 
 Given(
@@ -299,7 +272,7 @@ Then(
 // Gate
 
 Given('a delivery gate of the {word} adapter', function (name: string) {
-  this.state['portGate'] = adapter(name, { 'in-memory': inMemoryGate });
+  this.state['portGate'] = adapter(name, { 'in-memory': inMemoryGate, process: processGate }, this);
 });
 
 Given(
@@ -328,7 +301,11 @@ Then('the delivery gate exited {int}', function (code: number) {
 // Clock
 
 Given('a delivery clock of the {word} adapter', function (name: string) {
-  this.state['portClock'] = adapter(name, { 'in-memory': inMemoryClock });
+  this.state['portClock'] = adapter<ClockFixture>(
+    name,
+    { 'in-memory': inMemoryClock, timer: timerClock },
+    this,
+  );
 });
 
 When('I sleep {int} seconds on the delivery clock', async function (seconds: number) {
@@ -359,7 +336,7 @@ const entry = (outcome: DeliveryEntry['outcome'], hash: string): DeliveryEntry =
 });
 
 Given('a delivery log of the {word} adapter', function (name: string) {
-  this.state['portLog'] = adapter(name, { 'in-memory': inMemoryLog });
+  this.state['portLog'] = adapter(name, { 'in-memory': inMemoryLog, file: fileLog }, this);
   this.state['portAppended'] = [];
 });
 

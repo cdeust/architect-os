@@ -39,6 +39,11 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | appendOnly     | []                                                     |
         | appendOnly     | ["a","b","c","d","e","f","g","h"]                      |
         | gateVerdict    | "a"                                                    |
+        | gateCommand    | ["a"]                                                  |
+        | gateCommand    | ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p"] |
+        | gateLog        | "a"                                                    |
+        | log            | "${home}/a"                                            |
+        | log            | "${home}/a.b/c"                                        |
         | ciAttempts     | 1                                                      |
         | ciAttempts     | 10                                                     |
         | pollSeconds    | 1                                                      |
@@ -84,6 +89,9 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | requiredJobs   |
         | appendOnly     |
         | gateVerdict    |
+        | gateCommand    |
+        | gateLog        |
+        | log            |
         | ciAttempts     |
         | pollSeconds    |
         | ciPolls        |
@@ -156,6 +164,26 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | gateVerdict    | "/reports/gate-base.json"      | $.gateVerdict a repository path is relative        |
         | gateVerdict    | "../gate-base.json"            | $.gateVerdict a repository path is relative        |
         | gateVerdict    | "reports\\\\gate-base.json"    | $.gateVerdict a repository path is relative        |
+        | gateCommand    | []                             | $.gateCommand                                      |
+        | gateCommand    | ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q"] | $.gateCommand        |
+        | gateCommand    | [""]                           | $.gateCommand.0                                    |
+        | gateCommand    | ["a\\u0000b"]                   | $.gateCommand.0 a word of the command is 1 to 200 characters |
+        | gateCommand    | ["a\\u007f"]                    | $.gateCommand.0 a word of the command is 1 to 200 characters |
+        | gateCommand    | ["a\\n"]                        | $.gateCommand.0 a word of the command is 1 to 200 characters |
+        | gateCommand    | 1                              | $.gateCommand                                      |
+        | gateCommand    | "npm run gate"                 | $.gateCommand                                      |
+        | gateLog        | ""                             | $.gateLog                                          |
+        | gateLog        | "/reports/gate.log"            | $.gateLog a repository path is relative            |
+        | gateLog        | "../gate.log"                  | $.gateLog a repository path is relative            |
+        | gateLog        | "reports\\\\gate.log"          | $.gateLog a repository path is relative            |
+        | log            | ""                             | $.log the log path starts with ${home}/            |
+        | log            | "/var/log/deliveries.jsonl"    | $.log the log path starts with ${home}/            |
+        | log            | "$HOME/a"                      | $.log the log path starts with ${home}/            |
+        | log            | "${home}"                      | $.log the log path starts with ${home}/            |
+        | log            | "x${home}/a"                   | $.log the log path starts with ${home}/            |
+        | log            | "${home}/../a"                 | $.log the log path has no ..                       |
+        | log            | "${home}/a/.."                 | $.log the log path has no ..                       |
+        | log            | 1                              | $.log                                              |
         | ciAttempts     | 0                              | $.ciAttempts                                       |
         | ciAttempts     | 11                             | $.ciAttempts                                       |
         | ciAttempts     | 1.5                            | $.ciAttempts                                       |
@@ -176,6 +204,26 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
       Examples:
         | field    |
         | workflow |
+
+    Scenario Outline: a word of the command of 200 characters
+      Given a deliver config of the base form
+      And the deliver config field "gateCommand" is set to a list of one string of 200 characters
+      When the deliver config is parsed
+      Then the deliver config is accepted
+
+      Examples:
+        | field       |
+        | gateCommand |
+
+    Scenario Outline: a word of the command of 201 characters
+      Given a deliver config of the base form
+      And the deliver config field "gateCommand" is set to a list of one string of 201 characters
+      When the deliver config is parsed
+      Then the deliver config is refused with a reason holding "$.gateCommand.0 a word of the command is 1 to 200 characters"
+
+      Examples:
+        | field       |
+        | gateCommand |
 
     Scenario Outline: a list holding a label of 65 characters
       Given a deliver config of the base form

@@ -3704,3 +3704,42 @@ L'étape s'est arrêtée là, comme le §82 l'avait construit : aucune revue n'a
 - Recherche : l'arrêt d'une étape par un contrôle est rapporté avec sa cause, remontée à la conception ; ce que l'exception retire à la règle est écrit.
 - SSDLC : une règle d'architecture n'est changée que par le mainteneur, dans un commit à elle, avec sa raison et un scénario qui la borne ; la revue a exigé cette séparation et elle est faite.
 - Opérationnel : une revue non payée sur un code qui ne pouvait pas entrer ; IRB sans objet.
+
+## 92. La commande de livraison, deuxième tranche : ses adaptateurs réels sur git, la porte, un journal et l'horloge, 18 novembre 2026
+
+Le §91 a été poussé (`a29256f`) : porte de l'hôte verte (2 443 scénarios, 20 ajoutés, aucun supprimé ; 1 fichier et 23 mutants dans le périmètre, aucun survivant), CI verte sur `gate` (Linux et macOS) à la première tentative ; `main` a suivi ; ruleset `pass` sur les deux branches.
+
+**Ce qui est construit.** Quatre des cinq ports de la commande ont leur adaptateur réel, et chaque contrat de `ports.feature` a maintenant deux lignes, le double en mémoire et l'adaptateur réel.
+
+| Port | Adaptateur | Ce qui le prouve |
+|---|---|---|
+| `Repository` | `git-repository.ts` : une commande git par méthode, argv fixe, `--prune` au fetch, jamais d'option de force | Un dépôt jetable et un dépôt nu distant, créés par le scénario avec de vrais commits ; un push qui n'est pas une avance rapide est refusé et la branche distante garde son empreinte |
+| `Gate` | `process-gate.ts` : la commande de la porte lancée dans l'arbre, ses deux sorties dans un fichier, le verdict lu une fois | Un script de porte en fixture ; un verdict qui n'est pas du JSON, une empreinte en majuscules, une de 39 caractères ne sont pas un verdict |
+| `DeliveryLog` | `file-log.ts` : une ligne JSON par livraison, dossier en 0700, fichier en 0600 | Les modes relus ; un fichier existant gardé |
+| `Clock` | `timer-clock.ts` | Un minuteur injecté qui tire aussitôt : aucun scénario n'attend |
+
+Tout processus passe par le fichier du §91. Le fichier descriptif reçoit `gateCommand`, `gateLog` et `log`, chacun avec ses copies refusées.
+
+**Ce qui n'est pas construit.** L'adaptateur de la forge, le point d'entrée et `npm run deliver` : la dernière tranche. Le point reste marqué `next`.
+
+**La boucle : deux passes.**
+
+| Passe | Construction, Sonnet 5.5 | Contrôles sans modèle | Revue, Opus 5.5 |
+|---|---|---|---|
+| 1 | 812 s, 1,23 $ | Types et format verts, architecture rouge : arrêt | Aucune, rien de payé (§91) |
+| 2 | 107 s, 0,20 $ | Les quatre verts ; 513 scénarios en 13 s, dont ceux du vrai git dans la sandbox sans réseau | 0,81 $, `request_changes`, 5 constats |
+
+Coût des deux passes : 2,24 $. Les cinq constats de la revue : deux mutants survivants et un cas d'échec dans le fichier des processus, traités au §91 ; l'exception à commiter à part, faite au §91 ; le README à mettre à jour, fait ici.
+
+**La mutation, jouée par l'hôte.** Sur tout l'outil, adaptateurs compris : 663 mutants, 624 tués, 31 erreurs d'exécution, 6 délais dépassés, 2 survivants. Les deux étaient dans la lecture du verdict de la porte, et tous deux équivalents : un encodage dont l'absence ne change pas ce que l'analyse JSON lit, et un `catch` qui rendait ce que la suite rend. Le mainteneur les a retirés par le code (plus d'encodage nommé, un `catch` sans corps), sans commentaire de désactivation ; la mutation de ce fichier rejouée ne laisse rien. Les délais dépassés ont été relus : des attentes qui ne finissent plus quand on casse ce qui les termine.
+
+**Ce qui n'est pas prouvé.** Aucun push vers un vrai dépôt distant sur le réseau, aucune vraie porte : les scénarios du vrai git poussent vers un dépôt nu sur disque, et la porte est un script. La première livraison faite par la commande, à la tranche suivante, sera la preuve de l'ensemble.
+
+**Schémas et README.** Aucun schéma ne change : le point reste `next`. Le README dit ce qui est construit du point « Delivery as a command » et de l'outil dans sa table des dossiers ; `CLAUDE.md` de même.
+
+**Chiffres.** 2 530 scénarios dans la suite (87 de plus).
+
+**Trois piliers.**
+- Recherche : deux passes rapportées avec leurs coûts ; la mutation réelle jouée par l'hôte ; ce que les scénarios ne prouvent pas est dit.
+- SSDLC : argv fixe, jamais de shell ni d'option de force ; un seul fichier lance des processus ; un journal de l'hôte en 0600 ; aucune dépendance ajoutée ; aucun commentaire de désactivation.
+- Opérationnel : chaque contrat a une ligne par adaptateur, ce qui borne ce qu'un adaptateur d'une autre forge ou d'un autre stockage devra tenir ; IRB sans objet.
