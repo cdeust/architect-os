@@ -21,6 +21,11 @@ export default {
   // the main.ts, files, PostgreSQL), so with several of them the status of a mutant depended on who collided with whom,
   // and the same commit gave different survivors from one run to the next. A verdict must be reproducible.
   concurrency: 1,
+  // A fuse against a first run that never ends, not a way to manage the duration of the suite. It is set explicitly so
+  // that the suite cannot outgrow a default (5 minutes) without anyone deciding. On 18 November 2026, with 2,896
+  // scenarios, the initial run took 4 min 9 s to 4 min 49 s on the host (cucumber alone: 5 min 35 s) and the default
+  // bound was reached silently. Journal §101.
+  dryRunTimeoutMinutes: 20,
   mutate: plan.mutate,
   reporters: ['json', 'clear-text', 'progress'],
   jsonReporter: { fileName: 'reports/mutation/mutation.json' },

@@ -11,6 +11,80 @@ Feature: the folder steps/ keeps what each step saw
     Given a copy of steps/ holding the valid step folder "demo"
     Then every entry of it follows the rule of the folders of steps
 
+  Scenario: a file that the repository ignores, beside the folders and inside one, is not judged: it can never be committed
+    Given a copy of steps/ in a repository that ignores ".DS_Store" and "node_modules/", holding the valid step folder "demo"
+    When the copy holds the file ".DS_Store"
+    And the copy holds the file "demo/.DS_Store"
+    Then every entry of it follows the rule of the folders of steps
+
+  Scenario: a directory that the repository ignores, with a file in it, beside the folders and inside one, is not judged
+    Given a copy of steps/ in a repository that ignores ".DS_Store" and "node_modules/", holding the valid step folder "demo"
+    When the copy holds the file "node_modules/pkg/index.js"
+    And the copy holds the file "demo/node_modules/pkg/index.js"
+    Then every entry of it follows the rule of the folders of steps
+
+  Scenario: an empty directory beside the folders is not judged: git cannot commit it
+    Given a copy of steps/ in a repository that ignores ".DS_Store" and "node_modules/", holding the valid step folder "demo"
+    When the copy holds the empty directory "scratch"
+    Then every entry of it follows the rule of the folders of steps
+
+  Scenario: in the same repository, a file that is not ignored is still refused
+    Given a copy of steps/ in a repository that ignores ".DS_Store" and "node_modules/", holding the valid step folder "demo"
+    When the copy holds the file "demo/notes.md"
+    Then that copy of steps/ is refused, because "demo: notes.md is in excess"
+
+  Scenario: in the same repository, a file in a subdirectory of a step folder is refused
+    Given a copy of steps/ in a repository that ignores ".DS_Store" and "node_modules/", holding the valid step folder "demo"
+    When the copy holds the file "demo/more/notes.md"
+    Then that copy of steps/ is refused, because "demo: more is in excess"
+
+  Scenario: an exclusion file of the host that names a file does not hide it from the rule
+    Given a copy of steps/ in a repository that ignores ".DS_Store" and "node_modules/", holding the valid step folder "demo"
+    And the global git configuration of the host excludes "notes.md"
+    When the copy holds the file "demo/notes.md"
+    Then that copy of steps/ is refused, because "demo: notes.md is in excess"
+
+  Scenario: a step folder that is added and committed is judged: it follows the rule
+    Given a copy of steps/ in a repository, holding the valid step folder "demo"
+    When the copy is added and committed
+    Then every entry of it follows the rule of the folders of steps
+
+  Scenario: a committed step folder whose brief is edited on disk is refused
+    Given a copy of steps/ in a repository, holding the valid step folder "demo"
+    When the copy is added and committed
+    And the copy is broken with a brief edited after the run
+    Then that copy of steps/ is refused, because "demo: brief.md is not the file the record hashed"
+
+  Scenario: a tracked step folder removed from the disk and not from the index is refused, not thrown
+    Given a copy of steps/ in a repository, holding the valid step folder "demo"
+    When the copy is added and committed
+    And the path "demo" of the copy is removed from the disk only
+    Then that copy of steps/ is refused, because "demo: is not a directory"
+
+  Scenario: the whole folder steps/ removed from the disk while git still lists it is refused
+    Given a copy of steps/ in a repository, holding the valid step folder "demo"
+    When the copy is added and committed
+    And the folder steps/ of the copy is removed from the disk only
+    Then that copy of steps/ is refused, because "steps: is not a directory"
+
+  Scenario: the folder steps/ absent from the disk, and git listing nothing under it, is not a defect
+    Given a copy of steps/ in a repository, holding the valid step folder "demo"
+    When the folder steps/ of the copy is removed from the disk only
+    Then every entry of it follows the rule of the folders of steps
+
+  Scenario: a tracked file of a step folder removed from the disk and not from the index is refused: it is missing
+    Given a copy of steps/ in a repository, holding the valid step folder "demo"
+    When the copy is added and committed
+    And the path "demo/brief.md" of the copy is removed from the disk only
+    Then that copy of steps/ is refused, because "demo: brief.md is missing"
+
+  Scenario: a tracked file that is none of the expected files, removed from the disk only, is refused: it is not a regular file
+    Given a copy of steps/ in a repository, holding the valid step folder "demo"
+    When the copy holds the file "demo/notes.md"
+    And the copy is added and committed
+    And the path "demo/notes.md" of the copy is removed from the disk only
+    Then that copy of steps/ is refused, because "demo: notes.md is not a regular file"
+
   Scenario: a copy of steps/ with no entry follows the rule on nothing
     Given a copy of steps/ holding no step folder
     Then every entry of it follows the rule of the folders of steps

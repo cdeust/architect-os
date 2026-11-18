@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 719" width="980" height="719" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 816" width="980" height="816" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="t">One sandbox per session: what a session can touch</title>
-  <desc id="d">Claude Code runs inside an srt sandbox with a random session token. The only route out is an authentication proxy on the host, which alone holds the credential. Secrets of the home folder and the folders of other sandboxes cannot be read. Five profiles set what a session, or a command the host runs for a step, may write and reach. Decided and not built, marked next: a spending bound per task token in the broker, rights per client, scenarios the build cannot write, and the same ports on a server.</desc>
+  <desc id="d">Claude Code runs inside an srt sandbox with a random session token. The only route out is an authentication proxy on the host, which alone holds the credential. Secrets of the home folder and the folders of other sandboxes cannot be read. Five profiles set what a session, or a command the host runs for a step, may write and reach. Decided and not built, marked next: a spending bound per task token in the broker, rights per client, scenarios the build cannot write, and the same ports on a server. Also decided and not built: one copy of the dependencies, kept by a package manager in a store that every sandbox can only read; worktrees made for one step and removed at its end; and a closed list of environment variables for the git the host starts.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
   </defs>
-  <rect x="0.5" y="0.5" width="979" height="718" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="0.5" y="0.5" width="979" height="815" rx="10" fill="#ffffff" stroke="#d0d7de"/>
   <text x="24" y="34" font-size="17" font-weight="600" fill="#1f2328">One sandbox per session: what a session can touch</text>
   <text x="24" y="54" font-size="12.5" fill="#57606a">packages/sandbox, on srt (@anthropic-ai/sandbox-runtime): Seatbelt on macOS, bubblewrap on Linux</text>
 
@@ -108,4 +108,19 @@
   <text x="746" y="636" font-size="12" font-weight="600" fill="#1f2328">On a server</text>
   <text x="746" y="654" font-size="11.5" fill="#57606a">the same port, another adapter;</text>
   <text x="746" y="669" font-size="11.5" fill="#57606a">credentials by federation</text>
+  <rect x="20" y="713" width="226" height="87" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+  <text x="32" y="733" font-size="12" font-weight="600" fill="#1f2328">One copy of the dependencies</text>
+  <text x="32" y="751" font-size="11.5" fill="#57606a">a package manager with one store,</text>
+  <text x="32" y="766" font-size="11.5" fill="#57606a">read-only for every sandbox; the</text>
+  <text x="32" y="781" font-size="11.5" fill="#57606a">host alone installs, from the lock</text>
+  <rect x="258" y="713" width="226" height="87" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+  <text x="270" y="733" font-size="12" font-weight="600" fill="#1f2328">Disposable worktrees</text>
+  <text x="270" y="751" font-size="11.5" fill="#57606a">one per step, made from the</text>
+  <text x="270" y="766" font-size="11.5" fill="#57606a">current head and removed at its</text>
+  <text x="270" y="781" font-size="11.5" fill="#57606a">end; none is kept in step by hand</text>
+  <rect x="496" y="713" width="226" height="87" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+  <text x="508" y="733" font-size="12" font-weight="600" fill="#1f2328">A closed environment for git</text>
+  <text x="508" y="751" font-size="11.5" fill="#57606a">the host starts git with a closed</text>
+  <text x="508" y="766" font-size="11.5" fill="#57606a">list of variables, as it starts</text>
+  <text x="508" y="781" font-size="11.5" fill="#57606a">its native children</text>
 </svg>

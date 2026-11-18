@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 603" width="980" height="603" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 700" width="980" height="700" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="t">How a step is tested and verified</title>
-  <desc id="d">Five checks come before the gate: scenarios written with the code, mutation of the changed lines, an independent review in a read-only sandbox, fresh inputs invented by another session, and a measure before the real system. A finding of any of them goes back to the code. When all are green, the gate runs on the host and in CI, and one command, npm run deliver, bound to the hash of the commit, delivers that same commit to the branch and then to main, both held by a ruleset that requires the gate, whose evaluation it reads after each push. Under each check, what it gave on one piece of work, the delivery command of 18 November 2026; the fresh inputs were not applied to it, and found three defects on the next piece of work. Decided and not built, marked next: scenarios written by another session and frozen, invented inputs as a phase, evals of prompts, findings given with a failing scenario, and a human gate at delivery.</desc>
+  <desc id="d">Five checks come before the gate: scenarios written with the code, mutation of the changed lines, an independent review in a read-only sandbox, fresh inputs invented by another session, and a measure before the real system. A finding of any of them goes back to the code. When all are green, the gate runs on the host and in CI, and one command, npm run deliver, bound to the hash of the commit, delivers that same commit to the branch and then to main, both held by a ruleset that requires the gate, whose evaluation it reads after each push. Under each check, what it gave on one piece of work, the delivery command of 18 November 2026; the fresh inputs were not applied to it, and found three defects on the next piece of work. Decided and not built, marked next: scenarios written by another session and frozen, invented inputs as a phase, evals of prompts, findings given with a failing scenario, and a human gate at delivery. Also decided and not built: the duration of the suite, whose scenarios run one at a time, measured and shortened by running together what shares neither a port nor a file.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
     <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#cf222e"/></marker>
   </defs>
-  <rect x="0.5" y="0.5" width="979" height="602" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="0.5" y="0.5" width="979" height="699" rx="10" fill="#ffffff" stroke="#d0d7de"/>
   <text x="24" y="34" font-size="17" font-weight="600" fill="#1f2328">How a step is tested and verified</text>
   <text x="24" y="54" font-size="12.5" fill="#57606a">Five checks before the gate. Under each, what it gave on one piece of work: the delivery command, 18 November 2026 (journal, §89 to §95)</text>
 
@@ -133,4 +133,9 @@
   <text x="794" y="538" font-size="11.5" fill="#57606a">a person approves before</text>
   <text x="794" y="553" font-size="11.5" fill="#57606a">main; the orchestrator has</text>
   <text x="794" y="568" font-size="11.5" fill="#57606a">no bypass</text>
+  <rect x="20" y="597" width="369" height="87" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+  <text x="32" y="617" font-size="12" font-weight="600" fill="#1f2328">The duration of the suite</text>
+  <text x="32" y="635" font-size="11.5" fill="#57606a">scenarios run one at a time, and the mutation tool plays</text>
+  <text x="32" y="650" font-size="11.5" fill="#57606a">them once more: measure where the time goes, run at the</text>
+  <text x="32" y="665" font-size="11.5" fill="#57606a">same time what shares neither a port nor a file</text>
 </svg>

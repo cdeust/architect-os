@@ -1,0 +1,54 @@
+{
+  "build": {
+    "model": "claude-sonnet-5-5",
+    "effort": "low",
+    "limitSeconds": 1200
+  },
+  "checks": [
+    {
+      "name": "types-features",
+      "command": [
+        "npx",
+        "tsc",
+        "-p",
+        "features",
+        "--noEmit",
+        "--composite",
+        "false",
+        "--incremental",
+        "false"
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "format",
+      "command": [
+        "npx",
+        "prettier",
+        "--check",
+        "."
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "scenarios",
+      "command": [
+        "npx",
+        "cucumber-js",
+        "--profile",
+        "replay",
+        "features/descriptive"
+      ],
+      "limitSeconds": 600
+    }
+  ],
+  "reviews": [
+    {
+      "name": "correctness",
+      "model": "claude-opus-5-5",
+      "effort": "medium",
+      "limitSeconds": 900
+    }
+  ],
+  "parallel": 2
+}

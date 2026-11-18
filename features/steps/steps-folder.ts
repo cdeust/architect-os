@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   lstatSync,
@@ -11,7 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   buildRecord,
   isStepName,
@@ -27,12 +28,46 @@ import { Given, ROOT, Then, When, stored } from './helpers.js';
 
 const sha256 = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex');
 
+/**
+ * What git could commit under `steps/`: the first component of each path (a step folder, or an entry of `steps/`) and,
+ * for each, its second components (the files of the folder). Tracked paths and untracked ones that the rules of the
+ * repository do not ignore; the exclusion file of the host is not read, as the fingerprint does not read it. What git
+ * ignores, and an empty directory, do not appear: they can never be committed, so the rule does not judge them.
+ */
+function committable(repository: string): Map<string, Set<string>> {
+  const listed = execFileSync(
+    'git',
+    [
+      '-c',
+      'core.excludesFile=/dev/null',
+      'ls-files',
+      '--cached',
+      '--others',
+      '--exclude-standard',
+      '-z',
+      '--',
+      'steps',
+    ],
+    { cwd: repository, encoding: 'utf8' },
+  );
+  const folders = new Map<string, Set<string>>();
+  for (const path of listed.split('\0').filter((entry) => entry !== '')) {
+    const [, name, file] = path.split('/') as [string, string, string | undefined];
+    const files = folders.get(name) ?? new Set<string>();
+    if (file !== undefined) files.add(file);
+    folders.set(name, files);
+  }
+  return folders;
+}
+
 /** What is wrong with the folder `steps/<name>`, or null. `reason` strings are the ones the scenarios expect. */
-function folderDefect(steps: string, name: string): string | null {
+function folderDefect(steps: string, name: string, files: ReadonlySet<string> | undefined): string | null {
   const folder = join(steps, name);
-  if (!lstatSync(folder).isDirectory()) return `${name}: is not a directory`;
+  if (!lstatSync(folder, { throwIfNoEntry: false })?.isDirectory()) return `${name}: is not a directory`;
   if (!isStepName(name)) return `${name}: its name is refused by the expression of the step names`;
-  const entries = readdirSync(folder, { withFileTypes: true });
+  const entries = readdirSync(folder, { withFileTypes: true }).filter(
+    (entry) => files === undefined || files.has(entry.name),
+  );
   const present = new Set(entries.map((entry) => entry.name));
   if (!present.has('step.json')) return `${name}: step.json is missing`;
   let scouts: string[];
@@ -49,6 +84,8 @@ function folderDefect(steps: string, name: string): string | null {
   if (missing !== undefined) return `${name}: ${missing} is missing`;
   const excess = [...present].sort().find((file) => !expected.includes(file));
   if (excess !== undefined) return `${name}: ${excess} is in excess`;
+  const gone = [...(files ?? [])].sort().find((file) => !present.has(file));
+  if (gone !== undefined) return `${name}: ${gone} is not a regular file`;
   const odd = entries.find((entry) => !entry.isFile());
   if (odd !== undefined) return `${name}: ${odd.name} is not a regular file`;
   const parsed = (() => {
@@ -75,13 +112,21 @@ function folderDefect(steps: string, name: string): string | null {
   return null;
 }
 
-/** The first defect among the entries of `steps/`, or null; an absent `steps/` has none. */
-function stepsDefect(steps: string): string | null {
+/**
+ * The first defect among the entries of `steps/`, or null. In a repository the entries are the paths git could commit;
+ * outside one, those of the disk. An absent `steps/` has no defect, unless git still lists paths under it.
+ */
+function stepsDefect(steps: string, repository?: string): string | null {
   const own = lstatSync(steps, { throwIfNoEntry: false });
-  if (own === undefined) return null;
+  if (own === undefined) {
+    // Absent from the disk: no defect, unless git still lists paths under it (removed and not yet from the index).
+    return repository !== undefined && committable(repository).size > 0 ? 'steps: is not a directory' : null;
+  }
   if (!own.isDirectory()) return 'steps: is not a directory';
-  for (const name of readdirSync(steps).sort()) {
-    const defect = folderDefect(steps, name);
+  const folders = repository === undefined ? undefined : committable(repository);
+  const names = folders === undefined ? readdirSync(steps) : [...folders.keys()];
+  for (const name of names.sort()) {
+    const defect = folderDefect(steps, name, folders?.get(name));
     if (defect !== null) return defect;
   }
   return null;
@@ -89,7 +134,8 @@ function stepsDefect(steps: string): string | null {
 
 interface Steps {
   steps: string;
-  defect?: string | null;
+  /** The repository whose exclusion rules apply to `steps`, when it is in one. */
+  repository?: string;
 }
 const own = (world: ArchitectWorld) => stored<Steps>(world, 'stepsFolder');
 
@@ -137,8 +183,21 @@ function writeValid(steps: string, name: string): void {
 }
 
 Given('the committed folder steps\\/ of the repository', function () {
-  this.state['stepsFolder'] = { steps: join(ROOT, 'steps') } satisfies Steps;
+  this.state['stepsFolder'] = { steps: join(ROOT, 'steps'), repository: ROOT } satisfies Steps;
 });
+
+/**
+ * Every git command of the scenarios that build a repository: no global and no system configuration, no template and
+ * no hooks, so that nothing of the host changes what the scenarios prove. The one call that reads the configuration of
+ * the host on purpose is the rule's own (`committable`), which the scenario of the exclusion file of the host exercises.
+ */
+function git(cwd: string | undefined, ...args: string[]): void {
+  execFileSync('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
+    cwd,
+    stdio: 'ignore',
+    env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
+  });
+}
 
 const copy = (world: ArchitectWorld): string => {
   const root = mkdtempSync(join(tmpdir(), 'aos-steps-gate-'));
@@ -157,8 +216,80 @@ Given('a copy of steps\\/ holding no step folder', function () {
   copy(this);
 });
 
+Given(
+  'a copy of steps\\/ in a repository that ignores {string} and {string}, holding the valid step folder {string}',
+  function (first: string, second: string, name: string) {
+    const steps = copy(this);
+    const repository = dirname(steps);
+    git(undefined, 'init', '-q', '--template=', repository);
+    writeFileSync(join(repository, '.gitignore'), `${first}\n${second}\n`);
+    writeValid(steps, name);
+    own(this).repository = repository;
+  },
+);
+
+Given('a copy of steps\\/ in a repository, holding the valid step folder {string}', function (name: string) {
+  const steps = copy(this);
+  const repository = dirname(steps);
+  git(undefined, 'init', '-q', '--template=', repository);
+  writeValid(steps, name);
+  own(this).repository = repository;
+});
+
+When('the copy is added and committed', function () {
+  const repository = own(this).repository;
+  assert.ok(repository, 'the copy is not in a repository');
+  git(repository, 'add', '--', 'steps');
+  git(
+    repository,
+    '-c',
+    'user.name=test',
+    '-c',
+    'user.email=test@example.invalid',
+    '-c',
+    'commit.gpgsign=false',
+    'commit',
+    '-q',
+    '-m',
+    'steps',
+  );
+});
+
+When('the path {string} of the copy is removed from the disk only', function (path: string) {
+  rmSync(join(own(this).steps, path), { recursive: true });
+});
+
+When('the folder steps\\/ of the copy is removed from the disk only', function () {
+  rmSync(own(this).steps, { recursive: true });
+});
+
+When('the copy holds the file {string}', function (path: string) {
+  const file = join(own(this).steps, path);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, 'left by a file browser\n');
+});
+
+When('the copy holds the empty directory {string}', function (path: string) {
+  mkdirSync(join(own(this).steps, path), { recursive: true });
+});
+
+Given('the global git configuration of the host excludes {string}', function (pattern: string) {
+  // The global configuration of git, for this scenario: an exclusion file that names the pattern. Unlike the git
+  // commands that build the copy (`git`, which ignores it), the call of the rule itself reads it: that is what is proved.
+  const home = mkdtempSync(join(tmpdir(), 'aos-steps-home-'));
+  const before = process.env['GIT_CONFIG_GLOBAL'];
+  this.cleanups.push(() => {
+    if (before === undefined) delete process.env['GIT_CONFIG_GLOBAL'];
+    else process.env['GIT_CONFIG_GLOBAL'] = before;
+    rmSync(home, { recursive: true, force: true });
+  });
+  writeFileSync(join(home, 'ignore'), `${pattern}\n`);
+  writeFileSync(join(home, 'gitconfig'), `[core]\n\texcludesFile = ${join(home, 'ignore')}\n`);
+  process.env['GIT_CONFIG_GLOBAL'] = join(home, 'gitconfig');
+});
+
 Then('every entry of it follows the rule of the folders of steps', function () {
-  assert.equal(stepsDefect(own(this).steps), null);
+  assert.equal(stepsDefect(own(this).steps, own(this).repository), null);
 });
 
 const record = (steps: string) => join(steps, 'demo', 'record.json');
@@ -207,5 +338,5 @@ When('the copy is broken with {}', function (defect: string) {
 });
 
 Then('that copy of steps\\/ is refused, because {string}', function (reason: string) {
-  assert.equal(stepsDefect(own(this).steps), reason);
+  assert.equal(stepsDefect(own(this).steps, own(this).repository), reason);
 });

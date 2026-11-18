@@ -93,6 +93,8 @@ interface Step {
   taken: Set<string>;
   /** The count of sessions started when the folder steps/ was prepared, once per call. */
   prepared: number[];
+  /** The error the root of the worktree throws, when the step is not launched from it. */
+  rootRefusal?: Error;
   /** The fingerprint of the worktree, or the error its computation throws, and how many times it was asked. */
   fingerprint: TreeFingerprint | Error;
   fingerprints: number;
@@ -419,6 +421,10 @@ const start = (s: Step, args: string): Promise<void> => {
     },
     now: () => s.clock,
     date: () => s.date,
+    root: () => {
+      if (s.rootRefusal !== undefined) throw s.rootRefusal;
+      return '/the/worktree';
+    },
     fingerprint: () => {
       s.fingerprints++;
       if (s.fingerprint instanceof Error) throw s.fingerprint;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 import { deliverDependencies, parseArguments, runDeliver, type DeliverDependencies } from '../../src/main.js';
 import { runToEnd } from '../../src/infrastructure/host-process.js';
 import { temporaryDirectory } from './fixtures.js';
@@ -142,19 +142,17 @@ async function run(world: DeliverWorld, argv: string, fromWorktree: boolean): Pr
   command.stderr = out.stderr;
 }
 
-Given('the delivery command is told the home {string}', function (home: string) {
-  commandOf(this).toldHome = home;
-  // A relative home is refused before anything is written. Should that refusal ever be lost (a mutant of the mutation
-  // run removes it), the log would land under the working directory of this process, which is a worktree of the
-  // repository: the scenario then fails, and must still leave that worktree as it found it.
-  if (!isAbsolute(home)) {
-    assert.match(home, /^zz-deliver-[a-z-]+$/);
-    this.cleanups.push(() => rmSync(join(process.cwd(), home), { recursive: true, force: true }));
-  }
+Given('the delivery command is told its home as a path that is not absolute', function () {
+  // The temporary home itself, written from the working directory of this process. Should the refusal ever be lost
+  // (the mutation run removes it on purpose), the log lands in that temporary home, which the scenario removes, and
+  // nowhere in a worktree of the repository.
+  const command = commandOf(this);
+  command.toldHome = relative(process.cwd(), command.home);
+  assert.equal(isAbsolute(command.toldHome), false);
 });
 
-Then('the worktree of the delivery command holds no entry named {string}', function (name: string) {
-  assert.equal(existsSync(join(commandOf(this).git.work, name)), false);
+Then('the home of the delivery command holds no delivery log', function () {
+  assert.equal(existsSync(join(commandOf(this).home, LOG)), false);
 });
 
 Then(

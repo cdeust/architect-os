@@ -120,22 +120,6 @@ Feature: the fingerprint of the tree of a worktree
       | rev-parse HEAD      | the text "ccccccccccccccccccccccccccccccccccccccccc" and the exit code 0 |
       | rev-parse HEAD      | the text "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC" and the exit code 0 |
 
-  Scenario: a tracked file that an exclusion rule names stays in the tree: a clean worktree is clean
-    Found by a fresh session that invented inputs (journal, §99): in an empty index, git add -A leaves such a file out.
-    Given a throwaway repository with one commit
-    And the file ".git/info/exclude" of the repository holds "a.txt\n"
-    When I take the fingerprint of the repository
-    Then the fingerprint is clean
-    And the fingerprint tree is the tree of HEAD
-
-  Scenario: the same file, changed, gives the tree that committing the change would give
-    Given a throwaway repository with one commit
-    And the file ".git/info/exclude" of the repository holds "a.txt\n"
-    And the file "a.txt" of the repository holds "changed\n"
-    When I take the fingerprint of the repository
-    Then the fingerprint is not clean
-    And the fingerprint tree is the tree that committing everything would give
-
   Scenario: the exclusion file of the host is not read: a file it names is in the tree
     Given a throwaway repository with one commit
     And the exclusion file of the host names "local.txt"

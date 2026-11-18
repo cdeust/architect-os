@@ -184,8 +184,8 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
         """
       And the log of the delivery command holds 0 lines
 
-    Scenario Outline: a home that is not an absolute path: the log is refused before any act, and nothing is written in the worktree
-      Given the delivery command is told the home "<home>"
+    Scenario: a home that is not an absolute path: the log is refused before any act, and nothing is written
+      Given the delivery command is told its home as a path that is not absolute
       When I run the delivery command with "step"
       Then the delivery command exited 3
       And the delivery command printed nothing on its standard output
@@ -193,13 +193,8 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
         """
         architect-os deliver: the delivery log is not an absolute path
         """
-      And the worktree of the delivery command holds no entry named "<home>"
+      And the home of the delivery command holds no delivery log
       And the remote of the delivery command has no branch "sentinel/gate-1a-step"
-
-      Examples:
-        | home               |
-        | zz-deliver-home    |
-        | zz-deliver-no-home |
 
   Rule: the entry point
 

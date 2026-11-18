@@ -22,6 +22,10 @@ Feature: Cucumber profiles
     Given the committed Stryker configuration
     Then its cucumber runner profile is "mutation"
 
+  Scenario: Stryker gives its first run an explicit bound
+    Given the committed Stryker configuration
+    Then its first run has an explicit bound of 20 minutes
+
   Scenario: a default profile with tags is rejected
     Given the committed cucumber configuration
     Then a default profile with tags is rejected

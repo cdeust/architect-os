@@ -21,6 +21,19 @@ export interface SessionMeasure {
   structuredOutput: unknown;
 }
 
+/**
+ * `modelUsage` : un objet dont chaque clé est un nom de modèle, venu du flux de la session. Il est lu en paires, et non
+ * par `z.record` : la bibliothèque écarte sans rien dire une clé `__proto__`, et le coût d'un tel nom doit rester
+ * compté. Ce qui n'est pas un objet (rien, une liste, un nombre) n'a pas de paires : le résultat n'en est pas un.
+ */
+function modelCosts() {
+  return z.preprocess(
+    (raw) =>
+      typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? Object.entries(raw) : undefined,
+    z.array(z.tuple([z.string(), z.object({ costUSD: z.number() })])),
+  );
+}
+
 // Seuls les champs lus sont déclarés ; les autres sont tolérés. Les schémas sont construits dans des fonctions : un
 // littéral au niveau du module ferait rejouer toute la suite pour chacun de ses mutants (Stryker).
 const resultEventSchema = () =>
@@ -39,7 +52,7 @@ const resultEventSchema = () =>
       cache_read_input_tokens: z.number(),
       cache_creation_input_tokens: z.number(),
     }),
-    modelUsage: z.record(z.string(), z.object({ costUSD: z.number() })),
+    modelUsage: modelCosts(),
     structured_output: z.unknown().optional(),
   });
 
@@ -97,7 +110,7 @@ export function measureSession(stream: string): SessionMeasure {
     };
   }
   // Par une Map, jamais par un accès à une clé de l'objet : un nom de modèle vient du flux de la session.
-  const costs = new Map(Object.entries(result.modelUsage).map(([model, usage]) => [model, usage.costUSD]));
+  const costs = new Map(result.modelUsage.map(([model, usage]) => [model, usage.costUSD]));
   const models = [...costs.keys()].sort();
   return {
     completed: result.subtype === 'success' && !result.is_error,

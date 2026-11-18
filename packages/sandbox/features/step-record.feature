@@ -185,7 +185,7 @@ Feature: the step leaves its brief and its record in the worktree
       And the steps folder already holds the step "demo"
       When I run the step with the arguments "<folder>"
       Then the step exits with 2
-      And the step stderr is "architect-os step: the step demo already has a folder in steps/"
+      And the step stderr is "architect-os step: l'étape demo a déjà un dossier dans steps/"
       And the step stdout is empty
       And no session was started
       And the step published nothing
@@ -197,7 +197,7 @@ Feature: the step leaves its brief and its record in the worktree
       And the step folder holds a step.json with a build and "no review"
       When I run the step with the arguments "<folder>"
       Then the step exits with 2
-      And the step stderr is "architect-os step: the step name must match ^[a-z][a-z0-9-]{0,31}$: <name>"
+      And the step stderr is "architect-os step: le nom de l'étape doit suivre ^[a-z][a-z0-9-]{0,31}$ : <name>"
       And the step stdout is empty
       And no session was started
       And the step published nothing
@@ -225,6 +225,19 @@ Feature: the step leaves its brief and its record in the worktree
         | a                                |
         | a-9                              |
         | aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa |
+
+    Scenario: a launch directory that is not the root of its worktree is refused before the name of the step, any session or any write
+      Given a step folder named "Demo"
+      And the step folder holds a step.json with a build and "no review"
+      And the step is not launched from the root of its worktree: "pas la racine"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: Error: pas la racine"
+      And the step stdout is empty
+      And no session was started
+      And the step published nothing
+      And the folder steps/ was not prepared
+      And the fingerprint was taken 0 times
 
     Scenario: a fingerprint that throws is a failure of the tool, before any session
       Given a step folder
@@ -291,7 +304,7 @@ Feature: the step leaves its brief and its record in the worktree
       When I run the step with the arguments "<folder>"
       Then the step exits with 0
       And the published record is accepted by the schema
-      And the published record field "sessions.0.costByModel" is {"claude-opus-5-5":0,"claude-sonnet-5-5":0.5,"other":0.4375}
+      And the published record field "sessions.0.costByModel" is {"claude-opus-5-5":0,"claude-sonnet-5-5":0.5,"other":0.46875}
       And the published record field "sessions.0.costByModel" has its keys in the order "claude-opus-5-5 claude-sonnet-5-5 other"
       And no published file contains "Evil"
       And no published file contains "evil"
@@ -320,6 +333,35 @@ Feature: the step leaves its brief and its record in the worktree
       And the step dependencies give a date that is now
       And the step dependencies fingerprint the worktree
       And the step dependencies publish "demo" with the files "a.md" and "b.md" under steps/ of the worktree
+
+    Scenario: launched from a directory below the root, the step is refused and nothing is created
+      Given a throwaway git worktree
+      When I build the step dependencies of a process whose INIT_CWD is the directory "packages/deep" of that worktree
+      Then the step dependencies refuse the directory "packages/deep" of that worktree, naming both paths, and create nothing
+
+    Scenario: outside a linked worktree the step has no root, no tree to fingerprint and no folder to write: the refusal of the worktree, each time
+      Given a throwaway git repository that is not a linked worktree
+      When I build the step dependencies of a process whose INIT_CWD is that repository
+      Then the step dependencies refuse the root, the fingerprint and the folder steps/ with "SandboxError: NOT_A_WORKTREE: dépôt principal : lancer depuis un worktree lié"
+
+    Scenario: an input is read as UTF-8 text, its byte order mark kept
+      Given a throwaway git worktree
+      And the file "brief.md" beside the worktree holds the bytes "ef bb bf c3 a9 74 c3 a9 0a"
+      When I build the step dependencies of a process whose INIT_CWD is that worktree
+      Then the step dependencies read that file as the text "\ufeffété\n"
+      And the step dependencies read no file at a path that does not exist
+
+    Scenario Outline: an input that is not valid UTF-8 is refused before any session, since what is published and hashed is its text: <bytes>
+      Given a throwaway git worktree
+      And the file "brief.md" beside the worktree holds the bytes "<bytes>"
+      When I build the step dependencies of a process whose INIT_CWD is that worktree
+      Then the step dependencies refuse to read that file with "Refusal: brief.md n'est pas de l'UTF-8 valide"
+
+      Examples:
+        | bytes       |
+        | 42 ff 0a    |
+        | c3 28       |
+        | ed a0 80    |
 
     Scenario: preparing creates steps/ when it is absent; the files are then written in mode 0644
       Given a temporary worktree
@@ -391,14 +433,6 @@ Feature: the step leaves its brief and its record in the worktree
       Given a temporary worktree
       When I try to publish "demo" with the real steps folder
       Then the publication is refused with "steps a disparu pendant l’étape"
-      And the directory "." of the worktree holds exactly ".git"
-
-    Scenario: a directory that is not the root of a worktree: refused when asked, and when publishing
-      Given a temporary worktree
-      And the worktree has no .git entry
-      Then the real steps folder refuses "demo" with "l'étape doit être lancée depuis la racine du worktree" when asked if it exists
-      When I try to publish "demo" with the real steps folder
-      Then the publication is refused with "l'étape doit être lancée depuis la racine du worktree"
       And the directory "." of the worktree holds exactly ""
 
   Rule: the schema of the record refuses whatever is not a hash, a name of the step file, a number or a value of a closed list

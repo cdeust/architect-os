@@ -665,6 +665,17 @@ Les deux écarts en gras sont à fermer avant l'on-premise.
 
 Les pilotes du §13 (HR2 à HR4) gardent leur place : ils mesurent des pièces que les étapes 2 à 4 emploient.
 
+**L'ordre, revu le 18 novembre 2026** (journal §100). Le propriétaire a redit son rôle et le stade visé : il est product engineer, il ne fait ni code ni revue de code ; selon SFEIR, écrire du code à la main est un anti-pattern ; une équipe est faite de deux product engineers et de plusieurs agents, dont le nombre suit leur autonomie ; « on n'a pas encore atteint ce stade-là ». Ce qui sépare la boucle de ce stade est ce que l'orchestrateur fait encore lui-même, hors de tout port : chaque point de la feuille de route est donc pesé par ce qu'il retire de ses mains. L'ordre de travail est celui de la feuille de route du README, « What comes next » :
+
+| Groupe | Points | Pourquoi là |
+|---|---|---|
+| 1. Ce que l'hôte hérite, ce qui est copié | Un environnement fermé pour git ; une seule copie des dépendances ; des worktrees jetables | Le premier est un défaut de sécurité trouvé dans tout le projet le 18 novembre (trois lancements de git avec tout l'environnement de l'hôte, dont celui de la commande qui pousse). Les deux autres sont une décision du propriétaire, et la condition du travail à plusieurs agents : chaque arbre de travail copie 542 Mo de dépendances, et suit la tête courante par la main de l'orchestrateur |
+| 2. Une boucle qui se corrige | La base d'erreurs et le pas de réflexion ; les entrées inventées et la mutation comme phases de l'étape ; le refus qui repart de lui-même ; les scénarios écrits à part | Chacun retire un geste de l'orchestrateur. Depuis le 18 novembre il n'écrit plus lui-même une correction : elle repart en consigne vers une session de construction, et une autre session la relit |
+| 3. Rejouable | Un commit par passe ; la part du prompt lue en cache et le coût par étape acceptée | Une passe qui part du travail non commité de la précédente n'est pas rejouable depuis le dépôt seul |
+| 4 à 9 | Les limites de ce qui est payé à l'usage, les evals, le routage, le cycle complet, le serveur, la plateforme | Inchangés |
+
+**Les dépendances : ce qui est décidé, et ce qui ne l'est pas.** Décidé par le propriétaire le 18 novembre 2026 : les dépendances ne sont pas dupliquées (« c'est le principe même du DRY »), et le moyen est un gestionnaire de paquets à magasin partagé, parce qu'il se transporte tel quel sur un serveur et dans un conteneur. Mesuré : 542 Mo par arbre, dont 337 Mo pour un seul binaire natif ; onze liens seulement sont propres à un arbre, ceux des paquets internes. Écartés : un dossier relié à la main, mécanisme maison à maintenir ; une copie à l'écriture seulement, qui dépend du système de fichiers. Non décidé, à lire à la source et à mesurer avant toute consigne : l'outil, son installation figée depuis le fichier de verrouillage avec les scripts désactivés, la vérification d'intégrité de son magasin, son usage en conteneur. Une menace est déjà nommée : si le magasin est relié aux arbres par des liens durs, une session qui écrit dans les dépendances de son arbre écrit dans celles de tous ; le profil du constructeur refusera l'écriture du dossier des dépendances, et l'installation devient un geste de l'hôte seul. Les sous-modules git, proposés par le propriétaire pour découper les briques, ne réduisent pas la place (la source suivie fait 5 Mo) et délieraient la preuve d'un seul commit ; la question reste ouverte pour une brique distribuée à part, à la brique de la marketplace.
+
 ### Étape 1, la commande de livraison : conception (17 novembre 2026, avant le code)
 
 **Ce qu'elle remplace.** Une suite que le mainteneur tape à la main à chaque commit, une vingtaine de fois le 17 novembre : amener le commit dans l'arbre de livraison, pousser une branche d'essai, jouer la porte, attendre la CI du commit, relancer un job resté sans runner, vérifier que les deux branches n'ont pas bougé, pousser, lire l'évaluation du ruleset, nettoyer. Une faute de frappe y pousse un autre commit que celui qui a été vérifié, avec un droit de contournement.
@@ -754,15 +765,53 @@ Le mainteneur commite ce dossier avec le code de l'étape. Le dossier du poste g
 | L'index temporaire | Il part de l'index du commit (`git read-tree HEAD`), puis reçoit `git add -A`. Dans un index vide, un fichier suivi qu'une règle d'exclusion nomme sortait de l'empreinte, et un arbre propre n'était pas celui de son commit : trouvé par les entrées inventées |
 | Le fichier d'exclusion de l'hôte | Il n'est pas lu (`core.excludesFile=/dev/null`) : l'empreinte ne dépend que du dépôt. `.git/info/exclude`, propre à un clone, reste lu : git ne permet pas de l'écarter |
 | `steps/` existe avant toute session | L'hôte le crée s'il manque. Sous Linux, srt pose un fichier vide à la place d'un chemin refusé absent (lu dans son code) : le dossier serait devenu un fichier pendant une session. L'hôte ne le recrée pas à la fin : s'il a disparu, la publication est refusée |
-| La racine du worktree | L'étape est refusée si elle n'est pas lancée depuis la racine : ailleurs, `steps/` s'écrirait où le profil ne le protège pas |
+| La racine du worktree | Une étape ne se lance que depuis la racine d'un worktree lié, résolue par la fonction du dépôt qui résout déjà le worktree d'une session (`resolveWorktree`) ; de tout autre dossier, elle est refusée avant toute session. L'empreinte et `steps/` sont pris à cette racine, et rien d'autre ne résout le worktree une seconde fois. Lancer depuis un sous-dossier n'est pas pris en charge : les contrôles, les sessions et la lecture des citations y tourneraient depuis un dossier que l'enregistrement ne note pas, et l'étape ne serait plus rejouable. Deux versions écartées le jour même (journal §100) : un contrôle plus faible posé à côté (la présence d'une entrée `.git`), puis une racine résolue pour l'empreinte et `steps/` seulement |
 | Le profil des contrôles | Il entre dans les empreintes du lanceur quand l'étape a des contrôles : aucun fichier d'outil ne le nomme |
 | L'enregistrement | Relu par son propre schéma avant d'être écrit ; une clé `__proto__`, que la bibliothèque de schémas écarte sans rien dire, est refusée ; le verdict garde les mots du contrat de revue |
 
-**Ce qui reste, dit.** Un nom de modèle `__proto__` dans le flux d'une session est écarté par la lecture des mesures, avant l'enregistrement : son coût reste dans le total, pas dans le détail par modèle. Une consigne qui n'est pas de l'UTF-8 valide est lue comme du texte : ce qui est publié et haché est ce texte, pas les octets d'origine. Un fichier laissé à la main dans `steps/` (un `.DS_Store`) rend la porte rouge.
+**Trois limites d'abord écrites ici comme « ce qui reste », corrigées à leur cause le jour même** (journal §100 ; le propriétaire : pas de pansement, et le projet entier est à maintenir, pas les seules dernières modifications).
+
+| Limite | Cause | Correction |
+|---|---|---|
+| Un nom de modèle `__proto__` dans le flux d'une session perdait son coût dans le détail par modèle | La lecture des mesures, plus ancienne que cette étape, passait par un objet à clés libres de la bibliothèque de schémas, qui écarte cette clé sans rien dire | Les noms de modèles sont lus en paires ; le coût d'un tel nom est compté, puis rangé sous `other` par l'enregistrement |
+| Une consigne qui n'est pas de l'UTF-8 valide était publiée comme texte, pas octet pour octet | Les entrées sont lues comme du texte, parce qu'elles sont données à une session | Une entrée qui n'est pas de l'UTF-8 valide est refusée avant toute session : ce qui est publié et haché est alors exactement ce qui a été lu |
+| Un `.DS_Store` laissé par un explorateur de fichiers dans `steps/` rendait la porte rouge | La règle lisait le disque, et non ce qui peut être commité | La règle ne juge pas ce que les règles d'exclusion du dépôt écartent ; un fichier non écarté reste refusé |
 
 **Ce que cette étape ne fait pas.** Elle ne rejoue rien par elle-même : rejouer reste trois commandes du mainteneur, écrites dans la doc de la boucle. Elle ne reprend pas les étapes passées : aucune n'a d'empreinte. La part du prompt lue en cache et le coût par étape acceptée sont le point suivant, qui étend l'enregistrement.
 
 **Mesure.** Avant : aucune étape rejouable depuis le dépôt (zéro sur toutes celles jouées). Après : chaque étape jouée a son dossier commité, et la porte le relit.
+
+### Un environnement fermé pour git : conception (18 novembre 2026, avant le code)
+
+**Le défaut.** L'hôte lance git en production à trois endroits, chaque fois avec tout l'environnement dont il a hérité : l'empreinte de l'arbre d'une étape (`packages/sandbox`), la lecture du dépôt par la porte (`tools/test-gate`), et la commande de livraison (`tools/deliver`), qui pousse, pour git et pour le client de la forge. Git obéit à des variables d'environnement : `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` désignent un autre dépôt que le dossier où il tourne ; `GIT_CONFIG_COUNT` et ses clés, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_PARAMETERS` lui donnent une configuration ; `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `GIT_EXEC_PATH` lui font lancer un programme ; `GIT_TRACE` écrit ce qu'il fait. Git en pose lui-même quand il lance un hook. Rien ne le provoque dans l'usage présent ; trouvé le 18 novembre en cherchant dans tout le projet la forme qu'une revue venait de relever dans un fichier de scénarios.
+
+**La règle, celle que la plateforme applique déjà à ses enfants natifs.** L'hôte lance git, et le client de la forge, avec une liste fermée de variables : celles dont le nom est dans la liste sont prises de l'environnement de l'hôte, puis viennent celles que l'appelant pose lui-même ; rien d'autre ne passe. Aucune variable `GIT_` de l'hôte n'atteint git.
+
+| Lancement | Variables prises de l'hôte | Posées par l'appelant |
+|---|---|---|
+| L'empreinte de l'arbre | `PATH`, `HOME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR` | `GIT_INDEX_FILE`, pour l'index temporaire |
+| La porte | Les mêmes | Aucune |
+| La livraison, git et le client de la forge | La liste du fichier descriptif de la commande : les mêmes, et ce qu'il faut pour s'identifier auprès de la forge sur un autre poste (`SSH_AUTH_SOCK`, `XDG_CONFIG_HOME`, `GH_TOKEN`, `GITHUB_TOKEN`) | `GIT_TERMINAL_PROMPT=0` |
+
+La commande de la porte que la livraison lance (`npm run gate`) garde l'environnement de l'hôte : c'est une suite entière, pas un appel à git, et ses propres appels à git passent par la règle ci-dessus.
+
+**La suite.** Les scénarios lancent git eux aussi, dans des dépôts jetables, depuis une vingtaine d'aides. La suite retire de son propre environnement, une fois, à son chargement, toute variable dont le nom commence par `GIT_` : aucune aide n'hérite alors de l'hôte, et celles qui posent une variable pour un scénario continuent de le faire.
+
+**Menaces.**
+
+| | Menace | Parade |
+|---|---|---|
+| **T** | `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_NAMESPACE` dans l'environnement : l'empreinte est celle d'un autre dépôt, la porte compare à une autre base, la livraison pousse depuis un autre dépôt | La liste fermée ; un scénario par lancement pose ces variables vers un second dépôt réel et vérifie que l'outil agit sur le sien |
+| **T** | Une configuration injectée par l'environnement (`GIT_CONFIG_COUNT`, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_GLOBAL`) : une adresse de dépôt réécrite, un filtre, un moniteur de fichiers | La liste fermée ; un scénario injecte une réécriture d'adresse et vérifie que la livraison pousse au bon dépôt distant |
+| **E** | Un programme lancé par git sur l'ordre d'une variable (`GIT_SSH_COMMAND`, `GIT_ASKPASS`, `GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_PAGER`) | La liste fermée ; un scénario pose un programme témoin et vérifie qu'il n'a pas tourné |
+| **I** | `GIT_TRACE`, `GIT_CURL_VERBOSE` écrivent des en-têtes d'authentification | La liste fermée |
+| **I** | Le jeton de la forge passe dans l'environnement de git | Voulu et borné : il n'est dans la liste que de la livraison, pour git et pour le client de la forge, qui s'en servent pour s'identifier ; ni l'empreinte ni la porte ne le reçoivent |
+| **D** | Une variable nécessaire manque sur un autre poste, et la livraison ne s'identifie plus | La liste de la livraison est dans son fichier descriptif, commité et relu ; l'arrêt est celui d'un port qui lève, sans rien de publié ; la première livraison réelle après ce changement est la preuve sur ce poste |
+| **R** | Sans objet : rien ne change à ce qui est enregistré | |
+
+**Ce que la règle ne ferme pas, et pourquoi.** La configuration globale de git, dans le dossier personnel, reste lue : c'est là que vit l'aide à l'identification de la livraison, et en CI la déclaration qui rend un dépôt sûr. Une session ne peut pas l'écrire (test d'évasion). Le fichier d'exclusion de l'hôte reste neutralisé pour l'empreinte et pour la règle de `steps/`, par leur option propre.
+
+**Mesure.** Avant : trois lancements de git en production et une vingtaine d'aides de scénarios héritent de tout l'environnement. Après : aucun ; un contrôle d'architecture ou un scénario descriptif refuse un lancement de git en production qui ne passe pas par la liste.
 
 ### Trois piliers
 

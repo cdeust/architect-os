@@ -115,6 +115,11 @@ Then(
   },
 );
 
+Then('its first run has an explicit bound of {int} minutes', function (minutes: number) {
+  const config = z.object({ dryRunTimeoutMinutes: z.number() }).parse(stored(this, 'stryker'));
+  assert.equal(config.dryRunTimeoutMinutes, minutes);
+});
+
 Then('its cucumber runner profile is {string}', function (profile: string) {
   const config = z.object({ cucumber: z.object({ profile: z.string() }) }).parse(stored(this, 'stryker'));
   assert.equal(config.cucumber.profile, profile);

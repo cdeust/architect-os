@@ -199,7 +199,14 @@ Feature: the measures of a claude stream-json session
       { "claude-sonnet-5-5": 0.125 }
       """
 
-  Scenario Outline: a result whose model has no usable costUSD is not a result: <fixture>
+  Scenario: a model named __proto__ keeps its cost: its name is read as a pair, never as a key a library drops
+    When I measure the fixture "result-model-proto.jsonl"
+    Then the measure costs by model
+      """
+      { "__proto__": 0.25, "claude-sonnet-5-5": 0.25 }
+      """
+
+  Scenario Outline: a result whose modelUsage is not an object of models with a costUSD each is not a result: <fixture>
     When I measure the fixture "<fixture>"
     Then the measure is not completed, with no cost by model and no model
 
@@ -207,3 +214,6 @@ Feature: the measures of a claude stream-json session
       | fixture                         |
       | result-model-without-cost.jsonl |
       | result-cost-string.jsonl        |
+      | result-usage-null.jsonl         |
+      | result-usage-list.jsonl         |
+      | result-usage-number.jsonl       |

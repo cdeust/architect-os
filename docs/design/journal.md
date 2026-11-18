@@ -4040,3 +4040,98 @@ Après correction les 103 passent ; ils restent au dépôt. La session a aussi n
 - Recherche : une passe rapportée avec ses constats ; quatre passages de mutation ; un contrôle dû et non appliqué depuis le §53 est rejoué, avec son coût, ses échecs et ce qu'il n'a pas pu exprimer ; ce qui reste est dit.
 - SSDLC : menaces écrites avant le code ; une contrainte de la couche outil prouvée dans une vraie sandbox, avec témoins ; aucun texte de session dans l'enregistrement ; aucune dépendance ajoutée ; aucun commentaire de désactivation.
 - Opérationnel : chaque étape laisse au dépôt de quoi être rejouée, écrit par l'hôte seul ; IRB sans objet.
+
+## 100. Ce que le mainteneur n'aurait pas dû accepter : trois limites corrigées à leur cause, une revue de son propre code, et les corrections renvoyées à la boucle, 18 novembre 2026
+
+Le §99 a été poussé (`93c1c66`) par `npm run deliver` : vingt minutes, porte verte (266 scénarios ajoutés, 6 fichiers et 273 mutants dans le périmètre, aucun survivant), CI verte sur Linux et macOS au premier sondage, ruleset `pass` sur les deux branches. Les trois attaques du constructeur sur `steps/` échouent aussi sous Linux.
+
+**Les mots du propriétaire, le 18 novembre.** « N'accepte pas des pansements ou du code que tu ne voudrais pas maintenir et faire évoluer. Tu n'es pas propriétaire uniquement de tes dernières modifications mais du projet dans sa globalité et tu as en charge aussi sa maintenance dans le temps. » Puis son rôle : product engineer ; il comprend la technique, il ne fait plus ni code ni revue de code ; « on utilise les tests, scénarios, mutation testing et attaques pour vérifier la robustesse et la justesse de notre architecture. Et chaque agent de review n'est jamais celui qui a écrit le code. » Et le stade visé : selon SFEIR, écrire du code à la main est un anti-pattern ; une équipe est faite de deux product engineers et de plusieurs agents ; « on n'a pas encore atteint ce stade-là ».
+
+**Ce que cela condamnait dans le §99.** Une rubrique « ce qui reste, dit » : trois limites que le mainteneur pouvait corriger le jour même, dont une dans du code plus ancien que l'étape. Nommer une limite n'est pas la traiter.
+
+| Limite écrite au §99 | Cause | Correction |
+|---|---|---|
+| Un nom de modèle `__proto__` perdait son coût par modèle | La lecture des mesures passait par un objet à clés libres de la bibliothèque de schémas, qui écarte cette clé sans rien dire | Les noms de modèles sont lus en paires |
+| Une consigne qui n'est pas de l'UTF-8 valide était publiée comme texte | Les entrées sont lues comme du texte | Une telle entrée est refusée avant toute session |
+| Un `.DS_Store` dans `steps/` rendait la porte rouge | La règle lisait le disque, pas ce qui peut être commité | La règle juge ce que git pourrait commiter |
+
+Et dans le travail du mainteneur lui-même : un contrôle plus faible posé à côté de celui que le dépôt a déjà pour résoudre un worktree ; des scénarios de livraison qui nettoyaient derrière eux un dossier écrit dans l'arbre, au lieu d'écrire dans leur dossier temporaire ; deux langues dans les messages d'un même fichier ; cent trois scénarios gardés sans avoir été lus un par un, lus depuis ; la règle que la porte applique à `steps/`, écrite par la boucle, jamais lue, lue depuis.
+
+**Une revue par une autre session, sur le code du mainteneur.** Ces corrections ont d'abord été écrites de sa main. Elles ont été données à une session de revue qui ne les avait pas écrites (Opus 5.5, 289 s, 1,02 $) : `request_changes`, cinq constats, dont trois de justesse.
+
+| Constat | Ce qu'il montrait |
+|---|---|
+| Lancée depuis un sous-dossier, une étape prenait l'empreinte et `steps/` à la racine, mais ses contrôles, ses sessions et la lecture des citations restaient dans le sous-dossier, que l'enregistrement ne note pas | Le même commit et la même consigne donnaient d'autres résultats : l'étape n'était plus rejouable |
+| Une entrée illisible était rapportée comme « pas de l'UTF-8 valide » | Un message faux, qui cache la cause |
+| La règle de la porte ne sautait que les fichiers ignorés, ni les dossiers ignorés ni les dossiers vides, et lisait le fichier d'exclusion de l'hôte | Une porte qui ne juge pas la même chose sur un poste et en CI |
+
+La mutation et les suites étaient vertes sur ce code : elles ne voient pas une décision de conception incomplète. La séparation de l'auteur et du relecteur vaut pour l'orchestrateur comme pour une session.
+
+**Les corrections renvoyées à la boucle, et non à la main.** Décision de mainteneur, tirée de la remarque du propriétaire : l'orchestrateur tourne sur le modèle le plus cher, c'est le plus mauvais endroit pour écrire du code, et ce qu'il écrit n'est relu par personne. Une correction qui change un comportement repart en consigne vers une session de construction, puis une autre session la relit. Deux décisions de conception accompagnent la consigne : une étape ne se lance que depuis la racine de son worktree, sinon elle est refusée, une règle à un endroit ; et la règle de la porte part de ce que git pourrait commiter, au lieu de dresser la liste de ce qui est ignoré.
+
+| Passe | Construction, Sonnet 5.5 | Contrôles sans modèle | Revue, Opus 5.5 |
+|---|---|---|---|
+| `briefs-b` | 164 s, 0,38 $ | Arrêtée par le contrôle des scénarios : `docs/testing.md` citait un chemin d'exemple sous `steps/`, lu comme un chemin du dépôt depuis que le dossier existe | Non jouée |
+| `briefs-b2` | 107 s, 0,09 $ | Verts | 0,42 $, `request_changes` : deux constats de justesse, tous deux dans la documentation du mainteneur, restée sur la version écartée ; deux propositions |
+| `briefs-b3` | 39 s, 0,06 $ | Verts | 0,41 $, `accept`, deux propositions |
+
+Coût du cycle : 2,38 $, revue initiale comprise. Les trois constructions ont coûté 0,53 $ en tout : avec une consigne précise, renvoyer une correction coûte moins que l'écrire sur le modèle de l'orchestrateur.
+
+**Les premiers dossiers écrits par l'outil.** `steps/briefs-b`, `steps/briefs-b2` et `steps/briefs-b3` sont dans ce commit, tels que l'hôte les a écrits : la consigne et le fichier descriptif de chaque passe, et son enregistrement. Le premier dit `refused`, avec ses contrôles et aucune revue. Tous trois disent `clean: false` : chaque passe est partie d'un arbre modifié, celui des corrections du mainteneur puis celui de la passe précédente. Ils ne sont donc pas rejouables depuis le dépôt seul, et l'enregistrement le dit. La règle de la porte les relit.
+
+**La mutation, jouée par l'hôte** sur les lignes de production changées : 50 mutants puis 56 après les trois passes, aucun survivant.
+
+**Un défaut plus large, trouvé en cherchant la même forme dans tout le projet.** La dernière proposition de la revue portait sur un fichier de scénarios : les commandes git héritent des variables de l'hôte. La même forme existe en production à trois endroits : l'empreinte de l'arbre, la porte, et la commande de livraison, qui pousse. Un `GIT_DIR` ou un `GIT_INDEX_FILE` posé autour d'elles, par exemple quand une commande est lancée depuis un hook git, les ferait agir sur un autre dépôt. Rien ne le provoque dans l'usage présent ; c'est contraire à la règle que la plateforme applique à ses propres enfants, une liste fermée de variables. C'est l'étape suivante, avec sa conception et ses menaces, et non une limite de plus.
+
+**Trois questions d'architecture du propriétaire, et ce qui en est décidé.**
+
+| Sa remarque | Mesure | Décision |
+|---|---|---|
+| Plusieurs worktrees maintenus prennent de la place et s'éloignent de la version courante | 542 Mo de dépendances par worktree, trois fois ; l'historique git entier pèse 33 Mo ; l'écart avec la tête est nul parce que l'orchestrateur avance les trois arbres à la main | Des worktrees jetables : un par étape, créé depuis la tête et retiré à la fin |
+| Qu'est-ce qui prend de la place, et faut-il des sous-modules git | La source suivie fait 5 Mo ; 337 Mo des dépendances sont un seul binaire natif ; 305 Mo de rapports de porte s'accumulent ; 26 Mo de l'historique sont un ancien binaire | Les sous-modules ne réduisent pas la place et délieraient la preuve d'un seul commit ; la question reste ouverte pour une brique distribuée à part |
+| « Les dépendances ne devraient pas être dupliquées, c'est le principe même du DRY » ; « le gestionnaire de paquets permet une évolution plus simple en cas de passage en cloud » | Onze liens seulement sont propres à un arbre | Une seule copie, par un gestionnaire de paquets à magasin partagé, en lecture seule pour toute sandbox ; l'outil se choisit après lecture de sa documentation et mesure |
+
+**L'ordre de la feuille de route, revu.** Chaque point est pesé par ce qu'il retire des mains de l'orchestrateur. Viennent d'abord l'environnement fermé pour git, la copie unique des dépendances et les worktrees jetables ; puis ce qui fait une boucle qui se corrige : la base d'erreurs, les entrées inventées et la mutation comme phases, le refus qui repart de lui-même ; puis un commit par passe. La note (§14) donne les raisons.
+
+**Schémas et README.** Six points entrent dans la feuille de route et dans les schémas : trois dans celui de l'isolation, deux dans celui de la boucle (la mutation rejoint les entrées inventées, un commit par passe), rendus contrôlés à l'œil. README relu : la boucle, la vérification, l'état de la brique R.1, la feuille de route entière, le compte de la suite.
+
+**Chiffres.** 2 896 scénarios dans la suite (20 de plus).
+
+**Trois piliers.**
+- Recherche : chaque limite est donnée avec sa cause ; la revue du code du mainteneur est rapportée avec ses constats ; trois passes avec leurs coûts, dont une arrêtée par un contrôle ; les mesures de place sont données avec ce qu'elles écartent.
+- SSDLC : auteur et relecteur séparés, y compris pour l'orchestrateur ; une classe de défaut cherchée dans tout le projet et inscrite comme étape suivante ; aucun commentaire de désactivation ; aucune dépendance ajoutée.
+- Opérationnel : les trois premiers enregistrements d'étapes sont au dépôt ; l'installation des dépendances est décidée comme un geste de l'hôte seul ; IRB sans objet.
+
+## 101. Le premier arrêt réel de la commande de livraison : une porte rouge sur un commit vert, et une borne que personne n'avait posée, 18 novembre 2026
+
+Le commit du §100 n'a pas été publié à sa première livraison. Cette section est dans le même commit, repris : il n'était sur aucune branche protégée.
+
+**L'arrêt.** `npm run deliver -- briefs-b` : préalables, branche d'essai, porte, puis `stopped`, phase `porte`, raison `porte rouge`, code de sortie 1. Rien n'a été poussé sur `feat/gate-1a` ni sur `main` ; la CI n'a pas été interrogée. C'est le premier des arrêts de la commande à être rencontré en vrai (§95) : elle a fait ce que ses scénarios disaient.
+
+**La cause, hors du code livré.**
+
+| Ce que la porte a vu | Valeur |
+|---|---|
+| Scénarios exécutés | 2 896, tous verts |
+| Compte attendu | 2 876 + 27 ajoutés − 7 supprimés = 2 896 |
+| Règles 1 à 4 et 6 | Aucune violation |
+| Règles 5 et 7, la mutation et le contrôle de son outil | Rapport de mutation absent |
+
+L'outil de mutation rejoue toute la suite une fois avant de muter quoi que ce soit. Ce premier passage a une borne, cinq minutes, qui est le défaut de l'outil : personne ne l'avait posée. La suite a gagné 286 scénarios dans la journée ; mesuré ce jour sur l'hôte, ce premier passage prenait entre 4 min 09 et 4 min 49, et les mêmes scénarios joués seuls, 5 min 35. La borne a été franchie, l'outil s'est arrêté sans rapport, et la porte a refusé : elle ne déclare pas vert ce qu'elle n'a pas pu vérifier.
+
+**Ce qui est corrigé, par une étape de la boucle.** La borne est posée explicitement, à vingt minutes, avec ce qu'elle est : un fusible contre un passage qui ne finit jamais, pas une façon de gérer la durée de la suite. Un scénario la tient. Étape `gate-fuse` : construction sur Sonnet 5.5, 24 s, 0,05 $ ; trois contrôles verts ; revue sur Opus 5.5, 0,13 $. La revue a rendu `request_changes` pour un seul constat, qui ne porte pas sur ce changement : l'arbre contenait une section de conception que le mainteneur avait écrite avant l'étape, et que la consigne excluait. Le mainteneur la garde dans ce commit, voir plus bas ; l'enregistrement de l'étape dit `refused`, et il est commité tel quel. C'est une seconde fois ce que le §100 notait : une étape qui part d'un arbre modifié mêle ce qu'elle fait et ce qui s'y trouvait.
+
+**Ce qui n'est pas corrigé, et entre à la feuille de route.** La durée de la suite. Les scénarios tournent un par un, pour qu'un verdict soit reproductible (§20) ; chaque porte les paie deux fois, et la durée croît avec chaque brique. Poser la borne plus haut ne traite pas cela. Ce qui est dû : mesurer où part le temps, et jouer en même temps ce qui ne partage ni port ni fichier.
+
+**Ce que l'arrêt a montré de la commande.** Elle laisse sa branche d'essai en place, pour qu'une reprise la retrouve. Quand le commit est remplacé, comme ici, cette branche reste sur le dépôt distant : le mainteneur l'a retirée à la main. La commande n'a pas de geste pour abandonner une livraison.
+
+**Dans ce commit aussi : la conception de l'étape suivante.** « Un environnement fermé pour git » (note de la boucle, §14), avec sa table des menaces, écrite avant toute ligne de code : la règle, les trois lancements, la liste de la livraison dans son fichier descriptif, ce que la suite retire de son propre environnement, ce que la règle ne ferme pas.
+
+**Schémas et README.** Un point entre à la feuille de route, la durée de la suite ; aucun élément du système n'est ajouté. Ce qui n'est pas prouvé dit qu'un arrêt de la commande a été rencontré.
+
+**Chiffres.** 2 897 scénarios dans la suite (un de plus).
+
+**Trois piliers.**
+- Recherche : un échec est rapporté avec sa cause mesurée, et distingué de ce qu'il n'est pas ; un verdict de revue défavorable est rapporté avec sa raison.
+- SSDLC : la porte a refusé un commit qu'elle ne pouvait pas vérifier, et la commande n'a rien publié ; une borne implicite devient explicite et tenue par un scénario ; menaces de l'étape suivante écrites avant son code.
+- Opérationnel : une limite de capacité est nommée et inscrite ; IRB sans objet.

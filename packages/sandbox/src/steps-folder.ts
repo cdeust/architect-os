@@ -22,27 +22,27 @@ function entry(path: string): Stats | undefined {
   return lstatSync(path, { throwIfNoEntry: false });
 }
 
-/** Le dossier `steps/` réel du worktree. */
-export function stepsFolder(worktree: string): StepsFolder {
-  const steps = join(worktree, 'steps');
+/**
+ * Le dossier `steps/` réel. `root` rend la racine du worktree à chaque opération : c'est sous cette racine, et nulle
+ * part ailleurs, que le profil du constructeur refuse l'écriture de `steps/`.
+ */
+export function stepsFolder(root: () => string): StepsFolder {
+  const path = (): string => join(root(), 'steps');
   /** `steps` est-il là ? Il doit être un dossier ordinaire du worktree : ni un lien, ni un fichier. */
   const present = (): boolean => {
-    // Le profil du constructeur ne refuse l'écriture que sous `steps/` à la racine : ailleurs, rien ne le tiendrait.
-    if (entry(join(worktree, '.git')) === undefined)
-      throw new Error("l'étape doit être lancée depuis la racine du worktree");
-    const own = entry(steps);
+    const own = entry(path());
     if (own !== undefined && !own.isDirectory())
       throw new Error("steps n'est pas un dossier ordinaire du worktree");
     return own !== undefined;
   };
   return {
     prepare() {
-      if (!present()) mkdirSync(steps);
+      if (!present()) mkdirSync(path());
     },
-    exists: (name) => present() && entry(join(steps, name)) !== undefined,
+    exists: (name) => present() && entry(join(path(), name)) !== undefined,
     publish(name, files) {
       if (!present()) throw new Error('steps a disparu pendant l’étape');
-      const folder = join(steps, name);
+      const folder = join(path(), name);
       // Relu au moment d'écrire : une session de construction a tourné depuis le premier contrôle.
       if (entry(folder) !== undefined) throw new Error(`steps/${name} existe déjà`);
       mkdirSync(folder);

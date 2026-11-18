@@ -13,7 +13,7 @@ Feature: fresh inputs for the record of a step, the folder steps/ and the finger
     And the step folder holds a step.json with a build and "no review"
     When I run the step with the arguments "<folder>"
     Then the step exits with 2
-    And the step stderr is "architect-os step: the step name must match ^[a-z][a-z0-9-]{0,31}$: <name>"
+    And the step stderr is "architect-os step: le nom de l'étape doit suivre ^[a-z][a-z0-9-]{0,31}$ : <name>"
     And no session was started
     And the step published nothing
     And the fingerprint was taken 0 times
@@ -32,7 +32,7 @@ Feature: fresh inputs for the record of a step, the folder steps/ and the finger
     And the step folder holds a step.json with a build and "no review"
     When I run the step with the arguments "<folder>"
     Then the step exits with 2
-    And the step stderr is "architect-os step: the step name must match ^[a-z][a-z0-9-]{0,31}$: demo "
+    And the step stderr is "architect-os step: le nom de l'étape doit suivre ^[a-z][a-z0-9-]{0,31}$ : demo "
     And no session was started
     And the step published nothing
     And the fingerprint was taken 0 times
@@ -470,7 +470,7 @@ Feature: fresh inputs for the record of a step, the folder steps/ and the finger
     When I try to publish "demo" with the real steps folder
     Then the publication is refused with "steps n'est pas un dossier ordinaire du worktree"
     And the entry "steps" of the worktree is still a dangling link
-    And the directory "." of the worktree holds exactly ".git steps"
+    And the directory "." of the worktree holds exactly "steps"
 
   # expected because: « un enregistrement ne se réécrit pas, une nouvelle passe prend un nouveau nom » (§14), and publish never replaces a file: the same call twice is refused the second time
   Scenario: the same name published twice: the second publication is refused and the first stays as it was

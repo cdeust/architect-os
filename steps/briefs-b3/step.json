@@ -1,0 +1,89 @@
+{
+  "build": {
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "limitSeconds": 3600
+  },
+  "checks": [
+    {
+      "name": "types",
+      "command": [
+        "npx",
+        "tsc",
+        "-p",
+        "packages/sandbox",
+        "--noEmit",
+        "--composite",
+        "false",
+        "--incremental",
+        "false"
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "types-features",
+      "command": [
+        "npx",
+        "tsc",
+        "-p",
+        "features",
+        "--noEmit",
+        "--composite",
+        "false",
+        "--incremental",
+        "false"
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "format",
+      "command": [
+        "npx",
+        "prettier",
+        "--check",
+        "."
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "architecture",
+      "command": [
+        "npx",
+        "depcruise",
+        "--config",
+        ".dependency-cruiser.cjs",
+        "packages",
+        "data",
+        "gateway",
+        "services",
+        "modules",
+        "tools"
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "scenarios",
+      "command": [
+        "npx",
+        "cucumber-js",
+        "--profile",
+        "replay",
+        "packages/sandbox/features/step-tool.feature",
+        "packages/sandbox/features/step-file.feature",
+        "packages/sandbox/features/step-checks.feature",
+        "packages/sandbox/features/measure.feature",
+        "features/descriptive"
+      ],
+      "limitSeconds": 900
+    }
+  ],
+  "reviews": [
+    {
+      "name": "correctness",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "limitSeconds": 1500
+    }
+  ],
+  "parallel": 2
+}

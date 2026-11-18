@@ -22,6 +22,7 @@ import { stepsFolder, type StepsFolder } from '../../src/steps-folder.js';
 import type { TreeFingerprint } from '../../src/tree-fingerprint.js';
 import { git } from './tree-fingerprint.js';
 import { Given, PKG, Then, When, stored, type SandboxWorld } from './helpers.js';
+import { repoOf } from './runner.js';
 
 /** The part of the state of a step (steps/step-tool.ts) that these steps read and set. */
 interface RecordStep {
@@ -31,6 +32,7 @@ interface RecordStep {
   prepared: number[];
   fingerprint: TreeFingerprint | Error;
   fingerprints: number;
+  rootRefusal?: Error;
   stdout: string;
   publication?: Error;
   rewrites: { file: string; content: string }[];
@@ -46,6 +48,10 @@ Given('the steps folder already holds the step {string}', function (name: string
 
 Given('the fingerprint of the worktree is a tree that is not clean', function () {
   step(this).fingerprint = { commit: '1'.repeat(40), tree: '2'.repeat(40), clean: false };
+});
+
+Given('the step is not launched from the root of its worktree: {string}', function (message: string) {
+  step(this).rootRefusal = new Error(message);
 });
 
 Given('the fingerprint of the worktree fails with {string}', function (message: string) {
@@ -214,24 +220,126 @@ Then('the step stdout does not contain {string}', function (text: string) {
 // --- the real dependencies ------------------------------------------------------------------------------------
 
 Given('a throwaway git worktree', function () {
+  // The linked worktree of a throwaway repository, at `<repo>/.claude/worktrees/w`: what `resolveWorktree` accepts.
+  this.state['recordRoot'] = repoOf(this).worktree;
+});
+
+Given('a throwaway git repository that is not a linked worktree', function () {
   const root = mkdtempSync(join(tmpdir(), 'aos-rec-'));
   this.cleanups.push(() => rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '-q');
-  writeFileSync(join(root, 'a.txt'), 'first\n');
-  git(root, 'add', '-A');
-  git(root, 'commit', '-q', '-m', 'first');
   this.state['recordRoot'] = root;
 });
 
-When('I build the step dependencies of a process whose INIT_CWD is that worktree', function () {
+const dependenciesIn = (world: SandboxWorld, directory: string): void => {
   const proc = {
     argv: ['node', 'step.ts', '/a/b'],
-    env: { INIT_CWD: stored<string>(this, 'recordRoot') },
+    env: { INIT_CWD: directory },
     cwd: () => '/elsewhere',
     stdout: new PassThrough(),
     stderr: new PassThrough(),
   } as unknown as CodeProcess;
-  this.state['recordDeps'] = stepDependencies(proc);
+  world.state['recordDeps'] = stepDependencies(proc);
+};
+
+When('I build the step dependencies of a process whose INIT_CWD is that worktree', function () {
+  dependenciesIn(this, stored<string>(this, 'recordRoot'));
+});
+
+When('I build the step dependencies of a process whose INIT_CWD is that repository', function () {
+  dependenciesIn(this, stored<string>(this, 'recordRoot'));
+});
+
+When(
+  'I build the step dependencies of a process whose INIT_CWD is the directory {string} of that worktree',
+  function (directory: string) {
+    const path = join(stored<string>(this, 'recordRoot'), directory);
+    mkdirSync(path, { recursive: true });
+    dependenciesIn(this, path);
+  },
+);
+
+/** What a dependency throws, as the step tool would report it. */
+const thrown = (act: () => unknown): string => {
+  try {
+    act();
+  } catch (error) {
+    return error instanceof Error ? `${error.constructor.name}: ${error.message}` : String(error);
+  }
+  return 'nothing thrown';
+};
+
+Then(
+  'the step dependencies refuse the root, the fingerprint and the folder steps\\/ with {string}',
+  function (message: string) {
+    assert.equal(
+      thrown(() => deps(this).root()),
+      message,
+    );
+    assert.equal(
+      thrown(() => deps(this).fingerprint()),
+      message,
+    );
+    assert.equal(
+      thrown(() => deps(this).steps.exists('demo')),
+      message,
+    );
+    assert.equal(
+      thrown(() => deps(this).steps.prepare()),
+      message,
+    );
+    assert.equal(
+      thrown(() => deps(this).steps.publish('demo', { 'a.md': 'A' })),
+      message,
+    );
+  },
+);
+
+Then(
+  'the step dependencies refuse the directory {string} of that worktree, naming both paths, and create nothing',
+  function (directory: string) {
+    const root = stored<string>(this, 'recordRoot');
+    const below = join(root, directory);
+    const listing = () => [
+      readdirSync(root, { recursive: true, encoding: 'utf8' }).sort(),
+      readdirSync(below),
+    ];
+    const before = listing();
+    const message = `Refusal: une étape se lance depuis la racine de son worktree : ${below} n'est pas ${root}`;
+    for (const act of [
+      () => deps(this).root(),
+      () => deps(this).fingerprint(),
+      () => deps(this).steps.exists('demo'),
+      () => deps(this).steps.prepare(),
+      () => deps(this).steps.publish('demo', { 'a.md': 'A' }),
+    ]) {
+      assert.equal(thrown(act), message);
+    }
+    assert.deepEqual(listing(), before);
+    assert.ok(!before[0]?.includes('steps'));
+  },
+);
+
+Given('the file {string} beside the worktree holds the bytes {string}', function (name: string, hex: string) {
+  const folder = mkdtempSync(join(tmpdir(), 'aos-rec-in-'));
+  this.cleanups.push(() => rmSync(folder, { recursive: true, force: true }));
+  writeFileSync(join(folder, name), Buffer.from(hex.replaceAll(' ', ''), 'hex'));
+  this.state['recordInput'] = join(folder, name);
+});
+
+Then('the step dependencies read that file as the text {string}', function (text: string) {
+  assert.equal(deps(this).readFile(stored<string>(this, 'recordInput')), JSON.parse(`"${text}"`));
+});
+
+Then('the step dependencies refuse to read that file with {string}', function (message: string) {
+  assert.equal(
+    thrown(() => deps(this).readFile(stored<string>(this, 'recordInput'))),
+    message,
+  );
+});
+
+Then('the step dependencies read no file at a path that does not exist', function () {
+  assert.equal(deps(this).readFile(join(stored<string>(this, 'recordRoot'), 'absent.md')), undefined);
 });
 
 const deps = (world: SandboxWorld) => stored<StepDependencies>(world, 'recordDeps');
@@ -290,18 +398,12 @@ Given('a temporary worktree', function () {
   const outside = join(root, 'outside');
   mkdirSync(worktree);
   mkdirSync(outside);
-  // The root of a worktree holds a `.git` entry: a file that names its git directory.
-  writeFileSync(join(worktree, '.git'), 'gitdir: elsewhere\n');
   this.state['recordWorktree'] = {
     root,
     worktree,
     outside,
-    folder: stepsFolder(worktree),
+    folder: stepsFolder(() => worktree),
   } satisfies Worktree;
-});
-
-Given('the worktree has no .git entry', function () {
-  rmSync(join(tree(this).worktree, '.git'));
 });
 
 // --- the schema of the record, alone ---------------------------------------------------------------------------

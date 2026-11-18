@@ -31,6 +31,7 @@ import { buildRecord, isStepName, stepRecordSchema, type RecordedSession } from 
 import { stepsFolder, type StepsFolder } from './steps-folder.js';
 import { parseTool } from './tool.js';
 import { fingerprintTree, type TreeFingerprint } from './tree-fingerprint.js';
+import { resolveWorktree } from './worktree.js';
 
 export type ToolFile = 'code.json' | 'review.json' | 'scout.json';
 
@@ -61,6 +62,8 @@ export interface StepDependencies {
   readonly now: () => number;
   /** La date de départ de l'étape, pour `startedAt` de son enregistrement. */
   readonly date: () => Date;
+  /** La racine du worktree où l'étape tourne ; lève si le répertoire de lancement n'est pas cette racine. */
+  readonly root: () => string;
   /** L'empreinte du worktree où l'étape tourne ; lève un message fixe si git échoue. */
   readonly fingerprint: () => TreeFingerprint;
   /** Le texte d'un fichier du lanceur, chemin relatif à `packages/sandbox` ; lève s'il manque. */
@@ -371,10 +374,13 @@ function launcherFiles(deps: StepDependencies, step: StepFile): Record<string, s
 export async function runStep(deps: StepDependencies): Promise<number> {
   try {
     const { folder, step, raw, brief, questions } = readStep(deps);
+    // Avant le nom de l'étape et avant toute session : une étape se lance de la racine de son worktree, ou se refuse.
+    deps.root();
     // `resolve` : le dossier `/x/demo/.` est le dossier `demo`.
     const name = basename(resolve(folder));
-    if (!isStepName(name)) throw new Refusal(`the step name must match ^[a-z][a-z0-9-]{0,31}$: ${name}`);
-    if (deps.steps.exists(name)) throw new Refusal(`the step ${name} already has a folder in steps/`);
+    if (!isStepName(name))
+      throw new Refusal(`le nom de l'étape doit suivre ^[a-z][a-z0-9-]{0,31}$ : ${name}`);
+    if (deps.steps.exists(name)) throw new Refusal(`l'étape ${name} a déjà un dossier dans steps/`);
     deps.steps.prepare();
     // Pris avant toute session, et les textes lus ici sont ceux que l'hôte publiera : jamais relus à la fin.
     const tree = deps.fingerprint();
@@ -606,13 +612,38 @@ const sourceReader =
     return undefined;
   };
 
+/**
+ * Le texte d'un fichier du dossier de l'étape. Ce que l'hôte publie et hache est ce texte : un fichier qui n'est pas de
+ * l'UTF-8 valide ne se relirait pas octet pour octet, il est refusé avant toute session. Une marque d'ordre des octets
+ * en tête est gardée : elle fait partie du fichier.
+ */
+function readText(path: string): string {
+  const bytes = readFileSync(path);
+  try {
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    throw new Refusal(`${basename(path)} n'est pas de l'UTF-8 valide`);
+  }
+}
+
+/**
+ * La racine du worktree lié qui contient `cwd`, si `cwd` en est la racine ; sinon un refus. `resolveWorktree` lève sa
+ * `SandboxError` telle quelle quand `cwd` n'est dans aucun worktree lié.
+ */
+function rootOf(cwd: string): string {
+  const { worktree } = resolveWorktree(cwd);
+  if (worktree !== realpathSync(resolve(cwd)))
+    throw new Refusal(`une étape se lance depuis la racine de son worktree : ${cwd} n'est pas ${worktree}`);
+  return worktree;
+}
+
 /** Les dépendances réelles : les fichiers du disque, les sessions sous srt, les flux du processus. */
 export function stepDependencies(proc: CodeProcess): StepDependencies {
   const cwd = proc.env['INIT_CWD'] ?? proc.cwd();
+  const root = (): string => rootOf(cwd);
   return {
     folderArguments: proc.argv.slice(2),
-    readFile: (path) =>
-      existsSync(path) && statSync(path).isFile() ? readFileSync(path, 'utf8') : undefined,
+    readFile: (path) => (existsSync(path) && statSync(path).isFile() ? readText(path) : undefined),
     readSource: sourceReader(cwd),
     writeFile: (path, content) => writeFileSync(path, content),
     appendFile: (path, content) => appendFileSync(path, content),
@@ -620,9 +651,10 @@ export function stepDependencies(proc: CodeProcess): StepDependencies {
     check: sandboxCheck(new SrtSandboxRunner(srtOptions(proc, {})), cwd),
     now: () => Date.now(),
     date: () => new Date(),
-    fingerprint: () => fingerprintTree(cwd),
+    root,
+    fingerprint: () => fingerprintTree(root()),
     readLauncher: (file) => readFileSync(join(PKG, file), 'utf8'),
-    steps: stepsFolder(cwd),
+    steps: stepsFolder(root),
     stdout: proc.stdout,
     stderr: proc.stderr,
   };
