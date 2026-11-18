@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
@@ -12,7 +12,8 @@ import type {
   Repository,
   RuleSuite,
 } from '../../src/domain/ports.js';
-import type { DeliverWorld } from './support.js';
+import type { HostEnvironment } from '../../src/infrastructure/host-process.js';
+import { REPOSITORY, type DeliverWorld } from './support.js';
 
 // What a contract scenario needs to put the world of a port in a state (a history, a remote, a verdict), which no port
 // can do. Each adapter comes with a fixture; the contracts of ports.feature run on them.
@@ -63,4 +64,25 @@ export function temporaryDirectory(world: DeliverWorld): string {
   const directory = mkdtempSync(join(tmpdir(), 'deliver-'));
   world.cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
   return directory;
+}
+
+/** The names of the host variables that the committed descriptive file gives to git and to the client of the forge. */
+export function committedNames(): string[] {
+  const committed = JSON.parse(readFileSync(`${REPOSITORY}tools/deliver/deliver.json`, 'utf8')) as {
+    environment: string[];
+  };
+  return committed.environment;
+}
+
+/**
+ * The host of an adapter in a scenario: the committed names, taken from this process, with a HOME and an
+ * XDG_CONFIG_HOME that are an empty temporary directory, so that no configuration of the machine is read.
+ */
+export function hostOf(world: DeliverWorld): HostEnvironment {
+  const names = committedNames();
+  const home = temporaryDirectory(world);
+  const taken = Object.fromEntries(
+    names.flatMap((name) => (process.env[name] === undefined ? [] : [[name, process.env[name]]])),
+  );
+  return { names, env: { ...taken, HOME: home, XDG_CONFIG_HOME: home } };
 }

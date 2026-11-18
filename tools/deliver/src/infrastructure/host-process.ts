@@ -13,20 +13,43 @@ export interface Finished {
 }
 
 /**
- * Runs `program` in `cwd` and waits for its end, with `added` variables on top of the environment it inherits.
- * Its three streams are pipes of this call (the default of `spawnSync`): it reads nothing, its standard error is
- * captured and dropped, neither returned nor shown. `undefined`: the program did not run to its end (it could not be
- * started, or a signal ended it); a program that exited with a non-zero code is a `Finished` like another.
+ * The host variables a program is given, by name, and the environment those names are taken from. The rule is the one of
+ * docs/design/orchestration-fable-5-2.md §14, « Un environnement fermé pour git »: a closed list, never the whole
+ * environment of the process.
+ */
+export interface HostEnvironment {
+  readonly names: readonly string[];
+  readonly env: Readonly<Record<string, string | undefined>>;
+}
+
+/** The environment of a program: each of `host.names` that `host.env` has as an own property and sets, then `added`, which wins. Nothing else. */
+export function closedEnvironment(
+  host: HostEnvironment,
+  added: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const given: Record<string, string> = {};
+  for (const name of host.names) {
+    const value = Object.hasOwn(host.env, name) ? host.env[name] : undefined;
+    if (value !== undefined) given[name] = value;
+  }
+  return { ...given, ...added };
+}
+
+/**
+ * Runs `program` in `cwd` and waits for its end, with `environment` as its whole environment: nothing of this process
+ * is added to it. Its three streams are pipes of this call (the default of `spawnSync`): it reads nothing, its standard
+ * error is captured and dropped, neither returned nor shown. `undefined`: the program did not run to its end (it could
+ * not be started, or a signal ended it); a program that exited with a non-zero code is a `Finished` like another.
  */
 export function runToEnd(
   program: string,
   args: readonly string[],
   cwd: string,
-  added: Readonly<Record<string, string>>,
+  environment: Readonly<Record<string, string>>,
 ): Finished | undefined {
   const result = spawnSync(program, args, {
     cwd,
-    env: { ...process.env, ...added },
+    env: environment,
     encoding: 'utf8',
   });
   return result.status === null ? undefined : { status: result.status, out: result.stdout };
@@ -35,6 +58,9 @@ export function runToEnd(
 /**
  * Runs `program` in `cwd` with both outputs written to the file `log` (created, or emptied) and no input, and gives its
  * exit code: 1 when a signal ended it or it could not be started, whether `spawn` says so by an event or by throwing.
+ * It starts the gate command, a whole suite, and keeps inheriting the environment of the host (the default of
+ * `spawn`): the closed list is for git and the client of the forge, not for the suite, whose own calls to git are
+ * closed by their own rule.
  */
 export async function runToFile(
   program: string,

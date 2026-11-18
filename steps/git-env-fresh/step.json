@@ -1,0 +1,4 @@
+{
+  "build": { "model": "claude-opus-5-5", "effort": "high", "limitSeconds": 2400 },
+  "parallel": 2
+}

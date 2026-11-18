@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -14,7 +15,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Given as CucumberGiven, Then as CucumberThen, When as CucumberWhen } from '@cucumber/cucumber';
 import { CONFIG_PATH, runGate } from '../../src/infrastructure/gate.js';
-import { git } from '../../src/infrastructure/git.js';
+import { git, gitWithOptions, GitRepository } from '../../src/infrastructure/git.js';
 
 /** Structural view of the root World (features/support/world.ts); a component cannot import across projects. */
 export interface GateWorld {
@@ -147,6 +148,13 @@ Given('the gate repository file {string} reads:', function (path: string, text: 
   repository(this).write(path, `${text}\n`);
 });
 
+Given(
+  'the gate repository file {string} reads {string} with CRLF line ends',
+  function (path: string, line: string) {
+    repository(this).write(path, `${line}\r\n`);
+  },
+);
+
 Given('the gate repository file {string} is removed', function (path: string) {
   repository(this).remove(path);
 });
@@ -214,3 +222,212 @@ Then('the gate output is:', function (text: string) {
   const repo = repository(this);
   assert.equal(repo.output, `${repo.tokens(text)}\n`);
 });
+
+// The closed environment of git (closed-environment.feature)
+
+function secondRepository(world: GateWorld): GateRepository {
+  const found = world.state['otherGateRepository'];
+  assert.ok(found instanceof GateRepository, 'a second gate repository must be given first');
+  return found;
+}
+
+Given('a second gate repository with its own commit', function () {
+  const other = new GateRepository();
+  this.cleanups.push(() => rmSync(other.dir, { recursive: true, force: true }));
+  other.write('other.txt', 'other\n');
+  other.commit('other');
+  other.write('other.txt', 'other again\n');
+  other.commit('other again');
+  this.state['otherGateRepository'] = other;
+});
+
+Given('the GIT_DIR of the process names the second gate repository', function () {
+  const other = secondRepository(this);
+  const before = process.env['GIT_DIR'];
+  process.env['GIT_DIR'] = join(other.dir, '.git');
+  this.cleanups.push(() => {
+    if (before === undefined) delete process.env['GIT_DIR'];
+    else process.env['GIT_DIR'] = before;
+  });
+});
+
+Given('the expectation is taken from the gate repository, before the poison', function () {
+  const read = new GitRepository(repository(this).dir);
+  const { head, firstParent } = read.commits();
+  this.state['gateExpected'] = { head, firstParent, diff: read.diff(firstParent as string) };
+});
+
+When('the gate reads its repository', function () {
+  const read = new GitRepository(repository(this).dir);
+  const { head, firstParent } = read.commits();
+  this.state['gateRead'] = { head, firstParent, diff: read.diff(firstParent as string) };
+});
+
+type Read = { head: string; firstParent: string | null; diff: string };
+
+/** The recorded state of a reading, checked for its shape as `secondRepository` is checked with `instanceof`. */
+function isRead(value: unknown): value is Read {
+  if (typeof value !== 'object' || value === null) return false;
+  const { head, firstParent, diff } = value as Record<string, unknown>;
+  return (
+    typeof head === 'string' &&
+    (typeof firstParent === 'string' || firstParent === null) &&
+    typeof diff === 'string'
+  );
+}
+
+function readState(world: GateWorld, key: 'gateRead' | 'gateExpected', missing: string): Read {
+  const found = world.state[key];
+  assert.ok(isRead(found), missing);
+  return found;
+}
+const gateRead = (world: GateWorld): Read =>
+  readState(world, 'gateRead', 'the gate must read its repository first');
+const gateExpected = (world: GateWorld): Read =>
+  readState(world, 'gateExpected', 'the expectation must be taken from the gate repository first');
+
+Then('the head it read is the head of the gate repository', function () {
+  assert.equal(gateRead(this).head, gateExpected(this).head);
+});
+
+Then('the first parent it read is the first parent of the gate repository', function () {
+  assert.equal(gateRead(this).firstParent, gateExpected(this).firstParent);
+});
+
+Then('the diff it read adds the line {string} to {string}', function (line: string, path: string) {
+  const diff = gateRead(this).diff;
+  assert.equal(diff, gateExpected(this).diff);
+  assert.ok(diff.includes(`+++ b/${path}`), diff);
+  assert.ok(diff.split('\n').includes(`+${line}`), diff);
+});
+
+Then(
+  'the diff it read is the expected one and adds the line {string} with a CRLF line end to {string}',
+  function (line: string, path: string) {
+    const diff = gateRead(this).diff;
+    assert.equal(diff, gateExpected(this).diff);
+    assert.ok(diff.includes(`+++ b/${path}`), diff);
+    assert.ok(diff.includes(`+${line}\r\n`), diff);
+  },
+);
+
+// What the git of the gate receives (closed-environment.feature): a fake git, first on the PATH of the process, records
+// the names of its environment, and the values of its two configuration variables, one line per call, next to itself. It is a node script started through its own
+// shebang: the step starts no process. macOS adds `__CF_USER_TEXT_ENCODING` to every process it starts: it is left out.
+const FAKE_GIT = `#!${process.execPath}
+const { appendFileSync } = require('node:fs');
+const names = Object.keys(process.env).filter((name) => name !== '__CF_USER_TEXT_ENCODING');
+appendFileSync(__filename + '.names', names.sort().join(', ') + '\\n');
+appendFileSync(__filename + '.configuration', [process.env.GIT_CONFIG_GLOBAL, process.env.GIT_CONFIG_SYSTEM].join(' ') + '\\n');
+appendFileSync(__filename + '.argv', process.argv.slice(2).join(' ') + '\\n');
+process.stdout.write('1111111111111111111111111111111111111111 2222222222222222222222222222222222222222\\n');
+`;
+
+Given('a fake git first on the PATH of the process, which records the names of its environment', function () {
+  const directory = mkdtempSync(join(tmpdir(), 'aos-gate-fake-'));
+  this.cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
+  const script = join(directory, 'git');
+  writeFileSync(script, FAKE_GIT);
+  chmodSync(script, 0o755);
+  const before = process.env['PATH'];
+  process.env['PATH'] = `${directory}:${before}`;
+  this.cleanups.push(() => {
+    process.env['PATH'] = before;
+  });
+  this.state['gateFakeGit'] = script;
+});
+
+When('the gate asks its git for the head', function () {
+  new GitRepository(repository(this).dir).commits();
+});
+
+Then('the fake git of the gate was started once as {string}', function (argv: string) {
+  const script = this.state['gateFakeGit'];
+  assert.equal(typeof script, 'string', 'a fake git must be put first on the PATH');
+  assert.equal(readFileSync(`${script as string}.argv`, 'utf8'), `${argv}\n`);
+});
+
+Given('the configuration of the gate repository names a witness program as its core.fsmonitor', function () {
+  const witness = join(mkdtempSync(join(tmpdir(), 'aos-gate-witness-')), 'witness');
+  this.cleanups.push(() => rmSync(dirname(witness), { recursive: true, force: true }));
+  writeFileSync(witness, `#!/bin/sh\n: > '${witness}.ran'\n`);
+  chmodSync(witness, 0o755);
+  const configuration = repository(this).path('.git/config');
+  writeFileSync(configuration, `${readFileSync(configuration, 'utf8')}[core]\n\tfsmonitor = ${witness}\n`);
+  this.state['gateWitness'] = witness;
+});
+
+When('git is asked for the diff with none of the options of the gate', function () {
+  const { firstParent } = new GitRepository(repository(this).dir).commits();
+  assert.notEqual(firstParent, null, 'the gate repository must have a first parent');
+  gitWithOptions(
+    repository(this).dir,
+    [],
+    ['diff', '--unified=0', '--no-renames', '--no-color', '--no-ext-diff', firstParent ?? ''],
+  );
+});
+
+function gateWitness(world: GateWorld): string {
+  const found = world.state['gateWitness'];
+  assert.equal(typeof found, 'string', 'a witness program must be named in the configuration first');
+  return found as string;
+}
+
+Then('the witness program of the gate has not run', function () {
+  assert.equal(existsSync(`${gateWitness(this)}.ran`), false);
+});
+
+Then('the witness program of the gate has run', function () {
+  assert.equal(existsSync(`${gateWitness(this)}.ran`), true);
+});
+
+Then('every call of the fake git of the gate received exactly the names {string}', function (names: string) {
+  const script = this.state['gateFakeGit'];
+  assert.equal(typeof script, 'string', 'a fake git must be put first on the PATH');
+  const calls = readFileSync(`${script as string}.names`, 'utf8')
+    .trimEnd()
+    .split('\n');
+  assert.ok(calls.length > 0);
+  for (const call of calls) assert.equal(call, names);
+});
+
+Then(
+  'every call of the fake git of the gate received the two configuration variables set to the empty file',
+  function () {
+    const script = this.state['gateFakeGit'];
+    assert.equal(typeof script, 'string', 'a fake git must be put first on the PATH');
+    const calls = readFileSync(`${script as string}.configuration`, 'utf8')
+      .trimEnd()
+      .split('\n');
+    assert.ok(calls.length > 0);
+    for (const call of calls) assert.equal(call, '/dev/null /dev/null');
+  },
+);
+
+Given('the HOME of the process holds a .gitconfig that sets core.autocrlf', function () {
+  const home = mkdtempSync(join(tmpdir(), 'aos-gate-home-'));
+  writeFileSync(join(home, '.gitconfig'), '[core]\n\tautocrlf = true\n');
+  const before = process.env['HOME'];
+  process.env['HOME'] = home;
+  this.cleanups.push(() => {
+    if (before === undefined) delete process.env['HOME'];
+    else process.env['HOME'] = before;
+    rmSync(home, { recursive: true, force: true });
+  });
+});
+
+Given(
+  'the XDG_CONFIG_HOME of the process holds a configuration file in git that sets diff.noprefix',
+  function () {
+    const xdg = mkdtempSync(join(tmpdir(), 'aos-gate-xdg-'));
+    mkdirSync(join(xdg, 'git'));
+    writeFileSync(join(xdg, 'git', 'config'), '[diff]\n\tnoprefix = true\n');
+    const before = process.env['XDG_CONFIG_HOME'];
+    process.env['XDG_CONFIG_HOME'] = xdg;
+    this.cleanups.push(() => {
+      if (before === undefined) delete process.env['XDG_CONFIG_HOME'];
+      else process.env['XDG_CONFIG_HOME'] = before;
+      rmSync(xdg, { recursive: true, force: true });
+    });
+  },
+);

@@ -1,0 +1,101 @@
+{
+  "step": "git-env-o",
+  "startedAt": "2026-11-18T16:38:25.915Z",
+  "tree": {
+    "commit": "60a123ff0516b1429e69763a5f7f17a461e633c4",
+    "tree": "3551aa6411d3e53a9adad4b758b51e9615e55545",
+    "clean": false
+  },
+  "inputs": {
+    "brief.md": "84585789283531c33d795ddab5fc2de191edacb162469a2e3dc533847a554c93",
+    "step.json": "ecfe2ae55da88e6530d56342a1072583baf192ae6f295d2f0088b46384fded88"
+  },
+  "launcher": {
+    "code.json": "cc2eab46372df976a61d3ee3316894b3b68901b5d85110eff62bd0d0704888a1",
+    "profiles/builder.json": "0a6ca080817163f806bd7a374ef0218c53195aba30a135cf84e380dadf5cfbf6",
+    "profiles/checker.json": "771dfbaa8c1d1e62ecb4d4f1bf598268feb1d3476cfa699ba39ea8d9cc4b2c58",
+    "profiles/reviewer.json": "feb8ecb4c1e0173536821f09093e37d3e7bc4f2f6eb8a5532e1da64ffecee507",
+    "prompts/build.md": "c46f5d44f0b5e1b8d593dcb14fa66bed0ad16c2af0743962762783b1f8100f10",
+    "prompts/review.md": "2e3e207d4291af6bcc393fa0196cb5865fcd091530b005bdbc192c378bfc0dbc",
+    "review.json": "a105ba5e52127ceef963dddab9ef122dcb2b96ac3ed100712729d05c6f8ea06e"
+  },
+  "sessions": [
+    {
+      "role": "build",
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "completed": true,
+      "stopped": false,
+      "durationSeconds": 508,
+      "costUsd": 0.3000781,
+      "costByModel": {
+        "claude-sonnet-5-5": 0.3000781
+      }
+    },
+    {
+      "role": "review",
+      "name": "correctness",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "completed": true,
+      "stopped": false,
+      "durationSeconds": 124,
+      "costUsd": 0.5773572,
+      "costByModel": {
+        "claude-opus-5-5": 0.5773572
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "types-sandbox",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 3
+    },
+    {
+      "name": "types-deliver",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 2
+    },
+    {
+      "name": "types-gate",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 2
+    },
+    {
+      "name": "types-features",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 2
+    },
+    {
+      "name": "format",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 4
+    },
+    {
+      "name": "architecture",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 2
+    },
+    {
+      "name": "scenarios",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 244
+    }
+  ],
+  "reviews": [
+    {
+      "name": "correctness",
+      "verdict": "request_changes",
+      "findings": 3
+    }
+  ],
+  "outcome": "refused"
+}

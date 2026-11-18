@@ -1,5 +1,5 @@
 {
-  "description": "La commande de livraison : les branches à publier dans l'ordre, la branche d'essai, le workflow et ses jobs exigés, les fichiers en ajout seul, le verdict de la porte et les bornes d'attente (docs/design/orchestration-fable-5-2.md §14, « Étape 1, la commande de livraison »).",
+  "description": "La commande de livraison : les branches à publier dans l'ordre, la branche d'essai, le workflow et ses jobs exigés, les fichiers en ajout seul, le verdict de la porte et les bornes d'attente (docs/design/orchestration-fable-5-2.md §14, « Étape 1, la commande de livraison »). La clé `environment` est la liste fermée des noms des variables de l'hôte que la commande donne à git et au client de la forge, avec ce que chacun pose lui-même : aucune autre ne passe (§14, « Un environnement fermé pour git »).",
   "remote": "origin",
   "repository": "cdeust/architect-os",
   "branches": ["feat/gate-1a", "main"],
@@ -11,6 +11,18 @@
   "gateCommand": ["npm", "run", "gate"],
   "gateLog": "reports/deliver-gate.log",
   "log": "${home}/.local/state/architect-os/deliveries.jsonl",
+  "environment": [
+    "PATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TMPDIR",
+    "SSH_AUTH_SOCK",
+    "XDG_CONFIG_HOME",
+    "GH_TOKEN",
+    "GITHUB_TOKEN"
+  ],
   "ciAttempts": 6,
   "pollSeconds": 30,
   "ciPolls": 90,

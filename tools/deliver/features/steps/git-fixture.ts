@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { runToEnd } from '../../src/infrastructure/host-process.js';
 import { GitRepository } from '../../src/infrastructure/git-repository.js';
-import { temporaryDirectory, type RepositoryFixture } from './fixtures.js';
+import { hostOf, temporaryDirectory, type RepositoryFixture } from './fixtures.js';
 import type { DeliverWorld } from './support.js';
 
 /** What a commit of the fixture writes, besides the file that names it. */
@@ -31,21 +31,23 @@ export interface GitFixture extends RepositoryFixture {
 const lines = (name: string, count: number): string =>
   Array.from({ length: count }, (_, index) => `${name} ${index + 1}\n`).join('');
 
-/** The environment variables set for the scenario, restored when it ends. */
-function setEnvironment(world: DeliverWorld, values: Record<string, string>): void {
-  const saved = Object.keys(values).map((name) => [name, process.env[name]] as const);
-  Object.assign(process.env, values);
-  world.cleanups.push(() => {
-    for (const [name, value] of saved) {
-      if (value === undefined) delete process.env[name];
-      else process.env[name] = value;
-    }
-  });
+/**
+ * The environment of the fixture's own git, closed: nothing of the environment of the suite. The adapter does not get it
+ * either: it is given a closed environment (`hostOf`). PATH is there to find git. No HOME is given, and
+ * GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM are /dev/null, so that no configuration of the machine is read. LC_ALL=C
+ * because the output of `rev-parse` is read. The identity is given by `-c` in `git` below; no scenario compares a hash
+ * between two repositories, so no date is fixed.
+ */
+function fixtureEnvironment(): Record<string, string> {
+  return {
+    PATH: process.env['PATH'] ?? '',
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_SYSTEM: '/dev/null',
+    LC_ALL: 'C',
+  };
 }
 
 export function gitFixture(world: DeliverWorld): GitFixture {
-  // No configuration of the machine is read, by the fixture or by the adapter, which inherits the environment.
-  setEnvironment(world, { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' });
   const root = temporaryDirectory(world);
   const bare = join(root, 'remote.git');
   const work = join(root, 'work');
@@ -54,7 +56,7 @@ export function gitFixture(world: DeliverWorld): GitFixture {
       'git',
       ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', ...args],
       cwd,
-      {},
+      fixtureEnvironment(),
     );
     assert.ok(finished?.status === 0, `git ${args[0]} did not succeed in the fixture`);
     return finished.out;
@@ -92,7 +94,7 @@ export function gitFixture(world: DeliverWorld): GitFixture {
   };
 
   return {
-    repository: new GitRepository(work, 'origin'),
+    repository: new GitRepository(work, 'origin', 'git', hostOf(world)),
     root,
     work,
     bare,

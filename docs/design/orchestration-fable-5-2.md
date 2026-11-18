@@ -670,7 +670,7 @@ Les pilotes du §13 (HR2 à HR4) gardent leur place : ils mesurent des pièces q
 | Groupe | Points | Pourquoi là |
 |---|---|---|
 | 1. Ce que l'hôte hérite, ce qui est copié | Un environnement fermé pour git ; une seule copie des dépendances ; des worktrees jetables | Le premier est un défaut de sécurité trouvé dans tout le projet le 18 novembre (trois lancements de git avec tout l'environnement de l'hôte, dont celui de la commande qui pousse). Les deux autres sont une décision du propriétaire, et la condition du travail à plusieurs agents : chaque arbre de travail copie 542 Mo de dépendances, et suit la tête courante par la main de l'orchestrateur |
-| 2. Une boucle qui se corrige | La base d'erreurs et le pas de réflexion ; les entrées inventées et la mutation comme phases de l'étape ; le refus qui repart de lui-même ; les scénarios écrits à part | Chacun retire un geste de l'orchestrateur. Depuis le 18 novembre il n'écrit plus lui-même une correction : elle repart en consigne vers une session de construction, et une autre session la relit |
+| 2. Une boucle qui se corrige | La base d'erreurs et le pas de réflexion ; les entrées inventées et la mutation comme phases de l'étape ; le refus qui repart de lui-même ; les écarts que la construction déclare, donnés aux revues comme des affirmations à vérifier (ajouté le 18 novembre, journal §102 : une revue a relevé comme défaut un écart que le rapport de construction justifiait par une preuve) ; les scénarios écrits à part | Chacun retire un geste de l'orchestrateur. Depuis le 18 novembre il n'écrit plus lui-même une correction : elle repart en consigne vers une session de construction, et une autre session la relit |
 | 3. Rejouable | Un commit par passe ; la part du prompt lue en cache et le coût par étape acceptée | Une passe qui part du travail non commité de la précédente n'est pas rejouable depuis le dépôt seul |
 | 4 à 9 | Les limites de ce qui est payé à l'usage, les evals, le routage, le cycle complet, le serveur, la plateforme | Inchangés |
 
@@ -789,9 +789,9 @@ Le mainteneur commite ce dossier avec le code de l'étape. Le dossier du poste g
 
 | Lancement | Variables prises de l'hôte | Posées par l'appelant |
 |---|---|---|
-| L'empreinte de l'arbre | `PATH`, `HOME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR` | `GIT_INDEX_FILE`, pour l'index temporaire |
-| La porte | Les mêmes | Aucune |
-| La livraison, git et le client de la forge | La liste du fichier descriptif de la commande : les mêmes, et ce qu'il faut pour s'identifier auprès de la forge sur un autre poste (`SSH_AUTH_SOCK`, `XDG_CONFIG_HOME`, `GH_TOKEN`, `GITHUB_TOKEN`) | `GIT_TERMINAL_PROMPT=0` |
+| L'empreinte de l'arbre | `PATH`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR` (le dossier personnel en est sorti après la douzième passe, voir plus bas) | `GIT_INDEX_FILE`, pour l'index temporaire ; `GIT_CONFIG_GLOBAL` et `GIT_CONFIG_SYSTEM`, vers un fichier vide |
+| La porte | Les mêmes | `GIT_CONFIG_GLOBAL` et `GIT_CONFIG_SYSTEM`, vers un fichier vide |
+| La livraison, git et le client de la forge | La liste du fichier descriptif de la commande, prise dans un ensemble fermé : les mêmes, et ce qu'il faut pour s'identifier auprès de la forge sur un autre poste (`SSH_AUTH_SOCK`, `XDG_CONFIG_HOME`, `GH_TOKEN`, `GITHUB_TOKEN`) | `GIT_TERMINAL_PROMPT=0` |
 
 La commande de la porte que la livraison lance (`npm run gate`) garde l'environnement de l'hôte : c'est une suite entière, pas un appel à git, et ses propres appels à git passent par la règle ci-dessus.
 
@@ -809,9 +809,85 @@ La commande de la porte que la livraison lance (`npm run gate`) garde l'environn
 | **D** | Une variable nécessaire manque sur un autre poste, et la livraison ne s'identifie plus | La liste de la livraison est dans son fichier descriptif, commité et relu ; l'arrêt est celui d'un port qui lève, sans rien de publié ; la première livraison réelle après ce changement est la preuve sur ce poste |
 | **R** | Sans objet : rien ne change à ce qui est enregistré | |
 
-**Ce que la règle ne ferme pas, et pourquoi.** La configuration globale de git, dans le dossier personnel, reste lue : c'est là que vit l'aide à l'identification de la livraison, et en CI la déclaration qui rend un dépôt sûr. Une session ne peut pas l'écrire (test d'évasion). Le fichier d'exclusion de l'hôte reste neutralisé pour l'empreinte et pour la règle de `steps/`, par leur option propre.
+**Ce que la règle ne ferme pas, et pourquoi.** Pour la livraison, la configuration globale de git, dans le dossier personnel, reste lue : c'est là que vit l'aide à l'identification auprès de la forge. Une session ne peut pas l'écrire (test d'évasion). Pour l'empreinte et la porte, elle n'est plus lue : voir « Décidé après la revue de la douzième passe ». Le fichier d'exclusion de l'hôte reste neutralisé pour l'empreinte et pour la règle de `steps/`, par leur option propre.
+
+**Décidé après les entrées inventées** (18 novembre 2026, journal §102). Une session neuve a cherché à faire agir git sur un autre dépôt, à lui faire lire une configuration ou lancer un programme, et à faire perdre à la livraison ce qui l'identifie : 73 scénarios, dont trois échouaient, et cinq remarques sur la conception.
+
+| Remarque de la session | Décision du mainteneur |
+|---|---|
+| Le schéma de la clé `environment` refusait les noms `GIT_` et acceptait ceux du chargeur de programmes (`LD_PRELOAD`, `DYLD_INSERT_LIBRARIES`), qui font exécuter du code à git comme au client de la forge | Une liste de refus ne finit jamais. Le schéma n'admet plus que des noms pris dans un ensemble fermé, celui du tableau ci-dessus pour la livraison ; le fichier descriptif en choisit une partie. Ajouter un nom est un changement de code, relu, avec son scénario |
+| La fermeture de l'environnement lisait un nom sur l'objet de l'hôte par sa chaîne de prototypes : `constructor` comptait pour posé | Seules les propriétés propres de l'environnement comptent |
+| `XDG_CONFIG_HOME`, dans la liste de la livraison pour le client de la forge, donne aussi à git une configuration globale (`$XDG_CONFIG_HOME/git/config`) | Gardé, et dit : c'est la configuration de l'hôte, au même titre que celle du dossier personnel, et c'est là que peut vivre l'aide à l'identification |
+| La porte et la livraison ne passaient pas à git les options que l'empreinte lui passe pour qu'il ne lance aucun programme de lui-même | Les trois lancements passent les mêmes : aucun moniteur de fichiers, aucun hook. La livraison pousse avec les droits du propriétaire : un hook de poussée n'a rien à y faire |
+| La liste de l'empreinte et celle de la porte sont écrites deux fois, dans deux composants qui ne partagent pas de code | Un contrôle littéral, à côté de celui qui refuse `process.env`, exige que les deux listes soient les mêmes |
+
+**Décidé après la revue de la douzième passe** (18 novembre 2026, journal §103). La revue a rejoué les scénarios avec un dossier personnel dont la configuration de git convertit les fins de ligne et écarte des fichiers : dix-sept échouaient. Elle proposait de poser un dossier personnel dans ces scénarios. La cause est en production : l'empreinte et la porte lisaient la configuration globale de l'hôte, alors que l'empreinte est dite ne dépendre que du dépôt et qu'un verdict de la porte doit être reproductible. Une conversion de fins de ligne change l'arbre calculé ; un réglage de l'affichage des différences change ce que la porte lit.
+
+| Lancement | Configuration globale et système de git |
+|---|---|
+| L'empreinte de l'arbre, la porte | Aucune n'est lue : l'appelant pose `GIT_CONFIG_GLOBAL` et `GIT_CONFIG_SYSTEM` vers un fichier vide, et le dossier personnel sort de leur liste, qui tombe à cinq noms |
+| La livraison | Celle de l'hôte reste lue : c'est là que vit l'aide à l'identification auprès de la forge. Ce que la livraison fait en dépend, et c'est dit |
+
+Ce que cela retire : sur un hôte où le dépôt n'appartient pas à l'utilisateur qui lance git (un conteneur), la déclaration qui rend un dépôt sûr vit dans la configuration globale ; l'empreinte et la porte ne la liront plus. Ce cas n'existe pas aujourd'hui (le job de la porte tourne sous l'utilisateur du runner) ; le jour où il existera, la déclaration se donne à git par une option de l'appel.
+
+La mutation, jouée par l'hôte, a dit la même chose que la session pour la porte : rien ne prouvait ce que son git reçoit, seulement ce qu'il ne reçoit pas. Un faux git, en tête du chemin de recherche, enregistre désormais les noms de son environnement, pour la porte comme pour la livraison.
 
 **Mesure.** Avant : trois lancements de git en production et une vingtaine d'aides de scénarios héritent de tout l'environnement. Après : aucun ; un contrôle d'architecture ou un scénario descriptif refuse un lancement de git en production qui ne passe pas par la liste.
+
+**Construite** (journal §102) : la liste fermée aux trois lancements, la clé `environment` de `tools/deliver/deliver.json` prise dans un ensemble fermé, les options contre un moniteur de fichiers et un hook aux trois lancements, `features/support/git-environment.ts` pour la suite, et deux contrôles littéraux sous `features/arch` : aucun des trois fichiers ne redonne `process.env`, et les deux listes écrites deux fois sont les mêmes.
+
+### Une seule copie des dépendances : conception (18 novembre 2026, avant le code et avant les mesures)
+
+**Le défaut.** Chaque arbre de travail porte sa propre copie des dépendances : 542 Mo, dont 337 Mo pour un seul binaire natif, trois fois sur ce poste. Avec plusieurs agents, ce sera une copie par agent. Une session de construction peut écrire dans la copie de son arbre, et l'hôte exécute ensuite ces dépendances quand il rejoue les scénarios. Seuls onze liens sont propres à un arbre : ceux qui relient entre eux les paquets internes.
+
+**Ce qui est décidé par le propriétaire.** Les dépendances ne sont pas dupliquées. Le moyen est un gestionnaire de paquets à magasin partagé, parce qu'il se transporte tel quel sur un serveur et dans un conteneur.
+
+**Ce que la source dit** (documentation de pnpm, version 12, lue le 18 novembre 2026 ; copie datée hors dépôt).
+
+| Fait | Conséquence |
+|---|---|
+| Les fichiers vivent dans un magasin adressé par leur contenu et sont liés en dur ou clonés dans chaque projet ; sur macOS le clone est essayé d'abord, sur Linux le lien dur | Une copie par version de dépendance. Sous Linux, un fichier d'un projet et celui du magasin sont le même fichier |
+| Le magasin doit être sur le même disque que le projet, sinon tout est copié | Le dépôt est sur un autre volume que le dossier personnel : le magasin se place sur ce volume |
+| Le contrôle d'intégrité du magasin « ne rend pas sûr un magasin inscriptible par des utilisateurs non fiables » | Le magasin n'est inscriptible par aucune sandbox |
+| Un mode figé installe contre un magasin en lecture seule, hors ligne, depuis le fichier de verrouillage (un montage en lecture seule, une couche d'image) | Le chemin du serveur et du conteneur existe dans l'outil |
+| Un magasin virtuel global : le dossier des dépendances d'un projet ne contient que des liens vers le magasin | Candidat : un arbre ne porterait plus aucun fichier de dépendance |
+| Les scripts de construction des dépendances ne tournent que s'ils sont autorisés un par un ; une version de moins d'un jour n'est pas installée | Plus strict par défaut que l'installation actuelle, qui désactive tous les scripts par une option |
+| Le fichier de verrouillage peut tenir deux documents ; un outil qui ne lit que le premier conclut « aucune dépendance, aucune vulnérabilité » sans échouer | La veille des avis et l'inventaire sont à vérifier contre ce format |
+| Une commande produit l'inventaire des dépendances (CycloneDX, SPDX) ; une autre convertit le fichier de verrouillage actuel, sans garantie d'identité | L'inventaire devient une commande ; la conversion se contrôle version par version |
+
+**La règle visée.** L'hôte seul installe, depuis le fichier de verrouillage, dans un magasin qu'aucune sandbox ne peut écrire. Un arbre de travail ne porte que ce qui lui est propre. Une session de construction ne peut pas écrire le dossier des dépendances de son arbre.
+
+**Menaces.**
+
+| | Menace | Parade |
+|---|---|---|
+| **T** | Une session écrit une dépendance : dans son arbre aujourd'hui, dans le magasin de tous demain si les fichiers sont des liens durs | Le profil du constructeur refuse l'écriture du dossier des dépendances de son arbre ; le magasin est hors de tout arbre et hors de toute liste d'écriture ; prouvé dans une vraie sandbox par le test d'évasion, sous macOS et sous Linux |
+| **T** | Une session remplace un lien du dossier des dépendances par un lien vers son propre code, que l'hôte exécuterait | Le même refus d'écriture couvre les liens |
+| **T** | Le fichier de verrouillage converti résout d'autres versions que l'actuel | Comparaison des versions résolues, paquet par paquet, avant et après ; un écart est une décision, pas un effet de bord |
+| **T** | Une dépendance ajoutée par une session | Elle ne peut plus installer : une dépendance nouvelle devient une demande à l'hôte, qui installe et régénère l'inventaire |
+| **E** | Un script d'installation d'une dépendance s'exécute sur l'hôte | Aucun autorisé par défaut ; chaque autorisation est une ligne commitée, relue |
+| **I** | La veille des avis ou l'inventaire lit un fichier de verrouillage à deux documents et conclut à tort « rien » | Un scénario donne à l'outil un fichier à deux documents dont le second porte une dépendance connue, et exige qu'elle soit vue |
+| **I** | Le registre voit quelles dépendances sont installées | Inchangé : c'est déjà le cas |
+| **D** | Le magasin est absent, sur un autre disque, ou corrompu | L'installation figée échoue en le disant ; elle ne retombe pas sur une copie silencieuse : un scénario le vérifie |
+| **D** | Un outil de la chaîne suit mal les liens du dossier des dépendances (compilation, mutation, garde d'architecture) | Mesuré avant toute décision : voir ci-dessous. Un mode à plat existe dans l'outil, en repli |
+| **S**, **R** | Sans objet : aucune identité ni aucun enregistrement n'est touché | |
+
+**Mesures, fixées avant d'être jouées.** Dans un arbre jetable, sur ce poste, magasin sur le volume du dépôt ; chaque mesure deux fois. Le script des mesures entre au dépôt, sous `bench/`, écrit par une session de construction et joué par l'hôte.
+
+| Mesure | Ce qu'elle décide |
+|---|---|
+| Temps et place d'une installation actuelle dans un arbre neuf | La référence |
+| Temps et place réellement prise par une installation depuis le magasin, premier arbre puis second | Si la copie est bien unique : la place prise par le second arbre doit être de l'ordre des liens |
+| La suite entière, la compilation, le garde d'architecture et le premier passage de l'outil de mutation, dans cet arbre | Si la forme à liens tient, ou s'il faut la forme à plat |
+| Les mêmes avec le magasin virtuel global | S'il peut être retenu |
+| Une installation figée, hors ligne, contre le magasin rendu non inscriptible | Le chemin d'une sandbox, d'un serveur, d'un conteneur |
+| Les versions résolues avant et après conversion | L'écart de la conversion |
+
+Critère : la décision se prend sur ces mesures. Si la forme à liens casse un outil de la chaîne et que la forme à plat ne partage plus rien, le résultat est dit tel quel et la décision revient au propriétaire.
+
+**Ce que le changement touche, à ne pas oublier.** Le fichier de verrouillage et sa mention dans les documents ; les quatre workflows qui installent, et le scénario qui exige que chaque installation désactive les scripts ; le job hebdomadaire des avis ; le registre de la veille, qui épingle deux paquets ; les commandes du dépôt et celle du lanceur ; les profils des sandboxes ; le banc, qui a son propre fichier de verrouillage.
+
+**Ce que cette étape ne fait pas.** Les arbres jetables : ils viennent après, et en dépendent.
 
 ### Trois piliers
 

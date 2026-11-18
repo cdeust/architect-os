@@ -32,7 +32,9 @@ export const macos = { ...config, paths: ['features/sandbox/**/*.feature'] };
 // and the format scenarios, which run tsc and prettier in child processes: they cover no production line in-process
 // and can kill no mutant, and on the copy they fail by design. features/arch runs dependency-cruiser in a child process
 // on zz-fixture-* files it writes into the tree: it reads sources and executes no production line, so it cannot detect
-// a mutant either, and the Stryker workers share one sandbox, so two workers collide on those files. A collision made
+// a mutant either, and the Stryker workers share one sandbox, so two workers collide on those files. features/arch
+// also holds a literal check of the text of three production files (closed-git-environment-text.feature): on the
+// instrumented copies that text is no longer the committed one, and the check fails by design. A collision made
 // the scenario fail and Stryker recorded a false kill, different from one run to the next. Both stay in the default
 // profile (the counted run, `npm test`, the gate). A scope by path, like `macos`: `features/**` is spelled as the root
 // areas other than these two; features/descriptive/cucumber-profiles.feature checks that no area is forgotten.

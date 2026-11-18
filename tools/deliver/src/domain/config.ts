@@ -19,6 +19,8 @@ export interface DeliverConfig {
   gateLog: string;
   /** The log of the deliveries, a path that starts with `${home}/`. */
   log: string;
+  /** The names of the host variables given to git and to the client of the forge; nothing else is. */
+  environment: string[];
   ciAttempts: number;
   pollSeconds: number;
   ciPolls: number;

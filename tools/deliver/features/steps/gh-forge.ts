@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { GhForge } from '../../src/infrastructure/gh-forge.js';
 import { REPO, type GhForgeFixture } from './gh-fixture.js';
-import { temporaryDirectory } from './fixtures.js';
+import { hostOf, temporaryDirectory } from './fixtures.js';
 import type { StreamProgressFixture } from './process-fixtures.js';
 import { Given, Then, When, type DeliverWorld } from './support.js';
 
@@ -34,7 +34,7 @@ Given('the gh forge finds the run {int} of {string}', function (id: number, hash
 });
 
 Given('a delivery forge over the program {string}', function (program: string) {
-  this.state['portForge'] = { forge: new GhForge(REPO, program, [], temporaryDirectory(this)) };
+  this.state['portForge'] = { forge: new GhForge(REPO, program, [], temporaryDirectory(this), hostOf(this)) };
 });
 
 /** The error of the call, when it threw. */

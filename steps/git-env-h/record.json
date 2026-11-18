@@ -1,0 +1,82 @@
+{
+  "step": "git-env-h",
+  "startedAt": "2026-11-18T13:26:21.721Z",
+  "tree": {
+    "commit": "9b720b249816b46dab467e8b6c1ac9de1202e5a0",
+    "tree": "440a09a3bd46abf0d03b629794ca90c720fdba9a",
+    "clean": false
+  },
+  "inputs": {
+    "brief.md": "c95f6bff8a20fbca55a813bfb9f8de5e5d3b5dc32eb960aa8f53581f2f3cbd95",
+    "step.json": "ecfe2ae55da88e6530d56342a1072583baf192ae6f295d2f0088b46384fded88"
+  },
+  "launcher": {
+    "code.json": "cc2eab46372df976a61d3ee3316894b3b68901b5d85110eff62bd0d0704888a1",
+    "profiles/builder.json": "0a6ca080817163f806bd7a374ef0218c53195aba30a135cf84e380dadf5cfbf6",
+    "profiles/checker.json": "771dfbaa8c1d1e62ecb4d4f1bf598268feb1d3476cfa699ba39ea8d9cc4b2c58",
+    "profiles/reviewer.json": "feb8ecb4c1e0173536821f09093e37d3e7bc4f2f6eb8a5532e1da64ffecee507",
+    "prompts/build.md": "c46f5d44f0b5e1b8d593dcb14fa66bed0ad16c2af0743962762783b1f8100f10",
+    "prompts/review.md": "2e3e207d4291af6bcc393fa0196cb5865fcd091530b005bdbc192c378bfc0dbc",
+    "review.json": "a105ba5e52127ceef963dddab9ef122dcb2b96ac3ed100712729d05c6f8ea06e"
+  },
+  "sessions": [
+    {
+      "role": "build",
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "completed": true,
+      "stopped": false,
+      "durationSeconds": 255,
+      "costUsd": 0.09053180000000001,
+      "costByModel": {
+        "claude-sonnet-5-5": 0.09053180000000001
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "types-sandbox",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 2
+    },
+    {
+      "name": "types-deliver",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 2
+    },
+    {
+      "name": "types-gate",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 2
+    },
+    {
+      "name": "types-features",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 2
+    },
+    {
+      "name": "format",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 3
+    },
+    {
+      "name": "architecture",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 2
+    },
+    {
+      "name": "scenarios",
+      "passed": false,
+      "stopped": false,
+      "durationSeconds": 218
+    }
+  ],
+  "reviews": [],
+  "outcome": "refused"
+}

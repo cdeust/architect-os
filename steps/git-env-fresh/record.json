@@ -1,0 +1,35 @@
+{
+  "step": "git-env-fresh",
+  "startedAt": "2026-11-18T12:31:56.948Z",
+  "tree": {
+    "commit": "9b720b249816b46dab467e8b6c1ac9de1202e5a0",
+    "tree": "21e301ecf1a150a973916bc07d0209507267fdc8",
+    "clean": false
+  },
+  "inputs": {
+    "brief.md": "a1871b35df1c17d0ace314f29bf01fb1d5137fa38cad1c38aff8f2c5cca787e2",
+    "step.json": "7f95082754908d966fc722450bfbedd67e23d1cb99f1910098b23b43bc18ff76"
+  },
+  "launcher": {
+    "code.json": "cc2eab46372df976a61d3ee3316894b3b68901b5d85110eff62bd0d0704888a1",
+    "profiles/builder.json": "0a6ca080817163f806bd7a374ef0218c53195aba30a135cf84e380dadf5cfbf6",
+    "prompts/build.md": "c46f5d44f0b5e1b8d593dcb14fa66bed0ad16c2af0743962762783b1f8100f10"
+  },
+  "sessions": [
+    {
+      "role": "build",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "completed": true,
+      "stopped": false,
+      "durationSeconds": 792,
+      "costUsd": 2.6752314000000004,
+      "costByModel": {
+        "claude-opus-5-5": 2.6752314000000004
+      }
+    }
+  ],
+  "checks": [],
+  "reviews": [],
+  "outcome": "passed"
+}

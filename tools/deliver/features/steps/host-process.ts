@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { runToEnd, runToFile, type Finished } from '../../src/infrastructure/host-process.js';
+import {
+  closedEnvironment,
+  runToEnd,
+  runToFile,
+  type Finished,
+} from '../../src/infrastructure/host-process.js';
 import { temporaryDirectory } from './fixtures.js';
 import { Given, Then, When, type DeliverWorld } from './support.js';
 
@@ -31,9 +36,14 @@ const runOf = (world: DeliverWorld): Run => {
   return run;
 };
 
-const toEnd = (world: DeliverWorld, program: string, args: string[], added: Record<string, string>): void => {
+const toEnd = (
+  world: DeliverWorld,
+  program: string,
+  args: string[],
+  environment: Record<string, string>,
+): void => {
   const run = runOf(world);
-  run.finished = runToEnd(program, args, run.directory, added);
+  run.finished = runToEnd(program, args, run.directory, environment);
 };
 
 When('I run the script {string} to its end', function (script: string) {
@@ -48,7 +58,7 @@ When(
 );
 
 When(
-  'I run the script {string} with the variable {string} added as {string} to its end',
+  'I run the script {string} with only the variable {string} set to {string} to its end',
   function (script: string, name: string, value: string) {
     toEnd(this, process.execPath, ['-e', script], { [name]: value });
   },
@@ -66,14 +76,63 @@ Then('the program did not run to its end', function () {
   assert.equal(runOf(this).finished, undefined);
 });
 
-Then('the program printed the PATH of this process', function () {
-  assert.equal(runOf(this).finished?.out, process.env['PATH']);
+When('I run the script {string} with the environment of this process to its end', function (script: string) {
+  toEnd(
+    this,
+    process.execPath,
+    ['-e', script],
+    Object.fromEntries(
+      Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+    ),
+  );
+});
+
+// The closed environment of a program: `closedEnvironment`.
+
+When(
+  'I close the environment of the names {string} over a host that sets {string} with {string} added',
+  function (names: string, host: string, added: string) {
+    const pairs = (text: string): [string, string][] =>
+      text === '' ? [] : text.split(',').map((pair) => pair.split('=') as [string, string]);
+    this.state['closed'] = closedEnvironment(
+      { names: names === '' ? [] : names.split(','), env: Object.fromEntries(pairs(host)) },
+      Object.fromEntries(pairs(added)),
+    );
+  },
+);
+
+When(
+  'I close the environment of the name {string} over a host that leaves it undefined',
+  function (name: string) {
+    this.state['closed'] = closedEnvironment({ names: [name], env: { [name]: undefined } }, {});
+  },
+);
+
+Then('the closed environment is {string}', function (expected: string) {
+  assert.deepEqual(
+    this.state['closed'],
+    expected === ''
+      ? {}
+      : Object.fromEntries(expected.split(',').map((pair) => pair.split('=') as [string, string])),
+  );
 });
 
 Then('the program printed the directory it ran in', function () {
   const run = runOf(this);
   assert.equal(run.finished?.out, run.directory);
 });
+
+Given(
+  'this process has the variable {string} set to {string} until the scenario ends',
+  function (name: string, value: string) {
+    const before = process.env[name];
+    process.env[name] = value;
+    this.cleanups.push(() => {
+      if (before === undefined) delete process.env[name];
+      else process.env[name] = before;
+    });
+  },
+);
 
 Given('the file already holds {string}', function (text: string) {
   writeFileSync(runOf(this).file, text);

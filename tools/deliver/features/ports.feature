@@ -193,7 +193,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | deletedLines       | git diff exited with code 129    |
         | deleteRemoteBranch | git push exited with code 128    |
 
-    Scenario Outline: each method is one fixed git command, started with the terminal prompt switched off
+    Scenario Outline: each method is one fixed git command, started with no file monitor, no hook and the terminal prompt switched off
       Given a delivery repository over a git that records what it is asked
       When I call "<method>" on the delivery repository
       Then git was asked "<argv>"
@@ -201,14 +201,14 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
       Examples:
         | method             | argv                                                           |
-        | isClean            | status --porcelain                                             |
-        | head               | rev-parse --verify HEAD^{commit}                               |
-        | fetch              | fetch --quiet --prune origin                                   |
-        | remoteHead         | rev-parse --verify --quiet refs/remotes/origin/main^{commit}   |
-        | isAncestor         | merge-base --is-ancestor aaa bbb                               |
-        | deletedLines       | diff --numstat aaa bbb -- docs/a.md                            |
-        | push               | push --quiet origin aaa:refs/heads/main                        |
-        | deleteRemoteBranch | push --quiet origin :refs/heads/main                           |
+        | isClean            | -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain |
+        | head               | -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse --verify HEAD^{commit} |
+        | fetch              | -c core.fsmonitor=false -c core.hooksPath=/dev/null fetch --quiet --prune origin |
+        | remoteHead         | -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse --verify --quiet refs/remotes/origin/main^{commit} |
+        | isAncestor         | -c core.fsmonitor=false -c core.hooksPath=/dev/null merge-base --is-ancestor aaa bbb |
+        | deletedLines       | -c core.fsmonitor=false -c core.hooksPath=/dev/null diff --numstat aaa bbb -- docs/a.md |
+        | push               | -c core.fsmonitor=false -c core.hooksPath=/dev/null push --quiet origin aaa:refs/heads/main |
+        | deleteRemoteBranch | -c core.fsmonitor=false -c core.hooksPath=/dev/null push --quiet origin :refs/heads/main |
 
     Scenario: a git executable that does not exist throws a fixed message
       Given a delivery repository over the git executable "/nonexistent/git"

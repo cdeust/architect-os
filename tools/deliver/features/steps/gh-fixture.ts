@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CiJob, CiRun, RuleSuite } from '../../src/domain/ports.js';
 import { GhForge } from '../../src/infrastructure/gh-forge.js';
-import { temporaryDirectory, type ForgeFixture } from './fixtures.js';
+import { hostOf, temporaryDirectory, type ForgeFixture } from './fixtures.js';
 import { REPOSITORY, type DeliverWorld } from './support.js';
 
 const FAKE_GH = `${REPOSITORY}tools/deliver/fixtures/fake-gh.mjs`;
@@ -25,6 +25,8 @@ export interface GhForgeFixture extends ForgeFixture {
   answers(kind: string, subject: string, answer: Answer): void;
   /** The arguments the client received, one line per call, in order. */
   asked(): string[];
+  /** The names of the environment the client received, sorted and joined by a space, one line per call, in order. */
+  environments(): string[];
 }
 
 const keys: Record<string, (subject: string) => string> = {
@@ -64,16 +66,19 @@ export function ghForge(world: DeliverWorld): GhForgeFixture {
   const prefix = [FAKE_GH, file];
   const asked = (): string[] =>
     existsSync(`${file}.argv`) ? readFileSync(`${file}.argv`, 'utf8').split('\n').slice(0, -1) : [];
+  const environments = (): string[] =>
+    existsSync(`${file}.env`) ? readFileSync(`${file}.env`, 'utf8').split('\n').slice(0, -1) : [];
   const answers: GhForgeFixture['answers'] = (kind, subject, answer) => {
     planned[keyOf(kind, subject)] = answer;
     write();
   };
   return {
-    forge: new GhForge(REPO, process.execPath, prefix, process.cwd()),
+    forge: new GhForge(REPO, process.execPath, prefix, process.cwd(), hostOf(world)),
     program: process.execPath,
     prefix,
     answers,
     asked,
+    environments,
     hasRun(hash: string, run: CiRun) {
       const key = keyOf('runs', hash);
       answers('runs', hash, { stdout: runsText(hash, run.id, run.completed ? 'completed' : 'in_progress') });

@@ -29,17 +29,37 @@ interface Fingerprinting {
   tmp?: string;
   /** The log of the fake git. */
   log?: string;
+  /** The directory of the fake git: the log, and the answers it is told to give. */
+  bin?: string;
+  /** The second repository, which the variables of the process name. */
+  other?: string;
 }
 /** The state of the scenario, made by the first step that needs it: the Given steps come in any order. */
 const fp = (world: { state: Record<string, unknown> }): Fingerprinting =>
   (world.state['fingerprinting'] ??= { directory: '', results: [] }) as Fingerprinting;
 
-/** A git for the scenarios: no configuration of the machine, no signature, no editor. */
+/**
+ * A git for the scenarios, started with a closed environment: nothing of the environment of the suite, whatever the
+ * machine or the job sets. PATH is there to find git. GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM are /dev/null so that no
+ * configuration of the machine is read (no HOME is given, so no `~/.gitconfig` and no XDG directory either). LC_ALL=C
+ * because the output of `status --porcelain` and of `rev-parse` is read. The identity is given by `-c` below, and no
+ * scenario compares a hash between two repositories, so no date is fixed. A scenario that sets GIT_DIR in the process to
+ * poison the fingerprint does not reach the helper: it reads the repository it is given.
+ */
 export const git = (directory: string, ...args: string[]): string => {
   const result = spawnSync(
     'git',
     ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args],
-    { cwd: directory, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } },
+    {
+      cwd: directory,
+      encoding: 'utf8',
+      env: {
+        PATH: process.env['PATH'] ?? '',
+        GIT_CONFIG_GLOBAL: '/dev/null',
+        GIT_CONFIG_SYSTEM: '/dev/null',
+        LC_ALL: 'C',
+      },
+    },
   );
   assert.equal(result.status, 0, `git ${args.join(' ')} failed: ${result.stderr}`);
   return result.stdout.trim();
@@ -52,13 +72,36 @@ const throwaway = (world: { state: Record<string, unknown>; cleanups: (() => voi
   return directory;
 };
 
-Given('a throwaway repository with one commit', function () {
-  const directory = throwaway(this);
+/** A repository of one commit that holds `.gitignore` and the file `tracked`. */
+const commitOne = (directory: string, tracked: string): void => {
   git(directory, 'init', '-q');
   writeFileSync(join(directory, '.gitignore'), '*.log\n');
-  writeFileSync(join(directory, 'a.txt'), 'first\n');
+  writeFileSync(join(directory, tracked), 'first\n');
   git(directory, 'add', '-A');
   git(directory, 'commit', '-q', '-m', 'first');
+};
+
+Given('a throwaway repository with one commit', function () {
+  commitOne(throwaway(this), 'a.txt');
+});
+
+Given('a second throwaway repository with one commit', function () {
+  const directory = mkdtempSync(join(ROOT_TMP, 'aos-fp-other-'));
+  this.cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
+  commitOne(directory, 'other.txt');
+  fp(this).other = directory;
+});
+
+Given('the GIT_DIR and the GIT_WORK_TREE of the process name the second repository', function () {
+  const other = fp(this).other as string;
+  setEnv(this, 'GIT_DIR', join(other, '.git'));
+  setEnv(this, 'GIT_WORK_TREE', other);
+});
+
+Given('the configuration of the process, by GIT_CONFIG_COUNT, makes core.autocrlf input', function () {
+  setEnv(this, 'GIT_CONFIG_COUNT', '1');
+  setEnv(this, 'GIT_CONFIG_KEY_0', 'core.autocrlf');
+  setEnv(this, 'GIT_CONFIG_VALUE_0', 'input');
 });
 
 Given('a directory that is not a repository', function () {
@@ -72,17 +115,33 @@ Given('a throwaway directory', function () {
 Given('the file {string} of the repository holds {string}', function (file: string, text: string) {
   const path = join(fp(this).directory, file);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, text.replaceAll('\\n', '\n'));
+  writeFileSync(path, text.replaceAll('\\n', '\n').replaceAll('\\r', '\r'));
 });
 
-Given('the exclusion file of the host names {string}', function (pattern: string) {
-  // The global configuration of git, for this scenario: an exclusion file that names the pattern.
-  const home = mkdtempSync(join(ROOT_TMP, 'aos-fp-home-'));
-  this.cleanups.push(() => rmSync(home, { recursive: true, force: true }));
-  writeFileSync(join(home, 'ignore'), `${pattern}\n`);
-  writeFileSync(join(home, 'gitconfig'), `[core]\n\texcludesFile = ${join(home, 'ignore')}\n`);
-  setEnv(this, 'GIT_CONFIG_GLOBAL', join(home, 'gitconfig'));
-});
+Given(
+  'the configuration of the host, in the HOME and in the XDG_CONFIG_HOME of the process, converts line endings and excludes {string}',
+  function (pattern: string) {
+    // The global configuration of git, for this scenario, in the two places where git looks for it: `~/.gitconfig` and
+    // `$XDG_CONFIG_HOME/git/config`. Each sets `core.autocrlf` and names an exclusion file that names the pattern.
+    const home = mkdtempSync(join(ROOT_TMP, 'aos-fp-home-'));
+    const xdg = mkdtempSync(join(ROOT_TMP, 'aos-fp-xdg-'));
+    this.cleanups.push(() => rmSync(home, { recursive: true, force: true }));
+    this.cleanups.push(() => rmSync(xdg, { recursive: true, force: true }));
+    writeFileSync(join(home, 'ignore'), `${pattern}\n`);
+    const configuration = (ignore: string) => `[core]\n\tautocrlf = true\n\texcludesFile = ${ignore}\n`;
+    writeFileSync(join(home, '.gitconfig'), configuration(join(home, 'ignore')));
+    mkdirSync(join(xdg, 'git'));
+    writeFileSync(join(xdg, 'ignore'), `${pattern}\n`);
+    writeFileSync(join(xdg, 'git', 'config'), configuration(join(xdg, 'ignore')));
+    // The default global exclusion files, which git reads without any configuration, even when GIT_CONFIG_GLOBAL is an
+    // empty file: `$XDG_CONFIG_HOME/git/ignore`, and `$HOME/.config/git/ignore` when XDG_CONFIG_HOME is not set.
+    writeFileSync(join(xdg, 'git', 'ignore'), `${pattern}\n`);
+    mkdirSync(join(home, '.config', 'git'), { recursive: true });
+    writeFileSync(join(home, '.config', 'git', 'ignore'), `${pattern}\n`);
+    setEnv(this, 'HOME', home);
+    setEnv(this, 'XDG_CONFIG_HOME', xdg);
+  },
+);
 
 Given('a temporary directory that the fingerprint must leave empty', function () {
   const tmp = mkdtempSync(join(ROOT_TMP, 'aos-fp-tmp-'));
@@ -220,16 +279,28 @@ Then('the fingerprint tree is {string}', function (tree: string) {
 
 // --- a fake git -----------------------------------------------------------------------------------------------
 
-const FAKE_GIT = `#!/bin/sh
-printf '%s|%s|%s\\n' "$*" "$GIT_INDEX_FILE" "$(pwd -P)" >> "$FAKE_GIT_LOG"
-shift 6
-if [ "$*" = "$FAKE_GIT_ON" ]; then
-  if [ -n "$FAKE_GIT_SLEEP" ]; then exec sleep "$FAKE_GIT_SLEEP"; fi
-  printf '%s\\n' "$FAKE_GIT_TEXT"
-  printf '%s\\n' "$FAKE_GIT_TEXT" >&2
-  exit "$FAKE_GIT_EXIT"
-fi
-printf '%s\\n' cccccccccccccccccccccccccccccccccccccccc
+// The fake git is a script of node, found through the PATH it is given. It reads what it must answer from files next to
+// itself, not from the environment: the fingerprint gives git a closed environment. It writes, for each call, its
+// arguments, its GIT_INDEX_FILE, its directory, the names (not the values) of its whole environment, and the values of
+// the two variables that name the global and the system configuration of git.
+const FAKE_GIT = `#!${process.execPath}
+const fs = require('node:fs');
+const path = require('node:path');
+const read = (name) => (fs.existsSync(path.join(__dirname, name)) ? fs.readFileSync(path.join(__dirname, name), 'utf8') : '');
+const args = process.argv.slice(2);
+// macOS adds __CF_USER_TEXT_ENCODING to every process it starts: it is not a variable the fingerprint gave.
+const names = Object.keys(process.env).filter((name) => name !== '__CF_USER_TEXT_ENCODING').sort();
+const configuration = [process.env.GIT_CONFIG_GLOBAL, process.env.GIT_CONFIG_SYSTEM];
+const line = [args.join(' '), process.env.GIT_INDEX_FILE ?? '', fs.realpathSync(process.cwd()), names, configuration];
+fs.appendFileSync(path.join(__dirname, 'calls.log'), JSON.stringify(line) + '\\n');
+if (args.slice(4).join(' ') === read('on')) {
+  if (read('sleep') !== '') setTimeout(() => {}, Number(read('sleep')) * 1000);
+  else {
+    process.stdout.write(read('text') + '\\n');
+    process.stderr.write(read('text') + '\\n');
+    process.exitCode = Number(read('exit'));
+  }
+} else process.stdout.write('cccccccccccccccccccccccccccccccccccccccc\\n');
 `;
 
 /** Sets an environment variable for the rest of the scenario. */
@@ -242,46 +313,42 @@ const setEnv = (world: { cleanups: (() => void)[] }, name: string, value: string
   });
 };
 
+/** What the fake git is told to do on the call `on`: files next to it. */
+const tell = (world: { state: Record<string, unknown> }, answers: Record<string, string>): void => {
+  for (const [name, text] of Object.entries(answers))
+    writeFileSync(join(fp(world).bin as string, name), text);
+};
+
 Given('a fake git that records its calls', function () {
   const bin = mkdtempSync(join(ROOT_TMP, 'aos-fp-bin-'));
   this.cleanups.push(() => rmSync(bin, { recursive: true, force: true }));
   writeFileSync(join(bin, 'git'), FAKE_GIT);
   chmodSync(join(bin, 'git'), 0o755);
-  const log = join(bin, 'calls.log');
-  writeFileSync(log, '');
+  writeFileSync(join(bin, 'calls.log'), '');
   setEnv(this, 'PATH', `${bin}:${process.env['PATH']}`);
-  setEnv(this, 'FAKE_GIT_LOG', log);
-  setEnv(this, 'FAKE_GIT_ON', '');
-  setEnv(this, 'FAKE_GIT_SLEEP', '');
-  fp(this).log = log;
+  fp(this).bin = bin;
+  fp(this).log = join(bin, 'calls.log');
 });
 
 Given('the fake git never answers the call {string}', function (call: string) {
-  setEnv(this, 'FAKE_GIT_ON', call);
-  setEnv(this, 'FAKE_GIT_SLEEP', '30');
+  tell(this, { on: call, sleep: '60' });
 });
 
 Given('the fake git answers the call {string} with the hash {string}', function (call: string, hash: string) {
-  setEnv(this, 'FAKE_GIT_ON', call);
-  setEnv(this, 'FAKE_GIT_TEXT', hash);
-  setEnv(this, 'FAKE_GIT_EXIT', '0');
+  tell(this, { on: call, text: hash, exit: '0' });
 });
 
 Given(
   'the fake git answers the call {string} with the exit code {int} and a marker',
   function (call: string, code: number) {
-    setEnv(this, 'FAKE_GIT_ON', call);
-    setEnv(this, 'FAKE_GIT_TEXT', 'MARKER');
-    setEnv(this, 'FAKE_GIT_EXIT', String(code));
+    tell(this, { on: call, text: 'MARKER', exit: String(code) });
   },
 );
 
 Given(
   'the fake git answers the call {string} with the text {string} and the exit code {int}',
   function (call: string, text: string, code: number) {
-    setEnv(this, 'FAKE_GIT_ON', call);
-    setEnv(this, 'FAKE_GIT_TEXT', text);
-    setEnv(this, 'FAKE_GIT_EXIT', String(code));
+    tell(this, { on: call, text, exit: String(code) });
   },
 );
 
@@ -289,7 +356,7 @@ const calls = (world: { state: Record<string, unknown> }) =>
   readFileSync(fp(world).log as string, 'utf8')
     .split('\n')
     .filter((line) => line !== '')
-    .map((line) => line.split('|') as [string, string, string]);
+    .map((line) => JSON.parse(line) as [string, string, string, string[], string[]]);
 
 Then('the fake git was called, in this order, with:', function (table: { raw: () => string[][] }) {
   const expected = table.raw().map(([args, index]) => [args?.trim(), index?.trim()]);
@@ -316,3 +383,39 @@ Then('the temporary index was in the temporary directory', function () {
   assert.match(basename(folder), /^aos-tree-/);
   assert.equal(basename(indexes[0] as string), 'index');
 });
+
+const CONFIGURATION = ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM'];
+
+Then(
+  'each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, and GIT_INDEX_FILE where it is due',
+  function () {
+    const list = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
+    const had = list.filter((name) => process.env[name] !== undefined);
+    // The scenario makes the check mean something: some names are set, one is not, and the list is not the whole process.
+    assert.ok(had.includes('LANG') && had.includes('LC_CTYPE') && !had.includes('LC_ALL'));
+    assert.ok(Object.keys(process.env).length > had.length);
+    const recorded = calls(this);
+    assert.equal(recorded.length, 5);
+    for (const [, index, , names, configuration] of recorded) {
+      assert.deepEqual(names, [...had, ...CONFIGURATION, ...(index === '' ? [] : ['GIT_INDEX_FILE'])].sort());
+      assert.deepEqual(configuration, ['/dev/null', '/dev/null']);
+    }
+  },
+);
+
+Then(
+  'each call of the fake git received exactly the five names of the list, the two configuration variables set to the empty file, and GIT_INDEX_FILE where it is due',
+  function () {
+    const list = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
+    assert.ok(list.every((name) => process.env[name] !== undefined));
+    const recorded = calls(this);
+    assert.equal(recorded.length, 5);
+    for (const [, index, , names, configuration] of recorded) {
+      assert.deepEqual(
+        names,
+        [...list, ...CONFIGURATION, ...(index === '' ? [] : ['GIT_INDEX_FILE'])].sort(),
+      );
+      assert.deepEqual(configuration, ['/dev/null', '/dev/null']);
+    }
+  },
+);

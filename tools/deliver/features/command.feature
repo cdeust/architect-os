@@ -196,6 +196,44 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       And the home of the delivery command holds no delivery log
       And the remote of the delivery command has no branch "sentinel/gate-1a-step"
 
+  Rule: the environment of the process is not given to git nor to the client of the forge
+
+    Scenario: a GIT_DIR of the process that names another repository: the commit of the worktree is pushed to its own remote
+      Given the process of the delivery command has a GIT_DIR that names another repository
+      When I run the delivery command with "step"
+      Then the delivery command exited 0
+      And the remote of the delivery command holds "feat/gate-1a" at the commit "h1"
+      And the remote of the delivery command holds "main" at the commit "h1"
+
+    Scenario: a rewrite of the address of the remote injected by GIT_CONFIG_COUNT: the push still reaches its own remote, and the other receives nothing
+      Given the process of the delivery command injects by GIT_CONFIG_COUNT the rewrite of its remote to another remote
+      When I run the delivery command with "step"
+      Then the delivery command exited 0
+      And the remote of the delivery command holds "feat/gate-1a" at the commit "h1"
+      And the remote of the delivery command holds "main" at the commit "h1"
+      And the other remote of the delivery command holds no branch
+
+    Scenario: a witness program named as GIT_SSH_COMMAND and GIT_ASKPASS is not run by the delivery
+      Given the process of the delivery command names a witness program as its GIT_SSH_COMMAND and its GIT_ASKPASS
+      And the remote of the delivery command is an address that only ssh could reach
+      When I run the delivery command with "step"
+      Then the delivery command exited 3
+      And the witness program of the delivery command has not run
+
+    Scenario: the same witness program is run by a git that is given those variables, so that the scenario above can fail
+      Given the process of the delivery command names a witness program as its GIT_SSH_COMMAND and its GIT_ASKPASS
+      And the remote of the delivery command is an address that only ssh could reach
+      When git is started directly with the environment of the delivery command, witness included
+      Then the witness program of the delivery command has run
+
+    Scenario: the client of the forge receives the variables of the list that the process set, and no other
+      Given the process of the delivery command has the variable "GH_TOKEN" set to "token-1"
+      And the process of the delivery command has the variable "SECRET_ELSEWHERE" set to "secret"
+      And the process of the delivery command has the variable "GIT_ASKPASS" set to "/nowhere"
+      When I run the delivery command with "step --until ci"
+      Then the delivery command exited 0
+      And every call of the scripted forge received exactly the variables of the list that the process had set, GH_TOKEN among them
+
   Rule: the entry point
 
     Scenario: the dependencies of a process

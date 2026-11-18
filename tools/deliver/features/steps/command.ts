@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { deliverDependencies, parseArguments, runDeliver, type DeliverDependencies } from '../../src/main.js';
 import { runToEnd } from '../../src/infrastructure/host-process.js';
-import { temporaryDirectory } from './fixtures.js';
+import { committedNames, hostOf, temporaryDirectory } from './fixtures.js';
 import { ghForge, type GhForgeFixture } from './gh-fixture.js';
 import { gitFixture, type GitFixture } from './git-fixture.js';
 import { REPOSITORY, Given, Then, When, type DeliverWorld } from './support.js';
@@ -23,6 +23,14 @@ interface Command {
   home: string;
   /** The home the command is told, when it is not the temporary one. */
   toldHome?: string;
+  /** The environment of the process the command is started in: the host variables of the descriptive file, and what a scenario adds. */
+  environment: Record<string, string>;
+  /** Another bare repository, when a scenario makes one. */
+  other?: string;
+  /** The program that a scenario names as the GIT_SSH_COMMAND and the GIT_ASKPASS of the process. */
+  witness?: string;
+  /** The file that the pre-push hook of the worktree writes when it runs. */
+  hookWitness?: string;
   /** The exit code the gate ends with; 0 leaves a verdict naming the commit. */
   gateCode: number;
   /** The descriptive file the command is given. */
@@ -77,6 +85,7 @@ Given(
       git,
       gh,
       home,
+      environment: { ...(hostOf(this).env as Record<string, string>) },
       gateCode: 0,
       config: join(home, 'deliver.json'),
       stdout: '',
@@ -127,7 +136,7 @@ async function run(world: DeliverWorld, argv: string, fromWorktree: boolean): Pr
   const dependencies: DeliverDependencies = {
     argv: argv === '' ? [] : argv.split(' '),
     cwd: fromWorktree ? command.git.work : command.home,
-    env: fromWorktree ? {} : { INIT_CWD: command.git.work },
+    env: fromWorktree ? command.environment : { ...command.environment, INIT_CWD: command.git.work },
     stdout: { write: (text: string) => void (out.stdout += text) },
     stderr: { write: (text: string) => void (out.stderr += text) },
     git: 'git',
@@ -260,7 +269,7 @@ When('I start cli.ts of the delivery command with no argument', function () {
     process.execPath,
     ['--import', 'tsx', 'tools/deliver/src/cli.ts'],
     REPOSITORY,
-    {},
+    { PATH: process.env['PATH'] ?? '' },
   );
 });
 
@@ -270,3 +279,112 @@ Then(
     assert.deepEqual(this.state['started'], { status: code, out: '' });
   },
 );
+
+// The closed environment of the real adapters (command.feature, rule: the environment of the process is not given to git)
+
+Given(
+  'the process of the delivery command has the variable {string} set to {string}',
+  function (name: string, value: string) {
+    commandOf(this).environment[name] = value;
+  },
+);
+
+Given('the process of the delivery command has a GIT_DIR that names another repository', function () {
+  const command = commandOf(this);
+  const other = join(command.git.root, 'elsewhere.git');
+  command.git.git(command.git.root, 'init', '--quiet', '--bare', other);
+  command.environment['GIT_DIR'] = other;
+});
+
+Given(
+  'the process of the delivery command injects by GIT_CONFIG_COUNT the rewrite of its remote to another remote',
+  function () {
+    const command = commandOf(this);
+    const other = join(command.git.root, 'other.git');
+    command.git.git(command.git.root, 'init', '--quiet', '--bare', other);
+    command.other = other;
+    Object.assign(command.environment, {
+      GIT_CONFIG_COUNT: '1',
+      GIT_CONFIG_KEY_0: `url.${other}.insteadOf`,
+      GIT_CONFIG_VALUE_0: command.git.bare,
+    });
+  },
+);
+
+Then('the other remote of the delivery command holds no branch', function () {
+  const { git } = commandOf(this).git;
+  assert.equal(git(commandOf(this).other as string, 'for-each-ref', 'refs/heads'), '');
+});
+
+Given(
+  'the process of the delivery command names a witness program as its GIT_SSH_COMMAND and its GIT_ASKPASS',
+  function () {
+    const command = commandOf(this);
+    const witness = join(temporaryDirectory(this), 'witness');
+    writeFileSync(witness, '#!/bin/sh\n: > "$0.ran"\nexit 1\n');
+    chmodSync(witness, 0o755);
+    command.witness = witness;
+    Object.assign(command.environment, { GIT_SSH_COMMAND: witness, GIT_ASKPASS: witness });
+  },
+);
+
+Given('the remote of the delivery command is an address that only ssh could reach', function () {
+  const { git, work } = commandOf(this).git;
+  git(work, 'remote', 'set-url', 'origin', 'ssh://127.0.0.1:1/nothing.git');
+});
+
+When('git is started directly with the environment of the delivery command, witness included', function () {
+  const command = commandOf(this);
+  runToEnd('git', ['fetch', 'origin'], command.git.work, command.environment);
+});
+
+Then('the witness program of the delivery command has not run', function () {
+  assert.equal(existsSync(`${commandOf(this).witness}.ran`), false);
+});
+
+Then('the witness program of the delivery command has run', function () {
+  assert.equal(existsSync(`${commandOf(this).witness}.ran`), true);
+});
+
+Then(
+  'every call of the scripted forge received exactly the variables of the list that the process had set, GH_TOKEN among them',
+  function () {
+    const set = committedNames().filter((name) => commandOf(this).environment[name] !== undefined);
+    assert.ok(set.includes('GH_TOKEN'));
+    const received = commandOf(this).gh.environments();
+    assert.ok(received.length > 0);
+    for (const names of received) assert.equal(names, [...set].sort().join(' '));
+  },
+);
+
+Given('the worktree of the delivery command has a pre-push hook that writes a witness file', function () {
+  const command = commandOf(this);
+  const hooks = join(command.git.work, '.git', 'hooks');
+  const witness = join(temporaryDirectory(this), 'pre-push.ran');
+  mkdirSync(hooks, { recursive: true });
+  writeFileSync(join(hooks, 'pre-push'), `#!/bin/sh\n: > '${witness}'\n`);
+  chmodSync(join(hooks, 'pre-push'), 0o755);
+  command.hookWitness = witness;
+});
+
+When(
+  'git pushes directly from the worktree of the delivery command, without the options of the delivery',
+  function () {
+    const command = commandOf(this);
+    const finished = runToEnd(
+      'git',
+      ['push', '--quiet', 'origin', 'HEAD:refs/heads/witness'],
+      command.git.work,
+      command.environment,
+    );
+    assert.equal(finished?.status, 0);
+  },
+);
+
+Then('the pre-push hook of the delivery command has not run', function () {
+  assert.equal(existsSync(commandOf(this).hookWitness as string), false);
+});
+
+Then('the pre-push hook of the delivery command has run', function () {
+  assert.equal(existsSync(commandOf(this).hookWitness as string), true);
+});

@@ -1,16 +1,17 @@
 import type { Repository } from '../domain/ports.js';
-import { runToEnd } from './host-process.js';
+import { closedEnvironment, runToEnd, type HostEnvironment } from './host-process.js';
 
 /**
  * `Repository` over git, in the delivery worktree: one git command per method, a fixed argv started without a shell,
- * with `GIT_TERMINAL_PROMPT=0` added to the environment it inherits. Nothing git prints is returned or shown: a method
+ * with a closed environment: the variables of the descriptive file that the host sets, and `GIT_TERMINAL_PROMPT=0`. Nothing git prints is returned or shown: a method
  * gives the fact its port names, and a failure the port does not name throws a fixed message with the exit code.
  */
 export class GitRepository implements Repository {
   constructor(
     private readonly worktree: string,
     private readonly remote: string,
-    private readonly git: string = 'git',
+    private readonly git: string,
+    private readonly host: HostEnvironment,
   ) {}
 
   isClean(): boolean {
@@ -63,7 +64,13 @@ export class GitRepository implements Repository {
 
   /** Runs git and gives its exit code; throws only when git did not run to its end (not found, or a signal). */
   private start(args: string[]): { status: number; out: string } {
-    const finished = runToEnd(this.git, args, this.worktree, { GIT_TERMINAL_PROMPT: '0' });
+    const finished = runToEnd(
+      this.git,
+      // No file monitor and no hook: git starts no program of its own, and the delivery pushes with the rights of the owner.
+      ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', ...args],
+      this.worktree,
+      closedEnvironment(this.host, { GIT_TERMINAL_PROMPT: '0' }),
+    );
     if (finished === undefined) throw new Error('git could not be run to its end');
     return finished;
   }

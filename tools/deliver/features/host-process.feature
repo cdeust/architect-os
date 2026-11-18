@@ -31,17 +31,42 @@ Feature: The one file of the delivery command that starts processes (programs ev
       When I run the script "process.stdout.write(process.argv[1])" with the argument "a b\"c'd $HOME" to its end
       Then the program ended with 0 and printed "a b\"c'd $HOME"
 
-    Scenario: an added variable is seen by the program
-      When I run the script "process.stdout.write(process.env.HOST_PROCESS_ADDED)" with the variable "HOST_PROCESS_ADDED" added as "seen" to its end
+    Scenario: the program is given the environment it is passed, complete
+      When I run the script "process.stdout.write(process.env.HOST_PROCESS_SEEN)" with only the variable "HOST_PROCESS_SEEN" set to "seen" to its end
       Then the program ended with 0 and printed "seen"
 
-    Scenario: the variables of this process are inherited
-      When I run the script "process.stdout.write(process.env.PATH)" to its end
-      Then the program printed the PATH of this process
+    Scenario: the program is given nothing of the environment of this process
+      Given this process has the variable "HOST_PROCESS_INHERITED" set to "inherited" until the scenario ends
+      When I run the script "process.stdout.write(String(process.env.HOST_PROCESS_INHERITED))" with only the variable "HOST_PROCESS_SEEN" set to "seen" to its end
+      Then the program ended with 0 and printed "undefined"
+
+    Scenario: the environment of this process, passed whole, is the one the program sees
+      Given the process has the variable "HOST_PROCESS_WHOLE" set to "whole"
+      When I run the script "process.stdout.write(process.env.HOST_PROCESS_WHOLE)" with the environment of this process to its end
+      Then the program ended with 0 and printed "whole"
 
     Scenario: the program runs in the directory it is given
       When I run the script "process.stdout.write(process.cwd())" to its end
       Then the program printed the directory it ran in
+
+  Rule: The closed environment of a program
+
+    Scenario Outline: the names that the host sets are taken, then what the caller adds, which wins
+      When I close the environment of the names "<names>" over a host that sets "<host>" with "<added>" added
+      Then the closed environment is "<closed>"
+
+      Examples:
+        | names     | host             | added      | closed      |
+        | A,B       | A=1,B=2,C=3      |            | A=1,B=2     |
+        | A,B       | A=1              |            | A=1         |
+        | A         | A=1              | G=0        | A=1,G=0     |
+        | A         | A=1              | A=2        | A=2         |
+        |           | A=1              | G=0        | G=0         |
+        | A         |                  |            |             |
+
+    Scenario: a name that the host leaves undefined is not given
+      When I close the environment of the name "A" over a host that leaves it undefined
+      Then the closed environment is ""
 
   Rule: Run with both outputs in a file
 
@@ -87,3 +112,8 @@ Feature: The one file of the delivery command that starts processes (programs ev
     Scenario: the program runs in the directory it is given
       When I run the script "process.stdout.write(process.cwd())" to a file
       Then the file holds the directory it ran in
+
+    Scenario: the program inherits the environment of this process: it is the gate command, a whole suite
+      Given this process has the variable "HOST_PROCESS_INHERITED" set to "inherited" until the scenario ends
+      When I run the script "process.stdout.write(process.env.HOST_PROCESS_INHERITED)" to a file
+      Then the file holds "inherited"

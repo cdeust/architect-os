@@ -7,6 +7,8 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
       Then the deliver config is accepted
       And the accepted deliver config holds the branches "feat/gate-1a, main" and the required jobs "gate-linux, gate-macos"
       And the committed deliver config names the section of its design
+      And the committed deliver config says what its environment key is
+      And the committed deliver config gives the host variables of git and of the forge client
 
     Scenario: the base form of these scenarios is accepted
       Given a deliver config of the base form
@@ -53,6 +55,9 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | ruleSuitePolls | 1                                                      |
         | ruleSuitePolls | 60                                                     |
         | workflow       | "Gate CI (linux)"                                      |
+        | environment    | ["PATH"]                                               |
+        | environment    | ["GITHUB_TOKEN","SSH_AUTH_SOCK","XDG_CONFIG_HOME","TMPDIR"] |
+        | environment    | ["PATH","HOME","LANG","LC_ALL","LC_CTYPE","TMPDIR","SSH_AUTH_SOCK","XDG_CONFIG_HOME","GH_TOKEN","GITHUB_TOKEN"] |
 
     Scenario Outline: a label of 64 characters
       Given a deliver config of the base form
@@ -87,6 +92,7 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | trialPrefix    |
         | workflow       |
         | requiredJobs   |
+        | environment    |
         | appendOnly     |
         | gateVerdict    |
         | gateCommand    |
@@ -184,6 +190,27 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | log            | "${home}/../a"                 | $.log the log path has no ..                       |
         | log            | "${home}/a/.."                 | $.log the log path has no ..                       |
         | log            | 1                              | $.log                                              |
+        | environment    | []                             | $.environment                                      |
+        | environment    | ["PATH","HOME","LANG","LC_ALL","LC_CTYPE","TMPDIR","SSH_AUTH_SOCK","XDG_CONFIG_HOME","GH_TOKEN","GITHUB_TOKEN","PATH"] | $.environment the variables are all different |
+        | environment    | ["PATH","PATH"]                | $.environment the variables are all different      |
+        | environment    | "PATH"                         | $.environment                                      |
+        | environment    | [1]                            | $.environment.0                                    |
+        | environment    | [""]                           | $.environment.0                                    |
+        | environment    | ["path"]                       | $.environment.0                                    |
+        | environment    | ["1A"]                         | $.environment.0                                    |
+        | environment    | ["_A"]                         | $.environment.0                                    |
+        | environment    | ["A-B"]                        | $.environment.0                                    |
+        | environment    | ["A B"]                        | $.environment.0                                    |
+        | environment    | ["A=1"]                        | $.environment.0                                    |
+        | environment    | ["A\\n"]                       | $.environment.0                                    |
+        | environment    | ["A"]                          | $.environment.0                                    |
+        | environment    | ["LD_PRELOAD"]                 | $.environment.0                                    |
+        | environment    | ["PATH","DYLD_INSERT_LIBRARIES"] | $.environment.1                                  |
+        | environment    | ["GIT"]                        | $.environment.0                                    |
+        | environment    | ["constructor"]                | $.environment.0                                    |
+        | environment    | ["GIT_DIR"]                    | $.environment.0                                    |
+        | environment    | ["PATH","GIT_"]                | $.environment.1                                    |
+        | environment    | ["PATH","GIT_CONFIG_COUNT"]    | $.environment.1                                    |
         | ciAttempts     | 0                              | $.ciAttempts                                       |
         | ciAttempts     | 11                             | $.ciAttempts                                       |
         | ciAttempts     | 1.5                            | $.ciAttempts                                       |

@@ -4135,3 +4135,123 @@ L'outil de mutation rejoue toute la suite une fois avant de muter quoi que ce so
 - Recherche : un échec est rapporté avec sa cause mesurée, et distingué de ce qu'il n'est pas ; un verdict de revue défavorable est rapporté avec sa raison.
 - SSDLC : la porte a refusé un commit qu'elle ne pouvait pas vérifier, et la commande n'a rien publié ; une borne implicite devient explicite et tenue par un scénario ; menaces de l'étape suivante écrites avant son code.
 - Opérationnel : une limite de capacité est nommée et inscrite ; IRB sans objet.
+
+## 102. Un environnement fermé pour git : dix passes, cinq erreurs de consigne, et ce que la mutation et des attaques inventées ont seules trouvé, 18 novembre 2026
+
+Le commit des §100 et §101 a été poussé (`9b720b2`) à sa seconde livraison : quatorze minutes, porte verte (28 scénarios ajoutés, 7 supprimés ; 3 fichiers et 56 mutants dans le périmètre, aucun survivant ; premier passage de l'outil de mutation en 4 min 51, sous la nouvelle borne), CI verte au premier sondage, ruleset `pass` sur les deux branches.
+
+**Ce qui est construit** (conception et menaces : note de la boucle, §14 ; le point quitte la feuille de route).
+
+| Pièce | Ce qu'elle fait |
+|---|---|
+| La liste fermée, aux trois lancements | L'empreinte de l'arbre, la porte et la livraison donnent à git six variables de l'hôte prises par leur nom, puis ce que l'appelant pose ; la livraison y ajoute ce qu'il faut pour s'identifier auprès de la forge, pour git et pour son client |
+| La clé `environment` du fichier descriptif de la livraison | Sa liste, prise dans un ensemble fermé de dix noms : tout autre nom est refusé |
+| Les options contre un programme que git lancerait de lui-même | Aucun moniteur de fichiers, aucun hook, aux trois lancements |
+| La suite | Elle retire de son propre environnement, à son chargement, toute variable `GIT_` |
+| Deux contrôles littéraux, sous `features/arch` | Aucun des trois fichiers ne redonne l'environnement entier à un lancement ; les deux listes écrites deux fois sont les mêmes |
+
+**La boucle : dix passes et une session d'entrées inventées, toutes enregistrées sous `steps/`.** La première est partie d'un commit publié : c'est le premier enregistrement rejouable depuis le dépôt seul.
+
+| Passe | Construction, Sonnet 5.5 | Ce qui l'a arrêtée, ou sa revue (Opus 5.5) |
+|---|---|---|
+| `git-env-a` | 1 342 s, 1,40 $ : tout est construit | Arrêtée par le contrôle des scénarios : le fichier d'étape y jouait les scénarios d'architecture, qui écrivent dans l'arbre, ce que la sandbox d'un contrôle refuse |
+| `git-env-b` | 0,21 $ | 0,76 $, `request_changes`, sept constats |
+| `git-env-c` | 0,15 $ | Arrêtée par le contrôle d'architecture : un lancement de processus dans un fichier de scénarios d'un outil |
+| `git-env-d` | 0,10 $ | 0,32 $ : aucun défaut de code ; le README et le schéma, restés au mainteneur |
+| `git-env-e` | 0,09 $ | 0,32 $ : aucun défaut de code |
+| `git-env-fresh` | Opus 5.5, 792 s, 2,68 $ : 73 scénarios d'attaque | |
+| `git-env-f` | 1 113 s, 1,09 $ | 0,82 $, `request_changes`, trois constats |
+| `git-env-g` | 0,11 $ | 0,40 $ : aucun défaut de code |
+| `git-env-h` | 0,09 $ | Arrêtée par le contrôle des scénarios : un scénario dépendant du temps |
+| `git-env-i` | 0,09 $ | 0,45 $, `accept` |
+| `git-env-j` | 0,14 $ | 0,41 $, `accept` |
+
+Coût : 9,62 $, dont 1,40 $ pour la construction initiale et 2,68 $ pour les entrées inventées.
+
+**Cinq erreurs de consigne, toutes du mainteneur, aucune publiée.**
+
+| Erreur | Qui l'a attrapée |
+|---|---|
+| Un contrôle d'étape qui joue des scénarios écrivant dans l'arbre | La sandbox du contrôle, à la première passe |
+| Des poisons qui ne pouvaient rien prouver : une variable que l'appel pose lui-même, une configuration qu'une option écrase, puis une troisième, donnée en remplacement, que git ignore | La session de construction : elle l'a dit dans son rapport, a essayé le remplacement, l'a écarté, et en a prouvé un autre en cassant la liste un instant |
+| « Une aide qui lance git sans ses variables », dans un fichier de scénarios d'un outil | Le contrôle d'architecture, en deux secondes, avant toute revue |
+| « Sous `features/arch` ou sous `features/descriptive` » pour un scénario qui lit le texte du code | La mutation de l'hôte : l'outil réécrit les fichiers qu'il mute, le scénario échouait sur sa copie, et la porte aurait été rouge |
+| Une borne de 300 ms posée au §99, quand le faux git était un script qui démarre en quelques millisecondes | Le contrôle des scénarios, quand le faux git est devenu plus lent à démarrer : sous charge, un appel normal a dépassé la borne |
+
+**Ce que la mutation de l'hôte a trouvé, après des revues sans défaut.** Trois passages. Le premier n'a pas pu démarrer, pour la raison de la quatrième ligne ci-dessus. Le deuxième : 58 mutants, 11 survivants, tous dans la liste fermée de la porte : les scénarios prouvaient ce que son git ne reçoit pas, jamais ce qu'il reçoit ; on pouvait vider la liste sans qu'un test le remarque. Un faux git en tête du chemin de recherche enregistre maintenant les noms de son environnement, pour la porte comme pour la livraison. Le troisième : 59 mutants, 2 survivants, dans la liste de l'empreinte : un nom que le processus de test ne pose pas, et une condition que le langage rend inutile. Le dernier, sur le fichier repris : 66 mutants, aucun survivant.
+
+**Ce que les entrées inventées ont trouvé.** Une session neuve, à qui il était demandé de penser comme quelqu'un qui veut faire agir git sur un autre dépôt, lui faire lancer un programme, ou faire perdre à la livraison ce qui l'identifie : 73 scénarios écrits avec les seuls steps existants ; trois échouaient sur l'hôte, ceux qu'elle avait annoncés.
+
+| Défaut | Correction |
+|---|---|
+| Le schéma de la clé `environment` refusait les noms `GIT_` et acceptait ceux du chargeur de programmes, qui font exécuter du code à git comme au client de la forge | Une liste de refus ne finit jamais : le schéma n'admet plus que des noms pris dans un ensemble fermé |
+| La fermeture de l'environnement prenait pour posée une variable que tout objet du langage possède | Seules les propriétés propres comptent |
+
+Elle a aussi rendu cinq remarques sur la conception, tranchées par le mainteneur dans la note avant la consigne suivante : les trois lancements passent les mêmes options contre un programme lancé par git ; les deux listes écrites deux fois sont tenues égales par un contrôle ; `XDG_CONFIG_HOME` reste dans la liste de la livraison, et il est dit qu'il donne aussi à git une configuration de l'hôte.
+
+**Ce que les revues ont trouvé.** Un attendu calculé par le git de production pendant que le poison était posé, qui ne tenait que parce que le second dépôt n'avait qu'un commit ; un scénario jumeau qui donnait son témoin par un autre chemin que le scénario dont il était le jumeau, et ne prouvait donc pas que la protection sert. Et, quatre fois, une documentation restée en arrière.
+
+**Ce que cette étape dit de la boucle.**
+- Elle tient sans que l'orchestrateur ait raison : trois arrêts sont venus de contrôles sans modèle, avant toute revue payée.
+- Les consignes sont son maillon faible : cinq erreurs, aucune relue par personne avant de partir. La base d'erreurs de la feuille de route doit les porter, relues avant chaque consigne.
+- La mutation est restée un geste de l'hôte, d'une demi-heure, en fin de cycle : deux défauts ont attendu quatre et neuf passes pour être vus. C'est le point de la feuille de route qui aurait le plus raccourci ce cycle.
+- Une revue ne voit pas le rapport de la session de construction : elle a relevé comme un écart un remplacement que ce rapport justifiait par une preuve. Inscrit à la feuille de route : donner aux revues les écarts que la construction déclare, comme des affirmations à vérifier.
+
+**Ce qui n'est pas fermé, et pourquoi.** La configuration globale de git, dans le dossier personnel ou sous `XDG_CONFIG_HOME`, reste lue : c'est là que vit l'aide à l'identification de la livraison, et en CI la déclaration qui rend un dépôt sûr. Une session ne peut pas l'écrire (test d'évasion). `.git/info/exclude` reste lu par l'empreinte : git ne permet pas de l'écarter.
+
+**La preuve qui reste à faire, par la livraison de ce commit.** Tout ce qui précède est joué sur des dépôts jetables et un client de forge scripté. La commande de livraison poussera ce commit avec son environnement fermé : si la liste retenue ne suffit pas à l'identifier auprès de la forge sur ce poste, elle s'arrêtera sans rien publier, et la section suivante le dira.
+
+**Schémas et README.** Le point « A closed environment for git » quitte la feuille de route et sa boîte en pointillés quitte le schéma de l'isolation, rendu contrôlé à l'œil ; la ligne G.1 entre dans l'état des briques, une ligne dans ce qui est prouvé. `CLAUDE.md` reçoit la règle. Un point entre à la feuille de route : les écarts déclarés par la construction, donnés aux revues.
+
+**Chiffres.** 3 053 scénarios dans la suite (156 de plus).
+
+**Trois piliers.**
+- Recherche : dix passes rapportées avec leurs arrêts et leurs coûts ; cinq erreurs du mainteneur données avec ce qui les a attrapées ; quatre passages de mutation ; des attaques inventées par une session qui n'avait pas écrit le code ; la preuve restante est annoncée avant d'être jouée.
+- SSDLC : menaces écrites avant le code ; une liste fermée au lieu d'une liste de refus ; aucune variable de l'hôte hors liste n'atteint git, prouvé sur de vrais dépôts ; auteur et relecteur séparés à chaque passe ; aucun commentaire de désactivation ; aucune dépendance ajoutée.
+- Opérationnel : la commande qui pousse ne peut plus être détournée vers un autre dépôt par son environnement ; chaque passe a son enregistrement au dépôt ; IRB sans objet.
+
+## 103. Le second arrêt réel de la commande, sur une CI rouge ; l'empreinte et la porte ne lisent plus la configuration de la machine ; conception de la copie unique des dépendances, 18 novembre 2026
+
+Le commit du §102 n'a pas été publié à sa première livraison. Cette section est dans le même commit, repris : il n'était sur aucune branche protégée.
+
+**L'arrêt.** `npm run deliver -- git-env` : préalables, branche d'essai, porte de l'hôte verte (166 scénarios ajoutés, 10 supprimés ; 8 fichiers et 55 mutants dans le périmètre, aucun survivant), puis `stopped`, phase `CI`, raison `CI rouge`, code de sortie 1. Rien n'a été poussé sur `feat/gate-1a` ni sur `main`. C'est le deuxième des arrêts de la commande à être rencontré en vrai, après la porte rouge du §101. Des deux jobs, celui de macOS n'avait pas reçu de machine et celui de Linux avait une étape en échec : la commande n'a pas relancé, elle s'est arrêtée, comme il faut pour une étape en échec.
+
+**Ce que cet essai prouve déjà de l'environnement fermé.** La branche d'essai a été poussée et la forge interrogée avec la liste fermée de variables : l'identification tient pour ces deux gestes sur ce poste. La publication sur les deux branches protégées restait à voir.
+
+**La cause, dans un scénario de l'étape.** Deux scénarios écrits pour prouver que la suite n'hérite pas de l'environnement de l'hôte lançaient un programme en lui donnant tout cet environnement, puis vérifiaient les noms qui commencent par `GIT`. Un runner de la forge en pose une quarantaine. Aucun contrôle du poste ne pouvait le voir : il fallait une machine dont l'environnement diffère. C'est la raison d'être de la CI dans la livraison, et la raison pour laquelle la commande ne publie pas avant elle.
+
+**Quatre passes de plus, par consigne.**
+
+| Passe | Construction, Sonnet 5.5 | Revue, Opus 5.5 | Ce qu'elle a fait |
+|---|---|---|---|
+| `git-env-k` | 0,14 $ | 0,47 $, `request_changes` | Le programme du scénario ne reçoit plus que ce qu'il lui faut ; prouvé avec quarante variables du même genre posées autour de la suite |
+| `git-env-l` | Interrompue par le mainteneur pendant sa construction : un orage chez le propriétaire | | Aucun enregistrement ; deux fichiers de scénarios à moitié repris |
+| `git-env-m` | 0,24 $ | 1,10 $, `request_changes` | La même, rejouée en disant à la session ce qu'elle pouvait trouver : le git que lancent les fixtures reçoit une liste fermée, une identité et une date fixes |
+| `git-env-n` | 1 995 s, 0,92 $ | 0,77 $, `accept` | Voir ci-dessous |
+| `git-env-o` | 0,30 $ | 0,58 $ : la documentation de test, reprise par le mainteneur | Deux scénarios rendus pleinement probants |
+
+**Une décision de fond, prise contre la proposition d'une revue.** La revue de `git-env-m` a rejoué les scénarios avec un dossier personnel dont la configuration de git convertit les fins de ligne et écarte des fichiers : dix-sept échouaient. Elle proposait de donner un dossier personnel à ces scénarios. La cause était en production : l'empreinte d'un arbre est dite ne dépendre que du dépôt, et un verdict de la porte doit être reproductible, or toutes deux lisaient la configuration globale de la machine. Une conversion de fins de ligne change l'arbre calculé ; un réglage de l'affichage des différences change ce que la porte lit. Le §102 écrivait que cette configuration « reste lue », avec une raison qui ne vaut que pour la livraison.
+
+| Lancement | Configuration de git de la machine |
+|---|---|
+| L'empreinte de l'arbre, la porte | Plus aucune n'est lue ; le dossier personnel sort de leur liste, qui tombe à cinq noms ; une option devenue indiscernable de son absence est retirée |
+| La livraison | Celle de la machine reste lue : c'est là que vit l'aide à l'identification |
+
+La preuve, dans les termes du défaut, par la session de `git-env-n` : les mêmes 1 160 scénarios verts tels quels, avec quarante variables de la forge, une autre langue, un fuseau horaire extrême et un dossier de configuration inexistant, puis avec un dossier personnel dont la configuration convertit les fins de ligne, écarte des fichiers, change l'affichage des différences, impose une signature et des hooks qui échouent.
+
+**La mutation, jouée par l'hôte** sur toutes les lignes de production de l'étape : 62 mutants, aucun survivant.
+
+**Coût de l'étape G.1, de la première passe à ce commit.** 14,14 $, sans la passe interrompue, qui n'a pas de mesure : treize passes jouées et une session d'entrées inventées.
+
+**Trouvé en arrêtant le travail pendant l'orage.** Un processus de la suite tournait depuis dix-neuf heures, sans parent : la commande d'un scénario qui vérifie qu'un contrôle trop long est interrompu à sa limite (`features/sandbox/checker.feature`), lancée le 17 novembre au soir, quand ce mécanisme était en cours de correction. Arrêté à la main. Reste à établir si le code présent en laisse un : le scénario sera rejoué seul, et le résultat consigné.
+
+**La conception du point suivant, écrite avant ses mesures** (note de la boucle, §14, « Une seule copie des dépendances »). Décidé par le propriétaire : les dépendances ne sont pas dupliquées, et le moyen est un gestionnaire de paquets à magasin partagé, parce qu'il se transporte tel quel sur un serveur et dans un conteneur. La note donne ce que la documentation de l'outil dit, lue à la source ; la règle visée (l'hôte seul installe, dans un magasin qu'aucune sandbox ne peut écrire) ; la table des menaces ; et six mesures fixées avant d'être jouées, avec ce que chacune décide.
+
+**Schémas et README.** Le README et `CLAUDE.md` disent cinq noms pour l'empreinte et la porte, et qu'elles ne lisent aucune configuration de la machine. Aucun élément du système n'est ajouté ; le point des dépendances est déjà à la feuille de route et dans le schéma de l'isolation.
+
+**Chiffres.** 3 052 scénarios dans la suite (155 de plus que le commit publié).
+
+**Trois piliers.**
+- Recherche : un arrêt réel rapporté avec sa cause ; une proposition de revue écartée avec sa raison ; une preuve en trois jeux ; une interruption et ce qu'elle a laissé ; la conception suivante écrite avec ses mesures fixées d'avance.
+- SSDLC : la commande n'a rien publié sur une CI rouge ; deux lancements de git en production ne dépendent plus de la machine ; les scénarios non plus ; menaces du point suivant écrites avant son code.
+- Opérationnel : un verdict de la porte et l'empreinte d'une étape sont les mêmes d'un poste à l'autre ; un processus laissé par la suite est signalé ; IRB sans objet.

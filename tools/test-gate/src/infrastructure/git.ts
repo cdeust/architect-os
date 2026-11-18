@@ -1,12 +1,49 @@
 import { execFileSync } from 'node:child_process';
 
 /**
- * Runs `git` in `cwd` and returns its standard output. The only process launch of tools/test-gate: named exception
- * of the rule child-process-only-in-sandbox in .dependency-cruiser.cjs. The gate has no network code and no token.
+ * The environment of every git call of the gate: the variables of the host that git needs, by name, and nothing else.
+ * A `GIT_DIR` or a `GIT_CONFIG_COUNT` of the host would make the gate read another repository or a configuration
+ * (docs/design/orchestration-fable-5-2.md §14, « Un environnement fermé pour git »). A name that the process does
+ * not set is given as `undefined`, which node leaves out of the environment of the child. The global and the system
+ * configuration of git are an empty file: with no `HOME` either, the verdict does not depend on the machine.
+ */
+function closedEnvironment(): NodeJS.ProcessEnv {
+  const names = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
+  const given: NodeJS.ProcessEnv = { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
+  for (const name of names) given[name] = process.env[name];
+  return given;
+}
+
+/**
+ * The options of every git call of the gate, before the subcommand: no file monitor and no hook, so that git starts no
+ * program of its own (docs/design/orchestration-fable-5-2.md §14, « Un environnement fermé pour git »), the same as the
+ * fingerprint of the tree; and the paths of the diff as they are.
+ */
+function options(): string[] {
+  return ['core.quotePath=false', 'core.fsmonitor=false', 'core.hooksPath=/dev/null'].flatMap((option) => [
+    '-c',
+    option,
+  ]);
+}
+
+/**
+ * Runs `git` in `cwd` and returns its standard output, through `gitWithOptions` with the two options that the gate
+ * always gives: no file monitor and no hook, in `options()`.
  */
 export function git(cwd: string, args: readonly string[]): string {
-  return execFileSync('git', ['-c', 'core.quotePath=false', ...args], {
+  return gitWithOptions(cwd, options(), args);
+}
+
+/**
+ * `git` with the options given before the subcommand. The only process launch of tools/test-gate: named exception of
+ * the rule child-process-only-in-sandbox in .dependency-cruiser.cjs. The gate has no network code and no token.
+ * The gate always gives `options()`, through `git`; the scenarios give none, to show that the options are what keeps
+ * the program of the configuration from running.
+ */
+export function gitWithOptions(cwd: string, before: readonly string[], args: readonly string[]): string {
+  return execFileSync('git', [...before, ...args], {
     cwd,
+    env: closedEnvironment(),
     encoding: 'utf8',
     maxBuffer: 1 << 30,
   });

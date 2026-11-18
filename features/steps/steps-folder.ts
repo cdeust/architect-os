@@ -187,15 +187,16 @@ Given('the committed folder steps\\/ of the repository', function () {
 });
 
 /**
- * Every git command of the scenarios that build a repository: no global and no system configuration, no template and
- * no hooks, so that nothing of the host changes what the scenarios prove. The one call that reads the configuration of
+ * Every git command of the scenarios that build a repository, started with a closed environment: PATH to find git, no
+ * global and no system configuration (and no HOME, so no file of the home either), no template and no hooks, so that
+ * nothing of the host or of the environment of the suite changes what the scenarios prove. The one call that reads the configuration of
  * the host on purpose is the rule's own (`committable`), which the scenario of the exclusion file of the host exercises.
  */
 function git(cwd: string | undefined, ...args: string[]): void {
   execFileSync('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
     cwd,
     stdio: 'ignore',
-    env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
+    env: { PATH: process.env['PATH'] ?? '', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' },
   });
 }
 

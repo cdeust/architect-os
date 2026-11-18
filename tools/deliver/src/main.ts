@@ -78,11 +78,12 @@ export async function runDeliver(deps: DeliverDependencies): Promise<number> {
   const { config } = loaded;
 
   const worktree = deps.env['INIT_CWD'] ?? deps.cwd;
+  const host = { names: config.environment, env: deps.env };
   try {
     // Built inside the `try`: an adapter that refuses what it is given says so like a port that throws.
     const ports = {
-      repository: new GitRepository(worktree, config.remote, deps.git),
-      forge: new GhForge(config.repository, deps.gh.program, deps.gh.prefix, worktree),
+      repository: new GitRepository(worktree, config.remote, deps.git, host),
+      forge: new GhForge(config.repository, deps.gh.program, deps.gh.prefix, worktree, host),
       gate: new ProcessGate(worktree, config.gateCommand, config.gateLog, config.gateVerdict),
       clock: new TimerClock(deps.setTimer),
       log: new FileLog(config.log, deps.home),

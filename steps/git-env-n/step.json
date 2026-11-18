@@ -1,0 +1,120 @@
+{
+  "build": {
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "limitSeconds": 4800
+  },
+  "checks": [
+    {
+      "name": "types-sandbox",
+      "command": [
+        "npx",
+        "tsc",
+        "-p",
+        "packages/sandbox",
+        "--noEmit",
+        "--composite",
+        "false",
+        "--incremental",
+        "false"
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "types-deliver",
+      "command": [
+        "npx",
+        "tsc",
+        "-p",
+        "tools/deliver",
+        "--noEmit",
+        "--composite",
+        "false",
+        "--incremental",
+        "false"
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "types-gate",
+      "command": [
+        "npx",
+        "tsc",
+        "-p",
+        "tools/test-gate",
+        "--noEmit",
+        "--composite",
+        "false",
+        "--incremental",
+        "false"
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "types-features",
+      "command": [
+        "npx",
+        "tsc",
+        "-p",
+        "features",
+        "--noEmit",
+        "--composite",
+        "false",
+        "--incremental",
+        "false"
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "format",
+      "command": [
+        "npx",
+        "prettier",
+        "--check",
+        "."
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "architecture",
+      "command": [
+        "npx",
+        "depcruise",
+        "--config",
+        ".dependency-cruiser.cjs",
+        "packages",
+        "data",
+        "gateway",
+        "services",
+        "modules",
+        "tools"
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "scenarios",
+      "command": [
+        "npx",
+        "cucumber-js",
+        "--profile",
+        "replay",
+        "packages/sandbox/features/tree-fingerprint.feature",
+        "packages/sandbox/features/tree-fingerprint-fresh.feature",
+        "packages/sandbox/features/step-tool.feature",
+        "tools/deliver/features",
+        "tools/test-gate/features",
+        "features/descriptive"
+      ],
+      "limitSeconds": 1200
+    }
+  ],
+  "reviews": [
+    {
+      "name": "correctness",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "limitSeconds": 1500
+    }
+  ],
+  "parallel": 2
+}

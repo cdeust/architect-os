@@ -3,6 +3,26 @@
 import { z } from 'zod';
 import type { DeliverConfig, ParseConfig } from '../domain/config.js';
 
+/**
+ * The closed set of the names of the host that the delivery may give to git and to the client of the forge: the
+ * descriptive file chooses a part of it; adding a name is a change of code (docs/design/orchestration-fable-5-2.md
+ * §14, « Un environnement fermé pour git »).
+ */
+function hostVariables() {
+  return [
+    'PATH',
+    'HOME',
+    'LANG',
+    'LC_ALL',
+    'LC_CTYPE',
+    'TMPDIR',
+    'SSH_AUTH_SOCK',
+    'XDG_CONFIG_HOME',
+    'GH_TOKEN',
+    'GITHUB_TOKEN',
+  ] as const;
+}
+
 function configSchema(): z.ZodType<DeliverConfig> {
   const refName = z
     .string()
@@ -46,6 +66,7 @@ function configSchema(): z.ZodType<DeliverConfig> {
       .string()
       .startsWith('${home}/', 'the log path starts with ${home}/')
       .refine((value) => !value.includes('..'), 'the log path has no ..'),
+    environment: z.array(z.enum(hostVariables())).min(1).refine(different, 'the variables are all different'),
     ciAttempts: count(10),
     pollSeconds: count(300),
     ciPolls: count(600),

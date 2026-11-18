@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DeliveryEntry, Repository, RuleSuite } from '../../src/domain/ports.js';
 import { GitRepository } from '../../src/infrastructure/git-repository.js';
-import { temporaryDirectory } from './fixtures.js';
+import { hostOf, temporaryDirectory } from './fixtures.js';
 import type { GitFixture } from './git-fixture.js';
 import {
   modeOf,
@@ -78,11 +78,15 @@ const repositoryOf = (world: DeliverWorld): Repository =>
   (world.state['portRepository'] as { repository: Repository }).repository;
 
 Given('a delivery repository over a directory that is not a repository', function () {
-  this.state['portRepository'] = { repository: new GitRepository(temporaryDirectory(this), 'origin') };
+  this.state['portRepository'] = {
+    repository: new GitRepository(temporaryDirectory(this), 'origin', 'git', hostOf(this)),
+  };
 });
 
 Given('a delivery repository over the git executable {string}', function (git: string) {
-  this.state['portRepository'] = { repository: new GitRepository(temporaryDirectory(this), 'origin', git) };
+  this.state['portRepository'] = {
+    repository: new GitRepository(temporaryDirectory(this), 'origin', git, hostOf(this)),
+  };
 });
 
 /** A `git` that writes its arguments, one per line, and the prompt variable it was started with, next to itself. */
@@ -94,7 +98,10 @@ Given('a delivery repository over a git that records what it is asked', function
     '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$0.argv"\nprintf \'%s\' "$GIT_TERMINAL_PROMPT" > "$0.prompt"\n',
   );
   chmodSync(script, 0o755);
-  this.state['portRepository'] = { repository: new GitRepository(directory, 'origin', script), script };
+  this.state['portRepository'] = {
+    repository: new GitRepository(directory, 'origin', script, hostOf(this)),
+    script,
+  };
 });
 
 When('I call {string} on the delivery repository', function (name: string) {

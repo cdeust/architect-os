@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { CiJob, CiRun, Forge, RuleSuite } from '../domain/ports.js';
-import { runToEnd } from './host-process.js';
+import { closedEnvironment, runToEnd, type HostEnvironment } from './host-process.js';
 
 // The schemas are built when a call needs them, inside functions: a schema at module level is evaluated once, when the
 // file is loaded, and the mutation run would replay the whole suite for each of its mutants.
@@ -50,7 +50,7 @@ function conclusionOf(value: string | null): CiJob['conclusion'] {
 
 /**
  * `Forge` over the GitHub client: every call is `<program> <prefix…> api <arguments>`, started without a shell in
- * `cwd`. `repository` is `owner/name`. What a call prints is parsed and checked by a schema that keeps the fields named
+ * `cwd`, with the closed environment of `host`. `repository` is `owner/name`. What a call prints is parsed and checked by a schema that keeps the fields named
  * here; nothing it prints is returned whole or put in an error: a failure throws one fixed message per method, with the
  * exit code when there is one.
  */
@@ -60,6 +60,7 @@ export class GhForge implements Forge {
     private readonly program: string,
     private readonly prefix: readonly string[],
     private readonly cwd: string,
+    private readonly host: HostEnvironment,
   ) {}
 
   run(hash: string, workflow: string): CiRun | undefined {
@@ -125,7 +126,12 @@ export class GhForge implements Forge {
 
   /** Runs `api <args>`; a program that did not run to its end or exited with a non-zero code throws. */
   private start(method: string, args: string[]): { out: string } {
-    const finished = runToEnd(this.program, [...this.prefix, 'api', ...args], this.cwd, {});
+    const finished = runToEnd(
+      this.program,
+      [...this.prefix, 'api', ...args],
+      this.cwd,
+      closedEnvironment(this.host, {}),
+    );
     if (finished === undefined) throw new Error(failure(method));
     if (finished.status !== 0) throw new Error(failure(method, finished.status));
     return finished;

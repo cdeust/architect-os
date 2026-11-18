@@ -27,6 +27,7 @@ const base = (): Record<string, unknown> => ({
   gateVerdict: 'reports/gate-base.json',
   gateCommand: ['npm', 'run', 'gate'],
   gateLog: 'reports/deliver-gate.log',
+  environment: ['PATH', 'HOME', 'GH_TOKEN'],
   log: '${home}/.local/state/architect-os/deliveries.jsonl',
   ciAttempts: 6,
   pollSeconds: 30,
@@ -103,4 +104,25 @@ Then('the committed deliver config names the section of its design', function ()
   assert.ok(
     (scene(this).raw['description'] as string).includes('docs/design/orchestration-fable-5-2.md §14'),
   );
+});
+
+Then('the committed deliver config says what its environment key is', function () {
+  const description = scene(this).raw['description'] as string;
+  assert.ok(description.includes('`environment`'));
+  assert.ok(description.includes('liste fermée des noms des variables de l'));
+});
+
+Then('the committed deliver config gives the host variables of git and of the forge client', function () {
+  assert.deepEqual(scene(this).raw['environment'], [
+    'PATH',
+    'HOME',
+    'LANG',
+    'LC_ALL',
+    'LC_CTYPE',
+    'TMPDIR',
+    'SSH_AUTH_SOCK',
+    'XDG_CONFIG_HOME',
+    'GH_TOKEN',
+    'GITHUB_TOKEN',
+  ]);
 });
