@@ -715,6 +715,42 @@ Elle s'arrête sur demande avant la phase 5 (`--until ci`) : c'est la couture o�
 
 **Mesure.** Avant : le nombre de commandes tapées par livraison et les erreurs relevées au journal (un push oublié de vérifier, une branche d'essai laissée). Après : une commande, et le journal de l'hôte.
 
+### Étape 1, les consignes d'étape dans le dépôt : conception (18 novembre 2026, avant le code)
+
+**Ce qui manque.** La consigne d'une étape (`brief.md`), son fichier descriptif (`step.json`) et les questions de ses éclaireurs vivent dans un dossier du poste du mainteneur. Rien du dépôt ne dit sur quel arbre une étape a tourné. L'étape `watch1` n'a pas pu être rejouée (§13) ; les six passes de la commande de livraison non plus.
+
+**Ce qui est décidé.** À la fin d'une étape, quelle que soit son issue, l'hôte écrit dans le worktree le dossier `steps/<nom>/`, où `<nom>` est le nom du dossier de l'étape :
+
+| Fichier | Contenu |
+|---|---|
+| `brief.md`, `step.json`, `scout.<nom>.md` | Les octets que l'outil a lus au départ de l'étape, et non ceux qui sont sur le disque à la fin |
+| `record.json` | L'enregistrement de l'étape, écrit par l'hôte seul : l'empreinte de l'arbre au départ, l'empreinte de chaque fichier d'entrée, celle de chaque prompt et de chaque profil du lanceur, puis par session son rôle, son modèle, son effort, sa durée et son coût par modèle, par contrôle son nom et son issue, par revue son verdict et le nombre de ses constats, l'issue de l'étape, l'heure de départ |
+
+Le mainteneur commite ce dossier avec le code de l'étape. Le dossier du poste garde ce qui ne va pas au dépôt : les flux des sessions, leurs rapports, les sorties des contrôles.
+
+**L'empreinte de l'arbre.** Trois valeurs prises avant toute session : le commit de `HEAD`, l'empreinte git de l'arbre de travail entier (fichiers suivis et non suivis, ceux que `.gitignore` écarte exceptés, calculée dans un index temporaire, sans toucher à l'index du worktree), et `clean`, vrai quand cette empreinte est celle de l'arbre du commit. Une étape partie d'un arbre propre se rejoue depuis le dépôt seul : le commit, la consigne, le fichier descriptif. Une étape partie d'un arbre modifié a son empreinte exacte, qui permet de vérifier un arbre reconstruit, et l'enregistrement dit qu'elle n'est pas rejouable depuis le dépôt seul. Rejouer n'est pas reproduire : une session de modèle n'est pas déterministe ; ce qui est rejouable est l'entrée, et ce qui se compare est l'enregistrement.
+
+**Un nom, une fois.** Le nom du dossier entre dans un chemin du dépôt : même expression que les noms de sessions. Une étape dont le nom a déjà un dossier `steps/<nom>/` dans le worktree est refusée avant toute session : un enregistrement ne se réécrit pas, une nouvelle passe prend un nouveau nom.
+
+**Ce que la porte lit.** Un scénario descriptif parcourt `steps/` à chaque porte : chaque dossier a ses fichiers et rien d'autre, `step.json` et `record.json` passent leur schéma, les questions sont celles des éclaireurs nommés, et l'empreinte de chaque fichier d'entrée est celle que l'enregistrement donne. Une consigne retouchée après coup rend la porte rouge.
+
+**Menaces.**
+
+| | Menace | Parade |
+|---|---|---|
+| **S** | Un dossier `steps/` fabriqué à la main se fait passer pour une étape jouée | Non paré par la technique : l'enregistrement n'est pas signé. Il vaut ce que vaut le commit qui le porte, donc la porte, la revue et le ruleset. Dit ici et au README |
+| **T** | Une session de construction, qui écrit le worktree, réécrit la consigne ou l'enregistrement d'une passe précédente, ou prépare un dossier au nom de sa propre étape | Le profil `builder` refuse toute écriture sous `steps/` du worktree : une contrainte de la couche outil, prouvée dans une vraie sandbox par le test d'évasion. L'hôte écrit les octets lus au départ, jamais relus. Le refus d'un nom déjà pris est joué avant toute session, et de nouveau à l'écriture |
+| **T** | Le nom de l'étape sort du dossier `steps/` (`..`, une barre, un lien) | Expression stricte sur le nom ; l'hôte refuse d'écrire si `steps` ou `steps/<nom>` existe et n'est pas un dossier ordinaire du worktree |
+| **R** | Qui a joué quoi, sur quel arbre | C'est l'objet de l'enregistrement ; il est commité avec le code |
+| **I** | Un texte venu d'une session entre au dépôt par l'enregistrement | L'enregistrement ne porte aucun texte de session : des nombres, des noms pris du fichier descriptif, des valeurs de listes fermées (verdict, issue), des empreintes. Le nom d'un modèle dans le coût par modèle vient du flux d'une session : il n'est gardé que s'il passe l'expression des noms de modèles, sinon il est compté sous `other` |
+| **I** | La consigne commitée porte un secret ou un chemin du poste | Elle est écrite par le mainteneur pour être lue par une session, donc déjà sans secret ; le balayage de secrets du dépôt s'y applique comme au reste. Elle devient publique : rien de privé n'y entre |
+| **D** | Le calcul de l'empreinte lance un programme : git lit sa configuration (filtres, moniteur de fichiers) | La configuration est celle de l'hôte, que le profil `builder` ne peut pas écrire (prouvé par le test d'évasion) ; git est lancé par un argv, avec `core.fsmonitor` et `core.hooksPath` neutralisés ; borne de temps |
+| **E** | L'hôte écrit hors du worktree | Le chemin est construit par l'hôte depuis le worktree et un nom validé ; aucun chemin ne vient d'une session |
+
+**Ce que cette étape ne fait pas.** Elle ne rejoue rien par elle-même : rejouer reste trois commandes du mainteneur, écrites dans la doc de la boucle. Elle ne reprend pas les étapes passées : aucune n'a d'empreinte. La part du prompt lue en cache et le coût par étape acceptée sont le point suivant, qui étend l'enregistrement.
+
+**Mesure.** Avant : aucune étape rejouable depuis le dépôt (zéro sur toutes celles jouées). Après : chaque étape jouée a son dossier commité, et la porte le relit.
+
 ### Trois piliers
 
 - Recherche : les sources sont nommées avec ce qui en a été lu ; la vérification de bout en bout et son résultat constant sont écrits avant tout essai ; ce qui vient d'un tiers rapporté par un autre est dit tel.

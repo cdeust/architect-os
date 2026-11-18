@@ -3939,3 +3939,43 @@ Le §96 a été poussé (`faed469`) par `npm run deliver` : huit minutes et demi
 - Recherche : la source de la fuite est relevée sur une exécution réelle ; quatre moyens sont écartés avec leur raison ; un témoin prouve que le garde-fou refuse l'état d'avant ; la preuve sur une exécution réelle est annoncée avant d'être jouée.
 - SSDLC : menace écrite avant le code ; aucune valeur dans un fichier, une ligne de commande ou cette conversation ; un garde-fou plus strict que le précédent.
 - Opérationnel : moindre exposition d'identifiants de compte dans un journal public ; la création des secrets reste au propriétaire ; IRB sans objet.
+
+## 98. Le masque prouvé sur une exécution réelle ; la feuille de route reprend : conception des consignes d'étape dans le dépôt, 18 novembre 2026
+
+Le §97 a été poussé (`078ba9e`) par `npm run deliver`, après que le propriétaire a créé les quatre secrets par la commande donnée : neuf minutes, porte jouée, CI verte au premier sondage, ruleset `pass` sur les deux branches.
+
+**La preuve annoncée au §97.** Le push sur `main` a déclenché l'exécution 44262102013 de `broker-live` : verte, l'échange et l'appel réel du broker compris.
+
+| Cherché dans son journal (270 lignes) | Trouvé |
+|---|---|
+| La valeur de chacun des quatre identifiants, mot pour mot | 0 occurrence pour chacun |
+| Les quatre lignes d'environnement de l'étape d'échange | `***` à la place de chaque valeur |
+
+Dépense : quatre requêtes au plus petit modèle, comme l'exécution du §87.
+
+**Ce qui reste public, par décision du propriétaire.** Les journaux des trois exécutions du 17 novembre portent les quatre valeurs. Le propriétaire, le 18 novembre : ces valeurs n'ont pas d'incidence, ce n'est pas un drame qu'elles y restent. Ils ne sont pas supprimés. Les quatre variables du dépôt, que plus rien ne lit, restent aussi ; elles ne sont visibles que des collaborateurs.
+
+**Le cap redit par le propriétaire.** « L'important c'est de continuer l'architecture pour parvenir à réaliser les briques marquées comme next. » Le travail reprend la feuille de route dans son ordre.
+
+**Premier point : les consignes d'étape dans le dépôt, conçues avant le code** (note de la boucle, §14, « Étape 1, les consignes d'étape dans le dépôt »).
+
+| Décision | Raison |
+|---|---|
+| À la fin d'une étape, l'hôte écrit `steps/<nom>/` dans le worktree : la consigne, le fichier descriptif et les questions tels qu'ils ont été lus au départ, et un enregistrement | Un artefact commité par phase ; aucune étape jouée à ce jour n'est rejouable depuis le dépôt |
+| L'enregistrement porte l'empreinte de l'arbre au départ (commit, arbre de travail entier, propre ou non), celle de chaque entrée, celle des prompts et profils du lanceur, puis des nombres et des valeurs de listes fermées | Rejouer, c'est retrouver l'entrée exacte ; aucun texte de session n'entre au dépôt |
+| Le profil du constructeur refuse toute écriture sous `steps/` | Une session qui écrit le worktree ne doit pouvoir réécrire ni sa consigne ni l'enregistrement d'une passe précédente : une contrainte de la couche outil |
+| Un nom d'étape ne sert qu'une fois | Un enregistrement ne se réécrit pas |
+| Un scénario relit `steps/` à chaque porte | Une consigne retouchée après coup rend la porte rouge |
+
+La table des menaces est dans la note. Une menace n'est pas parée et le dit : l'enregistrement n'est pas signé, il vaut ce que vaut le commit qui le porte.
+
+**Ce qui est dû à cette étape et sera rapporté.** Les entrées inventées par une session neuve, que le §96 a montrées non appliquées depuis le §53 : elles seront jouées sur cette étape, et leur résultat consigné.
+
+**Schémas et README.** Rien n'est construit dans ce commit : le point reste marqué `next` au README et dans le schéma de la boucle.
+
+**Chiffres.** 2 610 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : la preuve du masque est jouée et rapportée avec ce qui a été cherché ; ce qui reste public est dit, avec la décision ; la conception du point suivant est écrite avant son code, avec sa mesure.
+- SSDLC : modèle de menaces écrit avant toute ligne ; une menace non parée est nommée.
+- Opérationnel : moindre exposition dans les journaux à venir ; IRB sans objet.
