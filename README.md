@@ -147,7 +147,7 @@ Two pieces follow no external cycle and are kept as they are: the mutation of th
 | The verifier refuses an unknown DOI, another article's DOI, a retracted article and an invented passage                      | `tools/evidence/features/` (280 scenarios), and one real run against `doi.org`: one sound answer verified, four false ones refused                                                                                                                                                                                                         | `npm test`, then `npm run evidence -- verify`                            |
 | Claude Science answers the desk's questions without a gesture per question, once its session is started                      | Three questions, each verified at the first submission, in 7 to 19 minutes                                                                                                                                                                                                                                                                 | [`bench/evidence-remote`](bench/evidence-remote/README.md), with the app |
 
-The whole suite is 2,423 scenarios. On the four steps of the native gateway, none of the 404 mutants of the changed lines survived at the gate (44, 44, 206, 110); on the evidence desk, none of 645; on the worker's failure message, none of 42.
+The whole suite is 2,443 scenarios. On the four steps of the native gateway, none of the 404 mutants of the changed lines survived at the gate (44, 44, 206, 110); on the evidence desk, none of 645; on the worker's failure message, none of 42.
 
 ## What is not proven
 

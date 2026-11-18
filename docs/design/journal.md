@@ -3659,3 +3659,48 @@ Les survivants annoncés par la revue étaient tous réels ; la mutation en a tr
 - Recherche : trois passes rapportées avec leurs coûts et leurs constats ; la mutation réelle jouée plutôt qu'un raisonnement cru ; la cause commune de deux défauts remontée à la conception ; ce qui n'est pas prouvé est dit.
 - SSDLC : menaces avant le code ; deux défauts de sécurité trouvés par la revue avant qu'aucune ligne ne touche une branche ; une empreinte vérifiée avant tout acte ; raisons en liste fermée ; aucune dépendance ajoutée.
 - Opérationnel : la forge est derrière un port ; les contrôles sans modèle épargnent à la revue ce qu'une commande établit ; IRB sans objet.
+
+## 91. Un contrôle sans modèle arrête une étape avant sa revue, pour une vraie raison : une règle d'architecture que la conception avait oubliée ; l'exception nommée, commitée avec le seul fichier qu'elle autorise, 18 novembre 2026
+
+Le §90 a été poussé (`8e1b516`) : porte de l'hôte verte en 24 minutes (2 423 scénarios, 253 ajoutés, aucun supprimé ; 13 fichiers et 510 mutants dans le périmètre, aucun survivant), CI verte sur `gate` (Linux et macOS) à la première tentative ; `main` a suivi ; ruleset `pass` sur les deux branches.
+
+**Ce qui s'est passé.** La tranche suivante de la commande de livraison construit ses adaptateurs réels. Sa première passe par la boucle a fini sa construction (812 s, 1,23 $), puis l'hôte a joué les contrôles de l'étape :
+
+| Contrôle | Résultat |
+|---|---|
+| Types | Vert, 3 s |
+| Format | Vert, 3 s |
+| Architecture | Rouge, 2 s : trois imports de `node:child_process` hors du paquet de la sandbox |
+
+L'étape s'est arrêtée là, comme le §82 l'avait construit : aucune revue n'a été lancée. C'est le premier arrêt réel d'une étape par un contrôle sans modèle.
+
+**La cause est à la conception.** La règle `child-process-only-in-sandbox` réserve le lancement de processus au paquet de la sandbox, avec des exceptions nommées, un fichier chacune (conception de la plateforme, §6). Le §89 écrivait « un adaptateur à processus enfant » sans relire cette règle. Classe d'erreur : compréhension, du mainteneur, dans sa conception. Le contrôle qui l'attrape existe, et il l'a attrapée avant qu'une revue soit payée.
+
+**Ce que le mainteneur décide.** La commande lance trois programmes de l'hôte, `git`, le client de la forge et la porte. Ils ont besoin des identifiants et du réseau qu'une sandbox retire : ils ne passent pas par srt. La porte de test est dans le même cas pour `git`, et la règle lui nomme un fichier. La commande reçoit une exception de même forme, et une seule :
+
+| Changement | Fichier |
+|---|---|
+| Une exception nommée : `tools/deliver/src/infrastructure/host-process.ts`, le seul fichier de l'outil qui lance des processus | `.dependency-cruiser.cjs` |
+| Une ligne de garde : un autre fichier de `tools/deliver` qui importe `node:child_process` est refusé | `features/arch/guard.feature` |
+| Trois exceptions nommées au lieu de deux | `CLAUDE.md`, règles d'architecture |
+| « Un seul fichier lance des processus » | Note de la boucle, §14 |
+| Le fichier lui-même, et ses 20 scénarios | `tools/deliver/src/infrastructure/host-process.ts`, `tools/deliver/features/host-process.feature` |
+
+**Pourquoi ce commit est à part, et ce qu'il contient.** La règle de revue du dépôt refuse « un changement qui affaiblit `.dependency-cruiser.cjs` », et la revue de la seconde passe l'a rendu, à raison : tant que l'exception est dans le même diff que tout le code qui en profite, rien ne distingue une décision du mainteneur d'une facilité de la construction. Elle est donc commitée ici avec le seul fichier qu'elle autorise et ses scénarios, avant les adaptateurs qui s'en serviront : ce commit montre tout ce que l'exception permet, et rien d'autre.
+
+**Un premier découpage, refusé par la porte.** Le mainteneur avait d'abord commité l'exception toute seule, sans le fichier qu'elle nomme. La porte de l'hôte et la CI l'ont refusé, treize scénarios rouges : `CLAUDE.md` citait un fichier qui n'existait pas dans ce commit, ce que le garde-fou des chemins documentés interdit. Les scénarios descriptifs étaient verts dans l'arbre de construction, où le fichier existait sans être commité : c'est la porte, qui juge le commit seul, qui l'a vu. Ce commit rouge n'a été publié sur aucune des deux branches ; il a été retiré localement et sa branche d'essai supprimée. Classe d'erreur : technique, du mainteneur. Contrôle qui l'attrape : la porte, et elle l'a attrapée.
+
+**Le fichier.** Deux fonctions et rien de plus général : une exécution qui attend la fin d'un programme et rend son code et sa sortie, une exécution dont les deux sorties vont dans un fichier. Toujours un argv, jamais une ligne donnée à un shell. La seconde passe de la boucle l'a écrit ; la revue y a trouvé deux mutants survivants sur une option de flux et un lancement refusé par le système qui levait une erreur au lieu de rendre un échec ; le mainteneur a retiré l'option, ajouté le cas et trois scénarios. La mutation jouée ensuite sur ce seul fichier a laissé deux survivants : rien ne prouvait que le fichier de sortie est refermé. Deux scénarios comptent les descripteurs ouverts avant et après ; sans la fermeture, ils échouent tous deux (témoin joué).
+
+**Ce que ce changement retire à la règle, dit sans détour.** Un fichier de plus peut lancer un processus sur l'hôte, hors de toute sandbox. Il ne lance que des programmes nommés par le fichier descriptif de l'outil et par son code, avec un argv fixe et sans shell. Dans ce commit, rien ne l'appelle encore.
+
+**Preuves.** `features/arch` : ses deux scénarios verts sur l'hôte, la table des imports refusés portant la nouvelle ligne. `host-process.feature` : 20 scénarios, dont un argument avec un espace, une apostrophe et un dollar qui arrive tel quel au programme, un programme tué par un signal, un programme absent, un nom de programme que le système refuse.
+
+**Schémas et README.** Aucun élément du système n'est ajouté par ce commit.
+
+**Chiffres.** 2 443 scénarios dans la suite (20 de plus, ceux du fichier ; la ligne de garde entre dans la table d'un scénario existant).
+
+**Trois piliers.**
+- Recherche : l'arrêt d'une étape par un contrôle est rapporté avec sa cause, remontée à la conception ; ce que l'exception retire à la règle est écrit.
+- SSDLC : une règle d'architecture n'est changée que par le mainteneur, dans un commit à elle, avec sa raison et un scénario qui la borne ; la revue a exigé cette séparation et elle est faite.
+- Opérationnel : une revue non payée sur un code qui ne pouvait pas entrer ; IRB sans objet.

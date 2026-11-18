@@ -25,6 +25,7 @@ Feature: Architecture guard (dependency-cruiser)
       | gateway/src/infrastructure/zz-fixture-spawn.ts          | import 'node:child_process';                              | child-process-only-in-sandbox                 |
       | modules/memory/src/infrastructure/zz-fixture-spawn.ts  | import 'child_process';                                   | child-process-only-in-sandbox                 |
       | tools/test-gate/src/infrastructure/zz-fixture-spawn.ts | import 'node:child_process';                              | child-process-only-in-sandbox                 |
+      | tools/deliver/src/infrastructure/zz-fixture-spawn.ts   | import 'node:child_process';                              | child-process-only-in-sandbox                 |
       | modules/memory/src/domain/zz-fixture-sandbox.ts        | import '@architect-os/sandbox';                           | domain-imports-only-domain-and-contracts      |
       | modules/memory/src/application/zz-fixture-sandbox.ts   | import '@architect-os/sandbox';                           | application-imports-only-domain               |
       | tools/test-gate/src/domain/zz-fixture-domain.ts         | import '../infrastructure/git.js';                        | domain-imports-only-domain-and-contracts      |

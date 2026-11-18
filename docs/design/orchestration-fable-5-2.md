@@ -692,6 +692,8 @@ Elle s'arrête sur demande avant la phase 5 (`--until ci`) : c'est la couture o�
 
 **Où.** `tools/deliver/`, dans la forme de `tools/watch` : le domaine décide, sans rien lancer ; `git`, la forge et la porte sont des ports, avec un adaptateur à processus enfant (argv fixe, jamais de shell) et un double en mémoire pour les scénarios. Tout ce qui est propre à GitHub (run par empreinte, relance, évaluation du ruleset) est derrière le port de la forge : sur site, c'est un autre adaptateur.
 
+**Un seul fichier lance des processus** (ajouté le 18 novembre 2026, après qu'un contrôle sans modèle a arrêté une étape). Le dépôt réserve le lancement de processus au paquet de la sandbox, avec des exceptions nommées (conception de la plateforme, §6). La commande lance trois programmes de l'hôte, `git`, le client de la forge et la porte, qui ont besoin des identifiants et du réseau qu'une sandbox retire : ils ne passent donc pas par srt. Ils passent tous par un seul fichier, `tools/deliver/src/infrastructure/host-process.ts`, exception nommée de la règle comme le fichier `git` de la porte de test : argv fixe, jamais de shell, un seul endroit à relire. Un autre fichier de l'outil qui lancerait un processus est refusé, ce qu'un scénario prouve.
+
 **Menaces.**
 
 | | Menace | Parade |

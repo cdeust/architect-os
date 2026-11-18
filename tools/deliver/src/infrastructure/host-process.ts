@@ -1,0 +1,58 @@
+import { spawn, spawnSync } from 'node:child_process';
+import { closeSync, openSync } from 'node:fs';
+
+/**
+ * The only file of tools/deliver that starts processes: named exception of the rule child-process-only-in-sandbox in
+ * .dependency-cruiser.cjs. A program is always an argv, never a line given to a shell.
+ */
+
+/** What a program printed on its standard output, and the exit code it ended with. */
+export interface Finished {
+  status: number;
+  out: string;
+}
+
+/**
+ * Runs `program` in `cwd` and waits for its end, with `added` variables on top of the environment it inherits.
+ * Its three streams are pipes of this call (the default of `spawnSync`): it reads nothing, its standard error is
+ * captured and dropped, neither returned nor shown. `undefined`: the program did not run to its end (it could not be
+ * started, or a signal ended it); a program that exited with a non-zero code is a `Finished` like another.
+ */
+export function runToEnd(
+  program: string,
+  args: readonly string[],
+  cwd: string,
+  added: Readonly<Record<string, string>>,
+): Finished | undefined {
+  const result = spawnSync(program, args, {
+    cwd,
+    env: { ...process.env, ...added },
+    encoding: 'utf8',
+  });
+  return result.status === null ? undefined : { status: result.status, out: result.stdout };
+}
+
+/**
+ * Runs `program` in `cwd` with both outputs written to the file `log` (created, or emptied) and no input, and gives its
+ * exit code: 1 when a signal ended it or it could not be started, whether `spawn` says so by an event or by throwing.
+ */
+export async function runToFile(
+  program: string,
+  args: readonly string[],
+  cwd: string,
+  log: string,
+): Promise<number> {
+  const descriptor = openSync(log, 'w');
+  try {
+    return await new Promise<number>((resolve) => {
+      const child = spawn(program, args, { cwd, stdio: ['ignore', descriptor, descriptor] });
+      child.on('error', () => resolve(1));
+      child.on('close', (code) => resolve(code ?? 1));
+    });
+  } catch {
+    // `spawn` threw instead of emitting `error` (an argument it refuses): the program could not be started.
+    return 1;
+  } finally {
+    closeSync(descriptor);
+  }
+}

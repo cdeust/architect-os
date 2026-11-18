@@ -104,13 +104,16 @@ module.exports = {
         'Process launching lives behind the SandboxRunner port (docs/design/platform-v3-srt.md, §6). Named exceptions: ' +
         'tools/test-gate/src/infrastructure/git.ts, the single file through which the CI gate runs git (§7); ' +
         'tools/test-gate/src/infrastructure/replay.ts, the single file through which it runs cucumber-js to replay ' +
-        'the verdicts of the mutation tool (rule 7).',
+        'the verdicts of the mutation tool (rule 7); tools/deliver/src/infrastructure/host-process.ts, the single ' +
+        'file through which the delivery command starts git, the client of the forge and the gate, on the host, ' +
+        'where they need the credentials and the network a sandbox withholds (orchestration-fable-5-2.md, §14).',
       severity: 'error',
       from: {
         pathNot: [
           SANDBOX,
           '^tools/test-gate/src/infrastructure/git\\.ts$',
           '^tools/test-gate/src/infrastructure/replay\\.ts$',
+          '^tools/deliver/src/infrastructure/host-process\\.ts$',
         ],
       },
       to: { path: '^(node:)?child_process$', dependencyTypes: ['core'] },
