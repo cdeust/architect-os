@@ -81,6 +81,31 @@ Feature: no profile escapes its srt sandbox (platform-v3-srt.md, §8, exit of br
       | reaches the Postgres socket                  |
       | reads the folder of another task             |
 
+  Scenario Outline: the builder, which writes its worktree, cannot write under steps/ of it: <attack>
+    The host publishes there what a step saw (docs/design/orchestration-fable-5-2.md, §14): a build session must be able
+    neither to rewrite the record of an earlier step, nor to forge a folder, nor to move the folder itself. The host
+    makes steps/ before any session, so the refusal bears on a directory that exists.
+    Given an srt runner for profile "builder" over a throwaway home, beside the bait of every escape attack
+    When it runs the escape attack "<attack>" inside its sandbox
+    Then the escape attack failed, as the host observes it
+
+    Examples:
+      | attack                                                            |
+      | rewrites the record of a step already published                   |
+      | forges the folder of a step beside one already published          |
+      | replaces the empty steps/ the host prepared by a link to the home |
+
+  Scenario Outline: witness: without srt, the attack on steps/ succeeds on the host: <attack>
+    Given a throwaway git repository and a throwaway home, beside the bait of every escape attack, and no sandbox
+    When the host runs the escape attack "<attack>" itself, without srt
+    Then the escape attack succeeded, as the host observes it
+
+    Examples:
+      | attack                                                            |
+      | rewrites the record of a step already published                   |
+      | forges the folder of a step beside one already published          |
+      | replaces the empty steps/ the host prepared by a link to the home |
+
   Scenario Outline: positive control: profile <profile> writes a file in its own folder <folder> and reads it back
     Given an srt runner for profile "<profile>" over a throwaway home, beside the bait of every escape attack
     When it writes a file in its own folder "<folder>" inside its sandbox and reads it back
@@ -90,6 +115,7 @@ Feature: no profile escapes its srt sandbox (platform-v3-srt.md, §8, exit of br
       | profile  | folder     |
       | builder  | tmp        |
       | builder  | config     |
+      | builder  | worktree   |
       | reviewer | tmp        |
       | reviewer | config     |
       | checker  | tmp        |

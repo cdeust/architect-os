@@ -39,6 +39,7 @@
         "${repo}/.git/refs/heads/main",
         "${worktree}/.claude/settings.json",
         "${worktree}/.claude/settings.local.json",
+        "${worktree}/steps",
         "${config}/settings.json"
       ]
     },
@@ -100,7 +101,8 @@
           "Edit(/${home}/Library/Keychains/**)",
           "Edit(/${repo}/.git/hooks/**)",
           "Edit(/${repo}/.git/config)",
-          "Edit(/${worktree}/.claude/**)"
+          "Edit(/${worktree}/.claude/**)",
+          "Edit(/${worktree}/steps/**)"
         ]
       }
     },

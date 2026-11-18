@@ -747,6 +747,19 @@ Le mainteneur commite ce dossier avec le code de l'étape. Le dossier du poste g
 | **D** | Le calcul de l'empreinte lance un programme : git lit sa configuration (filtres, moniteur de fichiers) | La configuration est celle de l'hôte, que le profil `builder` ne peut pas écrire (prouvé par le test d'évasion) ; git est lancé par un argv, avec `core.fsmonitor` et `core.hooksPath` neutralisés ; borne de temps |
 | **E** | L'hôte écrit hors du worktree | Le chemin est construit par l'hôte depuis le worktree et un nom validé ; aucun chemin ne vient d'une session |
 
+**Précisé à la construction** (18 novembre 2026, journal §99).
+
+| Point | Ce qui est construit, et pourquoi |
+|---|---|
+| L'index temporaire | Il part de l'index du commit (`git read-tree HEAD`), puis reçoit `git add -A`. Dans un index vide, un fichier suivi qu'une règle d'exclusion nomme sortait de l'empreinte, et un arbre propre n'était pas celui de son commit : trouvé par les entrées inventées |
+| Le fichier d'exclusion de l'hôte | Il n'est pas lu (`core.excludesFile=/dev/null`) : l'empreinte ne dépend que du dépôt. `.git/info/exclude`, propre à un clone, reste lu : git ne permet pas de l'écarter |
+| `steps/` existe avant toute session | L'hôte le crée s'il manque. Sous Linux, srt pose un fichier vide à la place d'un chemin refusé absent (lu dans son code) : le dossier serait devenu un fichier pendant une session. L'hôte ne le recrée pas à la fin : s'il a disparu, la publication est refusée |
+| La racine du worktree | L'étape est refusée si elle n'est pas lancée depuis la racine : ailleurs, `steps/` s'écrirait où le profil ne le protège pas |
+| Le profil des contrôles | Il entre dans les empreintes du lanceur quand l'étape a des contrôles : aucun fichier d'outil ne le nomme |
+| L'enregistrement | Relu par son propre schéma avant d'être écrit ; une clé `__proto__`, que la bibliothèque de schémas écarte sans rien dire, est refusée ; le verdict garde les mots du contrat de revue |
+
+**Ce qui reste, dit.** Un nom de modèle `__proto__` dans le flux d'une session est écarté par la lecture des mesures, avant l'enregistrement : son coût reste dans le total, pas dans le détail par modèle. Une consigne qui n'est pas de l'UTF-8 valide est lue comme du texte : ce qui est publié et haché est ce texte, pas les octets d'origine. Un fichier laissé à la main dans `steps/` (un `.DS_Store`) rend la porte rouge.
+
 **Ce que cette étape ne fait pas.** Elle ne rejoue rien par elle-même : rejouer reste trois commandes du mainteneur, écrites dans la doc de la boucle. Elle ne reprend pas les étapes passées : aucune n'a d'empreinte. La part du prompt lue en cache et le coût par étape acceptée sont le point suivant, qui étend l'enregistrement.
 
 **Mesure.** Avant : aucune étape rejouable depuis le dépôt (zéro sur toutes celles jouées). Après : chaque étape jouée a son dossier commité, et la porte le relit.

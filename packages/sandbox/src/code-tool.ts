@@ -22,7 +22,7 @@ import { SrtSandboxRunner, standardStreamsAreTerminals, type SrtRunnerOptions } 
 import { authProxyOptions, loadTool, type Tool } from './tool.js';
 import { timer } from './timer.js';
 
-const PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+export const PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = resolve(PKG, '..', '..');
 
 /** Ce que l'outil demande au lanceur : le port, plus le lancement dans le terminal de l'hôte. */

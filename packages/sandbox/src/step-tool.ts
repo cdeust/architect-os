@@ -5,13 +5,14 @@
 // code ; tout ce qu'il faut pour relire l'étape reste dans le dossier. Ni rejeu sur l'hôte, ni porte, ni commit : ils restent à
 // l'orchestrateur. `step.ts` ne fait que lui passer le processus.
 import { appendFileSync, existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { isAbsolute, join, resolve, sep } from 'node:path';
+import { basename, isAbsolute, join, resolve, sep } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import { finished } from 'node:stream/promises';
 import { isatty } from 'node:tty';
 import { z } from 'zod';
 import {
   failureReporter,
+  PKG,
   processDependencies,
   runCodeTool,
   srtOptions,
@@ -26,6 +27,10 @@ import { SrtSandboxRunner } from './srt-runner.js';
 import type { SandboxRunner } from './port.js';
 import { outputTail, passed, renderChecks, type CheckOutcome, type CheckReport } from './step-checks.js';
 import { parseStepFile, type StepFile } from './step-file.js';
+import { buildRecord, isStepName, stepRecordSchema, type RecordedSession } from './step-record.js';
+import { stepsFolder, type StepsFolder } from './steps-folder.js';
+import { parseTool } from './tool.js';
+import { fingerprintTree, type TreeFingerprint } from './tree-fingerprint.js';
 
 export type ToolFile = 'code.json' | 'review.json' | 'scout.json';
 
@@ -54,6 +59,14 @@ export interface StepDependencies {
   readonly check: StepCheck;
   /** L'heure, en millisecondes : la durée d'un contrôle est mesurée par l'étape. */
   readonly now: () => number;
+  /** La date de départ de l'étape, pour `startedAt` de son enregistrement. */
+  readonly date: () => Date;
+  /** L'empreinte du worktree où l'étape tourne ; lève un message fixe si git échoue. */
+  readonly fingerprint: () => TreeFingerprint;
+  /** Le texte d'un fichier du lanceur, chemin relatif à `packages/sandbox` ; lève s'il manque. */
+  readonly readLauncher: (file: string) => string;
+  /** Le dossier `steps/` du worktree. */
+  readonly steps: StepsFolder;
   readonly stdout: Writable;
   readonly stderr: Writable;
 }
@@ -75,6 +88,7 @@ const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 function readStep(deps: StepDependencies): {
   folder: string;
   step: StepFile;
+  raw: string;
   brief: string;
   questions: string[];
 } {
@@ -100,7 +114,7 @@ function readStep(deps: StepDependencies): {
     if (question === undefined || question.trim() === '') throw new Refusal(`${file} absent ou vide`);
     return question;
   });
-  return { folder, step, brief, questions };
+  return { folder, step, raw, brief, questions };
 }
 
 /** Joue une session, garde son flux, ses mesures et son rapport ; rend les mesures et le flux. */
@@ -157,6 +171,7 @@ interface ReviewOutcome {
   config: ReviewConfig;
   verdict: ReturnType<typeof verdictOf>;
   measure: SessionMeasure;
+  stopped: boolean;
 }
 
 /** Une revue : sa session, puis son verdict écrit dans son fichier. */
@@ -167,7 +182,7 @@ async function review(
   brief: string,
 ): Promise<ReviewOutcome> {
   const prefix = `review.${config.name}`;
-  const { measure } = await play(
+  const { measure, stopped } = await play(
     deps,
     folder,
     prefix,
@@ -178,7 +193,7 @@ async function review(
   );
   const verdict = verdictOf(measure.structuredOutput);
   deps.writeFile(join(folder, `${prefix}.verdict.json`), json(verdict.file));
-  return { config, verdict, measure };
+  return { config, verdict, measure, stopped };
 }
 
 /**
@@ -214,6 +229,7 @@ interface ScoutOutcome {
   measure: SessionMeasure;
   /** La session a abouti sans être arrêtée à sa limite. */
   completed: boolean;
+  stopped: boolean;
   verified: Fact[];
   rejected: number;
   open: number;
@@ -240,7 +256,7 @@ async function scout(
     question,
   );
   const completed = measure.completed && !stopped;
-  const none = { config, measure, completed, verified: [], rejected: 0, open: 0 };
+  const none = { config, measure, completed, stopped, verified: [], rejected: 0, open: 0 };
   const writeInvalid = (why: string): ScoutOutcome => {
     deps.writeFile(join(folder, `${prefix}.facts.json`), json({ invalid: why }));
     return none;
@@ -253,7 +269,15 @@ async function scout(
   if (typeof parsed === 'string') return writeInvalid(parsed);
   const { verified, rejected } = verifyFacts(parsed.facts, deps.readSource);
   deps.writeFile(join(folder, `${prefix}.facts.json`), json({ verified, rejected, open: parsed.open }));
-  return { config, measure, completed, verified, rejected: rejected.length, open: parsed.open.length };
+  return {
+    config,
+    measure,
+    completed,
+    stopped,
+    verified,
+    rejected: rejected.length,
+    open: parsed.open.length,
+  };
 }
 
 /** Les faits de la sortie structurée, ou ce que le schéma en refuse. */
@@ -266,7 +290,12 @@ function factsSchemaResult(output: unknown): ReturnType<typeof parseFacts> | str
 }
 
 /** Le verdict de la revue, ou ce qui l'invalide. */
-function verdictOf(output: unknown): { file: unknown; verdict: string; blocks: boolean; findings: number } {
+function verdictOf(output: unknown): {
+  file: unknown;
+  verdict: 'accept' | 'request_changes' | 'invalid';
+  blocks: boolean;
+  findings: number;
+} {
   if (output === undefined) return invalid('la session n’a donné aucune sortie structurée');
   try {
     const verdict = parseReviewVerdict(output);
@@ -280,7 +309,10 @@ function verdictOf(output: unknown): { file: unknown; verdict: string; blocks: b
     return invalid(issues(error as z.ZodError));
   }
 }
-const invalid = (why: string) => ({ file: { invalid: why }, verdict: 'invalid', blocks: true, findings: 0 });
+// Une déclaration, et non une fonction fléchée au niveau du module : un mutant statique rejoue toute la suite.
+function invalid(why: string) {
+  return { file: { invalid: why }, verdict: 'invalid' as const, blocks: true, findings: 0 };
+}
 
 /**
  * La somme par modèle, les modèles dans l'ordre alphabétique ; les dollars sont additionnés tels quels. Une Map et non
@@ -299,10 +331,62 @@ function sumByModel(parts: readonly Record<string, number>[]): Record<string, nu
 const buildBrief = (brief: string, verified: readonly Fact[]): string =>
   verified.length === 0 ? brief : `${brief.trimEnd()}\n\n${renderFacts(verified)}`;
 
+/** Ce qu'une session laisse à l'enregistrement : ses mesures, et ni son rapport ni sa sortie. */
+function recorded(
+  role: RecordedSession['role'],
+  config: RecordedSession['config'],
+  { completed, durationSeconds, costUsd, costByModel }: SessionMeasure,
+  stopped: boolean,
+  name?: string,
+): RecordedSession {
+  return { role, name, config, completed, stopped, durationSeconds, costUsd, costByModel };
+}
+
+/**
+ * Les fichiers du lanceur dont l'étape dépend, par chemin relatif à `packages/sandbox` : le fichier de chaque outil
+ * qu'elle emploie, avec le prompt et le profil qu'il nomme. Lus ici, avant toute session.
+ */
+function launcherFiles(deps: StepDependencies, step: StepFile): Record<string, string> {
+  const tools: ToolFile[] = [
+    'code.json',
+    ...(step.reviews.length > 0 ? (['review.json'] as const) : []),
+    ...(step.scouts.length > 0 ? (['scout.json'] as const) : []),
+  ];
+  const files = new Map<string, string>();
+  for (const toolFile of tools) {
+    const text = deps.readLauncher(toolFile);
+    files.set(toolFile, text);
+    const tool = parseTool(JSON.parse(text));
+    for (const file of [tool.launcherPromptFile, `profiles/${tool.profile}.json`]) {
+      files.set(file, deps.readLauncher(file));
+    }
+  }
+  // Les contrôles tournent sous le profil `checker`, qu'aucun fichier d'outil ne nomme.
+  const checker = 'profiles/checker.json';
+  if (step.checks.length > 0) files.set(checker, deps.readLauncher(checker));
+  return Object.fromEntries([...files.keys()].sort().map((file) => [file, files.get(file) as string]));
+}
+
 /** Une étape ; son code de sortie : 0, 1 (l'étape ne passe pas) ou 2 (refus, échec de l'outil). */
 export async function runStep(deps: StepDependencies): Promise<number> {
   try {
-    const { folder, step, brief, questions } = readStep(deps);
+    const { folder, step, raw, brief, questions } = readStep(deps);
+    // `resolve` : le dossier `/x/demo/.` est le dossier `demo`.
+    const name = basename(resolve(folder));
+    if (!isStepName(name)) throw new Refusal(`the step name must match ^[a-z][a-z0-9-]{0,31}$: ${name}`);
+    if (deps.steps.exists(name)) throw new Refusal(`the step ${name} already has a folder in steps/`);
+    deps.steps.prepare();
+    // Pris avant toute session, et les textes lus ici sont ceux que l'hôte publiera : jamais relus à la fin.
+    const tree = deps.fingerprint();
+    const launcher = launcherFiles(deps, step);
+    const startedAt = deps.date();
+    const inputs = {
+      'brief.md': brief,
+      'step.json': raw,
+      ...Object.fromEntries(
+        step.scouts.map(({ name: scout }, index) => [`scout.${scout}.md`, questions[index] as string]),
+      ),
+    };
     const scoutOutcomes = await playBounded(step.scouts, step.parallel, (config, index) =>
       scout(deps, folder, config, questions[index] as string),
     );
@@ -373,6 +457,37 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       build.measure,
       ...outcomes.map(({ measure }) => measure),
     ];
+    const code = built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 0 : 1;
+    const record = buildRecord({
+      step: name,
+      startedAt,
+      tree,
+      inputs,
+      launcher,
+      sessions: [
+        ...scoutOutcomes.map(({ config, measure, stopped }) =>
+          recorded('scout', config, measure, stopped, config.name),
+        ),
+        recorded('build', step.build, build.measure, build.stopped),
+        ...outcomes.map(({ config, measure, stopped }) =>
+          recorded('review', config, measure, stopped, config.name),
+        ),
+      ],
+      checks: played.map((report) => ({
+        name: report.name,
+        passed: passed(report),
+        stopped: report.stopped,
+        durationSeconds: report.durationSeconds,
+      })),
+      reviews: outcomes.map(({ config, verdict }) => ({
+        name: config.name,
+        verdict: verdict.verdict,
+        findings: verdict.findings,
+      })),
+      outcome: code === 0 ? 'passed' : 'refused',
+    });
+    // Relu par son propre schéma : ce que la porte refuserait n'entre pas dans le worktree.
+    deps.steps.publish(name, { ...inputs, 'record.json': json(stepRecordSchema().parse(record)) });
     const summary = {
       scouts,
       build: {
@@ -389,9 +504,10 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       reviews,
       costUsd: measures.reduce((sum, measure) => sum + measure.costUsd, 0),
       costByModel: sumByModel(measures.map((measure) => measure.costByModel)),
+      record: `steps/${name}/record.json`,
     };
     deps.stdout.write(`${JSON.stringify(summary)}\n`);
-    return built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 0 : 1;
+    return code;
   } catch (error) {
     if (error instanceof Refusal) {
       deps.stderr.write(`architect-os step: ${error.message}\n`);
@@ -503,6 +619,10 @@ export function stepDependencies(proc: CodeProcess): StepDependencies {
     session: codeToolSession(toolDependencies(proc)),
     check: sandboxCheck(new SrtSandboxRunner(srtOptions(proc, {})), cwd),
     now: () => Date.now(),
+    date: () => new Date(),
+    fingerprint: () => fingerprintTree(cwd),
+    readLauncher: (file) => readFileSync(join(PKG, file), 'utf8'),
+    steps: stepsFolder(cwd),
     stdout: proc.stdout,
     stderr: proc.stderr,
   };

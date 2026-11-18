@@ -1,7 +1,17 @@
 import { execFileSync, spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { connect, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -29,6 +39,18 @@ interface Bait {
   readonly connections: () => number;
   /** `aos-sb/s-other…/tmp/secret` beside the sandbox's own folder, both folders 0700, holding the marker. */
   readonly otherTask: string;
+  /** `steps` of the worktree of the scenario's repository: where the host publishes what a step saw. */
+  readonly steps: string;
+}
+
+/** The record of a step already published, as the host left it. */
+const RECORD = 'kept by the host\n';
+const recordOf = (bait: Bait): string => join(bait.steps, 'taken', 'record.json');
+
+/** What the host does before a session: `steps/` exists, here with one step already published. */
+function layStep(bait: Bait): void {
+  mkdirSync(join(bait.steps, 'taken'), { recursive: true });
+  writeFileSync(recordOf(bait), RECORD);
 }
 
 /** One command of an attack, as observed: its outputs and exit, or the refusal of its start. */
@@ -42,7 +64,7 @@ interface Run {
 const OUTPUT_BOUND = 64 * 1024;
 
 /** Lays out the bait but the hook: a throwaway home with its secret, a listened socket, another task's folder. */
-async function layBait(world: SandboxWorld): Promise<Omit<Bait, 'hook'>> {
+async function layBait(world: SandboxWorld): Promise<Omit<Bait, 'hook' | 'steps'>> {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'aos-escape-')));
   world.cleanups.push(() => rmSync(root, { recursive: true, force: true }));
   const marker = `aos-escape-marker-${randomUUID()}`;
@@ -126,6 +148,8 @@ const attackConnections = (bait: Bait): Promise<number> =>
   });
 
 interface Attack {
+  /** What the host lays out before the attack, beyond the bait of every scenario. */
+  readonly prepare?: (bait: Bait) => void;
   readonly commands: (bait: Bait) => string[][];
   readonly failed: (bait: Bait, runs: readonly Run[]) => Promise<void> | void;
   /** The witness of a local attack: run on the host without srt, it succeeds. */
@@ -170,6 +194,36 @@ const ATTACKS: Record<string, Attack> = {
     failed: (b, [run]) => assert.equal(hasMarker(b, run as Run), false, "another task's folder was read"),
     succeeded: (b, [run]) =>
       assert.equal(hasMarker(b, run as Run), true, "another task's folder was not read"),
+  },
+  'rewrites the record of a step already published': {
+    prepare: layStep,
+    commands: (b) => [
+      ['node', '-e', "require('node:fs').writeFileSync(process.argv[1], 'forged')", recordOf(b)],
+    ],
+    failed: (b) => assert.equal(readFileSync(recordOf(b), 'utf8'), RECORD, 'the record was rewritten'),
+    succeeded: (b) =>
+      assert.equal(readFileSync(recordOf(b), 'utf8'), 'forged', 'the record was not rewritten'),
+  },
+  'forges the folder of a step beside one already published': {
+    prepare: layStep,
+    commands: (b) => [
+      ['mkdir', join(b.steps, 'forged')],
+      ['touch', join(b.steps, 'forged', 'record.json')],
+    ],
+    failed: (b) => assert.deepEqual(readdirSync(b.steps), ['taken'], 'a folder was added under steps/'),
+    succeeded: (b) => assert.deepEqual(readdirSync(b.steps).sort(), ['forged', 'taken']),
+  },
+  'replaces the empty steps/ the host prepared by a link to the home': {
+    prepare: (b) => mkdirSync(b.steps),
+    commands: (b) => [
+      ['rmdir', b.steps],
+      ['ln', '-s', b.home, b.steps],
+    ],
+    failed: (b) => {
+      assert.equal(lstatSync(b.steps).isDirectory(), true, 'steps/ is no longer a real directory');
+      assert.deepEqual(readdirSync(b.steps), []);
+    },
+    succeeded: (b) => assert.equal(lstatSync(b.steps).isSymbolicLink(), true, 'steps/ was not replaced'),
   },
   'makes a nested user namespace': {
     commands: () => [['unshare', '-r', 'true']],
@@ -235,9 +289,9 @@ async function onHost(bait: Bait, command: string[]): Promise<Run> {
 }
 
 /** The hook of the repository: its `.git/hooks` exists, `pre-commit` does not. */
-function withHook(base: Omit<Bait, 'hook'>, repo: string): Bait {
+function withHook(base: Omit<Bait, 'hook' | 'steps'>, repo: string, worktree: string): Bait {
   mkdirSync(join(repo, '.git', 'hooks'), { recursive: true });
-  return { ...base, hook: join(repo, '.git', 'hooks', 'pre-commit') };
+  return { ...base, hook: join(repo, '.git', 'hooks', 'pre-commit'), steps: join(worktree, 'steps') };
 }
 
 Given(
@@ -257,7 +311,8 @@ Given(
       });
       execFileSync('git', ['init', '-q', repo], { stdio: 'ignore' });
     } else assert.fail(`no profile named "${profile}"`);
-    this.state['bait'] = withHook(base, repo);
+    // `steps` is asked of the builder alone, whose working directory is the worktree of the repository.
+    this.state['bait'] = withHook(base, repo, stored<string>(this, 'cwd'));
     this.state['profile'] = profile;
   },
 );
@@ -265,7 +320,11 @@ Given(
 Given(
   'a throwaway git repository and a throwaway home, beside the bait of every escape attack, and no sandbox',
   async function () {
-    this.state['bait'] = withHook(await layBait(this), join(repoOf(this).root, 'repo'));
+    this.state['bait'] = withHook(
+      await layBait(this),
+      join(repoOf(this).root, 'repo'),
+      repoOf(this).worktree,
+    );
   },
 );
 
@@ -274,6 +333,7 @@ When(
   { timeout: 90_000 },
   async function (name: string) {
     const runs: Run[] = [];
+    attackOf(name).prepare?.(stored<Bait>(this, 'bait'));
     for (const command of attackOf(name).commands(stored<Bait>(this, 'bait')))
       runs.push(await inSandbox(this, command));
     this.state['attack'] = name;
@@ -284,6 +344,7 @@ When(
 When('the host runs the escape attack {string} itself, without srt', async function (name: string) {
   const bait = stored<Bait>(this, 'bait');
   const runs: Run[] = [];
+  attackOf(name).prepare?.(bait);
   for (const command of attackOf(name).commands(bait)) runs.push(await onHost(bait, command));
   this.state['attack'] = name;
   this.state['runs'] = runs;
@@ -309,7 +370,12 @@ Then('the escape attack succeeded, as the host observes it', async function () {
 });
 
 /** The folders of a sandbox the profiles write, by the variable of the profile that names each (`disposable` is the cwd). */
-const OWN_FOLDERS: Record<string, string> = { tmp: '${tmp}', config: '${config}', disposable: '${worktree}' };
+const OWN_FOLDERS: Record<string, string> = {
+  tmp: '${tmp}',
+  config: '${config}',
+  disposable: '${worktree}',
+  worktree: '${worktree}',
+};
 
 /** Writes a file in the folder given as argv[1] (substituted by the adapter), reads it back, prints what it read. */
 const WRITE_BACK = [

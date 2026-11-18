@@ -17,3 +17,5 @@ docs/communication/deck
 # Written by `npm run watch -- read`: the register and its lists of addresses stay in the form the tool writes.
 /tools/watch/watch.json
 /tools/watch/indexes
+# Written by `npm run step`: the brief and the step file are published byte for byte, and the record hashes them.
+/steps

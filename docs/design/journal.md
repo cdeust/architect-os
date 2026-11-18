@@ -3979,3 +3979,64 @@ La table des menaces est dans la note. Une menace n'est pas parée et le dit : l
 - Recherche : la preuve du masque est jouée et rapportée avec ce qui a été cherché ; ce qui reste public est dit, avec la décision ; la conception du point suivant est écrite avant son code, avec sa mesure.
 - SSDLC : modèle de menaces écrit avant toute ligne ; une menace non parée est nommée.
 - Opérationnel : moindre exposition dans les journaux à venir ; IRB sans objet.
+
+## 99. La consigne d'une étape entre au dépôt, avec l'empreinte de l'arbre qu'elle a vu ; les entrées inventées, rejouées, trouvent trois défauts, 18 novembre 2026
+
+Le §98 a été poussé (`bd3c5e4`) par `npm run deliver` : dix minutes, porte jouée, CI verte au premier sondage, ruleset `pass` sur les deux branches.
+
+**Ce qui est construit** (conception et menaces : note de la boucle, §14 ; premier point de la feuille de route, qui la quitte).
+
+| Pièce | Ce qu'elle fait |
+|---|---|
+| L'empreinte de l'arbre | Avant toute session : le commit, l'arbre git du répertoire de travail entier calculé dans un index temporaire, et s'il est celui du commit. L'index du worktree n'est pas touché |
+| L'enregistrement | Écrit par l'hôte seul : cette empreinte, celle de chaque entrée et de chaque fichier du lanceur dont l'étape dépend, puis des nombres et des valeurs de listes fermées. Aucun texte de session |
+| Le dossier `steps/<nom>/` | Écrit à la fin de l'étape, quelle que soit son issue : la consigne, le fichier descriptif et les questions tels qu'ils ont été lus au départ, et l'enregistrement. Un nom ne sert qu'une fois |
+| Le profil du constructeur | Il refuse toute écriture sous `steps/` de son worktree |
+| La porte | Un scénario relit chaque dossier : une consigne retouchée après coup la rend rouge |
+
+**La boucle : une passe.** Construction sur Sonnet 5.5, 787 s, 1,92 $ ; quatre contrôles sans modèle verts ; revue sur Opus 5.5, 2,14 $, `request_changes`, huit constats.
+
+| Constat de la revue | Ce qui en a été fait, à la main |
+|---|---|
+| Aucun scénario ne montrait le schéma de l'enregistrement refuser une mauvaise valeur | Une table de refus et d'acceptations, champ par champ |
+| Deux arguments sans effet dans le calcul de l'empreinte | Retirés |
+| Le formateur aurait reformaté le premier dossier commité, et cassé ses empreintes | `steps/` est exclu du formatage |
+| Un scénario supposait que git met plus d'une milliseconde | Un faux git qui ne répond jamais, pour chaque appel |
+| Le profil des contrôles manquait aux empreintes du lanceur ; un enregistrement que la porte refuserait pouvait être écrit | Ajouté ; l'enregistrement est relu par son schéma avant d'être écrit |
+| Une phrase du README du paquet se contredisait ; le README et les schémas restaient à faire | Fait |
+
+Deux corrections du mainteneur, à la lecture du code. L'étape est refusée hors de la racine du worktree : ailleurs le dossier s'écrirait où le profil ne le protège pas. Et l'hôte crée `steps/` avant toute session : sous Linux, srt pose un fichier vide à la place d'un chemin refusé qui n'existe pas (lu dans son code), si bien que le dossier serait devenu un fichier le temps d'une session.
+
+**La preuve en vraie sandbox.** Trois attaques du constructeur sur `steps/` de son worktree, ajoutées au test d'évasion : réécrire l'enregistrement d'une étape déjà publiée, forger un dossier à côté, remplacer le dossier vide préparé par l'hôte par un lien vers le dossier personnel. Les trois échouent sous srt ; les trois réussissent sur l'hôte sans srt, donc ce sont de vraies attaques ; un contrôle positif vérifie que le constructeur écrit toujours ailleurs dans son worktree. Jouées sur macOS : 62 scénarios verts. Linux les jouera en CI à la livraison de ce commit.
+
+**Les entrées inventées, rejouées pour la première fois depuis le §53** (dues, §96). Une session neuve (Opus 5.5, effort élevé, 752 s, 2,92 $) a écrit 103 scénarios avec les seuls steps existants, le résultat attendu de chacun tiré de la conception et non du code. Avant de les jouer sur l'hôte, le mainteneur a vérifié que la session n'avait changé aucun autre fichier, que chaque step employé existait, et qu'aucun nom de fichier ne sortait d'un dossier jetable ; il ne les a pas relus un par un. Quatre échouaient, ceux que la session avait annoncés :
+
+| Défaut | Ce que ni la revue, ni les contrôles, ni deux passes de mutation n'avaient vu | Correction |
+|---|---|---|
+| Un fichier suivi qu'une règle d'exclusion nomme sortait de l'empreinte | Dans un index vide, `git add -A` l'écarte : un arbre propre était enregistré comme modifié, et son arbre n'était pas celui du commit. C'est le cœur de ce que cette étape construit | L'index temporaire part de celui du commit ; le fichier d'exclusion de l'hôte n'est plus lu, pour que l'empreinte ne dépende que du dépôt |
+| Une clé `__proto__` dans un enregistrement était acceptée | La bibliothèque de schémas l'écarte sans la refuser : la porte ne l'aurait pas vue | Elle est cherchée avant la validation, l'enregistrement est refusé |
+| Un dossier d'étape donné avec `/.` à la fin était refusé | Son nom était lu comme `.` | Le chemin est normalisé |
+
+Après correction les 103 passent ; ils restent au dépôt. La session a aussi nommé ce que les steps existants ne savent pas exprimer (un lien symbolique, un bit d'exécution, un fichier supprimé dans l'arbre, des octets qui ne sont pas de l'UTF-8) : non joué.
+
+**La mutation, jouée par l'hôte.**
+
+| Passage | Mutants | Survivants | Ce qui en a été fait |
+|---|---|---|---|
+| Après la revue | 270 | 6 | Deux morceaux redondants retirés (un mode d'écriture exclusif après une création de dossier qui l'est déjà, une conversion de verdict) ; l'ordre des clés et la fin d'une expression prouvés |
+| Après ces corrections | 262 | 0 | Un mutant statique, une fonction fléchée au niveau du module, devenue une déclaration |
+| Après les entrées inventées | 282 | 4 | Tous sur deux gardes qu'aucun scénario ne distingue : la condition est réécrite sans elles |
+| Le fichier réécrit | 87 | 0 | |
+
+**Ce qui reste, dit dans la note.** L'enregistrement n'est pas signé : il vaut ce que vaut le commit qui le porte. Un nom de modèle `__proto__` dans le flux d'une session reste dans le coût total, pas dans le détail par modèle. Une consigne qui n'est pas de l'UTF-8 valide est publiée telle que lue comme texte. Un fichier laissé à la main dans `steps/` rend la porte rouge. Aucune étape n'a encore été rejouée depuis son dossier : cette étape-ci a tourné sur le lanceur d'avant, qui ne publie pas ; le premier dossier sera celui de l'étape suivante.
+
+**Coût.** 6,97 $ : construction 1,92 $, revue 2,14 $, entrées inventées 2,92 $. Les entrées inventées ont coûté plus que la revue et trouvé ce qu'elle n'avait pas trouvé ; la revue a trouvé ce qu'elles ne cherchaient pas. Une étape, sans comparaison : pas de conclusion sur le rapport des deux.
+
+**Schémas et README.** Le point « Step briefs in the repository » quitte la feuille de route ; la ligne R.1 entre dans l'état des briques. Le schéma de la boucle reçoit ce que l'hôte écrit dans le dépôt ; celui de la vérification dit que le quatrième contrôle, absent de la commande de livraison, a trouvé trois défauts sur le travail suivant ; rendus contrôlés à l'œil. README relu : la boucle, la vérification, le coût de la revue, le test d'évasion (43 attaques, 8 témoins, 11 contrôles positifs), ce qui n'est pas prouvé, la table des dossiers. `CLAUDE.md` reçoit le dossier `steps/`.
+
+**Chiffres.** 2 876 scénarios dans la suite (266 de plus).
+
+**Trois piliers.**
+- Recherche : une passe rapportée avec ses constats ; quatre passages de mutation ; un contrôle dû et non appliqué depuis le §53 est rejoué, avec son coût, ses échecs et ce qu'il n'a pas pu exprimer ; ce qui reste est dit.
+- SSDLC : menaces écrites avant le code ; une contrainte de la couche outil prouvée dans une vraie sandbox, avec témoins ; aucun texte de session dans l'enregistrement ; aucune dépendance ajoutée ; aucun commentaire de désactivation.
+- Opérationnel : chaque étape laisse au dépôt de quoi être rejouée, écrit par l'hôte seul ; IRB sans objet.

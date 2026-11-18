@@ -12,10 +12,14 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mock } from 'node:test';
+import { createHash } from 'node:crypto';
 import { PassThrough } from 'node:stream';
 import type { CodeProcess, CodeToolDependencies } from '../../src/code-tool.js';
 import { SandboxError } from '../../src/port.js';
 import { factsJsonSchema } from '../../src/scout-facts.js';
+import { stepRecordSchema } from '../../src/step-record.js';
+import { stepsFolder } from '../../src/steps-folder.js';
+import type { TreeFingerprint } from '../../src/tree-fingerprint.js';
 import {
   codeToolSession,
   runStep,
@@ -84,6 +88,20 @@ interface Step {
   clock: number;
   /** The files of the worktree the step runs in, as `readSource` gives them. */
   source: Map<string, string>;
+  /** What the step published, by step name, and the names that already have a folder in `steps/`. */
+  published: Map<string, Record<string, string>>;
+  taken: Set<string>;
+  /** The count of sessions started when the folder steps/ was prepared, once per call. */
+  prepared: number[];
+  /** The fingerprint of the worktree, or the error its computation throws, and how many times it was asked. */
+  fingerprint: TreeFingerprint | Error;
+  fingerprints: number;
+  date: Date;
+  publication?: Error;
+  /** The files of the launcher that the step cannot read. */
+  missing: Set<string>;
+  /** The files that the build session rewrites in the step folder while it runs. */
+  rewrites: { file: string; content: string }[];
   finished: boolean;
   run?: Promise<void>;
   stdout: string;
@@ -102,10 +120,12 @@ const turn = () => new Promise((resolve) => setImmediate(resolve));
 const step = (world: SandboxWorld) => stored<Step>(world, 'step');
 const fixture = (name: string) => readFileSync(join(PKG, 'fixtures', name), 'utf8');
 
-Given('a step folder', function () {
-  const folder = mkdtempSync(join(tmpdir(), 'aos-step-'));
-  this.cleanups.push(() => rmSync(folder, { recursive: true, force: true }));
-  this.state['step'] = {
+const newStepFolder = (world: SandboxWorld, name: string) => {
+  const parent = mkdtempSync(join(tmpdir(), 'aos-step-'));
+  world.cleanups.push(() => rmSync(parent, { recursive: true, force: true }));
+  const folder = join(parent, name);
+  mkdirSync(folder);
+  world.state['step'] = {
     folder,
     calls: [],
     behaviours: { 'code.json': {}, 'review.json': {}, 'scout.json': {} },
@@ -114,10 +134,26 @@ Given('a step folder', function () {
     checkCalls: [],
     clock: 0,
     source: new Map(),
+    published: new Map(),
+    taken: new Set(),
+    prepared: [],
+    fingerprint: { commit: 'a'.repeat(40), tree: 'b'.repeat(40), clean: true },
+    fingerprints: 0,
+    date: new Date('2026-11-18T09:30:00.000Z'),
+    rewrites: [],
+    missing: new Set(),
     finished: false,
     stdout: '',
     stderr: '',
   } satisfies Step;
+};
+
+Given('a step folder', function () {
+  newStepFolder(this, 'demo');
+});
+
+Given('a step folder named {string}', function (name: string) {
+  newStepFolder(this, name);
 });
 
 Given(
@@ -347,6 +383,14 @@ Given('the build session fails with the plain error {string}', function (message
   step(this).behaviours['code.json'].failure = new Error(message);
 });
 
+/** The files of the launcher as the scenarios see them: the three tool files as committed, the others fixed. */
+const launcherFile =
+  (s: Step) =>
+  (file: string): string => {
+    if (s.missing.has(file)) throw new Error(`missing launcher file ${file}`);
+    return /^(code|review|scout)\.json$/.test(file) ? readFileSync(join(PKG, file), 'utf8') : `fixed:${file}`;
+  };
+
 const start = (s: Step, args: string): Promise<void> => {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -374,6 +418,21 @@ const start = (s: Step, args: string): Promise<void> => {
       };
     },
     now: () => s.clock,
+    date: () => s.date,
+    fingerprint: () => {
+      s.fingerprints++;
+      if (s.fingerprint instanceof Error) throw s.fingerprint;
+      return s.fingerprint;
+    },
+    readLauncher: launcherFile(s),
+    steps: {
+      prepare: () => void s.prepared.push(s.calls.length),
+      exists: (name) => s.taken.has(name),
+      publish: (name, files) => {
+        if (s.publication !== undefined) throw s.publication;
+        s.published.set(name, { ...files });
+      },
+    },
     session: async (tool, argv, brief, limitSeconds, onOutput) => {
       s.calls.push({ tool, argv, brief, limitSeconds });
       const phase = tool === 'code.json' ? undefined : s.phases[tool];
@@ -388,6 +447,9 @@ const start = (s: Step, args: string): Promise<void> => {
       try {
         if (own.held) await gate((phase as Phase).ended, n).promise;
         if (own.failure) throw own.failure;
+        if (tool === 'code.json') {
+          for (const { file, content } of s.rewrites) writeFileSync(join(s.folder, file), content);
+        }
         const text = own.fixture === undefined ? '' : fixture(own.fixture);
         // In two chunks, as a stream arrives.
         onOutput(Buffer.from(text.slice(0, 10)));
