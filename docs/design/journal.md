@@ -3819,3 +3819,47 @@ Le §93 a été poussé (`6418ef6`), à la main pour la dernière fois : porte d
 - Recherche : la preuve à venir est décrite avant d'être jouée, et son résultat sera rapporté même s'il échoue ; deux hypothèses de l'adaptateur sont vérifiées contre la source avant le premier essai.
 - SSDLC : la première livraison par la commande porte un changement sans code.
 - Opérationnel : rien n'a été écrit sur la forge pour ces vérifications ; IRB sans objet.
+
+## 95. La première livraison faite par la commande : prête en huit minutes, publiée en dix secondes à la reprise, 18 novembre 2026
+
+Le §94 a été poussé (`979258a`) par `npm run deliver`, et non à la main. C'est la preuve que le §93 disait manquer : la commande a parlé à la vraie forge.
+
+**Première exécution, arrêtée avant la publication** (`npm run deliver -- first --until ci`, depuis l'arbre de livraison).
+
+| Phase dite par la commande | Ce qui s'est passé |
+|---|---|
+| préalables | Arbre propre, empreinte relevée, les deux branches distantes au parent `6418ef6`, le journal seulement allongé |
+| branche d'essai | `sentinel/gate-1a-first` poussée |
+| porte | Jouée : aucun verdict ne nommait encore ce commit |
+| CI | Un sondage : le run de la branche d'essai était déjà terminé, vert sur les deux jobs, quand la porte a fini |
+
+Résultat : `ready`, code de sortie 0, huit minutes en tout. Les deux branches n'avaient pas bougé, la branche d'essai existait, l'arbre était propre, et le journal de l'hôte avait sa première ligne.
+
+**Seconde exécution, sans l'arrêt** (`npm run deliver -- first`) : la reprise.
+
+| Phase | Ce qui s'est passé |
+|---|---|
+| préalables, branche d'essai | Rien à refaire : le push de la branche d'essai est sans effet |
+| porte | Non rejouée : le verdict nommait ce commit (`gate: reused`) |
+| CI | Verte au premier sondage, même run |
+| publication | `feat/gate-1a` poussée, son évaluation du ruleset lue : `pass` ; puis `main`, `pass` |
+| rangement | Branche d'essai supprimée |
+
+Résultat : `delivered`, code de sortie 0, dix secondes.
+
+**Contrôle indépendant de la commande**, par les mêmes appels que le mainteneur faisait à la main : le run retenu est bien celui de la branche d'essai pour `979258a`, vert sur `gate-linux` et `gate-macos` ; le verdict de la porte nomme `979258a` ; les deux branches distantes sont à `979258a` ; l'évaluation du ruleset est `pass` pour les deux ; il ne reste aucune branche d'essai ; l'arbre est propre ; le journal de l'hôte a deux lignes et n'est lisible que par son propriétaire.
+
+**Ce que cette livraison ne prouve pas.** Les chemins d'arrêt contre la vraie forge : une CI rouge, un job resté sans runner et sa relance, une évaluation du ruleset autre que `pass`, une branche qui a bougé. Ils sont prouvés par des scénarios, contre un client scripté dont deux réponses ont été confrontées à la source (§94). Le premier job macOS sans runner les jouera en vrai ; ce jour-là le résultat ira ici.
+
+**Ce qui reste à la main.** Amener le commit dans l'arbre de livraison avant, faire suivre le lanceur et le dépôt principal après : trois commandes, hors de ce qui est livré. Et l'écart nommé au §84 : c'est toujours l'orchestrateur qui lance la commande, avec le compte du propriétaire.
+
+**La mesure annoncée au §89.** Avant : une douzaine de commandes tapées par livraison, et deux erreurs de manipulation relevées au journal en deux jours (§83, §91). Après : une commande, relancée une fois pour la reprise, et une ligne par exécution dans le journal de l'hôte.
+
+**Schémas et README.** Aucun élément du système n'est ajouté ; le README dit déjà la commande construite.
+
+**Chiffres.** 2 606 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : la preuve annoncée au §94 est jouée et rapportée avec un contrôle fait hors de la commande ; ce qu'elle ne prouve pas est dit.
+- SSDLC : une publication n'a eu lieu qu'après la porte et la CI vertes pour l'empreinte, et l'évaluation du ruleset a été lue après chaque push, par la commande et par un contrôle indépendant.
+- Opérationnel : une livraison reprise sans rejouer la porte ; une trace par exécution, écrite par l'hôte ; IRB sans objet.
