@@ -3795,3 +3795,27 @@ Les huit statiques étaient six schémas et deux fonctions fléchées écrits au
 - Recherche : une passe rapportée avec ses constats et ce qui en a été fait, y compris ce qui est écarté et pourquoi ; deux passages de mutation ; ce qui n'est pas prouvé est dit, avec la preuve qui vient.
 - SSDLC : aucune sortie de programme n'entre dans un message ; un identifiant de run est vérifié avant d'entrer dans un chemin ; la portée d'une règle est écrite au lieu d'être tue ; aucun commentaire de désactivation ; aucune dépendance ajoutée.
 - Opérationnel : la livraison est une commande dont chaque phase se voit, qui s'arrête avant de publier sur demande ; IRB sans objet.
+
+## 94. La commande publiée, et le commit qui sera le premier livré par elle, 18 novembre 2026
+
+Le §93 a été poussé (`6418ef6`), à la main pour la dernière fois : porte de l'hôte verte (2 606 scénarios, 76 ajoutés, aucun supprimé ; 8 fichiers et 230 mutants dans le périmètre, aucun survivant), CI verte sur `gate` (Linux et macOS) à la première tentative, arbre de livraison propre après la porte ; `main` a suivi ; ruleset `pass` sur les deux branches. Deux reprises l'avaient précédé, racontées au §93 : la porte laissait un dossier dans l'arbre.
+
+**Ce que ce commit est.** Cette section, et rien d'autre : un changement sans risque, pour que la première livraison faite par `npm run deliver` ne porte que sa propre preuve.
+
+**Ce qui a été vérifié avant, en lecture seule, contre la vraie forge.** Les deux formes de réponse dont l'adaptateur dépend et que ses scénarios ne jouent que contre un client scripté :
+
+| Appel | Ce que la forge rend | Ce que l'adaptateur attendait |
+|---|---|---|
+| Les évaluations du ruleset d'une branche, la référence encodée dans la requête | Une liste dont chaque élément porte `after_sha` et `result` ; `pass` pour les deux derniers push | La même |
+| Les runs d'une empreinte | Deux runs du workflow `gate` pour `6418ef6`, celui de la branche d'essai avec le plus petit identifiant, celui de `main` ensuite | La même, et c'est le premier qui est pris |
+
+**Ce qui sera fait, et consigné à la section suivante, quel qu'en soit le résultat.** Depuis l'arbre de livraison : la commande avec l'arrêt avant publication, pour lire ses phases contre la vraie forge ; puis la commande sans cet arrêt, qui doit reprendre sans rejouer la porte et publier sur les deux branches ; puis la ligne qu'elle laisse dans son journal de l'hôte.
+
+**Schémas et README.** Aucun élément du système n'est ajouté.
+
+**Chiffres.** 2 606 scénarios dans la suite, inchangé.
+
+**Trois piliers.**
+- Recherche : la preuve à venir est décrite avant d'être jouée, et son résultat sera rapporté même s'il échoue ; deux hypothèses de l'adaptateur sont vérifiées contre la source avant le premier essai.
+- SSDLC : la première livraison par la commande porte un changement sans code.
+- Opérationnel : rien n'a été écrit sur la forge pour ces vérifications ; IRB sans objet.
