@@ -18,9 +18,9 @@ An MCP platform for agent work, built in public, and the method used to build it
 
 ## How it works
 
-![One image for the whole tree, in six parts: a call served by the gateway, which starts data and the broker as native children and modules and workers in srt sandboxes; one step of the orchestration loop, from the brief to the delivery, and what the host writes into steps/; every session in its own srt sandbox, the authentication proxy of the host alone holding the credential; the five checks before the gate, then the gate and the delivery; the evidence desk and the watch of Anthropic; and every point decided and not built yet, marked next, once each](docs/diagrams/architecture.svg)
+![The architecture of architect-os in one image, in five parts: a call served by the gateway; one step of the orchestration loop; every session in its own srt sandbox, with the entry ./aos that admits a run; the five checks before the gate; the evidence desk and the watch of Anthropic. Each brick that exists carries the mark ready; each point decided and not built carries the mark next and stands beside the brick it will join](docs/diagrams/architecture.svg)
 
-The architecture is drawn in this one image; the sections below read it part by part. What each sandbox profile opens is the one image kept apart, because it is not drawn by hand: it is produced from the five profile files and the gate holds it equal to them.
+The architecture is drawn in this one image: `ready` marks a brick that is built, `next` a point decided or designed and not built, drawn beside the brick it will join. The sections below read it part by part. What each sandbox profile opens is the one image kept apart, because it is not drawn by hand: it is produced from the five profile files and the gate holds it equal to them.
 
 ### One sandbox per session
 

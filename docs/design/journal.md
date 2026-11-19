@@ -4351,3 +4351,5 @@ Une cinquième classe est revenue jusqu'à la fin : une même affirmation écrit
 - Recherche : chaque énoncé du schéma repose sur une image relue contre l'arbre au §105.
 - SSDLC : l'image produite des profils, qui porte la garantie d'isolation, n'est pas touchée.
 - Opérationnel : sans objet ; IRB sans objet.
+
+**Les marques, à la demande du propriétaire.** Une seconde passe, demandée le même jour, met une marque `ready` sur chaque brique construite et place chaque point `next` à côté de la brique qu'il rejoindra, au lieu d'une liste à part : la porte humaine au-dessus de la livraison, la borne de dépense sous le broker, la copie unique des dépendances sous l'entrée `./aos`, et ainsi de suite. Les trente et un points `next` de l'image sont ceux de la feuille de route du README et des six images d'origine, chacun une fois. L'entrée `./aos` et l'admission d'une exécution (§106, commit `4703436`) y figurent comme construites, l'entrée n'étant pas encore obligatoire ; le point « One place to write » garde ce qui reste à faire.
