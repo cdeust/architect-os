@@ -37,6 +37,11 @@ Feature: Architecture guard (dependency-cruiser)
       | modules/broker/src/infrastructure/zz-fixture-spawn.ts   | import 'node:child_process';                              | child-process-only-in-sandbox                 |
       | data/src/domain/zz-fixture-mcp.ts                       | import '@modelcontextprotocol/sdk/server/mcp.js';         | mcp-sdk-only-in-presentation-and-infrastructure |
       | data/src/application/zz-fixture-mcp.ts                  | import '@modelcontextprotocol/sdk/server/stdio.js';       | mcp-sdk-only-in-presentation-and-infrastructure |
+      | tools/runtime/src/domain/zz-fixture-domain.ts           | import '#runtime/infrastructure/policy-file.js';          | domain-imports-only-domain-and-contracts      |
+      | tools/runtime/src/application/zz-fixture-application.ts | import '#runtime/infrastructure/node-runtime-filesystem.js'; | application-imports-only-domain            |
+      | tools/runtime/src/infrastructure/zz-fixture-root.ts     | import '#runtime/main.js';                                | composition-root-is-not-imported-by-layers    |
+      | tools/runtime/src/infrastructure/zz-fixture-spawn.ts    | import 'node:child_process';                              | child-process-only-in-sandbox                 |
+      | tools/runtime/src/application/zz-fixture-cross.ts       | import '../../../deliver/src/domain/ports.js';            | no-import-between-components                  |
       | data/src/domain/zz-fixture-cycle-a.ts                   | import './zz-fixture-cycle-b.js';\nexport const a = 1;    | no-circular                                   |
       | data/src/domain/zz-fixture-cycle-b.ts                   | import './zz-fixture-cycle-a.js';\nexport const b = 1;    | no-circular                                   |
     When the architecture guard runs

@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
-import { deliverDependencies, parseArguments, runDeliver, type DeliverDependencies } from '../../src/main.js';
+import {
+  deliverDependencies,
+  hostEnvironment,
+  parseArguments,
+  runDeliver,
+  type DeliverDependencies,
+} from '../../src/main.js';
 import { runToEnd } from '../../src/infrastructure/host-process.js';
 import { committedNames, hostOf, temporaryDirectory } from './fixtures.js';
 import { ghForge, type GhForgeFixture } from './gh-fixture.js';
@@ -393,3 +399,35 @@ Then('the pre-push hook of the delivery command has not run', function () {
 Then('the pre-push hook of the delivery command has run', function () {
   assert.equal(existsSync(commandOf(this).hookWitness as string), true);
 });
+
+// What ./aos hands over to the delivery (environment-fresh.feature, rule: a delivery admitted by ./aos)
+
+/** `NAME=VALUE,...`, each split at its first `=`, as an environment. */
+const environmentOf = (text: string): Record<string, string> =>
+  Object.fromEntries(
+    text.split(',').map((pair) => [pair.slice(0, pair.indexOf('=')), pair.slice(pair.indexOf('=') + 1)]),
+  );
+
+When('the host environment of a delivery is taken from a process with {string}', function (text: string) {
+  this.state['hostEnvironment'] = hostEnvironment(environmentOf(text));
+});
+
+Then('the host environment of the delivery is {string}', function (text: string) {
+  assert.deepEqual(this.state['hostEnvironment'], environmentOf(text));
+});
+
+Then(
+  'every call of the scripted forge received exactly the variables of the list that the process had set but XDG_CONFIG_HOME',
+  function () {
+    const set = committedNames().filter(
+      (name) => name !== 'XDG_CONFIG_HOME' && commandOf(this).environment[name] !== undefined,
+    );
+    assert.ok(
+      commandOf(this).environment['XDG_CONFIG_HOME'] !== undefined,
+      'the process has an XDG_CONFIG_HOME',
+    );
+    const received = commandOf(this).gh.environments();
+    assert.ok(received.length > 0);
+    for (const names of received) assert.equal(names, [...set].sort().join(' '));
+  },
+);
