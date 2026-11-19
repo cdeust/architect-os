@@ -1,0 +1,39 @@
+{
+  "build": {
+    "model": "claude-opus-5-5",
+    "effort": "high",
+    "limitSeconds": 5400
+  },
+  "checks": [
+    {
+      "name": "format",
+      "command": [
+        "npx",
+        "prettier",
+        "--check",
+        "."
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "docs",
+      "command": [
+        "npx",
+        "cucumber-js",
+        "--profile",
+        "replay",
+        "features/descriptive"
+      ],
+      "limitSeconds": 600
+    }
+  ],
+  "reviews": [
+    {
+      "name": "correctness",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "limitSeconds": 2400
+    }
+  ],
+  "parallel": 2
+}

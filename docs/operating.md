@@ -16,15 +16,15 @@ Native Windows is not planned. There is one means of isolation, `srt`: Docker is
 
 Every variable is required unless said otherwise, and none has a default. A refusal names the variable and what is expected of it, never its value (`gateway/features/native-config.feature`). Nothing else of the environment reaches the children: `data` is given its database URL, the broker its configuration file.
 
-| Variable                   | What it is                                                                                                                                      |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GATEWAY_TOKENS`           | `token=subject` pairs separated by `;`. A token has at least 32 characters among letters, digits and `-._~+/`; a subject has no blank           |
-| `GATEWAY_PORT`             | The port of the clients, on the loopback only. Put a reverse proxy in front of it to serve another interface (`deploy/edge/Caddyfile`)          |
-| `GATEWAY_QUOTA_PER_MINUTE` | Calls per minute, for one subject and one tool, a whole number of at least 1                                                                    |
-| `GATEWAY_PROFILE`          | The client profile of `topology/clients.json`. One exists, `owner`: every authenticated client has its rights                                   |
-| `BROKER_CONFIG`            | Absolute path of the broker's JSON file (`modules/broker/broker.json`): its port, its upstream, and the file, mode 0600, that holds the API key |
-| `DATABASE_URL`             | A `postgres://` URL, or `memory` for the store that keeps nothing across a restart                                                              |
-| `NODE_EXTRA_CA_CERTS`      | Optional: the absolute path of a certificate authority, given to the broker alone, for a host behind an inspecting proxy                        |
+| Variable                   | What it is                                                                                                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GATEWAY_TOKENS`           | `token=subject` pairs separated by `;`. A token has at least 32 characters among letters, digits and `-._~+/`; a subject has no blank                                                |
+| `GATEWAY_PORT`             | The port of the clients, on the loopback only. Put a reverse proxy in front of it to serve another interface (`deploy/edge/Caddyfile`)                                               |
+| `GATEWAY_QUOTA_PER_MINUTE` | Calls per minute, for one subject and one tool, a whole number of at least 1                                                                                                         |
+| `GATEWAY_PROFILE`          | The client profile of `topology/clients.json`. One exists, `owner`: every authenticated client has its rights                                                                        |
+| `BROKER_CONFIG`            | Absolute path of the broker's JSON file (`modules/broker/broker.json`): its port, its upstream, and the file that holds the API key, giving no permission to its group nor to others |
+| `DATABASE_URL`             | A `postgres://` URL, or `memory` for the store that keeps nothing across a restart                                                                                                   |
+| `NODE_EXTRA_CA_CERTS`      | Optional: the absolute path of a certificate authority, given to the broker alone, for a host behind an inspecting proxy                                                             |
 
 ## Stopping
 

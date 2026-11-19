@@ -47,6 +47,8 @@ const freePort = () =>
 const KEYS: Record<string, { content: string; mode: number } | 'directory'> = {
   'readable by its group': { content: 'sk-test', mode: 0o640 },
   'readable by all': { content: 'sk-test', mode: 0o644 },
+  'writable by others': { content: 'sk-test', mode: 0o602 },
+  'executable by its owner only': { content: 'sk-test', mode: 0o700 },
   empty: { content: '  \n', mode: 0o600 },
   'two words': { content: 'sk-test other', mode: 0o600 },
   'a directory': 'directory',

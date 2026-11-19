@@ -1,6 +1,7 @@
 Feature: starting the broker, its process, its descriptive file
-  The broker does not start without a key file only its owner reads, nor without its port. As a process, child of the
-  gateway, it speaks MCP on its stdio and nothing else, and ends with its stdin. broker.json carries what it relays.
+  The broker does not start without a key file that gives no permission to its group nor to others, nor without its
+  port. As a process, child of the gateway, it speaks MCP on its stdio and nothing else, and ends with its stdin.
+  broker.json carries what it relays.
 
   Scenario Outline: a key file the broker cannot trust refuses the start: <case>
     Given a key file that is <case>
@@ -8,15 +9,21 @@ Feature: starting the broker, its process, its descriptive file
     Then the start is refused with "<message>"
 
     Examples:
-      | case                  | message                                                  |
-      | readable by its group | key file must be readable by its owner only (0600): KEY |
-      | readable by all       | key file must be readable by its owner only (0600): KEY |
-      | empty                 | key file holds no key: KEY                               |
-      | two words             | key file holds no key: KEY                               |
-      | a directory           | key file is not a regular file: KEY                      |
+      | case                  | message                                                                             |
+      | readable by its group | key file must give no permission to its group nor to others (0600 for example): KEY |
+      | readable by all       | key file must give no permission to its group nor to others (0600 for example): KEY |
+      | writable by others    | key file must give no permission to its group nor to others (0600 for example): KEY |
+      | empty                 | key file holds no key: KEY                                                          |
+      | two words             | key file holds no key: KEY                                                          |
+      | a directory           | key file is not a regular file: KEY                                                 |
 
   Scenario: a key file of mode 0400 is trusted
     Given a key file that is readable by its owner only, read-only
+    When I start a broker with that key file
+    Then the broker started
+
+  Scenario: a key file of mode 0700, with no permission for its group nor for others, is trusted
+    Given a key file that is executable by its owner only
     When I start a broker with that key file
     Then the broker started
 
@@ -63,7 +70,7 @@ Feature: starting the broker, its process, its descriptive file
   Scenario: serve reports a broker that cannot start and gives 1
     Given a broker configuration file with a key file readable by all
     When I serve the broker with that configuration over a pair of streams
-    Then serve of the broker gives 1 and wrote "broker: key file must be readable by its owner only (0600): KEY"
+    Then serve of the broker gives 1 and wrote "broker: key file must give no permission to its group nor to others (0600 for example): KEY"
 
   Scenario: the configuration file is BROKER_CONFIG, or the broker.json of the module
     Then the configuration file of the environment "BROKER_CONFIG=/etc/b.json" is "/etc/b.json"
@@ -100,19 +107,19 @@ Feature: starting the broker, its process, its descriptive file
     Then a copy where <change> is rejected
 
     Examples:
-      | case             | change                                |
-      | http upstream    | upstream is "http://api.anthropic.com" |
-      | privileged port  | port is 80                            |
-      | relative route   | routes is ["/v1/messages"]            |
-      | no route         | routes is []                          |
-      | an unknown field | budget is 1                           |
-      | no key file      | keyFile is ""                         |
-      | a scheme led by x  | upstream is "xhttps://api.anthropic.com" |
-      | a scheme ended by x | upstream is "httpsx://api.anthropic.com" |
-      | an empty beta    | betas is [""]                         |
-      | an unknown scheme | scheme is "basic"                    |
-      | a scheme in another case | scheme is "Bearer"            |
-      | an empty scheme  | scheme is ""                          |
+      | case                     | change                                   |
+      | http upstream            | upstream is "http://api.anthropic.com"   |
+      | privileged port          | port is 80                               |
+      | relative route           | routes is ["/v1/messages"]               |
+      | no route                 | routes is []                             |
+      | an unknown field         | budget is 1                              |
+      | no key file              | keyFile is ""                            |
+      | a scheme led by x        | upstream is "xhttps://api.anthropic.com" |
+      | a scheme ended by x      | upstream is "httpsx://api.anthropic.com" |
+      | an empty beta            | betas is [""]                            |
+      | an unknown scheme        | scheme is "basic"                        |
+      | a scheme in another case | scheme is "Bearer"                       |
+      | an empty scheme          | scheme is ""                             |
 
   Scenario: a copy of broker.json that names a beta is accepted, and relays with it
     Given the committed broker.json

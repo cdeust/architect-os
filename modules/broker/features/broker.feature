@@ -31,10 +31,10 @@ Feature: the broker, sole holder of the API key (docs/design/platform-v3-srt.md,
     And no usage record and no answer holds the key, the token or the content
 
     Examples:
-      | answer             | record                                                                                                                                                                                                |
+      | answer             | record                                                                                                                                                                                        |
       | a JSON message     | {"status":200,"task":"task-2","parent":"call-2","route":"/v1/messages","model":"claude-test","input_tokens":12,"output_tokens":7,"cache_read_input_tokens":3,"cache_creation_input_tokens":2} |
-      | a stream of events | {"status":200,"task":"task-2","parent":"call-2","route":"/v1/messages","model":"claude-test","input_tokens":5,"output_tokens":4}                                                                     |
-      | an API error       | {"status":400,"task":"task-2","parent":"call-2","route":"/v1/messages","error_type":"invalid_request_error"}                                                                                          |
+      | a stream of events | {"status":200,"task":"task-2","parent":"call-2","route":"/v1/messages","model":"claude-test","input_tokens":5,"output_tokens":4}                                                              |
+      | an API error       | {"status":400,"task":"task-2","parent":"call-2","route":"/v1/messages","error_type":"invalid_request_error"}                                                                                  |
 
   Scenario: a token granted without a parent gives records without a parent
     Given the gateway grants the token "tok_cccccccccccccccccccccccccccccccccccc" to the task "task-3"
@@ -53,11 +53,11 @@ Feature: the broker, sole holder of the API key (docs/design/platform-v3-srt.md,
     And the gateway got no usage record
 
     Examples:
-      | case                       | headers                                                         |
-      | no key                     | content-type=application/json                                   |
-      | an unknown token           | x-api-key=tok_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee            |
-      | the token as a bearer      | authorization=Bearer tok_dddddddddddddddddddddddddddddddddddd   |
-      | the key of the broker      | x-api-key=sk-test-key-of-the-scenario                           |
+      | case                  | headers                                                       |
+      | no key                | content-type=application/json                                 |
+      | an unknown token      | x-api-key=tok_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee            |
+      | the token as a bearer | authorization=Bearer tok_dddddddddddddddddddddddddddddddddddd |
+      | the key of the broker | x-api-key=sk-test-key-of-the-scenario                         |
 
   Scenario: a revoked token is worth nothing (401), and a second revocation says so
     Given the gateway grants the token "tok_ffffffffffffffffffffffffffffffffffff" to the task "task-5" called by "call-5"
@@ -86,13 +86,13 @@ Feature: the broker, sole holder of the API key (docs/design/platform-v3-srt.md,
     Then the broker answers 401 "authentication_error"
 
     Examples:
-      | case                  | arguments                                                                              |
-      | a short token         | {"token":"tok_hhhh","task":"t"}                                                        |
-      | no task               | {"token":"tok_hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"}                                   |
-      | an unknown field      | {"token":"tok_hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh","task":"t","budget":1}             |
-      | a task with a space   | {"token":"tok_hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh","task":"a b"}                      |
-      | a token led by a sign | {"token":"!tok_hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh","task":"t"}                       |
-      | a token ended by a sign | {"token":"tok_hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh!","task":"t"}                     |
+      | case                    | arguments                                                                  |
+      | a short token           | {"token":"tok_hhhh","task":"t"}                                            |
+      | no task                 | {"token":"tok_hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"}                       |
+      | an unknown field        | {"token":"tok_hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh","task":"t","budget":1} |
+      | a task with a space     | {"token":"tok_hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh","task":"a b"}          |
+      | a token led by a sign   | {"token":"!tok_hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh","task":"t"}           |
+      | a token ended by a sign | {"token":"tok_hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh!","task":"t"}           |
 
   Scenario Outline: only POST /v1/messages passes: <method> <path> is refused (403)
     Given the gateway grants the token "tok_iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii" to the task "task-8" called by "call-8"
@@ -129,7 +129,7 @@ Feature: the broker, sole holder of the API key (docs/design/platform-v3-srt.md,
     And the upstream of the broker received no request
 
     Examples:
-      | change                        |
-      | removed                       |
-      | readable by its group         |
-      | emptied                       |
+      | change                |
+      | removed               |
+      | readable by its group |
+      | emptied               |

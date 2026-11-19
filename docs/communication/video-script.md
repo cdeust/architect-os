@@ -18,8 +18,8 @@ Vidéo d'environ 5 minutes, en français, pour le build in public. Public extern
 ## 1. Règles d'écriture et d'honnêteté
 
 1. Phrases courtes, ton direct, pas de superlatif, pas de triade rhétorique. Une énumération de noms littéraux (`search`, `describe`, `execute`) est affichée, pas déclamée.
-2. **Aucun gain de tokens n'est annoncé.** M1 et M2 ne sont pas mesurés : la baseline de 20 tâches n'est pas faite (md L17, L312). Les valeurs 1 500, 600 et 1 000 sont des cibles et ne sont ni dites ni affichées comme résultats.
-3. **Trois statuts, affichés à l'écran par une pastille** : « témoignage » (acte 1), « prouvé » (banc), « conçu, à prouver » (documenté mais pas encore joué). Dans l'acte 2, ce qui est « gagné par construction » est documenté ; seule l'isolation sous srt est prouvée par le banc. La mesure du coût et les bornes sont conçues, preuves prévues en 1b (md L68, L70).
+2. **Aucun gain de tokens n'est annoncé.** M1 et M2 ne sont pas mesurés : leur baseline sur 20 tâches représentatives n'est pas faite, sa date est au propriétaire (D-7 ; md L17, L312). La baseline de coût de la brique 0 est faite depuis (20 tâches de correction, 3 configurations, 180 sessions, journal §22 et §23) : elle mesure le coût de lancement d'une session, pas M1 ni M2. Les valeurs 1 500, 600 et 1 000 sont des cibles et ne sont ni dites ni affichées comme résultats.
+3. **Trois statuts, affichés à l'écran par une pastille** : « témoignage » (acte 1), « prouvé » (banc, ou scénario de la suite), « conçu, à prouver » (documenté mais pas encore joué). Dans l'acte 2, ce qui est « gagné par construction » est documenté ; seule l'isolation sous srt est prouvée par le banc. La mesure du coût et les bornes, conçues à `b097071` (md L68, L70), sont depuis prouvées par des scénarios de la suite (`platform-v3-srt.md`, §2, « Mesure du coût » et « Bornes opérationnelles » : 1b.2 à 1b.5) ; aucune tâche réelle de la plateforme n'a tourné contre l'API. La porte de CI, conçue à `b097071` (md L251 à L261), est construite depuis la brique 1a : `tools/test-gate` et `.github/workflows/gate.yml`, sur chaque pull request et chaque push de `main`, ses rapports fixtures refusés par `tools/test-gate/features` (`platform-v3-srt.md`, §1, tableau des piliers, et §7).
 4. **La TUI de la brique 1a.0 est « prouvée en pty ; premier lancement réel au propriétaire »** (md §8, 1a.0 ; jr §15, h). Seule la version B (`claude -p`, appel réel par le proxy) est prouvée : elle se tourne. La version A (TUI) seulement après le premier lancement réel, consigné au journal.
 5. Les échecs se montrent tels qu'au journal (jr L17-18), sans arrondi.
 6. Le banc n'a fait aucun appel réel à l'API : il utilise un faux amont (jr L7). La voix dit « faux serveur d'API ».
@@ -31,9 +31,11 @@ Vidéo d'environ 5 minutes, en français, pour le build in public. Public extern
 | Acte | Contenu                                            | Durée cible | Mots de voix | Voix, 155 mots/min     |
 | ---- | -------------------------------------------------- | ----------- | ------------ | ---------------------- |
 | 1    | Pourquoi on migre (couverture, témoignage)         | 1:10        | 145          | 0:56                   |
-| 2    | Le switch et ce qu'il rapporte                     | 2:00        | 243          | 1:34                   |
-| 3    | Démonstration de l'outil de code isolé, invitation | 1:55        | 157          | 1:01                   |
-|      | **Total**                                          | **5:05**    | **545**      | **3:31 de voix seule** |
+| 2    | Le switch et ce qu'il rapporte                     | 2:00        | 283          | 1:50                   |
+| 3    | Démonstration de l'outil de code isolé, invitation | 1:55        | 161          | 1:02                   |
+|      | **Total**                                          | **5:05**    | **589**      | **3:48 de voix seule** |
+
+Calcul de la voix : les mots de chaque bloc « Voix off » de l'acte, comptés entre espaces (un signe de ponctuation isolé compte pour un mot), divisés par 155 mots par minute, arrondis à la seconde ; pour l'acte 3, la version A (161 mots). Le total de la voix est la somme des durées arrondies des trois actes : 0:56 + 1:50 + 1:02 = 3:48. En version B (162 mots, 1:03), cette somme est de 3:49. Le plan P-16 (section 5) reprend ce total, 3:48.
 
 L'acte 3 est volontairement moins parlé : une partie de sa durée est l'image réelle du terminal (frappe, refus, commit) sous une voix rare.
 
@@ -68,29 +70,29 @@ Les faits de cet acte viennent de la session de travail, pas du document (annexe
 
 > Qu'apporte la nouvelle base ? D'abord ce qui est gagné par construction. C'est documenté, et l'écran dit ce qui est prouvé et ce qui reste à prouver.
 >
-> L'idée : le modèle exprime une intention, du code l'exécute. Le client ne voit que trois outils : search, describe, execute. Quatre éléments tournent sur la machine ; tout le reste tourne sous une sandbox, srt. Plus aucun hash dans la CI : seul le résultat des tests fait foi, et la mutation ne laisse aucun survivant sur les lignes changées. Le coût est mesuré à chaque réponse, plutôt que prédit. Des bornes coupent une boucle. L'isolation sous srt, elle, est prouvée par un banc sur Linux et macOS : 106 tests. Sur macOS, 94 passent et 1 échoue. Sur Linux, 92 passent et 5 échouent, face à un faux serveur d'API. Les échecs sont conservés.
+> L'idée : le modèle exprime une intention, du code l'exécute. Le client ne verra que trois outils : search, describe, execute. Quatre éléments tournent sur la machine ; la gateway lance le reste, modules et workers, sous une sandbox, srt. Les plugins viendront à une brique suivante. Hors de la plateforme, la porte de CI exécute encore le code candidat sous mon compte. Plus aucun hash dans la CI : seul le résultat des tests fait foi, et la mutation ne laisse aucun survivant sur les lignes changées. Le coût est mesuré à chaque réponse, plutôt que prédit. Des bornes coupent une boucle. L'isolation sous srt, elle, est prouvée par un banc sur Linux et macOS : 106 tests. Sur macOS, 94 passent et 1 échoue. Sur Linux, 92 passent et 5 échouent, face à un faux serveur d'API. Les échecs sont conservés.
 >
 > Un tiers, Michael Rollins, décrit dans un reel du 28 octobre un cas voisin : douze allers-retours et environ 190 000 tokens, contre un aller-retour et environ 17 000. Ce sont ses chiffres, je ne les ai pas vérifiés.
 >
 > La conception est passée de 1 627 lignes à 366. On reste en TypeScript, avec npm et des fichiers descriptifs, au plus près d'Anthropic. Et treize risques sont nommés, plutôt que des mécanismes pour tous les couvrir.
 >
-> Ensuite, ce qui reste à mesurer : le gain de tokens. La baseline de 20 tâches n'est pas faite. Je ne promets aucun chiffre.
+> Ensuite, ce qui reste à mesurer : le gain de tokens. Le coût de lancement d'une session est déjà mesuré ; la baseline du gain, sur 20 tâches représentatives, n'est pas faite. Je ne promets aucun chiffre.
 
 **À l'écran**
 
-- 0:00-0:10, titre « Gagné par construction » (colonne gauche) et « Reste à mesurer » (colonne droite, vide). Deux pastilles de légende : « prouvé (banc) », « conçu, à prouver ».
-- 0:10-0:30, idée : schéma avant/après (tout passe par le contexte / script entre le modèle et les outils), trois cartes `search`, `describe`, `execute` (md L15). Pastille « conçu ».
-- 0:30-0:45, topologie condensée : figure 1 du HTML révélée en deux temps, quatre natifs (gateway, broker, data, Postgres 17) puis le cadre « sous srt » (md L31, L50). Pastille « conçu » sauf l'isolation.
-- 0:45-1:00, porte de CI condensée : « aucun hash » barré, « tests » validé, formule `exécutés = base + ajoutés − supprimés` (md L253), « 0 survivant » (md L261). Pastille « conçu, à prouver » (1a).
-- 1:00-1:10, coût et bornes : champs d'un enregistrement d'usage sans valeur (md L68), jauges « délai », « nombre d'appels » qui coupent (md L70). Pastille « conçu, à prouver » (1b).
+- 0:00-0:10, titre « Gagné par construction » (colonne gauche) et « Reste à mesurer » (colonne droite, vide). Deux pastilles de légende : « prouvé (banc ou scénario) », « conçu, à prouver ».
+- 0:10-0:30, idée : schéma avant/après (tout passe par le contexte / script entre le modèle et les outils), trois cartes `search`, `describe`, `execute` (md L15). Pastille « conçu » : ce sont les méta-tools de la brique 3 ; aujourd'hui, le client appelle `recall` et `remember`.
+- 0:30-0:45, topologie condensée : figure 1 du HTML révélée en deux temps, quatre natifs (gateway, broker, data, Postgres 17) puis le cadre « sous srt » (md L31, L50). Pastille « prouvé » sur l'isolation et sur ce qui est construit, les quatre natifs, le module memory et son worker (`platform-v3-srt.md`, §2, « MCP, aucun protocole maison » : `features/integration/gateway.feature`, `gateway/features/worker-host.feature`, `features/sandbox/recall.feature` sous vrai srt) ; « conçu » sur la cible, executor, `manifest-registry`, autres modules et agents.
+- 0:45-1:00, porte de CI condensée : « aucun hash » barré, « tests » validé, formule `exécutés = base + ajoutés − supprimés` (md L253), « 0 survivant » (md L261). Pastille « prouvé » : la porte est construite à la brique 1a et tourne sur chaque pull request et chaque push de `main` (`tools/test-gate`, `.github/workflows/gate.yml` ; ses rapports fixtures refusés : `tools/test-gate/features`).
+- 1:00-1:10, coût et bornes : champs d'un enregistrement d'usage sans valeur (md L68), jauges « délai », « nombre d'appels » qui coupent (md L70). Pastille « prouvé » : scénarios de la suite, 1b.2 à 1b.5 (`platform-v3-srt.md`, §2).
 - 1:10-1:30, banc : lignes du run 41044838678, macOS 106 tests / 94 pass / 1 fail ; Linux 106 / 92 / 5 (jr L17-18) ; échecs nommés (jr L24-25) ; bandeau « aucun appel réel à l'API au banc » (jr L7). Pastille « prouvé ».
 - 1:30-1:38, « 1 627 lignes » (conception d'origine, commit `0dd97c5`) qui se réduit à « 366 lignes » (md, `b097071`) ; puis « TypeScript, npm, fichiers descriptifs » ; puis « 13 risques nommés ».
 - 1:38-1:50, corroboration externe, carte avec pastille « externe, chiffres de l'auteur, non vérifiés » : « Michael Rollins (@rollins.io), reel du 28 octobre 2026, légende : 12 allers-retours et environ 190 k tokens contre 1 aller-retour et environ 17 k ». Aucune capture du reel ; ces chiffres ne sont pas ceux du projet.
-- 1:50-2:00, colonne de droite : « gain de tokens M1, M2 » avec la pastille « baseline de 20 tâches : non faite ». Aucune valeur.
+- 1:50-2:00, colonne de droite : « gain de tokens M1, M2 » avec la pastille « baseline de M1 et M2 : non faite ». Aucune valeur.
 
 **Note de réalisation**
 
-L'idée, la topologie et la porte de CI sont condensées ici, pas en séquences séparées. Sources de chaque affirmation : annexe A. Ne pas dire « le coût est maîtrisé » ni « les boucles sont impossibles » : c'est conçu, preuve prévue en 1b (md L70). Ne pas afficher les cibles de tokens (1 500, 600, 1 000) : ce sont des cibles, pas des résultats. « Au plus près d'Anthropic » renvoie au choix de l'Agent SDK par directive de suivre l'amont (jr L215) ; ne pas le généraliser.
+L'idée, la topologie et la porte de CI sont condensées ici, pas en séquences séparées. Sources de chaque affirmation : annexe A. Ne pas dire « le coût est maîtrisé » ni « les boucles sont impossibles » : le coût est mesuré, jamais plafonné (décision 11), et les bornes sont prouvées par des scénarios de la suite (1b.4, 1b.5), pas sur une tâche réelle. Ne pas afficher les cibles de tokens (1 500, 600, 1 000) : ce sont des cibles, pas des résultats. « Au plus près d'Anthropic » renvoie au choix de l'Agent SDK par directive de suivre l'amont (jr L215) ; ne pas le généraliser.
 
 ---
 
@@ -102,11 +104,11 @@ C'est la brique 1a.0 (md §8, 1a.0 ; jr §14 et §15). Tout le reste de la plate
 
 > Voici l'outil de code isolé, la première brique. Une commande, depuis un worktree : elle lance un proxy sur ma machine, puis Claude Code, avec son interface complète, dans une sandbox.
 >
-> Aucun secret n'entre dans la sandbox. Je lui demande l'environnement : il ne contient qu'un jeton de session. Je lui demande de lire le trousseau : refusé. De joindre l'API directement : refusé. Ces refus viennent de la sandbox, pas du modèle. Puis je lui demande un commit : il passe, parce que le profil laisse écrire ce dont git a besoin.
+> Aucun secret n'entre dans la sandbox. Je lui demande l'environnement : il ne contient qu'un jeton de session. Je lui demande de lire le trousseau : refusé. De joindre l'API directement : refusé. Aucun de ces refus ne vient du modèle lui-même. Puis je lui demande un commit : il passe, parce que le profil laisse écrire ce dont git a besoin.
 >
 > Un risque reste, écrit : le jeton de session est lisible pendant la session. Il ne donne que des appels au modèle, par le proxy, et il est révoqué à la fin.
 >
-> Je construis ai-architect.tools en public, et le journal garde les échecs. La date de la baseline et le nom définitif restent ouverts. Pour relire le design ou contester un risque accepté, rejoignez-moi.
+> Je construis ai-architect.tools en public, et le journal garde les échecs. La date de la baseline du gain de tokens et le nom définitif restent ouverts. Pour relire le design ou contester un risque accepté, rejoignez-moi.
 
 **Voix off, version B (seule prouvée : `claude -p`, appel réel par le proxy)**
 
@@ -116,18 +118,18 @@ C'est la brique 1a.0 (md §8, 1a.0 ; jr §14 et §15). Tout le reste de la plate
 >
 > Un risque reste, écrit : le jeton de session est lisible pendant la session. Il ne donne que des appels au modèle, par le proxy, et il est révoqué à la fin.
 >
-> Je construis ai-architect.tools en public, et le journal garde les échecs. La date de la baseline et le nom définitif restent ouverts. Pour relire le design ou contester un risque accepté, rejoignez-moi.
+> Je construis ai-architect.tools en public, et le journal garde les échecs. La date de la baseline du gain de tokens et le nom définitif restent ouverts. Pour relire le design ou contester un risque accepté, rejoignez-moi.
 
 **À l'écran**
 
 - 0:00-0:08, figure 3 du HTML (section « 3. Outil de code, brique 1a.0 ») : colonnes « Écriture autorisée », « Écriture refusée », « Lecture refusée » (trousseau barré), proxy de l'hôte et « Allowlist réseau » (md §8, 1a.0), en fondu vers le terminal.
 - 0:08-1:30, **terminal réel** (section 4) : commande, démarrage, trois refus, commit.
 - 1:30-1:40, plan fixe de la commande avec le bandeau « R-1 : le jeton de session est lisible pendant la session ; appels au modèle seulement, révoqué à la fin » (md §4.2, R-1).
-- 1:40-1:55, carte de fin : `ai-architect.tools`, **`[À CONFIRMER : lien du dépôt / canal d'échange]`**, ouvertes : « date de la baseline », « nom définitif » (md L366) ; mention « dépôt public » seulement si confirmée au tournage (jr L72).
+- 1:40-1:55, carte de fin : `ai-architect.tools`, **`[À CONFIRMER : lien du dépôt / canal d'échange]`**, ouvertes : « date de la baseline de M1 et M2 », « nom définitif » (md L366) ; mention « dépôt public » seulement si confirmée au tournage (jr L72).
 
 **Note de réalisation**
 
-Sources : md §8, 1a.0 ; jr §15 (b, e, h). Pastille : « TUI prouvée en pty ; premier lancement réel au propriétaire ». Les trois démonstrations (`env`, trousseau, API directe) et le commit sont prouvés au journal §15 ; la prise les refait en réel. Version A seulement après le premier lancement réel de la TUI, consigné au journal (effet du 429 au démarrage). En version B, on ne montre que ce qui est exécuté en `-p` dans la prise. Détail de la prise : section 4.
+Sources : md §8, 1a.0 ; jr §15 (b, e, h). Pastille : « TUI prouvée en pty ; premier lancement réel au propriétaire ». Les trois démonstrations (`env`, trousseau, API directe) et le commit sont prouvés au journal §15 ; la prise les refait en réel. Depuis la décision 2 (4 novembre 2026), la commande du trousseau est arrêtée d'abord par une règle `permissions.deny` de la session (`Bash(security *)`, `packages/sandbox/profiles/builder.json`), avant srt, qui rend le trousseau introuvable ; l'API directe est refusée par srt (403). Ne pas dire que le refus du trousseau vient de la sandbox. Version A seulement après le premier lancement réel de la TUI, consigné au journal (effet du 429 au démarrage). En version B, on ne montre que ce qui est exécuté en `-p` dans la prise. Détail de la prise : section 4.
 
 ---
 
@@ -154,15 +156,15 @@ Montrer la commande `npm --prefix <lanceur> run code`, lancée dans un worktree,
 
 ### 4.3 Déroulé minuté (1:22 de terminal, 0:08 à 1:30 de l'acte)
 
-| Temps (dans l'acte) | Image                                                       | Action                                                                                            | Voix                                                                                                                                       |
-| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 0:08-0:18           | Terminal, invite dans le worktree `demo`                    | Frappe de `npm --prefix <lanceur> run code` (accélérée 2×), Entrée. Incrustation « une commande » | « Une commande : elle lance un proxy, puis Claude Code dans une sandbox. »                                                                 |
-| 0:18-0:30           | A : la TUI s'ouvre. B : `-p` avec une question simple       | Laisser le démarrage réel                                                                         | A : « Claude Code tourne dans une sandbox, dans son worktree. » B : « …en mode non interactif… »                                           |
-| 0:30-0:45           | Panneau de la figure 3 en incrustation, ce qui est autorisé |                                                                                                   | « Il peut écrire dans ce dossier et joindre… »                                                                                             |
-| 0:45-0:58           | Démonstration 1                                             | Demander `env                                                                                     | sed 's/=.*/=<masqué>/'`: seuls les noms`ANTHROPIC_BASE_URL`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CONFIG_DIR` apparaissent, valeurs masquées | « Il ne contient qu'un jeton de session. » |
-| 0:58-1:08           | Démonstration 2                                             | Demander `security find-generic-password -s demo-leurre`. Laisser le message de refus réel        | « Le trousseau : refusé. »                                                                                                                 |
-| 1:08-1:18           | Démonstration 3                                             | Demander `curl https://api.anthropic.com`. Erreur réelle (403)                                    | « L'API en direct : refusé. »                                                                                                              |
-| 1:18-1:30           | Commit                                                      | Demander de créer un fichier et de le committer ; afficher `git log -1 --oneline`                 | « Puis je lui demande un commit : il passe. »                                                                                              |
+| Temps (dans l'acte) | Image                                                       | Action                                                                                            | Voix                                                                                                                                 |
+| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 0:08-0:18           | Terminal, invite dans le worktree `demo`                    | Frappe de `npm --prefix <lanceur> run code` (accélérée 2×), Entrée. Incrustation « une commande » | « Une commande : elle lance un proxy, puis Claude Code dans une sandbox. »                                                           |
+| 0:18-0:30           | A : la TUI s'ouvre. B : `-p` avec une question simple       | Laisser le démarrage réel                                                                         | A : « Claude Code tourne dans une sandbox, dans son worktree. » B : « …en mode non interactif… »                                     |
+| 0:30-0:45           | Panneau de la figure 3 en incrustation, ce qui est autorisé |                                                                                                   | « Il peut écrire dans ce dossier et joindre… »                                                                                       |
+| 0:45-0:58           | Démonstration 1                                             | Demander `env                                                                                     | sed 's/=.*/=<masqué>/'`: seuls les noms`ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY`, `CLAUDE_CONFIG_DIR` apparaissent, valeurs masquées | « Il ne contient qu'un jeton de session. » |
+| 0:58-1:08           | Démonstration 2                                             | Demander `security find-generic-password -s demo-leurre`. Laisser le message de refus réel        | « Le trousseau : refusé. »                                                                                                           |
+| 1:08-1:18           | Démonstration 3                                             | Demander `curl https://api.anthropic.com`. Erreur réelle (403)                                    | « L'API en direct : refusé. »                                                                                                        |
+| 1:18-1:30           | Commit                                                      | Demander de créer un fichier et de le committer ; afficher `git log -1 --oneline`                 | « Puis je lui demande un commit : il passe. »                                                                                        |
 
 Ne pas inventer le texte des erreurs : la prise réelle fait foi. Si une erreur contient un chemin personnel, flouter. Si un refus n'est pas obtenu, ne pas le monter : repasser en version B pour ce refus.
 
@@ -212,12 +214,12 @@ Aucun identifiant, sous aucune forme.
 | P-08 | 2    | Généré              | Champs d'usage sans valeur, jauges de bornes                                                                              | md L68, L70           | 0:10  | à produire                     |
 | P-09 | 2    | Texte               | Tableau du banc (run 41044838678), échecs nommés, « faux amont »                                                          | jr L7, L17-18, L24-25 | 0:20  | à produire                     |
 | P-10 | 2    | Généré              | « 1 627 » → « 366 lignes » ; « 13 risques nommés »                                                                        | annexe A              | 0:08  | à produire                     |
-| P-11 | 2    | Généré              | Colonne « gain de tokens », « baseline de 20 tâches : non faite »                                                         | md L312               | 0:07  | à produire                     |
+| P-11 | 2    | Généré              | Colonne « gain de tokens », « baseline de M1 et M2 : non faite »                                                          | md L312               | 0:07  | à produire                     |
 | P-12 | 3    | Capture + fondu     | Figure 3 du HTML                                                                                                          | html, section 3       | 0:08  | existant à animer              |
 | P-13 | 3    | **Terminal réel**   | Prise B (`-p`) ; A (TUI) après son premier lancement réel : commande, démarrage, trois démonstrations, commit (section 4) | md §8, 1a.0 ; jr §15  | 1:22  | à tourner, B seule prouvée     |
 | P-14 | 3    | Généré              | Bandeau « R-1 : le jeton de session est lisible pendant la session, appels au modèle seulement »                          | md §4.2, R-1          | 0:10  | à produire                     |
-| P-15 | 3    | Généré              | Carte de fin avec `[À CONFIRMER : lien / canal]`, ouvertes : baseline, nom définitif                                      | md L366               | 0:15  | à produire, après confirmation |
-| P-16 | tout | Voix                | Enregistrement de la voix off                                                                                             | ce fichier            | 3:22  | à enregistrer après relecture  |
+| P-15 | 3    | Généré              | Carte de fin avec `[À CONFIRMER : lien / canal]`, ouvertes : baseline de M1 et M2, nom définitif                          | md L366               | 0:15  | à produire, après confirmation |
+| P-16 | tout | Voix                | Enregistrement de la voix off                                                                                             | ce fichier            | 3:48  | à enregistrer après relecture  |
 | P-17 | tout | Sous-titres         | Sous-titres français incrustés                                                                                            | ce fichier            |       | à produire                     |
 
 Charte : orange pour « sous srt », noir pour « natif », comme dans les figures du HTML ; pastilles de statut (témoignage, prouvé, conçu à prouver) identiques sur tout le film ; aucun logo tiers.
@@ -228,7 +230,7 @@ Charte : orange pour « sous srt », noir pour « natif », comme dans les figur
 2. Version de l'acte 3 : B seule est prouvée ; A après le premier lancement réel de la TUI par le propriétaire.
 3. Lien et canal d'invitation.
 4. « Dépôt public » : à reconfirmer à la date de tournage (jr L72).
-5. Date de la baseline et nom définitif : restent ouverts (md L366).
+5. Date de la baseline de M1 et M2 (D-7) et nom définitif : restent ouverts (md L366).
 
 ---
 
@@ -245,8 +247,8 @@ Convention : `md` = `docs/design/platform-v3-srt.md` (commit `b097071`), `jr` = 
 | C05 | aucun hash, aucun digest ; tests seuls font foi                                                               | 2            | md L251                                                                                 | « aucun hash, aucun digest »                                               |
 | C06 | formule du compte                                                                                             | 2            | md L253                                                                                 | « `exécutés = base + ajoutés − supprimés` »                                |
 | C07 | 0 survivant sur les lignes modifiées                                                                          | 2            | md L261                                                                                 | « 0 survivant sur les lignes modifiées du diff »                           |
-| C08 | coût mesuré par réponse, aucun plafond financier (conçu)                                                      | 2            | md L68, L359                                                                            | « Aucun plafond financier »                                                |
-| C09 | bornes qui coupent une boucle (conçu)                                                                         | 2            | md L70, L360                                                                            | « aucune boucle ne tourne indéfiniment »                                   |
+| C08 | coût mesuré par réponse, aucun plafond financier (conçu à `b097071`, prouvé depuis : scénarios 1b.2, 1b.3)    | 2            | md L68, L359                                                                            | « Aucun plafond financier »                                                |
+| C09 | bornes qui coupent une boucle (conçu à `b097071`, prouvé depuis : scénarios 1b.4, 1b.5)                       | 2            | md L70, L360                                                                            | « aucune boucle ne tourne indéfiniment »                                   |
 | C10 | 106 tests, run 41044838678                                                                                    | 2            | md L21 ; jr L17-18                                                                      | « 106 tests »                                                              |
 | C11 | macOS : 94 pass, 1 fail                                                                                       | 2            | jr L17                                                                                  | `\| 41044838678 \| \`70a146f\` \| macOS \| 106 \| 94 \| 1 \| 5 \| 6 \|`    |
 | C12 | Linux : 92 pass, 5 fail                                                                                       | 2            | jr L18                                                                                  | `\| 41044838678 \| \`70a146f\` \| Linux \| 106 \| 92 \| 5 \| 3 \| 6 \|`    |
@@ -255,7 +257,7 @@ Convention : `md` = `docs/design/platform-v3-srt.md` (commit `b097071`), `jr` = 
 | C15 | conception de 1 627 lignes                                                                                    | 2            | `git show 0dd97c5:docs/design/platform-v3-srt.md` (1 627 lignes) ; md L3 cite `0dd97c5` | « l'ancien texte complet reste dans git à `0dd97c5` »                      |
 | C16 | conception de 366 lignes                                                                                      | 2            | md (366 lignes) ; jr L308                                                               | « le document reste à 366 lignes »                                         |
 | C17 | 13 risques acceptés (R-1 à R-13)                                                                              | 2            | md L144 (R-1), L156 (R-13)                                                              | `\| R-1 \|` … `\| R-13 \|`                                                 |
-| C18 | baseline de 20 tâches, non faite                                                                              | 2            | md L17, L312                                                                            | « 20 tâches, M1, M2 » ; baseline attend la date du propriétaire            |
+| C18 | baseline de M1 et M2 sur 20 tâches, non faite (la baseline de coût est faite depuis : journal §22, §23)       | 2            | md L17, L312                                                                            | « 20 tâches, M1, M2 » ; baseline attend la date du propriétaire            |
 | C19 | TypeScript, npm, fichiers descriptifs                                                                         | 2            | md L72, L160, L220                                                                      | Marketplace/`.mcp.json`/`agents/*.md` ; `npm ci` ; « Fichier descriptif »  |
 | C20 | suivre l'amont (Agent SDK)                                                                                    | 2            | jr L215                                                                                 | « par directive de suivre l'amont »                                        |
 | C21 | commande de la brique de base                                                                                 | 3            | md §8, 1a.0 ; jr §15                                                                    | « `npm --prefix <lanceur> run code -- <arguments de claude>` »             |
@@ -264,7 +266,7 @@ Convention : `md` = `docs/design/platform-v3-srt.md` (commit `b097071`), `jr` = 
 | C24 | démonstrations : `env` (jeton de session seul), trousseau refusé, API directe 403, commit réussi              | 3            | jr §15 (b, e), jr §14                                                                   | « seulement le jeton de session… » ; `CONNECT tunnel failed, response 403` |
 | C25 | R-1 : jeton de session lisible, appels au modèle seulement, révoqué à la fin                                  | 3            | md §4.2, R-1                                                                            | « ne donne que des appels au modèle via le proxy »                         |
 | C26 | leurre : service de trousseau inexistant, `api.anthropic.com` direct                                          | 3 (tournage) | jr §15 (e)                                                                              | « refusé par srt »                                                         |
-| C27 | ouvertes : baseline, nom définitif                                                                            | 3            | md L366                                                                                 | « Ouvertes : la date de la baseline (D-7) et le nom définitif »            |
+| C27 | ouvertes : baseline de M1 et M2, nom définitif                                                                | 3            | md L366                                                                                 | « Ouvertes : la date de la baseline (D-7) et le nom définitif »            |
 | C28 | journal en ajout seulement                                                                                    | 3 (option)   | jr L3                                                                                   | « Ajout seulement »                                                        |
 | C29 | dépôt public (à reconfirmer)                                                                                  | 3            | jr L72                                                                                  | « Public, 0 ruleset, `main` non protégée »                                 |
 | C30 | date 30 octobre 2026                                                                                          | 1            | md L3                                                                                   | « Conception, 30 octobre 2026 »                                            |
