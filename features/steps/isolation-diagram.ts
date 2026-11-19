@@ -34,7 +34,7 @@ import type { ArchitectWorld } from '../support/world.js';
 
 // The scenarios of features/arch/isolation-diagram.feature. Two files, two guarantees: docs/diagrams/isolation-profiles.svg
 // is the image that features/support/isolation-rows.ts produces from the five profile files, and the whole file must
-// equal it; docs/diagrams/isolation.svg is drawn by hand, and only a tripwire reads it. The text of the file under test
+// equal it; docs/diagrams/architecture.svg is drawn by hand, and only a tripwire reads it. The text of the file under test
 // is the one the step "the text of the committed file" stores under `sourceText`.
 
 type ListName = 'writes' | 'closes' | 'reaches';
@@ -282,7 +282,7 @@ Given('a temporary copy of the repository holding the five profiles and a folder
   mkdirSync(join(root, 'packages', 'sandbox'), { recursive: true });
   cpSync(join(ROOT, PROFILES_DIR), join(root, PROFILES_DIR), { recursive: true });
   mkdirSync(join(root, 'docs', 'diagrams'), { recursive: true });
-  writeFileSync(join(root, 'docs', 'diagrams', 'isolation.svg'), 'hand-drawn');
+  writeFileSync(join(root, 'docs', 'diagrams', 'architecture.svg'), 'hand-drawn');
   this.state['copyRoot'] = root;
   this.state['snapshots'] = [snapshot(root)];
 });

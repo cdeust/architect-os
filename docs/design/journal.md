@@ -4315,3 +4315,19 @@ Une cinquième classe est revenue jusqu'à la fin : une même affirmation écrit
 - Recherche : chaque passage corrigé repose sur un fichier, une décision ou un commit ; une question de conception est tranchée par un relecteur d'un autre fournisseur, sur les fichiers, et adoptée par le mainteneur.
 - SSDLC : aucune affirmation d'isolation ni de secret n'en dit plus que ce qu'un profil ou un scénario montre.
 - Opérationnel : le document distingue ce qui tourne aujourd'hui de ce qu'un serveur ajoutera ; IRB sans objet.
+
+## 106. Un seul schéma d'architecture à la place de six (19 novembre 2026)
+
+**Ce qui a déclenché l'étape.** Le propriétaire demande que les diagrammes d'architecture soient réunis en un seul. Le README faisait 186 Ko et montrait sept images, une par section de « How it works » : un visiteur n'avait aucune vue d'ensemble avant de lire quarante-cinq minutes de texte.
+
+**Ce qui est fait.** Les six images dessinées à la main (`isolation.svg`, `native-gateway.svg`, `orchestration-loop.svg`, `verification.svg`, `evidence-desk.svg`, `anthropic-watch.svg`) sont fondues en `docs/diagrams/architecture.svg`, en six parties : le service d'un appel par la passerelle, une étape de la boucle, une sandbox par session, les contrôles avant la porte, le bureau des preuves et la veille d'Anthropic, puis les points décidés et non construits. Chaque énoncé du schéma est repris des six images du commit `721b186`, qui venaient d'être relues contre l'arbre (§105) ; aucun n'est ajouté. Les points marqués `next` qui figuraient dans plusieurs images (la porte humaine, les scénarios écrits à part, les entrées inventées, l'autre constructeur, les droits par client) n'y sont plus qu'une fois. Le README montre l'image en tête de « How it works » ; les sections gardent leur texte.
+
+**Ce qui n'est pas fondu, et pourquoi.** `isolation-profiles.svg` reste une image à part : elle n'est pas dessinée, elle est produite des cinq fichiers de profils, et la porte la tient égale à eux (`features/arch/isolation-diagram.feature`). La fondre dans un dessin à la main retirerait cette garantie.
+
+**Ce que le fil-piège lit désormais.** Le fil-piège de l'image dessinée (une chaîne de gabarit, un hôte d'une liste réseau) lit `architecture.svg`. Le schéma écrit « la boucle locale » là où l'image de la passerelle écrivait l'adresse de bouclage, qui est l'hôte d'une liste réseau de trois profils et que le fil-piège aurait arrêtée.
+
+**Ce qui n'est pas prouvé.** Le schéma a été rendu dans Chromium et relu à l'écran, pas dans un autre navigateur. La suite complète n'a pas tourné sous Node 26 ici : seul Node 22 était disponible ; les scénarios de `features/arch/isolation-diagram.feature`, le typage et le formatage ont passé, et la porte de la CI tranche sous Node 26. Les sections du journal antérieures nomment les anciennes images : le journal ne se récrit pas, cette section en tient lieu.
+
+- Recherche : chaque énoncé du schéma repose sur une image relue contre l'arbre au §105.
+- SSDLC : l'image produite des profils, qui porte la garantie d'isolation, n'est pas touchée.
+- Opérationnel : sans objet ; IRB sans objet.
