@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 800" width="980" height="800" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="t">One sandbox per session: what a session can touch</title>
-  <desc id="d">Every session runs inside an srt sandbox, from one of five profiles: builder, reviewer, checker, module and worker. The authentication proxy on the host alone holds the credential of the owner. The paths each profile opens and closes for writing, its network list and its token variables, with the count of the paths denied for reading, are listed in the other image, isolation-profiles.svg, produced from the five files and held equal to them by the gate. Before each command under srt, a canary under the same profile must fail to read a secret placed in a sibling sandbox folder and to reach a port the host listens on, on the loopback; otherwise the command does not start. Decided and not built, marked next: a spending bound per task token in the broker, rights per client, scenarios the build cannot write, and the same ports on a server. Also decided and not built: one root, given to the host, under which a run writes what it throws away (run), what is reused (cache, where the one copy of the dependencies lives, in a store written by the host alone that no sandbox can write) and what is kept until published (state), with a single entry that admits a run, profiles that write nothing in the home folder (the npm cache of a session being under the root), and the git writes of the builder closed (design of the loop, section 14, paragraph on what the builder can write in git). Also decided and not built, and not places under that root: worktrees made for one step and removed at its end; the candidate code that the gate runs as the host, to run under a sandbox; and, for a builder of another provider, a second proxy of the host and the consent of that provider, both held by the host alone, outside the root; a review of correctness is never of the builder&apos;s provider. The git the host starts receives a closed list of environment variables.</desc>
+  <desc id="d">Every session runs inside an srt sandbox, from one of five profiles: builder, reviewer, checker, module and worker. The authentication proxy on the host alone holds the credential of the owner. The paths each profile opens and closes for writing, its network list and its token variables, with the count of the paths denied for reading, are listed in the other image, isolation-profiles.svg, produced from the five files and held equal to them by the gate. Before each command under srt, a canary under the same profile must fail to read a secret placed in a sibling sandbox folder and to reach a port the host listens on, on the loopback; otherwise the command does not start. Decided and not built, marked next: a spending bound per task token in the broker, rights per client, scenarios the build cannot write, and the same ports on a server. Built, and optional until the next commit makes it compulsory: the entry ./aos, which admits a run before npm on a root its installer marked with the name of an environment, when the filesystem of the root and that of the home of the account each hold more than the floors of that environment, then allocates a run under the root, writes its receipt there and gives the command the locations of that run. Also decided and not built: the one root, given to the host, under which a run writes what it throws away (run), what is reused (cache, where the one copy of the dependencies lives, in a store written by the host alone that no sandbox can write) and what is kept until published (state), with the entry made compulsory for every command and workflow, profiles that write nothing in the home folder (the npm cache of a session being under the root), and the git writes of the builder closed (design of the loop, section 14, paragraph on what the builder can write in git). Also decided and not built, and not places under that root: worktrees made for one step and removed at its end; the candidate code that the gate runs as the host, to run under a sandbox; and, for a builder of another provider, a second proxy of the host and the consent of that provider, both held by the host alone, outside the root; a review of correctness is never of the builder&apos;s provider. The git the host starts receives a closed list of environment variables.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
   </defs>
@@ -64,6 +64,14 @@
   <path d="M210 326V340" stroke="#57606a" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
   <text x="330" y="364" font-size="12" fill="#57606a">the credential stays on the host</text>
 
+  <!-- the entry that admits a run: built, optional until the next commit -->
+  <rect x="620" y="344" width="340" height="96" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="632" y="364" font-size="12" font-weight="600" fill="#1f2328">Entry ./aos: the admission, before npm</text>
+  <text x="632" y="382" font-size="11.5" fill="#57606a">a root marked by its installer, room above the two</text>
+  <text x="632" y="397" font-size="11.5" fill="#57606a">floors of the environment its marker names, then a</text>
+  <text x="632" y="412" font-size="11.5" fill="#57606a">new run under the root, with its receipt; optional</text>
+  <text x="632" y="427" font-size="11.5" fill="#57606a">until the next commit makes it compulsory</text>
+
   <!-- profiles -->
   <text x="24" y="412" font-size="13" font-weight="600" fill="#1f2328">What each profile writes, closes for writing, reaches and holds as a token</text>
   <text x="24" y="432" font-size="12" fill="#57606a">is listed in the other image, isolation-profiles.svg, produced from the five profile files</text>
@@ -92,10 +100,10 @@
   <text x="746" y="669" font-size="11.5" fill="#57606a">credentials by federation</text>
   <rect x="20" y="713" width="226" height="87" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
   <text x="32" y="733" font-size="12" font-weight="600" fill="#1f2328">One place to write</text>
-  <text x="32" y="750" font-size="11.5" fill="#57606a">one root for the host, one entry</text>
-  <text x="32" y="764" font-size="11.5" fill="#57606a">that admits a run; no profile</text>
-  <text x="32" y="778" font-size="11.5" fill="#57606a">writes in the home; the builder's</text>
-  <text x="32" y="792" font-size="11.5" fill="#57606a">git writes, open today, are closed</text>
+  <text x="32" y="750" font-size="11.5" fill="#57606a">the entry compulsory for every</text>
+  <text x="32" y="764" font-size="11.5" fill="#57606a">command; no profile writes in</text>
+  <text x="32" y="778" font-size="11.5" fill="#57606a">the home; the builder's git</text>
+  <text x="32" y="792" font-size="11.5" fill="#57606a">writes, open today, are closed</text>
   <rect x="258" y="713" width="226" height="87" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
   <text x="270" y="733" font-size="12" font-weight="600" fill="#1f2328">Disposable worktrees</text>
   <text x="270" y="751" font-size="11.5" fill="#57606a">one per step, made from the</text>
