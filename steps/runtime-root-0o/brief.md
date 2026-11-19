@@ -1,0 +1,16 @@
+# Step W.0, closing: the room of a text is computed for the size it is drawn at
+
+The pass before is in the worktree (`steps/runtime-root-0n/`: read its brief, it holds the rule). Not to be touched: the maintainer's changes to `docs/design/orchestration-fable-5-2.md` and `docs/design/platform-v3-srt.md`; the change that gives `TMPDIR` to a child in `features/steps/closed-git-environment.ts` and `tools/deliver/features/steps/command.ts` (step `steps/deps-measure-e/`).
+
+1. **`features/support/isolation-rows.ts` measures every text with the width of an 11 px character**, while it also writes a 17 px bold title, a 12.5 px subtitle, a 12 px bold header and a 12 px role: a title that passes the measure can run past the border. A width guessed for a proportional font cannot be exact without a renderer, and the gate has none. So the generated image is drawn in a **monospace family** for all its texts, where the width of a text is its count of characters times a factor of its size; `fit` takes the size the text is drawn at, with one factor, stated once with the render that established it (render the image, measure a long line of each size, and write the measured pixels and the factor in a comment). The function refuses to produce a file in which a text of any size does not fit. Scenarios show the refusal for each size the function draws at: the title, the subtitle, the header, the role, an item, the sentence of the denied reads.
+2. **The feature claims what the scenarios show, no more**: after point 1 the sentence on every text is true; check each other sentence of the feature against a scenario and correct any that has none. For the script (`npm run diagram:isolation`): either a scenario runs the function the script calls on a temporary copy and shows it writes that one file and that a second run changes nothing, or the sentence says it is established by reading the script; choose the first if it needs no process to be started.
+3. **`README.md`**, the alternative text of the hand-drawn picture says the sandbox reaches the host « only through the authentication proxy »: that is false for a module (it reaches the callback of the gateway on the loopback) and for a worker (it reaches the broker on the loopback). Write what is true: a Claude Code session reaches the host through the authentication proxy, which alone holds the credential; what each profile reaches is in the generated image. The label « only » does not come back on the drawing, and the source comment `<!-- the only route out -->` goes, for the same reason. Read every sentence of the README about the isolation against the generated image once more.
+4. `CLAUDE.md`: nothing more to change; confirm that the only difference against `HEAD` is the line of the command.
+
+Regenerate, render both images and look at them (the monospace family changes the look: check that every row still fits its table and reads well); recount the suite the way the README says it is counted.
+
+## Checklist
+
+- [ ] `npx tsc -p features --noEmit --composite false --incremental false`, `npx prettier --check .`: green.
+- [ ] `npx cucumber-js --profile replay features/arch features/descriptive`: green; give the counts. (Run it yourself; it is not a check of the step.)
+- [ ] `npm run diagram:isolation` run twice: no change the second time.

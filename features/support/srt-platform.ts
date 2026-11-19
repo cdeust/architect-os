@@ -63,7 +63,7 @@ export interface SrtPlatform {
 }
 
 /** The options of a platform runner: the committed profiles, a disposable cwd, the variables of its launcher. */
-export const runnerOptions = (variables: Record<string, string>): ProcessRunnerOptions =>
+const runnerOptions = (variables: Record<string, string>): ProcessRunnerOptions =>
   processRunnerOptions(ROOT, process.execPath, variables);
 
 /**

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Banc de preuve brique 1b.0 : srt 0.0.81 sur Linux et macOS, faux amont local, aucune cle reelle.",
+  "description": "Banc de preuve brique 1b.0 : srt sur Linux et macOS (0.0.81 a la brique 1b.0, 0.0.83 depuis 1b.8), faux amont local, aucune cle reelle.",
   "engines": {
     "node": ">=26.11.1"
   },

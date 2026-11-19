@@ -1,0 +1,23 @@
+# Step W.0, closing: the isolation diagram is checked against the profiles, not rewritten by hand
+
+The closing passes are in the worktree (`steps/runtime-root-0g/`, `-0h/`, `-0i/`: read the three briefs). Not to be touched: the maintainer's changes to `docs/design/orchestration-fable-5-2.md` (read its new paragraph « Ce que le constructeur peut écrire dans git ») and to `docs/design/platform-v3-srt.md`; the change that gives `TMPDIR` to a child in `features/steps/closed-git-environment.ts` and `tools/deliver/features/steps/command.ts` (step `steps/deps-measure-e/`).
+
+## The decision of the maintainer
+
+Three reviews in a row found the isolation diagram saying less, or other, than the profile files: the cache of the home, the shared git store, and now a box that says the builder cannot commit while its profile opens the object store, the refs (all but `main`) and the logs for writing. Each pass rewrote a sentence. The cause is that the diagram restates by hand what five files decide, and nothing compares them. This pass builds the comparison, and makes the diagram hold only what can be compared.
+
+## What to build
+
+1. **The rows of the profiles in `docs/diagrams/isolation.svg` state lists, taken from the files.** For each of the five profiles of `packages/sandbox/profiles/` (`builder`, `reviewer`, `checker`, `worker`, `module`), the diagram names, in the words of the file (the template strings such as `${worktree}`, `${repo}/.git/objects`, `${home}/.cache`): every path the profile opens for writing, every path it closes for writing inside an opened one, and every host its network list allows. What it denies for reading is the same list for the five: the diagram names it once, by its count and by the file where it is read. Where the drawing has no room, the list goes in the description of the image (`<desc>`), profile by profile, and the row points to it. Choose the form that stays readable when rendered; render and look.
+2. **No sentence of the diagram says what a session can or cannot do unless it is one of those lists.** The box that says neither the builder nor the reviewer can commit goes: what is true today is in the lists (the builder writes the object store, the refs but `main`, the logs; no profile reaches the forge). The `next` box of the place to write says what the design will close: the cache of the home and the git writes of the builder (the design's paragraph named above).
+3. **A scenario compares the two, in both directions.** It loads each profile file and reads the diagram: a path opened or closed for writing, or a host allowed, that the diagram does not name for that profile, is refused; a template path or a host the diagram names for a profile that the file does not hold is refused; the count of the paths denied for reading matches. Poisoned copies: a profile that gains a write path, a profile that loses one, a diagram that names a path no profile holds, a host added to a network list. A scenario that reads the text of a file goes under `features/arch/` (outside the mutation profile); load the profiles the way the existing scenarios of the profiles do. Step text unique across the repository.
+4. **The README says the same.** Where it describes the isolation (the sentence that says the sandbox reaches only an authentication proxy is false for three profiles: the builder also reaches the package registry, a module the callback of the gateway, a worker the broker), write what the lists say; where it lists what is under the root, the gate under the sandbox and the second proxy are not under it: use a form that cannot be read that way.
+5. Left by the last review: the box of the second proxy is a few pixels too short for its last line (render and look); in `cucumber.mjs`, the comment says « the other four root areas, and the components' features ».
+6. `docs/testing.md` names the new feature with the two others of `features/arch` that read the text of files; the count of the suite in the README is recounted the way the README says it is counted.
+
+## Checklist
+
+- [ ] `npx tsc -p features --noEmit --composite false --incremental false`, `npx prettier --check .`: green.
+- [ ] `npx cucumber-js --profile replay features/arch features/descriptive`: green; give the counts. (Do not put this command in a check that writes into the worktree; run it yourself.)
+- [ ] In the report: for one profile, a path removed from the diagram by hand, the scenario that failed, and the diagram restored.
+- [ ] Three pillars: research (the lists are read from the files, nothing from memory), SSDLC (the threat: a diagram that understates what a sandbox may write is a false statement of security; the control: the gate refuses it), operational (nothing of the owner's machine is named).

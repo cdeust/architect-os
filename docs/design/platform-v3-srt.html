@@ -45,7 +45,7 @@
 <text x="46" y="164" font-size="12">identifiant d'appel : task, parent, profondeur, échéance</text>
 <text x="46" y="184" font-size="12">bornes de task, annulation ; registre : trace, parent, usage</text>
 <text x="46" y="204" font-size="12">lit la seule sortie validée de manifest-registry</text>
-<text x="46" y="224" font-size="12">SandboxRunner : srt, Docker par configuration ; aucun pg, aucune clé</text>
+<text x="46" y="224" font-size="12">SandboxRunner : srt seul ; aucun pg, aucune clé</text>
 
 <rect x="570" y="98" width="400" height="94" rx="4" fill="none" stroke="currentColor" stroke-width="1.4"/>
 <text x="586" y="122" font-weight="600">broker : seul détenteur de la clé API</text>
@@ -66,7 +66,7 @@
 <text x="274" y="352" font-size="12" text-anchor="end">rappel : proxy srt</text>
 
 <rect x="20" y="334" width="960" height="272" rx="6" fill="none" stroke="currentColor" stroke-dasharray="7 4" stroke-width="1.4"/>
-<text x="36" y="594" font-weight="600">Sous srt : base.srt.json ; variables : réseau, lectures et écritures en plus ; cwd jetable</text>
+<text x="36" y="594" font-weight="600">Sous srt : un profil par sorte, packages/sandbox/profiles ; variables résolues au lancement ; cwd jetable</text>
 
 <rect x="36" y="370" width="170" height="200" rx="4" fill="none" stroke="#c15a2e" stroke-width="2"/>
 <text x="48" y="394" font-weight="600" fill="#c15a2e">executor</text>
@@ -175,7 +175,7 @@
 <h2>3. Outil de code, brique 1a.0</h2>
 <p>Une commande depuis le worktree habituel : le lanceur crée une configuration propre, lance le proxy d'authentification de l'hôte, puis <code>srt … claude</code>. C'est le stage 0 simplifié : le reste de la plateforme se construit dedans. Schéma implémenté et prouvé sur <code>feat/tool-1a0</code> (<code>f14da63</code>, journal §14 et §15), décisions D13 à D16 du 30 octobre, avec R-1 et R-2 réécrits.</p>
 <figure>
-<svg viewBox="0 0 1000 400" role="img" aria-label="Outil de code : Claude Code tourne sous srt avec un jeton de session, dans un worktree du dépôt. Il écrit dans le worktree et les parties git nécessaires au commit ; les hooks, la configuration et les pointeurs du worktree sont refusés. Le trousseau, le dossier claude et le fichier claude.json de l'utilisateur sont illisibles. Le seul chemin vers le modèle est le proxy d'authentification de l'hôte, hors de la sandbox, qui détient seul l'identifiant et ne relaie que les messages vers api.anthropic.com. Des hooks PreToolUse réduisent le risque sans former de frontière." xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Inter, sans-serif" font-size="13" fill="currentColor">
+<svg viewBox="0 0 1000 400" role="img" aria-label="Outil de code : Claude Code tourne sous srt avec un jeton de session, dans un worktree du dépôt. Il écrit dans le worktree et les parties git nécessaires au commit ; les hooks, la configuration et les pointeurs du worktree sont refusés. Le trousseau, le dossier claude et le fichier claude.json de l'utilisateur sont illisibles. Le seul chemin vers le modèle est le proxy d'authentification de l'hôte, hors de la sandbox, qui détient seul l'identifiant et ne relaie que les POST vers /v1/messages et /v1/messages/count_tokens d'api.anthropic.com. Des hooks PreToolUse réduisent le risque sans former de frontière." xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Inter, sans-serif" font-size="13" fill="currentColor">
 <defs>
   <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
 </defs>
@@ -236,7 +236,7 @@
 <tr><td>db-migrator</td><td>oui</td><td>aucun</td><td>aucun</td></tr>
 </table>
 </div>
-<p class="legend">Docker remplace srt seulement là où srt n'est pas supporté, par configuration explicite, derrière le même port <code>SandboxRunner</code>. Sur serveur, un uid propre au broker ; gateway et data peuvent partager un uid (R-8).</p>
+<p class="legend">srt est le seul moyen d'isolation, derrière le port <code>SandboxRunner</code> : sans srt utilisable, aucun lancement en sandbox ne réussit (décisions 21 et 22). Sur serveur, un uid propre au broker ; gateway et data peuvent partager un uid (R-8).</p>
 
 </body>
 </html>

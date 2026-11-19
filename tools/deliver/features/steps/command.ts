@@ -269,7 +269,12 @@ When('I start cli.ts of the delivery command with no argument', function () {
     process.execPath,
     ['--import', 'tsx', 'tools/deliver/src/cli.ts'],
     REPOSITORY,
-    { PATH: process.env['PATH'] ?? '' },
+    // TMPDIR: tsx keeps its cache there; without it tsx falls back on the global temporary directory, where a check
+    // played under the profile of the checks was refused a write; with it the child writes where the process may.
+    {
+      PATH: process.env['PATH'] ?? '',
+      ...(process.env['TMPDIR'] === undefined ? {} : { TMPDIR: process.env['TMPDIR'] }),
+    },
   );
 });
 

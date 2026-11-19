@@ -1,0 +1,12 @@
+# Step W.0, closing: two wordings left by the review of the sweep
+
+The pass before is in the worktree (`steps/runtime-root-0t/`: read its brief and what it did). Its review found one defect, in a sentence of `docs/design/platform-v3-srt.md` on the history of the five profile files: the maintainer has corrected it by hand from the history of git (section 5, « Un gabarit par sorte »); do not touch that file nor `docs/design/orchestration-fable-5-2.md`. Two proposals remain, and the maintainer takes them. Not to be touched: the change that gives `TMPDIR` to a child in `features/steps/closed-git-environment.ts` and `tools/deliver/features/steps/command.ts` (step `steps/deps-measure-e/`). Change nothing else than what these two points need.
+
+1. `features/arch/isolation-diagram.feature`: its Given steps say « committed » (the five committed profiles, the text of the committed file) while they read the worktree; the image of the profiles is not even tracked before this delivery. They say what they read: the files of the worktree. One of these step texts is shared with `features/arch/closed-git-environment-text.feature` through one binding: read how the binding is shared, and choose so that each feature says what is true for it and every step text stays unique across the repository (a new step with its own text for this feature if the shared one is true for the other; or the shared one renamed in both if it is false in both: check which, and say). Every document that cites a scenario title or a step of this feature follows.
+2. `docs/testing.md`, the sentence that says why the features of `features/arch` that read the text of files are outside the mutation profile: the reason given (they read instrumented production sources) fits one of them; the feature of the diagram reads the five profile files and an image, which the mutation tool does not instrument. Name what each feature reads and why each is outside the profile, in one or two sentences, and check the comment of `cucumber.mjs` that states the same thing says the same.
+
+## Checklist
+
+- [ ] `npx tsc -p features --noEmit --composite false --incremental false`, `npx prettier --check .`: green.
+- [ ] `npx cucumber-js --profile replay features/arch features/descriptive`: green; give the counts. (Run it yourself; it is not a check of the step.)
+- [ ] The count of the suite in the README unchanged, or recounted if a scenario was added or removed.

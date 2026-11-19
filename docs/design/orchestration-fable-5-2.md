@@ -6,7 +6,7 @@ Cadre posé par le propriétaire le 14 novembre 2026, qui règle cette note :
 
 > « On parle ici d'une architecture utilisant srt avec un découpage pour accentuer la sécurisation des données et pour améliorer le processus de développement en utilisant un contexte adapté aux tâches demandées. La boucle d'orchestration vise le même principe. »
 
-Sources : dix-sept pages de la documentation Anthropic (`platform.claude.com/docs/fr/...`), lues en entier le 14 novembre 2026 et gardées hors de tout dépôt, avec leurs empreintes, dans `/Volumes/Anthropic/anthropic-partnership/reference/anthropic-prompting-2026-11-14/` (`shasum -a 256 -c SHA256SUMS` : dix-sept fichiers `OK`). Sept d'abord : bonnes pratiques de prompting ; prompting de Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5 ; nouveautés de Fable 5.2 ; guide de migration vers Fable 5.2. Puis dix, données par le propriétaire : bonnes pratiques des Skills ; critères de réussite et évaluations ; cohérence des sorties ; hallucinations ; latence ; fuites de prompt ; jailbreaks et injections ; routage de tickets ; modération de contenu ; exécuteur d'outils du SDK. Pour ces dix, les blocs de code des autres langages que TypeScript n'ont pas été lus : ils répètent le même exemple. Les constats d'usage viennent du journal, §16 (brique 1a construite dans l'outil) et §23 (baseline de coût).
+Sources : dix-sept pages de la documentation Anthropic (`platform.claude.com/docs/fr/...`), lues en entier le 14 novembre 2026 et gardées hors de tout dépôt, avec leurs empreintes, dans le dossier de références du mainteneur (`anthropic-prompting-2026-11-14/` ; `shasum -a 256 -c SHA256SUMS` : dix-sept fichiers `OK`). Sept d'abord : bonnes pratiques de prompting ; prompting de Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5 ; nouveautés de Fable 5.2 ; guide de migration vers Fable 5.2. Puis dix, données par le propriétaire : bonnes pratiques des Skills ; critères de réussite et évaluations ; cohérence des sorties ; hallucinations ; latence ; fuites de prompt ; jailbreaks et injections ; routage de tickets ; modération de contenu ; exécuteur d'outils du SDK. Pour ces dix, les blocs de code des autres langages que TypeScript n'ont pas été lus : ils répètent le même exemple. Les constats d'usage viennent du journal, §16 (brique 1a construite dans l'outil) et §23 (baseline de coût).
 
 ## Trois piliers
 
@@ -838,7 +838,7 @@ La mutation, jouée par l'hôte, a dit la même chose que la session pour la por
 
 ### Une seule copie des dépendances : conception (18 novembre 2026, avant le code et avant les mesures)
 
-**Le défaut.** Chaque arbre de travail porte sa propre copie des dépendances : 542 Mo, dont 337 Mo pour un seul binaire natif, trois fois sur ce poste. Avec plusieurs agents, ce sera une copie par agent. Une session de construction peut écrire dans la copie de son arbre, et l'hôte exécute ensuite ces dépendances quand il rejoue les scénarios. Seuls onze liens sont propres à un arbre : ceux qui relient entre eux les paquets internes.
+**Le défaut.** Chaque arbre de travail porte sa propre copie des dépendances : 542 Mo, dont 337 Mo pour un seul binaire natif, une fois par arbre de travail, soit trois fois aujourd'hui. Avec plusieurs agents, ce sera une copie par agent. Une session de construction peut écrire dans la copie de son arbre, et l'hôte exécute ensuite ces dépendances quand il rejoue les scénarios. Seuls onze liens sont propres à un arbre : ceux qui relient entre eux les paquets internes.
 
 **Ce qui est décidé par le propriétaire.** Les dépendances ne sont pas dupliquées. Le moyen est un gestionnaire de paquets à magasin partagé, parce qu'il se transporte tel quel sur un serveur et dans un conteneur.
 
@@ -847,7 +847,7 @@ La mutation, jouée par l'hôte, a dit la même chose que la session pour la por
 | Fait | Conséquence |
 |---|---|
 | Les fichiers vivent dans un magasin adressé par leur contenu et sont liés en dur ou clonés dans chaque projet ; sur macOS le clone est essayé d'abord, sur Linux le lien dur | Une copie par version de dépendance. Sous Linux, un fichier d'un projet et celui du magasin sont le même fichier |
-| Le magasin doit être sur le même disque que le projet, sinon tout est copié | Le dépôt est sur un autre volume que le dossier personnel : le magasin se place sur ce volume |
+| Le magasin doit être sur le même disque que le projet, sinon tout est copié | Le magasin se place sur le volume du dépôt, et l'hôte le vérifie avant d'installer |
 | Le contrôle d'intégrité du magasin « ne rend pas sûr un magasin inscriptible par des utilisateurs non fiables » | Le magasin n'est inscriptible par aucune sandbox |
 | Un mode figé installe contre un magasin en lecture seule, hors ligne, depuis le fichier de verrouillage (un montage en lecture seule, une couche d'image) | Le chemin du serveur et du conteneur existe dans l'outil |
 | Un magasin virtuel global : le dossier des dépendances d'un projet ne contient que des liens vers le magasin | Candidat : un arbre ne porterait plus aucun fichier de dépendance |
@@ -872,7 +872,7 @@ La mutation, jouée par l'hôte, a dit la même chose que la session pour la por
 | **D** | Un outil de la chaîne suit mal les liens du dossier des dépendances (compilation, mutation, garde d'architecture) | Mesuré avant toute décision : voir ci-dessous. Un mode à plat existe dans l'outil, en repli |
 | **S**, **R** | Sans objet : aucune identité ni aucun enregistrement n'est touché | |
 
-**Mesures, fixées avant d'être jouées.** Dans un arbre jetable, sur ce poste, magasin sur le volume du dépôt ; chaque mesure deux fois. Le script des mesures entre au dépôt, sous `bench/`, écrit par une session de construction et joué par l'hôte.
+**Mesures, fixées avant d'être jouées.** Dans un arbre jetable, sur la machine de développement, magasin sur le volume du dépôt ; chaque mesure deux fois. Le script des mesures entre au dépôt, sous `bench/`, écrit par une session de construction et joué par l'hôte.
 
 | Mesure | Ce qu'elle décide |
 |---|---|
@@ -885,9 +885,141 @@ La mutation, jouée par l'hôte, a dit la même chose que la session pour la por
 
 Critère : la décision se prend sur ces mesures. Si la forme à liens casse un outil de la chaîne et que la forme à plat ne partage plus rien, le résultat est dit tel quel et la décision revient au propriétaire.
 
-**Ce que le changement touche, à ne pas oublier.** Le fichier de verrouillage et sa mention dans les documents ; les quatre workflows qui installent, et le scénario qui exige que chaque installation désactive les scripts ; le job hebdomadaire des avis ; le registre de la veille, qui épingle deux paquets ; les commandes du dépôt et celle du lanceur ; les profils des sandboxes ; le banc, qui a son propre fichier de verrouillage.
+**Ce que le changement touche, à ne pas oublier.** Le fichier de verrouillage et sa mention dans les documents ; les cinq workflows qui installent (`gate`, `mutation-full`, `broker-live`, `bench-sandbox`, `watch`), et le scénario qui exige que chaque installation désactive les scripts ; le job hebdomadaire des avis ; le registre de la veille, qui épingle deux paquets ; les commandes du dépôt et celle du lanceur ; les profils des sandboxes ; le banc, qui a son propre fichier de verrouillage.
+
+**Après la revue adverse d'un autre fournisseur** (18 novembre 2026). À la demande du propriétaire, cette conception a été donnée en lecture seule à un modèle d'un autre fournisseur, avec le dépôt public pour seul contexte, pour qu'il la conteste. Son verdict : bloquante en l'état comme décision d'implémentation. Ses constats sont des affirmations à vérifier ; ce que le mainteneur en retient :
+
+| Constat | Décision |
+|---|---|
+| Refuser l'écriture d'un chemin ne protège pas un fichier lié en dur s'il a un autre nom inscriptible ; un clone protège le magasin, pas ce que l'hôte exécute | La parade se dit par mode : le magasin n'est sous aucun chemin inscriptible d'aucun profil, et le dossier des dépendances de chaque paquet interne, pas seulement celui de la racine, est refusé en écriture. Le mode réellement employé (clone, lien dur, copie) est relevé par la mesure, pas supposé |
+| « Une session ne peut plus installer » ne découle pas d'un dossier en lecture seule : le constructeur joint le registre et écrit ailleurs | Le profil du constructeur perd l'accès au registre le jour où l'hôte seul installe. C'est une conséquence de la conception, à construire avec elle |
+| Comparer des ensembles de noms et de versions ne prouve pas que la conversion du fichier de verrouillage est fidèle | La comparaison porte aussi sur l'empreinte d'intégrité de chaque paquet, et un fichier lu en partie fait échouer la mesure |
+| Autoriser un script d'installation, même ligne à ligne, affaiblit l'invariant présent | Aucun script d'installation, comme aujourd'hui, et aucune liste d'autorisations |
+| Usurpation et répudiation ne sont pas sans objet : un binaire du gestionnaire substitué, un magasin peuplé on ne sait par qui | La version du gestionnaire est épinglée avec son empreinte dans le manifeste ; l'hôte enregistre ce qu'il a installé, depuis quel fichier de verrouillage |
+| Rien ne garantit qu'une installation sur un autre disque échoue au lieu de copier | Un contrôle préalable de l'hôte : même périphérique pour le magasin et l'arbre, sinon refus |
+| Les mesures ne décident pas tout ce qu'elles annoncent : la place libre d'un volume est bruitée, un seuil de fichiers n'est pas la preuve d'un dossier fait de liens, un `chmod` n'est pas une sandbox, une suite partielle n'est pas la porte | Le script relève les liens et leurs cibles, compare le contenu du magasin par empreinte, et dit vert ou rouge pour la chaîne. La décision se prend en deux temps : les six mesures disent si la forme tient ; une septième, jouée dans deux vraies sandboxes (l'une tente d'écrire par chaque chemin, l'autre et l'hôte relisent les mêmes octets), conditionne la migration |
+| Le garde d'architecture reconnaît des dépendances par leur chemin : une autre forme de dossier peut le rendre vert à tort | Ses scénarios qui écrivent une violation sont joués sur la nouvelle forme : ils sont dans la chaîne mesurée |
+
+Il propose un autre moyen : un environnement de dépendances construit par l'hôte, immuable, monté en lecture seule, en gardant le gestionnaire actuel. C'est le moyen que le propriétaire a écarté le 18 novembre pour sa portabilité, et il laisse entière la question des liens des paquets internes. Il reste le repli si la forme à liens casse la chaîne ; le choix du moyen est au propriétaire.
+
+**Seconde contestation, après ces réponses** (19 novembre 2026, même relecteur d'un autre fournisseur, sur son modèle le plus capable). L'expérience peut se poursuivre ; la migration reste bloquée tant que ces points ne sont pas prouvés :
+
+- Le magasin vit sous `<racine>/cache/<gestionnaire>/`, hors de tout arbre et de tout chemin inscriptible d'une sandbox ; **l'hôte seul** le peuple, par un installateur dont l'exécutable et la configuration ne viennent pas de l'arbre candidat. Aucun profil n'installe.
+- La fidélité de la conversion se juge sur le graphe : pour chaque paquet interne, ses arêtes vers les paquets, les contextes de pairs, les dépendances optionnelles par plate-forme, en plus de l'intégrité ; pour les deux fichiers de verrouillage du dépôt (racine et `bench`).
+- L'interdiction des scripts d'installation se prouve par un témoin : un paquet d'essai dont le script laisserait une trace, installé par l'installateur réel. Le contrôle des workflows reconnaît l'installateur attendu au lieu de chercher une ligne `npm ci`.
+- Même périphérique ne prouve pas un lien : la mesure relève l'identité des fichiers, et pour un clone la place réellement prise par le second arbre.
+- La chaîne mesurée comprend une mutation non vide avec sa relecture et le verdict final, sur les deux systèmes ; Stryker peut continuer après avoir échoué à lier les dépendances dans sa copie : un départ vert ne prouve rien.
+- La septième mesure se joue sur chaque système et pour chaque mode d'import, avec le remplacement d'un dossier, un magasin absent, un magasin abîmé et une installation interrompue avant sa publication.
 
 **Ce que cette étape ne fait pas.** Les arbres jetables : ils viennent après, et en dépendent.
+
+### Un seul lieu d'écriture, imposé par l'hôte : conception (19 novembre 2026, avant le code)
+
+**Le fait.** Le 18 novembre 2026, la machine de développement s'est arrêtée : le disque qui porte le dossier personnel était plein. Le dépôt peut vivre sur un autre volume, ses outils écrivent ailleurs, par des chemins que rien ne désigne ni ne borne. Le propriétaire a posé la règle : le travail de développement se fait sur le volume du projet, et s'il est absent l'opération est suspendue.
+
+**Ce que le dépôt écrit hors de son arbre, relevé dans le code** (inventaire demandé en lecture seule à un modèle d'un autre fournisseur, puis contrôlé ici pour ce qui est cité) :
+
+| Qui écrit | Où | Borne et retrait aujourd'hui |
+| --- | --- | --- |
+| Le profil du constructeur | tout `${home}/.cache` en écriture ; le cache npm fixé à `${home}/.cache/npm` (`packages/sandbox/profiles/builder.json`) | aucune |
+| L'hôte, pour chaque session | le dossier temporaire du système (`code-tool.ts`, `process-options.ts`, `tree-fingerprint.ts`) | retiré à la fin normale ; rien après une mort de l'hôte |
+| L'hôte, pour chaque étape | un dossier donné par l'appelant, par habitude sous le dossier personnel : flux entiers des sessions, mesures, verdicts | aucune taille, aucun retrait |
+| Le proxy d'authentification, la livraison | deux journaux en ajout sous le dossier personnel | aucune rotation |
+| La porte | `reports/` de l'arbre, effacé au début de la porte suivante ; `.stryker-tmp` ; les fichiers de relecture des mutants | deux portes dans un arbre s'effacent l'une l'autre |
+| Des scénarios | `/tmp` écrit en dur ; un balayage de fichiers par leur nom | par scénario |
+| Le script de mesures des dépendances | un dossier de travail sous `.claude/worktrees`, que la règle réserve aux arbres enregistrés | par le script |
+| Un banc d'essai de conteneurs (`baseline/overhead.ts`) | une machine virtuelle et un `docker system prune -af` | le dépôt a quitté les conteneurs (décisions 21 et 22) : retiré par l'étape (0), dans le changement qui porte cette conception |
+
+À contrôler par un essai, pas par lecture : les chemins inscriptibles que le moteur de sandbox ajoute de lui-même à ceux de nos profils.
+
+**La règle visée.** Tout ce qui se régénère et que l'hôte ou une session écrit va sous une seule racine, donnée à l'hôte par un réglage nommé, sans valeur par défaut. L'hôte refuse de lancer quoi que ce soit si elle manque. Le chemin du poste du propriétaire n'est écrit nulle part dans le dépôt : le même code tourne sur un serveur.
+
+- **Forme.** `<racine>/cache/<outil>` pour ce qui se réemploie d'une exécution à l'autre ; `<racine>/run/<identifiant>` pour ce qu'une exécution jette (dossiers de session, dossier temporaire donné aux enfants, rapports de la porte, copies de la mutation) ; `<racine>/state` pour ce qui se garde jusqu'à sa publication (dossiers d'étape, journaux d'usage et de livraison).
+- **Admission, avant tout lancement** (session, étape, porte, livraison, mesure) : la racine existe et se résout à elle-même ; la place libre de son système de fichiers et celle du dossier personnel sont au-dessus de deux planchers lus dans un fichier descriptif ; sinon refus avec un code nommé, avant npm, avant tsx, avant l'effacement d'un rapport.
+- **Profils.** Aucun profil n'ouvre en écriture un chemin du dossier personnel. Le cache npm d'une session est sous la racine. Un scénario tente, depuis chaque profil, d'écrire dans le dossier personnel, dans le dossier temporaire global et dans l'exécution d'une autre session : refus attendu, sur le moteur réel.
+- **Fin d'exécution.** Sur succès, refus, erreur, borne de temps : les processus de l'exécution sont arrêtés, ce qui est preuve est publié, puis `<racine>/run/<identifiant>` est retiré et son absence contrôlée. Au démarrage, l'hôte retire les exécutions dont le processus propriétaire n'existe plus.
+- **Preuve ou jetable.** Preuve, gardée avec le code : `steps/<nom>/`, le verdict et le rapport de la porte du commit livré, les mesures. Gardé sous `state` jusqu'au commit de l'étape : verdicts de revue, rapport de construction. Jetable : flux entiers des sessions, journaux verbeux, copies de la mutation, fichiers de relecture.
+- **Borne de ce que l'hôte capture.** Chaque flux écrit par l'hôte a un plafond d'octets lu dans le fichier descriptif ; au-delà, l'exécution est arrêtée et rend un refus nommé : un flux coupé ne donne jamais un verdict vert.
+
+**Ce que cette étape ne borne pas, et où cela se décide.** Une session peut encore remplir le système de fichiers de la racine : seul un espace de capacité fixe par exécution l'arrêterait par le système et non par un contrôle. Ce mécanisme dépend de la plate-forme. Il se décide après la mesure des pics d'une étape et d'une porte, que l'admission enregistre ; il entre dans la feuille de route.
+
+**Menaces (STRIDE).**
+
+| Menace | Parade |
+| --- | --- |
+| S : une racine substituée (un lien, un autre volume monté au même nom) | la racine se résout à elle-même ; son périphérique est enregistré à l'admission et recontrôlé avant le retrait |
+| T : une session écrit dans l'exécution d'une autre, ou dans le cache qu'une autre lira | écriture ouverte sur sa seule exécution ; le cache partagé n'est inscriptible par aucune session : l'hôte seul le peuple ; essai sur le moteur réel |
+| R : un retrait dont on ne sait qui l'a fait | l'hôte ne retire que les chemins qu'il a créés et inscrits, jamais par nom ni par âge |
+| I : la racine peut être sur un volume sans chiffrement ni propriétaires (un volume externe, par exemple) | aucun secret sous la racine : ni le crédit du propriétaire, ni la clé du broker, ni un jeton de session ou de tâche ; un scénario refuse un profil ou un lanceur qui y poserait l'un d'eux |
+| D : le disque plein, le volume retiré en cours d'exécution | planchers à l'admission, plafond des flux, retrait en fin d'exécution ; volume absent : refus, jamais de repli sur le dossier personnel ; capacité dure à l'étape nommée plus haut |
+| E : un chemin de retrait calculé depuis un texte venu d'une session | le retrait ne prend que l'identifiant créé par l'hôte, contrôlé comme enfant direct de `<racine>/run` |
+
+**Ordre de construction.** (1) la racine, l'admission, les profils et l'essai d'écriture sur le moteur réel ; (2) la porte, la livraison et les scénarios sous `run`, sans `/tmp` en dur ni balayage par nom ; (3) fin d'exécution, reprise après une mort de l'hôte, plafond des flux ; (4) retrait du banc d'essai de conteneurs. Le script de mesures des dépendances prend la racine dès sa prochaine passe.
+
+**Après la contestation d'un autre fournisseur** (19 novembre 2026). Cette conception et celle des dépendances ont été données en lecture seule à un modèle d'un autre fournisseur (lecture statique : il n'a rien exécuté). Son verdict sur celle-ci : à reprendre ; la forme `cache / run / state` et l'absence de valeur par défaut sont à garder. Ce que le mainteneur en retient change la conception sur neuf points :
+
+| Constat | Décision |
+| --- | --- |
+| L'admission arrive trop tard : `npm run …` a déjà écrit ses journaux, et la porte efface ses rapports avant tout contrôle | Une entrée unique, en shell sans dépendance, fait l'admission puis lance : elle pose aux enfants une liste fermée de variables de lieu (dossier temporaire, cache npm, dossiers de configuration et de cache). Un script du dépôt lancé sans elle refuse |
+| Un chemin qui se résout à lui-même n'est pas la preuve du bon volume : un dossier ordinaire peut occuper le nom d'un volume absent | La racine porte une marque posée une fois par celui qui l'installe ; l'admission la lit. Pas de marque : refus |
+| La garantie « rien n'est écrit sur le dossier personnel » ne tient pas pour le code candidat que la porte exécute en tant qu'hôte | La garantie est dite pour ce qu'elle couvre : les écritures de l'hôte, celles des sessions, et les lieux par défaut donnés aux essais. Le code candidat lancé par l'hôte reste le risque accepté après relecture du diff (`platform-v3-srt.md`, R-2) ; il est nommé ici, pas couvert |
+| Le moteur ajoute ses propres chemins inscriptibles ; les profils ne donnent pas tous le dossier temporaire aux deux processus | Chaque profil donne le dossier temporaire de l'exécution à l'hôte du moteur et à l'enfant ; un essai sur le moteur réel écrit dans chaque chemin par défaut du moteur et attend un refus ; il lit aussi le dossier d'une exécution voisine et attend un refus |
+| Deux portes dans un arbre : la relecture des mutants écrit le mutant sur le fichier source lui-même | Une porte prend un verrou exclusif sur son arbre ; au démarrage, un verrou dont le propriétaire est mort fait restaurer le fichier muté avant toute chose. Des dossiers de rapport séparés ne suffisaient pas |
+| « Aucun secret sous la racine » promet plus que le système ne peut tenir : une session lit son jeton et peut l'écrire | La ligne I devient : le crédit du propriétaire et la clé du broker ne sont jamais sous la racine ; un jeton de session ou de tâche, court et révoqué en fin d'exécution, peut se trouver dans un flux brut, lequel est jetable et retiré en fin d'exécution ; le journal d'usage ne porte ni jeton ni contenu |
+| Le plafond des flux doit compter avant d'écrire, sur les deux canaux, et la livraison comme la relecture écrivent par descripteur sans passer par l'hôte | Le plafond est appliqué à l'écriture, dans un seul adaptateur par lequel passent l'étape, la porte lancée par la livraison et la relecture ; l'hôte ne garde plus un flux entier en mémoire |
+| Une publication écrite fichier par fichier peut rester à moitié faite, et le nom est alors refusé pour toujours | La publication de `steps/<nom>` se prépare à côté puis se pose d'un seul renommage |
+| Les exécuteurs hébergés n'ont pas ce volume : sans valeur par défaut, la CI refuse | Chaque workflow crée sa racine sous le dossier temporaire du job avant toute installation, y pose la marque et la donne à l'entrée unique ; c'est écrit comme la règle des exécuteurs éphémères, sans prétendre y prouver la séparation des disques |
+
+Le banc d'essai de conteneurs sort du dépôt avant le reste : il était encore appelable (`package.json`) et son nettoyage visait tout le démon. C'est l'étape (0), faite dans le changement qui porte cette conception.
+
+**Ce que ces décisions ne doivent pas affaiblir** (rappel du propriétaire, 19 novembre 2026 : ne pas simplifier au prix de la sécurité et de la séparation). Trois des réponses ci-dessus redisaient une garantie à la baisse ; elles sont reprises :
+
+- **Le jeton dans un flux brut.** Dire qu'un flux est jetable ne suffit pas. L'hôte connaît le jeton de chaque session : l'adaptateur par lequel passent tous les flux le remplace par une marque avant d'écrire le moindre octet, sur les deux canaux, y compris quand il est coupé entre deux morceaux ; un scénario fait imprimer son jeton à une session et ne le retrouve dans aucun fichier. Le jeton reste révoqué en fin d'exécution : les deux parades s'ajoutent.
+- **Le code candidat que la porte exécute en tant qu'hôte.** Le nommer « risque accepté » laissait ouverte la seule voie par laquelle un code non relu écrit où il veut. Les contrôles de la boucle tournent déjà sous le profil de contrôle ; la porte doit y venir : ses scénarios et sa mutation lancés sous sandbox, l'hôte ne gardant que le plan, le verdict et la publication. C'est une étape de conception à part entière (les scénarios de sandbox lancent eux-mêmes le moteur), inscrite à la feuille de route, et la garantie de cette section ne sera dite entière qu'après elle.
+- **Les planchers.** Une valeur unique pliée à l'environnement le plus pauvre n'est pas une borne. Le fichier descriptif porte un plancher par environnement nommé (poste, exécuteur hébergé, serveur) ; l'environnement est donné à l'entrée, sans valeur par défaut ; un environnement inconnu est refusé.
+
+- **Ce que le constructeur peut écrire dans git.** Relevé le 19 novembre par une revue du schéma d'isolation : le profil du constructeur ouvre en écriture le magasin d'objets partagé du dépôt, toutes ses références sauf celle de `main`, et ses journaux. Une session de construction peut donc créer un commit, et déplacer une référence locale autre que `main`, dont celle de la branche de livraison. Le schéma disait le contraire. C'est la même faute que le cache du dossier personnel : un profil plus large que son besoin. L'étape (1b) la traite avec lui : relever ce qu'une construction demande réellement à git (lire l'état et le diff de son arbre), fermer le reste, et prouver sur le moteur réel qu'une session ne peut ni créer un objet dans le magasin partagé, ni écrire une référence, ni toucher l'arbre d'une autre ; si une construction a besoin d'écrire des objets, ils vont dans un magasin propre à l'exécution, sous la racine. D'ici là, le schéma et le README disent ce que le profil ouvre aujourd'hui.
+
+Règle pour la suite de cette conception : aucune simplification ne retire une barrière existante (liste fermée, refus par défaut, séparation de l'auteur et du relecteur, secret tenu par l'hôte seul) ; quand une garantie ne peut pas être tenue en entier, l'étape qui la complète est nommée et entre dans la feuille de route.
+
+**Ordre de construction, revu.** (0) retrait du banc d'essai de conteneurs ; (1a) entrée unique, marque, admission, racine des workflows ; (1b) profils sans écriture sous le dossier personnel, dossier temporaire donné aux deux processus, essais d'écriture et de lecture voisine sur le moteur réel, journaux et dossiers d'étape sous `state` ; (2) la porte : verrou par arbre, restauration après une mort, sorties sous `run`, reçu lié au commit que la livraison lit, environnement fermé pour la porte lancée par la livraison, scénarios sans `/tmp` en dur ni balayage par nom ; (3) fin d'exécution, plafond des flux, publication d'un seul geste, durée de garde de `state` et de `cache` ; (4) mesure des pics par relevés répétés de la place libre pendant une étape, une porte, puis deux exécutions qui se chevauchent : la capacité dure se choisit alors avec la forme du magasin des dépendances, parce qu'un espace monté par exécution s'oppose aux liens durs vers un magasin commun.
+
+### Un constructeur d'un autre fournisseur, derrière un proxy de l'hôte : conception (19 novembre 2026, avant le code)
+
+**Le fait.** La boucle ne connaît qu'un constructeur : une session Claude, câblée dans `step-tool.ts` (les drapeaux de la session, le fichier `code.json`, l'ajout du prompt système). Le 19 novembre, le propriétaire a demandé qu'un modèle d'un autre fournisseur aide à la conception et à l'implémentation. Le faire écrire hors de la boucle, sans dossier d'étape, hors de srt et avec son propre bac à sable, aurait contourné l'isolation, la preuve commitée et le compte des coûts : le mainteneur l'avait d'abord prévu, le propriétaire l'a refusé comme un pansement.
+
+**Décision du propriétaire** (19 novembre 2026) : un proxy de l'hôte pour l'autre fournisseur, symétrique de celui de Claude. La session sous srt ne tient jamais l'identifiant du propriétaire.
+
+**Ce qui a été établi avant d'écrire** (étude demandée en lecture seule à un modèle de cet autre fournisseur ; les pages qui décident ont été relues à la source le même jour) :
+
+- Le client en ligne de commande de ce fournisseur accepte un fournisseur de modèles déclaré par configuration, avec une adresse de base en boucle locale et le nom d'une variable qui porte le jeton. Lu dans son aide et sa documentation ; non exécuté.
+- Son éditeur publie une voie, en préversion, par laquelle un outil local ou open source fait compter ses requêtes sur l'abonnement de l'utilisateur : un consentement propre à l'application, obtenu une fois dans le navigateur, puis des requêtes vers l'API publique. La documentation interdit de viser les points d'accès internes du produit grand public : la connexion existante du client du propriétaire n'est donc ni copiée ni relayée.
+- Non établi : les réglages de l'utilisateur sur cette voie (plafond, crédits, révocation), dont la page a refusé la lecture automatique ; et qu'aucune page lue n'autorise ni n'interdit en toutes lettres un agent en ligne de commande derrière un proxy. Le premier essai réel le dira : il est pré-enregistré plus bas.
+
+**La règle visée.**
+
+- **Un port au-dessus du lanceur de sandbox**, pour la phase de construction : il reçoit une spécification validée (fournisseur, modèle, effort), le prompt de confiance, la consigne, une échéance et un puits d'événements borné ; il rend une issue typée (code de sortie, tour achevé ou non, interruption, usage, identité du fournisseur). Un adaptateur par fournisseur et un adaptateur en mémoire. L'ordre de l'étape, les contrôles, le choix des relecteurs et la publication restent à l'étape.
+- **Un second proxy, propre au fournisseur**, avec le cycle de vie du jeton d'exécution partagé avec le premier (tirage, comparaison en temps constant, révocation, journal de métadonnées). L'hôte choisit le fournisseur avant de tirer le jeton ; aucun champ d'une requête ne peut en changer. Le proxy ne transmet qu'une route, vers une destination fixe, avec une liste fermée d'en-têtes dans chaque sens ; il refuse un modèle hors de celui de l'étape.
+- **L'identifiant du propriétaire** est un consentement propre à cette application, tenu par l'hôte seul, hors de la racine d'écriture, renouvelé par l'hôte seul sous un verrou. Une étape ne le voit jamais ; révoquer une exécution et retirer le consentement sont deux gestes distincts.
+- **La session** tourne sous srt comme celle de Claude : son dossier personnel, sa configuration, ses journaux, ses caches et son dossier temporaire sont dans le dossier de l'exécution ; le seul réseau ouvert est le port du proxy ; télémétrie, mise à jour automatique, recherche web et persistance d'historique sont coupées par configuration, et le refus de toute sortie directe est la barrière qui le garantit.
+- **Le bac à sable propre au client.** Le retirer « puisque srt l'entoure » ôterait une barrière : il n'est pas retiré par défaut. La première mesure dit si les deux se superposent (le client en écriture limitée à l'arbre, sous srt) ; s'ils ne se superposent pas, la décision de n'en garder qu'un est exposée au propriétaire avec la preuve, et le canari de srt passe avant chaque lancement.
+- **Le relecteur n'est jamais du fournisseur de l'auteur.** `step.json` nomme le constructeur ; l'hôte refuse une étape dont une revue de justesse est du même fournisseur que la construction. `record.json` enregistre le fournisseur, le modèle, l'effort, l'empreinte de l'exécutable du client et sa version.
+- **Le coût.** Un abonnement ne se compte pas en dollars par requête : l'usage est enregistré en jetons par réponse, depuis l'événement terminal du flux, et dit comme tel ; aucun prix n'est inventé.
+
+**Menaces (STRIDE).**
+
+| Menace | Parade |
+| --- | --- |
+| S : une session se fait passer pour une autre auprès du proxy, ou vise l'autre fournisseur | un jeton par exécution, lié au fournisseur à son tirage, révoqué à la fin ; essai : le jeton d'une exécution Claude est refusé par l'autre proxy |
+| T : la sortie du client d'un autre fournisseur porte un texte qui dirige l'hôte | l'hôte n'agit sur aucun texte venu d'une sandbox ; il lit des événements typés, validés contre un schéma, et refuse le reste |
+| R : une étape dont on ne sait quel modèle l'a écrite | `record.json` : fournisseur, modèle, effort, empreinte du client ; le journal d'usage du proxy doit concorder, sinon l'étape n'a pas de preuve |
+| I : l'identifiant renouvelable du propriétaire fuit vers une session, un fichier de la racine ou un journal | il n'entre ni dans l'environnement, ni dans les arguments, ni dans un fichier de l'exécution ; l'adaptateur des flux le masque comme les jetons ; essai : une session qui cherche l'identifiant ne le trouve nulle part |
+| D : une session épuise l'abonnement du propriétaire | un nombre de requêtes et un plafond de jetons par exécution, lus dans le fichier descriptif du constructeur ; au-delà, le proxy refuse et l'étape rend un refus nommé |
+| E : la chaîne d'approvisionnement du client (mise à jour silencieuse, binaire substitué) | version épinglée et empreinte vérifiée par l'hôte avant chaque lancement ; la source entre au registre de veille (`tools/watch/watch.json`) |
+
+**Vérification pré-enregistrée, avant toute ligne de production.** Les deux essais se jouent par un banc hors production (`bench/`, que rien de la production n'importe), avant l'étape B.1 ; le premier ne demande rien au propriétaire, le second demande son consentement dans son navigateur : (1) le client épinglé, sous srt, avec un faux amont local, écrit un fichier dans un arbre jetable et rend un flux d'événements dont l'usage se lit ; résultat attendu constant : un fichier, un tour achevé, zéro connexion hors du port du proxy. (2) Un seul tour réel par la voie de l'abonnement, sans outil ; résultat attendu : une réponse, un enregistrement d'usage, aucun débit hors abonnement. Si (2) échoue pour un motif de droit ou d'éligibilité, la construction s'arrête et la décision revient au propriétaire : aucune clé payée à l'usage n'est substituée sans lui.
+
+**Ordre de construction.** Après la racine d'écriture (étapes 1a et 1b), dont elle dépend : (B.0) le banc et ses deux essais, dont le résultat décide de la suite ; (B.1) le port de construction et l'adaptateur Claude, sans changement de comportement ; (B.2) le proxy du second fournisseur sur un faux amont, avec ses refus ; (B.3) l'adaptateur du second fournisseur sous srt, l'essai (1) rejoué par la production ; (B.4) le consentement tenu par l'hôte, l'essai (2) rejoué par la production, la règle du relecteur d'un autre fournisseur.
 
 ### Trois piliers
 

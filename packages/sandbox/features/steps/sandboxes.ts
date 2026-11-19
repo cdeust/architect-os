@@ -106,7 +106,7 @@ Given(
   'an srt runner over a throwaway temporary root such that the tmp folder of a sandbox is {int} characters long',
   function (length: number) {
     // `/tmp` is short on both systems (`/private/tmp` once resolved); the system temporary folder is too long on macOS.
-    // Where `/tmp` cannot be written (the build sandbox), the scenario fails, it is never skipped: the host runs it.
+    // Where `/tmp` is refused a write (a check played under the profile of the checks was, on 18 November 2026), the scenario fails, it is never skipped: the host runs it.
     const base = throwawayRoot(this, '/tmp', 'aos-b-');
     const pad = length - FOLDER_OVERHEAD - base.length - 1;
     assert.ok(pad > 0, `no room to pad ${base} to ${length}`);

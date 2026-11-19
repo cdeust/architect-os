@@ -26,6 +26,7 @@
     "review": "node --import tsx packages/sandbox/src/review.ts",
     "step": "node --import tsx packages/sandbox/src/step.ts",
     "evidence": "node --import tsx tools/evidence/src/cli.ts",
+    "diagram:isolation": "node --import tsx features/scripts/isolation-diagram.ts",
     "watch": "node --import tsx tools/watch/src/cli.ts",
     "deliver": "node --import tsx tools/deliver/src/cli.ts",
     "typecheck": "tsc -b",
@@ -41,7 +42,6 @@
     "baseline:pilot": "node --import tsx baseline/run.ts",
     "baseline:campaign": "BASELINE_REPEATS=3 node --import tsx baseline/run.ts",
     "baseline:analyze": "node --import tsx baseline/analyze.ts",
-    "baseline:overhead": "node --import tsx baseline/overhead.ts",
     "baseline:overhead-analyze": "node --import tsx baseline/overhead-analyze.ts"
   },
   "devDependencies": {

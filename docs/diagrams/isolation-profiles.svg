@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 618" width="980" height="618" role="img" aria-labelledby="t d" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace">
+  <title id="t">What each profile opens: the five profiles of the isolation</title>
+  <desc id="d">One row for each of the five profiles of the isolation, builder, reviewer, checker, worker and module: its role, the paths it opens for writing, the paths it closes for writing, the hosts its network list allows, and the variables of its environment that hold a token. A last row counts the paths denied for reading: one count when the five lists are the same, else one per profile. The image is produced from the five files of packages/sandbox/profiles by one function, and the gate requires the file to equal what it produces.</desc>
+  <rect x="0.5" y="0.5" width="979" height="617" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="24" y="34" font-size="17" font-weight="600" fill="#1f2328">What each profile opens: the five profiles of the isolation</text>
+  <text x="24" y="54" font-size="12.5" fill="#57606a">packages/sandbox/profiles, one row per file; produced by npm run diagram:isolation, never edited by hand</text>
+  <g>
+    <rect x="20" y="72" width="940" height="26" fill="#f6f8fa" stroke="#d0d7de"/>
+    <text x="32" y="90" font-size="12" font-weight="600" fill="#1f2328">Profile</text><text x="132" y="90" font-size="12" font-weight="600" fill="#1f2328">Role; then writes (allowWrite) · closes (denyWrite) · reaches (allowedDomains) · token in (names in env.set)</text>
+    <rect x="20" y="98" width="940" height="140" fill="#ffffff" stroke="#d0d7de"/>
+    <g id="profile-builder">
+      <text x="32" y="114" font-size="12" fill="#1f2328">builder</text><text x="132" y="114" font-size="12" fill="#57606a">a build session</text>
+      <text x="132" y="130" font-size="11" fill="#57606a">writes</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="130">${worktree} · ${repo}/.git/worktrees/${worktreeName} · ${repo}/.git/objects · ${repo}/.git/refs ·</tspan><tspan x="190" y="144">${repo}/.git/logs · ${home}/.cache · ${config} · ${tmp}</tspan></text>
+      <text x="132" y="158" font-size="11" fill="#57606a">closes</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="158">${repo}/.git/hooks · ${repo}/.git/config · ${repo}/.git/worktrees/${worktreeName}/commondir ·</tspan><tspan x="190" y="172">${repo}/.git/worktrees/${worktreeName}/gitdir · ${repo}/.git/worktrees/${worktreeName}/config.worktree ·</tspan><tspan x="190" y="186">${repo}/.git/refs/heads/main · ${worktree}/.claude/settings.json · ${worktree}/.claude/settings.local.json ·</tspan><tspan x="190" y="200">${worktree}/steps · ${config}/settings.json</tspan></text>
+      <text x="132" y="214" font-size="11" fill="#57606a">reaches</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="214">127.0.0.1:${authProxyPort} · registry.npmjs.org</tspan></text>
+      <text x="132" y="228" font-size="11" fill="#57606a">token in</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="228">ANTHROPIC_API_KEY</tspan></text>
+    </g>
+    <rect x="20" y="238" width="940" height="84" fill="#ffffff" stroke="#d0d7de"/>
+    <g id="profile-reviewer">
+      <text x="32" y="254" font-size="12" fill="#1f2328">reviewer</text><text x="132" y="254" font-size="12" fill="#57606a">a review session</text>
+      <text x="132" y="270" font-size="11" fill="#57606a">writes</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="270">${config} · ${tmp}</tspan></text>
+      <text x="132" y="284" font-size="11" fill="#57606a">closes</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="284">${config}/settings.json</tspan></text>
+      <text x="132" y="298" font-size="11" fill="#57606a">reaches</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="298">127.0.0.1:${authProxyPort}</tspan></text>
+      <text x="132" y="312" font-size="11" fill="#57606a">token in</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="312">ANTHROPIC_API_KEY</tspan></text>
+    </g>
+    <rect x="20" y="322" width="940" height="84" fill="#ffffff" stroke="#d0d7de"/>
+    <g id="profile-checker">
+      <text x="32" y="338" font-size="12" fill="#1f2328">checker</text><text x="132" y="338" font-size="12" fill="#57606a">a check of a step: a command, no model</text>
+      <text x="132" y="354" font-size="11" fill="#57606a">writes</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="354">${tmp}</tspan></text>
+      <text x="132" y="368" font-size="11" fill="#57606a">closes</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="368">none</tspan></text>
+      <text x="132" y="382" font-size="11" fill="#57606a">reaches</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="382">none</tspan></text>
+      <text x="132" y="396" font-size="11" fill="#57606a">token in</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="396">none</tspan></text>
+    </g>
+    <rect x="20" y="406" width="940" height="84" fill="#ffffff" stroke="#d0d7de"/>
+    <g id="profile-worker">
+      <text x="32" y="422" font-size="12" fill="#1f2328">worker</text><text x="132" y="422" font-size="12" fill="#57606a">the agent worker of one task</text>
+      <text x="132" y="438" font-size="11" fill="#57606a">writes</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="438">${worktree} · ${config} · ${tmp}</tspan></text>
+      <text x="132" y="452" font-size="11" fill="#57606a">closes</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="452">${worktree}/.mcp.json · ${worktree}/.claude</tspan></text>
+      <text x="132" y="466" font-size="11" fill="#57606a">reaches</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="466">127.0.0.1:${brokerPort}</tspan></text>
+      <text x="132" y="480" font-size="11" fill="#57606a">token in</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="480">ANTHROPIC_API_KEY</tspan></text>
+    </g>
+    <rect x="20" y="490" width="940" height="84" fill="#ffffff" stroke="#d0d7de"/>
+    <g id="profile-module">
+      <text x="32" y="506" font-size="12" fill="#1f2328">module</text><text x="132" y="506" font-size="12" fill="#57606a">a platform module, MCP on its stdio</text>
+      <text x="132" y="522" font-size="11" fill="#57606a">writes</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="522">${worktree} · ${tmp}</tspan></text>
+      <text x="132" y="536" font-size="11" fill="#57606a">closes</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="536">${worktree}/.mcp.json · ${worktree}/.claude</tspan></text>
+      <text x="132" y="550" font-size="11" fill="#57606a">reaches</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="550">127.0.0.1:${callbackPort}</tspan></text>
+      <text x="132" y="564" font-size="11" fill="#57606a">token in</text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="564">none</tspan></text>
+    </g>
+    <rect x="20" y="574" width="940" height="28" fill="#ffffff" stroke="#d0d7de"/>
+    <g id="denied-read">
+      <text x="32" y="592" font-size="12" fill="#cf222e">denied reads</text><text x="132" y="592" font-size="11" fill="#1f2328">11 paths, the same list in the five profiles; read in srt.filesystem.denyRead</text>
+    </g>
+  </g>
+</svg>

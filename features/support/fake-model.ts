@@ -99,7 +99,6 @@ export async function startFakeModel(
   script: readonly ModelTurn[],
   options: {
     readonly cycle?: boolean;
-    readonly host?: string;
     /** Served over HTTPS with this key and certificate: the broker of the platform refuses an upstream in clear. */
     readonly tls?: { readonly key: string; readonly cert: string };
   } = {},
@@ -146,8 +145,7 @@ export async function startFakeModel(
   };
   const server: Server =
     options.tls === undefined ? createServer(answer) : createTlsServer(options.tls, answer);
-  // The loopback, unless a container must reach it inside a Linux VM (baseline/overhead.ts).
-  await new Promise<void>((resolve) => server.listen(0, options.host ?? '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as AddressInfo).port;
   return {
     // Over HTTPS the certificate names localhost.

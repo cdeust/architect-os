@@ -1,0 +1,77 @@
+{
+  "step": "runtime-root-0",
+  "startedAt": "2026-11-18T23:27:05.494Z",
+  "tree": {
+    "commit": "ca2e9999c9becfd7cceb554673072b5d5570d655",
+    "tree": "e74e9cd3762a6c788850fd3db7ea9172b6f567df",
+    "clean": false
+  },
+  "inputs": {
+    "brief.md": "6d75f05953cac8880b45ba12097aa6379c0dd9f0f55e3ee8d4ed6dcbad3ff0aa",
+    "step.json": "d725d508ae84c988380b918179ede6fa71f5381b7e2a5fce2950d9b26e50afb2"
+  },
+  "launcher": {
+    "code.json": "cc2eab46372df976a61d3ee3316894b3b68901b5d85110eff62bd0d0704888a1",
+    "profiles/builder.json": "0a6ca080817163f806bd7a374ef0218c53195aba30a135cf84e380dadf5cfbf6",
+    "profiles/checker.json": "771dfbaa8c1d1e62ecb4d4f1bf598268feb1d3476cfa699ba39ea8d9cc4b2c58",
+    "profiles/reviewer.json": "feb8ecb4c1e0173536821f09093e37d3e7bc4f2f6eb8a5532e1da64ffecee507",
+    "prompts/build.md": "c46f5d44f0b5e1b8d593dcb14fa66bed0ad16c2af0743962762783b1f8100f10",
+    "prompts/review.md": "2e3e207d4291af6bcc393fa0196cb5865fcd091530b005bdbc192c378bfc0dbc",
+    "review.json": "a105ba5e52127ceef963dddab9ef122dcb2b96ac3ed100712729d05c6f8ea06e"
+  },
+  "sessions": [
+    {
+      "role": "build",
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "completed": true,
+      "stopped": false,
+      "durationSeconds": 170,
+      "costUsd": 0.3357274,
+      "costByModel": {
+        "claude-sonnet-5-5": 0.3357274
+      }
+    },
+    {
+      "role": "review",
+      "name": "correctness",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "completed": true,
+      "stopped": false,
+      "durationSeconds": 186,
+      "costUsd": 0.5104826000000001,
+      "costByModel": {
+        "claude-opus-5-5": 0.5104826000000001
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "format",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 12
+    },
+    {
+      "name": "types",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 6
+    },
+    {
+      "name": "docs",
+      "passed": true,
+      "stopped": false,
+      "durationSeconds": 11
+    }
+  ],
+  "reviews": [
+    {
+      "name": "correctness",
+      "verdict": "request_changes",
+      "findings": 5
+    }
+  ],
+  "outcome": "refused"
+}

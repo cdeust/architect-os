@@ -28,112 +28,23 @@ npm run baseline:analyze -- baseline/results/campaign-<date>.jsonl
 
 Les dépôts sont clonés en miroir dans un dossier temporaire ; chaque session travaille dans un clone local de ce miroir, dans un worktree `.claude/worktrees/bench`, jamais poussé. Les branches et les tags distants (`git ls-remote --heads --tags`) sont relevés avant et comparés après ; la dernière ligne du fichier de résultats dit s'ils sont intacts (`remotesUntouched`) et nomme chaque référence qui a changé (`remoteChanges`), pour distinguer un push venu d'ailleurs. L'`origin` des copies est le cache local, et les sessions ne peuvent lancer que la commande de test.
 
-## Surcoût de la structure (mesure A), protocole pré-enregistré
+## Résultats
 
-Mesure du temps que la structure de la plateforme ajoute à un appel, sans coût de modèle : le modèle est le faux
-modèle local de `features/support/fake-model.ts`, scripté (une recherche, puis la sortie structurée), donc les tokens
-sont fixés et le coût est nul. Ce protocole est commité avant toute mesure ; les résultats ne le modifient pas.
+`results/` garde les mesures brutes et leurs rapports ; ce sont les preuves que citent les décisions 21 et 22 de `docs/design/platform-v3-srt.md`.
 
-| Configuration     | Ce qui est chronométré                                                                                         |
-| ----------------- | -------------------------------------------------------------------------------------------------------------- |
-| `iso-none`        | `node -e 0` lancé directement, sans isolation                                                                  |
-| `iso-srt`         | le même `node -e 0` par `SrtSandboxRunner`, profil `module`, cwd jetable, canari compris                       |
-| `iso-docker`      | le même `node -e 0` par `docker run --rm --network none`, image `node:26-bookworm-slim` épinglée par digest    |
-| `recall-inproc`   | un `recall` en processus : serveur MCP de la gateway, worker v3, vrai SDK, vrai CLI, relais répondu en mémoire |
-| `recall-srt-warm` | un `recall` par la plateforme sous srt, comme `features/sandbox/recall.feature`, module déjà lancé             |
-| `recall-srt-cold` | le même, sur une plateforme neuve : le module est lancé par cet appel                                          |
+| Fichiers                            | Contenu                                                                                         |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `results/pilot-*`, `campaign-*`     | Le pilote et la campagne de coût (180 sessions)                                                 |
+| `results/overhead-*.jsonl` et `.md` | Le surcoût de la structure : isolation d'un processus, `recall`, délégation, sous srt et Docker |
 
-Le worker est toujours neuf, une sandbox par appel (§2). Le `recall` v2 (worker Docker) n'est pas mesuré : avec le
-Claude Code actuel, il échoue avant tout tour, le CLI refusant son schéma de sortie (draft 2020-12, journal §29) ; seule
-son isolation est comparée, par `iso-docker`.
+Les protocoles pré-enregistrés, leurs amendements et les hôtes mesurés sont au journal, `docs/design/journal.md` (§30 et suivants).
 
-Hypothèses, réfutables, publiées quel que soit le résultat :
-
-- H1 : le surcoût de démarrage de srt, canari compris, est inférieur à celui de Docker : médiane(`iso-srt` −
-  `iso-none`) < médiane(`iso-docker` − `iso-none`).
-- H2 : sur un `recall`, la plateforme sous srt ajoute moins d'une seconde : médiane(`recall-srt-warm`) −
-  médiane(`recall-inproc`) < 1 000 ms.
-- H3 : lancer le module au premier appel ajoute moins d'une seconde : médiane(`recall-srt-cold`) −
-  médiane(`recall-srt-warm`) < 1 000 ms.
-
-Méthode : 30 mesures par configuration après 2 mesures de chauffe écartées (cache d'image, cache du CLI) ; les
-configurations d'isolation alternent à chaque répétition, celles de `recall` aussi ; temps mural par
-`performance.now()`. Statistiques : médiane, p10 et p90 ; écarts de médianes avec intervalle à 95 % par bootstrap
-(10 000 tirages, graine 42). L'en-tête du fichier de résultats relève l'hôte : système, processeur, Node, srt, Docker,
-Claude Code.
-
-Limites, écrites d'avance : faux modèle, donc ni latence réseau ni temps du modèle, qui dominent un vrai appel ; un
-seul hôte par campagne. La même commande se relance sur Linux et, avec la preuve Windows, sur WSL2 et Docker.
+## Analyser les mesures de surcoût
 
 ```bash
-npm run baseline:overhead
 npm run baseline:overhead-analyze -- baseline/results/overhead-<date>.jsonl
 ```
 
-### Amendement du 7 novembre 2026 : H1, accepté par le propriétaire avant toute mesure
+`overhead-analyze.ts` lit un fichier de résultats : médiane, p10 et p90, écarts de médianes avec intervalle à 95 % par bootstrap (10 000 tirages, graine 42). Il ne lance aucun programme.
 
-La campagne du 7 novembre ne permet pas de conclure sur H1 (journal §30). Elle opposait un srt froid à un Docker chaud,
-dont la VM et le démon étaient déjà démarrés. Règle : les deux environnements sont comparés froids par défaut. Un srt
-chaud est exclu, car la sandbox meurt après chaque exécution, sans reprise de session, pour bloquer la contamination.
-
-Définition proposée de `iso-docker-cold` sur macOS, où Docker exige une VM : pour chaque exécution, une VM Colima dédiée
-(profil `aos-bench`, distinct des profils des autres sessions) est démarrée, le conteneur lancé, puis la VM arrêtée.
-Les trois étapes sont chronométrées, comme srt l'est de la création de sa sandbox jusqu'au retrait de son dossier.
-L'image reste sur le disque de la VM, comme le binaire de Node reste sur le disque de l'hôte pour srt : un disque
-chaud de part et d'autre, aucun processus chaud. H1 est reformulée sur `iso-docker-cold` ; son seuil ne change pas.
-
-Sous Linux, décision du propriétaire du 7 novembre 2026, avant toute mesure : Docker n'a pas de VM, et le froid y est
-le démon arrêté. Pour chaque exécution de `iso-docker-cold`, le démon (`docker.service` et `docker.socket`) est démarré,
-le conteneur lancé, puis le démon arrêté ; les trois étapes sont chronométrées, comme la VM sous macOS. `iso-srt` y
-tourne avec bubblewrap. Hôte de la première mesure Linux : la VM dédiée `aos-bench` (Ubuntu 24.04), où srt et Docker
-partagent les mêmes 2 cœurs et 2 Gio.
-
-### Délégation isolée : `claude -p` dans srt contre dans Docker, les deux froids (pré-enregistré le 7 novembre 2026)
-
-Demande du propriétaire : comparer la même délégation, isolée des deux côtés. Un `claude -p` hors isolation n'apporte
-ni la sécurité ni la réduction de coûts de l'architecture ; il n'est pas comparé.
-
-| Configuration       | Ce qui est chronométré                                                                                                                                                |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deleg-srt`         | un `claude -p` dans une sandbox srt neuve, profil `worker` (réseau : le port du modèle seul), canari compris, jusqu'au retrait de son dossier                         |
-| `deleg-docker-cold` | le même `claude -p` dans un conteneur, moteur froid selon l'hôte (macOS : VM `aos-bench` démarrée puis arrêtée ; Linux : containerd et dockerd démarrés puis arrêtés) |
-
-Les deux : Claude Code 2.1.312, `-p` avec une consigne fixe, `--bare --output-format json`, une clé factice, le même
-faux modèle, une réponse en un tour. Une délégation n'est comptée que si elle sort en 0 avec la réponse du modèle.
-Docker : image `aos-bench/claude:2.1.312`, construite une fois hors chronomètre dans le moteur de l'hôte de mesure,
-sur `node:26-bookworm-slim` épinglé par digest, avec le binaire Linux de `@anthropic-ai/claude-agent-sdk-linux-arm64`
-0.3.312, dont l'empreinte sha512 est vérifiée contre le lockfile ; elle reste sur le disque, comme le binaire de l'hôte
-pour srt. Le conteneur atteint le faux modèle par le réseau par défaut de Docker : Docker n'a pas de liste d'hôtes
-autorisés sans proxy de sortie, écart de sécurité noté, non mesuré.
-
-- H4 : médiane(`deleg-srt`) − médiane(`deleg-docker-cold`) < 0, l'intervalle à 95 % entier sous 0, sur chaque hôte
-  mesuré (macOS ; Linux dans la VM `aos-bench`).
-
-Méthode et statistiques : celles de la mesure A (30 mesures après 2 de chauffe, en alternance, bootstrap à graine 42).
-Commande : `OVERHEAD_ONLY=deleg npm run baseline:overhead`.
-
-Amendement du 7 novembre 2026, décision du propriétaire avant toute mesure retenue : un environnement Docker de
-délégation est éphémère et jetable, son image et ses paramètres changent d'une délégation à l'autre ; une image
-construite d'avance sur le disque de la VM le rendait chaud. Pour chaque exécution de `deleg-docker-cold`, sont
-chronométrés : le démarrage du moteur, la construction de l'image de la délégation avec `docker build --no-cache` (base
-`node:26-bookworm-slim` épinglée par digest, présente sur le disque ; binaire Claude Code ; une couche propre à la
-délégation), le conteneur, le retrait de l'image, l'arrêt du moteur. Le binaire Linux vient de
-`@anthropic-ai/claude-agent-sdk-linux-arm64` 0.3.312, sha512 vérifié contre le lockfile par le banc lui-même. La
-campagne interrompue du 7 novembre (image construite d'avance) n'est pas analysée et reste comme essai abandonné.
-
-Amendement du 7 novembre 2026, second, décision du propriétaire avant toute mesure retenue : l'environnement est
-jetable en entier, images et caches compris. Rien ne persiste d'une délégation à l'autre : avant la campagne, les
-images et le cache de construction du moteur de mesure sont effacés ; pour chaque exécution, l'image de base épinglée
-est retéléchargée depuis le registre par la construction, et le retrait final efface toutes les images et tout le cache
-de construction (`docker system prune -af`) avant l'arrêt du moteur, retrait chronométré. La variance du réseau et les
-limites de téléchargement du registre font partie de la mesure ; un téléchargement refusé est un échec compté.
-
-### Portage du 14 novembre 2026 : WSL2 sur un hôte Windows (étape « Hôtes »)
-
-Les trois commandes (`baseline:overhead`, puis `OVERHEAD_ONLY=cold` et `OVERHEAD_ONLY=deleg`) se relancent telles
-quelles dans WSL2 (Ubuntu 24.04, x64), avec la définition Linux du froid : containerd et dockerd démarrés puis
-arrêtés par `sudo -n systemctl`. Un seul changement de code, fait pour cette mesure et non soumis au propriétaire
-avant elle : le binaire Linux de Claude Code est celui du paquet de l'architecture de l'hôte
-(`@anthropic-ai/claude-agent-sdk-linux-<arch>` : `arm64` dans la VM `aos-bench`, `x64` sous WSL2), au lieu de `arm64`
-écrit en dur. Hypothèses, seuils, méthode et statistiques inchangés. Docker est le moteur installé dans la
-distribution WSL2 (`docker.io`), pas Docker Desktop.
+Le programme qui a produit ces mesures n'est plus dans l'arbre : il est dans l'historique du dépôt, au dernier commit qui le modifie, `be831caa7fbe80d5e159784d83fea7ee5a406497` (`git show be831caa7fbe80d5e159784d83fea7ee5a406497:baseline/overhead.ts`) ; le README de ce commit porte les protocoles.

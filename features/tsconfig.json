@@ -1,7 +1,7 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": { "outDir": "dist", "rootDir": "." },
-  "include": ["support", "steps"],
+  "include": ["support", "steps", "scripts"],
   "references": [
     { "path": "../packages/contracts" },
     { "path": "../data" },

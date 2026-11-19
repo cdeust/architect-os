@@ -4,7 +4,7 @@
 
 ```bash
 npm ci                 # Install (Node 26 LTS, see .nvmrc; exact versions, lockfile committed)
-npm test               # tsc -b, then cucumber-js: every scenario (unit, port contracts, end to end, typecheck, format, architecture guard)
+npm test               # tsc -b, then cucumber-js: every scenario of the default profile (unit, port contracts, end to end, typecheck, format, architecture guard)
 npm run gate           # the CI gate (docs/design/platform-v3-srt.md §7): plan, cucumber, Stryker on the perimeter, verdict
 npm run gate -- --job macos   # features/sandbox only
 npm run check          # = npm test. Must be green before every PR.
@@ -13,7 +13,8 @@ npm run format:check   # prettier --check (npm run format to fix; also a scenari
 npm run arch           # dependency-cruiser: layers, boundaries, cycles (also a scenario)
 npm --prefix <launcher checkout> run code   # from a worktree: claude under srt, builder profile (packages/sandbox/README.md)
 npm --prefix <launcher checkout> run review # from a worktree: the read-only reviewer session, prompt from the launcher
-npm --prefix <launcher checkout> run step -- <folder>  # one step of the orchestration loop: build session then review session under srt, files left in <folder> (packages/sandbox/README.md)
+npm --prefix <launcher checkout> run step -- <folder>  # one step of the orchestration loop: the scouts, the build, the checks and the reviews that step.json names, each under srt, files left in <folder> (packages/sandbox/README.md)
+npm run diagram:isolation   # after a build (npm run typecheck): rewrite docs/diagrams/isolation-profiles.svg whole from packages/sandbox/profiles when it differs (features/arch/isolation-diagram.feature requires the file equal to it)
 npm run evidence -- ask <ledger> <desk> <id> < question.txt  # evidence desk: record a question, publish the skill (tools/evidence/README.md)
 npm run evidence -- verify <ledger> <desk>                   # evidence desk: verify the answers left in the desk; exit 0, 1 (rejected or deferred), 2 (refused) or 3 (unexpected error)
 npm run watch -- check [--keep <dir>]                        # the watch of Anthropic: the register against its sources; exit 0, 1 (a source moved), 2 (register refused) or 3 (a source unreadable)

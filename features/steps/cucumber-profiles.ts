@@ -55,7 +55,7 @@ function assertCoversGate(profile: Profile): void {
   assert.deepEqual(missing, [], 'feature files of the gate outside the profile paths');
 }
 
-/** Areas that execute no production line in-process: they cannot detect a mutant (cucumber.mjs says why). */
+/** The two areas the mutation profile leaves out (cucumber.mjs says why). */
 const NOT_MUTATION_AREAS = ['repository', 'arch'];
 
 function assertMutationScope(base: Profile, mutation: Profile): void {

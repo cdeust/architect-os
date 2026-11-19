@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 648" width="980" height="648" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="t">One step of the orchestration loop</title>
-  <desc id="d">A brief is written by the orchestrator. Scouts, read-only sessions on a small model, each answer one question by quoting lines of the repository, and the host keeps only the quotations it finds at those lines. A build session in a sandbox gets the brief and the checked quotations. Then the checks of the step, commands without a model, run one after the other in a sandbox with no network and a read-only worktree; one that fails stops the step before any review. The host reads the diff and runs what the sandbox cannot. The reviews of the step, each a read-only session in its own sandbox and on its own model, run at the same time, receive the results of the checks and each return a verdict. The gate runs the scenarios and the mutation, and the host commits and delivers the same commit to the branch and then to main, both held by a ruleset. A refusal becomes a new brief that names what failed. At the end of a step the host writes into steps/&lt;name&gt;/ of the worktree the brief, the step file and the scout questions as it read them at the start, with a record of the tree the step saw, a hash of each input and of the launcher files, the costs and the verdicts; the builder cannot write there, and the folder is committed with the code. Decided and not built, marked next, each above the phase it joins: Define and Plan with a human signature before the brief; scenarios written by another session and frozen for the build; inputs invented by a fresh session and the mutation of the changed lines, both as phases of the step; one commit per pass on a work branch, so that every pass can be replayed; one review grid per dimension, a finding given with its failing scenario, and the departures a build declares given to the reviews as claims to check; a reflection that records errors for the next brief; and a human gate at delivery, the orchestrator having an identity of its own and no bypass.</desc>
+  <desc id="d">A brief is written by the orchestrator. Scouts, sessions on a small model that cannot write the worktree, each answer one question by quoting lines of the repository, and the host keeps only the quotations it finds at those lines. A build session in a sandbox gets the brief and the checked quotations. Then the checks of the step, commands without a model, run one after the other in a sandbox with no network and a read-only worktree; one that fails stops the step before any review. The host reads the diff and runs what the sandbox cannot. The reviews of the step, each a session that cannot write the worktree, in its own sandbox and on its own model, run at the same time up to the bound the step file sets, receive the results of the checks and each return a verdict. The gate runs the scenarios and the mutation, and the host commits and delivers the same commit to the branch and then to main, both held by a ruleset. After a refusal, the orchestrator writes a new brief that names what failed. At the end of a step that passed or was refused (a failure of the tool publishes nothing), the host writes into steps/&lt;name&gt;/ of the worktree the brief, the step file and the scout questions as it read them at the start, with a record of the tree the step saw, a hash of each input and of the launcher files, the costs and the verdicts; the builder cannot write there, and the folder is committed with the code. Decided and not built, marked next, each above the phase it joins unless said otherwise: Define and Plan with a human signature before the brief; scenarios written by another session and frozen for the build; a builder of another provider behind a proxy of the host, with a review of correctness never of the builder&apos;s provider (its box stands above the scouts, and its arrow bends to the right to join the build phase, which the box of the scenarios written apart also joins); inputs invented by a fresh session and the mutation of the changed lines, both as phases of the step; one commit per pass on a work branch, so that every pass can be replayed; one review grid per dimension, a finding given with its failing scenario, and the departures a build declares given to the reviews as claims to check; a reflection that records errors for the next brief; and a human gate at delivery, the orchestrator having an identity of its own and no bypass.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
     <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#cf222e"/></marker>
@@ -19,6 +19,13 @@
     <text x="73" y="139" text-anchor="middle">score; a spec, a</text>
     <text x="73" y="152" text-anchor="middle">plan; a human</text>
     <text x="73" y="165" text-anchor="middle">signs each</text>
+    <rect x="139" y="70" width="106" height="100" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
+    <rect x="174" y="77" width="36" height="16" rx="8" fill="#ddf4ff" stroke="#218bff"/><text x="192" y="88.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#0969da">next</text>
+    <text x="192" y="110" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">Other builder</text>
+    <text x="192" y="126" text-anchor="middle">another provider,</text>
+    <text x="192" y="139" text-anchor="middle">host proxy; no</text>
+    <text x="192" y="152" text-anchor="middle">correctness review</text>
+    <text x="192" y="165" text-anchor="middle">by its provider</text>
     <rect x="258" y="70" width="106" height="100" rx="8" fill="#ffffff" stroke="#218bff" stroke-dasharray="5 4"/>
     <rect x="293" y="77" width="36" height="16" rx="8" fill="#ddf4ff" stroke="#218bff"/><text x="311" y="88.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#0969da">next</text>
     <text x="311" y="110" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">Scenarios apart</text>
@@ -53,7 +60,7 @@
     <text x="906" y="152" text-anchor="middle">a human approves</text>
   </g>
   <g stroke="#218bff" stroke-width="1.4" stroke-dasharray="4 3" fill="none" marker-end="url(#n)">
-    <path d="M73 170V190"/><path d="M311 170V190"/><path d="M549 170V190"/><path d="M668 170V190"/><path d="M787 170V190"/><path d="M906 170V190"/>
+    <path d="M73 170V190"/><path d="M192 170V180H290V190"/><path d="M311 170V190"/><path d="M549 170V190"/><path d="M668 170V190"/><path d="M787 170V190"/><path d="M906 170V190"/>
   </g>
 
   <g font-size="11" fill="#1f2328">
@@ -101,7 +108,7 @@
     <text x="668" y="237" text-anchor="middle" fill="#57606a">several at once,</text>
     <text x="668" y="252" text-anchor="middle" fill="#57606a">each in its srt,</text>
     <text x="668" y="267" text-anchor="middle" fill="#57606a">on its model;</text>
-    <text x="668" y="282" text-anchor="middle" fill="#57606a">cannot write; get</text>
+    <text x="668" y="282" text-anchor="middle" fill="#57606a">tree read-only; get</text>
     <text x="668" y="297" text-anchor="middle" fill="#57606a">the check results</text>
     <text x="668" y="312" text-anchor="middle" fill="#57606a">and give verdicts</text>
     <rect x="734" y="192" width="106" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
@@ -111,11 +118,11 @@
     <text x="787" y="267" text-anchor="middle" fill="#57606a">+ added − removed</text>
     <text x="787" y="282" text-anchor="middle" fill="#57606a">0 surviving</text>
     <text x="787" y="297" text-anchor="middle" fill="#57606a">mutant on changed</text>
-    <text x="787" y="312" text-anchor="middle" fill="#57606a">lines</text>
+    <text x="787" y="312" text-anchor="middle" fill="#57606a">lines, debt aside</text>
     <rect x="853" y="192" width="106" height="132" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
     <text x="906" y="216" text-anchor="middle" font-weight="600" font-size="13">8 · Delivery</text>
-    <text x="906" y="237" text-anchor="middle" fill="#57606a">commit by the</text>
-    <text x="906" y="252" text-anchor="middle" fill="#57606a">host only; same</text>
+    <text x="906" y="237" text-anchor="middle" fill="#57606a">delivered by the</text>
+    <text x="906" y="252" text-anchor="middle" fill="#57606a">host: the same</text>
     <text x="906" y="267" text-anchor="middle" fill="#57606a">commit to the</text>
     <text x="906" y="282" text-anchor="middle" fill="#57606a">branch, then</text>
     <text x="906" y="297" text-anchor="middle" fill="#57606a">main; a ruleset</text>
@@ -132,8 +139,8 @@
     <path d="M787 324V368H668"/>
     <path d="M430 324V368"/>
   </g>
-  <rect x="112" y="356" width="252" height="24" rx="12" fill="#ffffff" stroke="#cf222e"/>
-  <text x="238" y="372" text-anchor="middle" font-size="12" fill="#cf222e">refused: a new brief names what failed</text>
+  <rect x="112" y="356" width="276" height="24" rx="12" fill="#ffffff" stroke="#cf222e"/>
+  <text x="250" y="372" text-anchor="middle" font-size="12" fill="#cf222e">refused: the orchestrator writes a new brief</text>
 
   <!-- kept -->
   <rect x="20" y="408" width="940" height="84" rx="8" fill="#ffffff" stroke="#d0d7de"/>

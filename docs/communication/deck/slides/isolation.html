@@ -5,25 +5,25 @@
 </div>
 <div style="display:flex;gap:32px">
 <div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#f8f7f2;border:1px solid rgba(62,50,42,0.26);border-radius:18px;padding:40px">
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;letter-spacing:3px;text-transform:uppercase;color:#a53e00">Par défaut</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;letter-spacing:3px;text-transform:uppercase;color:#a53e00">Seul moyen</p>
 <h3 style="font-family:'Fraunces', Georgia, serif;font-size:40px;font-weight:400;line-height:1.2;color:#261d17">srt, le sandbox-runtime d’Anthropic</h3>
 <p style="font-size:30px;line-height:1.4;color:#4b4038">Seatbelt sur macOS, bubblewrap sous Linux&#160;: le processus entier.</p>
 <div style="flex:1"></div>
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#61554e">srt 0.0.81, version exacte</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#61554e">srt 0.0.83, version exacte</p>
 </div>
 <div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#f8f7f2;border:1px solid rgba(62,50,42,0.26);border-radius:18px;padding:40px">
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;letter-spacing:3px;text-transform:uppercase;color:#a53e00">Exception</p>
-<h3 style="font-family:'Fraunces', Georgia, serif;font-size:40px;font-weight:400;line-height:1.2;color:#261d17">Docker, là où srt n’est pas supporté</h3>
-<p style="font-size:30px;line-height:1.4;color:#4b4038">Par configuration explicite, jamais par détection ni bascule.</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;letter-spacing:3px;text-transform:uppercase;color:#a53e00">Sans repli</p>
+<h3 style="font-family:'Fraunces', Georgia, serif;font-size:40px;font-weight:400;line-height:1.2;color:#261d17">Pas d’autre isolation que srt</h3>
+<p style="font-size:30px;line-height:1.4;color:#4b4038">Sans srt utilisable, aucun lancement en sandbox ne réussit.</p>
 <div style="flex:1"></div>
 <p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#61554e">un seul port&#160;: SandboxRunner</p>
 </div>
 <div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#f8f7f2;border:1px solid rgba(62,50,42,0.26);border-radius:18px;padding:40px">
 <p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;letter-spacing:3px;text-transform:uppercase;color:#a53e00">Au démarrage</p>
-<h3 style="font-family:'Fraunces', Georgia, serif;font-size:40px;font-weight:400;line-height:1.2;color:#261d17">Sans isolation, aucun démarrage</h3>
-<p style="font-size:30px;line-height:1.4;color:#4b4038">Une sandbox témoin doit être refusée en lecture et en réseau.</p>
+<h3 style="font-family:'Fraunces', Georgia, serif;font-size:40px;font-weight:400;line-height:1.2;color:#261d17">Sans isolation, aucun lancement</h3>
+<p style="font-size:30px;line-height:1.4;color:#4b4038">Avant chaque lancement, un canari doit être refusé en lecture et en réseau.</p>
 <div style="flex:1"></div>
-<p style="align-self:flex-start;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#845b00;background:#f1eee7;border:1px solid #845b00;border-radius:999px;padding:6px 20px;white-space:nowrap">À prouver · 1b</p>
+<p style="align-self:flex-start;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#0a693c;background:#f1eee7;border:1px solid #0a693c;border-radius:999px;padding:6px 20px;white-space:nowrap">Prouvé en CI</p>
 </div>
 </div>
 <div style="display:flex;gap:32px;align-items:center;background:#e6e1d7;border-radius:28px;padding:24px 32px">
@@ -35,5 +35,5 @@
 </div>
 <p style="position:absolute;left:128px;bottom:64px;width:1200px;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;letter-spacing:2px;color:#61554e">ai-architect.tools · architecture v3</p>
 <p style="position:absolute;right:128px;bottom:64px;width:200px;text-align:right;font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#61554e">06 / 13</p>
-<aside>Une sandbox, c’est une boîte dans laquelle un programme tourne avec des droits réduits : il ne lit que ce qu’on lui permet de lire, n’écrit que là où on le permet, et ne joint que les adresses réseau autorisées. Par défaut, la plateforme utilise srt, le sandbox-runtime publié par Anthropic. Il s’appuie sur les mécanismes du système : Seatbelt sur macOS, bubblewrap sous Linux. Il enveloppe le processus entier, y compris ses échanges MCP et ses hooks, et la version est épinglée exactement, 0.0.81. Docker n’intervient que là où srt n’est pas supporté, par un champ de configuration explicite, jamais par détection automatique ni par bascule silencieuse. Dans les deux cas, on passe par un seul point de lancement dans le code, le port SandboxRunner, appelé par la seule gateway. Troisième règle : au démarrage, une sandbox témoin doit échouer à lire un fichier hors de ses droits et à joindre une adresse hors de sa liste. Si l’un des deux réussit, la plateforme refuse de démarrer, sans aucun repli. C’est la sécurité pensée dès la conception : on préfère ne pas tourner que tourner sans isolation. Ce test au démarrage est encore à écrire, à la brique 1b. En bas, le moindre privilège : chaque sorte de processus n’a que le réseau dont elle a besoin, et aucune sandbox n’atteint la base. Cela, le banc l’a déjà prouvé sur Linux et sur macOS.</aside>
+<aside>Une sandbox, c’est une boîte dans laquelle un programme tourne avec des droits réduits : il ne lit que ce qu’on lui permet de lire, n’écrit que là où on le permet, et ne joint que les adresses réseau autorisées. La plateforme n’a qu’un moyen d’isolation, srt, le sandbox-runtime publié par Anthropic. Il s’appuie sur les mécanismes du système : Seatbelt sur macOS, bubblewrap sous Linux. Il enveloppe le processus entier, y compris ses échanges MCP et ses hooks, et la version est épinglée exactement, 0.0.83. Il n’y a aucun repli : sans srt utilisable, aucun lancement en sandbox ne réussit, et aucune configuration ne lance un module, un worker ou une session sans lui. On passe par un seul point de lancement dans le code, le port SandboxRunner, appelé par la gateway et par les outils de la boucle. Troisième règle : avant chaque commande lancée sous srt, un canari, sous le même profil, doit échouer à lire un secret placé dans le dossier d’une sandbox voisine et à joindre un port que l’hôte écoute en boucle locale. Si l’un des deux réussit, ou si le canari ne rend aucun verdict, la commande ne démarre pas, sans aucun repli. C’est la sécurité pensée dès la conception : on préfère ne pas lancer que lancer sans isolation. Ce canari est écrit, et prouvé dans de vraies sandboxes sur Linux et sur macOS (features/sandbox/canary.feature). En bas, le moindre privilège : chaque sorte de processus n’a que le réseau dont elle a besoin, et aucune sandbox n’atteint la base. Cela, le banc l’a déjà prouvé sur Linux et sur macOS.</aside>
 </section>

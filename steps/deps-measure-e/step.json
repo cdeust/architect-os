@@ -1,0 +1,48 @@
+{
+  "build": {
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "limitSeconds": 4800
+  },
+  "checks": [
+    {
+      "name": "format",
+      "command": [
+        "npx",
+        "prettier",
+        "--check",
+        "."
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "syntax",
+      "command": [
+        "node",
+        "--check",
+        "bench/deps-store/measure.mjs"
+      ],
+      "limitSeconds": 60
+    },
+    {
+      "name": "docs",
+      "command": [
+        "npx",
+        "cucumber-js",
+        "--profile",
+        "replay",
+        "features/descriptive"
+      ],
+      "limitSeconds": 600
+    }
+  ],
+  "reviews": [
+    {
+      "name": "correctness",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "limitSeconds": 1500
+    }
+  ],
+  "parallel": 2
+}

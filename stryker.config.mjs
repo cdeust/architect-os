@@ -12,8 +12,8 @@ const plan = existsSync(PLAN) ? JSON.parse(readFileSync(PLAN, 'utf8')) : { mutat
 export default {
   testRunner: 'cucumber',
   plugins: ['@stryker-mutator/cucumber-runner'],
-  // The `mutation` profile of cucumber.mjs: the default profile minus features/repository (typecheck and format run
-  // tsc and prettier in child processes, kill no mutant, and fail on the instrumented sandbox copy).
+  // The `mutation` profile of cucumber.mjs: the default profile minus features/repository and features/arch; the
+  // reasons are written in cucumber.mjs, at the profile.
   // Option `cucumber.profile`: node_modules/@stryker-mutator/cucumber-runner/dist/src-generated/cucumber-runner-options.d.ts.
   cucumber: { profile: 'mutation' },
   coverageAnalysis: 'perTest',

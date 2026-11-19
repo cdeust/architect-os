@@ -4,11 +4,11 @@ This page is for whoever runs the platform on a host: what the process needs, wh
 
 ## Hosts
 
-| Host                  | Means of isolation | Proven by                                                          |
-| --------------------- | ------------------ | ------------------------------------------------------------------ |
-| macOS                 | `srt`              | `features/sandbox/` in the CI job `gate-macos`                     |
-| Linux                 | `srt`              | `features/sandbox/` in the CI job `gate-linux`                     |
-| Windows, through WSL2 | `srt`              | the suite, the bench and the overhead measures (journal, §38, §39) |
+| Host                  | Means of isolation | Proven by                                                                                                                                |
+| --------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS                 | `srt`              | `features/sandbox/` in the CI job `gate-macos`                                                                                           |
+| Linux                 | `srt`              | `features/sandbox/` in the CI job `gate-linux`                                                                                           |
+| Windows, through WSL2 | `srt`              | the suite passed, the srt bench gave the result of Linux CI test by test, and the overhead measures were also taken there (journal, §38) |
 
 Native Windows is not planned. There is one means of isolation, `srt`: Docker is not one (design, decisions 21 and 22).
 

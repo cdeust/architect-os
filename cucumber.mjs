@@ -27,17 +27,28 @@ export default config;
 // A scope by path, not a filter: tools/test-gate/gate.json scopes the static count of the job identically.
 export const macos = { ...config, paths: ['features/sandbox/**/*.feature'] };
 
-// The mutation profile is used only by Stryker (stryker.config.mjs: cucumber.profile). Stryker runs the tests in a
-// sandbox copy (.stryker-tmp/sandbox-*) of instrumented, unformatted sources. features/repository holds the typecheck
-// and the format scenarios, which run tsc and prettier in child processes: they cover no production line in-process
-// and can kill no mutant, and on the copy they fail by design. features/arch runs dependency-cruiser in a child process
-// on zz-fixture-* files it writes into the tree: it reads sources and executes no production line, so it cannot detect
-// a mutant either, and the Stryker workers share one sandbox, so two workers collide on those files. features/arch
-// also holds a literal check of the text of three production files (closed-git-environment-text.feature): on the
-// instrumented copies that text is no longer the committed one, and the check fails by design. A collision made
-// the scenario fail and Stryker recorded a false kill, different from one run to the next. Both stay in the default
-// profile (the counted run, `npm test`, the gate). A scope by path, like `macos`: `features/**` is spelled as the root
-// areas other than these two; features/descriptive/cucumber-profiles.feature checks that no area is forgotten.
+// The mutation profile is used only by Stryker (stryker.config.mjs: cucumber.profile). It is a scope by area, and the
+// two areas features/repository and features/arch are outside it as wholes. This comment is the one place that says
+// why; every other file points here. Stryker runs the tests in a sandbox copy (.stryker-tmp/sandbox-*) of instrumented,
+// unformatted sources. A feature that executes no production line in process can kill no mutant.
+// - features/repository: two scenarios, each run in a child process (features/steps/repository.ts). The format check
+//   (`prettier --check .`) fails on the copy by design: the instrumented sources are unformatted. The typecheck
+//   (`tsc -b`) is not shown to fail on the copy; it kills no mutant because it executes no production line in process.
+// - features/arch/guard: dependency-cruiser in a child process on zz-fixture-* files it writes into the tree; no
+//   production line in process. Workers that collide on those files made it fail: the configuration runs one worker
+//   (stryker.config.mjs), and the collision is what happened when it ran several and would happen again if raised.
+// - features/arch/closed-git-environment-text: reads the text of three production files that Stryker instruments, so on
+//   the copy it would judge another text; no production line in process.
+// - features/arch/no-container-command: reads the text of the files git tracks or would track, outside Markdown, any
+//   directory named results and the records of the steps, production sources included, so the same holds on the copy;
+//   no production line in process.
+// - features/arch/isolation-diagram: reads five profile files and two images, and calls one production function, the
+//   loader of the profiles, which the mutation judges elsewhere (packages/sandbox/features/profile.feature). It is
+//   outside only because its area is.
+// Both areas stay in the default profile (`npm test`, and the counted run of the gate's Linux job); the mutation
+// profile lists the other four root areas, and the components' features.
+// A scope by path, like `macos`: `features/**` is spelled as the root areas other than repository and arch;
+// features/descriptive/cucumber-profiles.feature checks that no area is forgotten.
 const ROOT_AREAS = ['descriptive', 'infra', 'integration', 'sandbox'];
 export const mutation = {
   ...config,

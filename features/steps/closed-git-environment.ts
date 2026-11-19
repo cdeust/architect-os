@@ -6,7 +6,12 @@ import { ROOT, Then, When, stored } from './helpers.js';
 
 // The scenarios of features/descriptive/closed-git-environment.feature.
 
-/** The suite's own child, started with a closed list of variables and the three of the scenario. */
+/**
+ * The suite's own child, started with a closed list of variables and the three of the scenario.
+ * It also receives the TMPDIR of the process, when there is one: tsx keeps its cache in a temporary
+ * directory, and without TMPDIR it falls back on the global one, where a check played under the profile
+ * of the checks was refused a write; with it the child writes where the process is allowed to.
+ */
 function child(world: { state: Record<string, unknown> }, git: string[], support: boolean): void {
   const [dir, editor, token] = git;
   const script = `${support ? 'await import(process.argv[1]);' : ''}console.log(JSON.stringify(Object.keys(process.env).filter((name) => name.startsWith('GIT'))))`;
@@ -23,7 +28,13 @@ function child(world: { state: Record<string, unknown> }, git: string[], support
     {
       cwd: ROOT,
       encoding: 'utf8',
-      env: { PATH: process.env['PATH'] ?? '', GIT_DIR: dir, GIT_EDITOR: editor, GITHUB_TOKEN: token },
+      env: {
+        PATH: process.env['PATH'] ?? '',
+        ...(process.env['TMPDIR'] === undefined ? {} : { TMPDIR: process.env['TMPDIR'] }),
+        GIT_DIR: dir,
+        GIT_EDITOR: editor,
+        GITHUB_TOKEN: token,
+      },
     },
   );
   assert.equal(result.status, 0, result.stderr);

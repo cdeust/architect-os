@@ -3,9 +3,7 @@ Feature: no production file that starts git gives process.env to a launch (docs/
   the tree, the reading of the gate, the host process of the delivery) and refuses one that gives process.env, whole or
   spread, to a process launch. The scenarios on the suite itself are in features/descriptive/closed-git-environment.feature.
 
-  It is under features/arch because the mutation profile plays on a copy of the tree where the production files are
-  instrumented: a scenario that reads their text cannot be in that profile, and features/arch is left out of it
-  (cucumber.mjs, stryker.config.mjs).
+  It is under features/arch, which the mutation profile leaves out; why is written in cucumber.mjs.
 
   Rule: no production file that starts git gives process.env to a launch
 
