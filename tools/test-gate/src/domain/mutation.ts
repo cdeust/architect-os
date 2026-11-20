@@ -62,6 +62,7 @@ export interface MutantRecord {
   readonly id: string;
   readonly mutatorName: string;
   readonly status: string;
+  readonly statusReason?: string;
   readonly startLine: number;
   /** Column of the start, from one. */
   readonly startColumn: number;

@@ -245,7 +245,7 @@ export async function runGate(
   if (command.name === 'replay') return replayCommand(config, root, command.all, out);
   const job = jobOf(config, command.job);
   if (job === null) return refuse(`job inconnu : ${command.job}`);
-  if (command.name === 'inventory') {
+  if (command.name === 'inventory' || command.name === 'inventory-check') {
     if (!job.mutation) return refuse('le job ne prévoit pas de mutation');
     try {
       const repository = new GitRepository(root);
@@ -256,12 +256,30 @@ export async function runGate(
       if (debt.parent !== null && 'failure' in debt.parent)
         throw new Error('registre de dette illisible au premier parent : ' + debt.parent.failure);
       const { mutationLots } = await import('./mutation-inventory.js');
-      const lots = await mutationLots(root, perimeter, config.canary?.file, (file) => workspace.read(file));
-      workspace.write(INVENTORY_PATH, jsonText({ head, firstParent, job: job.name, lots }));
+      const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+      const lots = await mutationLots(root, perimeter, config.canary?.file, (file) => {
+        const bytes = workspace.readBytes(file);
+        return bytes === null ? null : decoder.decode(bytes);
+      });
+      const inventoryText = jsonText({ head, firstParent, job: job.name, lots });
+      if (command.name === 'inventory-check') {
+        if (workspace.readBytes(INVENTORY_PATH)?.equals(Buffer.from(inventoryText)) !== true)
+          return refuse('inventaire absent ou différent du périmètre courant');
+        const reportBytes = workspace.readBytes(config.reports.mutation);
+        if (reportBytes === null) return refuse('rapport de mutation absent');
+        const report = parseMutationReport(decoder.decode(reportBytes));
+        if ('failure' in report) return refuse(report.failure);
+        const { verifyMutationLots } = await import('./mutation-lot-proof.js');
+        const failure = verifyMutationLots(lots, report);
+        if (failure !== null) return refuse(failure.failure);
+        out.write('lots de mutation vérifiés : ' + lots.length + '\n');
+        return 0;
+      }
+      workspace.write(INVENTORY_PATH, inventoryText);
       out.write(`inventaire ${job.name} : ${lots.length} lot(s) de mutations -> ${INVENTORY_PATH}\n`);
       return 0;
     } catch (error) {
-      workspace.remove(INVENTORY_PATH);
+      if (command.name === 'inventory') workspace.remove(INVENTORY_PATH);
       return refuse((error as Error).message);
     }
   }

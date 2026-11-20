@@ -29,6 +29,7 @@ const ReportSchema = z.object({
             id: z.string(),
             mutatorName: z.string(),
             status: z.enum(STATUSES),
+            statusReason: z.string().optional(),
             replacement: z.string(),
             location: z.object({ start: Position, end: Position }),
             // Absent fields mean none (the schema marks them optional): no test killed or covered it, not static.
@@ -77,6 +78,7 @@ export function parseMutationReport(text: string): MutationReport | ReadFailure 
             id: mutant.id,
             mutatorName: mutant.mutatorName,
             status: mutant.status,
+            ...(mutant.statusReason === undefined ? {} : { statusReason: mutant.statusReason }),
             startLine: mutant.location.start.line,
             startColumn: mutant.location.start.column,
             endLine: mutant.location.end.line,

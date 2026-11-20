@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { Then, When, repository } from './repository.js';
 
 type Inventory = {
@@ -10,9 +11,10 @@ type Inventory = {
     whole: boolean;
     lines: number[];
     mutants: {
-      start: { line: number };
-      end: { line: number };
+      start: { line: number; column: number };
+      end: { line: number; column: number };
       mutatorName: string;
+      replacement: string;
       ignored: string | null;
     }[];
   }[];
@@ -65,4 +67,104 @@ Then('the inventory retains the native ignore reason', function () {
   const mutant = fixture.mutants.find(({ mutatorName }) => mutatorName === 'BooleanLiteral');
   assert.ok(mutant);
   assert.match(mutant.ignored ?? '', /fixture reason/);
+});
+
+When('the gate receives a mutation lot report with {string}', function (variant: string) {
+  const repo = repository(this);
+  const { lots } = readInventory(this);
+  const [lot] = lots;
+  assert.ok(lot);
+  const source = repo.read(lot.file);
+  const mutants = lot.mutants.map(({ start, end, mutatorName, replacement, ignored }, index) => ({
+    id: String(index),
+    status: ignored === null ? 'Killed' : 'Ignored',
+    statusReason: ignored ?? undefined,
+    replacement,
+    mutatorName,
+    location: { start, end },
+  }));
+  if (variant === 'omitted native file') {
+    repo.write(
+      'reports/mutation/mutation.json',
+      JSON.stringify({ files: {}, config: { mutate: [lot.file] } }),
+    );
+    return;
+  }
+  if (variant === 'cross-file id collision') {
+    const [, other] = lots;
+    assert.ok(other);
+    repo.write(
+      'reports/mutation/mutation.json',
+      JSON.stringify({
+        files: {
+          [lot.file]: { source, mutants },
+          [other.file]: {
+            source: repo.read(other.file),
+            mutants: other.mutants.map(({ start, end, mutatorName, replacement }, index) => ({
+              id: String(index),
+              status: 'Killed',
+              mutatorName,
+              replacement,
+              location: { start, end },
+            })),
+          },
+        },
+        config: { mutate: [lot.file, other.file] },
+      }),
+    );
+    return;
+  }
+  const first = mutants[0];
+  assert.ok(first);
+  if (variant === 'missing mutant') mutants.shift();
+  if (variant === 'duplicate identity') mutants.push({ ...first, id: 'duplicate' });
+  if (variant === 'outside active' || variant === 'outside ignored') {
+    mutants.push({
+      id: 'extra',
+      status: variant === 'outside active' ? 'Killed' : 'Ignored',
+      statusReason: undefined,
+      mutatorName: 'BooleanLiteral',
+      replacement: 'false',
+      location: { start: { line: 5, column: 26 }, end: { line: 5, column: 30 } },
+    });
+  }
+  if (variant === 'native ignore drift') {
+    assert.equal(first.status, 'Ignored');
+    first.statusReason = 'a different reason';
+  }
+  if (variant === 'stale inventory') repo.write('reports/mutation-inventory.json', '{}');
+  let claimedSource = source;
+  if (variant === 'wrong source') claimedSource += '\n';
+  if (variant === 'lone surrogate in source') claimedSource = source.replace('�', '\ud800');
+  const reportPath = 'reports/mutation/mutation.json';
+  repo.write(
+    reportPath,
+    JSON.stringify({
+      files: { [lot.file]: { source: claimedSource, mutants } },
+      config: { mutate: variant === 'different file list' ? [] : [lot.file] },
+    }),
+  );
+  if (variant === 'invalid UTF-8 inventory' || variant === 'invalid UTF-8 report') {
+    const path = repo.path(
+      variant === 'invalid UTF-8 report' ? reportPath : 'reports/mutation-inventory.json',
+    );
+    const valid = readFileSync(path);
+    const character = Buffer.from('�');
+    const i = valid.indexOf(character);
+    assert(i >= 0);
+    writeFileSync(
+      path,
+      Buffer.concat([valid.subarray(0, i), Buffer.from([255]), valid.subarray(i + character.length)]),
+    );
+  }
+});
+
+When('the gate checks its mutation inventory', function () {
+  return repository(this).run(['inventory-check', '--job', 'linux']);
+});
+
+Then('the mutation inventory check returns {string}', function (expected: string) {
+  const repo = repository(this);
+  assert.equal(repo.exitCode, expected === 'pass' ? 0 : 1, repo.output);
+  assert.ok(repo.output.includes(expected === 'pass' ? 'lots de mutation vérifiés' : expected), repo.output);
 });

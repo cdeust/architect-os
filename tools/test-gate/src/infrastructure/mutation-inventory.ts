@@ -50,6 +50,7 @@ export async function mutationLots(
       file,
       sourceSha256: sourceDigest(source),
       whole,
+      nativeMutants: mutants.length,
       lines,
       mutants: mutants.flatMap(({ location, mutatorName, replacement, status, statusReason }) => {
         // Instrumenter API uses zero-based positions. The gate consumes one-based reporter positions.
