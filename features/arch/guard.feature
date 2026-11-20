@@ -19,6 +19,7 @@ Feature: Architecture guard (dependency-cruiser)
       | gateway/src/application/zz-fixture-cross.ts             | import '../../../data/src/domain/ports.js';               | no-import-between-components                  |
       | gateway/src/application/zz-fixture-pg.ts                | import 'pg';                                              | pg-only-in-data-infrastructure                |
       | gateway/src/infrastructure/zz-fixture-sdk.ts            | import '@anthropic-ai/claude-agent-sdk';                  | agent-sdk-only-in-worker                      |
+      | tools/define/src/application/zz-fixture-mcp.ts         | import '@modelcontextprotocol/sdk/client/index.js';      | mcp-sdk-only-in-presentation-and-infrastructure |
       | gateway/src/domain/zz-fixture-mcp.ts                    | import '@modelcontextprotocol/sdk/server/mcp.js';         | mcp-sdk-only-in-presentation-and-infrastructure |
       | services/memory/worker/zz-fixture-mcp.ts                | import '@modelcontextprotocol/sdk/client/index.js';       | mcp-sdk-only-in-presentation-and-infrastructure |
       | packages/contracts/src/zz-fixture-contracts.ts          | import '../../../gateway/src/domain/ports.js';            | contracts-has-no-component-dependency         |
