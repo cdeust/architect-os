@@ -77,8 +77,8 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     When the gate replays every mutant of the mutation report
     Then the gate replay record is:
       """
-      src/math.mjs #0 Killed : témoin : cucumber-js n’a écrit aucun rapport : Error: Requested profile "absent" doesn't exist
-      src/math.mjs #5 Survived : Survived selon l'outil, mais sur le mutant : cucumber-js n’a écrit aucun rapport : Error: Requested profile "absent" doesn't exist
+      src/math.mjs #0 Killed : témoin : précontrôle Cucumber impossible
+      src/math.mjs #5 Survived : précontrôle Cucumber impossible
       """
 
   Scenario: a file that differs from the report is never mutated
@@ -409,3 +409,25 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       src/math.mjs #0 Killed : témoin après coup : ["specs/green.feature","Green fixture",null,"an outline with <value>","small values",["1"]] : UNDEFINED
       """
     And the gate replay ran 3 cucumber-js runs
+
+  Scenario: the replay refuses another scenario added by the Cucumber profile
+    Given the gate repository file "cucumber.mjs" reads:
+      """
+      export default {};
+      export const replay = { import: ['specs/steps/*.mjs'], paths: ['specs/second.feature'] };
+      """
+    When the replay runner runs "specs/green.feature:4" once within 20000 ms
+    Then the replay refuses its scenario selection with "scénario de rejeu inattendu : specs/second.feature:3"
+
+  Scenario: the replay rejects a feature selector without an exact line
+    When the replay runner runs "specs/green.feature" once within 20000 ms
+    Then the replay refuses its scenario selection with "sélection de scénarios de rejeu invalide"
+
+  Scenario: a completed replay that skipped a selected scenario cannot confirm a kill
+    Given the gate repository file "cucumber.mjs" reads:
+      """
+      export default {};
+      export const replay = { import: ['specs/steps/*.mjs'], tags: '@no-scenario-has-this-tag' };
+      """
+    When the replay runner runs "specs/green.feature:4" once within 20000 ms
+    Then the replay refuses its scenario selection with "scénario de rejeu manquant : specs/green.feature:4"

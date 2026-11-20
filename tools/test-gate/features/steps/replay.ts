@@ -461,3 +461,8 @@ Given('the gate mutation report mutated {string}', function (patterns: string) {
     (report as Report & { config: { mutate: string[] } }).config.mutate = patterns.split(', ');
   });
 });
+
+Then('the replay refuses its scenario selection with {string}', function (reason: string) {
+  const { result } = this.state['timed'] as Timed;
+  assert.equal(result.selectionFailure, reason, JSON.stringify(result.run));
+});

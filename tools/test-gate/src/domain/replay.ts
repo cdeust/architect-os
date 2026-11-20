@@ -124,6 +124,8 @@ export interface RunResult {
   readonly run: CucumberRun | ReadFailure;
   /** The run was stopped at its time limit. */
   readonly timedOut: boolean;
+  /** A completed test identity differs from the explicit selection. This cannot confirm a kill. */
+  readonly selectionFailure?: string;
 }
 
 const PASSED = 'PASSED';
@@ -140,6 +142,7 @@ function unclean(
   expected: number,
 ): { readonly failed: boolean; readonly why: string } | null {
   const broken = (why: string) => ({ failed: false, why });
+  if (result.selectionFailure !== undefined) return broken(result.selectionFailure);
   if (result.timedOut) return broken('délai dépassé');
   if ('failure' in result.run) return broken(result.run.failure);
   const hook = result.run.runHooks.find((h) => h.status !== PASSED);
@@ -191,6 +194,7 @@ export function judgeReplay(
     const original = unclean(control, scenarios);
     if (original !== null) return verdict(`témoin : ${original.why}`);
   }
+  if (mutant.selectionFailure !== undefined) return verdict(mutant.selectionFailure);
   const run = unclean(mutant, scenarios);
   if (replay.expectation.survives) {
     return verdict(run === null ? null : `${status} selon l'outil, mais sur le mutant : ${run.why}`);

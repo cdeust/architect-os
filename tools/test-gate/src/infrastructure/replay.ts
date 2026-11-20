@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { basename, join, normalize } from 'node:path';
 import {
   judgeReplay,
   recheckDivergence,
@@ -13,12 +13,10 @@ import {
 import { parseCucumberReport } from './cucumber-report.js';
 import type { Workspace } from './workspace.js';
 
-// The cucumber-js CLI of the repository; its package.json `exports` hides `bin/`, its own package.json does not.
-const CUCUMBER = join(
-  dirname(createRequire(import.meta.url).resolve('@cucumber/cucumber/package.json')),
-  'bin',
-  'cucumber.js',
+const CUCUMBER = fileURLToPath(
+  new URL(import.meta.url.endsWith('.ts') ? './replay-cucumber.ts' : './replay-cucumber.js', import.meta.url),
 );
+const SELECTION_PREFIX = 'AOS_REPLAY_SELECTION: ';
 
 /** The signal of a run stopped at its limit, and of its group once it is gone; nothing else sends it. */
 const KILL = 'SIGKILL';
@@ -46,8 +44,24 @@ export interface Runner {
   run(tests: readonly string[], limitMs: number): Promise<Timed>;
 }
 
+// Stryker's pinned Cucumber formatter names the scenario line or the exact Examples row.
+function scenarioLocation(value: string): boolean {
+  const match = /^([^:\\]+\.feature):([1-9][0-9]*)$/.exec(value);
+  const file = match?.[1];
+  return (
+    file !== undefined &&
+    file === normalize(file) &&
+    !file.startsWith('/') &&
+    !file.startsWith('../') &&
+    !file.startsWith('-') &&
+    !basename(file).startsWith('@') &&
+    !/[*?{}()\[\]\u0000\r\n]/.test(file) &&
+    Number.isSafeInteger(Number(match?.[2]))
+  );
+}
+
 /**
- * Runs `cucumber-js --profile <profile> --format message:<file> <feature>:<line>...` in `root`, sequentially (the
+ * Runs the pinned Cucumber API with explicit feature locations in `root`, sequentially (the
  * suite shares ports, files and PostgreSQL, as for Stryker's single worker), each run with its own report under `work`
  * (cucumber-js creates the directory). Each run leads its own process group, killed whole when the run ends or reaches
  * its limit: a scenario's own children (a nested cucumber-js, srt, PostgreSQL) never outlive it.
@@ -62,12 +76,17 @@ export class CucumberRunner implements Runner {
   ) {}
 
   async run(tests: readonly string[], limitMs: number): Promise<Timed> {
+    const expected = new Set(tests);
+    if (expected.size === 0 || expected.size !== tests.length || !tests.every(scenarioLocation)) {
+      const failure = 'sélection de scénarios de rejeu invalide';
+      return { result: { run: { failure }, timedOut: false, selectionFailure: failure }, ms: 0 };
+    }
     this.runs++;
     const report = join(this.work, `run-${this.runs}.ndjson`);
     const errors = join(this.work, `run-${this.runs}.err`);
     mkdirSync(this.work, { recursive: true });
     const stderr = openSync(errors, 'w');
-    const args = [CUCUMBER, '--profile', this.profile, '--format', `message:${report}`, ...tests];
+    const args = [CUCUMBER, this.profile, report, ...tests];
     const started = performance.now();
     // child_process.spawn options detached, stdio, timeout and killSignal: node_modules/@types/node/child_process.d.ts.
     // Standard output is ignored, never piped: an unread pipe that fills blocks the run. At `timeout`, Node kills the
@@ -80,7 +99,11 @@ export class CucumberRunner implements Runner {
       killSignal: KILL,
     });
     closeSync(stderr);
-    const signal = await new Promise((resolve) => child.on('close', (_code, closed) => resolve(closed)));
+    const { code, signal } = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+      (resolve) => {
+        child.once('close', (code, signal) => resolve({ code, signal }));
+      },
+    );
     try {
       process.kill(-(child.pid as number), KILL);
     } catch {
@@ -89,15 +112,35 @@ export class CucumberRunner implements Runner {
     const timedOut = signal === KILL;
     const ms = performance.now() - started;
     // Without a report, the first error line of its standard error says why (a stack frame names no error).
-    const why = String(
-      readFileSync(errors, 'utf8')
-        .split('\n')
-        .find((line) => line.includes('Error')),
-    );
+    const diagnostics = readFileSync(errors, 'utf8').split('\n');
+    const why = String(diagnostics.find((line) => line.includes('Error')));
+    const refused =
+      code === 2
+        ? diagnostics.find((line) => line.startsWith(SELECTION_PREFIX))?.slice(SELECTION_PREFIX.length)
+        : undefined;
+    let selectionFailure = diagnostics.includes('AOS_REPLAY_PLAN_VALID')
+      ? undefined
+      : (refused ?? 'précontrôle Cucumber non confirmé');
     const run = existsSync(report)
-      ? parseCucumberReport(readFileSync(report, 'utf8'), () => true)
+      ? parseCucumberReport(
+          readFileSync(report, 'utf8'),
+          () => true,
+          false,
+          (locations, completed) => {
+            const remaining = new Set(expected);
+            for (const location of locations) {
+              if (location === null || !remaining.delete(location)) {
+                selectionFailure = 'scénario de rejeu inattendu : ' + String(location);
+                return;
+              }
+            }
+            if (completed && remaining.size > 0) {
+              selectionFailure = 'scénario de rejeu manquant : ' + [...remaining].join(', ');
+            }
+          },
+        )
       : { failure: `cucumber-js n’a écrit aucun rapport : ${why}` };
-    return { result: { run, timedOut }, ms };
+    return { result: { run, timedOut, ...(selectionFailure === undefined ? {} : { selectionFailure }) }, ms };
   }
 }
 

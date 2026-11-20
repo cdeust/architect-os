@@ -66,18 +66,39 @@ export function parseCucumberReport(
   text: string,
   inScope: (uri: string) => boolean,
   requireComplete = false,
+  observeExecution?: (locations: readonly (string | null)[], completed: boolean) => void,
 ): CucumberRun | ReadFailure {
   try {
     const lines = text.split('\n').filter((line) => line.trim() !== '');
-    const envelopes = lines.map((line) => parseEnvelope(line));
-    if (requireComplete) {
+    const envelopes: Envelope[] = [];
+    let invalid: unknown;
+    for (const line of lines) {
+      try {
+        envelopes.push(parseEnvelope(line));
+      } catch (error) {
+        if (observeExecution === undefined) throw error;
+        // A torn final envelope does not erase earlier scenario starts from a replay.
+        invalid = error;
+        break;
+      }
+    }
+    let completed = false;
+    if (requireComplete || observeExecution !== undefined) {
       const starts = envelopes.filter((envelope) => envelope.testRunStarted !== undefined);
       const finishes = envelopes.filter((envelope) => envelope.testRunFinished !== undefined);
       const id = starts[0]?.testRunStarted?.id;
       const finish = envelopes.at(-1)?.testRunFinished;
-      if (!id || starts.length !== 1 || finishes.length !== 1 || finish === undefined)
-        return { failure: 'lot Cucumber sans événement de fin unique' };
-      if (id !== finish.testRunStartedId) return { failure: 'fin Cucumber rattachée à un autre lot' };
+      if (requireComplete || finishes.length !== 0) {
+        if (!id || starts.length !== 1 || finishes.length !== 1 || finish === undefined) {
+          observeExecution?.([null], true);
+          return { failure: 'lot Cucumber sans événement de fin unique' };
+        }
+        if (id !== finish.testRunStartedId) {
+          observeExecution?.([null], true);
+          return { failure: 'fin Cucumber rattachée à un autre lot' };
+        }
+        completed = true;
+      }
     }
     const { documents, pickles, testCases, hooks, started, willBeRetried, stepStatus, runHooks } =
       index(envelopes);
@@ -89,6 +110,7 @@ export function parseCucumberReport(
         identities.set(id, identity);
     }
     const executed = new Map<string, { id: string; pickleSteps: number; attempts: Attempt[] }>();
+    const locations: (string | null)[] = [];
     for (const start of started) {
       const testCase = testCases.get(start.testCaseId) as TestCase;
       const pickle = pickles.get(testCase.pickleId) as Pickle;
@@ -109,8 +131,16 @@ export function parseCucumberReport(
         willBeRetried: willBeRetried.get(start.id) ?? null,
         steps,
       });
-      if (inScope(pickle.uri)) executed.set(pickle.id, entry);
+      if (inScope(pickle.uri)) {
+        if (observeExecution !== undefined) {
+          const line = pickle.location?.line;
+          locations.push(line === undefined ? null : pickle.uri + ':' + line);
+        }
+        executed.set(pickle.id, entry);
+      }
     }
+    observeExecution?.(locations, completed);
+    if (invalid !== undefined) throw invalid;
     return {
       pickles: [...executed.values()],
       runHooks: [...runHooks.values()].map(({ hookId, status }) => ({
