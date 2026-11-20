@@ -19,3 +19,6 @@ docs/communication/deck
 /tools/watch/indexes
 # Written by `npm run step`: the brief and the step file are published byte for byte, and the record hashes them.
 /steps
+# Captured verbatim from the prd-gen MCP producer, including end-of-file bytes.
+/features/fixtures/define-delivery-command/01-prd.md
+/features/fixtures/define-delivery-command/10-verification-report.md
