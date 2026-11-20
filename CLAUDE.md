@@ -20,6 +20,7 @@ npm run evidence -- verify <ledger> <desk>                   # evidence desk: ve
 npm run watch -- check [--keep <dir>]                        # the watch of Anthropic: the register against its sources; exit 0, 1 (a source moved), 2 (register refused) or 3 (a source unreadable)
 npm run watch -- read <id>... [--keep <dir>]                 # the watch of Anthropic: record that these sources were read (docs/claude-code-watch.md)
 npm run define -- <run_id> <prd-gen-plugin-root>       # read a pending Define v1 handoff over MCP stdio (docs/define.md)
+npm run plan -- prepare <define> <proposal> <policy>  # preview a Plan bundle, then materialize it after operator approval (docs/plan.md)
 npm run deliver -- <name> [--until ci]                        # deliver the commit of this worktree (tools/deliver): trial branch, gate, CI for the hash, both branches; exit 0, 1 (stopped at a phase), 2 (refused), 3 (a program failed)
 ```
 

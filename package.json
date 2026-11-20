@@ -20,7 +20,8 @@
     "tools/evidence",
     "tools/watch",
     "tools/deliver",
-    "tools/define"
+    "tools/define",
+    "tools/plan"
   ],
   "scripts": {
     "code": "node --import tsx packages/sandbox/src/code.ts",
@@ -30,6 +31,7 @@
     "diagram:isolation": "node --import tsx features/scripts/isolation-diagram.ts",
     "watch": "node --import tsx tools/watch/src/cli.ts",
     "define": "node --import tsx tools/define/src/cli.ts",
+    "plan": "node --import tsx tools/plan/src/cli.ts",
     "deliver": "node --import tsx tools/deliver/src/cli.ts",
     "typecheck": "tsc -b",
     "format": "prettier --write .",
