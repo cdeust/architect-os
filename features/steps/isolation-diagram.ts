@@ -41,6 +41,20 @@ type ListName = 'writes' | 'closes' | 'reaches';
 
 const REGENERATE = 'npm run diagram:isolation';
 
+Then(
+  'the README embeds just the architecture and links to the profile diagram',
+  function (this: ArchitectWorld) {
+    const readme = stored<string>(this, 'sourceText');
+    const architecture = 'docs/diagrams/architecture.svg';
+    const images = [...readme.matchAll(/!\[[^\]\n]*\]\(([^)\n]+)\)/g)].map((match) => match[1]);
+    assert.deepEqual(images, [architecture]);
+    assert.doesNotMatch(readme, /<\s*(?:img|picture|svg|object|iframe|embed)\b|!\[[^\]\n]*\](?:[ \t]*\[|:)/i);
+    assert.match(readme, /(?<!!)\[[^\]\n]+\]\(docs\/diagrams\/isolation-profiles\.svg\)/);
+    assert(statSync(join(ROOT, architecture)).isFile());
+    assert(statSync(join(ROOT, IMAGE_FILE)).isFile());
+  },
+);
+
 function listOf(template: ProfileTemplate, list: ListName): string[] {
   const { filesystem, network } = template.srt;
   switch (list) {

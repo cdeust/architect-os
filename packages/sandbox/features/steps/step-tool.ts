@@ -984,3 +984,15 @@ Then('the step dependencies read the source {string} as undefined', function (pa
   const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
   assert.equal(deps.readSource(path), undefined);
 });
+
+Given('the step uses the materialized Plan folder', function () {
+  step(this).folder = stored<string>(this, 'planFolder');
+});
+
+Then('the Step record binds the two approved input files', function () {
+  const expected = stored<{ files_sha256: Record<string, string> }>(this, 'planManifest');
+  const archive = step(this).published.get('delivery');
+  assert.ok(archive);
+  const record = stepRecordSchema().parse(JSON.parse(archive['record.json']!));
+  assert.deepEqual(record.inputs, expected.files_sha256);
+});

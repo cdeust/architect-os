@@ -194,6 +194,12 @@ Feature: the image of the profiles is produced from the profile files, the hand-
       And the first run wrote exactly one file, "docs/diagrams/isolation-profiles.svg"
       And the second run changed nothing in the copy
 
+  Rule: the README embeds the architecture and links to the generated profile details
+
+    Scenario: the README has one architecture diagram and a separate profile link
+      Given the text of the committed file "README.md"
+      Then the README embeds just the architecture and links to the profile diagram
+
   Rule: the tripwire on the hand-drawn picture stops the plain forms only
 
     Scenario: the committed hand-drawn picture passes its tripwire
