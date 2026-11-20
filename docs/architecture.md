@@ -27,6 +27,12 @@ The local [Define reader](define.md) calls prd-gen over stdio and validates its 
 The only MCP SDK import for this command lives in `tools/define/src/infrastructure/prd-gen.ts`. The host starts the
 operator-selected plugin's fixed launcher to query its existing run. The gateway and sandboxed builders do not participate in the read.
 
+## Plan at the host
+
+The [Plan reader](plan.md) validates Define data, the proposed acceptance coverage and the independent Step policy.
+Its preview binds those inputs and the prospective files to one digest. A matching operator decision enables
+materialization into a fresh intake folder outside Git checkouts. Step still owns sessions, checks and the `steps/` archive.
+
 ## Layers inside a component
 
 ```

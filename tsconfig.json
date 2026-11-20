@@ -38,6 +38,9 @@
       "path": "tools/define"
     },
     {
+      "path": "tools/plan"
+    },
+    {
       "path": "features"
     }
   ]
