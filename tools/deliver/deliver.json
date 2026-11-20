@@ -6,6 +6,12 @@
   "trialPrefix": "sentinel/gate-1a-",
   "workflow": "gate",
   "requiredJobs": ["gate-linux", "gate-macos"],
+  "jobDependencies": {
+    "gate-linux": {
+      "producers": ["gate-linux-cucumber-1", "gate-linux-cucumber-2", "gate-linux-mutation"],
+      "admissionStep": "Require all producers"
+    }
+  },
   "appendOnly": ["docs/design/journal.md"],
   "gateVerdict": "reports/gate-base.json",
   "gateCommand": ["npm", "run", "gate"],

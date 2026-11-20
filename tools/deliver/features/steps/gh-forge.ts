@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { ciState } from '../../src/domain/ci.js';
 import { GhForge } from '../../src/infrastructure/gh-forge.js';
 import { REPO, type GhForgeFixture } from './gh-fixture.js';
 import { hostOf, temporaryDirectory } from './fixtures.js';
@@ -37,6 +38,21 @@ Given('a delivery forge over the program {string}', function (program: string) {
   this.state['portForge'] = { forge: new GhForge(REPO, program, [], temporaryDirectory(this), hostOf(this)) };
 });
 
+Then(
+  'the effective jobs of the gh run for {string} have the state {string}',
+  function (names: string, state: string) {
+    const required = names.split(', ');
+    const run = ghOf(this).forge.run(COMMIT, 'gate', required);
+    assert.equal(ciState(run, required), state);
+  },
+);
+
+Then('the gh run reports the first failed user step as {string}', function (name: string) {
+  const job = ghOf(this).forge.run(COMMIT, 'gate')?.jobs[0];
+  assert.ok(job?.failedStep);
+  assert.equal(job.firstStepFailure, name || undefined);
+});
+
 /** The error of the call, when it threw. */
 const failureOf = (world: DeliverWorld): Error => world.state['portFailure'] as Error;
 
@@ -47,6 +63,10 @@ function attempt(world: DeliverWorld, call: () => unknown): void {
     world.state['portFailure'] = error;
   }
 }
+
+When('I ask the gh forge for a delivery decision', function () {
+  attempt(this, () => ghOf(this).forge.run(COMMIT, 'gate', ['linux']));
+});
 
 When('I ask the gh forge for the run', function () {
   attempt(this, () => ghOf(this).forge.run(COMMIT, 'gate'));

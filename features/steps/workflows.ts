@@ -12,6 +12,9 @@ import { Given, ROOT, Then, stored } from './helpers.js';
  * YAML 1.2 (the `yaml` package default) reads the key `on` as a string, not as a boolean.
  */
 const StepSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().optional(),
+  if: z.string().optional(),
   uses: z.string().optional(),
   run: z.string().optional(),
   with: z.record(z.string(), z.unknown()).optional(),
@@ -24,6 +27,7 @@ const WorkflowSchema = z.object({
     z.string(),
     z.object({
       name: z.string().optional(),
+      needs: z.union([z.string(), z.array(z.string())]).optional(),
       if: z.string().optional(),
       environment: z.string().optional(),
       steps: z.array(StepSchema),
@@ -76,8 +80,23 @@ function assertGate(text: string): void {
   assert.ok(!('pull_request_target' in doc.on), 'gate.yml must not use pull_request_target');
   assert.deepEqual(doc.permissions, { contents: 'read', actions: 'read' });
   assert.ok(!text.includes('secrets.'), 'gate.yml must not use a secret');
-  assert.deepEqual(Object.keys(doc.jobs).sort(), ['gate-linux', 'gate-macos']);
-  for (const [id, job] of Object.entries(doc.jobs)) assert.equal(job.name, id);
+  assert.deepEqual(Object.keys(doc.jobs).sort(), [
+    'gate-linux',
+    'gate-linux-cucumber',
+    'gate-linux-mutation',
+    'gate-macos',
+  ]);
+  assert.deepEqual(doc.jobs['gate-linux']?.needs, ['gate-linux-cucumber', 'gate-linux-mutation']);
+  assert.equal(doc.jobs['gate-linux']?.if, '${{ always() }}');
+  const linuxSteps = doc.jobs['gate-linux']?.steps ?? [];
+  assert.equal(linuxSteps[0]?.id, 'admission');
+  assert.equal(linuxSteps[0]?.name, 'Require all producers');
+  assert.equal(
+    linuxSteps.find(({ name }) => name === 'Upload reports')?.if,
+    '$' + "{{ always() && steps.admission.outcome == 'success' }}",
+  );
+  for (const [id, job] of Object.entries(doc.jobs))
+    assert.equal(job.name, id === 'gate-linux-cucumber' ? 'gate-linux-cucumber-${{ matrix.shard }}' : id);
   for (const step of Object.values(doc.jobs).flatMap((job) => job.steps)) {
     assert.ok(!('cache' in (step.with ?? {})), 'gate.yml must not use a cache');
     if (step.uses?.startsWith('actions/checkout@') === true) {

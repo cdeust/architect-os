@@ -126,3 +126,17 @@ Then('the committed deliver config gives the host variables of git and of the fo
     'GITHUB_TOKEN',
   ]);
 });
+
+Then(
+  'the committed Linux gate requires its two cucumber shards and mutation at {string}',
+  function (step: string) {
+    const result = parsed(this);
+    assert.ok(result.ok);
+    assert.deepEqual(result.config.jobDependencies, {
+      'gate-linux': {
+        producers: ['gate-linux-cucumber-1', 'gate-linux-cucumber-2', 'gate-linux-mutation'],
+        admissionStep: step,
+      },
+    });
+  },
+);

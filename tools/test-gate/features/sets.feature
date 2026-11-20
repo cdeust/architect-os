@@ -138,3 +138,18 @@ Feature: Test gate, rules 1 and 3: unique identities, executed set equal to the 
 
       Mutation désactivée pour ce job.
       """
+
+  Scenario Outline: downstream verdict for independent Cucumber reports, <mode>
+    Given the gate repository holds the fixture specs "green.feature, second.feature"
+    And the gate head is committed
+    And the two Cucumber reports from fixture "green" are "<mode>"
+    When the gate checks the Linux job with two Cucumber reports
+    Then the gate verdict is "<verdict>"
+
+    Examples:
+      | mode             | verdict |
+      | complete         | green   |
+      | missing          | red     |
+      | duplicate        | red     |
+      | incomplete       | red     |
+      | foreign terminal | red     |

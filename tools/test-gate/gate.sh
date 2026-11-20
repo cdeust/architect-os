@@ -6,12 +6,18 @@
 #   4. test-gate replay: each verdict of Stryker in the perimeter and the canary replayed with cucumber-js directly;
 #      its exit code is never read either, check reads its record
 #   5. test-gate check: the verdict, from the reports only; its exit code is the exit code of this script
+# --mutation-only produces mutation and replay reports for the hosted gate to verify.
 # Previous reports are removed first: a stale report must never be read as the result of this run.
 set -u
 job=linux
+mutation_only=false
+if [ "$#" -eq 1 ] && [ "$1" = --mutation-only ]; then
+  mutation_only=true
+  shift
+fi
 if [ "$#" -gt 0 ]; then
   if [ "$#" -ne 2 ] || [ "$1" != "--job" ]; then
-    echo "usage: npm run gate [-- --job <name>]" >&2
+    echo "usage: npm run gate [-- --job <name> | --mutation-only]" >&2
     exit 1
   fi
   job=$2
@@ -21,10 +27,12 @@ rm -rf reports/cucumber.ndjson reports/mutation reports/replay reports/gate-plan
 $gate plan --job "$job" || exit 1
 # The platform launches its modules and workers from their built entry points (topology/modules.mcp.json): build first.
 npx tsc -b || exit 1
-if [ "$job" = linux ]; then
-  cucumber-js
-else
-  cucumber-js --profile "$job"
+if [ "$mutation_only" = false ]; then
+  if [ "$job" = linux ]; then
+    cucumber-js
+  else
+    cucumber-js --profile "$job"
+  fi
 fi
 if [ "$job" = linux ] && node -e 'process.exit(JSON.parse(require("fs").readFileSync("reports/gate-plan.json","utf8")).mutate.length > 0 ? 0 : 1)'; then
   started=$(date +%s)
@@ -33,5 +41,9 @@ if [ "$job" = linux ] && node -e 'process.exit(JSON.parse(require("fs").readFile
   started=$(date +%s)
   $gate replay
   echo "replay: $(($(date +%s) - started)) s"
+fi
+if [ "$mutation_only" = true ]; then
+  test -s reports/mutation/mutation.json && test -s reports/mutation/replay.json
+  exit $?
 fi
 exec $gate check --job "$job"

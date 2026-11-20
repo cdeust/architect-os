@@ -59,6 +59,23 @@ const job = (
 /** The runs a scenario can make the forge answer; the id is that of the run all along (a rerun keeps it). */
 function ciRun(kind: string): CiRun | undefined {
   switch (kind) {
+    case 'admission-1':
+    case 'accepted-2': {
+      const passed = kind === 'accepted-2';
+      return {
+        id: 42,
+        completed: true,
+        attempt: passed ? 2 : 1,
+        jobs: [
+          {
+            ...job('gate-linux', passed ? 'success' : 'failure', true, !passed),
+            ...(passed ? {} : { firstStepFailure: 'Require all producers' }),
+          },
+          job('producer', passed ? 'success' : 'cancelled', passed, false),
+          job('gate-macos', 'success', true, false),
+        ],
+      };
+    }
     case 'missing':
       return undefined;
     case 'waiting':
@@ -85,6 +102,12 @@ function ciRun(kind: string): CiRun | undefined {
       throw new Error(`unknown CI run kind: ${kind}`);
   }
 }
+
+Given('the delivery Linux gate has a required producer', function () {
+  scene(this).config.jobDependencies = {
+    'gate-linux': { producers: ['producer'], admissionStep: 'Require all producers' },
+  };
+});
 
 Given(
   'a delivery over the in-memory ports, the commit {string} ahead of both branches at {string}',

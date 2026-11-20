@@ -456,6 +456,52 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         api --method POST repos/cdeust/architect-os/actions/runs/7/rerun-failed-jobs
         """
 
+    Scenario: delivery takes its attempt number from the selected run when the listing omits it
+      Given a delivery forge of the gh adapter
+      And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the gh forge answers the run of "7" with '{"id":7,"head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}'
+      And the gh forge answers the attempt of "7/2" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"failure"}]}]'
+      Then the effective jobs of the gh run for "linux" have the state "failed"
+
+    Scenario: lack of a proven attempt stops delivery before a rerun request
+      Given a delivery forge of the gh adapter
+      And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the gh forge answers the run of "7" with '{"id":7,"head_sha":"0000000000000000000000000000000000000021","status":"completed"}'
+      When I ask the gh forge for a delivery decision
+      Then the gh forge failed with "the forge did not answer: run"
+      And the gh client was asked:
+        """
+        api repos/cdeust/architect-os/actions/runs?head_sha=0000000000000000000000000000000000000021&per_page=100
+        api repos/cdeust/architect-os/actions/runs/7
+        """
+
+    Scenario Outline: a partial rerun uses the newest execution of each job across all pages
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}]}'
+      And the gh forge answers the attempt of "7/2" with '[{"jobs":[]},{"jobs":[{"name":"linux","runner_name":"runner","conclusion":"<latest>"}]}]'
+      And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"linux","runner_name":"runner","conclusion":"<old>"},{"name":"macos","runner_name":"runner","conclusion":"success"}]}]'
+      Then the effective jobs of the gh run for "linux, macos" have the state "<state>"
+
+      Examples:
+        | latest  | old     | state  |
+        | success | failure | green  |
+        | failure | success | failed |
+
+    Scenario Outline: evidence for the first failed user step
+      Given a delivery forge of the gh adapter
+      And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the gh forge answers the jobs of "7" with '{"jobs":[{"name":"linux","runner_name":"r","conclusion":"failure","steps":<steps>}]}'
+      Then the gh run reports the first failed user step as "<name>"
+
+      Examples:
+        | steps                                                                                                                                                                             | name      |
+        | [{"name":"Set up job","conclusion":"success"},{"name":"Admission","conclusion":"failure"},{"name":"Build","conclusion":"skipped"},{"name":"Complete job","conclusion":"success"}] | Admission |
+        | [{"name":"Admission","conclusion":"failure"}]                                                                                                                                     | Admission |
+        | [{"conclusion":"failure"}]                                                                                                                                                        |           |
+        | [{"name":"Earlier","conclusion":"success"},{"name":"Admission","conclusion":"failure"}]                                                                                           |           |
+        | [{"name":"Admission","conclusion":"failure"},{"name":"Build","conclusion":"failure"}]                                                                                             |           |
+        | [{"name":"Admission","conclusion":"failure"},{"name":"Build","conclusion":"success"}]                                                                                             |           |
+
   Rule: Progress
 
     Scenario Outline: the phases are kept in order, each reported once

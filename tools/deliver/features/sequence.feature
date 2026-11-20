@@ -611,6 +611,23 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       Then the delivery stopped at the phase "CI" because "CI sans réponse"
       And the delivery clock slept 0 seconds
 
+    Scenario: a repeated observation of the rejected attempt does not spend another rerun
+      Given the delivery Linux gate has a required producer
+      And the delivery setting "ciAttempts" is 2
+      And the delivery CI answers "admission-1, admission-1, accepted-2"
+      When I deliver "step" until "ci"
+      Then the delivery acts are:
+        """
+        fetch
+        push h1 sentinel/gate-1a-step
+        gate
+        rerun 42
+        sleep 30
+        sleep 30
+        sleep 30
+        log ready
+        """
+
     Scenario: no runner twice then green, with three attempts: two reruns, each followed by a run still waiting
       Given the delivery setting "ciAttempts" is 3
       And the delivery CI answers "no-runner, no-runner, green"

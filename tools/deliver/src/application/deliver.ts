@@ -129,15 +129,26 @@ async function awaitCi(
   forge: Forge,
   clock: Clock,
 ): Promise<Stop | undefined> {
+  const jobNames = [
+    ...config.requiredJobs,
+    ...Object.values(config.jobDependencies ?? {}).flatMap((group) => group.producers),
+  ];
+  let requestedAttempt: number | undefined;
+  let unnumberedRerunPending = false;
   for (let poll = 1; ; poll++) {
     if (poll > 1) await clock.sleep(config.pollSeconds);
     entry.ci.polls = poll;
-    const run = forge.run(entry.hash, config.workflow);
+    const run = forge.run(entry.hash, config.workflow, jobNames);
     if (run !== undefined) {
       entry.ci.run = run.id;
       if (entry.ci.attempts === 0) entry.ci.attempts = 1;
     }
-    const state = ciState(run, config.requiredJobs);
+    // The forge can still show the completed attempt immediately after accepting the rerun request.
+    if (run !== undefined && !run.completed) unnumberedRerunPending = false;
+    const state =
+      unnumberedRerunPending || (requestedAttempt !== undefined && (run?.attempt ?? 0) <= requestedAttempt)
+        ? 'waiting'
+        : ciState(run, config.requiredJobs, config.jobDependencies);
     if (state === 'green') return undefined;
     if (state === 'failed') return { phase: 'CI', reason: 'CI rouge' };
     if (state === 'no-runner' && entry.ci.attempts >= config.ciAttempts) {
@@ -147,6 +158,8 @@ async function awaitCi(
     if (state === 'no-runner') {
       // `no-runner` is decided of a run that exists (ciState).
       forge.rerunFailed((run as CiRun).id);
+      requestedAttempt = run?.attempt;
+      unnumberedRerunPending = requestedAttempt === undefined;
       entry.ci.attempts++;
     }
   }

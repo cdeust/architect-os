@@ -75,9 +75,12 @@ Given(
       id: 42,
       completed: true,
       jobs: [
-        { name: 'gate-linux', conclusion: 'success', hadRunner: true, failedStep: false },
-        { name: 'gate-macos', conclusion: 'success', hadRunner: true, failedStep: false },
-      ],
+        'gate-linux',
+        'gate-macos',
+        'gate-linux-cucumber-1',
+        'gate-linux-cucumber-2',
+        'gate-linux-mutation',
+      ].map((name) => ({ name, conclusion: 'success', hadRunner: true, failedStep: false })),
     });
     for (const branch of ['feat/gate-1a', 'main']) gh.evaluated(branch, git.hashOf(commit), 'pass');
     const home = temporaryDirectory(this);

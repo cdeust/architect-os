@@ -10,7 +10,7 @@ import { baseOf, renderReport } from '../domain/report.js';
 import type { StaticSet } from '../domain/run.js';
 import { evaluate } from '../domain/verdict.js';
 import { jobOf, parseGateBase, parseGateConfig, parseReplayRecord, type GateConfig } from './config.js';
-import { parseCucumberReport } from './cucumber-report.js';
+import { parseCucumberReport, parseCucumberShards } from './cucumber-report.js';
 import { generateDebt, readDebt, realignDebt } from './debt.js';
 import { GitRepository } from './git.js';
 import { compileFeature } from './gherkin.js';
@@ -155,7 +155,23 @@ function gate(
       ? []
       : staticSet(repository.filesAt(firstParent).filter(inJob), (path) => repository.show(firstParent, path))
           .ids;
-  const cucumber = workspace.read(reports.cucumber);
+  const shards = env['AOS_CUCUMBER_SHARDS'];
+  const inScope = (uri: string) => matchesAny(uri, job.features);
+  const run = (() => {
+    if (shards !== undefined) {
+      // GitHub Actions limits a job matrix to 256 jobs (docs.github.com/en/actions/reference/limits).
+      if (!/^[1-9]\d*$/.test(shards) || Number(shards) > 256)
+        return { failure: 'nombre de lots Cucumber invalide' };
+      const reports = Array.from({ length: Number(shards) }, (_, i) =>
+        workspace.read(`reports/cucumber-shards/${i + 1}/cucumber.ndjson`),
+      );
+      return parseCucumberShards(reports, inScope);
+    }
+    const cucumber = workspace.read(reports.cucumber);
+    return cucumber === null
+      ? { failure: `${reports.cucumber} absent` }
+      : parseCucumberReport(cucumber, inScope);
+  })();
   const baseText = workspace.read(reports.base);
   const base: BaseInput = baseText === null ? null : parseGateBase(baseText);
   const mutationText = workspace.read(reports.mutation);
@@ -165,10 +181,7 @@ function gate(
     firstParent,
     staticNow,
     staticParent,
-    run:
-      cucumber === null
-        ? { failure: `${reports.cucumber} absent` }
-        : parseCucumberReport(cucumber, (uri) => matchesAny(uri, job.features)),
+    run,
     base,
     mutation:
       scope === null

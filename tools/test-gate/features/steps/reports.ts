@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseEnvelope } from '@cucumber/messages';
 import { FIXTURES, Given, Then, repository, type GateRepository } from './repository.js';
 
 const CUCUMBER = 'reports/cucumber.ndjson';
@@ -57,6 +58,43 @@ function expectedLines(repo: GateRepository, text: string): string[] {
     .split('\n')
     .filter((line) => line !== '');
 }
+
+Given(
+  'the two Cucumber reports from fixture {string} are {string}',
+  function (fixture: string, mode: string) {
+    const repo = repository(this);
+    const text = readFileSync(join(FIXTURES, 'reports', fixture + '.ndjson'), 'utf8');
+    const envelopes = text.trimEnd().split('\n').map(parseEnvelope);
+    const starts = envelopes.flatMap(({ testCaseStarted }) => (testCaseStarted ? [testCaseStarted.id] : []));
+    assert(starts.length > 1);
+    for (const shard of [0, 1]) {
+      if (shard === 1 && mode === 'missing') continue;
+      const partition = shard === 1 && mode === 'duplicate' ? 0 : shard;
+      const ids = new Set(starts.filter((_, index) => index % 2 === partition));
+      const rows = envelopes.filter(
+        ({ testCaseStarted, testCaseFinished, testStepStarted, testStepFinished }) => {
+          const id =
+            testCaseStarted?.id ??
+            testCaseFinished?.testCaseStartedId ??
+            testStepStarted?.testCaseStartedId ??
+            testStepFinished?.testCaseStartedId;
+          return id === undefined || ids.has(id);
+        },
+      );
+      const terminal = rows.at(-1)?.testRunFinished;
+      assert(terminal);
+      if (shard === 1 && mode === 'incomplete') rows.pop();
+      if (shard === 1 && mode === 'foreign terminal')
+        rows[rows.length - 1] = {
+          testRunFinished: { ...terminal, testRunStartedId: 'foreign' },
+        };
+      repo.write(
+        'reports/cucumber-shards/' + (shard + 1) + '/cucumber.ndjson',
+        rows.map((row) => JSON.stringify(row)).join('\n'),
+      );
+    }
+  },
+);
 
 Given('the gate cucumber report is the fixture {string}', function (name: string) {
   repository(this).write(CUCUMBER, readFileSync(join(FIXTURES, 'reports', `${name}.ndjson`), 'utf8'));

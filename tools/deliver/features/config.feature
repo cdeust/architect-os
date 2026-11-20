@@ -15,6 +15,26 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
       When the deliver config is parsed
       Then the deliver config is accepted
 
+  Rule: an optional dependency declaration binds a required aggregate to unique leaf jobs
+
+    Scenario Outline: conflicting or incomplete declarations are refused
+      Given a deliver config of the base form
+      And the deliver config field "jobDependencies" is set to '<value>'
+      When the deliver config is parsed
+      Then the deliver config is refused with a reason holding "jobDependencies"
+
+      Examples:
+        | value                                                               |
+        | {"unknown":{"admissionStep":"Check","producers":["a"]}}             |
+        | {"gate-linux":{"admissionStep":"Check","producers":["gate-linux"]}} |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a","a"]}}      |
+        | {"gate-linux":{"admissionStep":"Check","producers":[]}}             |
+        | {"gate-linux":{"admissionStep":"","producers":["a"]}}               |
+
+    Scenario: the committed aggregate binds the three Linux producers to its admission step
+      When the committed deliver config is loaded
+      Then the committed Linux gate requires its two cucumber shards and mutation at "Require all producers"
+
   Rule: a copy at the edge of a rule is accepted
 
     Scenario Outline: a value at the edge

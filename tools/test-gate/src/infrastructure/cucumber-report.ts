@@ -65,12 +65,22 @@ function index(envelopes: readonly Envelope[]) {
 export function parseCucumberReport(
   text: string,
   inScope: (uri: string) => boolean,
+  requireComplete = false,
 ): CucumberRun | ReadFailure {
   try {
     const lines = text.split('\n').filter((line) => line.trim() !== '');
-    const { documents, pickles, testCases, hooks, started, willBeRetried, stepStatus, runHooks } = index(
-      lines.map((line) => parseEnvelope(line)),
-    );
+    const envelopes = lines.map((line) => parseEnvelope(line));
+    if (requireComplete) {
+      const starts = envelopes.filter((envelope) => envelope.testRunStarted !== undefined);
+      const finishes = envelopes.filter((envelope) => envelope.testRunFinished !== undefined);
+      const id = starts[0]?.testRunStarted?.id;
+      const finish = envelopes.at(-1)?.testRunFinished;
+      if (!id || starts.length !== 1 || finishes.length !== 1 || finish === undefined)
+        return { failure: 'lot Cucumber sans événement de fin unique' };
+      if (id !== finish.testRunStartedId) return { failure: 'fin Cucumber rattachée à un autre lot' };
+    }
+    const { documents, pickles, testCases, hooks, started, willBeRetried, stepStatus, runHooks } =
+      index(envelopes);
     const byUri = new Map<string, Pickle[]>();
     for (const pickle of pickles.values()) byUri.set(pickle.uri, [...(byUri.get(pickle.uri) ?? []), pickle]);
     const identities = new Map<string, string>();
@@ -111,4 +121,29 @@ export function parseCucumberReport(
   } catch (error) {
     return { failure: `rapport Cucumber invalide : ${(error as Error).message}` };
   }
+}
+
+/** Parse reports separately so Cucumber IDs and documents from different runners never overwrite one another. */
+export function parseCucumberShards(
+  reports: readonly (string | null)[],
+  inScope: (uri: string) => boolean,
+): CucumberRun | ReadFailure {
+  if (reports.length === 0) return { failure: 'aucun lot Cucumber' };
+  const pickles: CucumberRun['pickles'][number][] = [];
+  const runHooks: CucumberRun['runHooks'][number][] = [];
+  const seen = new Set<string>();
+  for (const [index, text] of reports.entries()) {
+    const label = 'lot Cucumber ' + (index + 1);
+    if (text === null) return { failure: label + ' absent' };
+    const run = parseCucumberReport(text, inScope, true);
+    if ('failure' in run) return { failure: label + ' : ' + run.failure };
+    for (const pickle of run.pickles) {
+      if (seen.has(pickle.id))
+        return { failure: label + ' : scénario exécuté plusieurs fois : ' + pickle.id };
+      seen.add(pickle.id);
+      pickles.push(pickle);
+    }
+    runHooks.push(...run.runHooks);
+  }
+  return { pickles, runHooks };
 }
