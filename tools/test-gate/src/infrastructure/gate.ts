@@ -1,7 +1,7 @@
 import { parseArguments } from '../domain/arguments.js';
 import type { BaseInput } from '../domain/count.js';
 import { parseUnifiedDiff, wholeFile, type ChangedFile } from '../domain/diff.js';
-import { isJobFeature, matchesAny, type Job } from '../domain/layout.js';
+import { isJobFeature, isProduction, matchesAny, type Job } from '../domain/layout.js';
 import { retiredFiles } from '../domain/debt.js';
 import { canaryViolations } from '../domain/canary.js';
 import { inPerimeter, mutatePatterns, perimeterOf, type MutantRecord } from '../domain/mutation.js';
@@ -22,6 +22,7 @@ import { resolve } from 'node:path';
 
 /** The descriptive configuration, relative to the repository root. */
 export const CONFIG_PATH = 'tools/test-gate/gate.json';
+const INVENTORY_PATH = 'reports/mutation-inventory.json';
 
 export interface Output {
   write(text: string): unknown;
@@ -43,14 +44,15 @@ export function changedFiles(
   repository: GitRepository,
   workspace: Workspace,
   firstParent: string | null,
+  include: (path: string) => boolean = () => true,
 ): ChangedFile[] {
   const whole = (path: string) => wholeFile(path, workspace.read(path) as string);
   const present = (path: string) => workspace.read(path) !== null;
   return [
     ...(firstParent === null
-      ? repository.tracked().filter(present).map(whole)
-      : parseUnifiedDiff(repository.diff(firstParent))),
-    ...repository.untracked().map(whole),
+      ? repository.tracked().filter(include).filter(present).map(whole)
+      : parseUnifiedDiff(repository.diff(firstParent)).filter(({ path }) => include(path))),
+    ...repository.untracked().filter(include).map(whole),
   ];
 }
 
@@ -222,7 +224,9 @@ export async function runGate(
   const [, , ...args] = argv;
   const command = parseArguments(args);
   if ('failure' in command) return refuse(command.failure);
-  const text = new Workspace(root).read(CONFIG_PATH);
+  const workspace = new Workspace(root);
+  if (command.name === 'inventory') workspace.remove(INVENTORY_PATH);
+  const text = workspace.read(CONFIG_PATH);
   if (text === null) return refuse(`${CONFIG_PATH} absent`);
   const config = parseGateConfig(text);
   if ('failure' in config) return refuse(`${CONFIG_PATH} : ${config.failure}`);
@@ -241,5 +245,25 @@ export async function runGate(
   if (command.name === 'replay') return replayCommand(config, root, command.all, out);
   const job = jobOf(config, command.job);
   if (job === null) return refuse(`job inconnu : ${command.job}`);
+  if (command.name === 'inventory') {
+    if (!job.mutation) return refuse('le job ne prévoit pas de mutation');
+    try {
+      const repository = new GitRepository(root);
+      const { head, firstParent } = repository.commits();
+      const changes = changedFiles(repository, workspace, firstParent, (file) => isProduction(config, file));
+      const { debt, perimeter } = mutationScope(config, changes, workspace, repository, firstParent);
+      if ('failure' in debt.current) throw new Error('registre de dette illisible : ' + debt.current.failure);
+      if (debt.parent !== null && 'failure' in debt.parent)
+        throw new Error('registre de dette illisible au premier parent : ' + debt.parent.failure);
+      const { mutationLots } = await import('./mutation-inventory.js');
+      const lots = await mutationLots(root, perimeter, config.canary?.file, (file) => workspace.read(file));
+      workspace.write(INVENTORY_PATH, jsonText({ head, firstParent, job: job.name, lots }));
+      out.write(`inventaire ${job.name} : ${lots.length} lot(s) de mutations -> ${INVENTORY_PATH}\n`);
+      return 0;
+    } catch (error) {
+      workspace.remove(INVENTORY_PATH);
+      return refuse((error as Error).message);
+    }
+  }
   return gate(config, job, command.name, root, env, out);
 }

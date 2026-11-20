@@ -53,7 +53,7 @@ function controlViolations(
     ...(control.replay === null
       ? []
       : replayViolations(
-          [...canaryMutants, ...judgement.mutants],
+          [...canaryMutants, ...judgement.mutants.filter(({ file }) => file !== canary?.file)],
           control.replay.record,
           // A readable report has a text, hence a hash.
           control.reportHash as string,

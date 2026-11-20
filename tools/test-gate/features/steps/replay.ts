@@ -132,16 +132,28 @@ Given('the gate replay record of the mutation report confirms the mutants {strin
 });
 
 Given(
-  'the gate replay record of the mutation report confirms every mutant but {string}, with the divergence {string}',
-  function (id: string, divergence: string) {
-    const report = JSON.parse(repository(this).read(MUTATION)) as Report;
-    const ids = Object.values(report.files).flatMap((file) => file.mutants.map((m) => m.id));
-    writeRecord(
-      this,
-      ids.map((other) => [other, other === id ? divergence : null]),
-    );
+  'the gate replay record of the mutation report has a divergent record for mutant {string}',
+  function (id: string) {
+    writeRecord(this, [
+      ['0', null],
+      [id, 'écart'],
+    ]);
   },
 );
+
+Given('the first replay entry is changed to have a {string}', function (kind: string) {
+  const repo = repository(this);
+  const record = JSON.parse(repo.read(RECORD)) as {
+    mutants: { file: string; id: string; status: string; divergence: string | null }[];
+  };
+  const first = record.mutants[0];
+  assert.ok(first);
+  if (kind === 'duplicate entry') record.mutants.push(first);
+  else if (kind === 'different status') first.status = 'Survived';
+  else if (kind === 'foreign entry') record.mutants.push({ ...first, file: 'unrelated.mjs' });
+  else throw new Error(kind);
+  repo.write(RECORD, JSON.stringify(record));
+});
 
 Given(
   'the {word} of mutant {string} of the gate mutation report are {string}',

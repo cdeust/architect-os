@@ -234,17 +234,37 @@ export function replayViolations(
   reportHash: string,
 ): Violation[] {
   const due = required.filter(({ mutant }) => replayable(mutant.status));
-  if (due.length === 0) return [];
   const add = (text: string): Violation => ({ rule: 7, text });
-  if (record === null) return [add('rejeu des verdicts absent')];
+  if (record === null) return due.length === 0 ? [] : [add('rejeu des verdicts absent')];
   if ('failure' in record) return [add(`rejeu des verdicts illisible : ${record.failure}`)];
   if (record.report !== reportHash) return [add('le rejeu porte sur un autre rapport de mutation')];
-  const entries = new Map(record.mutants.map((entry) => [`${entry.file} ${entry.id}`, entry]));
+  const key = (file: string, id: string) => JSON.stringify([file, id]);
+  const entries = new Map<string, ReplayEntry>();
   const violations: Violation[] = [];
+  for (const entry of record.mutants) {
+    const identity = key(entry.file, entry.id);
+    if (entries.has(identity)) violations.push(add(`${entry.file} #${entry.id} : rejeu en double`));
+    else entries.set(identity, entry);
+  }
+  const expected = new Set<string>();
   for (const { file, mutant } of due) {
-    const entry = entries.get(`${file} ${mutant.id}`);
+    const identity = key(file, mutant.id);
+    if (expected.has(identity)) {
+      violations.push(add(`${label(file, mutant)} : mutant en double dans le rapport`));
+      continue;
+    }
+    expected.add(identity);
+    const entry = entries.get(identity);
     if (entry === undefined) violations.push(add(`${label(file, mutant)} : non rejoué`));
-    else if (entry.divergence !== null) violations.push(add(`${label(file, mutant)} : ${entry.divergence}`));
+    else if (entry.status !== mutant.status) {
+      violations.push(
+        add(`${label(file, mutant)} : statut du rejeu ${entry.status}, ${mutant.status} attendu`),
+      );
+    } else if (entry.divergence !== null)
+      violations.push(add(`${label(file, mutant)} : ${entry.divergence}`));
+  }
+  for (const [identity, entry] of entries) {
+    if (!expected.has(identity)) violations.push(add(`${entry.file} #${entry.id} : rejeu hors périmètre`));
   }
   return violations;
 }
