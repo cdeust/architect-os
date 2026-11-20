@@ -10,7 +10,7 @@ The root is the directory that contains the plugin's `.mcp.json`, `bin/ensure-de
 
 The reader requests `get_pipeline_state` in `define_handoff_v1` format. Exit 0 writes one JSON line with a `handoff` property. The consumer requires version 1, the requested run ID, unique requirement and criterion IDs, and complete acceptance coverage. Exit 2 reports invalid invocation, rejected or invalid planning data, or a mismatched run. Exit 3 reports a failure opening or querying the MCP transport. Refusals leave stdout empty.
 
-The reader leaves the gate decision and saved checkpoint in prd-gen. Its output contains requirements and acceptance criteria. It carries no launcher policy, executable arguments, plan approval, or authority to create an execution step. Plan, its human gate and the full replay through Deliver are still pending.
+The reader leaves the gate decision and saved checkpoint in prd-gen. Its output contains requirements and acceptance criteria. It carries no launcher policy, executable arguments, plan approval, or authority to create an execution step. The [Plan command](plan.md) can validate this output and materialize one Step bundle after its independent operator decision. The full replay through Deliver is still pending.
 
 ## Recorded pilot
 
