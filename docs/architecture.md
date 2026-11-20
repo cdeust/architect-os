@@ -21,6 +21,12 @@ One process tree, started by `node gateway/dist/src/serve.js` with nothing but i
 
 Proven by the entry file, not by a composition written for a test: `features/sandbox/gateway-entry.feature` under real srt on Linux and macOS. No profile escapes its sandbox: `features/sandbox/escape.feature`.
 
+## Define at the host
+
+The local [Define reader](define.md) calls prd-gen over stdio and validates its handoff before emitting planning data.
+The only MCP SDK import for this command lives in `tools/define/src/infrastructure/prd-gen.ts`. The host starts the
+operator-selected plugin's fixed launcher to query its existing run. The gateway and sandboxed builders do not participate in the read.
+
 ## Layers inside a component
 
 ```
