@@ -9,21 +9,13 @@ Feature: Builder profile template
     When I load the committed builder profile
     Then the profile allows writing to at least:
       | ${worktree}                                 |
-      | ${repo}/.git/worktrees/${worktreeName}      |
-      | ${repo}/.git/objects                        |
-      | ${repo}/.git/refs                           |
-      | ${repo}/.git/logs                           |
       | ${home}/.cache                              |
       | ${config}                                   |
       | ${tmp}                                      |
     And the profile allows writing to nothing under "${home}/.claude"
     And the profile denies writing to exactly:
-      | ${repo}/.git/hooks                                         |
-      | ${repo}/.git/config                                        |
-      | ${repo}/.git/worktrees/${worktreeName}/commondir           |
-      | ${repo}/.git/worktrees/${worktreeName}/gitdir              |
-      | ${repo}/.git/worktrees/${worktreeName}/config.worktree     |
-      | ${repo}/.git/refs/heads/main                               |
+      | ${repo}/.git                                               |
+      | ${worktree}/.git                                           |
       | ${worktree}/.claude/settings.json                          |
       | ${worktree}/.claude/settings.local.json                    |
       | ${worktree}/steps                                          |
@@ -77,6 +69,12 @@ Feature: Builder profile template
       | /r/.git/worktrees/w/config.worktree                         |
       | /r/.git/refs/heads/main                                     |
       | /r/.git/packed-refs                                         |
+      | /r/.git/logs/HEAD                                          |
+      | /r/.git/objects/ab/cdef                                     |
+      | /r/.git/refs/heads/feat/x                                   |
+      | /r/.git/worktrees/w/HEAD                                    |
+      | /r/.git/worktrees/w/index                                   |
+      | /r/.claude/worktrees/w/.git                                 |
       | /r/.claude/worktrees/w/.claude/settings.json                |
       | /r/.claude/worktrees/w/.claude/settings.local.json          |
       | /r/node_modules/.bin/srt                                    |
@@ -85,9 +83,6 @@ Feature: Builder profile template
       | /t/aos/config/settings.json                                 |
     And all of these paths are writable:
       | /r/.claude/worktrees/w/src/a.ts                             |
-      | /r/.git/objects/ab/cdef                                     |
-      | /r/.git/refs/heads/feat/x                                   |
-      | /r/.git/worktrees/w/HEAD                                    |
       | /t/aos/config/projects/p/s.jsonl                            |
       | /t/aos/config/plugins/data/builder-guard-inline/x           |
       | /t/aos/config/.claude.json                                  |
@@ -118,7 +113,7 @@ Feature: Builder profile template
     When I load the committed builder profile
     And I resolve the profile with the test variables
     Then the resolved profile contains no "${" placeholder
-    And the resolved write denials include "/r/.git/worktrees/w/commondir"
+    And the resolved write denials include "/r/.git"
     And the resolved environment sets "CLAUDE_CODE_TMPDIR" to "/t/aos/tmp"
     And the resolved environment sets "ANTHROPIC_BASE_URL" to "http://127.0.0.1:4321"
     And the resolved network domains include "127.0.0.1:4321"
