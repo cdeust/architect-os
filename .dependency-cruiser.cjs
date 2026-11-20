@@ -90,11 +90,11 @@ module.exports = {
       name: 'mcp-sdk-only-in-presentation-and-infrastructure',
       comment:
         'The MCP SDK is allowed in presentation/infrastructure of gateway, services, modules and data (and in their step ' +
-        'definitions), and in the infrastructure of a worker: its channel to the gateway on its own stdio (brick 1b.5).',
+        'definitions), and in the infrastructure of a worker: its channel to the gateway on its own stdio (brick 1b.5), and in the dedicated host-side Define reader adapter.',
       severity: 'error',
       from: {
         pathNot:
-          '^((gateway|services/[^/]+|modules/[^/]+|data)/(src/(presentation|infrastructure)|features)|services/[^/]+/worker/infrastructure)/',
+          '^((gateway|services/[^/]+|modules/[^/]+|data)/(src/(presentation|infrastructure)|features)|services/[^/]+/worker/infrastructure)/|^tools/define/src/infrastructure/prd-gen\\.ts$',
       },
       to: { path: '(^|/)node_modules/@modelcontextprotocol/sdk(/|$)' },
     },
@@ -106,7 +106,8 @@ module.exports = {
         'tools/test-gate/src/infrastructure/replay.ts, the single file through which it runs cucumber-js to replay ' +
         'the verdicts of the mutation tool (rule 7); tools/deliver/src/infrastructure/host-process.ts, the single ' +
         'file through which the delivery command starts git, the client of the forge and the gate, on the host, ' +
-        'where they need the credentials and the network a sandbox withholds (orchestration-fable-5-2.md, §14).',
+        'where they need the credentials and the network a sandbox withholds (orchestration-fable-5-2.md, §14). ' +
+        'The host-side Define adapter starts the operator-selected plugin only through the separately bounded MCP SDK exception.',
       severity: 'error',
       from: {
         pathNot: [
