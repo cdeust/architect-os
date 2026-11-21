@@ -50,16 +50,16 @@ export interface Runner {
 // Stryker's pinned Cucumber formatter names the scenario line or the exact Examples row.
 function scenarioLocation(value: string): boolean {
   const match = /^([^:\\]+\.feature):([1-9][0-9]*)$/.exec(value);
-  const file = match?.[1];
+  if (match === null) return false;
+  const file = match[1] as string;
   return (
-    file !== undefined &&
     file === normalize(file) &&
     !file.startsWith('/') &&
     !file.startsWith('../') &&
     !file.startsWith('-') &&
     !basename(file).startsWith('@') &&
     !/[*?{}()\[\]\u0000\r\n]/.test(file) &&
-    Number.isSafeInteger(Number(match?.[2]))
+    Number.isSafeInteger(Number(match[2]))
   );
 }
 

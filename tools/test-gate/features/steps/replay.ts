@@ -677,6 +677,24 @@ Given('the gate mutation report mutated {string}', function (patterns: string) {
   });
 });
 
+When('the replay runner is given the following scenario list:', async function (text: string) {
+  const repo = repository(this);
+  const runner = new CucumberRunner(repo.dir, 'replay', repo.path('reports/replay'));
+  this.state['timed'] = await runner.run(JSON.parse(text) as string[], 600_000);
+});
+
+Then('the invalid replay selection creates no run artifacts', function () {
+  const { result, ms } = this.state['timed'] as Timed;
+  const diagnostic = 'sélection de scénarios de rejeu invalide';
+  assert.deepEqual(result, {
+    run: { failure: diagnostic },
+    timedOut: false,
+    selectionFailure: diagnostic,
+  });
+  assert.equal(ms, 0);
+  assert.equal(repository(this).exists('reports/replay'), false);
+});
+
 Then('the replay refuses its scenario selection with {string}', function (reason: string) {
   const { result } = this.state['timed'] as Timed;
   assert.equal(result.selectionFailure, reason, JSON.stringify(result.run));

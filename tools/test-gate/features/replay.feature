@@ -524,9 +524,30 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     When the replay runner runs "specs/green.feature:4" once within 20000 ms
     Then the replay refuses its scenario selection with "scénario de rejeu inattendu : specs/second.feature:3"
 
-  Scenario: the replay rejects a feature selector without an exact line
-    When the replay runner runs "specs/green.feature" once within 20000 ms
-    Then the replay refuses its scenario selection with "sélection de scénarios de rejeu invalide"
+  Scenario Outline: the replay refuses an invalid scenario list before launching Cucumber
+    When the replay runner is given the following scenario list:
+      """
+      <locations>
+      """
+    Then the invalid replay selection creates no run artifacts
+
+    Examples:
+      | locations                                         |
+      | []                                                |
+      | ["specs/green.feature"]                           |
+      | ["specs/green.feature:4","specs/green.feature:4"] |
+      | ["specs/green.feature:4","specs/*.feature:4"]     |
+      | ["specs/../specs/green.feature:4"]                |
+      | ["/specs/green.feature:4"]                        |
+      | ["../specs/green.feature:4"]                      |
+      | ["-specs/green.feature:4"]                        |
+      | ["specs/@green.feature:4"]                        |
+      | ["specs/green.feature:0"]                         |
+      | ["specs/green.feature:04"]                        |
+      | ["specs/green.feature:٤"]                         |
+      | ["specs/green.feature:9007199254740992"]          |
+      | ["prefix:specs/green.feature:4"]                  |
+      | ["specs/green.feature:4suffix"]                   |
 
   Scenario: a completed replay that skipped a selected scenario cannot confirm a kill
     Given the gate repository file "cucumber.mjs" reads:
