@@ -171,3 +171,29 @@ Then('the gate debt registry now holds these entries:', function (table: DataTab
   assert.deepEqual(rows, table.raw().slice(1));
   assert.deepEqual(table.raw()[0], COLUMNS);
 });
+
+Given('the projected native report has no mutants on the changed line', function () {
+  const repo = repository(this);
+  const filename = 'reports/mutation/mutation.json';
+  const report = JSON.parse(repo.read(filename));
+  report.gateNativeScope = [{ file: 'src/math.mjs', whole: false, lines: [1] }];
+  report.files['src/math.mjs'].mutants = [];
+  repo.write(filename, JSON.stringify(report));
+});
+
+Given('the debt registry is unreadable in the {string}', function (revision: string) {
+  const repo = repository(this);
+  if (revision === 'working tree') {
+    repo.remove(DEBT_PATH);
+  } else {
+    assert.equal(revision, 'first parent');
+    repo.write(DEBT_PATH, '{"survivors":[],"extra":true}');
+    repo.commit('invalid debt at the first parent');
+    repo.write(DEBT_PATH, '{"survivors":[]}');
+    repo.commit('valid current debt');
+  }
+});
+
+Then('the gate repository holds a file {string}', function (file: string) {
+  assert.equal(repository(this).exists(file), true);
+});

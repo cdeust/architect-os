@@ -13,22 +13,42 @@ function idSchema() {
 function runsSchema() {
   return z.object({
     workflow_runs: z.array(
-      z.object({ id: idSchema(), name: z.string(), head_sha: z.string(), status: z.string() }),
+      z.object({
+        id: idSchema(),
+        name: z.string(),
+        head_sha: z.string(),
+        status: z.string(),
+        run_attempt: idSchema().optional(),
+      }),
     ),
   });
 }
 
-function jobsSchema() {
+function jobSchema() {
   return z.object({
-    jobs: z.array(
-      z.object({
-        name: z.string(),
-        conclusion: z.string().nullable(),
-        runner_name: z.string().nullable(),
-        steps: z.array(z.object({ conclusion: z.string().nullable() })).optional(),
-      }),
-    ),
+    name: z.string(),
+    conclusion: z.string().nullable(),
+    runner_name: z.string().nullable(),
+    steps: z.array(z.object({ name: z.string().optional(), conclusion: z.string().nullable() })).optional(),
   });
+}
+
+type ForgeJob = z.infer<ReturnType<typeof jobSchema>>;
+
+/** GitHub may include an automatic setup and completion around the workflow steps. */
+function firstStepFailure(steps: ForgeJob['steps']): string | undefined {
+  if (steps === undefined) return undefined;
+  const first = steps[0]?.name === 'Set up job' && steps[0].conclusion === 'success' ? 1 : 0;
+  const step = steps[first];
+  if (step?.conclusion !== 'failure' || !step.name) return undefined;
+  const rest = steps.slice(first + 1);
+  return rest.every(
+    (later, i) =>
+      later.conclusion === 'skipped' ||
+      (i === rest.length - 1 && later.name === 'Complete job' && later.conclusion === 'success'),
+  )
+    ? step.name
+    : undefined;
 }
 
 function ruleSuitesSchema() {
@@ -63,7 +83,7 @@ export class GhForge implements Forge {
     private readonly host: HostEnvironment,
   ) {}
 
-  run(hash: string, workflow: string): CiRun | undefined {
+  run(hash: string, workflow: string, jobNames?: readonly string[]): CiRun | undefined {
     const { workflow_runs } = this.read(
       'runs',
       [`repos/${this.repository}/actions/runs?head_sha=${hash}&per_page=100`],
@@ -73,21 +93,66 @@ export class GhForge implements Forge {
     // The first run of the commit is the one of its trial branch: the smallest id.
     const first = mine.sort((a, b) => a.id - b.id)[0];
     if (first === undefined) return undefined;
-    const { jobs } = this.read(
-      'jobs',
-      [`repos/${this.repository}/actions/runs/${first.id}/jobs?per_page=100`],
-      jobsSchema(),
-    );
+    const runPath = `repos/${this.repository}/actions/runs/${first.id}`;
+    // Delivery requires a numbered result before it can let a red run consume a rerun.
+    const version =
+      first.status === 'completed' && first.run_attempt === undefined && jobNames !== undefined
+        ? this.read(
+            'run',
+            [runPath],
+            z.object({
+              id: z.literal(first.id),
+              head_sha: z.literal(hash),
+              status: z.string(),
+              run_attempt: idSchema(),
+            }),
+          )
+        : first;
+    const jobs =
+      version.run_attempt !== undefined && version.status === 'completed'
+        ? this.effectiveJobs(runPath, version.run_attempt, jobNames)
+        : this.read('jobs', [`${runPath}/jobs?per_page=100`], z.object({ jobs: z.array(jobSchema()) })).jobs;
     return {
-      id: first.id,
-      completed: first.status === 'completed',
-      jobs: jobs.map((job) => ({
-        name: job.name,
-        conclusion: conclusionOf(job.conclusion),
-        hadRunner: job.runner_name !== null && job.runner_name !== '',
-        failedStep: job.steps?.some((step) => step.conclusion === 'failure') === true,
-      })),
+      id: version.id,
+      completed: version.status === 'completed',
+      ...(version.run_attempt === undefined ? {} : { attempt: version.run_attempt }),
+      jobs: jobs.map((job) => {
+        const steps = job.steps;
+        const firstFailure = firstStepFailure(steps);
+        return {
+          name: job.name,
+          conclusion: conclusionOf(job.conclusion),
+          hadRunner:
+            Boolean(job.runner_name) ||
+            Boolean(
+              steps?.some((step) => step.name && step.conclusion !== null && step.conclusion !== 'skipped'),
+            ),
+          failedStep: Boolean(steps?.some((step) => step.conclusion === 'failure')),
+          ...(firstFailure === undefined ? {} : { firstStepFailure: firstFailure }),
+        };
+      }),
     };
+  }
+
+  /** The attempt-specific endpoint binds every row to its attempt, even when the row omits run_attempt. */
+  private effectiveJobs(path: string, current: number, names?: readonly string[]): ForgeJob[] {
+    const effective: ForgeJob[] = [];
+    const seen = new Set<string>();
+    for (let attempt = current; attempt >= 1; attempt--) {
+      const pages = this.read(
+        'jobs',
+        ['--paginate', '--slurp', `${path}/attempts/${attempt}/jobs?per_page=100`],
+        z.array(z.object({ jobs: z.array(jobSchema()) })),
+      );
+      const rows = pages.flatMap((page) => page.jobs);
+      if (attempt === current && rows.length === 0) return [];
+      // Take the newest execution of each name. Preserve ties from the same attempt for ciState to reject.
+      const fresh = rows.filter((row) => !seen.has(row.name));
+      effective.push(...fresh);
+      for (const row of fresh) seen.add(row.name);
+      if (names?.every((name) => seen.has(name))) break;
+    }
+    return effective;
   }
 
   rerunFailed(runId: number): void {

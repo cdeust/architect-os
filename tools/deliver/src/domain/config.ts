@@ -10,6 +10,8 @@ export interface DeliverConfig {
   trialPrefix: string;
   workflow: string;
   requiredJobs: string[];
+  /** Required aggregate jobs, their upstream jobs, and the first step which checks their results. */
+  jobDependencies?: Record<string, { producers: string[]; admissionStep: string }>;
   /** Files that may only grow between the parent and the commit. */
   appendOnly: string[];
   gateVerdict: string;

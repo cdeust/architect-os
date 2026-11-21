@@ -995,30 +995,33 @@ Given(
     writeFileSync(join(scripts, 'gate.mjs'), SCRIPTED_GATE);
     writeFileSync(join(scripts, 'deliver.mjs'), DRIVER);
     writeFileSync(identity, `fixture-identity-${basename(scripts).replaceAll(' ', '-')}`);
+    const committed = JSON.parse(readFileSync(join(ROOT, 'tools/deliver/deliver.json'), 'utf8')) as {
+      requiredJobs: string[];
+      jobDependencies?: Record<string, { producers: string[] }>;
+    };
+    const required = new Set([
+      ...committed.requiredJobs,
+      ...Object.values(committed.jobDependencies ?? {}).flatMap(({ producers }) => producers),
+    ]);
+    const jobs = [...required].map((name) => ({
+      name,
+      conclusion: 'success',
+      runner_name: 'runner-1',
+      steps: [{ conclusion: 'success' }],
+    }));
     writeFileSync(
       answers,
       JSON.stringify({
-        [`repos/${REPO}/actions/runs?head_sha=${hash}&per_page=100`]: {
+        ['repos/' + REPO + '/actions/runs?head_sha=' + hash + '&per_page=100']: {
           stdout: JSON.stringify({
-            workflow_runs: [{ id: 42, name: 'gate', head_sha: hash, status: 'completed' }],
+            workflow_runs: [{ id: 42, name: 'gate', head_sha: hash, status: 'completed', run_attempt: 1 }],
           }),
         },
-        [`repos/${REPO}/actions/runs/42/jobs?per_page=100`]: {
-          stdout: JSON.stringify({
-            jobs: ['gate-linux', 'gate-macos'].map((name) => ({
-              name,
-              conclusion: 'success',
-              runner_name: 'runner-1',
-              steps: [{ conclusion: 'success' }],
-            })),
-          }),
+        ['--paginate --slurp repos/' + REPO + '/actions/runs/42/attempts/1/jobs?per_page=100']: {
+          stdout: JSON.stringify([{ jobs }]),
         },
       }),
     );
-    const committed = JSON.parse(readFileSync(join(ROOT, 'tools/deliver/deliver.json'), 'utf8')) as Record<
-      string,
-      unknown
-    >;
     const config = join(scripts, 'deliver.json');
     const verdict = JSON.stringify({ sha: hash, scenarios: [{ name: 'a' }] });
     writeFileSync(

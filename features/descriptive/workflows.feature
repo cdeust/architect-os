@@ -17,13 +17,20 @@ Feature: GitHub workflows
       | claude-review.yml        |
       | claude.yml               |
       | gate.yml                 |
+      | gate-lane.yml            |
       | mutation-full.yml        |
       | pipeline-after-merge.yml |
       | watch.yml                |
 
+  Scenario: the native lane preserves separate runner jobs and permissions
+    Given the committed workflow "gate-lane.yml"
+    Then it satisfies the native lane workflow rules
+    And Gate jobs reject explicit secrets and permissions
+
   Scenario: gate.yml follows the rules of the CI gate
     Given the committed workflow "gate.yml"
     Then it satisfies the gate workflow rules
+    And Gate jobs reject explicit secrets and permissions
 
   Scenario: broker-live.yml stores no credential, asks for the identity token of its run, keeps it to main, and names nothing the log would print
     Given the committed workflow "broker-live.yml"

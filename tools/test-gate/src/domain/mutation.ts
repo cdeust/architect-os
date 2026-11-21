@@ -3,6 +3,7 @@ import {
   debtIdentity,
   entryOf,
   judgeDebt,
+  type DebtEntry,
   type DebtInput,
   type DebtSummary,
 } from './debt.js';
@@ -62,6 +63,7 @@ export interface MutantRecord {
   readonly id: string;
   readonly mutatorName: string;
   readonly status: string;
+  readonly statusReason?: string;
   readonly startLine: number;
   /** Column of the start, from one. */
   readonly startColumn: number;
@@ -83,6 +85,11 @@ export interface MutationReport {
   readonly mutate: readonly string[];
   /** Every test of the run, by id: `<feature>:<line>`. */
   readonly tests: ReadonlyMap<string, string>;
+  /** Set only when Gate projected a verified native report. */
+  readonly gateNativeScope?: ReadonlyMap<
+    string,
+    { readonly whole: boolean; readonly lines: readonly number[] }
+  >;
 }
 
 export interface JudgedMutant {
@@ -185,7 +192,20 @@ export function judgeMutation(
       }
     }
   }
-  const judgedDebt = judgeDebt(debt, report, accepted);
+  const coverage = report.gateNativeScope;
+  const covered =
+    coverage === undefined
+      ? undefined
+      : ({ file, start, end }: DebtEntry) => {
+          const attested = coverage.get(file);
+          if (attested === undefined) return false;
+          if (perimeter.retired.includes(file)) return attested.whole;
+          const overlaps = (line: number) => line >= start.line && line <= end.line;
+          const changed = perimeter.changedLines.get(file);
+          if (changed === undefined) return false;
+          return (attested.whole || attested.lines.some(overlaps)) && [...changed].some(overlaps);
+        };
+  const judgedDebt = judgeDebt(debt, report, accepted, covered);
   violations.push(...judgedDebt.violations);
   return { perimeter, mutants, invalid, debt: judgedDebt.summary, violations };
 }

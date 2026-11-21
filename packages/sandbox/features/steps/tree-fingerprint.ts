@@ -319,15 +319,42 @@ const tell = (world: { state: Record<string, unknown> }, answers: Record<string,
     writeFileSync(join(fp(world).bin as string, name), text);
 };
 
-Given('a fake git that records its calls', function () {
+function installFakeGit(world: { state: Record<string, unknown>; cleanups: (() => void)[] }, script: string) {
   const bin = mkdtempSync(join(ROOT_TMP, 'aos-fp-bin-'));
-  this.cleanups.push(() => rmSync(bin, { recursive: true, force: true }));
-  writeFileSync(join(bin, 'git'), FAKE_GIT);
+  world.cleanups.push(() => rmSync(bin, { recursive: true, force: true }));
+  writeFileSync(join(bin, 'git'), script);
   chmodSync(join(bin, 'git'), 0o755);
   writeFileSync(join(bin, 'calls.log'), '');
-  setEnv(this, 'PATH', `${bin}:${process.env['PATH']}`);
-  fp(this).bin = bin;
-  fp(this).log = join(bin, 'calls.log');
+  setEnv(world, 'PATH', `${bin}:${process.env['PATH']}`);
+  fp(world).bin = bin;
+  fp(world).log = join(bin, 'calls.log');
+}
+
+Given('a fake git that records its calls', function () {
+  installFakeGit(this, FAKE_GIT);
+});
+
+Given('a fake git with immediate responses before its deliberately silent call', function () {
+  installFakeGit(
+    this,
+    [
+      '#!/bin/sh',
+      'set -eu',
+      'shift 4',
+      'IFS= read -r silent < "${0%/*}/on" || [ -n "$silent" ]',
+      'printf "%s\\n" "$*" >> "${0%/*}/calls.log"',
+      'if [ "$*" = "$silent" ]; then exec /bin/sleep 60; fi',
+      'printf "%s\\n" cccccccccccccccccccccccccccccccccccccccc',
+      '',
+    ].join('\n'),
+  );
+});
+
+Then('the timed out fake git call was {string}', function (call: string) {
+  const observed = readFileSync(fp(this).log as string, 'utf8')
+    .trimEnd()
+    .split('\n');
+  assert.equal(observed.at(-1), call);
 });
 
 Given('the fake git never answers the call {string}', function (call: string) {

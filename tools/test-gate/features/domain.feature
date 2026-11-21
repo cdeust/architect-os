@@ -127,3 +127,27 @@ Feature: Test gate domain functions, observed directly
     Given a gate workspace holding the files "zeta/a.x, alpha/b.x, alpha/a.x, mid/a.x, node_modules/n/q.x"
     When the gate workspace globs "**/*.x" excluding "**/node_modules/**"
     Then the gate workspace paths are "alpha/a.x, alpha/b.x, mid/a.x, zeta/a.x"
+
+  Scenario Outline: replay files with equal counts retain inventory path order, <case>
+    When the gate distributes replay files "<files>"
+    Then the first replay lot is "<first>" and the second is "<second>"
+
+    Examples:
+      | case                   | files                  | first    | second |
+      | heavier files first    | a:2, b:2, c:1, z:3     | z, c     | a, b   |
+      | paths break a tie      | a:1, b:1, c:1          | a, c     | b      |
+      | zero native mutants    | a:2, b:0, c:0, z:2     | a, b, c  | z      |
+      | no files               |                        |          |        |
+
+  Scenario Outline: native evidence supports multiline mutation debt only in the proven scope
+    When the gate judges the "<disposition>" multiline debt with native scope "<attestation>" and Git lines "<lines>"
+    Then the gate confirms <detected> detected and <removed> retired debt entries without violations
+
+    Examples:
+      | disposition | attestation | lines | detected | removed |
+      | retained    | [1,2]       | [1,3] | 1        | 0       |
+      | retained    | [4]         | [2]   | 0        | 0       |
+      | retained    | absent      | [2]   | 0        | 0       |
+      | retained    | whole       | []    | 0        | 0       |
+      | retained    | whole       | [2]   | 1        | 0       |
+      | retired     | whole       | []    | 0        | 1       |

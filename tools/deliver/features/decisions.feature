@@ -84,6 +84,37 @@ Feature: The decisions of the delivery command (pure: the trial branch, the stat
         | lint=failure/runner/failed-step, gate-linux=success/runner | gate-linux | green  |
         | lint=success/runner, gate-linux=failure/runner/failed-step | gate-linux | failed |
 
+  Rule: a required aggregate can explain a producer which never started only by its first admission step
+
+    Scenario Outline: the aggregate, its producers, and the independent required check
+      Then the completed gate with producers "a, b" and jobs "linux=<aggregate>, a=<a>, b=<b>, macos=success/runner" is "<state>"
+
+      Examples:
+        | aggregate                            | a                              | b                  | state     |
+        | success/runner                       | success/runner                 | success/runner     | green     |
+        | failure/runner/Require all producers | cancelled/norunner             | success/runner     | no-runner |
+        | failure/runner/Require all producers | cancelled/runner               | success/runner     | failed    |
+        | cancelled/runner/Require all producers | cancelled/norunner           | success/runner     | failed    |
+        | failure/runner/Require all producers | success/runner                 | cancelled/norunner | no-runner |
+        | failure/runner/Require all producers | failure/runner/failed-step     | cancelled/norunner | failed    |
+        | failure/runner/Require all producers | success/runner                 | success/runner     | failed    |
+        | failure/runner/Require all producers | cancelled/norunner/failed-step | success/runner     | failed    |
+        | failure/runner/Later                 | cancelled/norunner             | success/runner     | failed    |
+        | failure/runner                       | cancelled/norunner             | success/runner     | failed    |
+        | success/runner                       | cancelled/norunner             | success/runner     | failed    |
+        | success/runner/failed-step           | success/runner                 | success/runner     | failed    |
+        | success/runner                       | success/runner/failed-step     | success/runner     | failed    |
+        | cancelled/norunner                   | cancelled/norunner             | success/runner     | no-runner |
+
+    Scenario: a missing producer fails the gate
+      Then the completed gate with producers "a, b" and jobs "linux=success/runner, a=success/runner, macos=success/runner" is "failed"
+
+    Scenario: two current jobs with the same required producer name are ambiguous
+      Then the completed gate with producers "a" and jobs "linux=success/runner, a=success/runner, a=failure/runner, macos=success/runner" is "failed"
+
+    Scenario: a real failure of the independent check stops the rerun
+      Then the completed gate with producers "a" and jobs "linux=failure/runner/Require all producers, a=cancelled/norunner, macos=failure/runner/failed-step" is "failed"
+
   Rule: the plan of what to publish is the parent and the branches left, or a refusal
 
     Scenario: every branch is at the parent

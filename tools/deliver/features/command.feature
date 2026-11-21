@@ -6,6 +6,12 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
 
   Rule: a run that goes to its end
 
+    Scenario: delivery reads the required producer from the newest effective attempt
+      Given the delivery command has its required producer only in the preceding attempt
+      When I run the delivery command with "step --until ci"
+      Then the delivery command exited 0
+      And the delivery command only read the third and second job attempts, in order
+
     Scenario: a delivery to its end
       When I run the delivery command with "step"
       Then the delivery command exited 0
