@@ -48,6 +48,13 @@ Then('session workspace binding handles {string}', function (kind: string) {
       settings.filesystem.allowRead = ['/private'];
       expected = ['/private', work.repo];
       break;
+    case 'linked checkout and git metadata':
+      work.repo = run + '/repo';
+      work.worktree = work.repo + '/.claude/worktrees/topic';
+      settings.filesystem.allowWrite = [work.worktree];
+      settings.filesystem.allowRead = [work.worktree];
+      expected = [work.worktree, work.repo + '/.git'];
+      break;
     case 'mutable runtime root':
       settings.filesystem.allowWrite = [root];
       refusal = 'workspace grants writes';

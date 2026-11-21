@@ -14,6 +14,7 @@ Feature: Checker profile template (docs/design/orchestration-fable-5-2.md, §13,
       | ${tmp} |
     And the profile denies writing to exactly:
       | /tmp/claude |
+      | /private/tmp/claude |
       | ${runtime}/cache |
       | ${runtime}/state |
     And the profile denies reading exactly:

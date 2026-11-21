@@ -15,6 +15,7 @@ Feature: Reviewer profile template
     And the profile denies writing to exactly:
       | ${config}/settings.json |
       | /tmp/claude |
+      | /private/tmp/claude |
       | ${runtime}/cache |
       | ${runtime}/state |
     And the profile denies reading exactly:

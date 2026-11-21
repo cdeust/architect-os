@@ -25,6 +25,7 @@ Feature: module and worker profiles of the platform (docs/design/platform-v3-srt
       | ${worktree}/.mcp.json |
       | ${worktree}/.claude   |
       | /tmp/claude |
+      | /private/tmp/claude |
       | ${runtime}/cache |
       | ${runtime}/state |
     And the profile unsets exactly the variables:

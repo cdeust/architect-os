@@ -11,6 +11,7 @@ Feature: Only the intended checkout and session are reopened beneath a runtime
       | checkout outside the runtime       |
       | own checkout read fallback         |
       | own checkout keeps existing reads  |
+      | linked checkout and git metadata   |
       | ordinary prefix neighbour          |
       | mutable runtime root               |
       | mutable run collection             |

@@ -27,11 +27,17 @@ const command = `
     try { operation(); return false; }
     catch (e) { if (!['EACCES','EPERM','EROFS','ENOENT'].includes(e.code)) throw e; return true; }
   };
+  if (spec.builder) {
+    const marker = path.join(process.cwd(),'builder-can-write');
+    fs.writeFileSync(marker,'worktree',{flag:'wx'}); fs.unlinkSync(marker);
+  }
   const tmp = os.tmpdir();
   fs.writeFileSync(path.join(tmp, 'session-positive'), 'own');
   const cache = process.env.npm_config_cache;
   fs.mkdirSync(cache,{recursive:true}); fs.writeFileSync(path.join(cache,'private-cache-entry'),'own');
-  const writes = spec.write.map(p => denied(() => fs.closeSync(fs.openSync(p,'a'))));
+  // The host planted every control. Opening an existing object for writing measures access to
+  // that object, independent of whether a Linux masking mount permits disposable entries.
+  const writes = spec.write.map(p => denied(() => fs.closeSync(fs.openSync(p,'r+'))));
   const reads = spec.read.map(p => denied(() => fs.readFileSync(p)));
   const global = spec.global.map(p => denied(() => {
     fs.mkdirSync(path.dirname(p),{recursive:true});
@@ -102,6 +108,7 @@ When(
     if (profile === 'worker' || profile === 'module') usePlatform(this, extra);
     else useSrt(this, () => extra);
     const global = [join('/tmp', token), join('/tmp/claude', token)];
+    if (process.platform === 'darwin') global.push(join('/private/tmp/claude', token));
     this.cleanups.push(() => {
       for (const file of global) if (existsSync(file)) rmSync(file);
     });
@@ -109,7 +116,12 @@ When(
     const sandbox = await stored<SandboxRunner>(this, 'runner').start({
       profile,
       cwd: stored<string>(this, 'cwd'),
-      command: [process.execPath, '-e', command, JSON.stringify({ write, read, global })],
+      command: [
+        process.execPath,
+        '-e',
+        command,
+        JSON.stringify({ write, read, global, builder: profile === 'builder' }),
+      ],
     });
     sandbox.stdin.end();
     const collect = async (stream: NodeJS.ReadableStream) => {

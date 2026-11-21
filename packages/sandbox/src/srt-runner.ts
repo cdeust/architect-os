@@ -161,7 +161,10 @@ export function bindSessionWorkspace(
   if ([root, runs, sessionParent].some((path) => isWritable(settings, path)))
     throw unavailable('workspace grants writes to shared runtime storage');
   if (inside(workspace.repo, runs)) {
-    settings.filesystem.allowRead = [...(settings.filesystem.allowRead ?? []), workspace.repo];
+    // A Linux read-only bind of the primary checkout would cover the nested writable worktree.
+    // Git needs its common directory; a platform process instead consumes its separate source root.
+    const source = inside(workspace.worktree, workspace.repo) ? join(workspace.repo, '.git') : workspace.repo;
+    settings.filesystem.allowRead = [...(settings.filesystem.allowRead ?? []), source];
   }
 }
 

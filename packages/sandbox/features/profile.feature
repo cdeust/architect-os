@@ -20,6 +20,7 @@ Feature: Builder profile template
       | ${worktree}/steps                                          |
       | ${config}/settings.json                                    |
       | /tmp/claude |
+      | /private/tmp/claude |
       | ${runtime}/cache |
       | ${runtime}/state |
     And the profile denies reading exactly:

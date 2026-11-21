@@ -32,6 +32,7 @@
         "${worktree}/steps",
         "${config}/settings.json",
         "/tmp/claude",
+        "/private/tmp/claude",
         "${runtime}/cache",
         "${runtime}/state"
       ]

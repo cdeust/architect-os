@@ -28,6 +28,7 @@
         "${worktree}/.mcp.json",
         "${worktree}/.claude",
         "/tmp/claude",
+        "/private/tmp/claude",
         "${runtime}/cache",
         "${runtime}/state"
       ]

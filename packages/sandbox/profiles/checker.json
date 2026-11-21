@@ -24,7 +24,7 @@
       ],
       "allowRead": ["${tmp}", "${worktree}"],
       "allowWrite": ["${tmp}"],
-      "denyWrite": ["/tmp/claude", "${runtime}/cache", "${runtime}/state"]
+      "denyWrite": ["/tmp/claude", "/private/tmp/claude", "${runtime}/cache", "${runtime}/state"]
     }
   },
   "env": {

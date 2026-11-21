@@ -330,7 +330,7 @@ Given(
   'an srt runner over a throwaway git repository whose canary reports the path of its secret as what it read',
   function () {
     useSrt(this, (repo) => {
-      const probe = join(repo.root, 'repo', 'telling-canary.mjs');
+      const probe = join(repo.root, 'repo', '.git', 'telling-canary.mjs');
       writeFileSync(
         probe,
         'process.stdout.write(JSON.stringify({ read: process.argv[2], connect: "denied" }) + "\\n");\n',
@@ -355,7 +355,7 @@ Then('it is refused because the canary read a secret in the sibling folder of th
 Given('an srt runner over a throwaway git repository whose canary prints {string}', function (line: string) {
   useSrt(this, (repo) => {
     // Outside the worktree, which the sandbox may write: a trusted path must not be writable by it.
-    const probe = join(repo.root, 'repo', 'lying-canary.mjs');
+    const probe = join(repo.root, 'repo', '.git', 'lying-canary.mjs');
     writeFileSync(probe, `process.stdout.write(${JSON.stringify(`${line}\n`)});\n`);
     return { canaryProbe: probe };
   });
