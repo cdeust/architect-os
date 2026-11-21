@@ -190,3 +190,72 @@ Then('a measured draft without a provider key publishes only a refusal receipt',
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+Then('a measured Antigravity import supplies one receipt that binds the prepared Plan', () => {
+  const root = mkdtempSync(join(tmpdir(), 'measured-agy-'));
+  try {
+    const { define, policy } = planFixture(root);
+    const model = 'gemini-4-neon-high';
+    const step = 'delivery';
+    const response = join(root, 'response.jsonl');
+    const receipt = join(root, 'agy.jsonl');
+    const env = fixtureEnvironment(root);
+    const request = spawnSync(
+      process.execPath,
+      ['--import', 'tsx', 'tools/plan/src/cli.ts', 'agy-request', model, step, define],
+      { env, encoding: 'utf8' },
+    );
+    assert.equal(request.status, 0, request.stderr);
+    const digest = JSON.parse(JSON.parse(request.stdout).message.content.split('\n').at(-1)).request_sha256;
+    const id = 'fixture-conversation';
+    const events = [
+      { event: 'init', conversation_id: id, init: { model, permission_mode: 'strict' } },
+      {
+        event: 'result',
+        result: {
+          conversation_id: id,
+          status: 'SUCCESS',
+          num_turns: 1,
+          structured_output: {
+            request_sha256: digest,
+            proposal: {
+              step,
+              objective: 'Keep the receipt.',
+              verification: 'Read the receipt.',
+              acceptance_ids: ['AC-001'],
+            },
+          },
+        },
+      },
+    ];
+    writeFileSync(response, events.map((event) => JSON.stringify(event)).join('\n') + '\n');
+    const args = [receipt, 'agy-result', model, step, define, response];
+    const result = measured(args, env);
+    assert.equal(result.status, 0, result.stderr);
+    const journal = readFileSync(receipt, 'utf8');
+    const [started, finished, ...extra] = journal
+      .trimEnd()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    assert.deepEqual(extra, []);
+    assert.equal(started.event, 'started');
+    assert.equal(finished.event, 'finished');
+    assert.equal(finished.attempt_id, started.attempt_id);
+    assert.equal(finished.stage, 'agy-result');
+    assert.equal(finished.outcome, 'proposed');
+    assert.equal(finished.request_sha256, digest);
+    assert.equal(finished.billing_verified, false);
+
+    const proposal = join(root, 'proposal.json');
+    writeFileSync(proposal, result.stdout);
+    const preview = measured([join(root, 'prepare.jsonl'), 'prepare', define, proposal, policy], env);
+    assert.equal(preview.status, 0, preview.stderr);
+    const { status, manifest } = JSON.parse(preview.stdout);
+    assert.equal(status, 'pending');
+    assert.equal(manifest.run_id, finished.run_id);
+    assert.equal(manifest.source_sha256.define, finished.define_sha256);
+    assert.equal(manifest.source_sha256.proposal, finished.proposal_sha256);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
