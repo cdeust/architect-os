@@ -266,10 +266,10 @@
   <rect x="365.1" y="1192.5" width="157.0" height="132.0" rx="6" fill="#ffffff" stroke="#bf8700"/>
   <text x="376.1" y="1214.5" font-size="12.5" fill="#1f2328" font-weight="600">3 · Build</text>
   <text x="376.1" y="1232.5" font-size="11.5" fill="#57606a">Claude Code in srt,</text>
-  <text x="376.1" y="1248.0" font-size="11.5" fill="#57606a">profile builder:</text>
-  <text x="376.1" y="1263.5" font-size="11.5" fill="#57606a">writes its worktree,</text>
-  <text x="376.1" y="1279.0" font-size="11.5" fill="#57606a">from the brief and</text>
-  <text x="376.1" y="1294.5" font-size="11.5" fill="#57606a">the checked quotes</text>
+  <text x="376.1" y="1248.0" font-size="11.5" fill="#57606a">profile builder: owns</text>
+  <text x="376.1" y="1263.5" font-size="11.5" fill="#57606a">design, implementation</text>
+  <text x="376.1" y="1279.0" font-size="11.5" fill="#57606a">and maintenance of</text>
+  <text x="376.1" y="1294.5" font-size="11.5" fill="#57606a">the code it changes</text>
   <rect x="466.1" y="1184.0" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
   <text x="489.1" y="1196.5" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
   <rect x="535.7" y="1192.5" width="157.0" height="132.0" rx="6" fill="#ffffff" stroke="#bf8700"/>
