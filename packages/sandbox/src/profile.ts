@@ -77,6 +77,7 @@ export type ProfileTemplate = z.infer<typeof ProfileTemplateSchema>;
  */
 export const PROFILE_VARIABLES = [
   'home',
+  'runtime',
   'repo',
   'worktree',
   'worktreeName',

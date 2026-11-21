@@ -17,11 +17,20 @@
         "${home}/.claude",
         "${home}/.claude.json",
         "${home}/Library/Keychains",
-        "${sandboxes}"
+        "${sandboxes}",
+        "${home}/.npm",
+        "${runtime}/run",
+        "${runtime}/state"
       ],
       "allowRead": ["${worktree}", "${tmp}"],
       "allowWrite": ["${worktree}", "${tmp}"],
-      "denyWrite": ["${worktree}/.mcp.json", "${worktree}/.claude"]
+      "denyWrite": [
+        "${worktree}/.mcp.json",
+        "${worktree}/.claude",
+        "/tmp/claude",
+        "${runtime}/cache",
+        "${runtime}/state"
+      ]
     }
   },
   "env": {
@@ -29,7 +38,9 @@
     "set": {
       "TMPDIR": "${tmp}",
       "GATEWAY_CALLBACK_URL": "http://127.0.0.1:${callbackPort}/mcp",
-      "NODE_USE_ENV_PROXY": "1"
+      "NODE_USE_ENV_PROXY": "1",
+      "CLAUDE_CODE_TMPDIR": "${tmp}",
+      "npm_config_cache": "${tmp}/npm"
     },
     "unset": ["NO_PROXY", "no_proxy"]
   },

@@ -12,3 +12,4 @@ Feature: The approved Plan is read by the real Step host
     Then the step exits with 0
     And the sessions started were "code.json"
     And the Step record binds the two approved input files
+    And the approved Step intake still matches the Plan manifest byte for byte

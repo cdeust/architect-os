@@ -18,9 +18,15 @@ Feature: module and worker profiles of the platform (docs/design/platform-v3-srt
       | ${home}/.claude.json         |
       | ${home}/Library/Keychains    |
       | ${sandboxes}                  |
+      | ${home}/.npm |
+      | ${runtime}/run |
+      | ${runtime}/state |
     And the profile denies writing to exactly:
       | ${worktree}/.mcp.json |
       | ${worktree}/.claude   |
+      | /tmp/claude |
+      | ${runtime}/cache |
+      | ${runtime}/state |
     And the profile unsets exactly the variables:
       | NO_PROXY |
       | no_proxy |
@@ -51,6 +57,8 @@ Feature: module and worker profiles of the platform (docs/design/platform-v3-srt
       | TMPDIR               | ${tmp}                               |
       | GATEWAY_CALLBACK_URL | http://127.0.0.1:${callbackPort}/mcp |
       | NODE_USE_ENV_PROXY   | 1                                    |
+      | CLAUDE_CODE_TMPDIR | ${tmp} |
+      | npm_config_cache | ${tmp}/npm |
     When I resolve the profile with the variables of a platform process
     Then the resolved network domains are exactly "127.0.0.1:8080"
     And the resolved profile contains no "${" placeholder
@@ -83,6 +91,7 @@ Feature: module and worker profiles of the platform (docs/design/platform-v3-srt
       | CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC | 1                              |
       | DISABLE_AUTOUPDATER                      | 1                              |
       | DISABLE_TELEMETRY                        | 1                              |
+      | npm_config_cache | ${tmp}/npm |
     When I resolve the profile with the variables of a platform process
     Then the resolved network domains are exactly "127.0.0.1:8084"
     And the resolved environment sets "ANTHROPIC_API_KEY" to "task-token"

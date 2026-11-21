@@ -17,11 +17,20 @@
         "${home}/.claude",
         "${home}/.claude.json",
         "${home}/Library/Keychains",
-        "${sandboxes}"
+        "${sandboxes}",
+        "${home}/.npm",
+        "${runtime}/run",
+        "${runtime}/state"
       ],
       "allowRead": ["${worktree}", "${config}", "${tmp}"],
       "allowWrite": ["${worktree}", "${config}", "${tmp}"],
-      "denyWrite": ["${worktree}/.mcp.json", "${worktree}/.claude"]
+      "denyWrite": [
+        "${worktree}/.mcp.json",
+        "${worktree}/.claude",
+        "/tmp/claude",
+        "${runtime}/cache",
+        "${runtime}/state"
+      ]
     }
   },
   "env": {
@@ -35,7 +44,8 @@
       "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1",
       "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
       "DISABLE_AUTOUPDATER": "1",
-      "DISABLE_TELEMETRY": "1"
+      "DISABLE_TELEMETRY": "1",
+      "npm_config_cache": "${tmp}/npm"
     },
     "unset": ["NO_PROXY", "no_proxy"]
   },

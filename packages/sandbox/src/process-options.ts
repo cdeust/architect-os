@@ -22,6 +22,8 @@ export function processRunnerOptions(
     node,
     canaryProbe: join(root, 'packages', 'sandbox', 'src', 'canary-probe.mjs'),
     tmpRoot: tmpdir(),
+    runtimeRoot: process.env.ARCHITECT_OS_RUNTIME_ROOT!,
+    runDir: process.env.ARCHITECT_OS_RUN_DIR!,
     home,
     hostEnv: { PATH: `${dirname(node)}:/usr/bin:/bin`, HOME: home },
     trusted: [],

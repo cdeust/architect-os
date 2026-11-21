@@ -137,7 +137,7 @@ Given(
         gateVerdict: 'reports/gate-base.json',
         gateCommand: ['npm', 'run', 'gate'],
         gateLog: 'reports/deliver-gate.log',
-        log: '${home}/.local/state/architect-os/deliveries.jsonl',
+        log: '${state}/deliveries.jsonl',
         environment: ['PATH'],
         ciAttempts: 3,
         pollSeconds: 30,

@@ -17,7 +17,12 @@ import { isComponent, type Below } from '#runtime/domain/root.js';
 import type { SpaceSample } from '#runtime/domain/space.js';
 
 type MemoryNode =
-  | { readonly kind: 'directory'; readonly device: bigint; readonly inode: bigint }
+  | {
+      readonly kind: 'directory';
+      readonly device: bigint;
+      readonly inode: bigint;
+      readonly unsafeForState?: true;
+    }
   | { readonly kind: 'file'; readonly device: bigint; readonly bytes: Uint8Array }
   | { readonly kind: 'link' }
   | { readonly kind: 'special' };
@@ -52,6 +57,13 @@ export class MemoryRuntimeFilesystem implements RuntimeFilesystem {
         this.nodes.set(prefix, { kind: 'directory', device, inode: ++this.inodes });
     }
     return this;
+  }
+
+  /** A retained directory whose mode or owner would not protect the shared state on the host. */
+  unprotectedDirectory(path: string, device: bigint): void {
+    this.directory(path, device);
+    const dir = this.nodes.get(path) as Extract<MemoryNode, { kind: 'directory' }>;
+    this.nodes.set(path, { ...dir, unsafeForState: true });
   }
 
   file(path: string, bytes: Uint8Array, device: bigint): this {
@@ -167,7 +179,12 @@ export class MemoryRuntimeFilesystem implements RuntimeFilesystem {
       if (this.unsearchable.has(path.slice(0, path.lastIndexOf('/')))) return 'failed';
       const node = this.nodes.get(path);
       if (node === undefined) return 'absent';
-      if (node.kind !== 'directory' || node.device !== device) return 'unsafe';
+      if (
+        node.kind !== 'directory' ||
+        node.device !== device ||
+        (below[0] === 'state' && node.unsafeForState)
+      )
+        return 'unsafe';
     }
     return 'found';
   }
@@ -182,7 +199,12 @@ export class MemoryRuntimeFilesystem implements RuntimeFilesystem {
         this.make(path, { kind: 'directory', device: this.deviceOfParent(path), inode: ++this.inodes });
       }
       const node = this.nodes.get(path) as MemoryNode;
-      if (node.kind !== 'directory' || node.device !== device) return 'unsafe';
+      if (
+        node.kind !== 'directory' ||
+        node.device !== device ||
+        (below[0] === 'state' && node.unsafeForState)
+      )
+        return 'unsafe';
     }
     return 'ok';
   }

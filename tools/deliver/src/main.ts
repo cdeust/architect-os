@@ -1,7 +1,6 @@
 // The composition root of `npm run deliver` (docs/design/orchestration-fable-5-2.md §14): the one place that builds
 // objects. The entry `cli.ts` only hands it the process. Every dependency of the process is injected.
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { deliver } from './application/deliver.js';
 import type { DeliverConfig } from './domain/config.js';
@@ -29,7 +28,6 @@ export interface DeliverDependencies {
   readonly git: string;
   /** The program that runs the GitHub client, and what goes before `api` in its argv. */
   readonly gh: { readonly program: string; readonly prefix: readonly string[] };
-  readonly home: string;
   readonly setTimer: (handler: () => void, milliseconds: number) => unknown;
   /** The descriptive file `deliver.json`. */
   readonly config: string;
@@ -113,7 +111,7 @@ export async function runDeliver(deps: DeliverDependencies): Promise<number> {
       forge: new GhForge(config.repository, deps.gh.program, deps.gh.prefix, worktree, host),
       gate: new ProcessGate(worktree, config.gateCommand, config.gateLog, config.gateVerdict),
       clock: new TimerClock(deps.setTimer),
-      log: new FileLog(config.log, deps.home),
+      log: new FileLog(config.log, deps.env['ARCHITECT_OS_RUNTIME_ROOT']),
       progress: new StreamProgress(deps.stderr),
     };
     const result = await deliver(options, config, ports);
@@ -136,7 +134,7 @@ export interface DeliverProcess {
   cwd(): string;
 }
 
-/** The real dependencies: the streams of the process, git and gh, the home of the user, the timer, the file of this package. */
+/** The real dependencies: the streams of the process, git and gh, the timer, the file of this package. */
 export function deliverDependencies(proc: DeliverProcess): DeliverDependencies {
   return {
     argv: proc.argv.slice(2),
@@ -146,7 +144,6 @@ export function deliverDependencies(proc: DeliverProcess): DeliverDependencies {
     stderr: proc.stderr,
     git: 'git',
     gh: { program: 'gh', prefix: [] },
-    home: homedir(),
     setTimer: setTimeout,
     config: fileURLToPath(new URL('../deliver.json', import.meta.url)),
   };

@@ -75,8 +75,8 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | gateCommand    | ["a"]                                                  |
         | gateCommand    | ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p"] |
         | gateLog        | "a"                                                    |
-        | log            | "${home}/a"                                            |
-        | log            | "${home}/a.b/c"                                        |
+        | log            | "${state}/a"                                            |
+        | log            | "${state}/a.b/c"                                        |
         | ciAttempts     | 1                                                      |
         | ciAttempts     | 10                                                     |
         | pollSeconds    | 1                                                      |
@@ -213,13 +213,13 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | gateLog        | "/reports/gate.log"            | $.gateLog a repository path is relative            |
         | gateLog        | "../gate.log"                  | $.gateLog a repository path is relative            |
         | gateLog        | "reports\\\\gate.log"          | $.gateLog a repository path is relative            |
-        | log            | ""                             | $.log the log path starts with ${home}/            |
-        | log            | "/var/log/deliveries.jsonl"    | $.log the log path starts with ${home}/            |
-        | log            | "$HOME/a"                      | $.log the log path starts with ${home}/            |
-        | log            | "${home}"                      | $.log the log path starts with ${home}/            |
-        | log            | "x${home}/a"                   | $.log the log path starts with ${home}/            |
-        | log            | "${home}/../a"                 | $.log the log path has no ..                       |
-        | log            | "${home}/a/.."                 | $.log the log path has no ..                       |
+        | log            | ""                             | $.log the log path starts with ${state}/            |
+        | log            | "/var/log/deliveries.jsonl"    | $.log the log path starts with ${state}/            |
+        | log            | "$HOME/a"                      | $.log the log path starts with ${state}/            |
+        | log            | "${state}"                      | $.log the log path starts with ${state}/            |
+        | log            | "x${state}/a"                   | $.log the log path starts with ${state}/            |
+        | log            | "${state}/../a"                 | $.log the log path has only ordinary components                       |
+        | log            | "${state}/a/.."                 | $.log the log path has only ordinary components                       |
         | log            | 1                              | $.log                                              |
         | environment    | []                             | $.environment                                      |
         | environment    | ["PATH","HOME","LANG","LC_ALL","LC_CTYPE","TMPDIR","SSH_AUTH_SOCK","XDG_CONFIG_HOME","GH_TOKEN","GITHUB_TOKEN","PATH"] | $.environment the variables are all different |

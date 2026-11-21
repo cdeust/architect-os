@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { AuthProxyOptions, CredentialSource } from '../../src/auth-proxy.js';
 import { authProxyOptions, loadTool, parseTool, type Tool } from '../../src/tool.js';
@@ -12,6 +11,8 @@ const committed = (file = 'code.json'): Record<string, any> =>
 // Named defects of the committed file, one per row of the "rejects a broken copy" Examples.
 const DEFECTS: Record<string, (t: Record<string, any>) => unknown> = {
   'a misspelt key': (t) => (t['plugins'] = []),
+  'a usage log in the old host home': (t) => (t['authProxy']['usageLog'] = '${home}/usage.jsonl'),
+  'a usage log above persistent state': (t) => (t['authProxy']['usageLog'] = '${state}/../usage.jsonl'),
   'an empty command': (t) => (t['command'] = []),
   'a plain-http upstream': (t) => (t['authProxy']['upstream'] = 'http://api.anthropic.com'),
   'an xhttps upstream': (t) => (t['authProxy']['upstream'] = 'xhttps://api.anthropic.com'),
@@ -29,7 +30,12 @@ const DEFECTS: Record<string, (t: Record<string, any>) => unknown> = {
 const credentialSource: CredentialSource = async () => ({ accessToken: 'unused' });
 
 When('I build the auth proxy options with the session token {string}', function (sessionToken: string) {
-  this.state['options'] = authProxyOptions(stored<Tool>(this, 'tool'), sessionToken, credentialSource);
+  this.state['options'] = authProxyOptions(
+    stored<Tool>(this, 'tool'),
+    sessionToken,
+    credentialSource,
+    '/fixture',
+  );
 });
 
 Then('the auth proxy options carry the upstream, routes, betas and policy of code.json', function () {
@@ -55,8 +61,8 @@ Then(
   },
 );
 
-Then('the auth proxy usage log is {string} under the home directory', function (path: string) {
-  assert.equal(stored<AuthProxyOptions>(this, 'options').usageLog, join(homedir(), path));
+Then('the auth proxy usage log is {string} under the runtime root', function (path: string) {
+  assert.equal(stored<AuthProxyOptions>(this, 'options').usageLog?.path, join('/fixture', path));
 });
 
 When('I load the committed review.json', function () {

@@ -1,7 +1,6 @@
 import { runLocations } from '@architect-os/sandbox/runtime-context';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import {
   deliverDependencies,
@@ -22,14 +21,14 @@ import { REPOSITORY, Given, Then, When, type DeliverWorld } from './support.js';
 const FAKE_GATE = `${REPOSITORY}tools/deliver/fixtures/fake-gate.mjs`;
 const COMMITTED = `${REPOSITORY}tools/deliver/deliver.json`;
 const VERDICT = 'reports/gate-base.json';
-const LOG = '.local/state/architect-os/deliveries.jsonl';
+const LOG = 'state/deliveries.jsonl';
 
 interface Command {
   git: GitFixture;
   gh: GhForgeFixture;
   home: string;
   /** The home the command is told, when it is not the temporary one. */
-  toldHome?: string;
+  runtimeRoot: string;
   /** The environment of the process the command is started in: the host variables of the descriptive file, and what a scenario adds. */
   environment: Record<string, string>;
   /** Another bare repository, when a scenario makes one. */
@@ -94,7 +93,10 @@ Given(
     });
     for (const branch of ['feat/gate-1a', 'main']) gh.evaluated(branch, git.hashOf(commit), 'pass');
     const home = temporaryDirectory(this);
+    const runtimeRoot = temporaryDirectory(this);
+    mkdirSync(join(runtimeRoot, 'state'), { mode: 0o700 });
     const command: Command = {
+      runtimeRoot,
       git,
       gh,
       home,
@@ -149,12 +151,15 @@ async function run(world: DeliverWorld, argv: string, fromWorktree: boolean): Pr
   const dependencies: DeliverDependencies = {
     argv: argv === '' ? [] : argv.split(' '),
     cwd: fromWorktree ? command.git.work : command.home,
-    env: fromWorktree ? command.environment : { ...command.environment, INIT_CWD: command.git.work },
+    env: {
+      ...command.environment,
+      ARCHITECT_OS_RUNTIME_ROOT: command.runtimeRoot,
+      ...(fromWorktree ? {} : { INIT_CWD: command.git.work }),
+    },
     stdout: { write: (text: string) => void (out.stdout += text) },
     stderr: { write: (text: string) => void (out.stderr += text) },
     git: 'git',
     gh: { program: command.gh.program, prefix: command.gh.prefix },
-    home: command.toldHome ?? command.home,
     // A timer that fires at once: the polls are not waited for.
     setTimer: (handler) => handler(),
     config: command.config,
@@ -164,17 +169,17 @@ async function run(world: DeliverWorld, argv: string, fromWorktree: boolean): Pr
   command.stderr = out.stderr;
 }
 
-Given('the delivery command is told its home as a path that is not absolute', function () {
+Given('the delivery command is told its runtime root as a path that is not absolute', function () {
   // The temporary home itself, written from the working directory of this process. Should the refusal ever be lost
   // (the mutation run removes it on purpose), the log lands in that temporary home, which the scenario removes, and
   // nowhere in a worktree of the repository.
   const command = commandOf(this);
-  command.toldHome = relative(process.cwd(), command.home);
-  assert.equal(isAbsolute(command.toldHome), false);
+  command.runtimeRoot = relative(process.cwd(), command.runtimeRoot);
+  assert.equal(isAbsolute(command.runtimeRoot), false);
 });
 
 Then('the home of the delivery command holds no delivery log', function () {
-  assert.equal(existsSync(join(commandOf(this).home, LOG)), false);
+  assert.equal(existsSync(join(commandOf(this).home, '.local/state/architect-os/deliveries.jsonl')), false);
 });
 
 Then(
@@ -231,7 +236,7 @@ Then('the remote of the delivery command has no branch {string}', function (bran
 });
 
 Then('the log of the delivery command holds {int} lines', function (count: number) {
-  const path = join(commandOf(this).home, LOG);
+  const path = join(commandOf(this).runtimeRoot, LOG);
   const lines = existsSync(path) ? readFileSync(path, 'utf8').split('\n').slice(0, -1) : [];
   assert.equal(lines.length, count);
 });
@@ -264,11 +269,10 @@ Then('the delivery dependencies hold what the process gives', function () {
   assert.equal(built.stderr, proc.stderr);
 });
 
-Then('the delivery dependencies hold git, gh, the home of the user and the timer of node', function () {
+Then('the delivery dependencies hold git, gh and the timer of node', function () {
   const { built } = this.state['dependencies'] as { built: DeliverDependencies };
   assert.equal(built.git, 'git');
   assert.deepEqual(built.gh, { program: 'gh', prefix: [] });
-  assert.equal(built.home, homedir());
   assert.equal(built.setTimer, setTimeout);
 });
 

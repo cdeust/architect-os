@@ -12,7 +12,10 @@ Feature: Checker profile template (docs/design/orchestration-fable-5-2.md, §13,
     When I load the committed checker profile
     Then the profile allows writing to exactly:
       | ${tmp} |
-    And the profile denies writing to nothing
+    And the profile denies writing to exactly:
+      | /tmp/claude |
+      | ${runtime}/cache |
+      | ${runtime}/state |
     And the profile denies reading exactly:
       | ${home}/.ssh                 |
       | ${home}/.aws                 |
@@ -25,8 +28,12 @@ Feature: Checker profile template (docs/design/orchestration-fable-5-2.md, §13,
       | ${home}/.claude.json         |
       | ${home}/Library/Keychains    |
       | ${sandboxes}                 |
+      | ${home}/.npm |
+      | ${runtime}/run |
+      | ${runtime}/state |
     And the profile allows reading exactly:
       | ${tmp} |
+      | ${worktree} |
     And the profile allows no network domain and denies none
     And the profile allows no pseudo-terminal
     And the profile unsets exactly the variables:
@@ -49,6 +56,7 @@ Feature: Checker profile template (docs/design/orchestration-fable-5-2.md, §13,
       | npm_config_cache           | ${tmp}/npm |
       | npm_config_offline         | true       |
       | npm_config_update_notifier | false      |
+      | CLAUDE_CODE_TMPDIR | ${tmp} |
     And the profile writes no file
 
   Scenario: resolves with the variables of the adapter only, no launcher variable

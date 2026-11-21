@@ -5,6 +5,7 @@ import { Then, When, stored } from './helpers.js';
 /** The variables the adapter sets for every profile (`PROFILE_VARIABLES`), and no variable of a launcher. */
 const ADAPTER_VARS = (): ProfileVariables => ({
   home: '/h',
+  runtime: '/rt',
   repo: '/r',
   worktree: '/r/.claude/worktrees/w',
   worktreeName: 'w',

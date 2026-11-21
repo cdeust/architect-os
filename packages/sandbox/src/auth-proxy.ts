@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { timingSafeEqual } from 'node:crypto';
 import { once } from 'node:events';
-import { appendFileSync, mkdirSync } from 'node:fs';
+import type { StateJournal } from './state-journal.js';
 import {
   createServer,
   request as httpRequest,
@@ -12,7 +12,6 @@ import {
 } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import type { AddressInfo } from 'node:net';
-import { dirname } from 'node:path';
 import { refusalOf, type RequestPolicy } from './request-policy.js';
 
 /**
@@ -84,7 +83,7 @@ export interface AuthProxyOptions {
   /** Valeurs `anthropic-beta` exigées par l'identifiant (OAuth). */
   readonly betas: readonly string[];
   readonly policy: RequestPolicy;
-  readonly usageLog?: string;
+  readonly usageLog?: StateJournal;
 }
 
 export interface AuthProxy {
@@ -236,12 +235,6 @@ export function usageOf(contentType: string, body: string): Omit<UsageRecord, 'a
   }
 }
 
-/** Crée le journal d'usage, privé (dossier 700, fichier 600) : un journal impossible à créer empêche le démarrage. */
-function openUsageLog(path: string): void {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  appendFileSync(path, '', { mode: 0o600 });
-}
-
 /** Ce que le relais d'une requête admise partage avec le proxy. */
 interface Forward {
   readonly upstream: URL;
@@ -377,7 +370,7 @@ export async function startRelay(options: RelayOptions): Promise<Relay> {
 /** Le proxy de 1a.0 : un seul jeton de session, révocable, l'identifiant OAuth de l'hôte, un journal d'usage. */
 export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthProxy> {
   const { usageLog } = options;
-  if (usageLog !== undefined) openUsageLog(usageLog);
+  usageLog?.append('');
   let revoked = false;
   const relay = await startRelay({
     upstream: options.upstream,
@@ -391,7 +384,7 @@ export async function startAuthProxy(options: AuthProxyOptions): Promise<AuthPro
     onUsage: (record) => {
       if (usageLog === undefined) return;
       try {
-        appendFileSync(usageLog, `${JSON.stringify(record)}\n`);
+        usageLog.append(`${JSON.stringify(record)}\n`);
       } catch {
         throw new Error('usage log unwritable: the auth proxy refuses every request until it restarts');
       }

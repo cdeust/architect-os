@@ -11,9 +11,9 @@
     <g id="profile-builder">
       <text x="32" y="114" font-size="12" fill="#1f2328">builder</text><text x="132" y="114" font-size="12" fill="#57606a">a build session</text>
       <text x="132" y="130" font-size="11" fill="#57606a">writes</text>
-      <text font-size="11" fill="#1f2328"><tspan x="190" y="130">${worktree} · ${home}/.cache · ${config} · ${tmp}</tspan></text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="130">${worktree} · ${config} · ${tmp}</tspan></text>
       <text x="132" y="144" font-size="11" fill="#57606a">closes</text>
-      <text font-size="11" fill="#1f2328"><tspan x="190" y="144">${repo}/.git · ${worktree}/.git · ${worktree}/.claude/settings.json · ${worktree}/.claude/settings.local.json ·</tspan><tspan x="190" y="158">${worktree}/steps · ${config}/settings.json</tspan></text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="144">${repo}/.git · ${worktree}/.git · ${worktree}/.claude/settings.json · ${worktree}/.claude/settings.local.json ·</tspan><tspan x="190" y="158">${worktree}/steps · ${config}/settings.json · /tmp/claude · ${runtime}/cache · ${runtime}/state</tspan></text>
       <text x="132" y="172" font-size="11" fill="#57606a">reaches</text>
       <text font-size="11" fill="#1f2328"><tspan x="190" y="172">127.0.0.1:${authProxyPort} · registry.npmjs.org</tspan></text>
       <text x="132" y="186" font-size="11" fill="#57606a">token in</text>
@@ -25,7 +25,7 @@
       <text x="132" y="228" font-size="11" fill="#57606a">writes</text>
       <text font-size="11" fill="#1f2328"><tspan x="190" y="228">${config} · ${tmp}</tspan></text>
       <text x="132" y="242" font-size="11" fill="#57606a">closes</text>
-      <text font-size="11" fill="#1f2328"><tspan x="190" y="242">${config}/settings.json</tspan></text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="242">${config}/settings.json · /tmp/claude · ${runtime}/cache · ${runtime}/state</tspan></text>
       <text x="132" y="256" font-size="11" fill="#57606a">reaches</text>
       <text font-size="11" fill="#1f2328"><tspan x="190" y="256">127.0.0.1:${authProxyPort}</tspan></text>
       <text x="132" y="270" font-size="11" fill="#57606a">token in</text>
@@ -37,7 +37,7 @@
       <text x="132" y="312" font-size="11" fill="#57606a">writes</text>
       <text font-size="11" fill="#1f2328"><tspan x="190" y="312">${tmp}</tspan></text>
       <text x="132" y="326" font-size="11" fill="#57606a">closes</text>
-      <text font-size="11" fill="#1f2328"><tspan x="190" y="326">none</tspan></text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="326">/tmp/claude · ${runtime}/cache · ${runtime}/state</tspan></text>
       <text x="132" y="340" font-size="11" fill="#57606a">reaches</text>
       <text font-size="11" fill="#1f2328"><tspan x="190" y="340">none</tspan></text>
       <text x="132" y="354" font-size="11" fill="#57606a">token in</text>
@@ -49,7 +49,7 @@
       <text x="132" y="396" font-size="11" fill="#57606a">writes</text>
       <text font-size="11" fill="#1f2328"><tspan x="190" y="396">${worktree} · ${config} · ${tmp}</tspan></text>
       <text x="132" y="410" font-size="11" fill="#57606a">closes</text>
-      <text font-size="11" fill="#1f2328"><tspan x="190" y="410">${worktree}/.mcp.json · ${worktree}/.claude</tspan></text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="410">${worktree}/.mcp.json · ${worktree}/.claude · /tmp/claude · ${runtime}/cache · ${runtime}/state</tspan></text>
       <text x="132" y="424" font-size="11" fill="#57606a">reaches</text>
       <text font-size="11" fill="#1f2328"><tspan x="190" y="424">127.0.0.1:${brokerPort}</tspan></text>
       <text x="132" y="438" font-size="11" fill="#57606a">token in</text>
@@ -61,7 +61,7 @@
       <text x="132" y="480" font-size="11" fill="#57606a">writes</text>
       <text font-size="11" fill="#1f2328"><tspan x="190" y="480">${worktree} · ${tmp}</tspan></text>
       <text x="132" y="494" font-size="11" fill="#57606a">closes</text>
-      <text font-size="11" fill="#1f2328"><tspan x="190" y="494">${worktree}/.mcp.json · ${worktree}/.claude</tspan></text>
+      <text font-size="11" fill="#1f2328"><tspan x="190" y="494">${worktree}/.mcp.json · ${worktree}/.claude · /tmp/claude · ${runtime}/cache · ${runtime}/state</tspan></text>
       <text x="132" y="508" font-size="11" fill="#57606a">reaches</text>
       <text font-size="11" fill="#1f2328"><tspan x="190" y="508">127.0.0.1:${callbackPort}</tspan></text>
       <text x="132" y="522" font-size="11" fill="#57606a">token in</text>
@@ -69,7 +69,7 @@
     </g>
     <rect x="20" y="532" width="940" height="28" fill="#ffffff" stroke="#d0d7de"/>
     <g id="denied-read">
-      <text x="32" y="550" font-size="12" fill="#cf222e">denied reads</text><text x="132" y="550" font-size="11" fill="#1f2328">11 paths, the same list in the five profiles; read in srt.filesystem.denyRead</text>
+      <text x="32" y="550" font-size="12" fill="#cf222e">denied reads</text><text x="132" y="550" font-size="11" fill="#1f2328">14 paths, the same list in the five profiles; read in srt.filesystem.denyRead</text>
     </g>
   </g>
 </svg>

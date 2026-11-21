@@ -1,3 +1,4 @@
+import { isStateLogTemplate } from '@architect-os/sandbox/state-journal';
 // The strict zod schema of `tools/deliver/deliver.json` (docs/design/orchestration-fable-5-2.md §14). zod lives in
 // infrastructure, like in the other tools: the domain holds the type and the port `ParseConfig`.
 import { z } from 'zod';
@@ -73,8 +74,8 @@ function configSchema(): z.ZodType<DeliverConfig> {
     gateLog: path,
     log: z
       .string()
-      .startsWith('${home}/', 'the log path starts with ${home}/')
-      .refine((value) => !value.includes('..'), 'the log path has no ..'),
+      .startsWith('${state}/', 'the log path starts with ${state}/')
+      .refine(isStateLogTemplate, 'the log path has only ordinary components'),
     environment: z.array(z.enum(hostVariables())).min(1).refine(different, 'the variables are all different'),
     ciAttempts: count(10),
     pollSeconds: count(300),

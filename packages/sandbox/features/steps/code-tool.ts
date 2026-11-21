@@ -83,6 +83,7 @@ Given(
     };
     s.deps = {
       tool: tool(),
+      runtimeRoot: '/fixture',
       systemPrompt: () => s.prompt,
       credential: async () => ({ accessToken: 'host' }),
       startProxy: async (options) => {
@@ -310,7 +311,11 @@ Then('no proxy was started', function () {
 // --- processDependencies, srtOptions --------------------------------------------------------------------------
 
 const fakeProcess = (env: Record<string, string>, cwd: string, argv: string): CodeProcess => ({
-  env,
+  env: {
+    ...env,
+    ARCHITECT_OS_RUNTIME_ROOT: '/test/runtime',
+    ARCHITECT_OS_RUN_DIR: '/test/runtime/run/r123456',
+  },
   argv: argv.split(' '),
   execPath: '/usr/bin/node-of-the-host',
   cwd: () => cwd,
@@ -422,6 +427,8 @@ Then(
       node: '/usr/bin/node-of-the-host',
       canaryProbe: join(PKG, 'src', 'canary-probe.mjs'),
       tmpRoot: tmpdir(),
+      runtimeRoot: proc.env.ARCHITECT_OS_RUNTIME_ROOT!,
+      runDir: proc.env.ARCHITECT_OS_RUN_DIR!,
       home: homedir(),
       hostEnv: proc.env,
       trusted: [PKG, join(ROOT, 'package.json')],

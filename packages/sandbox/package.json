@@ -14,6 +14,10 @@
     "./runtime-context": {
       "types": "./dist/src/runtime-context.d.ts",
       "default": "./src/runtime-context.ts"
+    },
+    "./state-journal": {
+      "types": "./dist/src/state-journal.d.ts",
+      "default": "./src/state-journal.ts"
     }
   },
   "dependencies": {
