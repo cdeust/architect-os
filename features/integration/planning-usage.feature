@@ -4,3 +4,14 @@ Feature: Record local planning usage
 
   Scenario: A consumer process cannot start
     Then a planning measurement records its launch failure without a cost
+
+  Scenario Outline: One native draft receipt binds the proposal to the prepared preview
+    Then a measured "<provider>" draft supplies one receipt that binds the prepared Plan
+
+    Examples:
+      | provider |
+      | gpt      |
+      | gemini   |
+
+  Scenario: An unavailable drafting credential produces a single refusal
+    Then a measured draft without a provider key publishes only a refusal receipt
