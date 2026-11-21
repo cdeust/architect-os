@@ -16,9 +16,8 @@ import {
 } from './hosted-lots.js';
 import { jsonText, parseJson } from './json.js';
 import { mutationLots } from './mutation-inventory.js';
-import { requireCompleteMutationLots } from './mutation-lot-proof.js';
 import { requireNativeMutationReport } from './mutation-report.js';
-import { combineNative, projectNative } from './mutation-shards.js';
+import { combineHostedNative, projectNative } from './mutation-shards.js';
 import { verifyMutationCatalog } from './mutation-catalog.js';
 import { CucumberRunner, replayAll, sha256 } from './replay.js';
 import { Workspace } from './workspace.js';
@@ -158,12 +157,7 @@ export async function runHostedGate(
         errors.push(...issues.map(({ text }) => `lot ${number} : ${text}`));
         receipts.push(...received.record.mutants.map((entry) => ({ ...entry, id: number + '/' + entry.id })));
       }
-      const combined = jsonText(await combineNative(root, producers, full, canary.file, true));
-      const report = requireNativeMutationReport(combined);
-      const expected = full.map((lot) =>
-        lot.file === canary.file ? { ...lot, mutants: slices.flatMap(() => lot.mutants) } : lot,
-      );
-      requireCompleteMutationLots(expected, report);
+      const combined = await combineHostedNative(root, producers, full, canary.file, slices.length);
       // Keep the exact native results available to diagnose the whole campaign if replay refuses it.
       workspace.write(config.reports.mutation, combined);
       if (errors.length !== 0) throw new Error(errors.join('\n'));

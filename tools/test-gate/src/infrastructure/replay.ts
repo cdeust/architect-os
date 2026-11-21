@@ -4,8 +4,11 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { basename, extname, join, normalize } from 'node:path';
 import {
+  failureWitness,
+  isGherkinStep,
   judgeReplay,
   recheckDivergence,
+  type FailureWitness,
   type ReplayCase,
   type ReplayEntry,
   type RunResult,
@@ -36,13 +39,6 @@ export function sha256(text: string): string {
   return createHash('sha256').update(text).digest('hex');
 }
 
-interface FailureWitness {
-  readonly location: string;
-  readonly pickle: string;
-  readonly step: number;
-  readonly name: string;
-}
-
 /** One timed run of cucumber-js. */
 export interface Timed {
   readonly result: RunResult;
@@ -70,42 +66,6 @@ function scenarioLocation(value: string): boolean {
     !/[*?{}()\[\]\u0000\r\n]/.test(file) &&
     Number.isSafeInteger(Number(match[2]))
   );
-}
-
-const gherkinStep = ({ name }: { name: string }) => name.startsWith('step « ');
-
-/** Messages distinguish Gherkin steps from hooks. A candidate is useful only with a complete, admitted run. */
-function failureWitness(
-  result: RunResult,
-  locations: readonly (string | null)[],
-): FailureWitness | undefined {
-  const { run } = result;
-  if (
-    result.timedOut ||
-    result.incomplete ||
-    result.selectionFailure ||
-    'failure' in run ||
-    run.runHooks.some(({ status }) => status !== 'PASSED')
-  )
-    return undefined;
-  for (const [index, pickle] of run.pickles.entries()) {
-    const attempt = pickle.attempts[0];
-    const location = locations[index];
-    if (
-      !location ||
-      pickle.attempts.length !== 1 ||
-      attempt?.attempt !== 0 ||
-      attempt.willBeRetried !== false
-    )
-      continue;
-    if (attempt.steps.some(({ name, status }) => name.startsWith('hook ') && status !== 'PASSED')) continue;
-    const failed = attempt.steps.findIndex(({ status }) => status !== 'PASSED');
-    const outcome = attempt.steps[failed];
-    if (outcome?.status !== 'FAILED' || !gherkinStep(outcome)) continue;
-    const step = attempt.steps.slice(0, failed).filter(gherkinStep).length;
-    return { location, pickle: pickle.id, step, name: outcome.name };
-  }
-  return undefined;
 }
 
 /**
@@ -196,16 +156,14 @@ export class CucumberRunner implements Runner {
     let selectionFailure = diagnostics.includes('AOS_REPLAY_PLAN_VALID')
       ? undefined
       : (refused ?? 'précontrôle Cucumber non confirmé');
-    let runCompleted = false;
-    let executed: readonly (string | null)[] | undefined;
+    let executionReport: { locations: readonly (string | null)[]; completed: boolean } | undefined;
     const observed = existsSync(report)
       ? parseCucumberReport(
           readFileSync(report, 'utf8'),
           () => true,
           false,
           (locations, completed) => {
-            runCompleted = completed;
-            executed = locations;
+            executionReport = { locations, completed };
             const remaining = new Set<string | null>(expected);
             for (const location of locations) {
               if (!remaining.delete(location)) {
@@ -223,13 +181,13 @@ export class CucumberRunner implements Runner {
     const result: RunResult = {
       run,
       timedOut,
-      ...(runCompleted ? {} : { incomplete: true }),
+      ...(executionReport?.completed ? {} : { incomplete: true }),
       ...(code === 0 ? {} : { badExit: true }),
       ...(selectionFailure === undefined ? {} : { selectionFailure }),
     };
     const witness =
-      code === 1 && executed !== undefined && (discover || tests.length === 1)
-        ? failureWitness(result, executed)
+      code === 1 && executionReport?.completed && (discover || tests.length === 1)
+        ? failureWitness(result, executionReport.locations)
         : undefined;
     return { result, ms, ...(witness === undefined ? {} : { witness }) };
   }
@@ -301,7 +259,10 @@ export async function replayAll(
         const verdict = judgeReplay(replay, only.length, original.result, reproduced.result);
         const found = reproduced.witness;
         const originalPickle = 'failure' in original.result.run ? undefined : original.result.run.pickles[0];
-        const originalStep = originalPickle?.attempts[0]?.steps.filter(gherkinStep)[candidate.step];
+        const originalWitness = {
+          pickle: originalPickle?.id,
+          stepName: originalPickle?.attempts[0]?.steps.filter(isGherkinStep)[candidate.step]?.name,
+        };
         if (
           verdict.divergence === null &&
           !verdict.recheck &&
@@ -309,8 +270,8 @@ export async function replayAll(
           found.pickle === candidate.pickle &&
           found.step === candidate.step &&
           found.name === candidate.name &&
-          originalPickle?.id === candidate.pickle &&
-          originalStep?.name === candidate.name
+          originalWitness.pickle === candidate.pickle &&
+          originalWitness.stepName === candidate.name
         ) {
           entry(null);
           continue;

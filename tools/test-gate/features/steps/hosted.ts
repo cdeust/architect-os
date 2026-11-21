@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { Instrumenter } from '@stryker-mutator/instrumenter';
 import { noopLogger } from '@stryker-mutator/util';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runHostedGate } from '../../src/infrastructure/hosted-gate.js';
 import { CONFIG_PATH } from '../../src/infrastructure/gate.js';
@@ -10,6 +10,7 @@ import { HOSTED_COSTS, planHostedSlices } from '../../src/infrastructure/hosted-
 import type { Lot } from '../../src/infrastructure/mutation-lot-proof.js';
 import { readNativeLotIgnorer } from '../../src/infrastructure/stryker-lot-plugin.js';
 import { projectNative } from '../../src/infrastructure/mutation-shards.js';
+import { mutationCatalog } from '../../src/infrastructure/mutation-catalog.js';
 import { FIXTURES, Given, Then, When, repository, type GateRepository } from './repository.js';
 
 const LANES = [1, 2, 3] as const;
@@ -152,6 +153,93 @@ Then('the hosted collector rejects an active mutant without static metadata', as
   } finally {
     repo.write(path, original);
   }
+});
+
+Then('the hosted lane independently confirms its runtime witness against the original', async function () {
+  const repo = repository(this);
+  const file = 'src/runtime.mjs';
+  const source = 'export const enabled = true;\n';
+  const feature = 'specs/runtime.feature';
+  repo.write(file, source);
+  repo.write(
+    feature,
+    [
+      'Feature: runtime witness',
+      '  Scenario: failure on the mutant alone',
+      '    Given the runtime flag is read',
+      ...Array.from({ length: 23 }, (_, index) => [
+        '  Scenario: trailing ' + index,
+        '    Given a trailing scenario passes',
+      ]).flat(),
+      '',
+    ].join('\n'),
+  );
+  repo.write(
+    'specs/steps/steps.mjs',
+    "import { Given } from '@cucumber/cucumber';\n" +
+      "import { enabled } from '../../src/runtime.mjs';\n" +
+      "Given('the runtime flag is read', () => { if (!enabled) throw new TypeError('disabled fixture'); });\n" +
+      "Given('a trailing scenario passes', () => {});\n",
+  );
+  const control = 'specs/control.feature';
+  repo.write(
+    control,
+    'Feature: canary control\n  Scenario: control passes\n    Given a trailing scenario passes\n',
+  );
+  repo.commit('runtime witness fixture');
+  repo.write(HOSTED_COSTS, JSON.stringify({ files: {}, fallback: 1 }));
+  const catalog = await mutationCatalog(repo.dir);
+  assert.equal(catalog.size, 25);
+  const tests = [...catalog]
+    .filter((location) => location.startsWith(feature + ':'))
+    .map((location, index) => ({
+      id: String(index),
+      location: { start: { line: Number(location.slice(feature.length + 1)), column: 3 } },
+    }));
+  const lane = '1';
+  const inventory = await command(repo, 'inventory', lane);
+  assert.equal(inventory.status, 0, inventory.output);
+  await nativeFixture(repo, NATIVE, false);
+  const native = JSON.parse(repo.read(NATIVE));
+  assert.equal(native.files[file].mutants.length, 1);
+  const confirmed = native.files[file].mutants[0];
+  assert.equal(confirmed.mutatorName, 'BooleanLiteral');
+  confirmed.status = 'RuntimeError';
+  confirmed.static = true;
+  confirmed.coveredBy = tests.map(({ id }) => id);
+  native.testFiles = {
+    [feature]: { tests },
+    [control]: { tests: [{ id: 'canary-control', location: { start: { line: 2, column: 3 } } }] },
+  };
+  const other = native.files['zz/probe.mjs'].mutants as { coveredBy: string[] }[];
+  for (const mutant of other) mutant.coveredBy = ['canary-control'];
+  const origin = 'reports/mutation-shards/' + lane + '/';
+  repo.write(origin + 'mutation-inventory.json', repo.read(MANIFEST));
+  repo.write(origin + 'mutation/native.json', JSON.stringify(native));
+  repo.write(origin + 'producer', 'independent producer for the runtime fixture');
+  const replay = await command(repo, 'replay', lane);
+  assert.equal(replay.status, 0, replay.output);
+  const receipt = JSON.parse(repo.read('reports/replay-shards/' + lane + '/replay.json'));
+  assert.deepEqual(
+    receipt.record.mutants.find((entry: { file: string }) => entry.file === file),
+    {
+      file,
+      id: confirmed.id,
+      status: 'RuntimeError',
+      divergence: null,
+    },
+  );
+  const work = 'reports/replay';
+  const runtime = readdirSync(repo.path(work))
+    .filter((name) => name.endsWith('.ndjson'))
+    .map((name) => repo.read(work + '/' + name))
+    .filter((messages) => messages.includes(JSON.stringify(feature)));
+  assert.equal(runtime.length, 3);
+  const singletons = runtime.filter(
+    (messages) => messages.split('\n').filter((line) => line.includes('"testCaseStarted":')).length === 1,
+  );
+  assert.equal(singletons.length, 2);
+  assert.equal(repo.read(file), source);
 });
 
 When('the hosted mutation chains complete independently in {string} mode', async function (mode: string) {
@@ -410,11 +498,15 @@ Then('hosted planning keeps peers together and preserves a deeply nested file', 
   assert.throws(() => plan(1.5), /nombre de lots natifs invalide/);
   assert.throws(() => planHostedSlices(input.slice(0, 1), canary, read, costs, 3), /canari absent/);
 
-  let slices: ReturnType<typeof plan> | undefined;
-  assert.doesNotThrow(() => {
-    slices = plan(3);
-  }, 'the valid native hierarchy must produce an antichain per lot');
-  assert.ok(slices);
+  const admitted = (operation: () => ReturnType<typeof plan>) => {
+    let result: ReturnType<typeof plan> | undefined;
+    assert.doesNotThrow(() => {
+      result = operation();
+    }, 'a valid hierarchy must produce its complete native slices');
+    assert.ok(result);
+    return result;
+  };
+  const slices = admitted(() => plan(3));
   assert.equal(slices.length, 3);
   assert.ok(slices.every((slice) => slice.lots.some(({ file }) => file === canary)));
   assert.deepEqual(
@@ -427,13 +519,15 @@ Then('hosted planning keeps peers together and preserves a deeply nested file', 
   assert.ok(spans.some((bucket) => bucket.has('a') && bucket.has('b')));
   assert.equal(spans.filter((bucket) => ['a', 'c', 'd'].some((id) => bucket.has(id))).length, 3);
 
-  const fallback = plan(2);
+  const fallback = admitted(() => plan(2));
   assert.equal(fallback.flatMap(({ lots }) => lots.filter((lot) => lot.file === file)).length, 1);
   assert.deepEqual(fallback[0]?.patterns, [file, canary]);
   assert.equal(fallback[0]?.lots[0], input[0]);
 
   const sibling = 'src/unrelated.mjs';
-  const loaded = planHostedSlices([...input, lot(sibling, [innermost])], canary, read, costs, 2);
+  const loaded = admitted(() =>
+    planHostedSlices([...input, lot(sibling, [innermost])], canary, read, costs, 2),
+  );
   assert.ok(loaded.some(({ lots }) => lots.some((entry) => entry.file === file)));
   assert.ok(loaded.some(({ lots }) => lots.some((entry) => entry.file === sibling)));
   assert.ok(

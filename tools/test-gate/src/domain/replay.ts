@@ -137,6 +137,49 @@ export interface RunResult {
 const PASSED = 'PASSED';
 const FAILED = 'FAILED';
 
+export interface FailureWitness {
+  readonly location: string;
+  readonly pickle: string;
+  readonly step: number;
+  readonly name: string;
+}
+
+export const isGherkinStep = ({ name }: { name: string }) => name.startsWith('step « ');
+
+/** Messages distinguish Gherkin steps from hooks. A candidate is useful only with a complete, admitted run. */
+export function failureWitness(
+  result: RunResult,
+  locations: readonly (string | null)[],
+): FailureWitness | undefined {
+  const { run } = result;
+  if (
+    result.timedOut ||
+    result.incomplete ||
+    result.selectionFailure ||
+    'failure' in run ||
+    run.runHooks.some(({ status }) => status !== PASSED)
+  )
+    return undefined;
+  for (const [index, pickle] of run.pickles.entries()) {
+    const attempt = pickle.attempts[0];
+    const location = locations[index];
+    if (
+      !location ||
+      pickle.attempts.length !== 1 ||
+      attempt?.attempt !== 0 ||
+      attempt.willBeRetried !== false
+    )
+      continue;
+    if (attempt.steps.some(({ name, status }) => name.startsWith('hook ') && status !== PASSED)) continue;
+    const failed = attempt.steps.findIndex(({ status }) => status !== PASSED);
+    const outcome = attempt.steps[failed];
+    if (outcome?.status !== FAILED || !isGherkinStep(outcome)) continue;
+    const step = attempt.steps.slice(0, failed).filter(isGherkinStep).length;
+    return { location, pickle: pickle.id, step, name: outcome.name };
+  }
+  return undefined;
+}
+
 /**
  * Why a run of `expected` scenarios is not a clean pass, or null when it is one: every scenario ran once, every
  * step and run hook PASSED, before its limit. `failed`: the run is complete and every scenario that did not pass has

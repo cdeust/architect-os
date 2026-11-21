@@ -87,6 +87,24 @@ Feature: Hosted mutation slices retain exhaustive producer and replay proof
     Then the gate verdict is green
     And a second collection without a canary invalidates the old verdict
 
+  Scenario: the hosted replay independently confirms a RuntimeError with one named scenario
+    Given a gate repository
+    And the gate repository can run the fixture suite with cucumber-js
+    And the gate mutation fixture declares its independent mutation profile
+    And the gate repository file "zz/probe.mjs" reads:
+      """
+      export function probe(value) {
+        return !value;
+      }
+      """
+    And the gate configuration declares the canary "zz/probe.mjs" with:
+      """
+      {"probe":"Survived"}
+      """
+    And the gate configuration declares the replay
+    And the gate first parent is committed
+    Then the hosted lane independently confirms its runtime witness against the original
+
   Scenario: separately produced nested spans require the exact independently replayed union
     Given a gate repository
     And the gate repository holds the fixture specs "green.feature, second.feature"

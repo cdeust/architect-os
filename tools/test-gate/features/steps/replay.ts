@@ -19,6 +19,7 @@ import type { MutantRecord } from '../../src/domain/mutation.js';
 import { replayLotFor } from '../../src/domain/replay-lots.js';
 import {
   expectationOf,
+  failureWitness,
   judgeReplay,
   mutatedSource,
   recheckDivergence,
@@ -380,7 +381,8 @@ Then(
   },
 );
 
-Then('discovery stops a delayed child at the requested limit', async function () {
+// The original took 42 ms on run 44916565289. An unresolved close event should fail before the suite-wide step timeout.
+Then('discovery stops a delayed child at the requested limit', { timeout: 5_000 }, async function () {
   const repo = repository(this);
   const selector = 'specs/delayed-selector.mts';
   repo.write(
@@ -1286,4 +1288,60 @@ Then('replay assignment identifies its lot and refuses missing or repeated membe
   assert.equal(replayLotFor('src/second.mjs', lots), 2);
   assert.throws(() => replayLotFor('src/missing.mjs', lots), /mutant à rejouer sans lot/);
   assert.throws(() => replayLotFor('src/repeated.mjs', lots), /mutant à rejouer dans deux lots/);
+});
+
+Then('the replay witness refuses malformed attempts, failing hooks and invalid selection', function () {
+  const location = 'specs/runtime.feature:2';
+  const name = 'step « runtime flag is read »';
+  const attempt = {
+    attempt: 0,
+    willBeRetried: false,
+    steps: [
+      { name: 'hook setup:1', status: 'PASSED' },
+      { name, status: 'FAILED' },
+    ],
+  };
+  const pickle = { id: 'runtime', pickleSteps: 1, attempts: [attempt] };
+  const valid: RunResult = { timedOut: false, run: { pickles: [pickle], runHooks: [] } };
+  assert.deepEqual(failureWitness(valid, [location]), { location, pickle: 'runtime', step: 0, name });
+  const withAttempts = (attempts: ExecutedPickle['attempts']): RunResult => ({
+    timedOut: false,
+    run: { pickles: [{ ...pickle, attempts }], runHooks: [] },
+  });
+  for (const invalid of [
+    { ...valid, timedOut: true },
+    { ...valid, incomplete: true } as const,
+    { ...valid, selectionFailure: 'fixture disallowed' },
+    { ...valid, run: { failure: 'fixture report unreadable' } },
+    { ...valid, run: { pickles: [pickle], runHooks: [{ name: 'hook teardown:1', status: 'FAILED' }] } },
+    withAttempts([]),
+    withAttempts(new Array<typeof attempt>(1)),
+    withAttempts([attempt, attempt]),
+    withAttempts([{ ...attempt, attempt: 1 }]),
+    withAttempts([{ ...attempt, willBeRetried: true }]),
+    withAttempts([{ ...attempt, steps: [{ name, status: 'UNDEFINED' }] }]),
+    withAttempts([{ ...attempt, steps: [{ name, status: 'PASSED' }] }]),
+    withAttempts([
+      {
+        ...attempt,
+        steps: [
+          { name: 'hook teardown:1', status: 'FAILED' },
+          { name, status: 'FAILED' },
+        ],
+      },
+    ]),
+  ]) {
+    assert.doesNotThrow(() => {
+      assert.equal(failureWitness(invalid, [location]), undefined);
+    }, 'unusable Messages cannot provide or interrupt a replay witness');
+  }
+  assert.equal(failureWitness(valid, [null]), undefined);
+  const previous = { name: 'step « before the failure »', status: 'PASSED' };
+  const later = { ...attempt, steps: [previous, ...attempt.steps] };
+  assert.deepEqual(failureWitness(withAttempts([later]), [location]), {
+    location,
+    pickle: 'runtime',
+    step: 1,
+    name,
+  });
 });

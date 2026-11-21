@@ -9,6 +9,9 @@ Feature: Replay admission rejects invalid selection before the independent runne
     And the gate configuration declares the replay
     And the gate mutation report is the fixture "survivor"
 
+  Scenario: only a complete first attempt with a failed Gherkin step can supply a witness
+    Then the replay witness refuses malformed attempts, failing hooks and invalid selection
+
   Scenario: every replay candidate belongs to exactly one prepared lot
     Then replay assignment identifies its lot and refuses missing or repeated membership
 

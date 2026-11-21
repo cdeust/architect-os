@@ -16,6 +16,29 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     And the gate configuration declares the replay
     And the gate mutation report is the fixture "survivor"
 
+  Scenario: empty replay lots still require both receipts
+    Given the gate mutation fixture declares its independent mutation profile
+    And the gate mutation report keeps only the mutants ""
+    When the gate replays mutation lot "1"
+    Then the gate exits with 0
+    When the gate replays mutation lot "2"
+    Then the gate exits with 0
+    When the gate collects the mutation replay lots
+    Then the gate exits with 0
+    And the gate output includes "lots de rejeu vérifiés : 0 mutant(s)"
+    Given the gate removes replay lot "1"
+    When the gate collects the mutation replay lots
+    Then the gate exits with 1
+    And the gate output includes "lot de rejeu absent : 1"
+    And the gate replay record is absent
+
+  Scenario: a torn report retains an unexpected scenario started before the error
+    When the replay child returns "torn report with an unexpected scenario"
+    Then the replay of the observed report records:
+      """
+      {"selection":"scénario de rejeu inattendu : specs/second.feature:3","incomplete":true,"failure":"rapport Cucumber invalide : Expected property name or '}' in JSON at position 1 (line 1 column 2)"}
+      """
+
   Scenario: a replay work directory outside the repository keeps using the installed engine
     When the replay writes its working files outside the repository
     Then the replay run passed within its limit
@@ -58,27 +81,10 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       | refusal with no diagnostic              | {"selection":"précontrôle Cucumber non confirmé","incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : aucun diagnostic"}                                                |
       | execution error after a complete valid report | {"badExit":true,"failure":"Error: fixture execution rejected"} |
       | crash without report                    | {"incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : Error: fixture crash"}                                                                                            |
-      | torn report with an unexpected scenario | {"selection":"scénario de rejeu inattendu : specs/second.feature:3","incomplete":true,"failure":"rapport Cucumber invalide : Expected property name or '}' in JSON at position 1 (line 1 column 2)"} |
 
   Scenario: replacing the worktree selector cannot sabotage the independent replay harness
     When the runner snapshots the selector and then the worktree copy is replaced
     Then the replay run passed within its limit
-
-  Scenario: empty replay lots still require both receipts
-    Given the gate mutation fixture declares its independent mutation profile
-    And the gate mutation report keeps only the mutants ""
-    When the gate replays mutation lot "1"
-    Then the gate exits with 0
-    When the gate replays mutation lot "2"
-    Then the gate exits with 0
-    When the gate collects the mutation replay lots
-    Then the gate exits with 0
-    And the gate output includes "lots de rejeu vérifiés : 0 mutant(s)"
-    Given the gate removes replay lot "1"
-    When the gate collects the mutation replay lots
-    Then the gate exits with 1
-    And the gate output includes "lot de rejeu absent : 1"
-    And the gate replay record is absent
 
   Scenario: a static survivor is replayed in one lot and the collector verifies the exact union
     Given the gate mutation fixture declares its independent mutation profile

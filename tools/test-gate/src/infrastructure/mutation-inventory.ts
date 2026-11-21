@@ -1,3 +1,4 @@
+import { strykerCoreSchema } from '@stryker-mutator/api/core';
 import { noopLogger } from '@stryker-mutator/util';
 import { Instrumenter } from '@stryker-mutator/instrumenter';
 import { resolve } from 'node:path';
@@ -5,6 +6,26 @@ import { createHash } from 'node:crypto';
 import type { Perimeter } from '../domain/mutation.js';
 
 const instrumenter = new Instrumenter(noopLogger);
+
+type InstrumenterOptions = Parameters<Instrumenter['instrument']>[1];
+type PublishedMutatorDefaults = {
+  definitions: {
+    mutatorDescriptor: {
+      properties: {
+        plugins: { default: InstrumenterOptions['plugins'] };
+        excludedMutations: { default: InstrumenterOptions['excludedMutations'] };
+      };
+    };
+  };
+};
+
+const { plugins, excludedMutations } = (strykerCoreSchema as PublishedMutatorDefaults).definitions
+  .mutatorDescriptor.properties;
+const inventoryOptions: InstrumenterOptions = {
+  plugins: plugins.default,
+  excludedMutations: excludedMutations.default,
+  ignorers: [],
+};
 
 function sourceDigest(source: string): string {
   return createHash('sha256').update(source).digest('hex');
@@ -29,8 +50,7 @@ export async function mutationLots(
     const whole = wholeFiles.has(file);
     const { mutants } = await instrumenter.instrument(
       [{ name: resolve(root, file), content: source, mutate: true }],
-      // Matches the pinned gate config's defaults for the mutator and ignorer options.
-      { plugins: null, excludedMutations: [], ignorers: [] },
+      inventoryOptions,
     );
     lots.push({
       file,

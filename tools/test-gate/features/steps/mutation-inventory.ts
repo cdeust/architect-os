@@ -8,7 +8,12 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runGate } from '../../src/infrastructure/gate.js';
 import { mutationCatalog } from '../../src/infrastructure/mutation-catalog.js';
-import { combineNative, projectNative, type NativeProof } from '../../src/infrastructure/mutation-shards.js';
+import {
+  combineHostedNative,
+  combineNative,
+  projectNative,
+  type NativeProof,
+} from '../../src/infrastructure/mutation-shards.js';
 import { requireCompleteMutationLots, type Lot } from '../../src/infrastructure/mutation-lot-proof.js';
 import { requireNativeMutationReport } from '../../src/infrastructure/mutation-report.js';
 import { FIXTURES, Given, Then, When, repository } from './repository.js';
@@ -592,7 +597,7 @@ Then('the aggregate rejects empty proofs, foreign coverage and conflicting sourc
   assert.throws(() => projectNative('not JSON', []), /JSON invalide/);
 });
 
-Then('the complete native union refuses missing identities and extra bookkeeping rows', function () {
+Then('the complete native union refuses missing identities and extra bookkeeping rows', async function () {
   const bytes = readFileSync(join(FIXTURES, 'mutation/survivor.json'), 'utf8');
   const report = requireNativeMutationReport(bytes);
   const file = 'src/math.mjs';
@@ -629,5 +634,31 @@ Then('the complete native union refuses missing identities and extra bookkeeping
   assert.throws(
     () => requireCompleteMutationLots(planned, withMutants([expected, ghost])),
     /mutant ignoré hors projection finale : 1/,
+  );
+  const raw = JSON.parse(bytes) as NativeProof['raw'];
+  const native = raw.files[file];
+  assert.ok(native !== undefined);
+  const [selected, unplanned] = native.mutants;
+  assert.ok(selected !== undefined && unplanned !== undefined);
+  const valid = { ...raw, files: { [file]: { ...native, mutants: [selected] } } };
+  const root = repository(this).dir;
+  const combined = await combineHostedNative(root, [{ raw: valid, report }], planned, file, 1);
+  assert.equal(requireNativeMutationReport(combined).files.get(file)?.mutants[0]?.id, '1/0');
+  await assert.rejects(
+    combineHostedNative(root, [{ raw: valid, report }], planned, file, 2),
+    /nombre de producteurs différent du plan hébergé/,
+  );
+  const withNative = (mutants: typeof native.mutants): NativeProof => ({
+    raw: { ...valid, files: { [file]: { ...native, mutants } } },
+    report,
+  });
+  await assert.rejects(
+    combineHostedNative(root, [withNative([])], planned, file, 1),
+    /mutant\(s\) du lot absents/,
+  );
+  const bookkeeping = { ...unplanned, status: 'Ignored', statusReason: 'native bookkeeping' };
+  await assert.rejects(
+    combineHostedNative(root, [withNative([selected, bookkeeping])], planned, file, 1),
+    /mutant ignoré hors projection finale : 1\/1/,
   );
 });

@@ -1,8 +1,9 @@
 import { distributeReplayFiles } from '../domain/replay-lots.js';
 import type { MutationReport } from '../domain/mutation.js';
 import { parseMutationReport, requireNativeMutationReport } from './mutation-report.js';
-import { verifyMutationLots, type Lot } from './mutation-lot-proof.js';
+import { requireCompleteMutationLots, verifyMutationLots, type Lot } from './mutation-lot-proof.js';
 import { mutationCatalog, verifyMutationCatalog } from './mutation-catalog.js';
+import { jsonText } from './json.js';
 
 type RawMutant = {
   readonly id: string;
@@ -98,4 +99,23 @@ export async function combineNative(
     files: Object.fromEntries(files),
     testFiles,
   };
+}
+
+/** Form the hosted report only when the complete inventory is represented in the combined native bytes. */
+export async function combineHostedNative(
+  root: string,
+  proofs: readonly NativeProof[],
+  lots: readonly Lot[],
+  canary: string,
+  plannedCount: number,
+): Promise<string> {
+  if (proofs.length !== plannedCount) throw new Error('nombre de producteurs différent du plan hébergé');
+  const combined = jsonText(await combineNative(root, proofs, lots, canary, true));
+  const expected = lots.map((lot) =>
+    lot.file === canary
+      ? { ...lot, mutants: Array.from({ length: plannedCount }, () => lot.mutants).flat() }
+      : lot,
+  );
+  requireCompleteMutationLots(expected, requireNativeMutationReport(combined));
+  return combined;
 }
