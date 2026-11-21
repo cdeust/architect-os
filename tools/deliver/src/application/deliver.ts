@@ -147,7 +147,7 @@ async function awaitCi(
     if (run !== undefined && !run.completed) unnumberedRerunPending = false;
     const state =
       unnumberedRerunPending || (requestedAttempt !== undefined && (run?.attempt ?? 0) <= requestedAttempt)
-        ? 'waiting'
+        ? undefined
         : ciState(run, config.requiredJobs, config.jobDependencies);
     if (state === 'green') return undefined;
     if (state === 'failed') return { phase: 'CI', reason: 'CI rouge' };

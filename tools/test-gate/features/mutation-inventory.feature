@@ -179,7 +179,7 @@ Feature: The inventory projects native mutants onto changed production lines
     Examples:
       | case                | result   |
       | exact identities    | pass     |
-      | missing mutant      | absent   |
+      | missing mutant      | mutant(s) du lot absents du rapport : 1 |
       | duplicate identity  | répété   |
       | outside active      | hors lot |
       | outside ignored     | pass     |
