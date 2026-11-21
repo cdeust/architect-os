@@ -51,6 +51,33 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     When the replay child fails after creating its Messages file
     Then the replay records the execution error from the child
 
+  Scenario Outline: runner result reflects the actual Messages stream and process exit
+    When the replay child returns "<variant>"
+    Then the replay of the observed report records:
+      """
+      <result>
+      """
+
+    Examples:
+      | variant                                 | result                                                                                                                                                                                               |
+      | completed                               | {}                                                                                                                                                                                                   |
+      | missing scenario                        | {"selection":"scénario de rejeu manquant : specs/second.feature:3"}                                                                                                                                  |
+      | unexpected scenario                     | {"selection":"scénario de rejeu inattendu : specs/second.feature:3"}                                                                                                                                 |
+      | repeated scenario                       | {"selection":"scénario de rejeu inattendu : specs/green.feature:4"}                                                                                                                                  |
+      | foreign terminal                        | {"selection":"scénario de rejeu inattendu : null","failure":"fin Cucumber rattachée à un autre lot"}                                                                                                 |
+      | duplicate completion                    | {"selection":"scénario de rejeu inattendu : null","failure":"lot Cucumber sans événement de fin unique"}                                                                                             |
+      | unknown scenario location               | {"selection":"scénario de rejeu inattendu : null"}                                                                                                                                                   |
+      | unfinished report                       | {"incomplete":true}                                                                                                                                                                                  |
+      | unfinished report missing a scenario    | {"incomplete":true}                                                                                                                                                                                  |
+      | non-zero exit after completion          | {"badExit":true}                                                                                                                                                                                     |
+      | no preflight acknowledgement            | {"selection":"précontrôle Cucumber non confirmé"}                                                                                                                                                    |
+      | explicit refusal                        | {"selection":"fixture refused","incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : aucun diagnostic"}                                                                  |
+      | two missing scenarios                   | {"selection":"scénario de rejeu manquant : specs/green.feature:12, specs/second.feature:3"}                                                                                                          |
+      | refusal text with a different status    | {"selection":"précontrôle Cucumber non confirmé","incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : aucun diagnostic"}                                                |
+      | refusal with no diagnostic              | {"selection":"précontrôle Cucumber non confirmé","incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : aucun diagnostic"}                                                |
+      | crash without report                    | {"incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : Error: fixture crash"}                                                                                            |
+      | torn report with an unexpected scenario | {"selection":"scénario de rejeu inattendu : specs/second.feature:3","incomplete":true,"failure":"rapport Cucumber invalide : Expected property name or '}' in JSON at position 1 (line 1 column 2)"} |
+
   Scenario: replacing the worktree selector cannot sabotage the independent replay harness
     When the runner snapshots the selector and then the worktree copy is replaced
     Then the replay run passed within its limit

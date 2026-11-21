@@ -2,6 +2,7 @@ import { loadConfiguration, loadSources, type runCucumber } from '@cucumber/cucu
 import { runReplayCucumber } from '../../src/infrastructure/replay-cucumber.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { parseEnvelope } from '@cucumber/messages';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -360,6 +361,122 @@ Then('the replay records the execution error from the child', function () {
   const { result } = this.state['timed'] as Timed;
   assert.deepEqual(result.run, { failure: 'Error: failure after opening Messages' });
   assert.equal(result.selectionFailure, undefined);
+});
+
+When('the replay child returns {string}', async function (variant: string) {
+  const repo = repository(this);
+  const one = ['specs/green.feature:4'];
+  const both = [...one, 'specs/second.feature:3'];
+  const unexpected =
+    variant === 'unexpected scenario' || variant === 'torn report with an unexpected scenario';
+  const original = new CucumberRunner(repo.dir, 'replay', repo.path('reports/original'));
+  const witness = await original.run(unexpected ? both : one, 600_000);
+  assert.ok(!('failure' in witness.result.run), JSON.stringify(witness.result));
+  assert.equal(witness.result.selectionFailure, undefined);
+  assert.equal(witness.result.incomplete, undefined);
+  assert.equal(witness.result.badExit, undefined);
+  const envelopes = repo.read('reports/original/run-1.ndjson').trimEnd().split('\n').map(parseEnvelope);
+  const last = envelopes.at(-1)?.testRunFinished;
+  assert.ok(last);
+  if (variant === 'foreign terminal') {
+    envelopes[envelopes.length - 1] = { testRunFinished: { ...last, testRunStartedId: 'foreign' } };
+  }
+  if (variant === 'duplicate completion') envelopes.push({ testRunFinished: last });
+  if (variant === 'unknown scenario location') {
+    const index = envelopes.findIndex(({ pickle }) => pickle?.name === 'a plain scenario');
+    const pickle = envelopes[index]?.pickle;
+    assert(pickle);
+    const { location: _location, ...unlocated } = pickle;
+    envelopes[index] = { pickle: unlocated };
+  }
+  if (variant === 'repeated scenario') {
+    const start = envelopes.find(({ testCaseStarted }) => testCaseStarted !== undefined);
+    assert.ok(start);
+    envelopes.splice(-1, 0, start);
+  }
+  if (
+    variant === 'unfinished report' ||
+    variant === 'unfinished report missing a scenario' ||
+    variant === 'torn report with an unexpected scenario'
+  )
+    envelopes.pop();
+  const text = envelopes.map((entry) => JSON.stringify(entry)).join('\n');
+  let expected = one;
+  let report: string | null = text;
+  let stderr = 'AOS_REPLAY_PLAN_VALID\n';
+  let status = 0;
+  switch (variant) {
+    case 'missing scenario':
+    case 'unfinished report missing a scenario':
+      expected = both;
+      break;
+    case 'two missing scenarios':
+      expected = [...one, 'specs/green.feature:12', 'specs/second.feature:3'];
+      break;
+    case 'no preflight acknowledgement':
+      stderr = '';
+      break;
+    case 'explicit refusal':
+      stderr = 'AOS_REPLAY_SELECTION: fixture refused\n';
+      status = 2;
+      report = null;
+      break;
+    case 'refusal text with a different status':
+      stderr = 'AOS_REPLAY_SELECTION: fixture refused\n';
+      status = 1;
+      report = null;
+      break;
+    case 'refusal with no diagnostic':
+      stderr = '';
+      status = 2;
+      report = null;
+      break;
+    case 'crash without report':
+      stderr += 'Error: fixture crash\n';
+      status = 1;
+      report = null;
+      break;
+    case 'non-zero exit after completion':
+      status = 1;
+      break;
+    case 'torn report with an unexpected scenario':
+      report += '\n{';
+      break;
+  }
+  const selector = 'specs/returned-selector.mts';
+  repo.write(
+    selector,
+    [
+      "import { writeFileSync } from 'node:fs';",
+      'export async function runReplayCucumber(args, stderr) {',
+      report === null ? '' : '  writeFileSync(args[1], ' + JSON.stringify(report) + ');',
+      '  stderr.write(' + JSON.stringify(stderr) + ');',
+      '  return ' + status + ';',
+      '}',
+    ].join('\n'),
+  );
+  const runner = new CucumberRunner(
+    repo.dir,
+    'replay',
+    repo.path('reports/replay'),
+    pathToFileURL(repo.path(selector)),
+  );
+  this.state['timed'] = await runner.run(expected, 600_000);
+});
+
+Then('the replay of the observed report records:', function (text: string) {
+  const { result } = this.state['timed'] as Timed;
+  assert.equal(result.timedOut, false);
+  const failure = 'failure' in result.run ? result.run.failure : undefined;
+  assert.deepEqual(
+    {
+      ...(result.selectionFailure === undefined ? {} : { selection: result.selectionFailure }),
+      ...(result.incomplete === undefined ? {} : { incomplete: result.incomplete }),
+      ...(result.badExit === undefined ? {} : { badExit: result.badExit }),
+      ...(failure === undefined ? {} : { failure }),
+    },
+    JSON.parse(text),
+  );
 });
 
 When('the runner snapshots the selector and then the worktree copy is replaced', async function () {

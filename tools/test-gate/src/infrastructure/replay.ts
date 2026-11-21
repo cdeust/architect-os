@@ -149,9 +149,9 @@ export class CucumberRunner implements Runner {
           false,
           (locations, completed) => {
             runCompleted = completed;
-            const remaining = new Set(expected);
+            const remaining = new Set<string | null>(expected);
             for (const location of locations) {
-              if (location === null || !remaining.delete(location)) {
+              if (!remaining.delete(location)) {
                 selectionFailure = 'scénario de rejeu inattendu : ' + String(location);
                 return;
               }
