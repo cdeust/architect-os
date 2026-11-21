@@ -39,3 +39,21 @@ export function parsePlanApproval(raw: unknown) {
     })
     .parse(raw);
 }
+
+/** ai-architect-mcp-spec packages/orchestration/src/verified-plan.ts, verified_plan_v1. */
+export function parseVerifiedPlanReply(content: readonly unknown[]) {
+  const [part] = z.tuple([z.object({ type: z.literal('text'), text: z.string() })]).parse(content);
+  const sha = z.string().regex(/^[a-f0-9]{64}$/);
+  return z
+    .strictObject({
+      verified_plan: z.strictObject({
+        version: z.literal(1),
+        run_id: z.string(),
+        define_sha256: sha,
+        proposal_sha256: sha,
+        plan_sha256: sha,
+        proposal: z.unknown().transform(parsePlanProposal),
+      }),
+    })
+    .parse(JSON.parse(part.text));
+}
