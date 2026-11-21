@@ -14,6 +14,7 @@ import {
   type MutationJudgement,
   type Perimeter,
 } from '../../src/domain/mutation.js';
+import { distributeReplayFiles } from '../../src/domain/replay-lots.js';
 import { Workspace } from '../../src/infrastructure/workspace.js';
 import { FIXTURES, Given, Then, When } from './repository.js';
 
@@ -197,4 +198,16 @@ Then(
 
 Then('{string} names {string}: {word}', function (mutate: string, file: string, named: string) {
   assert.equal(mentioned(list(mutate), file), named === 'yes');
+});
+
+When('the gate distributes replay files {string}', function (files: string) {
+  const lots = list(files).map((entry) => {
+    const [file, weight] = entry.split(':') as [string, string];
+    return { file, mutants: Array.from({ length: Number(weight) }) };
+  });
+  this.state['replay-lots'] = distributeReplayFiles(lots).map((batch) => [...batch]);
+});
+
+Then('the first replay lot is {string} and the second is {string}', function (first: string, second: string) {
+  assert.deepEqual(this.state['replay-lots'], [list(first), list(second)]);
 });
