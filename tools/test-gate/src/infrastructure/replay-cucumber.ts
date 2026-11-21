@@ -1,12 +1,11 @@
-import { loadConfiguration, loadSources, runCucumber, type IRunEnvironment } from '@cucumber/cucumber/api';
-
-const cucumber = { loadConfiguration, loadSources, runCucumber };
+import type * as cucumber from '@cucumber/cucumber/api';
+import type { IRunEnvironment } from '@cucumber/cucumber/api';
 
 export async function runReplayCucumber(
   args: readonly string[],
   stderr: { write(text: string): unknown },
+  engine: Pick<typeof cucumber, 'loadConfiguration' | 'loadSources' | 'runCucumber'>,
   environment: IRunEnvironment = {},
-  engine = cucumber,
 ): Promise<number> {
   const refuse = (issue: string) => {
     stderr.write('AOS_REPLAY_SELECTION: ' + issue + '\n');
@@ -42,7 +41,15 @@ export async function runReplayCucumber(
   const { retry, dryRun, failFast, parallel } = runConfiguration.runtime;
   if (retry !== 0 || dryRun || failFast || parallel !== 0) return refuse('profil de rejeu invalide');
 
+  const formats = runConfiguration.formats.files;
+  if (Object.keys(formats).length !== 1 || formats[report] !== 'message')
+    return refuse('rapport Messages de rejeu invalide');
   stderr.write('AOS_REPLAY_PLAN_VALID\n');
-  const { success } = await engine.runCucumber(runConfiguration, environment);
-  return success ? 0 : 1;
+  try {
+    const { success } = await engine.runCucumber(runConfiguration, environment);
+    return success ? 0 : 1;
+  } catch (error) {
+    stderr.write('AOS_REPLAY_EXECUTION: ' + String(error) + '\n');
+    return 1;
+  }
 }

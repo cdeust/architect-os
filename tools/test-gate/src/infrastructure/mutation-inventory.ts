@@ -1,24 +1,10 @@
+import { noopLogger } from '@stryker-mutator/util';
 import { Instrumenter } from '@stryker-mutator/instrumenter';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { Perimeter } from '../domain/mutation.js';
 
-const disabled = () => false;
-const silent = () => undefined;
-const instrumenter = new Instrumenter({
-  isTraceEnabled: disabled,
-  isDebugEnabled: disabled,
-  isInfoEnabled: disabled,
-  isWarnEnabled: disabled,
-  isErrorEnabled: disabled,
-  isFatalEnabled: disabled,
-  trace: silent,
-  debug: silent,
-  info: silent,
-  warn: silent,
-  error: silent,
-  fatal: silent,
-});
+const instrumenter = new Instrumenter(noopLogger);
 
 function sourceDigest(source: string): string {
   return createHash('sha256').update(source).digest('hex');

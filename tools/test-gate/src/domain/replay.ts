@@ -69,7 +69,10 @@ function offsetOf(source: string, line: number, column: number): number {
 export function mutatedSource(source: string, mutant: MutantRecord): string {
   const start = offsetOf(source, mutant.startLine, mutant.startColumn);
   const end = offsetOf(source, mutant.endLine, mutant.endColumn);
-  return `${source.slice(0, start)}${mutant.replacement}${source.slice(end)}`;
+  // Stryker replaces a logical-expression AST node. Preserve its grouping when replay replaces text.
+  const replacement =
+    mutant.mutatorName === 'LogicalOperator' ? '(' + mutant.replacement + ')' : mutant.replacement;
+  return source.slice(0, start) + replacement + source.slice(end);
 }
 
 /**

@@ -26,31 +26,49 @@ export function parseArguments(args: readonly string[]): Command | ReadFailure {
     return options.length === 1 && options[0] === 'realign' ? { name: 'realign' } : { failure: USAGE };
   }
   if (name === 'replay-collect' && options.length === 0) return { name };
+  const [flag, value, ...rest] = options;
   if (name === 'replay') {
-    const [mode, shard] = options;
-    if (options.length === 2 && mode === '--shard' && (shard === '1' || shard === '2'))
-      return { name, all: false, shard: shard === '1' ? 1 : 2 };
-    if (options.length === 0) return { name, all: false };
-    return options.length === 1 && options[0] === '--all' ? { name, all: true } : { failure: USAGE };
+    switch (flag) {
+      case undefined:
+        return { name, all: false };
+      case '--all':
+        return options.length === 1 ? { name, all: true } : { failure: USAGE };
+      case '--shard': {
+        const shard = parseShard(value, rest);
+        return shard === undefined ? { failure: USAGE } : { name, all: false, shard };
+      }
+      default:
+        return { failure: USAGE };
+    }
   }
-  if (
-    name !== 'plan' &&
-    name !== 'check' &&
-    name !== 'inventory' &&
-    name !== 'inventory-check' &&
-    name !== 'inventory-project' &&
-    name !== 'inventory-collect'
-  )
-    return { failure: USAGE };
+  switch (name) {
+    case 'inventory':
+    case 'inventory-project':
+      if (flag === '--shard') {
+        const shard = parseShard(value, rest);
+        return shard === undefined ? { failure: USAGE } : { name, job: 'linux', shard };
+      }
+      break;
+    case 'inventory-check':
+    case 'inventory-collect':
+    case 'plan':
+    case 'check':
+      break;
+    default:
+      return { failure: USAGE };
+  }
   if (options.length === 0) return { name, job: 'linux' };
-  const [flag, job, ...rest] = options;
-  if (
-    (name === 'inventory' || name === 'inventory-project') &&
-    flag === '--shard' &&
-    rest.length === 0 &&
-    (job === '1' || job === '2')
-  )
-    return { name, job: 'linux', shard: job === '1' ? 1 : 2 };
+  const job = value;
   if (flag !== '--job' || job === undefined || rest.length > 0) return { failure: USAGE };
   return { name, job };
+}
+
+function parseShard(value: string | undefined, rest: readonly string[]): 1 | 2 | undefined {
+  if (rest.length !== 0) return undefined;
+  switch (value) {
+    case '1':
+      return 1;
+    case '2':
+      return 2;
+  }
 }

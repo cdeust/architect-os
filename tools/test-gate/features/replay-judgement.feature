@@ -65,3 +65,6 @@ Feature: Test gate, rule 7: how one replay is judged against the status the tool
       | 2 | PASSED \| PASSED | none                                             |
       | 2 | PASSED \| FAILED | témoin après coup : p2 : FAILED                  |
       | 1 | unreadable       | témoin après coup : illisible                    |
+
+  Scenario: a native logical operator replacement does not change its parent expression precedence
+    Then a nested logical mutation keeps its AST grouping during replay

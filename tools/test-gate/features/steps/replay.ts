@@ -1,8 +1,10 @@
 import { loadConfiguration, loadSources, type runCucumber } from '@cucumber/cucumber/api';
 import { runReplayCucumber } from '../../src/infrastructure/replay-cucumber.js';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { MutantRecord } from '../../src/domain/mutation.js';
 import {
   expectationOf,
@@ -273,18 +275,27 @@ When('the instrumented runner exercises the replay selector with {string}', asyn
         diagnostics += text;
       },
     },
-    { cwd: repo.dir },
     {
-      loadConfiguration,
+      async loadConfiguration(...configArgs) {
+        const config = await loadConfiguration(...configArgs);
+        const formats = config.runConfiguration.formats.files;
+        if (variant === 'missing format') delete formats[args[1] as string];
+        if (variant === 'wrong format') formats[args[1] as string] = 'json';
+        if (variant === 'extra format') formats[repo.path('reports/additional.json')] = 'json';
+        return config;
+      },
       async loadSources(...sourceArgs) {
         const result = await loadSources(...sourceArgs);
         return variant === 'duplicate' ? { ...result, plan: [...result.plan, ...result.plan] } : result;
       },
-      async runCucumber() {
+      async runCucumber(configuration) {
         called++;
+        assert.deepEqual(configuration.formats.files, { [repo.path('reports/replay.ndjson')]: 'message' });
+        if (variant === 'execution error') throw new Error('fixture execution failure');
         return { success: variant !== 'step failed', support: {} } as Awaited<ReturnType<typeof runCucumber>>;
       },
     },
+    { cwd: repo.dir },
   );
   this.state['replaySelector'] = { status, called, diagnostics };
 });
@@ -298,6 +309,58 @@ Then(
     assert.ok(actual.diagnostics.includes(expected), actual.diagnostics);
   },
 );
+
+When('the replay writes its working files outside the repository', async function () {
+  const repo = repository(this);
+  const work = mkdtempSync(join(tmpdir(), 'replay-outside-'));
+  try {
+    this.state['timed'] = await new CucumberRunner(repo.dir, 'replay', work).run(
+      ['specs/green.feature:4'],
+      600_000,
+    );
+  } finally {
+    rmSync(work, { recursive: true });
+  }
+});
+
+When('the replay child fails after creating its Messages file', async function () {
+  const repo = repository(this);
+  const file = 'specs/failed-selector.mts';
+  repo.write(
+    file,
+    [
+      "import { writeFileSync } from 'node:fs';",
+      'export async function runReplayCucumber(args, stderr) {',
+      '  writeFileSync(args[1], "");',
+      "  stderr.write('AOS_REPLAY_PLAN_VALID\\nAOS_REPLAY_EXECUTION: Error: failure after opening Messages\\n');",
+      '  return 1;',
+      '}',
+    ].join('\n'),
+  );
+  const runner = new CucumberRunner(
+    repo.dir,
+    'replay',
+    repo.path('reports/replay'),
+    pathToFileURL(repo.path(file)),
+  );
+  this.state['timed'] = await runner.run(['specs/green.feature:4'], 600_000);
+});
+
+Then('the replay records the execution error from the child', function () {
+  const { result } = this.state['timed'] as Timed;
+  assert.deepEqual(result.run, { failure: 'Error: failure after opening Messages' });
+  assert.equal(result.selectionFailure, undefined);
+});
+
+When('the runner snapshots the selector and then the worktree copy is replaced', async function () {
+  const repo = repository(this);
+  const source = new URL('../../src/infrastructure/replay-cucumber.ts', import.meta.url);
+  const original = repo.path('specs/selector.mts');
+  repo.write('specs/selector.mts', readFileSync(source, 'utf8'));
+  const runner = new CucumberRunner(repo.dir, 'replay', repo.path('reports/replay'), pathToFileURL(original));
+  repo.write('specs/selector.mts', 'throw Error("mutated selector loaded");\n');
+  this.state['timed'] = await runner.run(['specs/green.feature:4'], 600_000);
+});
 
 When('the gate replays the mutation report', function () {
   return repository(this).run(['replay']);
@@ -602,4 +665,17 @@ Given('the gate mutation report mutated {string}', function (patterns: string) {
 Then('the replay refuses its scenario selection with {string}', function (reason: string) {
   const { result } = this.state['timed'] as Timed;
   assert.equal(result.selectionFailure, reason, JSON.stringify(result.run));
+});
+
+Then('a nested logical mutation keeps its AST grouping during replay', function () {
+  const source = 'left && middle && right';
+  const mutant = {
+    mutatorName: 'LogicalOperator',
+    replacement: 'left || middle',
+    startLine: 1,
+    startColumn: 1,
+    endLine: 1,
+    endColumn: 15,
+  } as MutantRecord;
+  assert.equal(mutatedSource(source, mutant), '(left || middle) && right');
 });

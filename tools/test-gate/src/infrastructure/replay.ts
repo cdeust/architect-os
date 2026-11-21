@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { basename, join, normalize } from 'node:path';
 import {
   judgeReplay,
@@ -16,12 +17,9 @@ const CUCUMBER = new URL(
   import.meta.url.endsWith('.ts') ? './replay-cucumber.ts' : './replay-cucumber.js',
   import.meta.url,
 ).href;
-const REPLAY_ENTRY =
-  'import { runReplayCucumber } from ' +
-  JSON.stringify(CUCUMBER) +
-  ';' +
-  'process.exitCode = await runReplayCucumber(process.argv.slice(1), process.stderr);';
+const CUCUMBER_API = import.meta.resolve('@cucumber/cucumber/api');
 const SELECTION_PREFIX = 'AOS_REPLAY_SELECTION: ';
+const EXECUTION_PREFIX = 'AOS_REPLAY_EXECUTION: ';
 
 /** The signal of a run stopped at its limit, and of its group once it is gone; nothing else sends it. */
 const KILL = 'SIGKILL';
@@ -73,12 +71,17 @@ function scenarioLocation(value: string): boolean {
  */
 export class CucumberRunner implements Runner {
   private runs = 0;
+  // The selector is also a mutation target. Capture its original bytes before mutating the worktree.
+  private readonly selector: Buffer;
 
   constructor(
     private readonly root: string,
     private readonly profile: string,
     private readonly work: string,
-  ) {}
+    selector = new URL(CUCUMBER),
+  ) {
+    this.selector = readFileSync(selector);
+  }
 
   async run(tests: readonly string[], limitMs: number): Promise<Timed> {
     const expected = new Set(tests);
@@ -90,8 +93,17 @@ export class CucumberRunner implements Runner {
     const report = join(this.work, `run-${this.runs}.ndjson`);
     const errors = join(this.work, `run-${this.runs}.err`);
     mkdirSync(this.work, { recursive: true });
+    const selectorPath = join(this.work, 'selector.mts');
+    writeFileSync(selectorPath, this.selector);
+    const entry =
+      'import * as cucumber from ' +
+      JSON.stringify(CUCUMBER_API) +
+      ';' +
+      'import { runReplayCucumber } from ' +
+      JSON.stringify(pathToFileURL(selectorPath).href) +
+      ';process.exitCode = await runReplayCucumber(process.argv.slice(1), process.stderr, cucumber);';
+    const args = ['--input-type=module', '--eval', entry, '--', this.profile, report, ...tests];
     const stderr = openSync(errors, 'w');
-    const args = ['--input-type=module', '--eval', REPLAY_ENTRY, '--', this.profile, report, ...tests];
     const started = performance.now();
     // child_process.spawn options detached, stdio, timeout and killSignal: node_modules/@types/node/child_process.d.ts.
     // Standard output is ignored, never piped: an unread pipe that fills blocks the run. At `timeout`, Node kills the
@@ -118,7 +130,10 @@ export class CucumberRunner implements Runner {
     const ms = performance.now() - started;
     // Without a report, the first error line of its standard error says why (a stack frame names no error).
     const diagnostics = readFileSync(errors, 'utf8').split('\n');
-    const why = String(diagnostics.find((line) => line.includes('Error')));
+    const execution = diagnostics
+      .find((line) => line.startsWith(EXECUTION_PREFIX))
+      ?.slice(EXECUTION_PREFIX.length);
+    const why = execution ?? diagnostics.find((line) => line.includes('Error')) ?? 'aucun diagnostic';
     const refused =
       code === 2
         ? diagnostics.find((line) => line.startsWith(SELECTION_PREFIX))?.slice(SELECTION_PREFIX.length)
@@ -127,7 +142,7 @@ export class CucumberRunner implements Runner {
       ? undefined
       : (refused ?? 'précontrôle Cucumber non confirmé');
     let runCompleted = false;
-    const run = existsSync(report)
+    const observed = existsSync(report)
       ? parseCucumberReport(
           readFileSync(report, 'utf8'),
           () => true,
@@ -147,6 +162,7 @@ export class CucumberRunner implements Runner {
           },
         )
       : { failure: `cucumber-js n’a écrit aucun rapport : ${why}` };
+    const run = execution === undefined ? observed : { failure: execution };
     return {
       result: {
         run,

@@ -24,6 +24,10 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       | variant        | status | calls | diagnostic                         |
       | success        | 0      | 1     | AOS_REPLAY_PLAN_VALID               |
       | step failed    | 1      | 1     | AOS_REPLAY_PLAN_VALID               |
+      | execution error | 1     | 1     | AOS_REPLAY_EXECUTION: Error: fixture execution failure |
+      | missing format | 2      | 0     | rapport Messages de rejeu invalide |
+      | wrong format   | 2      | 0     | rapport Messages de rejeu invalide |
+      | extra format   | 2      | 0     | rapport Messages de rejeu invalide |
       | profile absent | 2      | 0     | précontrôle Cucumber impossible    |
       | no profile     | 2      | 0     | arguments de rejeu invalides       |
       | no report      | 2      | 0     | arguments de rejeu invalides       |
@@ -38,6 +42,18 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       | failFast       | 2      | 0     | profil de rejeu invalide           |
       | parallel       | 2      | 0     | profil de rejeu invalide           |
       | plugins        | 2      | 0     | profil de rejeu invalide           |
+
+  Scenario: a replay work directory outside the repository keeps using the installed engine
+    When the replay writes its working files outside the repository
+    Then the replay run passed within its limit
+
+  Scenario: a truncated Messages file does not erase an execution error
+    When the replay child fails after creating its Messages file
+    Then the replay records the execution error from the child
+
+  Scenario: replacing the worktree selector cannot sabotage the independent replay harness
+    When the runner snapshots the selector and then the worktree copy is replaced
+    Then the replay run passed within its limit
 
   Scenario: a static survivor is replayed in one lot and the collector verifies the exact union
     Given the gate mutation fixture declares its independent mutation profile

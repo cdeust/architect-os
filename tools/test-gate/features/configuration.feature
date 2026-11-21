@@ -112,3 +112,13 @@ Feature: Test gate configuration and command line
       | plan --job linux extra   |
       | replay --some            |
       | replay --all extra       |
+      | replay --all 1           |
+      | replay --shard           |
+      | replay --shard 3         |
+      | replay --shard 1 extra   |
+      | replay --other 1         |
+      | inventory --other 1      |
+      | inventory --shard       |
+      | inventory --shard 3     |
+      | inventory --shard 1 extra |
+      | inventory-check --shard 1 |
