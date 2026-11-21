@@ -27,8 +27,14 @@ Feature: The inventory projects native mutants onto changed production lines
     When the native plugin instruments the inventory files
     And the gate projects the native report
     Then the verified projection contains only the inventory mutants
+    Given the checked mutation projection is compact JSON
     When the gate checks its mutation inventory
-    Then the mutation inventory check returns "pass"
+    Then the gate exits with 0
+    And the gate output is:
+      """
+      lots de mutation vérifiés : 1 lot(s)
+      """
+    And the mutation projection kept its original bytes
 
   Scenario Outline: a CallExpression with no selected active child stays out of the projected report
     Given a gate repository
@@ -167,8 +173,21 @@ Feature: The inventory projects native mutants onto changed production lines
       {"probe":"Killed"}
       """
     And the gate head is committed
+    When the gate inventories the mutation scope
+    Then the inventory files are "src/a.mjs, src/b.mjs, zz/probe.mjs"
+    And the inventory declares only the shard "none"
+    And the gate output is:
+      """
+      inventaire linux : 3 lot(s) de mutations -> reports/mutation-inventory.json
+      """
     When the gate inventories native shard "1"
-    And the native plugin instruments the inventory files
+    Then the inventory files are "src/a.mjs, zz/probe.mjs"
+    And the inventory declares only the shard "1"
+    And the gate output is:
+      """
+      inventaire linux : 2 lot(s) de mutations -> reports/mutation-inventory.json
+      """
+    When the native plugin instruments the inventory files
     And the native producer "1" publishes its raw proof
     And the gate collects the two native production lots
     Then the gate exits with 1
@@ -271,12 +290,42 @@ Feature: The inventory projects native mutants onto changed production lines
     When the gate inventories the mutation scope
     Then the inventory marks "src/scoped.mjs" as whole
 
-  Scenario: an absent current debt registry cannot produce a valid inventory
+  Scenario Outline: unreadable debt cannot produce a valid inventory
     Given a gate repository
     And the gate head is committed
-    And the gate debt registry is absent
+    And the debt registry is unreadable in the "<revision>"
     When the gate inventories the mutation scope
     Then the mutation inventory is refused
+    And the gate output is:
+      """
+      <diagnostic>
+      """
+
+    Examples:
+      | revision     | diagnostic                                                                                       |
+      | working tree | porte de test : registre de dette illisible : mutation-debt.json absent                         |
+      | first parent | porte de test : registre de dette illisible au premier parent : hors schéma : ✖ Unrecognized key: "extra" |
+
+  Scenario: projection without a native report invalidates only the earlier projection
+    Given a gate repository
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export const value = true;
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    And the gate repository file "reports/mutation/mutation.json" reads:
+      """
+      {"previous":true}
+      """
+    When the gate projects the native report
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : rapport de mutation absent : reports/mutation/native.json
+      """
+    And the gate repository holds no file "reports/mutation/mutation.json"
+    And the gate repository holds a file "reports/mutation-inventory.json"
 
   Scenario: an invalid configuration invalidates a previous inventory
     Given a gate repository

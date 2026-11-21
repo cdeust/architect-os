@@ -69,6 +69,13 @@ function readInventory(world: Parameters<typeof repository>[0]): Inventory {
   return result;
 }
 
+Then('the inventory declares only the shard {string}', function (shard: string) {
+  const repo = repository(this);
+  const manifest = JSON.parse(repo.read('reports/mutation-inventory.json')) as { shard?: number };
+  if (shard === 'none') assert.equal(Object.hasOwn(manifest, 'shard'), false);
+  else assert.equal(manifest.shard, Number(shard));
+});
+
 Then('the inventory files are {string}', function (paths: string) {
   assert.deepEqual(
     readInventory(this).lots.map(({ file }) => file),
@@ -402,6 +409,21 @@ When('the gate receives a mutation lot report with {string}', function (variant:
       Buffer.concat([valid.subarray(0, i), Buffer.from([255]), valid.subarray(i + character.length)]),
     );
   }
+});
+
+Given('the checked mutation projection is compact JSON', function () {
+  const repo = repository(this);
+  const path = 'reports/mutation/mutation.json';
+  const compact = JSON.stringify(JSON.parse(repo.read(path)));
+  repo.write(path, compact);
+  this.state['compact mutation projection'] = compact;
+});
+
+Then('the mutation projection kept its original bytes', function () {
+  assert.equal(
+    repository(this).read('reports/mutation/mutation.json'),
+    this.state['compact mutation projection'],
+  );
 });
 
 When('the gate checks its mutation inventory', function () {

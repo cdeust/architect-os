@@ -341,7 +341,7 @@ export async function runGate(
             head,
             firstParent,
             job: job.name,
-            ...(shard === undefined ? {} : { shard }),
+            shard,
             lots: planned,
           }),
         };
@@ -387,7 +387,7 @@ export async function runGate(
         return 0;
       }
       workspace.write(INVENTORY_PATH, inventoryText);
-      out.write(`inventaire ${job.name} : ${lots.length} lot(s) de mutations -> ${INVENTORY_PATH}\n`);
+      out.write(`inventaire ${job.name} : ${planned.length} lot(s) de mutations -> ${INVENTORY_PATH}\n`);
       return 0;
     } catch (error) {
       if (command.name === 'inventory') workspace.remove(INVENTORY_PATH);

@@ -131,6 +131,27 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       """
     And the gate replay record is absent
 
+  Scenario Outline: a replay lot with unreadable debt cannot retain an older receipt
+    Given the gate mutation fixture declares its independent mutation profile
+    And the gate mutation report keeps only the mutants "5"
+    And the gate repository file "reports/replay-shards/1/replay.json" reads:
+      """
+      {"previous":true}
+      """
+    And the debt registry is unreadable in the "<revision>"
+    When the gate replays mutation lot "1"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : registre de dette illisible
+      """
+    And the gate repository holds no file "reports/replay-shards/1/replay.json"
+
+    Examples:
+      | revision     |
+      | working tree |
+      | first parent |
+
   Scenario: a truncated static scenario catalogue is rejected before replay
     Given the gate mutation fixture declares its independent mutation profile
     And the gate mutation report keeps only the mutants "5"
