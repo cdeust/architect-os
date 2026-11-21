@@ -17,3 +17,11 @@ Feature: Import a Plan proposal from an operator's Antigravity session
       | failed run     | PLAN_AGY_RUN_FAILED       |
       | missing file   | PLAN_AGY_INPUT_UNAVAILABLE |
       | invalid Define | PLAN_DEFINE_INVALID        |
+      | zero usage | proposed |
+      | invalid usage | proposed |
+      | no usage | proposed |
+      | array usage | proposed |
+      | string usage | proposed |
+
+  Scenario: Validate the native Antigravity protocol envelope and reject tool events
+    Then the imported Antigravity events must form one tool-free turn
