@@ -1,0 +1,144 @@
+#!/bin/sh
+# ./aos -- PROGRAM [ARG ...]: the admission of a run, then PROGRAM in its place (docs/design/orchestration-fable-5-2.md
+# §14, « Un seul lieu d'écriture, imposé par l'hôte »). Optional until the next commit makes it compulsory.
+#
+# The one setting is ARCHITECT_OS_RUNTIME_ROOT: an existing physical directory, marked once by its installer
+# (<root>/.architect-os-runtime-root, which names the environment); no default, nothing created in its place. This
+# script checks the grammar, the setting and the host Node, runs the admission (tools/runtime/src/cli.ts) with plain
+# Node, from source, in a clean environment and without stdin, then sets the closed list of locations below and
+# replaces itself with PROGRAM: cwd, argv, stdin, the streams and the exit status are PROGRAM's. Everything it and
+# PROGRAM create is private to the account (umask 077).
+#
+# PROGRAM is a word that does not begin with `-`. Refusals come in a fixed order: the grammar (USAGE), the setting
+# (RUNTIME_ROOT_REQUIRED), the host Node (RUNTIME_NODE_MISSING, RUNTIME_NODE_UNSUPPORTED), then the admission
+# (tools/runtime/src/domain/refusal.ts holds the list in that order).
+#
+# Exit codes before PROGRAM: 2 with `aos: <CODE>` on stderr (a usage or admission refusal), 3 with
+# `aos: RUNTIME_UNEXPECTED`, once (an unexpected failure); 126 and 127 when PROGRAM cannot be executed or found.
+#
+# Node is a host prerequisite, taken from a trusted location, never from the caller's PATH: the first directory of
+# tools/runtime/node-locations (where an installer or the runner puts Node) that holds an executable `node`, which
+# must report the version of .nvmrc. It runs the admission, and the listing of the npm settings below. Other programs
+# are started by absolute path: /usr/bin/env and /bin/sh, on macOS and on Linux. PROGRAM is looked up in the caller's
+# PATH, unchanged.
+set -u
+umask 077
+
+refuse() {
+  printf 'aos: %s\n' "$1" >&2
+  exit 2
+}
+fail() {
+  printf 'aos: RUNTIME_UNEXPECTED\n' >&2
+  exit 3
+}
+
+if [ "$#" -lt 2 ] || [ "$1" != "--" ] || [ -z "$2" ]; then refuse USAGE; fi
+# A PROGRAM that begins with `-` is read differently by the final `exec` of each shell: bash, zsh and ksh take `-c` as
+# their option (the next word runs with an empty environment), dash runs a program named `-c`. `exec --` is no cure:
+# dash runs a program named `--`. It is refused; such a program is given by a path, `./-c`.
+case $2 in
+  -*) refuse USAGE ;;
+esac
+shift
+root=${ARCHITECT_OS_RUNTIME_ROOT-}
+[ -n "$root" ] || refuse RUNTIME_ROOT_REQUIRED
+
+# The checkout of this script, found from its own path, never from the caller's directory, git or npm.
+case $0 in
+  */*) here=${0%/*} ;;
+  *) here=. ;;
+esac
+checkout=$(CDPATH='' cd -P -- "$here" && pwd -P) || fail
+
+locations=$checkout/tools/runtime/node-locations
+[ -f "$locations" ] && [ -r "$locations" ] || fail
+node=
+while IFS= read -r location; do
+  case $location in
+    /*) ;;
+    *) fail ;;
+  esac
+  if [ -f "$location/node" ] && [ -x "$location/node" ]; then
+    node=$location/node
+    break
+  fi
+done <"$locations"
+[ -n "$node" ] || refuse RUNTIME_NODE_MISSING
+IFS= read -r pin <"$checkout/.nvmrc" || fail
+version=$(/usr/bin/env -i PATH=/usr/bin:/bin "$node" --version </dev/null 2>/dev/null) || refuse RUNTIME_NODE_UNSUPPORTED
+[ "$version" = "v$pin" ] || refuse RUNTIME_NODE_UNSUPPORTED
+
+# The kind of PROGRAM, for the receipt: the word npm, npx or node, or other; neither its name nor its path is passed on.
+case $1 in
+  npm | npx | node) kind=$1 ;;
+  *) kind=other ;;
+esac
+
+# The inherited variables that npm would read as one of the settings this script controls (cache, logs-dir,
+# userconfig, globalconfig, node-options), in any of the spellings npm accepts: mixed case, `-` for `_`. A POSIX shell
+# cannot name some of them, so they are listed by the trusted Node, which only reads the names of its environment
+# (tools/runtime/src/npm-names.ts), and removed by /usr/bin/env -u below. Its environment is the caller's, but the
+# overrides of Node that could load a hook or write: NODE_OPTIONS, a coverage output, redirected warnings, a compile
+# cache. They are not given to PROGRAM either.
+unset NODE_OPTIONS NODE_V8_COVERAGE NODE_REDIRECT_WARNINGS
+names=$(/usr/bin/env -u NODE_COMPILE_CACHE NODE_DISABLE_COMPILE_CACHE=1 \
+  "$node" "$checkout/tools/runtime/src/npm-names.ts" </dev/null) || fail
+
+# The admission. Its environment is the closed list below: no inherited NODE_OPTIONS, loader, coverage output or
+# compile cache. On success it prints the identifier of the run it allocated, alone; on a refusal or an error it
+# caught, it has already printed `aos: <CODE>`.
+run=$(/usr/bin/env -i PATH=/usr/bin:/bin NODE_DISABLE_COMPILE_CACHE=1 \
+  "$node" "$checkout/tools/runtime/src/cli.ts" "$root" "$kind" </dev/null)
+case $? in
+  0) ;;
+  2) exit 2 ;;
+  3) exit 3 ;;
+  *) fail ;;
+esac
+case $run in
+  r[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9]) ;;
+  *) fail ;;
+esac
+dir=$root/run/$run
+
+# The delivery (tools/deliver) gives git and the client of the forge the XDG_CONFIG_HOME of the caller, where their
+# identity is configured, not the one of the run: it is handed over here, `set:<value>` or `unset`, whatever was
+# inherited under this name.
+if [ "${XDG_CONFIG_HOME+set}" = set ]; then
+  ARCHITECT_OS_HOST_XDG_CONFIG_HOME=set:$XDG_CONFIG_HOME
+else
+  ARCHITECT_OS_HOST_XDG_CONFIG_HOME=unset
+fi
+
+# The closed list of locations given to PROGRAM; an inherited value is overwritten.
+ARCHITECT_OS_RUNTIME_ROOT=$root
+ARCHITECT_OS_RUN_DIR=$dir
+TMPDIR=$dir/tmp
+TMP=$dir/tmp
+TEMP=$dir/tmp
+XDG_CONFIG_HOME=$dir/config
+XDG_DATA_HOME=$dir/data
+XDG_STATE_HOME=$dir/state
+XDG_CACHE_HOME=$root/cache/xdg
+NODE_COMPILE_CACHE=$root/cache/node
+export ARCHITECT_OS_RUNTIME_ROOT ARCHITECT_OS_RUN_DIR ARCHITECT_OS_HOST_XDG_CONFIG_HOME TMPDIR TMP TEMP \
+  XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME NODE_COMPILE_CACHE
+
+# PROGRAM, through /usr/bin/env, which removes each listed spelling, then gives npm's four locations one value each,
+# then /bin/sh, which execs PROGRAM with its arguments as they are (env would read a PROGRAM holding `=` as a variable).
+set -- /bin/sh -c 'exec "$@"' aos "$@"
+set -- "npm_config_cache=$root/cache/npm" "npm_config_logs_dir=$dir/npm-logs" \
+  "npm_config_userconfig=$dir/config/npm/user.npmrc" "npm_config_globalconfig=$dir/config/npm/global.npmrc" "$@"
+set -f
+IFS='
+'
+for name in $names; do
+  case $name in
+    *[!A-Za-z_-]*) fail ;;
+  esac
+  set -- -u "$name" "$@"
+done
+unset IFS
+set +f
+exec /usr/bin/env "$@"
