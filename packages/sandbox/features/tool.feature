@@ -40,6 +40,10 @@ Feature: code.json, the descriptive file of the 1a.0 tool
       | a usage log above persistent state |
       | no launcher prompt file |
 
+  Scenario: a usage journal outside runtime state reports which path policy was violated
+    When I break a copy of the committed code.json with a usage log above persistent state
+    Then parsing the broken code.json fails with the message "invalid runtime state log path"
+
   Scenario Outline: a launcher prompt file outside the launcher package is refused by name: <defect>
     When I break a copy of the committed code.json with <defect>
     Then parsing the broken code.json fails with the message "chemin relatif à packages/sandbox, sans .."
