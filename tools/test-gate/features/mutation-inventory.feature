@@ -237,6 +237,26 @@ Feature: The inventory projects native mutants onto changed production lines
       """
     And the gate repository holds no file "reports/mutation/mutation.json"
 
+  Scenario: Stryker discovers the inventory plugin under its registered name
+    Given a gate repository
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export const value = true;
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    Then the registered native plugin reads the inventory from its working directory
+
+  Scenario: the inventory plugin rejects invalid encoding before admitting any source
+    Given a gate repository
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export const value = true;
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    Then the native plugin refuses an inventory with invalid UTF-8 bytes or a byte-order mark
+
   Scenario: a configured canary is inventoried whole with zero mutations
     Given a gate repository
     And the gate repository file "src/scoped.mjs" reads:

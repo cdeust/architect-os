@@ -4,7 +4,8 @@ import { resolve } from 'node:path';
 import { inventoryIgnorer } from './mutation-lot-ignorer.js';
 
 export function readNativeLotIgnorer(root = process.cwd()) {
-  const text = readFileSync(resolve(root, 'reports/mutation-inventory.json'), 'utf8');
+  const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+  const text = decoder.decode(readFileSync(resolve(root, 'reports/mutation-inventory.json')));
   return inventoryIgnorer(root, JSON.parse(text).lots);
 }
 

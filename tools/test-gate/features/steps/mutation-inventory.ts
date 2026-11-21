@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { Instrumenter } from '@stryker-mutator/instrumenter';
 import { noopLogger } from '@stryker-mutator/util';
-import { readNativeLotIgnorer } from '../../src/infrastructure/stryker-lot-plugin.js';
+import { PluginKind } from '@stryker-mutator/api/plugin';
+import { readNativeLotIgnorer, strykerPlugins } from '../../src/infrastructure/stryker-lot-plugin.js';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -23,6 +24,38 @@ type Inventory = {
     }[];
   }[];
 };
+
+Then('the registered native plugin reads the inventory from its working directory', function () {
+  const repo = repository(this);
+  assert.equal(strykerPlugins.length, 1);
+  const [plugin] = strykerPlugins;
+  assert.ok(plugin);
+  assert.equal(plugin.name, 'gate-native-lots');
+  assert.equal(plugin.kind, PluginKind.Ignore);
+  const cwd = process.cwd();
+  try {
+    process.chdir(repo.dir);
+    const ignorer = plugin.factory();
+    const file = repo.path('src/scoped.mjs');
+    assert.equal(ignorer.shouldIgnore({ hub: { file: { opts: { filename: file } } }, node: {} }), undefined);
+  } finally {
+    process.chdir(cwd);
+  }
+});
+
+Then('the native plugin refuses an inventory with invalid UTF-8 bytes or a byte-order mark', function () {
+  const repo = repository(this);
+  const path = repo.path('reports/mutation-inventory.json');
+  const valid = readFileSync(path);
+  const malformed = Buffer.from(valid);
+  const insideQuotedPath = malformed.indexOf(Buffer.from('src/scoped.mjs'));
+  assert(insideQuotedPath >= 0);
+  malformed[insideQuotedPath] = 255;
+  writeFileSync(path, malformed);
+  assert.throws(() => readNativeLotIgnorer(repo.dir), { code: 'ERR_ENCODING_INVALID_ENCODED_DATA' });
+  writeFileSync(path, Buffer.concat([Buffer.from('\uFEFF'), valid]));
+  assert.throws(() => readNativeLotIgnorer(repo.dir), SyntaxError);
+});
 
 When('the gate inventories the mutation scope', function () {
   return repository(this).run(['inventory', '--job', 'linux']);
