@@ -8,9 +8,13 @@ export const mutationPaths = [
 // The pinned Cucumber runner accepts a path ordering. A static mutant can stop at its first failing witness.
 // Prepend only globs already represented by the mutation profile, so Cucumber's path de-duplication keeps exactly the
 // same scenarios even when no witness fails early. Keep exhaustive scope for survivors.
-const gateWitnesses = ['configuration', 'mutation-inventory', 'replay-judgement', 'replay'].map(
-  (feature) => `tools/test-gate/features/${feature}.feature`,
-);
+const gateWitnesses = [
+  'configuration',
+  'replay-judgement',
+  'replay-admission',
+  'hosted',
+  'mutation-inventory',
+].map((feature) => `tools/test-gate/features/${feature}.feature`);
 
 export function mutationFeaturesFor(sources) {
   const components = new Set();

@@ -5,8 +5,9 @@ import { isJobFeature, isProduction, matchesAny, type Job } from '../domain/layo
 import { retiredFiles } from '../domain/debt.js';
 import { canaryViolations } from '../domain/canary.js';
 import { inPerimeter, mutatePatterns, perimeterOf, type MutantRecord } from '../domain/mutation.js';
-import { replayCases, replayViolations } from '../domain/replay.js';
-import { distributeReplayFiles } from '../domain/replay-lots.js';
+import { replayCases, replayViolations, type ReplayCase, type ReplayRecord } from '../domain/replay.js';
+import type { ReadFailure } from '../domain/violation.js';
+import { distributeReplayFiles, replayLotFor } from '../domain/replay-lots.js';
 import { baseOf, renderReport } from '../domain/report.js';
 import type { StaticSet } from '../domain/run.js';
 import { evaluate } from '../domain/verdict.js';
@@ -83,6 +84,17 @@ function controlOf(config: GateConfig, workspace: Workspace, mutationText: strin
   };
 }
 
+function requireReplayLot(
+  required: readonly ReplayCase[],
+  receipt: ReplayRecord | ReadFailure,
+  reportHash: string,
+  shard: 1 | 2,
+): asserts receipt is ReplayRecord {
+  const issues = replayViolations(required, receipt, reportHash);
+  if (issues.length)
+    throw new Error('lot de rejeu ' + shard + ' : ' + issues.map(({ text }) => text).join('\n'));
+}
+
 /**
  * `test-gate replay [--all]`: replays the verdicts of the mutation report (the perimeter of rule 5 and the canary, or
  * every mutant), writes the record `check` reads, and returns 1 when a verdict or the canary is contradicted.
@@ -113,7 +125,7 @@ async function replayCommand(
   }
   const canary = config.canary;
   let selected = (_file: string, _mutant: MutantRecord) => true;
-  let batches: ReturnType<typeof distributeReplayFiles> | undefined;
+  let plan: { mode: 1 | 2 | 'collect'; batches: ReturnType<typeof distributeReplayFiles> } | undefined;
   if (mode !== 'all') {
     const repository = new GitRepository(root);
     const { firstParent } = repository.commits();
@@ -127,38 +139,35 @@ async function replayCommand(
       await verifyMutationCatalog(root, report.tests);
       const { mutationLots } = await import('./mutation-inventory.js');
       const lots = await mutationLots(root, perimeter, canary?.file, (file) => workspace.read(file));
-      batches = distributeReplayFiles(lots);
+      plan = { mode, batches: distributeReplayFiles(lots) };
     }
   }
   const reportHash = sha256(text as string);
   const cases = replayCases(report, selected);
   let due = cases;
-  if (batches !== undefined) {
-    const [first, second] = batches;
-    const inReplayLot = (shard: 1 | 2, file: string, mutant: MutantRecord) => {
-      if (file === canary?.file && /^[12]\//.test(mutant.id)) return mutant.id[0] === String(shard);
-      return (shard === 1 ? first : second).has(file);
-    };
-    if (cases.some(({ file }) => !batches[0].has(file) && !batches[1].has(file)))
-      throw new Error('mutant à rejouer sans lot');
+  if (plan !== undefined) {
+    const { mode, batches } = plan;
+    const byLot: Record<1 | 2, ReplayCase[]> = { 1: [], 2: [] };
+    for (const item of cases) {
+      const { file, mutant } = item;
+      const assigned = replayLotFor(file, batches);
+      const shard =
+        file === canary?.file && /^[12]\//.test(mutant.id) ? (mutant.id[0] === '1' ? 1 : 2) : assigned;
+      byLot[shard].push(item);
+    }
     if (mode === 'collect') {
       const collected = ([1, 2] as const).flatMap((shard) => {
         const receiptText = workspace.read(replayShardPath(shard));
         const receipt = receiptText === null ? null : parseReplayRecord(receiptText);
-        const required = cases.filter(({ file, mutant }) => inReplayLot(shard, file, mutant));
         if (receipt === null) throw new Error('lot de rejeu absent : ' + shard);
-        if ('failure' in receipt)
-          throw new Error('lot de rejeu ' + shard + ' : rejeu des verdicts illisible : ' + receipt.failure);
-        const issues = replayViolations(required, receipt, reportHash);
-        if (issues.length)
-          throw new Error('lot de rejeu ' + shard + ' : ' + issues.map(({ text }) => text).join('\n'));
+        requireReplayLot(byLot[shard], receipt, reportHash, shard);
         return receipt.mutants;
       });
       workspace.write(target, jsonText({ report: reportHash, mutants: collected }));
       out.write('lots de rejeu vérifiés : ' + collected.length + ' mutant(s)\n');
       return 0;
     }
-    if (mode === 1 || mode === 2) due = cases.filter(({ file, mutant }) => inReplayLot(mode, file, mutant));
+    due = byLot[mode];
   }
   workspace.remove(settings.work);
   const runner = new CucumberRunner(root, settings.profile, resolve(root, settings.work));

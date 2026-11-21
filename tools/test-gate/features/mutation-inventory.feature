@@ -156,6 +156,30 @@ Feature: The inventory projects native mutants onto changed production lines
     When the gate inventories the mutation scope
     Then the mutation plugin retains an unlocated node of "src/scoped.mjs"
 
+  Scenario: an inventory with no configured canary still validates both native producers
+    Given a gate repository
+    And the gate repository holds the fixture specs "green.feature, second.feature"
+    And the gate repository can run the fixture suite with cucumber-js
+    And the gate mutation fixture declares its independent mutation profile
+    And the gate first parent is committed
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export const changed = true;
+      """
+    And the gate head is committed
+    When the gate inventories native shard "1"
+    And the native plugin instruments the inventory files
+    And the native producer "1" publishes its raw proof
+    And the gate inventories native shard "2"
+    And the native plugin instruments the inventory files
+    And the native producer "2" publishes its raw proof
+    And the gate collects the two native production lots
+    Then the gate exits with 0
+    And the gate output is:
+      """
+      producteurs de mutation vérifiés : 2
+      """
+
   Scenario: separate native producers are both required and their local test IDs keep their exact scenario locations
     Given a gate repository
     And the gate repository holds the fixture specs "green.feature, second.feature"
@@ -363,6 +387,11 @@ Feature: The inventory projects native mutants onto changed production lines
     When the gate inventories the mutation scope
     Then the mutation inventory is refused
     And the gate output includes "registre de dette illisible"
+
+  Scenario: a failed inventory publication removes the partial proof
+    Given a gate repository
+    And the gate head is committed
+    Then the inventory announcement failure invalidates the written inventory
 
   Scenario: an ignored native mutant retains its reason for future scope validation
     Given a gate repository

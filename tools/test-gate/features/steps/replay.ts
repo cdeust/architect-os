@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { MutantRecord } from '../../src/domain/mutation.js';
+import { replayLotFor } from '../../src/domain/replay-lots.js';
 import {
   expectationOf,
   judgeReplay,
@@ -379,6 +380,24 @@ Then(
   },
 );
 
+Then('discovery stops a delayed child at the requested limit', async function () {
+  const repo = repository(this);
+  const selector = 'specs/delayed-selector.mts';
+  repo.write(
+    selector,
+    'export async function runReplayCucumber() { await new Promise(resolve => setTimeout(resolve, 250)); return 1; }',
+  );
+  const runner = new CucumberRunner(
+    repo.dir,
+    'replay',
+    repo.path('reports/replay-deadline'),
+    pathToFileURL(repo.path(selector)),
+  );
+  const { result, witness } = await runner.discover(['specs/green.feature:4'], 20);
+  assert.equal(result.timedOut, true);
+  assert.equal(witness, undefined);
+});
+
 When('the replay writes its working files outside the repository', async function () {
   const repo = repository(this);
   const work = mkdtempSync(join(tmpdir(), 'replay-outside-'));
@@ -534,6 +553,10 @@ When('the replay child returns {string}', async function (variant: string) {
       report = null;
       break;
     case 'non-zero exit after completion':
+      status = 1;
+      break;
+    case 'execution error after a complete valid report':
+      stderr += 'AOS_REPLAY_EXECUTION: Error: fixture execution rejected\n';
       status = 1;
       break;
     case 'torn report with an unexpected scenario':
@@ -1002,6 +1025,9 @@ When('independent runtime replay tries a {string} failure', async function (kind
       (kind === 'passing-global-hook'
         ? "import { BeforeAll } from '@cucumber/cucumber';\nBeforeAll(() => {});\n"
         : '') +
+      (kind === 'after-global-failure'
+        ? "import { AfterAll } from '@cucumber/cucumber';\nAfterAll(() => probe());\n"
+        : '') +
       (kind === 'after-failure'
         ? "import { After } from '@cucumber/cucumber';\nAfter(({pickle}) => { if (pickle.name === 'execute the observed step') probe(); });\n"
         : '') +
@@ -1028,6 +1054,16 @@ When('independent runtime replay tries a {string} failure', async function (kind
   });
   assert.deepEqual(found, [{ file, id: 'native', status: replay.mutant.status, divergence: null }]);
   assert.equal(repo.read(file), source);
+  if (kind === 'passing-hook') {
+    repo.write(file, mutated);
+    try {
+      const runner = new CucumberRunner(repo.dir, 'replay', repo.path('reports/ordinal-proof'));
+      const { witness } = await runner.run(['specs/runtime.feature:4'], 600_000);
+      assert.equal(witness?.step, 0, 'a passing hook does not count as a step of the feature');
+    } finally {
+      repo.write(file, source);
+    }
+  }
   this.state['runtime replay proof'] = { work };
 });
 
@@ -1079,20 +1115,29 @@ Then('discovery cannot substitute another original identity or failing step', as
     ms: 5,
     result: { timedOut: false, run: { pickles, runHooks: [] } },
   });
-  for (const [control, found] of [
-    [step('other pickle identity', name, 'PASSED'), witness],
-    [undefined, witness],
-    [step(pickle, name, 'FAILED'), witness],
-    [step(pickle, name, 'PASSED'), undefined],
-    [step(pickle, name, 'PASSED'), { ...witness, pickle: 'wrong reproduced pickle' }],
-    [step(pickle, name, 'PASSED'), { ...witness, location: tests[0] as string }],
-    [step(pickle, 'step « a different original step »', 'PASSED'), witness],
-    [step(pickle, name, 'PASSED'), { ...witness, name: 'step « a different failing step »' }],
-    [step(pickle, name, 'PASSED'), { ...witness, step: 1 }],
+  const healthy = timed(step(pickle, name, 'PASSED'));
+  const failedOriginal: Timed = {
+    ms: 5,
+    result: { timedOut: false, run: { failure: 'fixture report unreadable' } },
+  };
+  for (const [control, found, broken] of [
+    [timed(step('other pickle identity', name, 'PASSED')), witness],
+    [timed(), witness],
+    [failedOriginal, witness],
+    [timed({ ...step(pickle, name, 'PASSED'), attempts: [] }), witness],
+    [timed(step(pickle, name, 'FAILED')), witness],
+    [timed(step(pickle, 'hook fixture:1', 'PASSED')), witness],
+    [healthy, undefined],
+    [healthy, witness, true],
+    [healthy, { ...witness, pickle: 'wrong reproduced pickle' }],
+    [healthy, { ...witness, location: tests[0] as string }],
+    [timed(step(pickle, 'step « a different original step »', 'PASSED')), witness],
+    [healthy, { ...witness, name: 'step « a different failing step »' }],
+    [healthy, { ...witness, step: 1 }],
   ] as const) {
     repo.write(file, source);
     const calls: string[][] = [];
-    const entries = await replayAll(
+    const work = replayAll(
       [replay],
       new Workspace(repo.dir),
       {
@@ -1104,10 +1149,11 @@ Then('discovery cannot substitute another original identity or failing step', as
         async run(paths) {
           calls.push([...paths]);
           const isOriginal = repo.read(file) === source;
-          if (paths.length === 1 && isOriginal) return control === undefined ? timed() : timed(control);
+          if (paths.length === 1 && isOriginal) return control;
           if (paths.length === 1) {
             const observed = timed(step(pickle, found?.name ?? name, 'FAILED'));
-            return found === undefined ? observed : { ...observed, witness: found };
+            const result = broken ? { ...observed.result, timedOut: true } : observed.result;
+            return found === undefined ? observed : { ...observed, result, witness: found };
           }
           return timed(
             step('prior scenario', 'step « prior »', 'PASSED'),
@@ -1119,8 +1165,38 @@ Then('discovery cannot substitute another original identity or failing step', as
       600_000,
       { discoverRuntimeErrors: true },
     );
+    await assert.doesNotReject(work, 'a rejected fast witness must use the full independent replay');
+    const entries = await work;
     assert.deepEqual(calls, [tests, [location], [location], tests, tests]);
     assert.equal(entries[0]?.divergence, null);
+    assert.equal(repo.read(file), source);
+  }
+
+  for (const [status, discoverRuntimeErrors] of [
+    ['RuntimeError', false],
+    ['Killed', true],
+  ] as const) {
+    const variant = { ...replay, mutant: { ...replay.mutant, status } };
+    const selected: string[][] = [];
+    const work = replayAll(
+      [variant],
+      new Workspace(repo.dir),
+      {
+        async discover() {
+          assert.fail('discovery requires an opted-in RuntimeError');
+        },
+        async run(paths) {
+          selected.push([...paths]);
+          const passing = repo.read(file) === source;
+          return timed(...paths.map((uri) => step(uri, name, passing ? 'PASSED' : 'FAILED')));
+        },
+      },
+      600_000,
+      { discoverRuntimeErrors },
+    );
+    await assert.doesNotReject(work);
+    assert.deepEqual(selected, [tests, tests]);
+    assert.equal((await work)[0]?.divergence, null);
     assert.equal(repo.read(file), source);
   }
 
@@ -1201,3 +1277,13 @@ Then(
     assert.match(duplicate[0]?.text ?? '', /mutant en double dans le rapport/);
   },
 );
+
+Then('replay assignment identifies its lot and refuses missing or repeated membership', function () {
+  const first = new Set(['src/first.mjs', 'src/repeated.mjs']);
+  const second = new Set(['src/second.mjs', 'src/repeated.mjs']);
+  const lots = [first, second] as const;
+  assert.equal(replayLotFor('src/first.mjs', lots), 1);
+  assert.equal(replayLotFor('src/second.mjs', lots), 2);
+  assert.throws(() => replayLotFor('src/missing.mjs', lots), /mutant à rejouer sans lot/);
+  assert.throws(() => replayLotFor('src/repeated.mjs', lots), /mutant à rejouer dans deux lots/);
+});

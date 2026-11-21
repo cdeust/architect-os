@@ -12,3 +12,14 @@ export function distributeReplayFiles<T extends { file: string; mutants: readonl
   }
   return batches;
 }
+
+export function replayLotFor(
+  file: string,
+  [first, second]: readonly [ReadonlySet<string>, ReadonlySet<string>],
+): 1 | 2 {
+  const inFirst = first.has(file);
+  const inSecond = second.has(file);
+  if (inFirst === inSecond)
+    throw new Error(inFirst ? 'mutant à rejouer dans deux lots' : 'mutant à rejouer sans lot');
+  return inFirst ? 1 : 2;
+}

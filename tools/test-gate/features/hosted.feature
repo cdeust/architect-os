@@ -56,6 +56,7 @@ Feature: Hosted mutation slices retain exhaustive producer and replay proof
     And the gate head is committed
     When the hosted collector receives a canary-only proof from each runner
     Then the hosted collector preserves all canary-qualified IDs exactly once
+    And the hosted collector rejects an active mutant without static metadata
     And a replaced producer or a missing receipt cannot reuse the hosted verdict
 
   Scenario: debt retirement preserves native scope while replay follows changed lines

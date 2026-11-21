@@ -165,11 +165,12 @@ Then(
       'features/arch/should-not-enter.ts',
       'tools/.hidden/src/should-not-enter.ts',
     ]);
-    assert.deepEqual(paths.slice(0, 6), [
+    assert.deepEqual(paths.slice(0, 7), [
       'tools/test-gate/features/configuration.feature',
-      'tools/test-gate/features/mutation-inventory.feature',
       'tools/test-gate/features/replay-judgement.feature',
-      'tools/test-gate/features/replay.feature',
+      'tools/test-gate/features/replay-admission.feature',
+      'tools/test-gate/features/hosted.feature',
+      'tools/test-gate/features/mutation-inventory.feature',
       'tools/test-gate/features/**/*.feature',
       'tools/deliver/features/**/*.feature',
     ]);
@@ -189,7 +190,8 @@ Then(
     assert.ok(ordered[0]?.startsWith('tools/test-gate/features/configuration.feature:'));
     const firstOf = (feature: string) =>
       ordered.findIndex((location) => location.startsWith(`tools/test-gate/features/${feature}.feature:`));
-    assert.ok(firstOf('replay') >= 0 && firstOf('replay') < firstOf('hosted'));
+    assert.ok(firstOf('replay-admission') >= 0 && firstOf('replay-admission') < firstOf('hosted'));
+    assert.ok(firstOf('hosted') < firstOf('replay'));
     assert.equal(new Set(ordered).size, ordered.length);
     assert.deepEqual(ordered.sort(), standard.sort());
   },

@@ -135,7 +135,7 @@ async function awaitCi(
   ];
   let requestedAttempt: number | undefined;
   let unnumberedRerunPending = false;
-  for (let poll = 1; ; poll++) {
+  for (let poll = 1; poll <= config.ciPolls; poll++) {
     if (poll > 1) await clock.sleep(config.pollSeconds);
     entry.ci.polls = poll;
     const run = forge.run(entry.hash, config.workflow, jobNames);
@@ -154,8 +154,7 @@ async function awaitCi(
     if (state === 'no-runner' && entry.ci.attempts >= config.ciAttempts) {
       return { phase: 'CI', reason: 'aucun runner après le nombre de tentatives permis' };
     }
-    if (poll >= config.ciPolls) return { phase: 'CI', reason: 'CI sans réponse' };
-    if (state === 'no-runner') {
+    if (state === 'no-runner' && poll < config.ciPolls) {
       // `no-runner` is decided of a run that exists (ciState).
       const rejected = run as CiRun;
       forge.rerunFailed(rejected.id);
@@ -164,6 +163,7 @@ async function awaitCi(
       entry.ci.attempts++;
     }
   }
+  return { phase: 'CI', reason: 'CI sans réponse' };
 }
 
 /** The evaluation of the push of the hash to a branch, polled; undefined when none came. */

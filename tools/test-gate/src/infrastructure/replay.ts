@@ -310,8 +310,7 @@ export async function replayAll(
           found.step === candidate.step &&
           found.name === candidate.name &&
           originalPickle?.id === candidate.pickle &&
-          originalStep?.name === candidate.name &&
-          originalStep.status === 'PASSED'
+          originalStep?.name === candidate.name
         ) {
           entry(null);
           continue;

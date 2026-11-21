@@ -6,6 +6,7 @@ import { readNativeLotIgnorer, strykerPlugins } from '../../src/infrastructure/s
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { runGate } from '../../src/infrastructure/gate.js';
 import { mutationCatalog } from '../../src/infrastructure/mutation-catalog.js';
 import { combineNative, projectNative, type NativeProof } from '../../src/infrastructure/mutation-shards.js';
 import { requireCompleteMutationLots, type Lot } from '../../src/infrastructure/mutation-lot-proof.js';
@@ -153,6 +154,33 @@ Then('the inventory marks {string} as whole', function (file: string) {
   assert.ok(lot);
   assert.equal(lot.whole, true);
   assert.deepEqual(lot.mutants, []);
+});
+
+Then('the inventory announcement failure invalidates the written inventory', async function () {
+  const repo = repository(this);
+  let output = '';
+  const inventory = 'reports/mutation-inventory.json';
+  let wasWritten = false;
+  const code = await runGate(
+    ['node', 'test-gate', 'inventory', '--job', 'linux'],
+    repo.dir,
+    {},
+    {
+      write(text) {
+        if (text.startsWith('inventaire ')) {
+          const published = JSON.parse(repo.read(inventory));
+          assert.ok(Array.isArray(published.lots));
+          wasWritten = true;
+          throw new Error('fixture output interrupted');
+        }
+        output += text;
+      },
+    },
+  );
+  assert.equal(code, 1, output);
+  assert.equal(output, 'porte de test : fixture output interrupted\n');
+  assert.equal(wasWritten, true);
+  assert.equal(repo.exists(inventory), false);
 });
 
 Then('the mutation inventory is refused', function () {

@@ -16,62 +16,6 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     And the gate configuration declares the replay
     And the gate mutation report is the fixture "survivor"
 
-  Scenario Outline: the replay refuses an invalid scenario list before launching Cucumber
-    When the replay runner is given the following scenario list:
-      """
-      <locations>
-      """
-    Then the invalid replay selection creates no run artifacts
-
-    Examples:
-      | locations                                         |
-      | []                                                |
-      | ["specs/green.feature"]                           |
-      | ["specs/green.feature:4","specs/green.feature:4"] |
-      | ["specs/green.feature:4","specs/*.feature:4"]     |
-      | ["specs/../specs/green.feature:4"]                |
-      | ["/specs/green.feature:4"]                        |
-      | ["../specs/green.feature:4"]                      |
-      | ["-specs/green.feature:4"]                        |
-      | ["specs/@green.feature:4"]                        |
-      | ["specs/green.feature:0"]                         |
-      | ["specs/green.feature:04"]                        |
-      | ["specs/green.feature:٤"]                         |
-      | ["specs/green.feature:9007199254740992"]          |
-      | ["prefix:specs/green.feature:4"]                  |
-      | ["specs/green.feature:4suffix"]                   |
-
-  Scenario: replay admission rejects incomplete and duplicate scenario or mutant identities
-    Then the independent replay rejects a missing attempt, zero steps or duplicate native identity
-
-  Scenario Outline: the instrumented runner can exercise each replay selection decision
-    When the instrumented runner exercises the replay selector with "<variant>"
-    Then the replay selector exits with <status> and authorizes execution <calls> times with "<diagnostic>"
-
-    Examples:
-      | variant        | status | calls | diagnostic                         |
-      | success        | 0      | 1     | AOS_REPLAY_PLAN_VALID               |
-      | discovery      | 0      | 1     | AOS_REPLAY_PLAN_VALID              |
-      | step failed    | 1      | 1     | AOS_REPLAY_PLAN_VALID               |
-      | execution error | 1     | 1     | AOS_REPLAY_EXECUTION: Error: fixture execution failure |
-      | missing format | 2      | 0     | rapport Messages de rejeu invalide |
-      | wrong format   | 2      | 0     | rapport Messages de rejeu invalide |
-      | extra format   | 2      | 0     | rapport Messages de rejeu invalide |
-      | profile absent | 2      | 0     | précontrôle Cucumber impossible    |
-      | no profile     | 2      | 0     | arguments de rejeu invalides       |
-      | no report      | 2      | 0     | arguments de rejeu invalides       |
-      | no locations   | 2      | 0     | arguments de rejeu invalides       |
-      | extra          | 2      | 0     | scénario de rejeu inattendu : specs/second.feature:3 |
-      | missing        | 2      | 0     | scénario de rejeu manquant : specs/green.feature:9999 |
-      | duplicate      | 2      | 0     | scénario de rejeu répété           |
-      | syntax         | 2      | 0     | sources de rejeu illisibles        |
-      | shard          | 2      | 0     | profil de rejeu invalide           |
-      | retry          | 2      | 0     | profil de rejeu invalide           |
-      | dryRun         | 2      | 0     | profil de rejeu invalide           |
-      | failFast       | 2      | 0     | profil de rejeu invalide           |
-      | parallel       | 2      | 0     | profil de rejeu invalide           |
-      | plugins        | 2      | 0     | profil de rejeu invalide           |
-
   Scenario: a replay work directory outside the repository keeps using the installed engine
     When the replay writes its working files outside the repository
     Then the replay run passed within its limit
@@ -107,18 +51,34 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       | unknown scenario location               | {"selection":"scénario de rejeu inattendu : null"}                                                                                                                                                   |
       | unfinished report                       | {"incomplete":true}                                                                                                                                                                                  |
       | unfinished report missing a scenario    | {"incomplete":true}                                                                                                                                                                                  |
-      | non-zero exit after completion          | {"badExit":true}                                                                                                                                                                                     |
       | no preflight acknowledgement            | {"selection":"précontrôle Cucumber non confirmé"}                                                                                                                                                    |
       | explicit refusal                        | {"selection":"fixture refused","incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : aucun diagnostic"}                                                                  |
       | two missing scenarios                   | {"selection":"scénario de rejeu manquant : specs/green.feature:12, specs/second.feature:3"}                                                                                                          |
       | refusal text with a different status    | {"selection":"précontrôle Cucumber non confirmé","incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : aucun diagnostic"}                                                |
       | refusal with no diagnostic              | {"selection":"précontrôle Cucumber non confirmé","incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : aucun diagnostic"}                                                |
+      | execution error after a complete valid report | {"badExit":true,"failure":"Error: fixture execution rejected"} |
       | crash without report                    | {"incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : Error: fixture crash"}                                                                                            |
       | torn report with an unexpected scenario | {"selection":"scénario de rejeu inattendu : specs/second.feature:3","incomplete":true,"failure":"rapport Cucumber invalide : Expected property name or '}' in JSON at position 1 (line 1 column 2)"} |
 
   Scenario: replacing the worktree selector cannot sabotage the independent replay harness
     When the runner snapshots the selector and then the worktree copy is replaced
     Then the replay run passed within its limit
+
+  Scenario: empty replay lots still require both receipts
+    Given the gate mutation fixture declares its independent mutation profile
+    And the gate mutation report keeps only the mutants ""
+    When the gate replays mutation lot "1"
+    Then the gate exits with 0
+    When the gate replays mutation lot "2"
+    Then the gate exits with 0
+    When the gate collects the mutation replay lots
+    Then the gate exits with 0
+    And the gate output includes "lots de rejeu vérifiés : 0 mutant(s)"
+    Given the gate removes replay lot "1"
+    When the gate collects the mutation replay lots
+    Then the gate exits with 1
+    And the gate output includes "lot de rejeu absent : 1"
+    And the gate replay record is absent
 
   Scenario: a static survivor is replayed in one lot and the collector verifies the exact union
     Given the gate mutation fixture declares its independent mutation profile
@@ -643,6 +603,7 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       | passing-hook  | 3         | 2          |
       | passing-global-hook | 3   | 2          |
       | after-failure | 3         | 0          |
+      | after-global-failure | 4  | 0          |
       | disabled      | 2         | 0          |
       | ordinary-kill | 2         | 0          |
       | run-only      | 2         | 0          |
@@ -650,6 +611,3 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       | load    | 4         | 0          |
       | hook    | 3         | 0          |
       | ordered | 5         | 2          |
-
-  Scenario: discovery requires the same original scenario and Gherkin failure step
-    Then discovery cannot substitute another original identity or failing step

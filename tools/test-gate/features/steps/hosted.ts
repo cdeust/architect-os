@@ -9,6 +9,7 @@ import { CONFIG_PATH } from '../../src/infrastructure/gate.js';
 import { HOSTED_COSTS, planHostedSlices } from '../../src/infrastructure/hosted-lots.js';
 import type { Lot } from '../../src/infrastructure/mutation-lot-proof.js';
 import { readNativeLotIgnorer } from '../../src/infrastructure/stryker-lot-plugin.js';
+import { projectNative } from '../../src/infrastructure/mutation-shards.js';
 import { FIXTURES, Given, Then, When, repository, type GateRepository } from './repository.js';
 
 const LANES = [1, 2, 3] as const;
@@ -124,6 +125,33 @@ Then('the hosted collector preserves all canary-qualified IDs exactly once', asy
   assert.equal(receipt.report, createHash('sha256').update(report).digest('hex'));
   assert.deepEqual(Object.keys(JSON.parse(report).files), ['zz/probe.mjs']);
   assert.deepEqual(receipt.mutants.map(({ id }: { id: string }) => id).sort(), expected);
+});
+
+Then('the hosted collector rejects an active mutant without static metadata', async function () {
+  const repo = repository(this);
+  const path = 'reports/mutation-shards/1/mutation/native.json';
+  const original = repo.read(path);
+  const report = JSON.parse(original);
+  delete report.files['zz/probe.mjs'].mutants[0].static;
+  const incomplete = JSON.stringify(report);
+  const { lots, patterns } = JSON.parse(repo.read('reports/mutation-shards/1/mutation-inventory.json')) as {
+    lots: Lot[];
+    patterns: string[];
+  };
+  assert.throws(
+    () => projectNative(incomplete, lots, patterns),
+    /marquage statique absent pour un mutant actif/,
+  );
+  repo.write(path, incomplete);
+  try {
+    const refused = await command(repo, 'collect');
+    assert.equal(refused.status, 1, refused.output);
+    assert.match(refused.output, /marquage statique absent pour un mutant actif/);
+    assert.equal(repo.exists(aggregate), false);
+    assert.equal(repo.exists('reports/mutation/replay.json'), false);
+  } finally {
+    repo.write(path, original);
+  }
 });
 
 When('the hosted mutation chains complete independently in {string} mode', async function (mode: string) {
@@ -382,7 +410,11 @@ Then('hosted planning keeps peers together and preserves a deeply nested file', 
   assert.throws(() => plan(1.5), /nombre de lots natifs invalide/);
   assert.throws(() => planHostedSlices(input.slice(0, 1), canary, read, costs, 3), /canari absent/);
 
-  const slices = plan(3);
+  let slices: ReturnType<typeof plan> | undefined;
+  assert.doesNotThrow(() => {
+    slices = plan(3);
+  }, 'the valid native hierarchy must produce an antichain per lot');
+  assert.ok(slices);
   assert.equal(slices.length, 3);
   assert.ok(slices.every((slice) => slice.lots.some(({ file }) => file === canary)));
   assert.deepEqual(

@@ -116,9 +116,11 @@ export class GateRepository {
     env: NodeJS.ProcessEnv = { GITHUB_STEP_SUMMARY: this.path('summary.md') },
   ): Promise<void> {
     let output = '';
-    this.exitCode = await runGate(['node', 'main.ts', ...args], this.dir, env, {
+    const verdict = runGate(['node', 'main.ts', ...args], this.dir, env, {
       write: (text: string) => (output += text),
     });
+    await assert.doesNotReject(verdict, 'Gate must return a verdict or a refusal diagnostic');
+    this.exitCode = await verdict;
     this.output = output;
   }
 }
