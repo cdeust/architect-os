@@ -138,3 +138,16 @@ Feature: Test gate domain functions, observed directly
       | paths break a tie      | a:1, b:1, c:1          | a, c     | b      |
       | zero native mutants    | a:2, b:0, c:0, z:2     | a, b, c  | z      |
       | no files               |                        |          |        |
+
+  Scenario Outline: native evidence supports multiline mutation debt only in the proven scope
+    When the gate judges the "<disposition>" multiline debt with native scope "<attestation>" and Git lines "<lines>"
+    Then the gate confirms <detected> detected and <removed> retired debt entries without violations
+
+    Examples:
+      | disposition | attestation | lines | detected | removed |
+      | retained    | [1,2]       | [1,3] | 1        | 0       |
+      | retained    | [4]         | [2]   | 0        | 0       |
+      | retained    | absent      | [2]   | 0        | 0       |
+      | retained    | whole       | []    | 0        | 0       |
+      | retained    | whole       | [2]   | 1        | 0       |
+      | retired     | whole       | []    | 0        | 1       |

@@ -201,10 +201,9 @@ export function judgeMutation(
           if (attested === undefined) return false;
           if (perimeter.retired.includes(file)) return attested.whole;
           const overlaps = (line: number) => line >= start.line && line <= end.line;
-          return (
-            (attested.whole || attested.lines.some(overlaps)) &&
-            [...(perimeter.changedLines.get(file) ?? [])].some(overlaps)
-          );
+          const changed = perimeter.changedLines.get(file);
+          if (changed === undefined) return false;
+          return (attested.whole || attested.lines.some(overlaps)) && [...changed].some(overlaps);
         };
   const judgedDebt = judgeDebt(debt, report, accepted, covered);
   violations.push(...judgedDebt.violations);

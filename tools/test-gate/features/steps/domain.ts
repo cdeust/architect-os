@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { countRule, type Count } from '../../src/domain/count.js';
-import type { DebtInput } from '../../src/domain/debt.js';
+import type { DebtInput, DebtRegistry } from '../../src/domain/debt.js';
 import { parseUnifiedDiff, type ChangedFile } from '../../src/domain/diff.js';
 import type { Layout } from '../../src/domain/layout.js';
 import { mentioned, mutatedAt, rangePatterns } from '../../src/domain/mutate-pattern.js';
@@ -15,6 +15,7 @@ import {
   type Perimeter,
 } from '../../src/domain/mutation.js';
 import { distributeReplayFiles } from '../../src/domain/replay-lots.js';
+import { parseMutationReport } from '../../src/infrastructure/mutation-report.js';
 import { Workspace } from '../../src/infrastructure/workspace.js';
 import { FIXTURES, Given, Then, When } from './repository.js';
 
@@ -211,3 +212,48 @@ When('the gate distributes replay files {string}', function (files: string) {
 Then('the first replay lot is {string} and the second is {string}', function (first: string, second: string) {
   assert.deepEqual(this.state['replay-lots'], [list(first), list(second)]);
 });
+
+When(
+  'the gate judges the {string} multiline debt with native scope {string} and Git lines {string}',
+  function (disposition: string, attestation: string, lines: string) {
+    const file = 'src/math.mjs';
+    const parent = JSON.parse(readFileSync(join(FIXTURES, 'debt/partial-line.json'), 'utf8')) as DebtRegistry;
+    const raw = JSON.parse(readFileSync(join(FIXTURES, 'mutation/partial-line.json'), 'utf8'));
+    raw.files[file].mutants = [
+      { ...raw.files[file].mutants.find(({ id }: { id: string }) => id === '9'), status: 'Killed' },
+    ];
+    raw.config.mutate = [file];
+    raw.gateNativeScope =
+      attestation === 'absent'
+        ? []
+        : [
+            {
+              file,
+              whole: attestation === 'whole',
+              lines: attestation === 'whole' ? [] : JSON.parse(attestation),
+            },
+          ];
+    const report = parseMutationReport(JSON.stringify(raw), true);
+    assert.ok(!('failure' in report), JSON.stringify(report));
+    const changes = [{ path: file, deleted: false, lines: JSON.parse(lines) as number[] }];
+    const retired = disposition === 'retired';
+    const perimeter = perimeterOf(layout, changes, retired ? [file] : []);
+    this.state['judgement'] = judgeMutation(perimeter, report, {
+      ...EMPTY_DEBT,
+      parent,
+      current: retired ? EMPTY_DEBT.current : parent,
+      present: new Set([file]),
+      sources: new Map([[file, raw.files[file].source]]),
+    });
+  },
+);
+
+Then(
+  'the gate confirms {int} detected and {int} retired debt entries without violations',
+  function (detected: number, retired: number) {
+    const { debt, violations } = this.state['judgement'] as MutationJudgement;
+    assert.equal(debt.notSurvived, detected);
+    assert.equal(debt.removed, retired);
+    assert.deepEqual(violations, []);
+  },
+);
