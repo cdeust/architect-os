@@ -50,7 +50,7 @@ function safeHome(value: string | undefined) {
   if (insideCheckout(home)) throw Error();
   return home;
 }
-function installed(name: string, home: string, selected: string | undefined) {
+export function installationPolicy(home: string, name: string) {
   const roots = [
     join(home, '.local'),
     join(home, '.codex'),
@@ -63,6 +63,15 @@ function installed(name: string, home: string, selected: string | undefined) {
     name === 'codex'
       ? ['/opt/homebrew/bin/codex', '/usr/local/bin/codex', join(home, '.local', 'bin', name)]
       : [join(home, '.local', 'bin', name)];
+  return { roots, choices };
+}
+
+export function trustedMetadata(mode: number, owner: number, operator: number) {
+  return (mode & 0o022) === 0 && (owner === 0 || owner === operator);
+}
+
+function installed(name: string, home: string, selected: string | undefined) {
+  const { roots, choices } = installationPolicy(home, name);
   if (selected !== undefined) return trustedBinary(selected, name, roots);
   for (const candidate of choices) {
     try {
@@ -83,8 +92,7 @@ function trustedBinary(path: string, name: string, roots: string[]) {
   let current = binary;
   for (;;) {
     const metadata = statSync(current);
-    if ((metadata.mode & 0o022) !== 0 || (metadata.uid !== 0 && metadata.uid !== process.getuid!()))
-      throw Error();
+    if (!trustedMetadata(metadata.mode, metadata.uid, process.getuid!())) throw Error();
     if (current === root) break;
     current = dirname(current);
   }
@@ -183,7 +191,7 @@ export function nativeInvocation(r: DraftRequest) {
                 'read_file(*)',
                 'write_file(*)',
                 'command(*)',
-                'unsandboxed(*)',
+
                 'read_url(*)',
                 'execute_url(*)',
                 'mcp(*)',

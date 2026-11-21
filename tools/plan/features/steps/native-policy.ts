@@ -14,7 +14,12 @@ import {
 import { join, dirname, delimiter, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Then } from '@cucumber/cucumber';
-import { requestDraft, type DraftRequest } from '../../src/infrastructure/plan-cli.js';
+import {
+  requestDraft,
+  trustedMetadata,
+  installationPolicy,
+  type DraftRequest,
+} from '../../src/infrastructure/plan-cli.js';
 
 const request: DraftRequest = {
   provider: 'gemini',
@@ -71,12 +76,42 @@ Then('native drafts reject redirected executables and active Google integrations
       await assert.rejects(() => run(overrides), why);
       assert.equal(existsSync(marker), false);
     };
+    const roots = [
+      join(home, '.local'),
+      join(home, '.codex'),
+      join(home, '.gemini'),
+      '/opt/homebrew',
+      '/usr/local',
+      '/usr',
+    ];
+    for (const name of ['claude', 'agy', 'codex']) {
+      const choices =
+        name === 'codex'
+          ? ['/opt/homebrew/bin/codex', '/usr/local/bin/codex', join(dir, 'codex')]
+          : [join(dir, name)];
+      assert.deepEqual(installationPolicy(home, name), { roots, choices });
+    }
+    for (const owner of [0, 1001, 1002])
+      for (const mode of [0o700, 0o755, 0o757, 0o775]) {
+        assert.equal(
+          trustedMetadata(mode, owner, 1001),
+          (owner === 0 || owner === 1001) && [0o700, 0o755].includes(mode),
+        );
+      }
     await ok();
     await refuse({ HOME: undefined }, /invalid profile path/);
     await refuse({ HOME: 'relative' }, /invalid profile path/);
     const checkout = join(root, 'checkout');
     mkdirSync(checkout);
     writeFileSync(join(checkout, '.git'), 'gitdir: fake');
+    const original = process.env.TMPDIR;
+    try {
+      process.env.TMPDIR = checkout;
+      await refuse();
+    } finally {
+      if (original === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = original;
+    }
     await refuse({ AOS_PLAN_GEMINI_HOME: checkout });
     await refuse({ AOS_PLAN_GEMINI_HOME: 'relative' });
     await refuse({ AOS_PLAN_GEMINI_BIN: 'relative/agy' }, /invalid CLI path/);
@@ -164,6 +199,7 @@ Then('a controlled provider respects its environment, output bound and timeout',
     const refused = await requestDraft(r, env);
     assert.equal(refused.text, null);
     assert.equal(refused.usage, null);
+    assert.equal(refused.failure, 'output_unavailable');
     const seen = JSON.parse(readFileSync(trace, 'utf8'));
     assert.equal(seen.home, root);
     assert.equal(seen.path, [dirname(process.execPath), '/usr/bin', '/bin'].join(delimiter));

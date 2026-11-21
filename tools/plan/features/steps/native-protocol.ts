@@ -73,15 +73,7 @@ Then('the three native CLI invocations close their tool surfaces and pin the cho
     useG1Credits: false,
     toolPermission: 'strict',
     permissions: {
-      deny: [
-        'read_file(*)',
-        'write_file(*)',
-        'command(*)',
-        'unsandboxed(*)',
-        'read_url(*)',
-        'execute_url(*)',
-        'mcp(*)',
-      ],
+      deny: ['read_file(*)', 'write_file(*)', 'command(*)', 'read_url(*)', 'execute_url(*)', 'mcp(*)'],
     },
   };
   assert.deepEqual(google.args, [

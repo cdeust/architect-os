@@ -57,3 +57,15 @@ On 2026-11-21, a ChatGPT-authenticated, read-only `codex exec` session requested
 The proposal SHA-256 was `10e539ffedfdbd10769019f77ef88d58371f20393da06719047b480ad47eea43`. The shipped Plan preparation command consumed the proposal and produced a pending preview with approval SHA-256 `3bf718da5c1e9efb33132cfb84af25757f1f1d9734c5e77360fa374bf5c92eac`. This observation measures the Codex session including its host context. The native CLI adapters have separate offline process-contract scenarios.
 
 A refused draft records a fixed native failure category when available, including CLI diagnostics, incomplete or unexpected events, provider refusal, process failure and unavailable output. Model text and diagnostic bytes are discarded. A warning can refuse a proposal while retaining the counters from an otherwise valid response.
+
+## Signed-in CLI measurement on 2026-11-21
+
+At architect-os commit `7bf2ee04`, all three commands used the same accepted Define (SHA-256 `c748171d2920c8b03f7cf1a07d1575f87f5b237ad921fd8e635d4eba043a3312`). No native launcher proposal passed directly to prepare in this measurement.
+
+| Native command                  | Process         | Input / output tokens | Reported USD | Result                                                                                                                                          |
+| ------------------------------- | --------------- | --------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Haiku                    | Exit 1, 0.93 s  | 0 / 0                 | 0            | The account showed 100% weekly usage and additional credits disabled.                                                                           |
+| Codex 0.162.1, GPT-6.2 Astra    | Exit 1, 4.38 s  | Unknown               | Unknown      | The standalone executable ran. An earlier local discovery refusal stopped before any process started.                                           |
+| Antigravity, Gemini 4 Neon High | Exit 0, 17.51 s | 9,827 / 711           | Unknown      | The launcher refused the response. The existing native transcript yielded the proposal and counters. A separate prepare accepted it as pending. |
+
+The Gemini transcript and launcher journal represent one attempt. The recovered proposal SHA-256 is `138845d4d6d7a424bc918c54ee5b91db269c9ee45023d73fe9e35c42c21e8aa6`; the separate recovery receipt SHA-256 is `95b75dd895a56c160b1057a6c6ed7aac0b0bfed2444484d154d36888c8ec34a5`. The original journal did not distinguish stderr warnings from rejected stream events. Google documents that individual accounts warn when given an enterprise-only unsandboxed rule. The personal-account command denies all commands with `command(*)`, which covers execution both inside and outside the sandbox. [Google CLI permission matching](https://antigravity.google/docs/permissions?tab=cli)
