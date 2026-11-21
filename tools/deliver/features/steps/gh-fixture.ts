@@ -32,6 +32,11 @@ export interface GhForgeFixture extends ForgeFixture {
 const keys: Record<string, (subject: string) => string> = {
   runs: (hash) => `repos/${REPO}/actions/runs?head_sha=${hash}&per_page=100`,
   jobs: (id) => `repos/${REPO}/actions/runs/${id}/jobs?per_page=100`,
+  run: (id) => `repos/${REPO}/actions/runs/${id}`,
+  attempt: (subject) => {
+    const [run, attempt] = subject.split('/');
+    return `--paginate --slurp repos/${REPO}/actions/runs/${run}/attempts/${attempt}/jobs?per_page=100`;
+  },
   rerun: (id) => `--method POST repos/${REPO}/actions/runs/${id}/rerun-failed-jobs`,
   suites: (branch) =>
     `repos/${REPO}/rulesets/rule-suites?ref=${encodeURIComponent(`refs/heads/${branch}`)}&per_page=100`,
@@ -83,6 +88,17 @@ export function ghForge(world: DeliverWorld): GhForgeFixture {
       const key = keyOf('runs', hash);
       answers('runs', hash, { stdout: runsText(hash, run.id, run.completed ? 'completed' : 'in_progress') });
       answers('jobs', String(run.id), { stdout: JSON.stringify({ jobs: run.jobs.map(jobText) }) });
+      answers('run', String(run.id), {
+        stdout: JSON.stringify({
+          id: run.id,
+          head_sha: hash,
+          status: run.completed ? 'completed' : 'in_progress',
+          run_attempt: run.attempt ?? 1,
+        }),
+      });
+      answers('attempt', String(run.id) + '/' + String(run.attempt ?? 1), {
+        stdout: JSON.stringify([{ jobs: run.jobs.map(jobText) }]),
+      });
       // A rerun leaves the run not completed, and without jobs.
       answers('rerun', String(run.id), {
         stdout: '{}',

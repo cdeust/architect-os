@@ -1,0 +1,131 @@
+# Each native slice and its independent replay use distinct standard GitHub-hosted VMs.
+name: gate mutation lane
+on:
+  workflow_call:
+    inputs:
+      lane:
+        type: number
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  mutation:
+    name: mutation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bubblewrap socat ripgrep
+          bwrap --version
+
+      - name: Host requirement - allow unprivileged user namespaces with capabilities (E-07, R-13)
+        run: |
+          echo "before: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          echo "after: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)"
+
+      - name: PostgreSQL 17 (PGDG) with pgvector
+        run: |
+          sudo apt-get install -y --no-install-recommends postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends postgresql-17 postgresql-17-pgvector
+          echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
+          /usr/lib/postgresql/17/bin/postgres --version
+
+      - name: Install (lockfile, scripts disabled)
+        run: npm ci --ignore-scripts
+
+      - name: Run mutation producer
+        env:
+          AOS_LANE: ${{ inputs.lane }}
+        run: |
+          npm exec --no -- tsc -b
+          node --import tsx tools/test-gate/src/hosted.ts inventory "$AOS_LANE"
+          AOS_NATIVE_MUTATION_LOTS=1 npm exec --no -- stryker run
+          node --import tsx tools/test-gate/src/hosted.ts verify "$AOS_LANE"
+          git rev-parse --verify HEAD > reports/mutation/head
+
+      - name: Upload the mutation report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gate-mutation-linux-${{ github.run_attempt }}-${{ inputs.lane }}
+          path: |
+            reports/mutation/native.json
+            reports/mutation/head
+            reports/mutation-inventory.json
+          if-no-files-found: error
+
+  replay:
+    name: replay
+    runs-on: ubuntu-24.04
+    needs: mutation
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bubblewrap socat ripgrep
+          bwrap --version
+
+      - name: Host requirement - allow unprivileged user namespaces with capabilities (E-07, R-13)
+        run: |
+          echo "before: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          echo "after: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)"
+
+      - name: PostgreSQL 17 (PGDG) with pgvector
+        run: |
+          sudo apt-get install -y --no-install-recommends postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends postgresql-17 postgresql-17-pgvector
+          echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
+          /usr/lib/postgresql/17/bin/postgres --version
+
+      - name: Install (lockfile, scripts disabled)
+        run: npm ci --ignore-scripts
+
+      - name: Fetch the mutation report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AOS_LANE: ${{ inputs.lane }}
+        run: sh tools/test-gate/fetch-ci-artifacts.sh mutation "$AOS_LANE"
+
+      - name: Build and independently replay this lot
+        env:
+          AOS_LANE: ${{ inputs.lane }}
+        run: |
+          npm exec --no -- tsc -b
+          node --import tsx tools/test-gate/src/hosted.ts replay "$AOS_LANE"
+          git rev-parse --verify HEAD > "reports/replay-shards/$AOS_LANE/head"
+
+      - name: Upload the replay lot
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gate-replay-linux-${{ github.run_attempt }}-${{ inputs.lane }}
+          path: reports/replay-shards/${{ inputs.lane }}/
+          if-no-files-found: error

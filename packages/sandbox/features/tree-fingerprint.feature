@@ -57,17 +57,16 @@ Feature: the fingerprint of the tree of a worktree
     Then the fingerprint throws "l'empreinte de l'arbre a échoué : git rev-parse HEAD"
 
   Scenario Outline: a git call that never answers is stopped at the bound: <call>
-    The fake git is a node script: its start takes some tens of milliseconds, and can pass a few hundred on a loaded
-    machine. The bound is 5 seconds, far above that start, so that the calls meant to answer are not stopped by it; the silence of the
-    fake git is 60 seconds, far above the bound, so that only the bound can end the call. A bound of 300 milliseconds
-    was of the order of the start, and the scenario then depended on the load of the machine.
+    A shell fixture answers each preceding command without a Node startup. Its silent call replaces the shell
+    with sleep, so the real timeout can stop it directly. The call log verifies which invocation reached the bound.
 
-    Given a fake git that records its calls
+    Given a fake git with immediate responses before its deliberately silent call
     And the fake git never answers the call "<call>"
     And a temporary directory that the fingerprint must leave empty
     And a throwaway directory
-    When I try to take the fingerprint of the directory with a bound of 5000 milliseconds
+    When I try to take the fingerprint of the directory with a bound of 1000 milliseconds
     Then the fingerprint throws "l'empreinte de l'arbre a échoué : git <call>"
+    And the timed out fake git call was "<call>"
     And the temporary directory is empty
 
     Examples:

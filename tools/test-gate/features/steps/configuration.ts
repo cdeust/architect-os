@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { parseArguments } from '../../src/domain/arguments.js';
 import { changedFiles } from '../../src/infrastructure/gate.js';
 import { jobOf, parseGateConfig } from '../../src/infrastructure/config.js';
 import { GitRepository } from '../../src/infrastructure/git.js';
@@ -72,4 +73,33 @@ Then('the committed gate configuration declares the rule 7 controls:', function 
   const config = parseGateConfig(readFileSync(COMMITTED, 'utf8'));
   assert.ok(!('failure' in config));
   assert.deepEqual({ canary: config.canary, replay: config.replay }, JSON.parse(text));
+});
+
+Then('the Gate path selector filters tracked, changed and untracked files', function () {
+  const repo = repository(this);
+  const git = new GitRepository(repo.dir);
+  const workspace = new Workspace(repo.dir);
+  const selected = (file: string) => file.endsWith('.mjs');
+  const paths = (parent: string | null) =>
+    changedFiles(git, workspace, parent, selected).map(({ path }) => path);
+
+  repo.write('src/kept.mjs', 'export const kept = 1;\n');
+  repo.write('note.txt', 'a tracked file outside the requested scope\n');
+  repo.commit('tracked paths');
+  const parent = git.commits().head;
+  repo.write('src/kept.mjs', 'export const kept = 2;\n');
+  repo.write('note.txt', 'a changed file outside the requested scope\n');
+  repo.write('src/new.mjs', 'export const fresh = 3;\n');
+  repo.write('fresh.txt', 'an untracked file outside the requested scope\n');
+
+  assert.deepEqual(paths(parent), ['src/kept.mjs', 'src/new.mjs']);
+  assert.deepEqual(paths(null), ['src/gone.mjs', 'src/kept.mjs', 'src/long.mjs', 'src/new.mjs']);
+});
+
+Then('the replay commands keep their explicit argument contracts', function () {
+  assert.deepEqual(parseArguments(['replay-collect']), { name: 'replay-collect' });
+  assert.ok('failure' in parseArguments(['replay-collect', '--all']));
+  assert.ok('failure' in parseArguments(['replay', '--unknown']));
+  assert.deepEqual(parseArguments(['replay', '--shard', '1']), { name: 'replay', all: false, shard: 1 });
+  assert.deepEqual(parseArguments(['replay', '--all']), { name: 'replay', all: true });
 });

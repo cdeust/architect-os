@@ -72,3 +72,6 @@ Feature: Test gate diff against the first parent
       """
       src/new.mjs: 1,2,3
       """
+
+  Scenario: a production caller sees only its requested files
+    Then the Gate path selector filters tracked, changed and untracked files

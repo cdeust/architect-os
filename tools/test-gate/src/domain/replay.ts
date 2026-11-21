@@ -69,7 +69,10 @@ function offsetOf(source: string, line: number, column: number): number {
 export function mutatedSource(source: string, mutant: MutantRecord): string {
   const start = offsetOf(source, mutant.startLine, mutant.startColumn);
   const end = offsetOf(source, mutant.endLine, mutant.endColumn);
-  return `${source.slice(0, start)}${mutant.replacement}${source.slice(end)}`;
+  // Stryker replaces a logical-expression AST node. Preserve its grouping when replay replaces text.
+  const replacement =
+    mutant.mutatorName === 'LogicalOperator' ? '(' + mutant.replacement + ')' : mutant.replacement;
+  return source.slice(0, start) + replacement + source.slice(end);
 }
 
 /**
@@ -86,12 +89,13 @@ export function replayCases(
   selected: (file: string, mutant: MutantRecord) => boolean,
 ): ReplayCase[] {
   const cases: ReplayCase[] = [];
+  const all = [...report.tests.keys()];
   const locations = (ids: readonly string[]) => [...new Set(ids.map((id) => report.tests.get(id) as string))];
   for (const [file, { source, mutants }] of report.files) {
     for (const mutant of mutants) {
       const expectation = expectationOf(mutant.status);
       if (expectation === undefined || !selected(file, mutant)) continue;
-      const covering = coveringIds(mutant, [...report.tests.keys()]);
+      const covering = coveringIds(mutant, all);
       const killed = mutant.status === 'Killed';
       const ids = killed ? mutant.killedBy : covering;
       const fallback = killed ? covering : [];
@@ -124,10 +128,57 @@ export interface RunResult {
   readonly run: CucumberRun | ReadFailure;
   /** The run was stopped at its time limit. */
   readonly timedOut: boolean;
+  readonly incomplete?: true;
+  readonly badExit?: true;
+  /** A completed test identity differs from the explicit selection. This cannot confirm a kill. */
+  readonly selectionFailure?: string;
 }
 
 const PASSED = 'PASSED';
 const FAILED = 'FAILED';
+
+export interface FailureWitness {
+  readonly location: string;
+  readonly pickle: string;
+  readonly step: number;
+  readonly name: string;
+}
+
+export const isGherkinStep = ({ name }: { name: string }) => name.startsWith('step « ');
+
+/** Messages distinguish Gherkin steps from hooks. A candidate is useful only with a complete, admitted run. */
+export function failureWitness(
+  result: RunResult,
+  locations: readonly (string | null)[],
+): FailureWitness | undefined {
+  const { run } = result;
+  if (
+    result.timedOut ||
+    result.incomplete ||
+    result.selectionFailure ||
+    'failure' in run ||
+    run.runHooks.some(({ status }) => status !== PASSED)
+  )
+    return undefined;
+  for (const [index, pickle] of run.pickles.entries()) {
+    const attempt = pickle.attempts[0];
+    const location = locations[index];
+    if (
+      !location ||
+      pickle.attempts.length !== 1 ||
+      attempt?.attempt !== 0 ||
+      attempt.willBeRetried !== false
+    )
+      continue;
+    if (attempt.steps.some(({ name, status }) => name.startsWith('hook ') && status !== PASSED)) continue;
+    const failed = attempt.steps.findIndex(({ status }) => status !== PASSED);
+    const outcome = attempt.steps[failed];
+    if (outcome?.status !== FAILED || !isGherkinStep(outcome)) continue;
+    const step = attempt.steps.slice(0, failed).filter(isGherkinStep).length;
+    return { location, pickle: pickle.id, step, name: outcome.name };
+  }
+  return undefined;
+}
 
 /**
  * Why a run of `expected` scenarios is not a clean pass, or null when it is one: every scenario ran once, every
@@ -140,6 +191,7 @@ function unclean(
   expected: number,
 ): { readonly failed: boolean; readonly why: string } | null {
   const broken = (why: string) => ({ failed: false, why });
+  if (result.selectionFailure !== undefined) return broken(result.selectionFailure);
   if (result.timedOut) return broken('délai dépassé');
   if ('failure' in result.run) return broken(result.run.failure);
   const hook = result.run.runHooks.find((h) => h.status !== PASSED);
@@ -148,6 +200,10 @@ function unclean(
   let failed = true;
   for (const pickle of result.run.pickles) {
     if (pickle.attempts.length !== 1) return broken(`${pickle.id} : ${pickle.attempts.length} tentatives`);
+    const attempt = pickle.attempts[0];
+    if (attempt?.attempt !== 0 || attempt.willBeRetried !== false)
+      return broken(pickle.id + ' : tentative non terminée ou répétée');
+    if (pickle.pickleSteps === 0) return broken(pickle.id + ' : scénario sans step');
     const step = pickle.attempts.flatMap((attempt) => attempt.steps).find((s) => s.status !== PASSED);
     if (step === undefined) continue;
     failing.push(`${pickle.id} : ${step.status}`);
@@ -155,7 +211,9 @@ function unclean(
   }
   const ran = result.run.pickles.length;
   if (ran !== expected) return broken(`${ran} scénario(s) exécuté(s) sur ${expected}`);
-  return failing.length === 0 ? null : { failed, why: failing.join(', ') };
+  if (result.incomplete) return broken('rapport Cucumber sans fin de run');
+  if (failing.length > 0) return { failed, why: failing.join(', ') };
+  return result.badExit ? broken('Cucumber a échoué sans step en échec') : null;
 }
 
 /** The judgement of one replay. */
@@ -191,6 +249,7 @@ export function judgeReplay(
     const original = unclean(control, scenarios);
     if (original !== null) return verdict(`témoin : ${original.why}`);
   }
+  if (mutant.selectionFailure !== undefined) return verdict(mutant.selectionFailure);
   const run = unclean(mutant, scenarios);
   if (replay.expectation.survives) {
     return verdict(run === null ? null : `${status} selon l'outil, mais sur le mutant : ${run.why}`);
@@ -230,17 +289,37 @@ export function replayViolations(
   reportHash: string,
 ): Violation[] {
   const due = required.filter(({ mutant }) => replayable(mutant.status));
-  if (due.length === 0) return [];
   const add = (text: string): Violation => ({ rule: 7, text });
-  if (record === null) return [add('rejeu des verdicts absent')];
+  if (record === null) return due.length === 0 ? [] : [add('rejeu des verdicts absent')];
   if ('failure' in record) return [add(`rejeu des verdicts illisible : ${record.failure}`)];
   if (record.report !== reportHash) return [add('le rejeu porte sur un autre rapport de mutation')];
-  const entries = new Map(record.mutants.map((entry) => [`${entry.file} ${entry.id}`, entry]));
+  const key = (file: string, id: string) => JSON.stringify([file, id]);
+  const entries = new Map<string, ReplayEntry>();
   const violations: Violation[] = [];
+  for (const entry of record.mutants) {
+    const identity = key(entry.file, entry.id);
+    if (entries.has(identity)) violations.push(add(`${entry.file} #${entry.id} : rejeu en double`));
+    else entries.set(identity, entry);
+  }
+  const expected = new Set<string>();
   for (const { file, mutant } of due) {
-    const entry = entries.get(`${file} ${mutant.id}`);
+    const identity = key(file, mutant.id);
+    if (expected.has(identity)) {
+      violations.push(add(`${label(file, mutant)} : mutant en double dans le rapport`));
+      continue;
+    }
+    expected.add(identity);
+    const entry = entries.get(identity);
     if (entry === undefined) violations.push(add(`${label(file, mutant)} : non rejoué`));
-    else if (entry.divergence !== null) violations.push(add(`${label(file, mutant)} : ${entry.divergence}`));
+    else if (entry.status !== mutant.status) {
+      violations.push(
+        add(`${label(file, mutant)} : statut du rejeu ${entry.status}, ${mutant.status} attendu`),
+      );
+    } else if (entry.divergence !== null)
+      violations.push(add(`${label(file, mutant)} : ${entry.divergence}`));
+  }
+  for (const [identity, entry] of entries) {
+    if (!expected.has(identity)) violations.push(add(`${entry.file} #${entry.id} : rejeu hors périmètre`));
   }
   return violations;
 }

@@ -36,11 +36,15 @@ export interface CiJob {
   /** Whether GitHub ever gave the job a runner. */
   hadRunner: boolean;
   failedStep: boolean;
+  /** Only the first user step failed, before any subsequent user step ran. */
+  firstStepFailure?: string;
 }
 
 export interface CiRun {
   id: number;
   completed: boolean;
+  /** Omitted by older forge adapters. A failed-jobs rerun keeps the run id. */
+  attempt?: number;
   jobs: CiJob[];
 }
 
@@ -61,7 +65,7 @@ export interface Repository {
 }
 
 export interface Forge {
-  run(hash: string, workflow: string): CiRun | undefined;
+  run(hash: string, workflow: string, jobNames?: readonly string[]): CiRun | undefined;
   rerunFailed(id: number): void;
   /** The evaluation of the push that brought `hash` to `branch`; undefined while there is none (or nobody pushed). */
   ruleSuite(branch: string, hash: string): RuleSuite | undefined;

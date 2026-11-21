@@ -1,20 +1,48 @@
 // What a run of the workflow says of the required jobs.
-import type { CiRun } from './ports.js';
+import type { DeliverConfig } from './config.js';
+import type { CiJob, CiRun } from './ports.js';
 
 export type CiState = 'missing' | 'waiting' | 'green' | 'no-runner' | 'failed';
 
-/**
- * Decided in this order. Only a job GitHub never started is replayed without a person: a required job that is absent,
- * that has a failed step, or that was cancelled after it got a runner is `failed`.
- */
-export function ciState(run: CiRun | undefined, requiredJobs: readonly string[]): CiState {
+/** A dependent job can run solely to report that GitHub never assigned its producer a runner. */
+export function ciState(
+  run: CiRun | undefined,
+  requiredJobs: readonly string[],
+  dependencies: DeliverConfig['jobDependencies'] = {},
+): CiState {
   if (run === undefined) return 'missing';
   if (!run.completed) return 'waiting';
-  const jobs = requiredJobs.map((name) => run.jobs.find((job) => job.name === name));
-  if (jobs.every((job) => job?.conclusion === 'success')) return 'green';
-  const present = jobs.filter((job) => job !== undefined);
-  const neverStarted =
-    present.length === jobs.length &&
-    present.every((job) => !job.failedStep && (job.conclusion === 'success' || !job.hadRunner));
-  return neverStarted ? 'no-runner' : 'failed';
+  const uniqueJob = (name: string): CiJob | undefined => {
+    const matches = run.jobs.filter((job) => job.name === name);
+    return matches.length === 1 ? matches[0] : undefined;
+  };
+  const jobs: CiJob[] = [];
+  for (const name of requiredJobs) {
+    const job = uniqueJob(name);
+    if (job === undefined) return 'failed';
+    const group = Object.hasOwn(dependencies, name) ? dependencies[name] : undefined;
+    if (group !== undefined) {
+      let producerDidNotSucceed = false;
+      for (const producer of group.producers) {
+        const upstream = uniqueJob(producer);
+        if (upstream === undefined || upstream.failedStep) return 'failed';
+        producerDidNotSucceed ||= upstream.conclusion !== 'success';
+        jobs.push(upstream);
+      }
+      if (job.conclusion === 'success' && (producerDidNotSucceed || job.failedStep)) return 'failed';
+      if (
+        producerDidNotSucceed &&
+        job.hadRunner &&
+        job.conclusion === 'failure' &&
+        job.failedStep &&
+        job.firstStepFailure === group.admissionStep
+      )
+        continue;
+    }
+    jobs.push(job);
+  }
+  if (jobs.every((job) => job.conclusion === 'success')) return 'green';
+  return jobs.every((job) => !job.failedStep && (job.conclusion === 'success' || !job.hadRunner))
+    ? 'no-runner'
+    : 'failed';
 }

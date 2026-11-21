@@ -14,6 +14,10 @@ Feature: Cucumber profiles
     Then its mutation profile differs from the default profile only by its paths
     And its mutation profile covers every feature file of the default profile except those of features/repository and features/arch
 
+  Scenario: component priority only permutes the mutation profile
+    Given the committed cucumber configuration
+    Then prioritizing mutated components preserves every scenario of the independent catalogue
+
   Scenario: a mutation profile that brings features/arch back is rejected
     Given the committed cucumber configuration
     Then a mutation profile that brings features/arch back is rejected
