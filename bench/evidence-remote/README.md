@@ -20,11 +20,11 @@ Les textes intégraux des articles ne passent pas par les outils : le répondant
 
 ```bash
 # depuis la racine du dépôt ; le fichier du jeton est créé (0600) s'il n'existe pas
-TSX_TSCONFIG_PATH=features/tsconfig.json node --import tsx bench/evidence-remote/server.ts <registre> <guichet> 8790 <fichier du jeton>
+TSX_TSCONFIG_PATH=features/tsconfig.json ./aos -- node --import tsx bench/evidence-remote/server.ts <registre> <guichet> 8790 <fichier du jeton>
 # un tunnel HTTPS vers 127.0.0.1:8790, par exemple ngrok, dont le jeton reste dans le trousseau de l'hôte
 # dans Claude Science : Connectors > Add connector > Remote, adresse https://<tunnel>/mcp/<jeton>
 # dans une session : « Appelle l'outil desk_instructions du connecteur et suis ses instructions. »
-node bench/evidence-remote/wait-verdict.mjs <registre> <guichet>
+./aos -- node bench/evidence-remote/wait-verdict.mjs <registre> <guichet>
 ```
 
 Le serveur n'écoute que sur `127.0.0.1` et refuse (401) tout appel sans le jeton, en en-tête `Authorization: Bearer` sur `/mcp` ou en dernier segment du chemin `/mcp/<jeton>`.

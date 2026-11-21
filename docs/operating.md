@@ -1,6 +1,6 @@
 # Operating the platform as one process
 
-This page is for whoever runs the platform on a host: what the process needs, what it refuses, how it stops, and what it leaves. It describes the native path (`docs/design/platform-v3-srt.md`, §2 and §6): one process, started by `node gateway/dist/src/serve.js`, which starts `data` and the broker as its children and isolates every module and worker. Each statement names the scenario or the measure that holds it.
+This page is for whoever runs the platform on a host: what the process needs, what it refuses, how it stops, and what it leaves. It describes the native path (`docs/design/platform-v3-srt.md`, §2 and §6): one process, started by `./aos -- node gateway/dist/src/serve.js`, which starts `data` and the broker as its children and isolates every module and worker. Each statement names the scenario or the measure that holds it.
 
 ## Hosts
 
@@ -38,8 +38,8 @@ The exit code is 0 when the process was asked to stop, 1 otherwise: a refused co
 
 - **Standard output**: the audit log, one JSON object per line: every call of a client, by its subject, with its outcome.
 - **Standard error**: its own refusals (`gateway: ...`) and what its children write, each line prefixed by the name of its process.
-- **Temporary files**: `<temporary folder>/aos-sb`, mode 0700, holds one folder per sandbox, removed when the sandbox ends.
-- **After a clean stop**: nothing: no process of a sandbox, no folder, no listening port.
+- **Temporary files**: `$ARCHITECT_OS_RUN_DIR/tmp/aos-sb`, mode 0700, holds one folder per sandbox, removed when the sandbox ends.
+- **After a clean stop**: the gateway closes its listening port and removes the sessions it started. The admitted run directory and its admission receipt remain under the runtime root.
 - **After a kill that cannot be caught** (`SIGKILL`, a power cut): the two children end with their standard input. A sandbox may be left: its processes (measured: killing `srt` alone leaves most of its descendants, journal, §1, T-06). Folders may be left under `aos-sb`. Nothing removes them at the next start: that is not built.
 
 ## What this page does not cover

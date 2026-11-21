@@ -10,7 +10,7 @@ client --> gateway --> module (sandbox, MCP on stdio)       a data tool
                \--> data (child, MCP on stdio) --> postgres + pgvector, or a store in memory
 ```
 
-One process tree, started by `node gateway/dist/src/serve.js` with nothing but its configuration.
+One process tree, started by `./aos -- node gateway/dist/src/serve.js` with nothing but its configuration.
 
 - The **gateway** authenticates, counts, audits and routes. It runs no agent and touches no data. It serves its clients over HTTP on the loopback only.
 - **data** and the **broker** are its two children outside any sandbox, started from a closed list of commands and variables with nothing inherited from the host. `data` alone holds the database URL; the broker alone holds the API key, and gives one token per task.
@@ -48,7 +48,7 @@ src/main.ts: the composition root, the only place objects are built
 - Every port has a real adapter and an in-memory adapter; the in-memory ones make the whole system runnable in a single test process.
 - Components never import each other. They call each other by MCP on the stdio of a child, or over the loopback.
 
-The rules are enforced by `npm run arch` (`.dependency-cruiser.cjs`) and proved by `features/arch/guard.feature`, which writes temporary violating files and checks the guard turns red.
+The rules are enforced by `./aos -- npm run arch` (`.dependency-cruiser.cjs`) and proved by `features/arch/guard.feature`, which writes temporary violating files and checks the guard turns red.
 
 ## The `Result` contract
 
