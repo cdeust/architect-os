@@ -1,8 +1,12 @@
 import { createHash } from 'node:crypto';
 import { parseDefinePlanningReply, parseVerifiedPlanReply } from '@architect-os/contracts';
 
-const digest = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex');
-const jsonFile = (value: unknown) => JSON.stringify(value) + '\n';
+function digest(bytes: Uint8Array | string) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+function jsonFile(value: unknown) {
+  return JSON.stringify(value) + '\n';
+}
 
 /** Verify the file bytes the downstream Plan command will actually consume. */
 export function verifiedProposal(
@@ -29,6 +33,6 @@ export function verifiedProposal(
     plan.proposal_sha256 !== binding.proposal_sha256 ||
     plan.plan_sha256 !== digest(jsonFile(binding))
   )
-    throw new Error('PLAN_BINDING_INVALID');
+    throw new Error();
   return proposal;
 }
