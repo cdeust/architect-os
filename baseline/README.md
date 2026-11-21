@@ -48,3 +48,5 @@ npm run baseline:overhead-analyze -- baseline/results/overhead-<date>.jsonl
 `overhead-analyze.ts` lit un fichier de résultats : médiane, p10 et p90, écarts de médianes avec intervalle à 95 % par bootstrap (10 000 tirages, graine 42). Il ne lance aucun programme.
 
 Le programme qui a produit ces mesures n'est plus dans l'arbre : il est dans l'historique du dépôt, au dernier commit qui le modifie, `be831caa7fbe80d5e159784d83fea7ee5a406497` (`git show be831caa7fbe80d5e159784d83fea7ee5a406497:baseline/overhead.ts`) ; le README de ce commit porte les protocoles.
+
+Measure Define and Plan using [the planning protocol](../docs/plan.md#measure-the-checkpoint-to-plan-path).
