@@ -97,7 +97,7 @@ function fakeDraftEnvironment(root: string, provider: string): NodeJS.ProcessEnv
         {
           event: 'init',
           conversation_id: 'one',
-          init: { model: 'fixture-model', permission_mode: 'strict' },
+          init: { model: 'gemini-fixture-model', permission_mode: 'strict' },
         },
         {
           event: 'result',
@@ -124,7 +124,7 @@ Then('a measured {string} draft supplies one receipt that binds the prepared Pla
   try {
     const { define, policy } = planFixture(root);
     const receipt = join(root, 'draft.jsonl');
-    const command = [receipt, 'draft', provider, 'fixture-model', 'delivery', define, '3000'];
+    const command = [receipt, 'draft', provider, 'gemini-fixture-model', 'delivery', define, '3000'];
     const env = fakeDraftEnvironment(root, provider);
     const result = measured(command, env);
     assert.equal(result.status, 0, result.stderr);
@@ -140,7 +140,7 @@ Then('a measured {string} draft supplies one receipt that binds the prepared Pla
     const [start, finish] = events;
     assert.equal(start.attempt_id, finish.attempt_id);
     assert.equal(finish.provider, provider);
-    assert.equal(finish.model_requested, 'fixture-model');
+    assert.equal(finish.model_requested, 'gemini-fixture-model');
     assert.equal(finish.usage.input_tokens, 12);
     assert.equal(finish.usage.output_tokens, 7);
     assert.equal(finish.outcome, 'proposed');
@@ -174,7 +174,7 @@ Then('a measured draft without a provider installation publishes only a refusal 
   try {
     const { define } = planFixture(root);
     const receipt = join(root, 'draft.jsonl');
-    const result = measured([receipt, 'draft', 'gpt', 'fixture-model', 'delivery', define, '3000'], {
+    const result = measured([receipt, 'draft', 'gpt', 'gemini-fixture-model', 'delivery', define, '3000'], {
       ...fixtureEnvironment(root),
       AOS_PLAN_GPT_BIN: join(root, '.local', 'bin', 'codex'),
     });

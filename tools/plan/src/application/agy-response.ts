@@ -1,14 +1,29 @@
+export class AgyProtocolError extends Error {
+  constructor(
+    readonly reason:
+      | 'invalid_object'
+      | 'incomplete_stream'
+      | 'unexpected_invocation'
+      | 'unexpected_event'
+      | 'unexpected_step',
+  ) {
+    super(reason);
+  }
+}
+
 export function record(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('expected object');
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    throw new AgyProtocolError('invalid_object');
   return value as Record<string, unknown>;
 }
 
 export function readAgyTurn(text: string, model: string) {
   const lines = text.trimEnd().split('\n');
   const events = lines.map((line) => record(JSON.parse(line)));
-  const initEvent = events[0];
-  const terminal = events.at(-1);
-  if (initEvent?.event !== 'init' || terminal?.event !== 'result') throw new Error('incomplete stream');
+  const initEvent = events[0]!;
+  const terminal = events.at(-1)!;
+  if (initEvent.event !== 'init' || terminal.event !== 'result')
+    throw new AgyProtocolError('incomplete_stream');
   const init = record(initEvent.init);
   const id = initEvent.conversation_id;
   const result = record(terminal.result);
@@ -20,9 +35,9 @@ export function readAgyTurn(text: string, model: string) {
     result.conversation_id !== id ||
     result.num_turns !== 1
   )
-    throw new Error('unexpected invocation');
+    throw new AgyProtocolError('unexpected_invocation');
   for (const event of events.slice(1, -1)) {
-    if (event.event !== 'step_update') throw new Error('unexpected stream event');
+    if (event.event !== 'step_update') throw new AgyProtocolError('unexpected_event');
     const update = record(event.step_update);
     if (
       update.conversation_id !== id ||
@@ -34,7 +49,7 @@ export function readAgyTurn(text: string, model: string) {
         update.step_type !== 'agent_response' &&
         update.step_type !== 'checkpoint')
     )
-      throw new Error('unexpected step');
+      throw new AgyProtocolError('unexpected_step');
   }
   return result;
 }

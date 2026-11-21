@@ -1,4 +1,4 @@
-import { readAgyTurn } from '../application/agy-response.js';
+import { AgyProtocolError, readAgyTurn } from '../application/agy-response.js';
 import { NativeLauncher, readCapped, timer } from '@architect-os/sandbox';
 import {
   readFileSync,
@@ -28,7 +28,16 @@ export interface DraftRequest {
   handoff: DefineHandoff;
   timeoutMs: number;
 }
+export type NativeFailure =
+  | AgyProtocolError['reason']
+  | 'output_unavailable'
+  | 'cli_diagnostic'
+  | 'invalid_response'
+  | 'provider_refused'
+  | 'process_failed';
+
 export interface NativeResult {
+  failure?: NativeFailure;
   exit_code: number | null;
   signal: string | null;
   text: string | null;
@@ -36,7 +45,7 @@ export interface NativeResult {
 }
 
 function safeHome(value: string | undefined) {
-  if (!value || !isAbsolute(value)) throw Error();
+  if (!value || !isAbsolute(value)) throw Error('invalid profile path');
   const home = realpathSync(value);
   if (insideCheckout(home)) throw Error();
   return home;
@@ -54,12 +63,22 @@ function installed(name: string, home: string, selected: string | undefined) {
     name === 'codex'
       ? ['/opt/homebrew/bin/codex', '/usr/local/bin/codex', join(home, '.local', 'bin', name)]
       : [join(home, '.local', 'bin', name)];
-  const path = selected ?? choices.find((candidate) => existsSync(candidate));
-  if (!path) throw Error();
-  if (!isAbsolute(path) || path.split(sep).at(-1) !== name) throw Error();
+  if (selected !== undefined) return trustedBinary(selected, name, roots);
+  for (const candidate of choices) {
+    try {
+      return trustedBinary(candidate, name, roots);
+    } catch {
+      // Discovery may skip unsafe installations. The CLI has not been started.
+    }
+  }
+  throw Error('CLI not installed');
+}
+function trustedBinary(path: string, name: string, roots: string[]) {
+  if (!isAbsolute(path) || path.split(sep).at(-1) !== name) throw Error('invalid CLI path');
   const binary = realpathSync(path);
   const root = roots.find((dir) => binary.startsWith(dir + sep));
-  if (!root || insideCheckout(dirname(binary)) || !statSync(binary).isFile()) throw Error();
+  if (!root) throw Error('outside trusted installation roots');
+  if (insideCheckout(dirname(binary)) || !statSync(binary).isFile()) throw Error();
   // Every component beneath the installation root is owned by this operator or root.
   let current = binary;
   for (;;) {
@@ -156,6 +175,7 @@ export function nativeInvocation(r: DraftRequest) {
           '--settings',
           JSON.stringify({
             modelProvider: '',
+            agentMode: '',
             useG1Credits: false,
             toolPermission: 'strict',
             permissions: {
@@ -186,8 +206,8 @@ function count(n: unknown) {
 function object(value: unknown): Record<string, unknown> {
   return Object(value) as Record<string, unknown>;
 }
-function safeModel(value: unknown) {
-  return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(value) ? value : null;
+function safeModel(value = '') {
+  return /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(value) ? value : null;
 }
 
 export function parseNative(provider: PlanProvider, stdout: string, requested: string) {
@@ -201,14 +221,14 @@ export function parseNative(provider: PlanProvider, stdout: string, requested: s
   const last = rows.at(-1)!;
   let raw = object(last.usage),
     text: unknown = null,
-    model: unknown = null,
+    model: string | undefined,
     cache: unknown,
     write: unknown,
     reasoning: unknown,
     cost: unknown;
   switch (provider) {
     case 'claude': {
-      if (rows.length !== 1 || last.type !== 'result') throw Error();
+      if (last.type !== 'result') throw Error();
       if (last.subtype === 'success' && last.is_error === false) text = last.result;
       const models = Object.keys(object(last.modelUsage));
       if (models.length === 1) model = models[0];
@@ -273,8 +293,11 @@ export async function requestDraft(r: DraftRequest, env: NodeJS.ProcessEnv): Pro
       const preferences = join(config, 'config.json');
       const metadata = lstatSync(preferences, { throwIfNoEntry: false });
       if (metadata) {
-        if (!metadata.isFile()) throw Error();
-        const value = object(JSON.parse(readFileSync(preferences, 'utf8')));
+        if (!metadata.isFile() || metadata.nlink !== 1 || realpathSync(preferences) !== preferences)
+          throw Error('unsafe Google preferences path');
+        const value = object(
+          JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(preferences))),
+        );
         if (
           object(value.userSettings).enableAdc !== undefined &&
           object(value.userSettings).enableAdc !== false
@@ -318,14 +341,20 @@ export async function requestDraft(r: DraftRequest, env: NodeJS.ProcessEnv): Pro
     // close sends EOF, waits for the streams and kills the process group when the timeout expires.
     const [{ code, signal }, stdout] = await Promise.all([child.close(), output]);
     const base = { exit_code: code, signal, text: null, usage: null };
-    if (stdout === null || (r.provider === 'gemini' && warning)) return base;
+    if (stdout === null) return { ...base, failure: 'output_unavailable' };
     try {
       const reply = parseNative(r.provider, stdout, r.model);
-      return { ...base, ...reply, text: code === 0 ? reply.text : null };
-    } catch {
-      return base;
+      if (r.provider === 'gemini' && warning)
+        return { ...base, usage: reply.usage, failure: 'cli_diagnostic' };
+      if (code !== 0) return { ...base, usage: reply.usage, failure: 'process_failed' };
+      if (!reply.text) return { ...base, usage: reply.usage, failure: 'provider_refused' };
+      return { ...base, ...reply };
+    } catch (e) {
+      const failure =
+        e instanceof AgyProtocolError ? e.reason : code !== 0 ? 'process_failed' : 'invalid_response';
+      return { ...base, failure };
     }
   } finally {
-    rmSync(cwd, { recursive: true, force: true });
+    rmSync(cwd, { recursive: true });
   }
 }

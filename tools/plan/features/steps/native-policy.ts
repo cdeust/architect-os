@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   chmodSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -10,7 +11,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { join, dirname, delimiter } from 'node:path';
+import { join, dirname, delimiter, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Then } from '@cucumber/cucumber';
 import { requestDraft, type DraftRequest } from '../../src/infrastructure/plan-cli.js';
@@ -66,23 +67,23 @@ Then('native drafts reject redirected executables and active Google integrations
       assert.equal(readFileSync(marker, 'utf8'), profile);
       rmSync(marker);
     };
-    const refuse = async (overrides: NodeJS.ProcessEnv = {}) => {
-      await assert.rejects(() => run(overrides));
+    const refuse = async (overrides: NodeJS.ProcessEnv = {}, why = /./) => {
+      await assert.rejects(() => run(overrides), why);
       assert.equal(existsSync(marker), false);
     };
     await ok();
-    await refuse({ HOME: undefined });
-    await refuse({ HOME: 'relative' });
+    await refuse({ HOME: undefined }, /invalid profile path/);
+    await refuse({ HOME: 'relative' }, /invalid profile path/);
     const checkout = join(root, 'checkout');
     mkdirSync(checkout);
     writeFileSync(join(checkout, '.git'), 'gitdir: fake');
     await refuse({ AOS_PLAN_GEMINI_HOME: checkout });
     await refuse({ AOS_PLAN_GEMINI_HOME: 'relative' });
-    await refuse({ AOS_PLAN_GEMINI_BIN: 'relative/agy' });
-    await refuse({ AOS_PLAN_GEMINI_BIN: join(dir, 'other') });
+    await refuse({ AOS_PLAN_GEMINI_BIN: 'relative/agy' }, /invalid CLI path/);
+    await refuse({ AOS_PLAN_GEMINI_BIN: join(dir, 'other') }, /invalid CLI path/);
     const outside = join(root, 'agy');
     writeFileSync(outside, '', { mode: 0o700 });
-    await refuse({ AOS_PLAN_GEMINI_BIN: outside });
+    await refuse({ AOS_PLAN_GEMINI_BIN: outside }, /outside trusted installation roots/);
     rmSync(exe);
     symlinkSync(outside, exe);
     await refuse();
@@ -117,6 +118,10 @@ Then('native drafts reject redirected executables and active Google integrations
     rmSync(join(plugins, 'enabled'), { recursive: true });
     await ok();
     const settings = join(config, 'config.json');
+    writeFileSync(outside, '{}');
+    linkSync(outside, settings);
+    await refuse({}, /unsafe Google preferences path/);
+    rmSync(settings);
     symlinkSync(outside, settings);
     await refuse();
     rmSync(settings);
@@ -129,7 +134,7 @@ Then('native drafts reject redirected executables and active Google integrations
     writeFileSync(settings, '{}');
     await ok();
     rmSync(exe);
-    await refuse();
+    await refuse({}, /CLI not installed/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -164,6 +169,7 @@ Then('a controlled provider respects its environment, output bound and timeout',
     assert.equal(seen.path, [dirname(process.execPath), '/usr/bin', '/bin'].join(delimiter));
     assert.equal(seen.lang, 'C');
     assert.equal(seen.tmp, seen.cwd);
+    assert.match(basename(seen.cwd), /^aos-plan-cli-/);
     assert.equal(existsSync(seen.cwd), false);
     start('process.stdin.resume();setInterval(()=>{},60000);');
     const timed = await requestDraft({ ...r, timeoutMs: 100 }, env);

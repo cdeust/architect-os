@@ -64,7 +64,7 @@ Then(
           {
             event: 'init',
             conversation_id: 'one',
-            init: { model: 'fixture-model', permission_mode: 'strict' },
+            init: { model: 'gemini-fixture-model', permission_mode: 'strict' },
           },
           {
             event: 'step_update',
@@ -93,7 +93,7 @@ Then(
       const source = `#!${process.execPath}
 const fs=require('node:fs'),assert=require('node:assert/strict');const args=process.argv.slice(2),stdin=fs.readFileSync(0,'utf8');
 assert.ok(stdin.includes('run_fixture'));assert.ok(!args.join(' ').includes('run_fixture'));
-assert.equal(args[args.indexOf('--model')+1],'fixture-model');
+assert.equal(args[args.indexOf('--model')+1],'gemini-fixture-model');
 assert.ok(!('SYNTHETIC_SECRET' in process.env));assert.ok(!('OPENAI_API_KEY' in process.env));
 assert.deepEqual(Object.keys(process.env).filter(k=>k!=='__CF_USER_TEXT_ENCODING').sort(),['HOME','LANG','PATH','TMPDIR']);
 assert.equal(fs.readdirSync(process.cwd()).length,0);
@@ -118,7 +118,7 @@ if(reply==='timeout'){setInterval(()=>{},10000);}else{if(reply==='diagnostic')pr
           'plan',
           'draft',
           provider,
-          'fixture-model',
+          'gemini-fixture-model',
           'audit',
           path,
           receipt,
@@ -145,6 +145,19 @@ if(reply==='timeout'){setInterval(()=>{},10000);}else{if(reply==='diagnostic')pr
       if (outcome !== 'PLAN_DEFINE_INVALID')
         assert.equal(finish.define_sha256, createHash('sha256').update(bytes).digest('hex'));
       assert.equal(start.transport, 'native-cli');
+      assert.equal(start.billing_verified, false);
+      if (outcome === 'PLAN_PROVIDER_FAILED') {
+        const reason: Record<string, string> = {
+          tool: provider === 'gemini' ? 'unexpected_step' : 'invalid_response',
+          refused: 'provider_refused',
+          diagnostic: 'cli_diagnostic',
+          nonzero: 'process_failed',
+          timeout: 'process_failed',
+          malformed: 'invalid_response',
+          absent: 'launch_failed',
+        };
+        assert.equal(finish.native_failure, reason[reply]);
+      }
       assert.equal(start.attempt_id, finish.attempt_id);
       assert.equal(finish.outcome, outcome);
       if (outcome === 'proposed') {
@@ -198,6 +211,14 @@ Then(
         assert.match(err, /usage: plan draft/);
         assert.equal(existsSync(args[4]!), false);
       }
+      proc.argv = ['node', 'plan', 'draft', 'gemini', ...args.slice(1)];
+      err = '';
+      assert.equal(await runPlanCommand(proc), 2);
+      assert.match(err, /usage: plan draft/);
+      proc.argv = ['node', 'plan', 'draft', ...args];
+      err = '';
+      assert.equal(await runPlanCommand(proc), 2);
+      assert.match(err, /PLAN_DEFINE_INVALID/);
       proc.argv = ['node', 'plan', 'prepare'];
       err = '';
       assert.equal(await runPlanCommand(proc), 2);

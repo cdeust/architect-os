@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { record } from '../../src/application/agy-response.js';
 import { devNull } from 'node:os';
 import { Then } from '@cucumber/cucumber';
 import { nativeInvocation, parseNative, type PlanProvider } from '../../src/infrastructure/plan-cli.js';
@@ -68,6 +69,7 @@ Then('the three native CLI invocations close their tool surfaces and pin the cho
   const google = nativeInvocation({ ...common, provider: 'gemini' });
   const settings = {
     modelProvider: '',
+    agentMode: '',
     useG1Credits: false,
     toolPermission: 'strict',
     permissions: {
@@ -192,6 +194,31 @@ Then('only native single-turn drafting events and measured counters are accepted
     },
     z = { event: 'result', result };
   const read = (rows: object[]) => parse('gemini', rows);
+  for (const invalid of [null, false, 0, '', 'text', []])
+    assert.throws(() => record(invalid), /invalid_object/);
+  for (const id of ['', 42])
+    assert.throws(
+      () =>
+        read([
+          { ...i, conversation_id: id },
+          { ...z, result: { ...result, conversation_id: id } },
+        ]),
+      /unexpected_invocation/,
+    );
+  assert.throws(() => read([z]), /incomplete_stream/);
+  assert.throws(() => read([i, { event: 'other' }, z]), /unexpected_event/);
+  assert.throws(
+    () => read([i, { ...u, step_update: { ...step, tool_name: 'read_file' } }, z]),
+    /unexpected_step/,
+  );
+  assert.equal(
+    parseNative(
+      'claude',
+      JSON.stringify(c).replace('"total_cost_usd":0.09', '"total_cost_usd":1e999'),
+      'fixture',
+    ).usage.cost_usd,
+    null,
+  );
   const a = read([i, u, z]);
   assert.equal(a.text, 'proposal');
   assert.deepEqual(a.usage, {

@@ -39,6 +39,7 @@ export async function runPlanCommand(proc: DraftProcess, run = requestDraft): Pr
   const timeoutMs = Number(timeout);
   if (
     !isProvider(provider) ||
+    (provider === 'gemini' && !model.startsWith('gemini-')) ||
     !/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(model) ||
     !isStepName(step) ||
     !path ||
@@ -69,12 +70,14 @@ export async function runPlanCommand(proc: DraftProcess, run = requestDraft): Pr
     usage: Awaited<ReturnType<typeof requestDraft>>['usage'] = null,
     exit_code: number | null = null,
     signal: string | null = null;
+  let native_failure: string | null = null;
   let outcome = 'PLAN_DEFINE_INVALID';
   try {
     write({
       event: 'started',
       at: new Date().toISOString(),
       transport: 'native-cli',
+      billing_verified: false,
       timeout_ms: timeoutMs,
     });
     const define = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(readFileSync(path));
@@ -82,7 +85,9 @@ export async function runPlanCommand(proc: DraftProcess, run = requestDraft): Pr
     run_id = handoff.run_id;
     define_sha256 = sha(define);
     outcome = 'PLAN_PROVIDER_FAILED';
+    native_failure = 'launch_failed';
     const response = await run({ provider, model, step, handoff, timeoutMs }, proc.env);
+    native_failure = response.failure ?? null;
     exit_code = response.exit_code;
     signal = response.signal;
     usage = response.usage;
@@ -108,6 +113,7 @@ export async function runPlanCommand(proc: DraftProcess, run = requestDraft): Pr
     write({
       event: 'finished',
       outcome,
+      native_failure,
       duration_ms: performance.now() - started,
       run_id,
       define_sha256,
