@@ -55,31 +55,6 @@ export function parseArguments(argv: readonly string[]): Arguments | undefined {
   return { name, until };
 }
 
-/**
- * The variable by which the shell entry `./aos` hands over the XDG_CONFIG_HOME of its caller, `set:<value>` or `unset`,
- * before it gives its command the one of the run it admitted (docs/design/orchestration-fable-5-2.md §14, « Un seul
- * lieu d'écriture »): the identity of git and of the client of the forge is configured in the caller's.
- */
-export const HANDED_XDG_CONFIG_HOME = 'ARCHITECT_OS_HOST_XDG_CONFIG_HOME';
-
-/**
- * The environment from which git and the client of the forge take the names of the list: the one of the process when
- * nothing is handed over (a delivery started without `./aos`); else the same, with the XDG_CONFIG_HOME the caller of
- * `./aos` had, set, empty or absent as it was. None when what is handed over has neither form. The nested gate keeps
- * the environment of the process, and with it the XDG_CONFIG_HOME of the run.
- */
-export function hostEnvironment(
-  env: Readonly<Record<string, string | undefined>>,
-): Readonly<Record<string, string | undefined>> | undefined {
-  const handed = env[HANDED_XDG_CONFIG_HOME];
-  if (handed === undefined) return env;
-  const given: Record<string, string | undefined> = { ...env };
-  delete given['XDG_CONFIG_HOME'];
-  if (handed === 'unset') return given;
-  if (!handed.startsWith('set:')) return undefined;
-  return { ...given, XDG_CONFIG_HOME: handed.slice('set:'.length) };
-}
-
 function loadConfig(path: string): { ok: true; config: DeliverConfig } | { ok: false; reason: string } {
   let raw: unknown;
   try {
@@ -102,10 +77,8 @@ export async function runDeliver(deps: DeliverDependencies): Promise<number> {
   if (!loaded.ok) return refuse(loaded.reason);
   const { config } = loaded;
 
-  const env = hostEnvironment(deps.env);
-  if (env === undefined) return refuse(`${HANDED_XDG_CONFIG_HOME} is neither "unset" nor "set:<value>"`);
   const worktree = deps.env['INIT_CWD'] ?? deps.cwd;
-  const host = { names: config.environment, env };
+  const host = { names: config.environment, env: deps.env };
   try {
     // Built inside the `try`: an adapter that refuses what it is given says so like a port that throws.
     const ports = {

@@ -4357,3 +4357,5 @@ Une cinquième classe est revenue jusqu'à la fin : une même affirmation écrit
 **Le tableau d'état quitte le README.** Le tableau « Where it stands » répétait `done` sur vingt lignes ; la marque `ready` de l'image le dit désormais. Le tableau est déplacé, sans rien perdre, dans `docs/bricks.md` : la brique, ce qu'elle est, ses limites (ce qui suivait `done`) et les sections du journal de son travail. Le README le résume en deux phrases. `docs/bricks.md` entre dans les documents dont `features/descriptive/doc-paths.feature` vérifie les chemins.
 
 **Ce que la suite a montré ici.** La suite entière, lancée sous Node 22, a échoué sur 96 étapes, toutes de ce poste : la sandbox srt n'y démarre pas (`ISOLATION_UNAVAILABLE`, `features/sandbox/` et le lecteur de source de `packages/sandbox`) et PostgreSQL 17 n'y est pas (`@postgres`). Aucune ne lit une image ni un document. La porte de la CI tranche sous Node 26.
+
+**Périmètre de publication.** La PR du README conserve les reçus historiques de la passe, dans les chemins protégés par SRT. L’admission est livrée séparément sur la branche runtime. Le schéma la marque comme prévue pour l’arbre courant.

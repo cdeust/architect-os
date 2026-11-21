@@ -1,5 +1,0 @@
-{
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "outDir": "dist", "rootDir": ".", "erasableSyntaxOnly": true },
-  "include": ["src", "features"]
-}

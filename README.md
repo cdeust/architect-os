@@ -200,15 +200,6 @@ npm run gate       # the CI gate: the count, the scenarios, the mutation of the 
 npm run deliver -- <name>   # deliver the commit of this worktree: trial branch, gate, CI, both branches; --until ci stops before publication
 ```
 
-The entry that admits a run is available, and optional until the next commit makes it compulsory. On a directory its installer marked once with the name of its environment (`workstation`, `hosted-runner` or `server`), a command runs through it:
-
-```bash
-printf 'architect-os-runtime-root/v2\nenvironment=workstation\n' > <root>/.architect-os-runtime-root   # once, by the installer
-ARCHITECT_OS_RUNTIME_ROOT=<root> ./aos -- npm test   # refused before npm (`aos: <CODE>`, exit 2) unless both floors hold
-```
-
-The admission runs with the Node of the first location of `tools/runtime/node-locations` that holds one (the tool cache of the Linux runner, Homebrew, `/usr/local/bin`, `/usr/bin`), never with the one the caller's `PATH` finds, and that Node must report the version of `.nvmrc`; the command itself is looked up in the caller's `PATH`. Before it becomes the command, the entry removes every inherited spelling npm reads as its cache, its log folder, its two configuration files or its `node-options`, in any case and with `-` for `_`, and gives the first four one value each.
-
 The platform as one process, on the store that keeps nothing (`DATABASE_URL` takes a `postgres://` URL otherwise). The broker reads the API key from the file its configuration names, which must give no permission to its group nor to others; a client token has at least 32 characters:
 
 ```bash
@@ -253,7 +244,6 @@ client --> gateway --> module (srt, MCP on stdio)      a data tool
 | `tools/define/`       | The host reads and checks a pending prd-gen Define v1 handoff over MCP stdio.                                                                                 |
 | `tools/plan/`         | Previews one Step input bundle and materializes it after explicit operator approval.                                                                          |
 | `tools/deliver/`      | The delivery of a commit, `npm run deliver`: six phases bound to one commit hash.                                                                             |
-| `tools/runtime/`      | The admission of a run, `./aos`: the marked root, the floors per environment, the receipt; plain Node, before any install.                                    |
 | `steps/`              | What each step of the loop saw, written by the host: the brief, the step file, and a record with the fingerprint of the tree.                                 |
 | `baseline/`, `bench/` | Measurements and trials, outside production.                                                                                                                  |
 | `docs/`               | Architecture, design notes, the experiment log, testing.                                                                                                      |

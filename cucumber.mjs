@@ -45,10 +45,6 @@ export const macos = { ...config, paths: ['features/sandbox/**/*.feature'] };
 // - features/arch/isolation-diagram: reads five profile files and two images, and calls one production function, the
 //   loader of the profiles, which the mutation judges elsewhere (packages/sandbox/features/profile.feature). It is
 //   outside only because its area is.
-// - features/arch/runtime-entry: starts the shell entry `aos` as a host process, from a copy of the launcher whose
-//   sources would be the instrumented ones on the copy; a child process executes no production line in process. The
-//   decisions of the admission are judged in process by tools/runtime/features. It also reads the import specifiers of
-//   tools/runtime/src as text, which on the copy would be another text.
 // Both areas stay in the default profile (`npm test`, and the counted run of the gate's Linux job); the mutation
 // profile lists the other four root areas, and the components' features.
 // A scope by path, like `macos`: `features/**` is spelled as the root areas other than repository and arch;
