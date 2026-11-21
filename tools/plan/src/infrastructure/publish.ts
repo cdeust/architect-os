@@ -1,7 +1,7 @@
 import { lstatSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, normalize } from 'node:path';
 
-function insideCheckout(directory: string): boolean {
+export function insideCheckout(directory: string): boolean {
   // A primary checkout has a directory here and a linked worktree has a file.
   if (lstatSync(join(directory, '.git'), { throwIfNoEntry: false })) return true;
   const ancestor = dirname(directory);

@@ -108,6 +108,8 @@ Then(
       ];
       const trace = reply === 'truncated' ? events.slice(0, -1) : events;
       writeFileSync(response, trace.map((event) => JSON.stringify(event)).join('\n') + '\n');
+      if (reply === 'missing file') rmSync(response);
+      if (reply === 'invalid Define') writeFileSync(define, '{}');
       const args = ['agy-result', model, step, define, response, receipt];
       const imported = await run(args);
       const before = readFileSync(receipt, 'utf8');
@@ -122,6 +124,9 @@ Then(
       assert.equal(finish.model_reported, null);
       assert.equal(finish.outcome, outcome);
       assert.ok(finish.duration_ms >= 0);
+      assert.equal(finish.version, 2);
+      assert.equal(finish.exit_code, imported.code);
+      assert.equal(finish.native_exit_code, null);
       if (outcome === 'proposed') {
         assert.equal(imported.code, 0);
         assert.deepEqual(JSON.parse(imported.stdout), proposal);
@@ -130,7 +135,7 @@ Then(
         assert.equal(finish.external_duration_seconds, 3);
         assert.equal(finish.usage.thinking_tokens, 2);
       } else {
-        assert.equal(imported.code, 2);
+        assert.equal(imported.code, ['missing file', 'invalid Define'].includes(reply) ? 2 : 1);
         assert.equal(imported.stdout, '');
         assert.ok(imported.stderr.includes(outcome));
         assert.equal(finish.proposal_sha256, null);

@@ -1,3 +1,4 @@
+import { record, readAgyTurn } from './application/agy-response.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
@@ -27,47 +28,6 @@ function readRequest(model: string, step: string, path: string) {
   return { request_sha256, define_sha256, handoff };
 }
 
-function record(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('expected object');
-  return value as Record<string, unknown>;
-}
-
-function oneTurn(path: string, model: string) {
-  const lines = readUtf8(readFileSync(path)).trimEnd().split('\n');
-  const events = lines.map((line) => record(JSON.parse(line)));
-  const initEvent = events[0];
-  const terminal = events.at(-1);
-  if (initEvent?.event !== 'init' || terminal?.event !== 'result') throw new Error('incomplete stream');
-  const init = record(initEvent.init);
-  const id = initEvent.conversation_id;
-  const result = record(terminal.result);
-  if (
-    typeof id !== 'string' ||
-    !id ||
-    init.model !== model ||
-    init.permission_mode !== 'strict' ||
-    result.conversation_id !== id ||
-    result.num_turns !== 1
-  )
-    throw new Error('unexpected invocation');
-  for (const event of events.slice(1, -1)) {
-    if (event.event !== 'step_update') throw new Error('unexpected stream event');
-    const update = record(event.step_update);
-    if (
-      update.conversation_id !== id ||
-      'tool_name' in update ||
-      'tool_info' in update ||
-      'subagent_info' in update ||
-      (update.state !== 'ACTIVE' && update.state !== 'DONE') ||
-      (update.step_type !== 'user_input' &&
-        update.step_type !== 'agent_response' &&
-        update.step_type !== 'checkpoint')
-    )
-      throw new Error('unexpected step');
-  }
-  return result;
-}
-
 const tokenFields = ['input_tokens', 'output_tokens', 'thinking_tokens', 'cache_read_tokens', 'total_tokens'];
 function reportedUsage(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -82,9 +42,9 @@ function reportedUsage(value: unknown) {
 
 export async function runAgyExchange(proc: PlanProcess): Promise<number> {
   const [mode, model = '', step = '', define = '', result, receipt, ...extra] = proc.argv.slice(2);
-  const fail = (outcome: string) => {
+  const fail = (outcome: string, exitCode = 2) => {
     proc.stderr.write('architect-os plan ' + mode + ': ' + outcome + '\n');
-    return 2;
+    return exitCode;
   };
   const exporting = mode === 'agy-request';
   if (
@@ -129,7 +89,7 @@ export async function runAgyExchange(proc: PlanProcess): Promise<number> {
     writeFileSync(
       journal.fd,
       JSON.stringify({
-        version: 1,
+        version: 2,
         attempt_id,
         stage: 'agy-result',
         provider: 'gemini',
@@ -141,13 +101,15 @@ export async function runAgyExchange(proc: PlanProcess): Promise<number> {
     );
   write({ event: 'started', at: new Date().toISOString() });
   let request: ReturnType<typeof readRequest> | undefined;
-  let response: ReturnType<typeof oneTurn> | undefined;
+  let response: ReturnType<typeof readAgyTurn> | undefined;
   let outcome = 'PLAN_DEFINE_INVALID';
   let proposal: string | undefined;
   try {
     request = readRequest(model, step, define);
+    outcome = 'PLAN_AGY_INPUT_UNAVAILABLE';
+    const stream = readFileSync(result);
     outcome = 'PLAN_AGY_STREAM_INVALID';
-    response = oneTurn(result, model);
+    response = readAgyTurn(readUtf8(stream), model);
     outcome = 'PLAN_AGY_RUN_FAILED';
     if (response.status !== 'SUCCESS') throw new Error('unsuccessful run');
     outcome = 'PLAN_AGY_REQUEST_MISMATCH';
@@ -162,8 +124,15 @@ export async function runAgyExchange(proc: PlanProcess): Promise<number> {
     // The raw model response and file paths stay outside the measurement.
   }
   const reportedDuration = response?.duration_seconds;
+  const exit_code = proposal
+    ? 0
+    : outcome === 'PLAN_DEFINE_INVALID' || outcome === 'PLAN_AGY_INPUT_UNAVAILABLE'
+      ? 2
+      : 1;
   write({
     event: 'finished',
+    exit_code,
+    native_exit_code: null,
     outcome,
     duration_ms: performance.now() - started,
     run_id: request?.handoff.run_id ?? null,
@@ -178,7 +147,7 @@ export async function runAgyExchange(proc: PlanProcess): Promise<number> {
     model_reported: null,
     cost_usd: null,
   });
-  if (!proposal) return fail(outcome);
+  if (!proposal) return fail(outcome, exit_code);
   proc.stdout.write(proposal);
   return 0;
 }

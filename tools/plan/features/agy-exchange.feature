@@ -15,3 +15,5 @@ Feature: Import a Plan proposal from an operator's Antigravity session
       | extra turn     | PLAN_AGY_STREAM_INVALID   |
       | truncated      | PLAN_AGY_STREAM_INVALID   |
       | failed run     | PLAN_AGY_RUN_FAILED       |
+      | missing file   | PLAN_AGY_INPUT_UNAVAILABLE |
+      | invalid Define | PLAN_DEFINE_INVALID        |
