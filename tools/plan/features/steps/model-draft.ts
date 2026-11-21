@@ -101,7 +101,7 @@ const reply=${JSON.stringify(reply)},provider=${JSON.stringify(provider)};
 if(provider==='claude'){assert.ok(args.includes('--no-session-persistence'));assert.ok(args.includes('--strict-mcp-config'));assert.equal(args[args.indexOf('--tools')+1],'');}
 if(provider==='gpt'){assert.ok(args.includes('--ephemeral'));assert.ok(args.includes('--ignore-user-config'));assert.ok(args.includes('read-only'));}
 if(provider==='gemini'){assert.equal(JSON.parse(stdin).event,'user');assert.ok(args.includes('--sandbox'));const settings=JSON.parse(args[args.indexOf('--settings')+1]);assert.equal(settings.useG1Credits,false);assert.ok(settings.permissions.deny.includes('mcp(*)'));}
-if(reply==='timeout'){setInterval(()=>{},10000);}else{if(reply==='diagnostic')process.stderr.write('private cli diagnostic'); console.log(${JSON.stringify(reply === 'malformed' ? 'invalid' : responses[provider]!.map((x) => JSON.stringify(x)).join('\n'))});if(reply==='nonzero')process.exitCode=1;}
+if(reply==='timeout'){setInterval(()=>{},10000);}else{if(reply==='diagnostic')process.stderr.write('private cli diagnostic');if(reply==='whitespace')process.stderr.write('  '); console.log(${JSON.stringify(reply === 'malformed' ? 'invalid' : responses[provider]!.map((x) => JSON.stringify(x)).join('\n'))});if(reply==='nonzero')process.exitCode=1;}
 `;
       if (reply !== 'absent') writeFileSync(exe, source, { mode: 0o700 });
       let out = '',

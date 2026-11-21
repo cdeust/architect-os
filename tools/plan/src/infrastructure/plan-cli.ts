@@ -214,8 +214,8 @@ function count(n: unknown) {
 function object(value: unknown): Record<string, unknown> {
   return Object(value) as Record<string, unknown>;
 }
-function safeModel(value = '') {
-  return /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(value) ? value : null;
+function safeModel(value: string | undefined) {
+  return value && /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(value) ? value : null;
 }
 
 export function parseNative(provider: PlanProvider, stdout: string, requested: string) {
@@ -282,7 +282,7 @@ export function parseNative(provider: PlanProvider, stdout: string, requested: s
       cache_read_tokens: count(cache),
       cache_creation_tokens: count(write),
       reasoning_tokens: count(reasoning),
-      cost_usd: typeof cost === 'number' && Number.isFinite(cost) && cost >= 0 ? cost : null,
+      cost_usd: Number.isFinite(cost) && Number(cost) >= 0 ? Number(cost) : null,
     },
   };
 }

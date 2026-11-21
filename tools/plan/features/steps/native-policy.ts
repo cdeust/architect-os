@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -166,8 +167,16 @@ Then('native drafts reject redirected executables and active Google integrations
     }
     writeFileSync(settings, JSON.stringify({ userSettings: { enableAdc: false } }));
     await ok();
+    writeFileSync(settings, Buffer.concat([Buffer.from('{"name":"'), Buffer.from([255]), Buffer.from('"}')]));
+    await refuse();
     writeFileSync(settings, '{}');
     await ok();
+    const moved = join(profile, 'original');
+    renameSync(config, moved);
+    symlinkSync(moved, config);
+    await refuse({}, /unsafe Google preferences path/);
+    rmSync(config);
+    renameSync(moved, config);
     rmSync(exe);
     await refuse({}, /CLI not installed/);
   } finally {
@@ -191,6 +200,10 @@ Then('a controlled provider respects its environment, output bound and timeout',
       NODE_OPTIONS: 'irrelevant',
     };
     const r = { ...request, provider: 'claude' as const };
+    const googleConfig = join(root, '.gemini', 'config');
+    mkdirSync(googleConfig, { recursive: true });
+    writeFileSync(join(googleConfig, 'hooks.json'), 'active');
+
     start(
       'const fs=require("node:fs");fs.readFileSync(0);fs.writeFileSync(' +
         JSON.stringify(trace) +

@@ -11,6 +11,8 @@ Feature: An operator drafts with the chosen provider's signed-in CLI
       | gpt      | tool         | PLAN_PROVIDER_FAILED  |
       | gemini   | tool         | PLAN_PROVIDER_FAILED  |
       | gemini   | refused      | PLAN_PROVIDER_FAILED  |
+      | gemini   | whitespace   | proposed              |
+      | claude   | diagnostic   | proposed              |
       | gemini   | diagnostic   | PLAN_PROVIDER_FAILED  |
       | claude   | nonzero      | PLAN_PROVIDER_FAILED  |
       | gpt      | timeout      | PLAN_PROVIDER_FAILED  |
