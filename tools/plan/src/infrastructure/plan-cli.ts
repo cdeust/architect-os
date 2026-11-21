@@ -1,4 +1,5 @@
-import { spawnSync } from 'node:child_process';
+import { readAgyTurn } from '../application/agy-response.js';
+import { NativeLauncher, readCapped, timer } from '@architect-os/sandbox';
 import {
   readFileSync,
   existsSync,
@@ -236,33 +237,7 @@ export function parseNative(provider: PlanProvider, stdout: string, requested: s
       break;
     }
     case 'gemini': {
-      const first = rows[0]!,
-        id = first.conversation_id,
-        init = object(first.init);
-      if (
-        first.event !== 'init' ||
-        typeof id !== 'string' ||
-        !id ||
-        init.model !== requested ||
-        init.permission_mode !== 'strict' ||
-        last.event !== 'result'
-      )
-        throw Error();
-      for (const row of rows.slice(1, -1)) {
-        const step = object(row.step_update);
-        if (
-          row.event !== 'step_update' ||
-          step.conversation_id !== id ||
-          'tool_name' in step ||
-          'tool_info' in step ||
-          'subagent_info' in step ||
-          !['ACTIVE', 'DONE'].includes(String(step.state)) ||
-          !['user_input', 'agent_response', 'checkpoint'].includes(String(step.step_type))
-        )
-          throw Error();
-      }
-      const result = object(last.result);
-      if (result.conversation_id !== id || result.num_turns !== 1) throw Error();
+      const result = readAgyTurn(stdout, requested);
       raw = object(result.usage);
       if (result.status === 'SUCCESS') text = result.response;
       cache = raw.cache_read_tokens;
@@ -284,7 +259,7 @@ export function parseNative(provider: PlanProvider, stdout: string, requested: s
   };
 }
 
-export function requestDraft(r: DraftRequest, env: NodeJS.ProcessEnv): NativeResult {
+export async function requestDraft(r: DraftRequest, env: NodeJS.ProcessEnv): Promise<NativeResult> {
   const home = safeHome(env.HOME);
   const binary = installed(programs[r.provider], home, env['AOS_PLAN_' + r.provider.toUpperCase() + '_BIN']);
   const cwd = mkdtempSync(join(tmpdir(), 'aos-plan-cli-'));
@@ -314,25 +289,39 @@ export function requestDraft(r: DraftRequest, env: NodeJS.ProcessEnv): NativeRes
       if (existsSync(plugins) && readdirSync(plugins).length) throw Error();
     }
     const { args, input } = nativeInvocation(r);
-    const child = spawnSync(binary, args, {
-      input,
-      encoding: 'utf8',
-      cwd,
-      env: {
-        HOME: profile,
-        PATH: [dirname(process.execPath), '/usr/bin', '/bin'].join(delimiter),
-        TMPDIR: cwd,
-        LANG: 'C',
+    let warning = false;
+    const launcher = new NativeLauncher(
+      {
+        [r.provider]: {
+          cwd,
+          command: [binary, ...args],
+          env: {
+            HOME: profile,
+            PATH: [dirname(process.execPath), '/usr/bin', '/bin'].join(delimiter),
+            TMPDIR: cwd,
+            LANG: 'C',
+          },
+        },
       },
-      stdio: 'pipe',
-      timeout: r.timeoutMs,
-      killSignal: 'SIGKILL',
-    });
-    const base = { exit_code: child.status, signal: child.signal, text: null, usage: null };
-    if (child.error || (r.provider === 'gemini' && child.stderr.trim() !== '')) return base;
+      {
+        graceMs: r.timeoutMs,
+        schedule: timer,
+        log: (_name, chunk) => {
+          if (chunk.trim()) warning = true;
+        },
+      },
+    );
+    const child = await launcher.start(r.provider);
+    // Preserve node:child_process's default maxBuffer. readCapped also bounds the decoded evidence.
+    const output = readCapped(child.stdout, 1024 * 1024).catch(() => null);
+    child.stdin.write(input);
+    // close sends EOF, waits for the streams and kills the process group when the timeout expires.
+    const [{ code, signal }, stdout] = await Promise.all([child.close(), output]);
+    const base = { exit_code: code, signal, text: null, usage: null };
+    if (stdout === null || (r.provider === 'gemini' && warning)) return base;
     try {
-      const reply = parseNative(r.provider, child.stdout, r.model);
-      return { ...base, ...reply, text: child.status === 0 ? reply.text : null };
+      const reply = parseNative(r.provider, stdout, r.model);
+      return { ...base, ...reply, text: code === 0 ? reply.text : null };
     } catch {
       return base;
     }

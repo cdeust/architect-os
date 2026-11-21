@@ -136,6 +136,14 @@ if(reply==='timeout'){setInterval(()=>{},10000);}else{if(reply==='diagnostic')pr
         .trim()
         .split('\n')
         .map((x) => JSON.parse(x));
+      assert.equal(start.stage, 'draft');
+      assert.equal(start.event, 'started');
+      assert.equal(finish.event, 'finished');
+      assert.ok(Number.isFinite(Date.parse(start.at)));
+      assert.ok(finish.duration_ms >= 0 && finish.duration_ms <= performance.now());
+      assert.equal(start.timeout_ms, reply === 'timeout' ? 10 : 3000);
+      if (outcome !== 'PLAN_DEFINE_INVALID')
+        assert.equal(finish.define_sha256, createHash('sha256').update(bytes).digest('hex'));
       assert.equal(start.transport, 'native-cli');
       assert.equal(start.attempt_id, finish.attempt_id);
       assert.equal(finish.outcome, outcome);
@@ -148,6 +156,7 @@ if(reply==='timeout'){setInterval(()=>{},10000);}else{if(reply==='diagnostic')pr
       }
       assert.doesNotMatch(journal, /private cli diagnostic|Audit\.|SYNTHETIC_SECRET/);
       assert.equal(await runPlanCommand(proc), 2);
+      assert.ok(err.endsWith('architect-os plan draft: PLAN_RECEIPT_UNAVAILABLE\n'));
       assert.equal(readFileSync(receipt, 'utf8'), journal);
     } finally {
       rmSync(root, { recursive: true, force: true });
