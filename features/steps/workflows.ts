@@ -106,7 +106,7 @@ function assertGate(text: string): void {
   const lane = doc.jobs['gate-linux-lane'];
   assert.deepEqual(lane?.strategy, {
     'fail-fast': false,
-    matrix: { lane: Array.from({ length: 20 }, (_, i) => i + 1) },
+    matrix: { lane: Array.from({ length: 16 }, (_, i) => i + 1) },
   });
   assert.equal(lane?.uses, './.github/workflows/gate-lane.yml');
   assert.deepEqual(lane?.with, { lane: '${{ matrix.lane }}' });

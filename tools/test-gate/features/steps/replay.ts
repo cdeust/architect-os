@@ -22,6 +22,7 @@ import {
   mutatedSource,
   recheckDivergence,
   replayCases,
+  replayViolations,
   type Expectation,
   type Judgement,
   type ReplayCase,
@@ -281,6 +282,18 @@ Then('the gate output includes {string}', function (expected: string) {
 
 When('the instrumented runner exercises the replay selector with {string}', async function (variant: string) {
   const repo = repository(this);
+  if (variant === 'success') {
+    // Resolve from the running step module, including when Stryker loads it inside its instrumented copy.
+    const source = new URL('../../src/infrastructure/replay-cucumber.ts', import.meta.url);
+    const imported = (await import(
+      source.href
+    )) as typeof import('../../src/infrastructure/replay-cucumber.js');
+    assert.equal(
+      imported.runReplayCucumber,
+      runReplayCucumber,
+      'the fixture executes its local source selector',
+    );
+  }
   const profiles: Record<string, object> = {
     shard: { shard: '1/2' },
     retry: { retry: 1 },
@@ -1070,3 +1083,43 @@ Then('discovery cannot substitute another original identity or failing step', as
   assert.equal(small[0]?.divergence, null);
   assert.equal(repo.read(file), source);
 });
+
+Then(
+  'the independent replay rejects a missing attempt, zero steps or duplicate native identity',
+  function () {
+    const mutant = { id: '1', status: 'Survived', mutatorName: 'fixture', startLine: 2 } as MutantRecord;
+    const replay: ReplayCase = {
+      file: 'src/probe.mjs',
+      mutant,
+      expectation: { survives: true },
+      tests: ['specs/green.feature:4'],
+      fallback: [],
+      source: '',
+      mutated: '',
+      problem: null,
+    };
+    const clean = runOf('PASSED');
+    assert.ok(!('failure' in clean.run));
+    const first = clean.run.pickles[0];
+    assert.ok(first !== undefined);
+    const attempt = first.attempts[0];
+    assert.ok(attempt !== undefined);
+    for (const [changed, reason] of [
+      [{ ...first, attempts: new Array<NonNullable<typeof attempt>>(1) }, 'tentative non terminée'],
+      [{ ...first, attempts: [{ ...attempt, attempt: 1 }] }, 'tentative non terminée'],
+      [{ ...first, pickleSteps: 0 }, 'scénario sans step'],
+    ] as const) {
+      const malformed = { ...clean, run: { ...clean.run, pickles: [changed] } };
+      const verdict = judgeReplay(replay, 1, null, malformed);
+      assert.ok(verdict.divergence?.includes(reason), JSON.stringify(verdict));
+    }
+    const record = {
+      report: 'digest',
+      mutants: [{ file: replay.file, id: '1', status: 'Survived', divergence: null }],
+    };
+    const duplicate = replayViolations([replay, replay], record, 'digest');
+    assert.equal(duplicate.length, 1);
+    assert.equal(duplicate[0]?.rule, 7);
+    assert.match(duplicate[0]?.text ?? '', /mutant en double dans le rapport/);
+  },
+);

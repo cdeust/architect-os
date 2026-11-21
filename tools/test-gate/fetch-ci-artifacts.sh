@@ -79,7 +79,7 @@ download_mutation() {
 }
 valid_lane() {
   case "$1" in
-    [1-9]|1[0-9]|20) return 0 ;;
+    [1-9]|1[0-6]) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -111,14 +111,18 @@ download_replay() {
 }
 pids=
 failed=0
-for part in $(seq 1 20); do
+wait_downloads() {
+  for pid in $pids; do
+    wait "$pid" || failed=1
+  done
+  pids=
+}
+for part in $(seq 1 16); do
   download_replay "$part" &
   pids="$pids $!"
   if [ "$((part % 5))" -eq 0 ]; then
-    for pid in $pids; do
-      wait "$pid" || failed=1
-    done
-    pids=
+    wait_downloads
   fi
 done
+wait_downloads
 test "$failed" -eq 0

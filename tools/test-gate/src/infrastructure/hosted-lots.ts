@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { Lot } from './mutation-lot-proof.js';
 
-// GitHub's standard Free runner concurrency limit. Functional jobs release slots while production runs.
-export const HOSTED_LANES = 20;
+// The hosted run 44905674009 used about sixteen Linux runners and spent nearly an hour of runner time on 20 dry-runs.
+export const HOSTED_LANES = 16;
 export const HOSTED_COSTS = 'tools/test-gate/hosted-mutation-cost.json';
 
 export interface MutationCosts {

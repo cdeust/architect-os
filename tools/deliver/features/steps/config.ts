@@ -137,7 +137,7 @@ Then(
         producers: [
           'gate-linux-cucumber-1',
           'gate-linux-cucumber-2',
-          ...Array.from({ length: 20 }, (_, i) => i + 1).flatMap((lane) => [
+          ...Array.from({ length: 16 }, (_, i) => i + 1).flatMap((lane) => [
             'gate-linux-lane-' + lane + ' / mutation',
             'gate-linux-lane-' + lane + ' / replay',
           ]),

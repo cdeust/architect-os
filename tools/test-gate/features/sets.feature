@@ -189,3 +189,6 @@ Feature: Test gate, rules 1 and 3: unique identities, executed set equal to the 
       | 257   | nombre de lots Cucumber invalide   |
       | 12    | lot Cucumber 1 absent              |
       | 256   | lot Cucumber 1 absent              |
+
+  Scenario: the same Cucumber report has the correct admission checks for each reader
+    Then Cucumber Messages admission distinguishes legacy reads, strict lots and torn replay tails

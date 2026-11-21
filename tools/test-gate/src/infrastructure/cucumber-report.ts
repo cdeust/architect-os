@@ -1,6 +1,6 @@
 import {
   parseEnvelope,
-  type Envelope,
+  Envelope,
   type GherkinDocument,
   type Hook,
   type Location,
@@ -70,11 +70,13 @@ export function parseCucumberReport(
 ): CucumberRun | ReadFailure {
   try {
     const lines = text.split('\n').filter((line) => line.trim() !== '');
-    const envelopes: Envelope[] = [];
+    const envelopes = Array.of<Envelope>();
     let invalid: unknown;
     for (const line of lines) {
       try {
-        envelopes.push(parseEnvelope(line));
+        const envelope = parseEnvelope(line);
+        if (!(envelope instanceof Envelope)) throw new Error('enveloppe Messages non objet');
+        envelopes.push(envelope);
       } catch (error) {
         if (observeExecution === undefined) throw error;
         // A torn final envelope does not erase earlier scenario starts from a replay.
@@ -84,9 +86,11 @@ export function parseCucumberReport(
     }
     let completed = false;
     if (requireComplete || observeExecution !== undefined) {
-      const starts = envelopes.filter((envelope) => envelope.testRunStarted !== undefined);
+      const starts = envelopes
+        .map(({ testRunStarted }) => testRunStarted)
+        .filter((start) => start !== undefined);
       const finishes = envelopes.filter((envelope) => envelope.testRunFinished !== undefined);
-      const id = starts[0]?.testRunStarted?.id;
+      const id = starts[0]?.id;
       const finish = envelopes.at(-1)?.testRunFinished;
       if (requireComplete || finishes.length !== 0) {
         if (!id || starts.length !== 1 || finishes.length !== 1 || finish === undefined) {
@@ -132,10 +136,8 @@ export function parseCucumberReport(
         steps,
       });
       if (inScope(pickle.uri)) {
-        if (observeExecution !== undefined) {
-          const line = pickle.location?.line;
-          locations.push(line === undefined ? null : pickle.uri + ':' + line);
-        }
+        const line = pickle.location?.line;
+        locations.push(line === undefined ? null : pickle.uri + ':' + line);
         executed.set(pickle.id, entry);
       }
     }

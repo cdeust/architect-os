@@ -90,7 +90,7 @@ function controlOf(config: GateConfig, workspace: Workspace, mutationText: strin
 async function replayCommand(
   config: GateConfig,
   root: string,
-  mode: 'all' | 'normal' | 'collect' | 1 | 2,
+  mode: 'all' | 'collect' | 1 | 2 | undefined,
   out: Output,
 ): Promise<number> {
   const workspace = new Workspace(root);
@@ -132,11 +132,13 @@ async function replayCommand(
   }
   const reportHash = sha256(text as string);
   const cases = replayCases(report, selected);
-  const inReplayLot = (shard: 1 | 2, file: string, mutant: MutantRecord) => {
-    if (file === canary?.file && /^[12]\//.test(mutant.id)) return mutant.id[0] === String(shard);
-    return batches?.[shard === 1 ? 0 : 1].has(file) === true;
-  };
+  let due = cases;
   if (batches !== undefined) {
+    const [first, second] = batches;
+    const inReplayLot = (shard: 1 | 2, file: string, mutant: MutantRecord) => {
+      if (file === canary?.file && /^[12]\//.test(mutant.id)) return mutant.id[0] === String(shard);
+      return (shard === 1 ? first : second).has(file);
+    };
     if (cases.some(({ file }) => !batches[0].has(file) && !batches[1].has(file)))
       throw new Error('mutant à rejouer sans lot');
     if (mode === 'collect') {
@@ -145,21 +147,21 @@ async function replayCommand(
         const receipt = receiptText === null ? null : parseReplayRecord(receiptText);
         const required = cases.filter(({ file, mutant }) => inReplayLot(shard, file, mutant));
         if (receipt === null) throw new Error('lot de rejeu absent : ' + shard);
+        if ('failure' in receipt)
+          throw new Error('lot de rejeu ' + shard + ' : rejeu des verdicts illisible : ' + receipt.failure);
         const issues = replayViolations(required, receipt, reportHash);
         if (issues.length)
           throw new Error('lot de rejeu ' + shard + ' : ' + issues.map(({ text }) => text).join('\n'));
-        if ('failure' in receipt) throw new Error(receipt.failure);
         return receipt.mutants;
       });
       workspace.write(target, jsonText({ report: reportHash, mutants: collected }));
       out.write('lots de rejeu vérifiés : ' + collected.length + ' mutant(s)\n');
       return 0;
     }
+    if (mode === 1 || mode === 2) due = cases.filter(({ file, mutant }) => inReplayLot(mode, file, mutant));
   }
   workspace.remove(settings.work);
   const runner = new CucumberRunner(root, settings.profile, resolve(root, settings.work));
-  const due =
-    mode === 1 || mode === 2 ? cases.filter(({ file, mutant }) => inReplayLot(mode, file, mutant)) : cases;
   const mutants = await replayAll(due, workspace, runner, settings.limitMs);
   workspace.write(target, jsonText({ report: reportHash, mutants }));
   const divergent = mutants.filter((entry) => entry.divergence !== null);
@@ -299,7 +301,7 @@ export async function runGate(
   }
   if (command.name === 'replay' || command.name === 'replay-collect') {
     const mode =
-      command.name === 'replay-collect' ? 'collect' : (command.shard ?? (command.all ? 'all' : 'normal'));
+      command.name === 'replay-collect' ? 'collect' : (command.shard ?? (command.all ? 'all' : undefined));
     try {
       return await replayCommand(config, root, mode, out);
     } catch (error) {

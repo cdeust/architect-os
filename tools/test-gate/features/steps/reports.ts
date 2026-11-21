@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseEnvelope, TestStepResultStatus } from '@cucumber/messages';
-import { parseCucumberShards } from '../../src/infrastructure/cucumber-report.js';
+import { parseCucumberReport, parseCucumberShards } from '../../src/infrastructure/cucumber-report.js';
 import {
   parseMutationReport,
   requireNativeMutationReport,
@@ -404,3 +404,35 @@ Then('a valid native mutation report has a parsed source, position and active st
   }, 'a valid native mutation report must parse in process');
   assert.throws(() => requireNativeMutationReport('broken'), /JSON invalide/);
 });
+
+Then(
+  'Cucumber Messages admission distinguishes legacy reads, strict lots and torn replay tails',
+  function () {
+    const source = readFileSync(join(FIXTURES, 'reports/green.ndjson'), 'utf8');
+    const inScope = () => true;
+    for (const invalid of ['false', '"text"', '[]', 'null']) {
+      const proof = parseCucumberReport(invalid + '\n' + source, inScope, true);
+      assert.deepEqual(proof, { failure: 'rapport Cucumber invalide : enveloppe Messages non objet' });
+    }
+    const lines = source.trimEnd().split('\n');
+    const terminal = JSON.parse(lines.pop() as string);
+    terminal.testRunFinished.testRunStartedId = 'different run';
+    const mismatch = [...lines, JSON.stringify(terminal)].join('\n');
+    const legacy = parseCucumberReport(mismatch, inScope);
+    assert.ok(!('failure' in legacy) && legacy.pickles.length > 0);
+    assert.deepEqual(parseCucumberReport(mismatch, inScope, true), {
+      failure: 'fin Cucumber rattachée à un autre lot',
+    });
+
+    const torn = lines.join('\n') + '\n{';
+    let identities: readonly (string | null)[] = [];
+    const observed = parseCucumberReport(torn, inScope, false, (locations, completed) => {
+      identities = locations;
+      assert.equal(completed, false);
+    });
+    const unopened = parseCucumberReport(torn, inScope);
+    assert.ok(identities.includes('specs/green.feature:4'));
+    assert.ok('failure' in observed);
+    assert.deepEqual(observed, unopened);
+  },
+);

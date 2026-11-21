@@ -42,15 +42,7 @@
         "gate-linux-lane-15 / mutation",
         "gate-linux-lane-15 / replay",
         "gate-linux-lane-16 / mutation",
-        "gate-linux-lane-16 / replay",
-        "gate-linux-lane-17 / mutation",
-        "gate-linux-lane-17 / replay",
-        "gate-linux-lane-18 / mutation",
-        "gate-linux-lane-18 / replay",
-        "gate-linux-lane-19 / mutation",
-        "gate-linux-lane-19 / replay",
-        "gate-linux-lane-20 / mutation",
-        "gate-linux-lane-20 / replay"
+        "gate-linux-lane-16 / replay"
       ],
       "admissionStep": "Require all producers"
     }
