@@ -97,6 +97,10 @@ Feature: The inventory projects native mutants onto changed production lines
     And the native producer "2" publishes its raw proof
     And the gate collects the two native production lots
     Then the gate exits with 0
+    And the gate output is:
+      """
+      producteurs de mutation vérifiés : 2
+      """
     And the native result from "src/a.mjs" is named "1/0" and covers "specs/green.feature:12"
     And the native result from "src/b.mjs" is named "2/0" and covers "specs/green.feature:12"
     And the aggregated report keeps the two certified canaries
@@ -107,6 +111,50 @@ Feature: The inventory projects native mutants onto changed production lines
     When the gate replays mutation lot "2"
     Then the gate exits with 1
     And the replay receipt "2" contains only its own canary
+    Given the second native proof has "a surviving canary"
+    When the gate collects the two native production lots
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : canari de mutation refusé dans le lot 2
+      """
+    And the gate repository holds no file "reports/mutation/mutation.json"
+    When the native producer "2" publishes its raw proof
+    Given the second native proof has "an unknown covering test"
+    When the gate collects the two native production lots
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : scénario de mutant absent du catalogue : unknown-identifier
+      """
+    And the gate repository holds no file "reports/mutation/mutation.json"
+    When the native producer "2" publishes its raw proof
+    Given the second native proof has "a missing scenario"
+    When the gate collects the two native production lots
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : catalogue des scénarios de mutation différent : specs/green.feature:20
+      """
+    And the gate repository holds no file "reports/mutation/mutation.json"
+    When the native producer "2" publishes its raw proof
+    Given the second native proof has "an unexpected scenario"
+    When the gate collects the two native production lots
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : catalogue des scénarios de mutation différent : specs/green.feature:999
+      """
+    And the gate repository holds no file "reports/mutation/mutation.json"
+    When the native producer "2" publishes its raw proof
+    Given the second native proof has "a duplicate scenario"
+    When the gate collects the two native production lots
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : scénario de mutation répété
+      """
+    And the gate repository holds no file "reports/mutation/mutation.json"
 
   Scenario: a configured canary is inventoried whole with zero mutations
     Given a gate repository

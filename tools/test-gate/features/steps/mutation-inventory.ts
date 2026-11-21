@@ -4,7 +4,7 @@ import { readNativeLotIgnorer } from '../../src/infrastructure/stryker-lot-plugi
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { FIXTURES, Then, When, repository } from './repository.js';
+import { FIXTURES, Given, Then, When, repository } from './repository.js';
 
 type Inventory = {
   head: string;
@@ -160,6 +160,34 @@ When('the native producer {string} publishes its raw proof', function (shard: st
   }
   repo.write(directory + '/mutation/native.json', JSON.stringify(raw));
   repo.write(directory + '/mutation-inventory.json', repo.read('reports/mutation-inventory.json'));
+});
+
+Given('the second native proof has {string}', function (variant: string) {
+  const repo = repository(this);
+  const path = 'reports/mutation-shards/2/mutation/native.json';
+  const report = JSON.parse(repo.read(path));
+  const tests = report.testFiles['specs/green.feature'].tests;
+  switch (variant) {
+    case 'a surviving canary':
+      report.files['zz/probe.mjs'].mutants[0].status = 'Survived';
+      delete report.files['zz/probe.mjs'].mutants[0].killedBy;
+      break;
+    case 'an unknown covering test':
+      report.files['src/b.mjs'].mutants[0].coveredBy = ['unknown-identifier'];
+      break;
+    case 'a missing scenario':
+      tests.pop();
+      break;
+    case 'an unexpected scenario':
+      tests.push({ ...tests[0], id: 'extra-location', location: { start: { line: 999, column: 1 } } });
+      break;
+    case 'a duplicate scenario':
+      tests.push({ ...tests[0], id: 'duplicate-location' });
+      break;
+    default:
+      throw new Error(variant);
+  }
+  repo.write(path, JSON.stringify(report));
 });
 
 When('the gate collects the two native production lots', function () {
