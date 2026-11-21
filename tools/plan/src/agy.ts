@@ -31,7 +31,13 @@ function readRequest(model: string, step: string, path: string) {
 function reportedUsage(value: unknown) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
   const usage = record(value);
-  const tokenFields = ['input_tokens', 'output_tokens', 'thinking_tokens', 'cache_read_tokens', 'total_tokens'];
+  const tokenFields = [
+    'input_tokens',
+    'output_tokens',
+    'thinking_tokens',
+    'cache_read_tokens',
+    'total_tokens',
+  ];
   return Object.fromEntries(
     tokenFields.map((field) => {
       const count = usage[field];
