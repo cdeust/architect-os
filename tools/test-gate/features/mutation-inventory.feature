@@ -4,6 +4,7 @@ Feature: The inventory projects native mutants onto changed production lines
     Given a gate repository
     And the gate repository file "src/scoped.mjs" reads:
       """
+      const earlier = false;
       export function same(a, b) {
         return a ===
           a;
@@ -13,6 +14,7 @@ Feature: The inventory projects native mutants onto changed production lines
     And the gate first parent is committed
     And the gate repository file "src/scoped.mjs" reads:
       """
+      const earlier = false;
       export function same(a, b) {
         return a ===
           b;
@@ -33,7 +35,7 @@ Feature: The inventory projects native mutants onto changed production lines
     And the gate repository file "src/scoped.mjs" reads:
       """
       function call(a, b) { return a && b; }
-      export const value = call(
+      call(
         true,
         // Stryker disable next-line BooleanLiteral: equivalent fixture
         true,
@@ -43,7 +45,7 @@ Feature: The inventory projects native mutants onto changed production lines
     And the gate repository file "src/scoped.mjs" reads:
       """
       function call(a, b) { return a && b; }
-      export const value = call(
+      call(
         true,
         // Stryker disable next-line BooleanLiteral: equivalent fixture<comment>
         <value>,
@@ -61,6 +63,85 @@ Feature: The inventory projects native mutants onto changed production lines
       | comment   | value |
       |           | false |
       | corrected | true  |
+
+  Scenario: an adjacent call on the same line stays outside a selected mutation span
+    Given a gate repository
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      const flag = true; call(
+        false
+      );
+      """
+    And the gate first parent is committed
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      const flag = false; call(
+        false
+      );
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    And the native plugin instruments the inventory files
+    And the gate projects the native report
+    Then the verified projection contains only the inventory mutants
+
+  Scenario: a canary is emitted in path order with the other production files
+    Given a gate repository
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export const value = true;
+      """
+    And the gate repository file "aaa/probe.mjs" reads:
+      """
+      export const canary = true;
+      """
+    And the gate configuration declares the canary "aaa/probe.mjs" with:
+      """
+      {}
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    Then the inventory files are "aaa/probe.mjs, src/scoped.mjs"
+
+  Scenario: a configured canary whose source is missing cannot produce an inventory
+    Given a gate repository
+    And the gate configuration declares the canary "zz/absent.mjs" with:
+      """
+      {}
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    Then the mutation inventory is refused
+    And the gate output is:
+      """
+      porte de test : zz/absent.mjs : source de mutation absente
+      """
+
+  Scenario: a whole-file lot keeps unlocated nodes and refuses an unplanned source
+    Given a gate repository
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export const value = true;
+      """
+    And the gate configuration declares the canary "src/scoped.mjs" with:
+      """
+      {}
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    Then the mutation plugin retains an unlocated node of "src/scoped.mjs"
+    And the whole-file plugin retains the unmutated identifier of "src/scoped.mjs"
+    And native instrumentation refuses the unplanned file "src/unlisted.mjs"
+
+  Scenario: a partial lot keeps an upstream node without a native location
+    Given a gate repository
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export const value = true;
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    Then the mutation plugin retains an unlocated node of "src/scoped.mjs"
 
   Scenario: separate native producers are both required and their local test IDs keep their exact scenario locations
     Given a gate repository

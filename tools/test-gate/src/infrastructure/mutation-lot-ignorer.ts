@@ -8,8 +8,8 @@ type Span = { readonly start: Point; readonly end: Point };
 
 // The pinned Stryker instrumenter passes Babel paths through the empty Ignorer.NodePath type.
 interface BabelPath extends NodePath {
-  readonly hub?: { readonly file?: { readonly opts?: { readonly filename?: string } } };
-  readonly node?: { readonly loc?: Span | null };
+  readonly hub: { readonly file: { readonly opts: { readonly filename: string } } };
+  readonly node: { readonly loc?: Span | null };
 }
 
 function atOrBefore(left: Point, right: Point): boolean {
@@ -35,10 +35,10 @@ export function inventoryIgnorer(root: string, lots: readonly Lot[]): Ignorer {
   );
   return {
     shouldIgnore(path: BabelPath) {
-      const filename = path.hub?.file?.opts?.filename;
-      const file = filename === undefined ? undefined : files.get(resolve(root, filename));
-      if (file === undefined) throw new Error('instrumentation hors inventaire : ' + String(filename));
-      const loc = path.node?.loc;
+      const filename = path.hub.file.opts.filename;
+      const file = files.get(resolve(root, filename));
+      if (file === undefined) throw new Error('instrumentation hors inventaire : ' + filename);
+      const loc = path.node.loc;
       if (file.whole || loc == null) return undefined;
       if (file.spans.some(({ start, end }) => atOrBefore(loc.start, start) && atOrBefore(end, loc.end)))
         return undefined;

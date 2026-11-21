@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { Instrumenter } from '@stryker-mutator/instrumenter';
+import { noopLogger } from '@stryker-mutator/util';
 import { readNativeLotIgnorer } from '../../src/infrastructure/stryker-lot-plugin.js';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -35,6 +36,45 @@ function readInventory(world: Parameters<typeof repository>[0]): Inventory {
   return result;
 }
 
+Then('the inventory files are {string}', function (paths: string) {
+  assert.deepEqual(
+    readInventory(this).lots.map(({ file }) => file),
+    paths.split(', '),
+  );
+});
+
+Then('the mutation plugin retains an unlocated node of {string}', function (file: string) {
+  const repo = repository(this);
+  const plugin = readNativeLotIgnorer(repo.dir);
+  assert.equal(
+    plugin.shouldIgnore({ hub: { file: { opts: { filename: repo.path(file) } } }, node: {} }),
+    undefined,
+  );
+});
+
+Then('the whole-file plugin retains the unmutated identifier of {string}', function (file: string) {
+  const repo = repository(this);
+  const plugin = readNativeLotIgnorer(repo.dir);
+  const loc = { start: { line: 1, column: 13 }, end: { line: 1, column: 18 } };
+  assert.equal(
+    plugin.shouldIgnore({ hub: { file: { opts: { filename: repo.path(file) } } }, node: { loc } }),
+    undefined,
+  );
+});
+
+Then('native instrumentation refuses the unplanned file {string}', async function (file: string) {
+  const repo = repository(this);
+  const name = repo.path(file);
+  await assert.rejects(
+    new Instrumenter(noopLogger).instrument([{ name, content: 'export const value = true;', mutate: true }], {
+      plugins: null,
+      excludedMutations: [],
+      ignorers: [readNativeLotIgnorer(repo.dir)],
+    }),
+    { message: 'instrumentation hors inventaire : ' + name },
+  );
+});
+
 Then('the mutation inventory retains the scoped multiline nodes', function () {
   const result = readInventory(this);
   const [lot] = result.lots;
@@ -42,11 +82,11 @@ Then('the mutation inventory retains the scoped multiline nodes', function () {
   assert.ok(lot);
   assert.equal(lot.file, 'src/scoped.mjs');
   assert.equal(lot.whole, false);
-  assert.deepEqual(lot.lines, [3]);
+  assert.deepEqual(lot.lines, [4]);
   assert.equal(lot.sourceSha256, createHash('sha256').update(repository(this).read(lot.file)).digest('hex'));
-  assert(lot.mutants.some((mutant) => mutant.mutatorName === 'BlockStatement' && mutant.start.line === 1));
-  assert(lot.mutants.some((mutant) => mutant.mutatorName === 'EqualityOperator' && mutant.start.line === 2));
-  assert(lot.mutants.every((mutant) => mutant.start.line <= 3 && mutant.end.line >= 3));
+  assert(lot.mutants.some((mutant) => mutant.mutatorName === 'BlockStatement' && mutant.start.line === 2));
+  assert(lot.mutants.some((mutant) => mutant.mutatorName === 'EqualityOperator' && mutant.start.line === 3));
+  assert(lot.mutants.every((mutant) => mutant.start.line <= 4 && mutant.end.line >= 4));
 });
 
 Then('the inventory marks {string} as whole', function (file: string) {
@@ -75,22 +115,7 @@ Then('the inventory retains the native ignore reason', function () {
 When('the native plugin instruments the inventory files', async function () {
   const repo = repository(this);
   const { lots } = readInventory(this);
-  const disabled = () => false;
-  const silent = () => undefined;
-  const instrumenter = new Instrumenter({
-    isTraceEnabled: disabled,
-    isDebugEnabled: disabled,
-    isInfoEnabled: disabled,
-    isWarnEnabled: disabled,
-    isErrorEnabled: disabled,
-    isFatalEnabled: disabled,
-    trace: silent,
-    debug: silent,
-    info: silent,
-    warn: silent,
-    error: silent,
-    fatal: silent,
-  });
+  const instrumenter = new Instrumenter(noopLogger);
   const inputs = lots.map(({ file }) => ({ name: repo.path(file), content: repo.read(file), mutate: true }));
   const result = await instrumenter.instrument(inputs, {
     plugins: null,

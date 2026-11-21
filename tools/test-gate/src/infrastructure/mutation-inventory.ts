@@ -24,9 +24,9 @@ export async function mutationLots(
   for (const file of candidates) {
     const source = read(file);
     if (source === null) throw new Error(file + ' : source de mutation absente');
-    const lines = [...(perimeter.changedLines.get(file) ?? [])].sort((a, b) => a - b);
+    // The perimeter keeps the changed line order from Git.
+    const lines = [...(perimeter.changedLines.get(file) ?? [])];
     const whole = wholeFiles.has(file);
-    if (!whole && lines.length === 0) throw new Error(file + ' : périmètre de mutation vide');
     const { mutants } = await instrumenter.instrument(
       [{ name: resolve(root, file), content: source, mutate: true }],
       // Matches the pinned gate config's defaults for the mutator and ignorer options.
@@ -38,7 +38,7 @@ export async function mutationLots(
       whole,
       nativeMutants: mutants.length,
       lines,
-      mutants: mutants.flatMap(({ location, mutatorName, replacement, status, statusReason }) => {
+      mutants: mutants.flatMap(({ location, mutatorName, replacement, statusReason }) => {
         // Instrumenter API uses zero-based positions. The gate consumes one-based reporter positions.
         const start = { line: location.start.line + 1, column: location.start.column + 1 };
         const end = { line: location.end.line + 1, column: location.end.column + 1 };
@@ -49,7 +49,7 @@ export async function mutationLots(
             end,
             mutatorName,
             replacement,
-            ignored: status === 'Ignored' ? (statusReason ?? '') : null,
+            ignored: statusReason || null,
           },
         ];
       }),
