@@ -1,3 +1,2 @@
-import { runPlan } from './main.js';
-
-process.exitCode = runPlan(process);
+import { runPlanCommand } from './draft.js';
+process.exitCode = await runPlanCommand(process);
