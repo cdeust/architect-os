@@ -16,6 +16,184 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     And the gate configuration declares the replay
     And the gate mutation report is the fixture "survivor"
 
+  Scenario: empty replay lots still require both receipts
+    Given the gate mutation fixture declares its independent mutation profile
+    And the gate mutation report keeps only the mutants ""
+    When the gate replays mutation lot "1"
+    Then the gate exits with 0
+    When the gate replays mutation lot "2"
+    Then the gate exits with 0
+    When the gate collects the mutation replay lots
+    Then the gate exits with 0
+    And the gate output includes "lots de rejeu vérifiés : 0 mutant(s)"
+    Given the gate removes replay lot "1"
+    When the gate collects the mutation replay lots
+    Then the gate exits with 1
+    And the gate output includes "lot de rejeu absent : 1"
+    And the gate replay record is absent
+
+  Scenario: a torn report retains an unexpected scenario started before the error
+    When the replay child returns "torn report with an unexpected scenario"
+    Then the replay of the observed report records:
+      """
+      {"selection":"scénario de rejeu inattendu : specs/second.feature:3","incomplete":true,"failure":"rapport Cucumber invalide : Expected property name or '}' in JSON at position 1 (line 1 column 2)"}
+      """
+
+  Scenario: a replay work directory outside the repository keeps using the installed engine
+    When the replay writes its working files outside the repository
+    Then the replay run passed within its limit
+
+  Scenario: a truncated Messages file does not erase an execution error
+    When the replay child fails after creating its Messages file
+    Then the replay records the execution error from the child
+
+  Scenario Outline: runner result reflects the actual Messages stream and process exit (<variant>)
+    When the replay child returns "<variant>"
+    Then the replay of the observed report records:
+      """
+      <result>
+      """
+
+    Examples:
+      | variant                                 | result                                                                                                                                                                                               |
+      | completed                               | {}                                                                                                                                                                                                   |
+      | single failure                          | {"badExit":true,"witness":"specs/green.feature:4"} |
+      | ordinary multiple failures              | {"badExit":true} |
+      | discovery failure                       | {"badExit":true,"witness":"specs/green.feature:4"} |
+      | unexpected failed scenario              | {"badExit":true,"selection":"scénario de rejeu inattendu : specs/second.feature:3"} |
+      | failed report without completion        | {"badExit":true,"incomplete":true} |
+      | failed report with unfinished attempt   | {"badExit":true} |
+      | failed report with retried attempt      | {"badExit":true} |
+      | failed report with noninitial attempt   | {"badExit":true} |
+      | failing step with successful exit       | {} |
+      | missing scenario                        | {"selection":"scénario de rejeu manquant : specs/second.feature:3"}                                                                                                                                  |
+      | unexpected scenario                     | {"selection":"scénario de rejeu inattendu : specs/second.feature:3"}                                                                                                                                 |
+      | repeated scenario                       | {"selection":"scénario de rejeu inattendu : specs/green.feature:4"}                                                                                                                                  |
+      | foreign terminal                        | {"selection":"scénario de rejeu inattendu : null","failure":"fin Cucumber rattachée à un autre lot"}                                                                                                 |
+      | duplicate completion                    | {"selection":"scénario de rejeu inattendu : null","failure":"lot Cucumber sans événement de fin unique"}                                                                                             |
+      | unknown scenario location               | {"selection":"scénario de rejeu inattendu : null"}                                                                                                                                                   |
+      | unfinished report                       | {"incomplete":true}                                                                                                                                                                                  |
+      | unfinished report missing a scenario    | {"incomplete":true}                                                                                                                                                                                  |
+      | no preflight acknowledgement            | {"selection":"précontrôle Cucumber non confirmé"}                                                                                                                                                    |
+      | explicit refusal                        | {"selection":"fixture refused","incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : aucun diagnostic"}                                                                  |
+      | two missing scenarios                   | {"selection":"scénario de rejeu manquant : specs/green.feature:12, specs/second.feature:3"}                                                                                                          |
+      | refusal text with a different status    | {"selection":"précontrôle Cucumber non confirmé","incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : aucun diagnostic"}                                                |
+      | refusal with no diagnostic              | {"selection":"précontrôle Cucumber non confirmé","incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : aucun diagnostic"}                                                |
+      | execution error after a complete valid report | {"badExit":true,"failure":"Error: fixture execution rejected"} |
+      | crash without report                    | {"incomplete":true,"badExit":true,"failure":"cucumber-js n’a écrit aucun rapport : Error: fixture crash"}                                                                                            |
+
+  Scenario: replacing the worktree selector cannot sabotage the independent replay harness
+    When the runner snapshots the selector and then the worktree copy is replaced
+    Then the replay run passed within its limit
+
+  Scenario: a static survivor is replayed in one lot and the collector verifies the exact union
+    Given the gate mutation fixture declares its independent mutation profile
+    And the gate mutation report keeps only the mutants "0, 5"
+    And mutant "5" of the gate mutation report is static
+    And the gate report includes a second file with one surviving mutant
+    When the gate replays mutation lot "1"
+    Then the gate exits with 0
+    When the gate replays mutation lot "2"
+    Then the gate exits with 0
+    When the gate collects the mutation replay lots
+    Then the gate exits with 0
+    And the gate output includes "lots de rejeu vérifiés : 3 mutant(s)"
+    And the gate replay record is:
+      """
+      src/math.mjs #0 Killed : confirmé
+      src/math.mjs #5 Survived : confirmé
+      src/other.mjs #other-5 Survived : confirmé
+      """
+    And replay lot "1" contains just "src/math.mjs"
+    And replay lot "2" contains just "src/other.mjs"
+    Given the gate copies the first replay receipt into the second lot
+    When the gate collects the mutation replay lots
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : lot de rejeu 2 : src/other.mjs:7 EqualityOperator #other-5 : non rejoué
+      src/math.mjs #0 : rejeu hors périmètre
+      src/math.mjs #5 : rejeu hors périmètre
+      """
+    And the gate replay record is absent
+    Given the gate repository file "reports/replay-shards/2/replay.json" reads:
+      """
+      {}
+      """
+    When the gate collects the mutation replay lots
+    Then the gate exits with 1
+    And the gate output includes "lot de rejeu 2 : rejeu des verdicts illisible : "
+    And the gate replay record is absent
+    Given the gate removes replay lot "2"
+    When the gate collects the mutation replay lots
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : lot de rejeu absent : 2
+      """
+    And the gate replay record is absent
+    When the gate replays mutation lot "2"
+    Then the gate exits with 0
+    Given the gate appends a newline to the mutation report
+    When the gate collects the mutation replay lots
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : lot de rejeu 1 : le rejeu porte sur un autre rapport de mutation
+      """
+    And the gate replay record is absent
+
+  Scenario Outline: replay refuses a report whose bytes are not strict JSON, <variant>
+    Given the gate replay record reads "previous receipt"
+    And the mutation report bytes contain a "<variant>"
+    When the gate replays every mutant of the mutation report
+    Then the gate exits with 1
+    And the gate output includes "<diagnostic>"
+    And the gate replay record is absent
+
+    Examples:
+      | variant             | diagnostic                                                       |
+      | malformed UTF-8 byte | porte de test : The encoded data was not valid for encoding utf-8 |
+      | byte-order mark      | porte de test : rapport de mutation illisible : JSON invalide    |
+
+  Scenario Outline: a replay lot with unreadable debt cannot retain an older receipt
+    Given the gate mutation fixture declares its independent mutation profile
+    And the gate mutation report keeps only the mutants "5"
+    And the gate repository file "reports/replay-shards/1/replay.json" reads:
+      """
+      {"previous":true}
+      """
+    And the debt registry is unreadable in the "<revision>"
+    When the gate replays mutation lot "1"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : registre de dette illisible
+      """
+    And the gate repository holds no file "reports/replay-shards/1/replay.json"
+
+    Examples:
+      | revision     |
+      | working tree |
+      | first parent |
+
+  Scenario: a truncated static scenario catalogue is rejected before replay
+    Given the gate mutation fixture declares its independent mutation profile
+    And the gate mutation report keeps only the mutants "5"
+    And mutant "5" of the gate mutation report is static
+    And the gate removes a scenario from the mutation report catalogue
+    When the gate replays mutation lot "1"
+    Then the gate exits with 1
+    And the gate output includes "catalogue des scénarios de mutation différent"
+
+  Scenario: a static verdict must carry the activation mode
+    Given the gate mutation fixture declares its independent mutation profile
+    And the gate mutation report keeps only the mutants "5"
+    And the static field of mutant "5" of the gate mutation report is absent
+    When the gate replays mutation lot "1"
+    Then the gate exits with 1
+    And the gate output includes "marquage statique absent"
+
   Scenario: every mutant is replayed: the two edited kills diverge, the file is written back
     When the gate replays every mutant of the mutation report
     Then the gate exits with 1
@@ -77,8 +255,8 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     When the gate replays every mutant of the mutation report
     Then the gate replay record is:
       """
-      src/math.mjs #0 Killed : témoin : cucumber-js n’a écrit aucun rapport : Error: Requested profile "absent" doesn't exist
-      src/math.mjs #5 Survived : Survived selon l'outil, mais sur le mutant : cucumber-js n’a écrit aucun rapport : Error: Requested profile "absent" doesn't exist
+      src/math.mjs #0 Killed : témoin : précontrôle Cucumber impossible
+      src/math.mjs #5 Survived : précontrôle Cucumber impossible
       """
 
   Scenario: a file that differs from the report is never mutated
@@ -153,16 +331,10 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       | 5  | confirmé                                      |
       | 6  | Ignored selon l'outil, mais sur le mutant : ["specs/green.feature","Green fixture",null,"an outline with <value>","small values",["1"]] : FAILED, ["specs/green.feature","Green fixture",null,"an outline with <value>","small values",["2"]] : FAILED, ["specs/second.feature","Second green fixture",null,"another passing scenario",null,null] : FAILED |
 
-  Scenario: a Timeout mutant whose run hangs is confirmed at three times its control plus ten seconds
+  Scenario: a reported Timeout is confirmed with the control-derived bound and a fresh witness
     Given the gate mutation report keeps only the mutants "0"
     And mutant "0" of the gate mutation report has the status "Timeout"
-    And mutant "0" of the gate mutation report is replaced by "{ const end = Date.now() + 60000; while (Date.now() < end); }"
-    When the gate replays every mutant of the mutation report
-    Then the gate exits with 0
-    And the gate replay record is:
-      """
-      src/math.mjs #0 Timeout : confirmé
-      """
+    Then the reported timeout is replayed with the precise bound and a fresh control
 
   Scenario: a survivor whose run hangs past the limit of gate.json diverges: it has no control to bound it
     Given the gate mutation report keeps only the mutants "0"
@@ -409,3 +581,39 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       src/math.mjs #0 Killed : témoin après coup : ["specs/green.feature","Green fixture",null,"an outline with <value>","small values",["1"]] : UNDEFINED
       """
     And the gate replay ran 3 cucumber-js runs
+
+  Scenario: the replay refuses another scenario added by the Cucumber profile
+    Given the gate repository file "cucumber.mjs" reads:
+      """
+      export default {};
+      export const replay = { import: ['specs/steps/*.mjs'], paths: ['specs/second.feature'] };
+      """
+    When the replay runner runs "specs/green.feature:4" once within 20000 ms
+    Then the replay refuses its scenario selection with "scénario de rejeu inattendu : specs/second.feature:3"
+
+  Scenario: a completed replay that skipped a selected scenario cannot confirm a kill
+    Given the gate repository file "cucumber.mjs" reads:
+      """
+      export default {};
+      export const replay = { import: ['specs/steps/*.mjs'], tags: '@no-scenario-has-this-tag' };
+      """
+    When the replay runner runs "specs/green.feature:4" once within 20000 ms
+    Then the replay refuses its scenario selection with "scénario de rejeu manquant : specs/green.feature:4"
+
+  Scenario Outline: discovery only supplies a candidate for independent RuntimeError replay: <kind>
+    When independent runtime replay tries a "<kind>" failure
+    Then the runtime proof used <processes> separate processes and <singletons> singleton reports
+
+    Examples:
+      | kind    | processes | singletons |
+      | passing-hook  | 3         | 2          |
+      | passing-global-hook | 3   | 2          |
+      | after-failure | 3         | 0          |
+      | after-global-failure | 4  | 0          |
+      | disabled      | 2         | 0          |
+      | ordinary-kill | 2         | 0          |
+      | run-only      | 2         | 0          |
+      | step    | 3         | 2          |
+      | load    | 4         | 0          |
+      | hook    | 3         | 0          |
+      | ordered | 5         | 2          |

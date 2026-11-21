@@ -25,6 +25,11 @@ export class Workspace {
     return existsSync(file) ? readFileSync(file, 'utf8') : null;
   }
 
+  readBytes(path: string): Buffer | null {
+    const file = resolve(this.root, path);
+    return existsSync(file) ? readFileSync(file) : null;
+  }
+
   exists(path: string): boolean {
     return existsSync(resolve(this.root, path));
   }

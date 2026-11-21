@@ -129,7 +129,7 @@ Feature: Test gate, rule 7 in check: the canary, then the replay record of every
       | unreadable | reads "x" | rejeu des verdicts illisible : JSON invalide : Unexpected token 'x', "x" is not valid JSON |
       | of another report  | reads "{\"report\": \"0\", \"mutants\": []}"                       | le rejeu porte sur un autre rapport de mutation                           |
       | without the mutant | of the mutation report confirms the mutants "0"                      | src/math.mjs:3 ArithmeticOperator #1 : non rejoué                         |
-      | with a divergence  | of the mutation report confirms every mutant but "1", with the divergence "écart" | src/math.mjs:3 ArithmeticOperator #1 : écart                              |
+      | with a divergence  | of the mutation report has a divergent record for mutant "1" | src/math.mjs:3 ArithmeticOperator #1 : écart                              |
 
   Scenario: a perimeter without a replayable mutant needs no replay record
     Given the gate configuration declares the replay
@@ -187,3 +187,20 @@ Feature: Test gate, rule 7 in check: the canary, then the replay record of every
       """
       7: canari src/math.mjs:2 BlockStatement #0 : hors des fonctions déclarées
       """
+
+  Scenario Outline: the gate rejects a replay record with a <case>
+    Given the gate configuration declares the replay
+    And the gate replay record of the mutation report confirms the mutants "0, 1"
+    And the first replay entry is changed to have a "<case>"
+    When the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate violations of rule 7 are:
+      """
+      7: <violation>
+      """
+
+    Examples:
+      | case              | violation                                                        |
+      | duplicate entry   | src/math.mjs #0 : rejeu en double                                |
+      | different status  | src/math.mjs:2 BlockStatement #0 : statut du rejeu Survived, Killed attendu |
+      | foreign entry     | unrelated.mjs #0 : rejeu hors périmètre                           |

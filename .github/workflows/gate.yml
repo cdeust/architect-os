@@ -17,12 +17,13 @@ permissions:
   actions: read
 
 jobs:
-  gate-linux:
-    name: gate-linux
+  gate-linux-cucumber:
+    name: gate-linux-cucumber-${{ matrix.shard }}
     runs-on: ubuntu-24.04
-    # Stryker then the replay of rule 7 on the changed files; a change that rewrites a whole module measured
-    # 110 + 77 min locally (docs/design/journal.md §20). 360 is the limit of a hosted runner.
-    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -58,6 +59,65 @@ jobs:
       - name: Install (lockfile, scripts disabled)
         run: npm ci --ignore-scripts
 
+      - name: Run the functional suite lot
+        env:
+          AOS_SHARD: ${{ matrix.shard }}
+        run: |
+          npm exec --no -- tsc -b
+          npm exec --no -- cucumber-js --shard "$AOS_SHARD/2" || test -s reports/cucumber.ndjson
+          git rev-parse --verify HEAD > reports/cucumber-head
+
+      - name: Upload the functional report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gate-cucumber-linux-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: |
+            reports/cucumber.ndjson
+            reports/cucumber-head
+          if-no-files-found: error
+
+  gate-linux-lane:
+    name: gate-linux-lane-${{ matrix.lane }}
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    uses: ./.github/workflows/gate-lane.yml
+    with:
+      lane: ${{ matrix.lane }}
+
+  gate-linux:
+    name: gate-linux
+    runs-on: ubuntu-24.04
+    needs: [gate-linux-cucumber, gate-linux-lane]
+    if: ${{ always() }}
+    steps:
+      - name: Require all producers
+        id: admission
+        env:
+          CUCUMBER_RESULT: ${{ needs.gate-linux-cucumber.result }}
+          LANES_RESULT: ${{ needs.gate-linux-lane.result }}
+        run: test "$CUCUMBER_RESULT" = success && test "$LANES_RESULT" = success
+
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install (lockfile, scripts disabled)
+        run: npm ci --ignore-scripts
+
+      - name: Fetch reports from the effective producer jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sh tools/test-gate/fetch-ci-artifacts.sh
+
       - name: Base of the count (artifact of the last green main run)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -71,11 +131,16 @@ jobs:
           if [ -z "$run_id" ]; then echo "base: no green main run for $parent"; exit 0; fi
           gh run download "$run_id" -n gate-base-linux -D reports/base -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-linux of run $run_id not downloadable"
 
+      - name: Verify and collect independent replay lots
+        run: node --import tsx tools/test-gate/src/hosted.ts collect
+
       - name: Gate
-        run: npm run gate -- --job linux
+        env:
+          AOS_CUCUMBER_SHARDS: '2'
+        run: node --import tsx tools/test-gate/src/main.ts check --job linux
 
       - name: Upload reports
-        if: always()
+        if: ${{ always() && steps.admission.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gate-reports-linux

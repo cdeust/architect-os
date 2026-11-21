@@ -205,6 +205,7 @@ export function judgeDebt(
   input: DebtInput,
   report: DebtReport | ReadFailure,
   accepted: number,
+  nativeCoverage?: (entry: DebtEntry) => boolean,
 ): DebtJudgement {
   const violations: Violation[] = [];
   const add = (text: string) => violations.push({ rule: 6, text });
@@ -239,7 +240,8 @@ export function judgeDebt(
   const readable = 'failure' in report ? null : report;
   // An entry the run mutated: its lines lie in a pattern of config.mutate (a whole file, a glob, or a range).
   const covered = (found: DebtReport, entry: DebtEntry) =>
-    mutatedAt(found.mutate, entry.file, entry.start.line, entry.end.line);
+    mutatedAt(found.mutate, entry.file, entry.start.line, entry.end.line) &&
+    (nativeCoverage?.(entry) ?? true);
   // The identities of the mutants of one file of the report whose status passes `keep`.
   const identitiesOf = (found: DebtReport, file: string, keep: (status: string) => boolean): Set<string> => {
     const result = found.files.get(file);

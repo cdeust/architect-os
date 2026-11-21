@@ -20,23 +20,10 @@
         "${sandboxes}"
       ],
       "allowRead": ["${config}", "${tmp}"],
-      "allowWrite": [
-        "${worktree}",
-        "${repo}/.git/worktrees/${worktreeName}",
-        "${repo}/.git/objects",
-        "${repo}/.git/refs",
-        "${repo}/.git/logs",
-        "${home}/.cache",
-        "${config}",
-        "${tmp}"
-      ],
+      "allowWrite": ["${worktree}", "${home}/.cache", "${config}", "${tmp}"],
       "denyWrite": [
-        "${repo}/.git/hooks",
-        "${repo}/.git/config",
-        "${repo}/.git/worktrees/${worktreeName}/commondir",
-        "${repo}/.git/worktrees/${worktreeName}/gitdir",
-        "${repo}/.git/worktrees/${worktreeName}/config.worktree",
-        "${repo}/.git/refs/heads/main",
+        "${repo}/.git",
+        "${worktree}/.git",
         "${worktree}/.claude/settings.json",
         "${worktree}/.claude/settings.local.json",
         "${worktree}/steps",
