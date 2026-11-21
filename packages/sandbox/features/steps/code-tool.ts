@@ -383,6 +383,10 @@ Then('the system prompt of the dependencies is the build prompt of the launcher'
   assert.equal(deps(this).systemPrompt(), BUILD_PROMPT);
 });
 
+Then('the dependencies give the auth proxy the admitted runtime root {string}', function (root: string) {
+  assert.equal(deps(this).runtimeRoot, root);
+});
+
 Then('the dependencies start the auth proxy of auth-proxy.ts', function () {
   assert.equal(deps(this).startProxy, startAuthProxy);
 });
