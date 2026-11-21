@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseEnvelope } from '@cucumber/messages';
+import { parseEnvelope, TestStepResultStatus } from '@cucumber/messages';
+import { parseCucumberShards } from '../../src/infrastructure/cucumber-report.js';
 import { FIXTURES, Given, Then, repository, type GateRepository } from './repository.js';
 
 const CUCUMBER = 'reports/cucumber.ndjson';
@@ -83,11 +84,48 @@ Given(
       );
       const terminal = rows.at(-1)?.testRunFinished;
       assert(terminal);
-      if (shard === 1 && mode === 'incomplete') rows.pop();
-      if (shard === 1 && mode === 'foreign terminal')
-        rows[rows.length - 1] = {
-          testRunFinished: { ...terminal, testRunStartedId: 'foreign' },
-        };
+      if (shard === 1) {
+        const started = rows.findIndex((row) => row.testRunStarted !== undefined);
+        assert(started >= 0);
+        switch (mode) {
+          case 'incomplete':
+            rows.pop();
+            break;
+          case 'foreign terminal':
+            rows[rows.length - 1] = { testRunFinished: { ...terminal, testRunStartedId: 'foreign' } };
+            break;
+          case 'empty':
+            rows.length = 0;
+            break;
+          case 'no run start':
+            rows.splice(started, 1);
+            break;
+          case 'duplicate run start':
+            rows.splice(started, 0, rows[started] as (typeof rows)[number]);
+            break;
+          case 'duplicate run finish':
+            rows.push({ testRunFinished: terminal });
+            break;
+          case 'nonterminal finish': {
+            const source = rows.find((row) => row.source !== undefined)?.source;
+            assert(source);
+            rows.push({ source });
+            break;
+          }
+          case 'failed run hook': {
+            const finished = rows.find((row) => row.testRunHookFinished !== undefined)?.testRunHookFinished;
+            assert(finished);
+            const index = rows.findIndex((row) => row.testRunHookFinished === finished);
+            rows[index] = {
+              testRunHookFinished: {
+                ...finished,
+                result: { ...finished.result, status: TestStepResultStatus.FAILED },
+              },
+            };
+            break;
+          }
+        }
+      }
       repo.write(
         'reports/cucumber-shards/' + (shard + 1) + '/cucumber.ndjson',
         rows.map((row) => JSON.stringify(row)).join('\n'),
@@ -214,6 +252,15 @@ Then('the gate verdict is {string}', function (verdict: string) {
   const green = verdict === 'green';
   assert.match(repo.read(REPORT), new RegExp(`^# Porte de test, job \\S+ : ${green ? 'VERTE' : 'ROUGE'}\\n`));
   assert.equal(repo.exitCode, green ? 0 : 1);
+});
+
+Then('the Cucumber lot parser refuses an empty list with {string}', function (failure: string) {
+  assert.deepEqual(parseCucumberShards([], () => true), { failure });
+});
+
+Then('the Cucumber lot outcome diagnostic is:', function (expected: string) {
+  const actual = violations(repository(this).read(REPORT)).filter((line) => line.startsWith('2: '));
+  assert.deepEqual(actual, expected === 'none' ? [] : ['2: ' + expected]);
 });
 
 Then('the gate reports no violation', function () {

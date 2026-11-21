@@ -145,11 +145,24 @@ Feature: Test gate, rules 1 and 3: unique identities, executed set equal to the 
     And the two Cucumber reports from fixture "green" are "<mode>"
     When the gate checks the Linux job with two Cucumber reports
     Then the gate verdict is "<verdict>"
+    And the Cucumber lot outcome diagnostic is:
+      """
+      <diagnostic>
+      """
 
     Examples:
-      | mode             | verdict |
-      | complete         | green   |
-      | missing          | red     |
-      | duplicate        | red     |
-      | incomplete       | red     |
-      | foreign terminal | red     |
+      | mode                 | verdict | diagnostic                                                                                                                                                |
+      | complete             | green   | none                                                                                                                                                      |
+      | missing              | red     | rapport Cucumber illisible : lot Cucumber 2 absent                                                                                                        |
+      | duplicate            | red     | rapport Cucumber illisible : lot Cucumber 2 : scénario exécuté plusieurs fois : ["specs/green.feature","Green fixture",null,"a plain scenario",null,null] |
+      | incomplete           | red     | rapport Cucumber illisible : lot Cucumber 2 : lot Cucumber sans événement de fin unique                                                                   |
+      | foreign terminal     | red     | rapport Cucumber illisible : lot Cucumber 2 : fin Cucumber rattachée à un autre lot                                                                       |
+      | empty                | red     | rapport Cucumber illisible : lot Cucumber 2 : lot Cucumber sans événement de fin unique                                                                   |
+      | no run start         | red     | rapport Cucumber illisible : lot Cucumber 2 : lot Cucumber sans événement de fin unique                                                                   |
+      | duplicate run start  | red     | rapport Cucumber illisible : lot Cucumber 2 : lot Cucumber sans événement de fin unique                                                                   |
+      | duplicate run finish | red     | rapport Cucumber illisible : lot Cucumber 2 : lot Cucumber sans événement de fin unique                                                                   |
+      | nonterminal finish   | red     | rapport Cucumber illisible : lot Cucumber 2 : lot Cucumber sans événement de fin unique                                                                   |
+      | failed run hook      | red     | hook specs/steps/steps.mjs:38 : FAILED                                                                                                                    |
+
+  Scenario: an empty list of Cucumber lots has no outcome
+    Then the Cucumber lot parser refuses an empty list with "aucun lot Cucumber"
