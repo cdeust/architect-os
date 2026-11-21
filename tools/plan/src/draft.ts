@@ -6,7 +6,7 @@ import { runAgyExchange } from './agy.js';
 import { parseDefinePlanningReply } from '@architect-os/contracts';
 import { coveredProposal } from './application/prepare.js';
 import { isStepName } from './infrastructure/step-inputs.js';
-import { isProvider, requestDraft } from './infrastructure/planner-api.js';
+import { isProvider, requestDraft } from './infrastructure/plan-cli.js';
 
 interface DraftProcess {
   argv: readonly string[];
@@ -18,7 +18,7 @@ function sha(s: string) {
   return createHash('sha256').update(s).digest('hex');
 }
 
-export async function runPlanCommand(proc: DraftProcess, send: typeof fetch = fetch): Promise<number> {
+export async function runPlanCommand(proc: DraftProcess, run = requestDraft): Promise<number> {
   if (proc.argv[2] === 'agy-request' || proc.argv[2] === 'agy-result') return runAgyExchange(proc);
   if (proc.argv[2] !== 'draft') return runPlan(proc);
   const fail = (message: string) => {
@@ -26,11 +26,9 @@ export async function runPlanCommand(proc: DraftProcess, send: typeof fetch = fe
     return 2;
   };
   const args = proc.argv.slice(3);
-  const synopsis =
-    'usage: plan draft <claude|gpt|gemini> <model> <step> <define> <new-receipt> <max-output-tokens> <timeout-ms>';
-  if (args.length !== 7) return fail(synopsis);
-  const [provider, model, step, path, receipt, limit, timeout] = args as [
-    string,
+  const synopsis = 'usage: plan draft <claude|gpt|gemini> <model> <step> <define> <new-receipt> <timeout-ms>';
+  if (args.length !== 6) return fail(synopsis);
+  const [provider, model, step, path, receipt, timeout] = args as [
     string,
     string,
     string,
@@ -38,16 +36,13 @@ export async function runPlanCommand(proc: DraftProcess, send: typeof fetch = fe
     string,
     string,
   ];
-  const maxTokens = Number(limit),
-    timeoutMs = Number(timeout);
+  const timeoutMs = Number(timeout);
   if (
     !isProvider(provider) ||
     !/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(model) ||
     !isStepName(step) ||
     !path ||
     !receipt ||
-    !Number.isSafeInteger(maxTokens) ||
-    maxTokens <= 0 ||
     !Number.isSafeInteger(timeoutMs) ||
     timeoutMs <= 0 ||
     // Node timer delays above the signed 32-bit maximum are reset to one millisecond.
@@ -72,13 +67,14 @@ export async function runPlanCommand(proc: DraftProcess, send: typeof fetch = fe
   let run_id: string | null = null,
     define_sha256: string | null = null,
     usage: Awaited<ReturnType<typeof requestDraft>>['usage'] = null,
-    http_status: number | null = null;
+    exit_code: number | null = null,
+    signal: string | null = null;
   let outcome = 'PLAN_DEFINE_INVALID';
   try {
     write({
       event: 'started',
       at: new Date().toISOString(),
-      max_output_tokens: maxTokens,
+      transport: 'native-cli',
       timeout_ms: timeoutMs,
     });
     const define = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(readFileSync(path));
@@ -86,12 +82,9 @@ export async function runPlanCommand(proc: DraftProcess, send: typeof fetch = fe
     run_id = handoff.run_id;
     define_sha256 = sha(define);
     outcome = 'PLAN_PROVIDER_FAILED';
-    const response = await requestDraft(
-      { provider, model, step, handoff, maxTokens, timeoutMs },
-      proc.env,
-      send,
-    );
-    http_status = response.http_status;
+    const response = run({ provider, model, step, handoff, timeoutMs }, proc.env);
+    exit_code = response.exit_code;
+    signal = response.signal;
     usage = response.usage;
     if (!response.text) throw new Error();
     outcome = 'PLAN_PROPOSAL_INVALID';
@@ -105,20 +98,21 @@ export async function runPlanCommand(proc: DraftProcess, send: typeof fetch = fe
       run_id,
       define_sha256,
       proposal_sha256: sha(bytes),
-      http_status,
+      exit_code,
+      signal,
       usage,
     });
     proc.stdout.write(bytes);
     return 0;
-  } catch (error) {
-    if (error instanceof Error && error.message === 'PLAN_KEY_MISSING') outcome = error.message;
+  } catch {
     write({
       event: 'finished',
       outcome,
       duration_ms: performance.now() - started,
       run_id,
       define_sha256,
-      http_status,
+      exit_code,
+      signal,
       usage,
     });
     return fail(outcome);

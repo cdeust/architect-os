@@ -107,7 +107,7 @@ module.exports = {
         'the verdicts of the mutation tool (rule 7); tools/deliver/src/infrastructure/host-process.ts, the single ' +
         'file through which the delivery command starts git, the client of the forge and the gate, on the host, ' +
         'where they need the credentials and the network a sandbox withholds (orchestration-fable-5-2.md, §14). ' +
-        'The host-side Define adapter starts the operator-selected plugin only through the separately bounded MCP SDK exception.',
+        'Plan starts the chosen native provider CLI on the host. The host-side Define adapter starts the operator-selected plugin only through the separately bounded MCP SDK exception.',
       severity: 'error',
       from: {
         pathNot: [
@@ -115,6 +115,7 @@ module.exports = {
           '^tools/test-gate/src/infrastructure/git\\.ts$',
           '^tools/test-gate/src/infrastructure/replay\\.ts$',
           '^tools/deliver/src/infrastructure/host-process\\.ts$',
+          '^tools/plan/src/infrastructure/plan-cli\\.ts$',
         ],
       },
       to: { path: '^(node:)?child_process$', dependencyTypes: ['core'] },

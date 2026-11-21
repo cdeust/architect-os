@@ -59,17 +59,17 @@ npm run --silent baseline:planning -- 04.jsonl materialize define.json proposal.
 To measure a model-drafted proposal, run `draft` in place of `proposal` after `define`. This path selects one provider and model. It uses the native draft receipt, which includes the reported provider usage when available.
 
 ```sh
-npm run --silent baseline:planning -- 02-draft.jsonl draft "$PROVIDER" "$MODEL" delivery define.json "$MAX_OUTPUT_TOKENS" "$TIMEOUT_MS" > proposal.json
+npm run --silent baseline:planning -- 02-draft.jsonl draft "$PROVIDER" "$MODEL" delivery define.json "$TIMEOUT_MS" > proposal.json
 ```
 
-Use the same `prepare` and independent approval commands. Match `run_id`, `define_sha256` and `proposal_sha256` in the draft receipt to the prepared manifest. `proposal` remains the route for the verified Spec projection. See [model drafting](plan-models.md) for credentials and the receipt fields.
+Use the same `prepare` and independent approval commands. Match `run_id`, `define_sha256` and `proposal_sha256` in the draft receipt to the prepared manifest. `proposal` remains the route for the verified Spec projection. See [model drafting](plan-models.md) for the native account setup and receipt fields.
 
 For `define`, `proposal`, `prepare` and `materialize`, the journal starts with an attempt ID and UTC time.
 These measurements include process startup. Completed commands record exit status, signal, the SHA-256 of stdout, run ID when available and approval fingerprint when emitted.
 A `measurement_failed` event identifies an observer or launch error. A lone start identifies an interrupted observation.
 A second read of a checkpoint contributes a new local latency observation. These four stages record `producer_usage` as null because the checkpoint projections supply no generation usage.
 
-The native `draft` chronometer starts in the child after its receipt is opened. Its terminal event records outcome, HTTP status and usage when available, and the `proposal` hash on success.
+The native `draft` chronometer starts in the child after its receipt is opened. Its terminal event records outcome, CLI exit code or signal, and usage when available, and the `proposal` hash on success.
 A failure before the receipt opens creates no new journal. Count distinct attempt IDs when combining copies.
 
 For generation, retain the producer's `bench:real` plan, per-call `rows.jsonl`, per-arm `record.json` and `summary.md`. In the native record, use one arm's totals once. The journal and per-purpose breakdown describe those same calls. Preserve requested vs reported models, cache reads/writes, unknown fields, unmetered counts and terminal outcome. Record the producer revision and arm artifact digest. The benchmark drives an in-memory reducer and omits the MCP checkpoint identity and host-session cost. Keep its costs at benchmark-arm scope until a producer supplies an explicit binding to a checkpoint.

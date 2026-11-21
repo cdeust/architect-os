@@ -13,8 +13,8 @@ Feature: Record local planning usage
       | gpt      |
       | gemini   |
 
-  Scenario: An unavailable drafting credential produces a single refusal
-    Then a measured draft without a provider key publishes only a refusal receipt
+  Scenario: A missing native provider installation produces a single refusal
+    Then a measured draft without a provider installation publishes only a refusal receipt
 
   Scenario: A measured Antigravity import feeds the same approval gate
     Then a measured Antigravity import supplies one receipt that binds the prepared Plan
