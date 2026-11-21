@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { openSync, closeSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { open } from 'node:fs/promises';
+import { runPlan } from './main.js';
 import { parseDefinePlanningReply } from '@architect-os/contracts';
 import { coveredProposal } from './application/prepare.js';
 import { isStepName } from './infrastructure/step-inputs.js';
@@ -11,22 +13,34 @@ interface DraftProcess {
   stdout: { write(s: string): unknown };
   stderr: { write(s: string): unknown };
 }
-const sha = (s: string) => createHash('sha256').update(s).digest('hex');
+function sha(s: string) {
+  return createHash('sha256').update(s).digest('hex');
+}
 
-export async function runDraft(proc: DraftProcess, send: typeof fetch = fetch): Promise<number> {
-  const [provider, model, step, path, receipt, limit, timeout, ...extra] = proc.argv.slice(3);
+export async function runPlanCommand(proc: DraftProcess, send: typeof fetch = fetch): Promise<number> {
+  if (proc.argv[2] !== 'draft') return runPlan(proc);
   const fail = (message: string) => {
     proc.stderr.write('architect-os plan draft: ' + message + '\n');
     return 2;
   };
+  const args = proc.argv.slice(3);
+  const synopsis =
+    'usage: plan draft <claude|gpt|gemini> <model> <step> <define> <new-receipt> <max-output-tokens> <timeout-ms>';
+  if (args.length !== 7) return fail(synopsis);
+  const [provider, model, step, path, receipt, limit, timeout] = args as [
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+  ];
   const maxTokens = Number(limit),
     timeoutMs = Number(timeout);
   if (
-    !provider ||
     !isProvider(provider) ||
-    !model ||
     !/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(model) ||
-    !step ||
     !isStepName(step) ||
     !path ||
     !receipt ||
@@ -35,23 +49,21 @@ export async function runDraft(proc: DraftProcess, send: typeof fetch = fetch): 
     !Number.isSafeInteger(timeoutMs) ||
     timeoutMs <= 0 ||
     // Node timer delays above the signed 32-bit maximum are reset to one millisecond.
-    timeoutMs > 2 ** 31 - 1 ||
-    extra.length
+    timeoutMs > 2 ** 31 - 1
   )
-    return fail(
-      'usage: plan draft <claude|gpt|gemini> <model> <step> <define> <new-receipt> <max-output-tokens> <timeout-ms>',
-    );
-  let fd: number;
+    return fail(synopsis);
+  let handle;
   try {
-    fd = openSync(receipt, 'wx', 0o600);
+    handle = await open(receipt, 'wx', 0o600);
   } catch {
     return fail('PLAN_RECEIPT_UNAVAILABLE');
   }
+  await using journal = handle;
   const attempt_id = randomUUID(),
     started = performance.now();
   const write = (event: Record<string, unknown>) =>
     writeFileSync(
-      fd,
+      journal.fd,
       JSON.stringify({ version: 1, attempt_id, stage: 'draft', provider, model_requested: model, ...event }) +
         '\n',
     );
@@ -108,7 +120,5 @@ export async function runDraft(proc: DraftProcess, send: typeof fetch = fetch): 
       usage,
     });
     return fail(outcome);
-  } finally {
-    closeSync(fd);
   }
 }

@@ -16,3 +16,14 @@ Feature: An operator chooses the provider that drafts one Plan
       | gpt      | timed out   | PLAN_PROVIDER_FAILED  |
       | gpt      | invalid run | PLAN_DEFINE_INVALID   |
       | claude   | missing key | PLAN_KEY_MISSING      |
+      | gpt      | length          | PLAN_PROVIDER_FAILED  |
+      | gpt      | nontext         | PLAN_PROVIDER_FAILED  |
+      | gpt      | malformed usage | proposed              |
+      | gemini   | BOM             | PLAN_DEFINE_INVALID   |
+      | claude   | invalid UTF8    | PLAN_DEFINE_INVALID   |
+
+      | claude   | missing content | PLAN_PROVIDER_FAILED  |
+      | gemini   | missing content | PLAN_PROVIDER_FAILED  |
+
+  Scenario: Validate the CLI contract before opening a journal
+    Then invalid draft operands refuse without a provider request and prepare keeps its own CLI

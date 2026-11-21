@@ -1,4 +1,2 @@
-import { runPlan } from './main.js';
-import { runDraft } from './draft.js';
-
-process.exitCode = process.argv[2] === 'draft' ? await runDraft(process) : runPlan(process);
+import { runPlanCommand } from './draft.js';
+process.exitCode = await runPlanCommand(process);
