@@ -47,6 +47,15 @@ Then(
   },
 );
 
+Then('the gh run for {string} is:', function (names: string, text: string) {
+  const run = ghOf(this).forge.run(COMMIT, 'gate', names.split(', '));
+  assert.deepEqual(run, JSON.parse(text));
+});
+
+Then('the unfiltered gh run is:', function (text: string) {
+  assert.deepEqual(ghOf(this).forge.run(COMMIT, 'gate'), JSON.parse(text));
+});
+
 Then('the gh run reports the first failed user step as {string}', function (name: string) {
   const job = ghOf(this).forge.run(COMMIT, 'gate')?.jobs[0];
   assert.ok(job?.failedStep);

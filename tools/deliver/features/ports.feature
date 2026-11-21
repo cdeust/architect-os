@@ -336,6 +336,20 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | ""         | false |
         | "runner-1" | true  |
 
+    Scenario Outline: a named executed step proves runner assignment when the runner name is absent
+      Given a delivery forge of the gh adapter
+      And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the gh forge answers the jobs of "7" with '{"jobs":[{"name":"gate-linux","conclusion":"cancelled","runner_name":null,"steps":<steps>}]}'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 7, completed "yes", with the jobs '[{"name":"gate-linux","conclusion":"cancelled","hadRunner":<runner>,"failedStep":false}]'
+
+      Examples:
+        | steps                                    | runner |
+        | [{"name":"Build","conclusion":"success"}] | true   |
+        | [{"name":"Build","conclusion":null}]      | false  |
+        | [{"name":"Build","conclusion":"skipped"}] | false  |
+        | [{"conclusion":"success"}]                | false  |
+        | [{"name":"","conclusion":"success"}]      | false  |
+
     Scenario: a job without steps has no failed step
       Given a delivery forge of the gh adapter
       And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
@@ -487,6 +501,87 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | success | failure | green  |
         | failure | success | failed |
 
+    Scenario: an empty current attempt cannot inherit successful jobs from an earlier execution
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}]}'
+      And the gh forge answers the attempt of "7/2" with '[{"jobs":[]}]'
+      And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success"}]}]'
+      Then the gh run for "linux" is:
+        """
+        {"id":7,"completed":true,"attempt":2,"jobs":[]}
+        """
+      And the gh client was asked:
+        """
+        api repos/cdeust/architect-os/actions/runs?head_sha=0000000000000000000000000000000000000021&per_page=100
+        api --paginate --slurp repos/cdeust/architect-os/actions/runs/7/attempts/2/jobs?per_page=100
+        """
+
+    Scenario: a complete current attempt makes no request for an older attempt
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}]}'
+      And the gh forge answers the attempt of "7/2" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success"}]}]'
+      Then the gh run for "linux" is:
+        """
+        {"id":7,"completed":true,"attempt":2,"jobs":[{"name":"linux","conclusion":"success","hadRunner":true,"failedStep":false}]}
+        """
+      And the gh client was asked:
+        """
+        api repos/cdeust/architect-os/actions/runs?head_sha=0000000000000000000000000000000000000021&per_page=100
+        api --paginate --slurp repos/cdeust/architect-os/actions/runs/7/attempts/2/jobs?per_page=100
+        """
+
+    Scenario: an empty historical attempt does not stop the search for another required job
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":3}]}'
+      And the gh forge answers the attempt of "7/3" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success"}]}]'
+      And the gh forge answers the attempt of "7/2" with '[{"jobs":[]}]'
+      And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"macos","runner_name":"r","conclusion":"success"}]}]'
+      Then the effective jobs of the gh run for "linux, macos" have the state "green"
+
+    Scenario: a completed attempt can also be read without a job filter
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":1}]}'
+      And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success"}]}]'
+      Then the unfiltered gh run is:
+        """
+        {"id":7,"completed":true,"attempt":1,"jobs":[{"name":"linux","conclusion":"success","hadRunner":true,"failedStep":false}]}
+        """
+
+    Scenario: an in-progress unnumbered run uses the live jobs response
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"in_progress"}]}'
+      And the gh forge answers the jobs of "7" with '{"jobs":[]}'
+      Then the gh run for "linux" is:
+        """
+        {"id":7,"completed":false,"jobs":[]}
+        """
+      And the gh client was asked:
+        """
+        api repos/cdeust/architect-os/actions/runs?head_sha=0000000000000000000000000000000000000021&per_page=100
+        api repos/cdeust/architect-os/actions/runs/7/jobs?per_page=100
+        """
+
+    Scenario: an in-progress numbered attempt uses the live jobs response
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"in_progress","run_attempt":2}]}'
+      And the gh forge answers the jobs of "7" with '{"jobs":[{"name":"linux","runner_name":"live","conclusion":null}]}'
+      Then the gh run for "linux" is:
+        """
+        {"id":7,"completed":false,"attempt":2,"jobs":[{"name":"linux","conclusion":null,"hadRunner":true,"failedStep":false}]}
+        """
+      And the gh client was asked:
+        """
+        api repos/cdeust/architect-os/actions/runs?head_sha=0000000000000000000000000000000000000021&per_page=100
+        api repos/cdeust/architect-os/actions/runs/7/jobs?per_page=100
+        """
+
+    Scenario: an unavailable attempt-specific listing reports the failed operation
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}]}'
+      And the gh forge answers the attempt of "7/2" with the exit code 1 and the output "fixture attempted listing"
+      When I ask the gh forge for a delivery decision
+      Then the gh forge failed with "the forge did not answer: jobs (exit code 1)"
+
     Scenario Outline: evidence for the first failed user step
       Given a delivery forge of the gh adapter
       And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
@@ -501,6 +596,9 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | [{"name":"Earlier","conclusion":"success"},{"name":"Admission","conclusion":"failure"}]                                                                                           |           |
         | [{"name":"Admission","conclusion":"failure"},{"name":"Build","conclusion":"failure"}]                                                                                             |           |
         | [{"name":"Admission","conclusion":"failure"},{"name":"Build","conclusion":"success"}]                                                                                             |           |
+        | [{"name":"Set up job","conclusion":"skipped"},{"name":"Admission","conclusion":"failure"}]                                                                                        |           |
+        | [{"name":"Admission","conclusion":"failure"},{"name":"Complete job","conclusion":"success"},{"name":"Build","conclusion":"skipped"}]                                              |           |
+        | [{"name":"Admission","conclusion":"failure"},{"name":"Complete job","conclusion":null}]                                                                                          |           |
 
   Rule: Progress
 
