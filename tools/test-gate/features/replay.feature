@@ -131,6 +131,19 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       """
     And the gate replay record is absent
 
+  Scenario Outline: replay refuses a report whose bytes are not strict JSON, <variant>
+    Given the gate replay record reads "previous receipt"
+    And the mutation report bytes contain a "<variant>"
+    When the gate replays every mutant of the mutation report
+    Then the gate exits with 1
+    And the gate output includes "<diagnostic>"
+    And the gate replay record is absent
+
+    Examples:
+      | variant             | diagnostic                                                       |
+      | malformed UTF-8 byte | porte de test : The encoded data was not valid for encoding utf-8 |
+      | byte-order mark      | porte de test : rapport de mutation illisible : JSON invalide    |
+
   Scenario Outline: a replay lot with unreadable debt cannot retain an older receipt
     Given the gate mutation fixture declares its independent mutation profile
     And the gate mutation report keeps only the mutants "5"

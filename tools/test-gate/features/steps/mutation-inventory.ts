@@ -57,6 +57,19 @@ Then('the native plugin refuses an inventory with invalid UTF-8 bytes or a byte-
   assert.throws(() => readNativeLotIgnorer(repo.dir), SyntaxError);
 });
 
+Given('the gate source {string} begins with a byte-order mark', function (file: string) {
+  const repo = repository(this);
+  repo.write(file, '\uFEFFexport const value = true;\n');
+});
+
+Then('the inventory source digest includes every byte of {string}', function (file: string) {
+  const repo = repository(this);
+  const lot = readInventory(this).lots.find((item) => item.file === file);
+  assert.ok(lot);
+  const bytes = readFileSync(repo.path(file));
+  assert.equal(lot.sourceSha256, createHash('sha256').update(bytes).digest('hex'));
+});
+
 When('the gate inventories the mutation scope', function () {
   return repository(this).run(['inventory', '--job', 'linux']);
 });
@@ -255,6 +268,16 @@ Given('the second native proof has {string}', function (variant: string) {
   repo.write(path, JSON.stringify(report));
 });
 
+Given('native producer {string} records a survivor in {string}', function (shard: string, file: string) {
+  const repo = repository(this);
+  const path = 'reports/mutation-shards/' + shard + '/mutation/native.json';
+  const report = JSON.parse(repo.read(path));
+  const [mutant] = report.files[file].mutants;
+  assert.ok(mutant);
+  mutant.status = 'Survived';
+  repo.write(path, JSON.stringify(report));
+});
+
 When('the gate collects the two native production lots', function () {
   return repository(this).run(['inventory-collect', '--job', 'linux']);
 });
@@ -293,6 +316,41 @@ Then('the replay receipt {string} contains only its own canary', function (shard
         file === 'zz/probe.mjs' && id.startsWith(shard + '/') && divergence !== null,
     ),
   );
+});
+
+Then(
+  'replay lot {string} confirms a production survivor {string} in {string}',
+  function (shard: string, id: string, file: string) {
+    const repo = repository(this);
+    const receipt = JSON.parse(repo.read('reports/replay-shards/' + shard + '/replay.json'));
+    const rows = receipt.mutants as { file: string; id: string; status: string; divergence: string | null }[];
+    assert.deepEqual(
+      rows.filter((row) => row.file !== 'zz/probe.mjs'),
+      [{ file, id, status: 'Survived', divergence: null }],
+    );
+    const canaries = rows.filter((row) => row.file === 'zz/probe.mjs');
+    assert.ok(canaries.length > 0);
+    assert.ok(canaries.every((row) => row.id.startsWith(shard + '/') && row.divergence !== null));
+  },
+);
+
+Given('the merged report has an unprefixed canary ID {string}', function (id: string) {
+  const repo = repository(this);
+  const path = 'reports/mutation/mutation.json';
+  const report = JSON.parse(repo.read(path));
+  const [mutant] = report.files['zz/probe.mjs'].mutants;
+  assert.ok(mutant);
+  mutant.id = id;
+  repo.write(path, JSON.stringify(report));
+});
+
+Then('replay lot {string} has a canary record for {string}', function (shard: string, id: string) {
+  const repo = repository(this);
+  const receipt = JSON.parse(repo.read('reports/replay-shards/' + shard + '/replay.json'));
+  const matches = (receipt.mutants as { file: string; id: string }[]).filter(
+    (entry) => entry.file === 'zz/probe.mjs' && entry.id === id,
+  );
+  assert.equal(matches.length, 1);
 });
 
 When('the gate projects the native report', function () {

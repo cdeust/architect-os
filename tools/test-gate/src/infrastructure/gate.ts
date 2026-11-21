@@ -133,7 +133,7 @@ async function replayCommand(
   const reportHash = sha256(text as string);
   const cases = replayCases(report, selected);
   const inReplayLot = (shard: 1 | 2, file: string, mutant: MutantRecord) => {
-    if (file === canary?.file && /^[12]\//.test(mutant.id)) return mutant.id.startsWith(String(shard) + '/');
+    if (file === canary?.file && /^[12]\//.test(mutant.id)) return mutant.id[0] === String(shard);
     return batches?.[shard === 1 ? 0 : 1].has(file) === true;
   };
   if (batches !== undefined) {

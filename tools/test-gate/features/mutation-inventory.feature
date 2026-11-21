@@ -109,6 +109,13 @@ Feature: The inventory projects native mutants onto changed production lines
     When the gate inventories the mutation scope
     Then the inventory files are "aaa/probe.mjs, src/scoped.mjs"
 
+  Scenario: the source digest covers the byte-order mark preserved by inventory decoding
+    Given a gate repository
+    And the gate source "src/prefixed.mjs" begins with a byte-order mark
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    Then the inventory source digest includes every byte of "src/prefixed.mjs"
+
   Scenario: a configured canary whose source is missing cannot produce an inventory
     Given a gate repository
     And the gate configuration declares the canary "zz/absent.mjs" with:
@@ -154,6 +161,8 @@ Feature: The inventory projects native mutants onto changed production lines
     And the gate repository holds the fixture specs "green.feature, second.feature"
     And the gate repository can run the fixture suite with cucumber-js
     And the gate mutation fixture declares its independent mutation profile
+    And the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate first parent is committed
     And the gate repository file "src/a.mjs" reads:
       """
       export const first = true;
@@ -189,6 +198,7 @@ Feature: The inventory projects native mutants onto changed production lines
       """
     When the native plugin instruments the inventory files
     And the native producer "1" publishes its raw proof
+    And native producer "1" records a survivor in "src/a.mjs"
     And the gate collects the two native production lots
     Then the gate exits with 1
     And the gate output includes "inventaire absent"
@@ -210,7 +220,11 @@ Feature: The inventory projects native mutants onto changed production lines
     And the replay receipt "1" contains only its own canary
     When the gate replays mutation lot "2"
     Then the gate exits with 1
-    And the replay receipt "2" contains only its own canary
+    And replay lot "2" confirms a production survivor "1/0" in "src/a.mjs"
+    Given the merged report has an unprefixed canary ID "x2/legacy"
+    When the gate replays mutation lot "1"
+    Then the gate exits with 1
+    And replay lot "1" has a canary record for "x2/legacy"
     Given the second native proof has "a surviving canary"
     When the gate collects the two native production lots
     Then the gate exits with 1

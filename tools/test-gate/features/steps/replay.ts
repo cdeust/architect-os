@@ -3,7 +3,15 @@ import { runReplayCucumber } from '../../src/infrastructure/replay-cucumber.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { parseEnvelope } from '@cucumber/messages';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -110,6 +118,20 @@ Given('the gate configuration declares the canary {string} with:', function (fil
   const config = JSON.parse(repo.read(CONFIG_PATH)) as Record<string, unknown>;
   config['canary'] = { file, functions: JSON.parse(text) as unknown };
   repo.write(CONFIG_PATH, JSON.stringify(config));
+});
+
+Given('the mutation report bytes contain a {string}', function (variant: string) {
+  const repo = repository(this);
+  const valid = Buffer.from(JSON.stringify({ files: {}, config: { mutate: [] }, marker: 'probe' }));
+  if (variant === 'byte-order mark') {
+    writeFileSync(repo.path(MUTATION), Buffer.concat([Buffer.from('\uFEFF'), valid]));
+  } else {
+    assert.equal(variant, 'malformed UTF-8 byte');
+    const position = valid.indexOf(Buffer.from('probe'));
+    assert(position >= 0);
+    valid[position] = 255;
+    writeFileSync(repo.path(MUTATION), valid);
+  }
 });
 
 Given('the gate replay record reads {string}', function (text: string) {
