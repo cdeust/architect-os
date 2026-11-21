@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -77,7 +77,7 @@ function fixtureEnvironment(root: string): NodeJS.ProcessEnv {
   return { HOME: root, PATH: process.env.PATH, TSX_TSCONFIG_PATH: process.env.TSX_TSCONFIG_PATH };
 }
 
-function fakeDraftEnvironment(root: string, provider: string): NodeJS.ProcessEnv {
+function fakeDraftEnvironment(root: string, provider: string, refused = false): NodeJS.ProcessEnv {
   assert.ok(provider === 'gpt' || provider === 'gemini');
   const proposal = JSON.stringify({
     step: 'delivery',
@@ -85,32 +85,44 @@ function fakeDraftEnvironment(root: string, provider: string): NodeJS.ProcessEnv
     verification: 'Read the receipt.',
     acceptance_ids: ['AC-001'],
   });
-  const gpt = provider === 'gpt';
-  const response = gpt
-    ? {
-        model: 'fixture-gpt',
-        choices: [{ finish_reason: 'stop', message: { content: proposal } }],
-        usage: { prompt_tokens: 12, completion_tokens: 7 },
-      }
-    : {
-        modelVersion: 'fixture-gemini',
-        candidates: [{ finishReason: 'STOP', content: { parts: [{ text: proposal }] } }],
-        usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 7 },
-      };
-  const origin = gpt ? 'https://api.openai.com' : 'https://generativelanguage.googleapis.com';
-  const source =
-    'globalThis.fetch = async (url) => {' +
-    'if (new URL(url).origin !== ' +
-    JSON.stringify(origin) +
-    ') throw Error("wrong provider");' +
-    'return Response.json(' +
-    JSON.stringify(response) +
-    ');};';
-  return {
-    ...fixtureEnvironment(root),
-    [gpt ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY']: 'synthetic-key',
-    NODE_OPTIONS: '--import=data:text/javascript;base64,' + Buffer.from(source).toString('base64'),
-  };
+  const gpt = provider === 'gpt',
+    name = gpt ? 'codex' : 'agy';
+  const usage = { input_tokens: 12, output_tokens: 7 };
+  const reports = gpt
+    ? [
+        { type: 'item.completed', item: { type: 'agent_message', text: proposal } },
+        { type: 'turn.completed', usage },
+      ]
+    : [
+        {
+          event: 'init',
+          conversation_id: 'one',
+          init: { model: 'gemini-fixture-model', permission_mode: 'strict' },
+        },
+        {
+          event: 'result',
+          result: {
+            conversation_id: 'one',
+            status: refused ? 'ERROR' : 'SUCCESS',
+            num_turns: 1,
+            response: proposal,
+            usage,
+          },
+        },
+      ];
+  const dir = join(root, '.local', 'bin');
+  mkdirSync(dir, { recursive: true });
+  const exe = join(dir, name);
+  writeFileSync(
+    exe,
+    '#!' +
+      process.execPath +
+      '\nrequire("node:fs").readFileSync(0);console.log(' +
+      JSON.stringify(reports.map((r) => JSON.stringify(r)).join('\n')) +
+      ');',
+    { mode: 0o700 },
+  );
+  return { ...fixtureEnvironment(root), ['AOS_PLAN_' + provider.toUpperCase() + '_BIN']: exe };
 }
 
 Then('a measured {string} draft supplies one receipt that binds the prepared Plan', (provider: string) => {
@@ -118,7 +130,7 @@ Then('a measured {string} draft supplies one receipt that binds the prepared Pla
   try {
     const { define, policy } = planFixture(root);
     const receipt = join(root, 'draft.jsonl');
-    const command = [receipt, 'draft', provider, 'fixture-model', 'delivery', define, '200', '1000'];
+    const command = [receipt, 'draft', provider, 'gemini-fixture-model', 'delivery', define, '3000'];
     const env = fakeDraftEnvironment(root, provider);
     const result = measured(command, env);
     assert.equal(result.status, 0, result.stderr);
@@ -133,8 +145,10 @@ Then('a measured {string} draft supplies one receipt that binds the prepared Pla
     );
     const [start, finish] = events;
     assert.equal(start.attempt_id, finish.attempt_id);
+    assert.equal(finish.exit_code, 0);
+    assert.equal(finish.native_exit_code, 0);
     assert.equal(finish.provider, provider);
-    assert.equal(finish.model_requested, 'fixture-model');
+    assert.equal(finish.model_requested, 'gemini-fixture-model');
     assert.equal(finish.usage.input_tokens, 12);
     assert.equal(finish.usage.output_tokens, 7);
     assert.equal(finish.outcome, 'proposed');
@@ -163,18 +177,18 @@ Then('a measured {string} draft supplies one receipt that binds the prepared Pla
   }
 });
 
-Then('a measured draft without a provider key publishes only a refusal receipt', () => {
+Then('a measured draft without a provider installation publishes only a refusal receipt', () => {
   const root = mkdtempSync(join(tmpdir(), 'measured-draft-refusal-'));
   try {
     const { define } = planFixture(root);
     const receipt = join(root, 'draft.jsonl');
-    const result = measured(
-      [receipt, 'draft', 'gpt', 'fixture-model', 'delivery', define, '200', '1000'],
-      fixtureEnvironment(root),
-    );
-    assert.equal(result.status, 2, result.stderr);
+    const result = measured([receipt, 'draft', 'gpt', 'gemini-fixture-model', 'delivery', define, '3000'], {
+      ...fixtureEnvironment(root),
+      AOS_PLAN_GPT_BIN: join(root, '.local', 'bin', 'codex'),
+    });
+    assert.equal(result.status, 1, result.stderr);
     assert.equal(result.stdout, '');
-    assert.match(result.stderr, /PLAN_KEY_MISSING/);
+    assert.match(result.stderr, /PLAN_PROVIDER_FAILED/);
     const events = readFileSync(receipt, 'utf8')
       .trimEnd()
       .split('\n')
@@ -184,7 +198,7 @@ Then('a measured draft without a provider key publishes only a refusal receipt',
       ['started', 'finished'],
     );
     assert.equal(events[0].attempt_id, events[1].attempt_id);
-    assert.equal(events[1].outcome, 'PLAN_KEY_MISSING');
+    assert.equal(events[1].outcome, 'PLAN_PROVIDER_FAILED');
     assert.equal(events[1].usage, null);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -259,3 +273,37 @@ Then('a measured Antigravity import supplies one receipt that binds the prepared
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+Then(
+  'both Plan entrypoints return one when a successful native Gemini process supplies a refused response',
+  () => {
+    const root = mkdtempSync(join(tmpdir(), 'gemini-exit-'));
+    try {
+      const { define } = planFixture(root);
+      const env = fakeDraftEnvironment(root, 'gemini', true);
+      for (const stage of ['draft', 'measured']) {
+        const path = join(root, stage + '.jsonl');
+        const args = ['gemini', 'gemini-fixture-model', 'delivery', define];
+        const response =
+          stage === 'draft'
+            ? spawnSync(
+                process.execPath,
+                ['--import', 'tsx', 'tools/plan/src/cli.ts', 'draft', ...args, path, '3000'],
+                { env, encoding: 'utf8' },
+              )
+            : measured([path, 'draft', ...args, '3000'], env);
+        assert.equal(response.status, 1, response.stderr);
+        assert.equal(response.stdout, '');
+        const [, terminal] = readFileSync(path, 'utf8')
+          .trimEnd()
+          .split('\n')
+          .map((s) => JSON.parse(s));
+        assert.equal(terminal.exit_code, 1);
+        assert.equal(terminal.native_exit_code, 0);
+        assert.equal(terminal.outcome, 'PLAN_PROVIDER_FAILED');
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
