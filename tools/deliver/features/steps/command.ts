@@ -399,3 +399,35 @@ Then('the pre-push hook of the delivery command has not run', function () {
 Then('the pre-push hook of the delivery command has run', function () {
   assert.equal(existsSync(commandOf(this).hookWitness as string), true);
 });
+
+Given('the delivery command has its required producer only in the preceding attempt', function () {
+  const { git, gh, config } = commandOf(this);
+  const settings = JSON.parse(readFileSync(config, 'utf8'));
+  settings.jobDependencies = {
+    'gate-linux': { producers: ['producer'], admissionStep: 'Require all producers' },
+  };
+  writeFileSync(config, JSON.stringify(settings));
+  const jobs = ['gate-linux', 'gate-macos'].map((name) => ({
+    name,
+    conclusion: 'success' as const,
+    hadRunner: true,
+    failedStep: false,
+  }));
+  gh.hasRun(git.hashOf('h1'), { id: 42, completed: true, attempt: 3, jobs });
+  gh.answers('attempt', '42/2', {
+    stdout: JSON.stringify([
+      { jobs: [{ name: 'producer', conclusion: 'success', runner_name: 'runner', steps: [] }] },
+    ]),
+  });
+  gh.answers('attempt', '42/1', { exit: 89 });
+});
+
+Then('the delivery command only read the third and second job attempts, in order', function () {
+  const calls = commandOf(this)
+    .gh.asked()
+    .filter((line) => line.includes('/attempts/'));
+  assert.deepEqual(
+    calls.map((line) => /\/attempts\/(\d+)\/jobs/.exec(line)?.[1]),
+    ['3', '2'],
+  );
+});

@@ -24,6 +24,7 @@ import {
   replayCases,
   type Expectation,
   type Judgement,
+  type ReplayCase,
   type RunResult,
 } from '../../src/domain/replay.js';
 import type { ExecutedPickle } from '../../src/domain/run.js';
@@ -319,6 +320,7 @@ When('the instrumented runner exercises the replay selector with {string}', asyn
     {
       async loadConfiguration(...configArgs) {
         const config = await loadConfiguration(...configArgs);
+        if (variant === 'success') delete config.runConfiguration.plugins;
         const formats = config.runConfiguration.formats.files;
         if (variant === 'missing format') delete formats[args[1] as string];
         if (variant === 'wrong format') formats[args[1] as string] = 'json';
@@ -347,7 +349,14 @@ Then(
     const actual = this.state['replaySelector'] as { status: number; called: number; diagnostics: string };
     assert.equal(actual.status, status, actual.diagnostics);
     assert.equal(actual.called, called);
-    assert.ok(actual.diagnostics.includes(expected), actual.diagnostics);
+    const marker = 'AOS_REPLAY_PLAN_VALID\n';
+    const diagnostic =
+      status === 2
+        ? 'AOS_REPLAY_SELECTION: ' + expected + '\n'
+        : expected === 'AOS_REPLAY_PLAN_VALID'
+          ? marker
+          : marker + expected + '\n';
+    assert.equal(actual.diagnostics, diagnostic);
   },
 );
 
@@ -894,4 +903,170 @@ Then('the reported timeout is replayed with the precise bound and a fresh contro
   assert.deepEqual(observed, [600_000, 10_122, 600_000]);
   assert.deepEqual(result, [{ file: candidate.file, id: '0', status: 'Timeout', divergence: null }]);
   assert.equal(repo.read(candidate.file), candidate.source);
+});
+
+When('independent runtime replay tries a {word} failure', async function (kind: string) {
+  const repo = repository(this);
+  const file = 'src/runtime-probe.mjs';
+  const source =
+    'let primed = false;\nexport function prime() { primed = true; }\nexport function probe() { return primed; }\n';
+  const throwing = "throw new TypeError('runtime witness');";
+  const mutated =
+    kind === 'load'
+      ? throwing + '\n' + source
+      : source.replace('return primed;', kind === 'ordered' ? 'if (primed) ' + throwing : throwing);
+  repo.write(file, source);
+  repo.write(
+    'specs/runtime.feature',
+    'Feature: independent runtime replay\n' +
+      '  Scenario: establish prior state\n    Given prior state is established\n' +
+      '  Scenario: execute the observed step\n    Given the runtime probe is exercised\n' +
+      Array.from(
+        { length: 22 },
+        (_, index) =>
+          '  Scenario: trailing scenario ' + index + '\n    Given the trailing scenario has no failure\n',
+      ).join(''),
+  );
+  repo.write(
+    'specs/steps/steps.mjs',
+    "import { Given } from '@cucumber/cucumber';\n" +
+      "import { prime, probe } from '../../src/runtime-probe.mjs';\n" +
+      "Given('prior state is established', () => prime());\n" +
+      "Given('the runtime probe is exercised', () => probe());\n" +
+      "Given('the trailing scenario has no failure', () => {});\n" +
+      (kind === 'hook'
+        ? "import { Before } from '@cucumber/cucumber';\nBefore(({ pickle }) => { if (pickle.name === 'execute the observed step') probe(); });\n"
+        : ''),
+  );
+  const replay: ReplayCase = {
+    file,
+    mutant: { id: 'native', status: 'RuntimeError' } as MutantRecord,
+    expectation: { survives: false },
+    tests: Array.from({ length: 24 }, (_, index) => 'specs/runtime.feature:' + (2 + index * 2)),
+    fallback: [],
+    source,
+    mutated,
+    problem: null,
+  };
+  const work = repo.path('reports/runtime-proof');
+  const found = await replayAll(
+    [replay],
+    new Workspace(repo.dir),
+    new CucumberRunner(repo.dir, 'replay', work),
+    600_000,
+    { discoverRuntimeErrors: true },
+  );
+  assert.deepEqual(found, [{ file, id: 'native', status: 'RuntimeError', divergence: null }]);
+  assert.equal(repo.read(file), source);
+  this.state['runtime replay proof'] = { work };
+});
+
+Then(
+  'the runtime proof used {int} separate processes and {int} singleton reports',
+  function (runs: number, singletons: number) {
+    const { work } = this.state['runtime replay proof'] as { work: string };
+    const files = readdirSync(work);
+    assert.equal(files.filter((name) => name.endsWith('.err')).length, runs);
+    const totals = files
+      .filter((name) => name.endsWith('.ndjson'))
+      .map(
+        (name) =>
+          readFileSync(join(work, name), 'utf8')
+            .trim()
+            .split('\n')
+            .filter((line) => parseEnvelope(line).testCaseStarted !== undefined).length,
+      );
+    assert.equal(totals.filter((count) => count === 1).length, singletons);
+  },
+);
+
+Then('discovery cannot substitute another original identity or failing step', async function () {
+  const repo = repository(this);
+  const file = 'src/runtime-probe.mjs';
+  const source = 'export const original = true;\n';
+  const mutated = 'export const original = false;\n';
+  const location = 'specs/runtime.feature:4';
+  const tests = Array.from({ length: 24 }, (_, index) => 'specs/runtime.feature:' + (2 + index * 2));
+  const name = 'step « the same Gherkin step »';
+  const pickle = 'stable pickle identity';
+  const witness = { location, pickle, step: 0, name };
+  const replay: ReplayCase = {
+    file,
+    source,
+    mutated,
+    tests,
+    fallback: [],
+    problem: null,
+    mutant: { id: 'native', status: 'RuntimeError' } as MutantRecord,
+    expectation: { survives: false },
+  };
+  const step = (id: string, label: string, status: string) => ({
+    id,
+    pickleSteps: 1,
+    attempts: [{ attempt: 0, willBeRetried: false, steps: [{ name: label, status }] }],
+  });
+  const timed = (...pickles: ReturnType<typeof step>[]): Timed => ({
+    ms: 5,
+    result: { timedOut: false, run: { pickles, runHooks: [] } },
+  });
+  for (const [control, found] of [
+    [step('other pickle identity', name, 'PASSED'), witness],
+    [step(pickle, 'step « a different original step »', 'PASSED'), witness],
+    [step(pickle, name, 'PASSED'), { ...witness, name: 'step « a different failing step »' }],
+    [step(pickle, name, 'PASSED'), { ...witness, step: 1 }],
+  ] as const) {
+    repo.write(file, source);
+    const calls: string[][] = [];
+    const entries = await replayAll(
+      [replay],
+      new Workspace(repo.dir),
+      {
+        async discover(paths) {
+          calls.push([...paths]);
+          assert.equal(repo.read(file), mutated);
+          return { ...timed(step(pickle, name, 'FAILED')), witness };
+        },
+        async run(paths) {
+          calls.push([...paths]);
+          const isOriginal = repo.read(file) === source;
+          if (paths.length === 1 && isOriginal) return timed(control);
+          if (paths.length === 1) return { ...timed(step(pickle, found.name, 'FAILED')), witness: found };
+          return timed(
+            step('prior scenario', 'step « prior »', 'PASSED'),
+            step(pickle, name, isOriginal ? 'PASSED' : 'FAILED'),
+            ...tests.slice(2).map((uri) => step(uri, 'step « trailing »', 'PASSED')),
+          );
+        },
+      },
+      600_000,
+      { discoverRuntimeErrors: true },
+    );
+    assert.deepEqual(calls, [tests, [location], [location], tests, tests]);
+    assert.equal(entries[0]?.divergence, null);
+    assert.equal(repo.read(file), source);
+  }
+
+  const short = { ...replay, tests: tests.slice(0, 2) };
+  const calls: string[][] = [];
+  const small = await replayAll(
+    [short],
+    new Workspace(repo.dir),
+    {
+      async discover() {
+        throw new Error('a short selection must use normal replay');
+      },
+      async run(paths) {
+        calls.push([...paths]);
+        return timed(
+          step('prior scenario', 'step « prior »', 'PASSED'),
+          step(pickle, name, repo.read(file) === source ? 'PASSED' : 'FAILED'),
+        );
+      },
+    },
+    600_000,
+    { discoverRuntimeErrors: true },
+  );
+  assert.deepEqual(calls, [short.tests, short.tests]);
+  assert.equal(small[0]?.divergence, null);
+  assert.equal(repo.read(file), source);
 });

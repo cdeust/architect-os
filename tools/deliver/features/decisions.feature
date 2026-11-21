@@ -93,6 +93,8 @@ Feature: The decisions of the delivery command (pure: the trial branch, the stat
         | aggregate                            | a                              | b                  | state     |
         | success/runner                       | success/runner                 | success/runner     | green     |
         | failure/runner/Require all producers | cancelled/norunner             | success/runner     | no-runner |
+        | failure/runner/Require all producers | cancelled/runner               | success/runner     | failed    |
+        | cancelled/runner/Require all producers | cancelled/norunner           | success/runner     | failed    |
         | failure/runner/Require all producers | success/runner                 | cancelled/norunner | no-runner |
         | failure/runner/Require all producers | failure/runner/failed-step     | cancelled/norunner | failed    |
         | failure/runner/Require all producers | success/runner                 | success/runner     | failed    |

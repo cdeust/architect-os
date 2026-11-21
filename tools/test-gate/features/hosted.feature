@@ -30,6 +30,7 @@ Feature: Hosted mutation slices retain exhaustive producer and replay proof
     Then the hosted verdict has all independently replayed mutations
     And each hosted producer must match its committed inventory and canary
     And the static mutant contradicts a limited coverage claim
+    And the hosted collector reports both independent divergences on separate lines
     And a replaced producer or a missing receipt cannot reuse the hosted verdict
 
   Scenario: debt retirement preserves native scope while replay follows changed lines

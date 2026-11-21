@@ -37,8 +37,6 @@ export function parseArguments(args: readonly string[]): Command | ReadFailure {
         const shard = parseShard(value, rest);
         return shard === undefined ? { failure: USAGE } : { name, all: false, shard };
       }
-      default:
-        return { failure: USAGE };
     }
   }
   switch (name) {

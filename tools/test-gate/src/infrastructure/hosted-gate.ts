@@ -7,10 +7,16 @@ import { replayCases, replayViolations, type ReplayEntry } from '../domain/repla
 import { jobOf, parseGateConfig, ReplayRecordSchema } from './config.js';
 import { changedFiles, CONFIG_PATH, mutationScope, type Output } from './gate.js';
 import { GitRepository } from './git.js';
-import { HOSTED_COSTS, HOSTED_LANES, planHostedSlices, type MutationCosts } from './hosted-lots.js';
+import {
+  HOSTED_COSTS,
+  HOSTED_LANES,
+  planHostedSlices,
+  type HostedSlice,
+  type MutationCosts,
+} from './hosted-lots.js';
 import { jsonText, parseJson } from './json.js';
 import { mutationLots } from './mutation-inventory.js';
-import { verifyMutationLots } from './mutation-lot-proof.js';
+import { requireCompleteMutationLots } from './mutation-lot-proof.js';
 import { requireNativeMutationReport } from './mutation-report.js';
 import { combineNative, projectNative } from './mutation-shards.js';
 import { verifyMutationCatalog } from './mutation-catalog.js';
@@ -19,8 +25,10 @@ import { Workspace } from './workspace.js';
 
 const MANIFEST = 'mutation-inventory.json';
 const NATIVE = 'mutation/native.json';
+const LANE_COMMANDS: readonly (string | undefined)[] = ['inventory', 'verify', 'replay'];
 const origin = (lane: number) => `reports/mutation-shards/${lane}`;
 const receipt = (lane: number) => `reports/replay-shards/${lane}/replay.json`;
+const timingReceipt = (lane: number) => `reports/replay-shards/${lane}/timings.json`;
 const Receipt = z.strictObject({
   producer: z.string().regex(/^[a-f0-9]{64}$/),
   manifest: z.string().regex(/^[a-f0-9]{64}$/),
@@ -35,14 +43,17 @@ export async function runHostedGate(
 ): Promise<number> {
   const [command, selected] = args;
   const lane = Number(selected);
-  const validLane = args.length === 2 && /^[1-9][0-9]*$/.test(selected ?? '') && lane <= count;
+  const validLane = args.length === 2 && /^[1-9][0-9]*$/.test(String(selected)) && lane <= count;
   const collecting = command === 'collect' && args.length === 1;
   const workspace = new Workspace(root);
   try {
-    if (!collecting && (!validLane || !['inventory', 'verify', 'replay'].includes(command ?? '')))
+    if (!collecting && (!validLane || !LANE_COMMANDS.includes(command)))
       throw new Error('usage : hosted-gate inventory|verify|replay <lot> | collect');
     if (command === 'inventory') workspace.remove('reports/' + MANIFEST);
-    if (command === 'replay') workspace.remove(receipt(lane));
+    if (command === 'replay') {
+      workspace.remove(receipt(lane));
+      workspace.remove(timingReceipt(lane));
+    }
     const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
     const read = (path: string) => {
       const bytes = workspace.readBytes(path);
@@ -68,9 +79,9 @@ export async function runHostedGate(
     const timing = JSON.parse(read(HOSTED_COSTS)) as MutationCosts;
     const slices = planHostedSlices(full, canary.file, read, timing, count);
     const manifest = (number: number) => {
-      const slice = slices[number - 1];
-      if (slice === undefined) throw new Error('lot natif absent : ' + number);
-      return { ...slice, text: jsonText({ head, firstParent, lane: number, ...slice }) };
+      // The admitted lane indexes the dense result of planHostedSlices. Read both fields before writing.
+      const { lots, patterns } = slices[number - 1] as HostedSlice;
+      return { lots, patterns, text: jsonText({ head, firstParent, lane: number, lots, patterns }) };
     };
     const proved = (number: number, directory: string) => {
       const { lots, patterns, text } = manifest(number);
@@ -107,11 +118,22 @@ export async function runHostedGate(
       const producer = sha256(read(directory + '/producer'));
       const work = resolve(root, replay.work);
       workspace.remove(work);
+      const timings: { file: string; id: string; status: string; elapsedMs: number }[] = [];
       const entries = await replayAll(
         cases,
         workspace,
         new CucumberRunner(root, replay.profile, work),
         replay.limitMs,
+        {
+          discoverRuntimeErrors: true,
+          onTiming: ({ file, id, status }, elapsedMs) => {
+            timings.push({ file, id, status, elapsedMs: Math.round(elapsedMs) });
+          },
+        },
+      );
+      workspace.write(
+        timingReceipt(lane),
+        jsonText({ producer, manifest: manifestHash, report: nativeHash, mutants: timings }),
       );
       workspace.write(
         receipt(lane),
@@ -141,10 +163,7 @@ export async function runHostedGate(
       const expected = full.map((lot) =>
         lot.file === canary.file ? { ...lot, mutants: slices.flatMap(() => lot.mutants) } : lot,
       );
-      const mismatch = verifyMutationLots(expected, report, (id) => {
-        throw new Error('mutant ignoré hors projection finale : ' + id);
-      });
-      if (mismatch !== null) throw new Error(mismatch.failure);
+      requireCompleteMutationLots(expected, report);
       // Keep the exact native results available to diagnose the whole campaign if replay refuses it.
       workspace.write(config.reports.mutation, combined);
       if (errors.length !== 0) throw new Error(errors.join('\n'));

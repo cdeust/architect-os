@@ -6,6 +6,10 @@ import { readNativeLotIgnorer, strykerPlugins } from '../../src/infrastructure/s
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { mutationCatalog } from '../../src/infrastructure/mutation-catalog.js';
+import { combineNative, projectNative, type NativeProof } from '../../src/infrastructure/mutation-shards.js';
+import { requireCompleteMutationLots, type Lot } from '../../src/infrastructure/mutation-lot-proof.js';
+import { requireNativeMutationReport } from '../../src/infrastructure/mutation-report.js';
 import { FIXTURES, Given, Then, When, repository } from './repository.js';
 
 type Inventory = {
@@ -501,4 +505,101 @@ Then('the mutation inventory check returns {string}', function (expected: string
   const repo = repository(this);
   assert.equal(repo.exitCode, expected === 'pass' ? 0 : 1, repo.output);
   assert.ok(repo.output.includes(expected === 'pass' ? 'lots de mutation vérifiés' : expected), repo.output);
+});
+
+Then('the independent mutation catalogue refuses empty and partly invalid sources', async function () {
+  const repo = repository(this);
+  const config = "export default {};\nexport const mutation = { paths: ['specs/*.feature'] };\n";
+  repo.write('cucumber.mjs', config);
+  repo.write('specs/empty.feature', 'Feature: no examples\n');
+  await assert.rejects(mutationCatalog(repo.dir), /profil de mutation incomplet ou illisible/);
+  repo.holdSpecs(['green.feature']);
+  const valid = await mutationCatalog(repo.dir);
+  assert.equal(valid.size, 4);
+  assert.ok(valid.has('specs/green.feature:12'));
+  repo.write('specs/bad.feature', 'Not a Gherkin feature\n');
+  await assert.rejects(mutationCatalog(repo.dir), /profil de mutation incomplet ou illisible/);
+});
+
+Then('the aggregate rejects empty proofs, foreign coverage and conflicting source copies', async function () {
+  const repo = repository(this);
+  const bytes = readFileSync(join(FIXTURES, 'mutation/survivor.json'), 'utf8');
+  const raw = JSON.parse(bytes) as NativeProof['raw'];
+  const report = requireNativeMutationReport(bytes);
+  const proof: NativeProof = { raw, report };
+  const file = 'src/math.mjs';
+  const copy = raw.files[file];
+  assert.ok(copy !== undefined);
+  const proofs = [proof, proof];
+  await assert.rejects(combineNative(repo.dir, [], [], undefined), /aucun producteur de mutation/);
+  await assert.rejects(
+    combineNative(repo.dir, proofs, [], undefined),
+    /fichier de mutation répété entre lots : src\/math\.mjs/,
+  );
+  const sharedCanary = await combineNative(repo.dir, proofs, [], file);
+  const sharedSource = await combineNative(repo.dir, proofs, [], undefined, true);
+  assert.deepEqual(sharedCanary.files, sharedSource.files);
+  const shuffled: NativeProof = { report, raw: { ...raw, files: { 'src/z.mjs': copy, 'src/a.mjs': copy } } };
+  const sorted = await combineNative(repo.dir, [shuffled], [], undefined);
+  assert.deepEqual(Object.keys(sorted.files), ['src/a.mjs', 'src/z.mjs']);
+  assert.equal(sharedSource.files[file]?.mutants.length, copy.mutants.length * 2);
+  assert.deepEqual(
+    sharedSource.files[file]?.mutants
+      .filter(({ id }) => id.endsWith('/0'))
+      .map(({ id, coveredBy }) => [id, coveredBy]),
+    [
+      ['1/0', ['specs/green.feature:12', 'specs/green.feature:13', 'specs/second.feature:3']],
+      ['2/0', ['specs/green.feature:12', 'specs/green.feature:13', 'specs/second.feature:3']],
+    ],
+  );
+  const second = (edit: typeof copy): NativeProof => ({ report, raw: { ...raw, files: { [file]: edit } } });
+  const different = second({ ...copy, source: copy.source + '\n' });
+  const foreign = second({ ...copy, mutants: [{ id: 'original', killedBy: ['foreign-id'] }] });
+  for (const [other, message] of [
+    [different, /fichier de mutation répété entre lots : src\/math\.mjs/],
+    [foreign, /scénario de mutant absent du catalogue : foreign-id/],
+  ] as const) {
+    await assert.rejects(combineNative(repo.dir, [proof, other], [], undefined, true), message);
+  }
+  assert.throws(() => projectNative('not JSON', []), /JSON invalide/);
+});
+
+Then('the complete native union refuses missing identities and extra bookkeeping rows', function () {
+  const bytes = readFileSync(join(FIXTURES, 'mutation/survivor.json'), 'utf8');
+  const report = requireNativeMutationReport(bytes);
+  const file = 'src/math.mjs';
+  const rows = report.files.get(file);
+  assert.ok(rows !== undefined);
+  const [expected, extra] = rows.mutants;
+  assert.ok(expected !== undefined && extra !== undefined);
+  const planned: Lot[] = [
+    {
+      file,
+      whole: false,
+      lines: [2, 3, 4],
+      nativeMutants: rows.mutants.length,
+      sourceSha256: createHash('sha256').update(rows.source).digest('hex'),
+      mutants: [
+        {
+          start: { line: expected.startLine, column: expected.startColumn },
+          end: { line: expected.endLine, column: expected.endColumn },
+          mutatorName: expected.mutatorName,
+          replacement: expected.replacement,
+          ignored: null,
+        },
+      ],
+    },
+  ];
+  const withMutants = (mutants: typeof rows.mutants) => ({
+    ...report,
+    mutate: [file],
+    files: new Map([[file, { ...rows, mutants }]]),
+  });
+  requireCompleteMutationLots(planned, withMutants([expected]));
+  assert.throws(() => requireCompleteMutationLots(planned, withMutants([])), /mutant\(s\) du lot absents/);
+  const ghost = { ...extra, status: 'Ignored', statusReason: 'native bookkeeping' };
+  assert.throws(
+    () => requireCompleteMutationLots(planned, withMutants([expected, ghost])),
+    /mutant ignoré hors projection finale : 1/,
+  );
 });

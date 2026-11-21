@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { parseArguments } from '../../src/domain/arguments.js';
 import { changedFiles } from '../../src/infrastructure/gate.js';
 import { jobOf, parseGateConfig } from '../../src/infrastructure/config.js';
 import { GitRepository } from '../../src/infrastructure/git.js';
@@ -93,4 +94,12 @@ Then('the Gate path selector filters tracked, changed and untracked files', func
 
   assert.deepEqual(paths(parent), ['src/kept.mjs', 'src/new.mjs']);
   assert.deepEqual(paths(null), ['src/gone.mjs', 'src/kept.mjs', 'src/long.mjs', 'src/new.mjs']);
+});
+
+Then('the replay commands keep their explicit argument contracts', function () {
+  assert.deepEqual(parseArguments(['replay-collect']), { name: 'replay-collect' });
+  assert.ok('failure' in parseArguments(['replay-collect', '--all']));
+  assert.ok('failure' in parseArguments(['replay', '--unknown']));
+  assert.deepEqual(parseArguments(['replay', '--shard', '1']), { name: 'replay', all: false, shard: 1 });
+  assert.deepEqual(parseArguments(['replay', '--all']), { name: 'replay', all: true });
 });

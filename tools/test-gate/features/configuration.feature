@@ -3,6 +3,9 @@ Feature: Test gate configuration and command line
   and the jobs: it is a descriptive file, loaded against its zod schema; a broken copy is rejected. The command
   line is `plan|check [--job <name>]`; anything else is refused with exit code 1.
 
+  Scenario: collecting and replaying a shard accept distinct arguments
+    Then the replay commands keep their explicit argument contracts
+
   Scenario: a valid native report exposes its parsed source, positions and static status
     Then a valid native mutation report has a parsed source, position and active static flag
 

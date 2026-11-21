@@ -476,3 +476,15 @@ Feature: The inventory projects native mutants onto changed production lines
       | invalid UTF-8 inventory | périmètre |
       | invalid UTF-8 report    | utf-8     |
       | lone surrogate in source | source du rapport |
+
+  Scenario: the independently loaded mutation profile must be readable and nonempty
+    Given a gate repository
+    Then the independent mutation catalogue refuses empty and partly invalid sources
+
+  Scenario: mutation aggregation checks common source and canonical test identities
+    Given a gate repository
+    And the gate repository holds the fixture specs "green.feature, second.feature"
+    And the gate repository can run the fixture suite with cucumber-js
+    And the gate mutation fixture declares its independent mutation profile
+    Then the aggregate rejects empty proofs, foreign coverage and conflicting source copies
+    And the complete native union refuses missing identities and extra bookkeeping rows

@@ -20,6 +20,10 @@ const EXECUTION_PREFIX = 'AOS_REPLAY_EXECUTION: ';
 /** The signal of a run stopped at its limit, and of its group once it is gone; nothing else sends it. */
 const KILL = 'SIGKILL';
 
+// A direct Cucumber fixture with the same witness measured higher discovery cost at 2 scenarios and lower
+// cost at 24 and 96. Keep the extra processes off short selections.
+const DISCOVERY_MIN_SCENARIOS = 24;
+
 /**
  * The limit of a run with a control: three times the run on the original, plus ten seconds of start-up, in whole
  * milliseconds (spawn refuses a fractional `timeout`).
@@ -32,15 +36,24 @@ export function sha256(text: string): string {
   return createHash('sha256').update(text).digest('hex');
 }
 
+interface FailureWitness {
+  readonly location: string;
+  readonly pickle: string;
+  readonly step: number;
+  readonly name: string;
+}
+
 /** One timed run of cucumber-js. */
 export interface Timed {
   readonly result: RunResult;
   readonly ms: number;
+  readonly witness?: FailureWitness;
 }
 
 /** What the replay needs of cucumber-js. */
 export interface Runner {
   run(tests: readonly string[], limitMs: number): Promise<Timed>;
+  discover?(tests: readonly string[], limitMs: number): Promise<Timed>;
 }
 
 // Stryker's pinned Cucumber formatter names the scenario line or the exact Examples row.
@@ -57,6 +70,42 @@ function scenarioLocation(value: string): boolean {
     !/[*?{}()\[\]\u0000\r\n]/.test(file) &&
     Number.isSafeInteger(Number(match[2]))
   );
+}
+
+const gherkinStep = ({ name }: { name: string }) => name.startsWith('step « ');
+
+/** Messages distinguish Gherkin steps from hooks. A candidate is useful only with a complete, admitted run. */
+function failureWitness(
+  result: RunResult,
+  locations: readonly (string | null)[],
+): FailureWitness | undefined {
+  const { run } = result;
+  if (
+    result.timedOut ||
+    result.incomplete ||
+    result.selectionFailure ||
+    'failure' in run ||
+    run.runHooks.some(({ status }) => status !== 'PASSED')
+  )
+    return undefined;
+  for (const [index, pickle] of run.pickles.entries()) {
+    const attempt = pickle.attempts[0];
+    const location = locations[index];
+    if (
+      !location ||
+      pickle.attempts.length !== 1 ||
+      attempt?.attempt !== 0 ||
+      attempt.willBeRetried !== false
+    )
+      continue;
+    if (attempt.steps.some(({ name, status }) => name.startsWith('hook ') && status !== 'PASSED')) continue;
+    const failed = attempt.steps.findIndex(({ status }) => status !== 'PASSED');
+    const outcome = attempt.steps[failed];
+    if (outcome?.status !== 'FAILED' || !gherkinStep(outcome)) continue;
+    const step = attempt.steps.slice(0, failed).filter(gherkinStep).length;
+    return { location, pickle: pickle.id, step, name: outcome.name };
+  }
+  return undefined;
 }
 
 /**
@@ -79,7 +128,15 @@ export class CucumberRunner implements Runner {
     this.selector = readFileSync(selector);
   }
 
-  async run(tests: readonly string[], limitMs: number): Promise<Timed> {
+  run(tests: readonly string[], limitMs: number): Promise<Timed> {
+    return this.execute(tests, limitMs, false);
+  }
+
+  discover(tests: readonly string[], limitMs: number): Promise<Timed> {
+    return this.execute(tests, Math.min(limitMs, detectLimit(0)), true);
+  }
+
+  private async execute(tests: readonly string[], limitMs: number, discover: boolean): Promise<Timed> {
     const expected = new Set(tests);
     if (expected.size === 0 || expected.size !== tests.length || !tests.every(scenarioLocation)) {
       const failure = 'sélection de scénarios de rejeu invalide';
@@ -97,7 +154,9 @@ export class CucumberRunner implements Runner {
       ';' +
       'import { runReplayCucumber } from ' +
       JSON.stringify(pathToFileURL(selectorPath).href) +
-      ';process.exitCode = await runReplayCucumber(process.argv.slice(1), process.stderr, cucumber);';
+      ';process.exitCode = await runReplayCucumber(process.argv.slice(1), process.stderr, cucumber, {}, ' +
+      discover +
+      ');';
     const args = ['--input-type=module', '--eval', entry, '--', this.profile, report, ...tests];
     const stderr = openSync(errors, 'w');
     const started = performance.now();
@@ -138,6 +197,7 @@ export class CucumberRunner implements Runner {
       ? undefined
       : (refused ?? 'précontrôle Cucumber non confirmé');
     let runCompleted = false;
+    let executed: readonly (string | null)[] = [];
     const observed = existsSync(report)
       ? parseCucumberReport(
           readFileSync(report, 'utf8'),
@@ -145,6 +205,7 @@ export class CucumberRunner implements Runner {
           false,
           (locations, completed) => {
             runCompleted = completed;
+            executed = locations;
             const remaining = new Set<string | null>(expected);
             for (const location of locations) {
               if (!remaining.delete(location)) {
@@ -159,16 +220,16 @@ export class CucumberRunner implements Runner {
         )
       : { failure: `cucumber-js n’a écrit aucun rapport : ${why}` };
     const run = execution === undefined ? observed : { failure: execution };
-    return {
-      result: {
-        run,
-        timedOut,
-        ...(runCompleted ? {} : { incomplete: true }),
-        ...(code === 0 ? {} : { badExit: true }),
-        ...(selectionFailure === undefined ? {} : { selectionFailure }),
-      },
-      ms,
+    const result: RunResult = {
+      run,
+      timedOut,
+      ...(runCompleted ? {} : { incomplete: true }),
+      ...(code === 0 ? {} : { badExit: true }),
+      ...(selectionFailure === undefined ? {} : { selectionFailure }),
     };
+    const witness =
+      code === 1 && (discover || tests.length === 1) ? failureWitness(result, executed) : undefined;
+    return { result, ms, ...(witness === undefined ? {} : { witness }) };
   }
 }
 
@@ -180,11 +241,17 @@ export class CucumberRunner implements Runner {
  * control after it (Judgement.recheck). `limitMs` bounds the controls and the runs
  * without a control; a run with a control is bounded by detectLimit.
  */
+export interface ReplayOptions {
+  readonly discoverRuntimeErrors?: boolean;
+  readonly onTiming?: (entry: ReplayEntry, elapsedMs: number) => void;
+}
+
 export async function replayAll(
   cases: readonly ReplayCase[],
   workspace: Workspace,
   runner: Runner,
   limitMs: number,
+  options: ReplayOptions = {},
 ): Promise<ReplayEntry[]> {
   const controls = new Map<string, Timed>();
   const control = async (tests: readonly string[]) => {
@@ -195,8 +262,12 @@ export async function replayAll(
   };
   const entries: ReplayEntry[] = [];
   for (const replay of cases) {
-    const entry = (divergence: string | null) =>
-      entries.push({ file: replay.file, id: replay.mutant.id, status: replay.mutant.status, divergence });
+    const started = performance.now();
+    const entry = (divergence: string | null) => {
+      const completed = { file: replay.file, id: replay.mutant.id, status: replay.mutant.status, divergence };
+      entries.push(completed);
+      options.onTiming?.(completed, performance.now() - started);
+    };
     if (replay.problem !== null) {
       entry(replay.problem);
       continue;
@@ -205,18 +276,52 @@ export async function replayAll(
       entry('le fichier du dépôt diffère de celui du rapport de mutation');
       continue;
     }
+    const runMutant = async (run: () => Promise<Timed>) => {
+      workspace.write(replay.file, replay.mutated);
+      try {
+        return await run();
+      } finally {
+        workspace.write(replay.file, replay.source);
+      }
+    };
+    if (
+      options.discoverRuntimeErrors === true &&
+      replay.mutant.status === 'RuntimeError' &&
+      replay.tests.length >= DISCOVERY_MIN_SCENARIOS &&
+      runner.discover !== undefined
+    ) {
+      const discover = runner.discover.bind(runner);
+      const candidate = (await runMutant(() => discover(replay.tests, limitMs))).witness;
+      if (candidate !== undefined && replay.tests.includes(candidate.location)) {
+        const only = [candidate.location];
+        const original = await runner.run(only, limitMs);
+        const reproduced = await runMutant(() => runner.run(only, detectLimit(original.ms)));
+        const verdict = judgeReplay(replay, only.length, original.result, reproduced.result);
+        const found = reproduced.witness;
+        const originalPickle = 'failure' in original.result.run ? undefined : original.result.run.pickles[0];
+        const originalStep = originalPickle?.attempts[0]?.steps.filter(gherkinStep)[candidate.step];
+        if (
+          verdict.divergence === null &&
+          !verdict.recheck &&
+          found?.location === candidate.location &&
+          found.pickle === candidate.pickle &&
+          found.step === candidate.step &&
+          found.name === candidate.name &&
+          originalPickle?.id === candidate.pickle &&
+          originalStep?.name === candidate.name &&
+          originalStep.status === 'PASSED'
+        ) {
+          entry(null);
+          continue;
+        }
+      }
+    }
     // A run with a control is bounded by it: a mutant that hangs costs three times the control, not `limitMs`.
     const attempt = async (tests: readonly string[]) => {
       const witness = replay.expectation.survives ? null : await control(tests);
       const limit = witness === null ? limitMs : detectLimit(witness.ms);
-      workspace.write(replay.file, replay.mutated);
-      let judgement;
-      try {
-        const run = await runner.run(tests, limit);
-        judgement = judgeReplay(replay, tests.length, witness?.result ?? null, run.result);
-      } finally {
-        workspace.write(replay.file, replay.source);
-      }
+      const run = await runMutant(() => runner.run(tests, limit));
+      const judgement = judgeReplay(replay, tests.length, witness?.result ?? null, run.result);
       if (!judgement.recheck) return judgement;
       const fresh = await runner.run(tests, limitMs);
       return { ...judgement, divergence: recheckDivergence(fresh.result, tests.length) };

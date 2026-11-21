@@ -146,7 +146,7 @@ async function awaitCi(
     // The forge can still show the completed attempt immediately after accepting the rerun request.
     if (run !== undefined && !run.completed) unnumberedRerunPending = false;
     const state =
-      unnumberedRerunPending || (requestedAttempt !== undefined && (run?.attempt ?? 0) <= requestedAttempt)
+      unnumberedRerunPending || (run?.attempt ?? 0) <= (requestedAttempt ?? Number.NEGATIVE_INFINITY)
         ? undefined
         : ciState(run, config.requiredJobs, config.jobDependencies);
     if (state === 'green') return undefined;
@@ -157,8 +157,9 @@ async function awaitCi(
     if (poll >= config.ciPolls) return { phase: 'CI', reason: 'CI sans réponse' };
     if (state === 'no-runner') {
       // `no-runner` is decided of a run that exists (ciState).
-      forge.rerunFailed((run as CiRun).id);
-      requestedAttempt = run?.attempt;
+      const rejected = run as CiRun;
+      forge.rerunFailed(rejected.id);
+      requestedAttempt = rejected.attempt;
       unnumberedRerunPending = requestedAttempt === undefined;
       entry.ci.attempts++;
     }

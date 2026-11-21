@@ -612,3 +612,17 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       """
     When the replay runner runs "specs/green.feature:4" once within 20000 ms
     Then the replay refuses its scenario selection with "scénario de rejeu manquant : specs/green.feature:4"
+
+  Scenario Outline: discovery only supplies a candidate for independent RuntimeError replay: <kind>
+    When independent runtime replay tries a <kind> failure
+    Then the runtime proof used <processes> separate processes and <singletons> singleton reports
+
+    Examples:
+      | kind    | processes | singletons |
+      | step    | 3         | 2          |
+      | load    | 4         | 0          |
+      | hook    | 3         | 0          |
+      | ordered | 5         | 2          |
+
+  Scenario: discovery requires the same original scenario and Gherkin failure step
+    Then discovery cannot substitute another original identity or failing step

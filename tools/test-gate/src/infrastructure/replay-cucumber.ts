@@ -6,6 +6,7 @@ export async function runReplayCucumber(
   stderr: { write(text: string): unknown },
   engine: Pick<typeof cucumber, 'loadConfiguration' | 'loadSources' | 'runCucumber'>,
   environment: IRunEnvironment = {},
+  discover = false,
 ): Promise<number> {
   const refuse = (issue: string) => {
     stderr.write('AOS_REPLAY_SELECTION: ' + issue + '\n');
@@ -44,6 +45,7 @@ export async function runReplayCucumber(
   const formats = runConfiguration.formats.files;
   if (Object.keys(formats).length !== 1 || formats[report] !== 'message')
     return refuse('rapport Messages de rejeu invalide');
+  if (discover) runConfiguration.runtime.failFast = true;
   stderr.write('AOS_REPLAY_PLAN_VALID\n');
   try {
     const { success } = await engine.runCucumber(runConfiguration, environment);

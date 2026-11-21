@@ -628,6 +628,18 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         log ready
         """
 
+    Scenario Outline: a rerun request remains pending through an incomplete forge timeline
+      Given the delivery Linux gate has a required producer
+      And the delivery setting "ciAttempts" is 2
+      And the delivery CI follows "<timeline>" exactly across a rerun request
+      When I deliver "step" until "ci"
+      Then delivery is ready after 2 attempts and <polls> polls, with one rerun
+
+      Examples:
+        | timeline                                                        | polls |
+        | admission-1, missing, accepted-2                                | 3     |
+        | admission-unnumbered, admission-unnumbered, waiting, accepted-2 | 4     |
+
     Scenario: no runner twice then green, with three attempts: two reruns, each followed by a run still waiting
       Given the delivery setting "ciAttempts" is 3
       And the delivery CI answers "no-runner, no-runner, green"

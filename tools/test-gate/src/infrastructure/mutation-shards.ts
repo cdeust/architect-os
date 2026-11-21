@@ -68,7 +68,8 @@ export async function combineNative(
         if (location === undefined) throw new Error('scénario de mutant absent du catalogue : ' + id);
         return location;
       });
-    for (const [name, file] of Object.entries(raw.files).sort(([a], [b]) => (a < b ? -1 : 1))) {
+    for (const name of Object.keys(raw.files).sort()) {
+      const file = raw.files[name] as RawFile;
       const previous = files.get(name);
       if (
         previous !== undefined &&

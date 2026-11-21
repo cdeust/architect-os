@@ -84,7 +84,17 @@ When('the hosted mutation chains complete independently in {string} mode', async
   for (const lane of LANES) {
     const inventory = await command(repo, 'inventory', String(lane));
     assert.equal(inventory.status, 0, inventory.output);
-    const manifest = JSON.parse(repo.read(MANIFEST)) as { lots: Lot[] };
+    const manifest = JSON.parse(repo.read(MANIFEST)) as { lots: Lot[]; patterns: string[] };
+    assert.equal(
+      inventory.output,
+      'lot ' +
+        lane +
+        ' : ' +
+        manifest.lots.length +
+        ' fichier(s), ' +
+        manifest.patterns.length +
+        ' plage(s)\n',
+    );
     const nested = manifest.lots.find(({ file }) => file === 'src/nested.mjs');
     if (nested !== undefined) {
       split++;
@@ -95,15 +105,34 @@ When('the hosted mutation chains complete independently in {string} mode', async
       }
     }
     await nativeFixture(repo, NATIVE, mode === 'debt retirement');
+    repo.write(aggregate, 'earlier aggregate');
+    repo.write('reports/mutation/replay.json', 'earlier replay');
     const verified = await command(repo, 'verify', String(lane));
     assert.equal(verified.status, 0, verified.output);
     assert.equal(verified.output, 'lot natif ' + lane + ' vérifié\n');
+    assert.equal(repo.read(aggregate), 'earlier aggregate');
+    assert.equal(repo.read('reports/mutation/replay.json'), 'earlier replay');
     const directory = 'reports/mutation-shards/' + lane;
     repo.write(directory + '/mutation-inventory.json', repo.read(MANIFEST));
     repo.write(directory + '/mutation/native.json', repo.read(NATIVE));
     repo.write(directory + '/producer', 'first producer attempt for lane ' + lane);
+    repo.write('reports/replay/stale', 'leftover from a previous run');
     const replayed = await command(repo, 'replay', String(lane));
     assert.equal(replayed.status, 0, replayed.output);
+    assert.equal(repo.exists('reports/replay/stale'), false);
+    const output = 'reports/replay-shards/' + lane;
+    const { producer, manifest: planned, record } = JSON.parse(repo.read(output + '/replay.json'));
+    const timings = JSON.parse(repo.read(output + '/timings.json'));
+    assert.equal(timings.producer, producer);
+    assert.equal(timings.manifest, planned);
+    assert.equal(timings.report, record.report);
+    assert.deepEqual(
+      timings.mutants.map(({ elapsedMs, ...key }: { elapsedMs: number }) => {
+        assert.ok(Number.isSafeInteger(elapsedMs) && elapsedMs >= 0);
+        return key;
+      }),
+      record.mutants.map(({ divergence: _divergence, ...key }: { divergence: string | null }) => key),
+    );
   }
   if (mode === 'changed lines') assert.ok(split > 1);
 });
@@ -118,6 +147,10 @@ Then('the hosted verdict has all independently replayed mutations', async functi
     id: string;
     divergence: string | null;
   }[];
+  assert.equal(
+    accepted.output,
+    LANES.length + ' producteurs vérifiés, ' + entries.length + ' verdict(s) rejoué(s)\n',
+  );
   assert.ok(entries.every((entry) => entry.divergence === null));
   assert.equal(
     entries.length,
@@ -135,6 +168,14 @@ Then('a replaced producer or a missing receipt cannot reuse the hosted verdict',
 
   const goodReceiptPath = 'reports/replay-shards/2/replay.json';
   const goodReceipt = repo.read(goodReceiptPath);
+  const differentManifest = JSON.parse(goodReceipt);
+  differentManifest.manifest = '0'.repeat(64);
+  repo.write(goodReceiptPath, JSON.stringify(differentManifest));
+  const refused = await command(repo, 'collect');
+  assert.equal(refused.status, 1, refused.output);
+  assert.match(refused.output, /provenance du rejeu différente pour le lot 2/);
+  assert.equal(repo.exists('reports/mutation/replay.json'), false);
+
   for (const field of ['producer', 'manifest']) {
     const complete = JSON.parse(goodReceipt);
     const digest = complete[field] as string;
@@ -193,6 +234,13 @@ Then('a second collection without a canary invalidates the old verdict', async f
   assert.match(rejected.output, /configuration Linux sans canari/);
   assert.equal(repo.exists(aggregate), false);
   assert.equal(repo.exists('reports/mutation/replay.json'), false);
+  delete config.replay;
+  repo.write(CONFIG_PATH, JSON.stringify(config));
+  repo.write(aggregate, 'another earlier aggregate');
+  const absentReplay = await command(repo, 'collect');
+  assert.equal(absentReplay.status, 1, absentReplay.output);
+  assert.match(absentReplay.output, /configuration Linux sans canari, mutation ou rejeu/);
+  assert.equal(repo.exists(aggregate), false);
 });
 
 Given('only the second fixture exercises the nested return value', function () {
@@ -536,6 +584,8 @@ Then('each hosted producer must match its committed inventory and canary', async
   const native = directory + 'mutation/native.json';
   const manifestPath = directory + 'mutation-inventory.json';
   const receiptPath = 'reports/replay-shards/1/replay.json';
+  const timing = 'reports/replay-shards/1/timings.json';
+  const earlierTiming = repo.read(timing);
   const original = repo.read(native);
   const manifest = repo.read(manifestPath);
   const receipt = repo.read(receiptPath);
@@ -544,6 +594,7 @@ Then('each hosted producer must match its committed inventory and canary', async
     const wrongTree = await command(repo, 'replay', '1');
     assert.equal(wrongTree.status, 1, wrongTree.output);
     assert.match(wrongTree.output, /inventaire différent du périmètre courant pour le lot 1/);
+    assert.equal(repo.exists(timing), false);
     assert.equal(repo.exists(receiptPath), false);
     repo.write(manifestPath, manifest);
     const report = JSON.parse(original);
@@ -557,5 +608,30 @@ Then('each hosted producer must match its committed inventory and canary', async
     repo.write(manifestPath, manifest);
     repo.write(native, original);
     repo.write(receiptPath, receipt);
+    repo.write(timing, earlierTiming);
+  }
+});
+
+Then('the hosted collector reports both independent divergences on separate lines', async function () {
+  const repo = repository(this);
+  const paths = [1, 2].map((lane) => 'reports/replay-shards/' + lane + '/replay.json');
+  const original = paths.map((path) => repo.read(path));
+  try {
+    for (const [index, path] of paths.entries()) {
+      const receipt = JSON.parse(original[index] as string);
+      receipt.record.mutants[0].divergence = 'independent replay disagreement';
+      repo.write(path, JSON.stringify(receipt));
+    }
+    const failure = await command(repo, 'collect');
+    assert.equal(failure.status, 1, failure.output);
+    const lines = failure.output
+      .split('\n')
+      .filter((line) => line.includes('independent replay disagreement'));
+    assert.equal(lines.length, 2, failure.output);
+    assert.match(lines[0] as string, /lot 1 : /);
+    assert.match(lines[1] as string, /lot 2 : /);
+    assert.equal(repo.exists('reports/mutation/replay.json'), false);
+  } finally {
+    for (const [index, path] of paths.entries()) repo.write(path, original[index] as string);
   }
 });

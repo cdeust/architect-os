@@ -60,12 +60,13 @@ const job = (
 function ciRun(kind: string): CiRun | undefined {
   switch (kind) {
     case 'admission-1':
+    case 'admission-unnumbered':
     case 'accepted-2': {
       const passed = kind === 'accepted-2';
       return {
         id: 42,
         completed: true,
-        attempt: passed ? 2 : 1,
+        ...(kind === 'admission-unnumbered' ? {} : { attempt: passed ? 2 : 1 }),
         jobs: [
           {
             ...job('gate-linux', passed ? 'success' : 'failure', true, !passed),
@@ -320,5 +321,24 @@ Then(
   'the delivery forge gives the rule suite {string} of the branch {string} at {string}',
   function (suite: string, branch: string, hash: string) {
     assert.equal(scene(this).forge.ruleSuite(branch, hex(hash)), suite);
+  },
+);
+
+Given('the delivery CI follows {string} exactly across a rerun request', function (timeline: string) {
+  const { forge, commit, journal } = scene(this);
+  forge.script(commit, timeline.split(', ').map(ciRun));
+  forge.rerunFailed = (id) => journal.record('rerun', id);
+});
+
+Then(
+  'delivery is ready after {int} attempts and {int} polls, with one rerun',
+  function (attempts: number, polls: number) {
+    const delivered = result(this);
+    assert.equal(delivered.outcome, 'ready');
+    assert.deepEqual(delivered.ci, { run: 42, attempts, polls });
+    assert.deepEqual(
+      scene(this).journal.calls.filter((call) => call.startsWith('rerun ')),
+      ['rerun 42'],
+    );
   },
 );

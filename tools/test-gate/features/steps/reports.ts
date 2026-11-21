@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseEnvelope, TestStepResultStatus } from '@cucumber/messages';
 import { parseCucumberShards } from '../../src/infrastructure/cucumber-report.js';
-import { parseMutationReport } from '../../src/infrastructure/mutation-report.js';
+import {
+  parseMutationReport,
+  requireNativeMutationReport,
+} from '../../src/infrastructure/mutation-report.js';
 import { FIXTURES, Given, Then, repository, type GateRepository } from './repository.js';
 
 const CUCUMBER = 'reports/cucumber.ndjson';
@@ -399,4 +402,5 @@ Then('a valid native mutation report has a parsed source, position and active st
     assert.equal(first.status, 'Killed');
     assert.deepEqual([first.startLine, first.endLine, first.static], [2, 4, false]);
   }, 'a valid native mutation report must parse in process');
+  assert.throws(() => requireNativeMutationReport('broken'), /JSON invalide/);
 });

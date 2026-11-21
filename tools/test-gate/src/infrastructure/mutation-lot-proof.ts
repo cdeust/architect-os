@@ -79,3 +79,11 @@ export function verifyMutationLots(
   }
   return null;
 }
+
+/** A final aggregate has no bookkeeping rows. Every active or ignored identity must belong to the plan. */
+export function requireCompleteMutationLots(lots: readonly Lot[], report: MutationReport): void {
+  const mismatch = verifyMutationLots(lots, report, (id) => {
+    throw new Error('mutant ignoré hors projection finale : ' + id);
+  });
+  if (mismatch !== null) throw new Error(mismatch.failure);
+}
