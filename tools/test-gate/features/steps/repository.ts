@@ -182,6 +182,10 @@ Given('the gate configuration is absent', function () {
   repository(this).remove(CONFIG_PATH);
 });
 
+When('the gate checks the Linux job with Cucumber report count {string}', function (count: string) {
+  return repository(this).run(['check', '--job', 'linux'], { AOS_CUCUMBER_SHARDS: count });
+});
+
 When('the gate checks the Linux job with two Cucumber reports', function () {
   return repository(this).run(['check', '--job', 'linux'], { AOS_CUCUMBER_SHARDS: '2' });
 });

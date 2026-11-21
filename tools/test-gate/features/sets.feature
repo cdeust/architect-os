@@ -166,3 +166,26 @@ Feature: Test gate, rules 1 and 3: unique identities, executed set equal to the 
 
   Scenario: an empty list of Cucumber lots has no outcome
     Then the Cucumber lot parser refuses an empty list with "aucun lot Cucumber"
+
+  Scenario Outline: a configured Cucumber lot count is validated before looking for reports
+    Given a gate repository
+    And the gate head is committed
+    When the gate checks the Linux job with Cucumber report count "<count>"
+    Then the gate verdict is red
+    And the Cucumber lot outcome diagnostic is:
+      """
+      rapport Cucumber illisible : <diagnostic>
+      """
+
+    Examples:
+      | count | diagnostic                         |
+      |       | nombre de lots Cucumber invalide   |
+      | 0     | nombre de lots Cucumber invalide   |
+      | 01    | nombre de lots Cucumber invalide   |
+      | -1    | nombre de lots Cucumber invalide   |
+      | 1.5   | nombre de lots Cucumber invalide   |
+      | a1    | nombre de lots Cucumber invalide   |
+      | 1a    | nombre de lots Cucumber invalide   |
+      | 257   | nombre de lots Cucumber invalide   |
+      | 12    | lot Cucumber 1 absent              |
+      | 256   | lot Cucumber 1 absent              |
