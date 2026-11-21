@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { isStateLogTemplate, StateJournal } from './state-journal.js';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
 import type { AuthProxyOptions, CredentialSource } from './auth-proxy.js';
@@ -33,8 +33,8 @@ export const ToolSchema = z.strictObject({
       maxBodyBytes: z.number().int().positive(),
     }),
     credentialCommand: z.array(z.string().min(1)).min(1),
-    /** `${home}` seul est résolu. */
-    usageLog: z.string().min(1),
+    /** `${state}` seul est résolu. */
+    usageLog: z.string().refine(isStateLogTemplate, 'invalid runtime state log path'),
   }),
 });
 export type Tool = z.infer<typeof ToolSchema>;
@@ -46,12 +46,13 @@ export const loadTool = (file: string): Tool =>
 
 /**
  * Les options du proxy d'authentification : celles de `code.json`, le jeton de la session, la source de l'identifiant
- * de l'hôte ; `${home}` du journal d'usage est le répertoire personnel.
+ * de l'hôte ; `${state}` désigne le dossier persistant de la racine admise.
  */
 export function authProxyOptions(
   tool: Tool,
   sessionToken: string,
   credential: CredentialSource,
+  runtimeRoot: string | undefined,
 ): AuthProxyOptions {
   const { upstream, routes, betas, policy, usageLog } = tool.authProxy;
   return {
@@ -61,6 +62,6 @@ export function authProxyOptions(
     policy,
     sessionToken,
     credential,
-    usageLog: usageLog.replaceAll('${home}', homedir()),
+    usageLog: new StateJournal(runtimeRoot, usageLog),
   };
 }

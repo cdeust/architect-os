@@ -28,6 +28,7 @@ export const SHARED_DIRECTORIES: readonly Below[] = [
   ['cache', 'npm'],
   ['cache', 'xdg'],
   ['cache', 'node'],
+  ['state'],
 ];
 
 /** The directories of a run, below `run/<id>`, made in this order once the run is allocated. */

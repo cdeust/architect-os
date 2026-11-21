@@ -1,3 +1,4 @@
+import { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   chmodSync,
@@ -766,6 +767,48 @@ Then(
     } finally {
       if (home === undefined) delete process.env['HOME'];
       else process.env['HOME'] = home;
+    }
+  },
+);
+
+Then(
+  'the runtime filesystem refuses an unprotected state on both passes while accepting its private state',
+  function () {
+    const { root, device, memory, filesystem } = contract(this),
+      path = join(root, 'state');
+    if (memory) memory.unprotectedDirectory(path, device);
+    else {
+      mkdirSync(path, { mode: 0o700 });
+      chmodSync(path, 0o750);
+    }
+    assert.equal(filesystem.findDirectory(root, device, ['state']), 'unsafe');
+    assert.equal(filesystem.ensureDirectory(root, device, ['state']), 'unsafe');
+    if (memory) memory.directory(path, device);
+    else chmodSync(path, 0o700);
+    assert.equal(filesystem.findDirectory(root, device, ['state']), 'found');
+    assert.equal(filesystem.ensureDirectory(root, device, ['state']), 'ok');
+    const cache = join(root, 'cache');
+    if (memory) memory.unprotectedDirectory(cache, device);
+    else {
+      mkdirSync(cache, { mode: 0o700 });
+      chmodSync(cache, 0o750);
+    }
+    assert.equal(filesystem.findDirectory(root, device, ['cache']), 'found');
+    assert.equal(filesystem.ensureDirectory(root, device, ['cache']), 'ok');
+  },
+);
+Then(
+  'the host runtime filesystem refuses state owned by another account before and during allocation',
+  function () {
+    const { root, device, filesystem } = contract(this);
+    mkdirSync(join(root, 'state'), { mode: 0o700 });
+    const owner = process.getuid!();
+    const account = mock.method(process as NodeJS.Process & { getuid(): number }, 'getuid', () => owner + 1);
+    try {
+      assert.equal(filesystem.findDirectory(root, device, ['state']), 'unsafe');
+      assert.equal(filesystem.ensureDirectory(root, device, ['state']), 'unsafe');
+    } finally {
+      account.mock.restore();
     }
   },
 );

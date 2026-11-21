@@ -19,7 +19,7 @@ export interface DeliverConfig {
   gateCommand: string[];
   /** Where the two outputs of the gate are written, relative to the delivery worktree. */
   gateLog: string;
-  /** The log of the deliveries, a path that starts with `${home}/`. */
+  /** The log of the deliveries, a path that starts with `${state}/`. */
   log: string;
   /** The names of the host variables given to git and to the client of the forge; nothing else is. */
   environment: string[];

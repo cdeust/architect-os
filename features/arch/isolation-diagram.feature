@@ -72,7 +72,7 @@ Feature: the image of the profiles is produced from the profile files, the hand-
     Scenario: the generated file edited by hand is refused
       Given the five committed profile files of packages/sandbox
       And the text of the committed file "docs/diagrams/isolation-profiles.svg"
-      When the text "${home}/.cache · ${config} · ${tmp}</tspan>" is replaced by "${home}/.cache · ${config} · ${tmp} · ${home}/.npm</tspan>"
+      When the text "${worktree} · ${config} · ${tmp}</tspan>" is replaced by "${worktree} · ${config} · ${tmp} · ${home}/.npm</tspan>"
       Then the generated image is refused for exactly
         | the file is not what the profiles give, first difference at line 14; regenerate with: npm run diagram:isolation |
 

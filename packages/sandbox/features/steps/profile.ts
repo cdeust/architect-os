@@ -20,6 +20,7 @@ const committed = (): Record<string, any> =>
 
 const VARS: ProfileVariables = {
   home: '/h',
+  runtime: '/rt',
   repo: '/r',
   worktree: '/r/.claude/worktrees/w',
   worktreeName: 'w',

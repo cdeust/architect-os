@@ -29,6 +29,7 @@ Feature: The admission of a run (application: admit, over the in-memory runtime 
         | /mnt/aos/cache/npm                                |
         | /mnt/aos/cache/xdg                                |
         | /mnt/aos/cache/node                               |
+        | /mnt/aos/state                                    |
         | /mnt/aos/run/r000001                              |
         | /mnt/aos/run/r000001/tmp                          |
         | /mnt/aos/run/r000001/npm-logs                     |
@@ -299,6 +300,7 @@ Feature: The admission of a run (application: admit, over the in-memory runtime 
         | a file in place of cache     | /mnt/aos/cache       | a regular file on device 7 |
         | a link in place of cache/npm | /mnt/aos/cache/npm   | a link                     |
         | on another device            | /mnt/aos/cache       | a directory on device 9    |
+        | a link in place of state     | /mnt/aos/state       | a link                     |
         | a special file in place of cache/node | /mnt/aos/cache/node | a special file      |
 
     Scenario Outline: the shared directory <path> found in place is kept, and the ones missing are made
@@ -362,6 +364,17 @@ Feature: The admission of a run (application: admit, over the in-memory runtime 
 
   Rule: a setup that fails dispatches nothing, and removes its own run while it is still the one it made
 
+    Scenario: a failed admission preserves another run and the retained state
+      Given the memory runtime path "/mnt/aos/state" is a directory on device 7
+      And the memory runtime path "/mnt/aos/state/prior" is a directory on device 7
+      And the memory runtime path "/mnt/aos/run/rkept01" is a directory on device 7
+      And the memory runtime path "/mnt/aos/run/r000001/admission.json" cannot be made
+      When the runtime admission runs for the setting "/mnt/aos"
+      Then the runtime admission is refused with "RUNTIME_SETUP_FAILED"
+      And the memory runtime path "/mnt/aos/run/r000001" does not exist
+      And the memory runtime path "/mnt/aos/state/prior" remains a directory
+      And the memory runtime path "/mnt/aos/run/rkept01" remains a directory
+
     Scenario Outline: a setup that cannot make <path> fails, and leaves no run of its own
       Given the memory runtime path "<path>" cannot be made
       And the memory runtime path "/mnt/aos/run/rkept01" is a directory on device 7
@@ -374,6 +387,7 @@ Feature: The admission of a run (application: admit, over the in-memory runtime 
 
       Examples:
         | path                                          | removed                                                                                                   |
+        | /mnt/aos/state                                | nothing                                                                                                   |
         | /mnt/aos/cache/xdg                            | nothing                                                                                                   |
         | /mnt/aos/run/r000001                          | nothing                                                                                                   |
         | /mnt/aos/run/r000001/tmp                      | r000001                                                                                                   |

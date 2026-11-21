@@ -917,7 +917,7 @@ Il propose un autre moyen : un environnement de dépendances construit par l'hô
 
 **Le fait.** Le 18 novembre 2026, la machine de développement s'est arrêtée : le disque qui porte le dossier personnel était plein. Le dépôt peut vivre sur un autre volume, ses outils écrivent ailleurs, par des chemins que rien ne désigne ni ne borne. Le propriétaire a posé la règle : le travail de développement se fait sur le volume du projet, et s'il est absent l'opération est suspendue.
 
-**Ce que le dépôt écrit hors de son arbre, relevé dans le code** (inventaire demandé en lecture seule à un modèle d'un autre fournisseur, puis contrôlé ici pour ce qui est cité) :
+**Inventaire initial des écritures hors de l’arbre, avant les tranches (1a) et (1b)** (inventaire demandé en lecture seule à un modèle d'un autre fournisseur, puis contrôlé ici pour ce qui est cité) :
 
 | Qui écrit | Où | Borne et retrait aujourd'hui |
 | --- | --- | --- |
@@ -994,7 +994,7 @@ Règle pour la suite de cette conception : aucune simplification ne retire une b
 
 Le premier commit a livré `tools/runtime`, l’entrée `./aos` et ses scénarios. La marque de la racine détermine l’environnement. La seconde tranche de 1a fait passer les commandes du dépôt et les jobs qui les exécutent par `./aos -- PROGRAMME [ARG ...]`. Une invocation directe d’un point d’entrée protégé refuse avant de lancer sa charge de travail. La préparation de l’hôte et les actions externes gardent leurs propres points d’entrée.
 
-La suite commence à (1b) : déplacer les écritures des profils et le cache de session sous la racine, puis vérifier les accès sur le moteur réel. Le verrou et les sorties de la porte, le cycle de vie des traces et la mesure des pics restent dans les tranches (2) à (4).
+La tranche (1b) donne aux cinq profils des dossiers privés de session et place le cache npm du constructeur dans son temporaire. Le proxy et la livraison ajoutent leurs entrées aux journaux `state/usage.jsonl` et `state/deliveries.jsonl` de la racine admise. Step lit une seule fois les entrées du dossier fourni. Il conserve les résultats sous `state/steps/<identifiant-run>/<nom>/` et écrit les flux bruts sous `run/<identifiant-run>/tmp/steps/<nom>/`. Une seconde tentative au même nom dans cette allocation refuse. La publication de `steps/<nom>/` dans le worktree garde son contrat. Le verrou et les sorties de la porte, le cycle de vie des traces et la mesure des pics restent dans les tranches (2) à (4).
 
 ### Un constructeur d'un autre fournisseur, derrière un proxy de l'hôte : conception (19 novembre 2026, avant le code)
 

@@ -32,6 +32,6 @@
       "Claude Code-credentials",
       "-w"
     ],
-    "usageLog": "${home}/.local/state/architect-os/usage.jsonl"
+    "usageLog": "${state}/usage.jsonl"
   }
 }

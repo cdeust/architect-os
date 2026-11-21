@@ -1,3 +1,4 @@
+import { StateJournal } from '../../src/state-journal.js';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest, type IncomingHttpHeaders, type Server } from 'node:http';
@@ -47,13 +48,15 @@ const running = (s: ProxyScenario): AuthProxy => {
 };
 
 /** Under a folder the proxy creates, so that the folder's mode is the proxy's. */
-const usageLogPath = (s: ProxyScenario) => join(s.dir, 'state', 'architect-os', 'usage.jsonl');
+const journalOf = (s: ProxyScenario) => new StateJournal(s.dir, '${state}/usage.jsonl');
+const usageLogPath = (s: ProxyScenario) => journalOf(s).path;
 
 const ROUTES = ['^/v1/messages/count_tokens$', '^/v1/messages(\\?[^#]*)?$'];
 const POLICY = { bodyFields: ['model', 'messages', 'system', 'tools'], maxBodyBytes: 256 };
 
 Given('a fake upstream answering with a server-sent-events stream that carries a usage', async function () {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'aos-proxy-')));
+  mkdirSync(join(dir, 'state'), { mode: 0o700 });
   const seen: Seen[] = [];
   // `?json` answers a JSON message; `?break` cuts its answer after the headers; `?hold` never answers.
   const upstream: Server = createServer((req, res) => {
@@ -115,7 +118,7 @@ Given(
       policy: POLICY,
       sessionToken: token,
       credential: async () => ({ accessToken: credential }),
-      usageLog: usageLogPath(s),
+      usageLog: journalOf(s),
     });
     this.cleanups.push(() => running(s).close());
   },
@@ -150,7 +153,7 @@ async function restartWith(world: SandboxWorld, credential: CredentialSource): P
     policy: POLICY,
     sessionToken: s.token,
     credential,
-    usageLog: usageLogPath(s),
+    usageLog: journalOf(s),
   });
 }
 
@@ -492,7 +495,7 @@ Then('starting a proxy whose usage log is under a file fails', async function ()
       policy: POLICY,
       sessionToken: s.token,
       credential: async () => ({ accessToken: 'host-credential' }),
-      usageLog: join(file, 'usage.jsonl'),
+      usageLog: new StateJournal(file, '${state}/usage.jsonl'),
     }),
   );
 });

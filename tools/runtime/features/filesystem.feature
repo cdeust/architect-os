@@ -384,3 +384,16 @@ Feature: The RuntimeFilesystem port (contract: the host adapter on real director
         | case            | calls                                            |
         | another inode   | stat the directory with another inode the second time |
         | another device  | stat the directory with another device the second time |
+
+  Scenario Outline: The retained state requires the owner and private mode on <adapter>
+    Given a runtime filesystem of the <adapter> adapter over a scratch root
+    Then the runtime filesystem refuses an unprotected state on both passes while accepting its private state
+
+    Examples:
+      | adapter |
+      | memory  |
+      | node    |
+
+  Scenario: The host binds persistent state to the same account
+    Given a runtime filesystem of the node adapter over a scratch root
+    Then the host runtime filesystem refuses state owned by another account before and during allocation

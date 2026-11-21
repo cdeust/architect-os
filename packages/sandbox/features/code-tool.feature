@@ -63,6 +63,7 @@ Feature: the code tool of 1a.0, composed from code.json (host side, fake runner,
     When I build the process dependencies with standard streams that are terminals
     Then the dependencies run in "/target" with the arguments "-p x" in a terminal
     And the dependencies load the tool of code.json
+    And the dependencies give the auth proxy the admitted runtime root "/test/runtime"
     And the dependencies start the auth proxy of auth-proxy.ts
     And the dependencies give a fresh 64-hex session token each time
     And the dependencies build an srt runner for the variables "authProxyPort" "1" and "sessionToken" "t"

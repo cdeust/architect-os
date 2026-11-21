@@ -4,8 +4,10 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -78,6 +80,7 @@ const newPhase = (): Phase => ({
 });
 interface Step {
   folder: string;
+  outputs: { retained: string; streams: string };
   calls: Call[];
   behaviours: Record<ToolFile, Behaviour>;
   phases: Record<Phased, Phase>;
@@ -129,6 +132,7 @@ const newStepFolder = (world: SandboxWorld, name: string) => {
   mkdirSync(folder);
   world.state['step'] = {
     folder,
+    outputs: { retained: join(parent, 'retained-output'), streams: join(parent, 'raw-streams') },
     calls: [],
     behaviours: { 'code.json': {}, 'review.json': {}, 'scout.json': {} },
     phases: { 'scout.json': newPhase(), 'review.json': newPhase() },
@@ -403,6 +407,11 @@ const start = (s: Step, args: string): Promise<void> => {
     readFile: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined),
     readSource: (path) => s.source.get(path),
     writeFile: (path, content) => writeFileSync(path, content),
+    reserveOutputs: () => {
+      mkdirSync(s.outputs.retained);
+      mkdirSync(s.outputs.streams);
+      return s.outputs;
+    },
     appendFile: (path, content) => writeFileSync(path, content, { flag: 'a' }),
     check: async (command, limitSeconds) => {
       s.checkCalls.push({ command, limitSeconds });
@@ -493,9 +502,19 @@ When('I end the review session {int}', function (n: number) {
   gate(step(this).phases['review.json'].ended, n).resolve();
 });
 
-When('I wait for the review session {int} to start', async function (n: number) {
-  await gate(step(this).phases['review.json'].started, n).promise;
+async function awaitPhaseStart(s: Step, phase: Phase, n: number): Promise<void> {
+  assert.ok(s.run);
+  const started = await Promise.race([
+    gate(phase.started, n).promise.then(() => true),
+    s.run.then(() => false),
+  ]);
+  assert.ok(started, 'Step finished before the expected phase started: ' + s.stderr);
   await turn();
+}
+
+When('I wait for the review session {int} to start', async function (n: number) {
+  const s = step(this);
+  await awaitPhaseStart(s, s.phases['review.json'], n);
 });
 
 When('I end the check {int}', function (n: number) {
@@ -503,8 +522,8 @@ When('I end the check {int}', function (n: number) {
 });
 
 When('I wait for the check {int} to start', async function (n: number) {
-  await gate(step(this).checks.started, n).promise;
-  await turn();
+  const s = step(this);
+  await awaitPhaseStart(s, s.checks, n);
 });
 
 When('I end the scout session {int}', function (n: number) {
@@ -512,8 +531,8 @@ When('I end the scout session {int}', function (n: number) {
 });
 
 When('I wait for the scout session {int} to start', async function (n: number) {
-  await gate(step(this).phases['scout.json'].started, n).promise;
-  await turn();
+  const s = step(this);
+  await awaitPhaseStart(s, s.phases['scout.json'], n);
 });
 
 Then('the checks started were {string}', function (commands: string) {
@@ -651,27 +670,46 @@ Then(
   },
 );
 
+function stepFile(s: Step, name: string): string {
+  if (name === 'brief.md') return join(s.folder, name);
+  return join(name.endsWith('.stream.jsonl') ? s.outputs.streams : s.outputs.retained, name);
+}
+
+Then('the approved Step intake still matches the Plan manifest byte for byte', function () {
+  const { folder } = step(this);
+  const { files_sha256: expected } = stored<{ files_sha256: Record<string, string> }>(this, 'planManifest');
+  assert.deepEqual(readdirSync(folder).sort(), Object.keys(expected).sort());
+  for (const [file, digest] of Object.entries(expected)) {
+    assert.equal(
+      createHash('sha256')
+        .update(readFileSync(join(folder, file)))
+        .digest('hex'),
+      digest,
+    );
+  }
+});
+
 Then('the step file {string} is the same as the step file {string}', function (name: string, other: string) {
   assert.equal(
-    readFileSync(join(step(this).folder, name), 'utf8'),
-    readFileSync(join(step(this).folder, other), 'utf8'),
+    readFileSync(stepFile(step(this), name), 'utf8'),
+    readFileSync(stepFile(step(this), other), 'utf8'),
   );
 });
 
 Then('the step file {string} is the brief of the session {int}', function (name: string, n: number) {
-  assert.equal(readFileSync(join(step(this).folder, name), 'utf8'), step(this).calls[n - 1]?.brief);
+  assert.equal(readFileSync(stepFile(step(this), name), 'utf8'), step(this).calls[n - 1]?.brief);
 });
 
 Then('the step file {string} is the fixture {string}', function (name: string, file: string) {
-  assert.equal(readFileSync(join(step(this).folder, name), 'utf8'), fixture(file));
+  assert.equal(readFileSync(stepFile(step(this), name), 'utf8'), fixture(file));
 });
 
 Then('the step file {string} is:', function (name: string, content: string) {
-  assert.equal(readFileSync(join(step(this).folder, name), 'utf8'), `${content}\n`);
+  assert.equal(readFileSync(stepFile(step(this), name), 'utf8'), `${content}\n`);
 });
 
 Then('the step file {string} is exactly {string}', function (name: string, content: string) {
-  assert.equal(readFileSync(join(step(this).folder, name), 'utf8'), content);
+  assert.equal(readFileSync(stepFile(step(this), name), 'utf8'), content);
 });
 
 Given(
@@ -682,11 +720,11 @@ Given(
 );
 
 Then('the step file {string} contains {string}', function (name: string, text: string) {
-  assert.ok(readFileSync(join(step(this).folder, name), 'utf8').includes(text));
+  assert.ok(readFileSync(stepFile(step(this), name), 'utf8').includes(text));
 });
 
 Then('the step file {string} does not contain {string}', function (name: string, text: string) {
-  assert.ok(!readFileSync(join(step(this).folder, name), 'utf8').includes(text));
+  assert.ok(!readFileSync(stepFile(step(this), name), 'utf8').includes(text));
 });
 
 Then('the brief of the session {int} does not contain {string}', function (n: number, text: string) {
@@ -694,7 +732,7 @@ Then('the brief of the session {int} does not contain {string}', function (n: nu
 });
 
 Then('the step folder has no file {string}', function (name: string) {
-  assert.equal(existsSync(join(step(this).folder, name)), false);
+  assert.equal(existsSync(stepFile(step(this), name)), false);
 });
 
 // --- codeToolSession ----------------------------------------------------------------------------------------
@@ -861,7 +899,14 @@ Then(
     this.cleanups.push(() => rmSync(folder, { recursive: true, force: true }));
     const file = join(folder, 'f.txt');
     deps.writeFile(file, 'ab');
+    assert.equal(statSync(file).mode & 0o777, 0o600);
+    assert.throws(() => deps.writeFile(file, 'replace'), { code: 'EEXIST' });
+    assert.throws(() => deps.appendFile(join(folder, 'missing'), Buffer.from('x')), { code: 'ENOENT' });
+    symlinkSync(file, join(folder, 'link'));
+    assert.throws(() => deps.appendFile(join(folder, 'link'), Buffer.from('x')), { code: 'ELOOP' });
+    const descriptors = readdirSync('/dev/fd');
     deps.appendFile(file, Buffer.from('cd'));
+    assert.deepEqual(readdirSync('/dev/fd'), descriptors);
     assert.equal(deps.readFile(file), 'abcd');
     assert.equal(deps.readFile(join(folder, 'missing')), undefined);
     mkdirSync(join(folder, 'dir'));

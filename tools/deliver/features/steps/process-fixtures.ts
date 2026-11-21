@@ -100,7 +100,8 @@ export interface FileLogFixture extends LogFixture {
 
 export function fileLog(world: DeliverWorld): FileLogFixture {
   const home = temporaryDirectory(world);
-  const path = join(home, '.local/state/architect-os/deliveries.jsonl');
+  mkdirSync(join(home, 'state'), { mode: 0o700 });
+  const path = join(home, 'state/deliveries.jsonl');
   const text = (): string => readFileSync(path, 'utf8');
   const parse = (line: string): DeliveryEntry => {
     const read = JSON.parse(line) as Omit<DeliveryEntry, 'ruleSuites'> & {
@@ -109,13 +110,13 @@ export function fileLog(world: DeliverWorld): FileLogFixture {
     return { ...read, ruleSuites: new Map(Object.entries(read.ruleSuites)) };
   };
   return {
-    log: new FileLog('${home}/.local/state/architect-os/deliveries.jsonl', home),
+    log: new FileLog('${state}/deliveries.jsonl', home),
     directory: dirname(path),
     path,
     text,
     prepare(content) {
       mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, content);
+      writeFileSync(path, content, { mode: 0o600 });
     },
     parse,
     entries: () => text().split('\n').slice(0, -1).map(parse),

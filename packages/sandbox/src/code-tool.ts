@@ -32,6 +32,7 @@ export interface CodeToolRunner extends SandboxRunner {
 
 export interface CodeToolDependencies {
   readonly tool: Tool;
+  readonly runtimeRoot: string | undefined;
   /** Le fichier de prompt système, absolu, dans le checkout du lanceur. Lève `ISOLATION_UNAVAILABLE` s'il manque. */
   readonly systemPrompt: () => string;
   readonly credential: CredentialSource;
@@ -68,7 +69,9 @@ export async function runCodeTool(deps: CodeToolDependencies): Promise<number> {
     );
   });
   const sessionToken = deps.sessionToken();
-  const proxy = await deps.startProxy(authProxyOptions(deps.tool, sessionToken, deps.credential));
+  const proxy = await deps.startProxy(
+    authProxyOptions(deps.tool, sessionToken, deps.credential, deps.runtimeRoot),
+  );
   try {
     const runner = deps.runner({ authProxyPort: String(proxy.port), sessionToken });
     const request: SandboxRequest = {
@@ -120,6 +123,8 @@ export function srtOptions(proc: CodeProcess, variables: Readonly<Record<string,
     node: proc.execPath,
     canaryProbe: join(PKG, 'src', 'canary-probe.mjs'),
     tmpRoot: tmpdir(),
+    runtimeRoot: proc.env.ARCHITECT_OS_RUNTIME_ROOT!,
+    runDir: proc.env.ARCHITECT_OS_RUN_DIR!,
     home: homedir(),
     hostEnv: proc.env,
     trusted: [PKG, join(ROOT, 'package.json')],
@@ -140,6 +145,7 @@ export function processDependencies(
   const cwd = proc.env['INIT_CWD'] ?? proc.cwd();
   return {
     tool,
+    runtimeRoot: proc.env['ARCHITECT_OS_RUNTIME_ROOT'],
     systemPrompt: () => {
       const file = join(PKG, tool.launcherPromptFile);
       if (!existsSync(file)) {

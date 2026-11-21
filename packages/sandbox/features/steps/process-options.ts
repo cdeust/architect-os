@@ -31,7 +31,11 @@ Then(
   'the options of the platform process are, with the home and the temporary folder of this host:',
   function (expected: string) {
     const { srtCli: _srtCli, ...rest } = options(this);
-    const wanted = expected.replaceAll('<home>', homedir()).replaceAll('<tmp>', tmpdir());
+    const wanted = expected
+      .replaceAll('<home>', homedir())
+      .replaceAll('<tmp>', tmpdir())
+      .replaceAll('<runtime>', process.env.ARCHITECT_OS_RUNTIME_ROOT!)
+      .replaceAll('<run>', process.env.ARCHITECT_OS_RUN_DIR!);
     assert.deepEqual(rest, JSON.parse(wanted));
   },
 );

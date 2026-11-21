@@ -2,9 +2,19 @@
 // Les éclaireurs (au plus `parallel` à la fois), dont l'hôte vérifie chaque citation en lisant le fichier ; la session de
 // construction avec le brief et les faits vérifiés, puis les contrôles sans modèle (§13, O.3c), un à la fois, sous srt
 // par le profil `checker`, puis les sessions de revue (au plus `parallel` à la fois), chacune sous srt par l'outil de
-// code ; tout ce qu'il faut pour relire l'étape reste dans le dossier. Ni rejeu sur l'hôte, ni porte, ni commit : ils restent à
+// code ; l'état de l'étape reste sous la racine admise, les flux dans le temporaire du run. Ni rejeu sur l'hôte, ni porte, ni commit : ils restent à
 // l'orchestrateur. `step.ts` ne fait que lui passer le processus.
-import { appendFileSync, existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  closeSync,
+  constants,
+  openSync,
+  existsSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, isAbsolute, join, resolve, sep } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import { finished } from 'node:stream/promises';
@@ -28,6 +38,7 @@ import type { SandboxRunner } from './port.js';
 import { outputTail, passed, renderChecks, type CheckOutcome, type CheckReport } from './step-checks.js';
 import { parseStepFile, type StepFile } from './step-file.js';
 import { buildRecord, isStepName, stepRecordSchema, type RecordedSession } from './step-record.js';
+import { reserveStepOutputs, type StepOutputs } from './step-outputs.js';
 import { stepsFolder, type StepsFolder } from './steps-folder.js';
 import { parseTool } from './tool.js';
 import { fingerprintTree, type TreeFingerprint } from './tree-fingerprint.js';
@@ -55,6 +66,7 @@ export interface StepDependencies {
   /** Le texte d'un fichier du worktree où l'étape tourne, `undefined` s'il n'en est pas un (fichier ordinaire dans ce worktree). */
   readonly readSource: (path: string) => string | undefined;
   readonly writeFile: (path: string, content: string) => void;
+  readonly reserveOutputs: (name: string, intake: string, worktree: string) => StepOutputs;
   readonly appendFile: (path: string, content: Uint8Array) => void;
   readonly session: StepSession;
   readonly check: StepCheck;
@@ -123,14 +135,14 @@ function readStep(deps: StepDependencies): {
 /** Joue une session, garde son flux, ses mesures et son rapport ; rend les mesures et le flux. */
 async function play(
   deps: StepDependencies,
-  folder: string,
+  outputs: StepOutputs,
   prefix: string,
   tool: ToolFile,
   config: StepSessionConfig,
   extra: readonly string[],
   brief: string,
 ): Promise<{ measure: SessionMeasure; stopped: boolean }> {
-  const streamFile = join(folder, `${prefix}.stream.jsonl`);
+  const streamFile = join(outputs.streams, `${prefix}.stream.jsonl`);
   deps.writeFile(streamFile, '');
   const chunks: Buffer[] = [];
   const argv = [...SESSION_ARGUMENTS, '--model', config.model, '--effort', config.effort, ...extra];
@@ -143,8 +155,8 @@ async function play(
     structuredOutput: _structured,
     ...measure
   } = measureSession(Buffer.concat(chunks).toString());
-  deps.writeFile(join(folder, `${prefix}.measure.json`), json({ ...measure, stopped }));
-  if (tool === 'code.json') deps.writeFile(join(folder, 'build.report.md'), report);
+  deps.writeFile(join(outputs.retained, `${prefix}.measure.json`), json({ ...measure, stopped }));
+  if (tool === 'code.json') deps.writeFile(join(outputs.retained, 'build.report.md'), report);
   return { measure: { ...measure, report, structuredOutput: _structured }, stopped };
 }
 
@@ -154,13 +166,17 @@ const outputBound = () => 4000;
 type CheckConfig = StepFile['checks'][number];
 
 /** Un contrôle : joué, sa durée mesurée en secondes entières, son résultat écrit dans `check.<nom>.json`. */
-async function playCheck(deps: StepDependencies, folder: string, config: CheckConfig): Promise<CheckReport> {
+async function playCheck(
+  deps: StepDependencies,
+  outputs: StepOutputs,
+  config: CheckConfig,
+): Promise<CheckReport> {
   const before = deps.now();
   const outcome = await deps.check(config.command, config.limitSeconds);
   const durationSeconds = Math.round((deps.now() - before) / 1000);
   const { exitCode, stopped, cut, output } = outcome;
   deps.writeFile(
-    join(folder, `check.${config.name}.json`),
+    join(outputs.retained, `check.${config.name}.json`),
     json({ command: config.command, exitCode, stopped, durationSeconds, cut, output }),
   );
   return { name: config.name, command: config.command, exitCode, stopped, durationSeconds, cut, output };
@@ -180,14 +196,14 @@ interface ReviewOutcome {
 /** Une revue : sa session, puis son verdict écrit dans son fichier. */
 async function review(
   deps: StepDependencies,
-  folder: string,
+  outputs: StepOutputs,
   config: ReviewConfig,
   brief: string,
 ): Promise<ReviewOutcome> {
   const prefix = `review.${config.name}`;
   const { measure, stopped } = await play(
     deps,
-    folder,
+    outputs,
     prefix,
     'review.json',
     config,
@@ -195,7 +211,7 @@ async function review(
     brief,
   );
   const verdict = verdictOf(measure.structuredOutput);
-  deps.writeFile(join(folder, `${prefix}.verdict.json`), json(verdict.file));
+  deps.writeFile(join(outputs.retained, `${prefix}.verdict.json`), json(verdict.file));
   return { config, verdict, measure, stopped };
 }
 
@@ -244,14 +260,14 @@ interface ScoutOutcome {
  */
 async function scout(
   deps: StepDependencies,
-  folder: string,
+  outputs: StepOutputs,
   config: ScoutConfig,
   question: string,
 ): Promise<ScoutOutcome> {
   const prefix = `scout.${config.name}`;
   const { measure, stopped } = await play(
     deps,
-    folder,
+    outputs,
     prefix,
     'scout.json',
     config,
@@ -261,7 +277,7 @@ async function scout(
   const completed = measure.completed && !stopped;
   const none = { config, measure, completed, stopped, verified: [], rejected: 0, open: 0 };
   const writeInvalid = (why: string): ScoutOutcome => {
-    deps.writeFile(join(folder, `${prefix}.facts.json`), json({ invalid: why }));
+    deps.writeFile(join(outputs.retained, `${prefix}.facts.json`), json({ invalid: why }));
     return none;
   };
   if (!completed) return writeInvalid('la session n’a pas abouti');
@@ -271,7 +287,10 @@ async function scout(
   const parsed = factsSchemaResult(measure.structuredOutput);
   if (typeof parsed === 'string') return writeInvalid(parsed);
   const { verified, rejected } = verifyFacts(parsed.facts, deps.readSource);
-  deps.writeFile(join(folder, `${prefix}.facts.json`), json({ verified, rejected, open: parsed.open }));
+  deps.writeFile(
+    join(outputs.retained, `${prefix}.facts.json`),
+    json({ verified, rejected, open: parsed.open }),
+  );
   return {
     config,
     measure,
@@ -375,7 +394,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
   try {
     const { folder, step, raw, brief, questions } = readStep(deps);
     // Avant le nom de l'étape et avant toute session : une étape se lance de la racine de son worktree, ou se refuse.
-    deps.root();
+    const worktree = deps.root();
     // `resolve` : le dossier `/x/demo/.` est le dossier `demo`.
     const name = basename(resolve(folder));
     if (!isStepName(name))
@@ -393,8 +412,9 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         step.scouts.map(({ name: scout }, index) => [`scout.${scout}.md`, questions[index] as string]),
       ),
     };
+    const outputs = deps.reserveOutputs(name, folder, worktree);
     const scoutOutcomes = await playBounded(step.scouts, step.parallel, (config, index) =>
-      scout(deps, folder, config, questions[index] as string),
+      scout(deps, outputs, config, questions[index] as string),
     );
     const scouts = Object.fromEntries(
       scoutOutcomes.map(({ config, measure, completed, verified, rejected, open }) => [
@@ -414,14 +434,14 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       brief,
       scoutOutcomes.flatMap(({ verified }) => verified),
     );
-    deps.writeFile(join(folder, 'build.brief.md'), forBuild);
-    const build = await play(deps, folder, 'build', 'code.json', step.build, [], forBuild);
+    deps.writeFile(join(outputs.retained, 'build.brief.md'), forBuild);
+    const build = await play(deps, outputs, 'build', 'code.json', step.build, [], forBuild);
     const built = build.measure.completed && !build.stopped;
     // Les contrôles, l'un après l'autre ; le premier qui ne passe pas met fin à la phase.
     const played: CheckReport[] = [];
     if (built) {
       for (const config of step.checks) {
-        const report = await playCheck(deps, folder, config);
+        const report = await playCheck(deps, outputs, config);
         played.push(report);
         if (!passed(report)) break;
       }
@@ -429,10 +449,12 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     const checked = played.every(passed);
     const forReviews =
       played.length === 0 ? brief : `${brief.trimEnd()}\n\n${renderChecks(played, outputBound())}`;
-    if (built && checked) deps.writeFile(join(folder, 'review.brief.md'), forReviews);
+    if (built && checked) deps.writeFile(join(outputs.retained, 'review.brief.md'), forReviews);
     const outcomes =
       built && checked
-        ? await playBounded(step.reviews, step.parallel, (config) => review(deps, folder, config, forReviews))
+        ? await playBounded(step.reviews, step.parallel, (config) =>
+            review(deps, outputs, config, forReviews),
+          )
         : [];
     const checks = Object.fromEntries(
       played.map((report) => [
@@ -645,8 +667,16 @@ export function stepDependencies(proc: CodeProcess): StepDependencies {
     folderArguments: proc.argv.slice(2),
     readFile: (path) => (existsSync(path) && statSync(path).isFile() ? readText(path) : undefined),
     readSource: sourceReader(cwd),
-    writeFile: (path, content) => writeFileSync(path, content),
-    appendFile: (path, content) => appendFileSync(path, content),
+    reserveOutputs: (name, intake, worktree) => reserveStepOutputs(proc.env, name, intake, worktree),
+    writeFile: (path, content) => writeFileSync(path, content, { flag: 'wx', mode: 0o600 }),
+    appendFile: (path, content) => {
+      const descriptor = openSync(path, constants.O_APPEND | constants.O_WRONLY | constants.O_NOFOLLOW);
+      try {
+        appendFileSync(descriptor, content);
+      } finally {
+        closeSync(descriptor);
+      }
+    },
     session: codeToolSession(toolDependencies(proc)),
     check: sandboxCheck(new SrtSandboxRunner(srtOptions(proc, {})), cwd),
     now: () => Date.now(),

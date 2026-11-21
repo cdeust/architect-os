@@ -2243,11 +2243,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 100,
+        "line": 101,
         "column": 22
       },
       "end": {
-        "line": 100,
+        "line": 101,
         "column": 41
       },
       "mutator": "Regex",
@@ -2257,11 +2257,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 100,
+        "line": 101,
         "column": 22
       },
       "end": {
-        "line": 100,
+        "line": 101,
         "column": 41
       },
       "mutator": "Regex",
@@ -2271,11 +2271,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 103,
+        "line": 104,
         "column": 7
       },
       "end": {
-        "line": 103,
+        "line": 104,
         "column": 31
       },
       "mutator": "ConditionalExpression",
@@ -2285,11 +2285,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 103,
+        "line": 104,
         "column": 75
       },
       "end": {
-        "line": 103,
+        "line": 104,
         "column": 107
       },
       "mutator": "StringLiteral",
@@ -2299,11 +2299,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 105,
+        "line": 106,
         "column": 7
       },
       "end": {
-        "line": 105,
+        "line": 106,
         "column": 24
       },
       "mutator": "ConditionalExpression",
@@ -2313,11 +2313,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 105,
+        "line": 106,
         "column": 68
       },
       "end": {
-        "line": 105,
+        "line": 106,
         "column": 94
       },
       "mutator": "StringLiteral",
@@ -2327,11 +2327,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 108,
+        "line": 109,
         "column": 41
       },
       "end": {
-        "line": 108,
+        "line": 109,
         "column": 47
       },
       "mutator": "StringLiteral",
@@ -2341,11 +2341,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 109,
+        "line": 110,
         "column": 11
       },
       "end": {
-        "line": 111,
+        "line": 112,
         "column": 4
       },
       "mutator": "BlockStatement",
@@ -2355,11 +2355,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 110,
+        "line": 111,
         "column": 28
       },
       "end": {
-        "line": 110,
+        "line": 111,
         "column": 45
       },
       "mutator": "StringLiteral",
@@ -2369,11 +2369,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 110,
+        "line": 111,
         "column": 47
       },
       "end": {
-        "line": 110,
+        "line": 111,
         "column": 79
       },
       "mutator": "StringLiteral",
@@ -2383,11 +2383,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 115,
+        "line": 116,
         "column": 52
       },
       "end": {
-        "line": 115,
+        "line": 116,
         "column": 61
       },
       "mutator": "StringLiteral",
@@ -2397,11 +2397,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 117,
+        "line": 118,
         "column": 66
       },
       "end": {
-        "line": 117,
+        "line": 118,
         "column": 101
       },
       "mutator": "StringLiteral",
@@ -2411,11 +2411,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 125,
+        "line": 126,
         "column": 56
       },
       "end": {
-        "line": 125,
+        "line": 126,
         "column": 73
       },
       "mutator": "StringLiteral",
@@ -2425,11 +2425,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 131,
+        "line": 132,
         "column": 7
       },
       "end": {
-        "line": 131,
+        "line": 132,
         "column": 32
       },
       "mutator": "ConditionalExpression",
@@ -2439,11 +2439,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 131,
+        "line": 132,
         "column": 24
       },
       "end": {
-        "line": 131,
+        "line": 132,
         "column": 32
       },
       "mutator": "StringLiteral",
@@ -2453,11 +2453,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 132,
+        "line": 133,
         "column": 7
       },
       "end": {
-        "line": 132,
+        "line": 133,
         "column": 27
       },
       "mutator": "ConditionalExpression",
@@ -2467,11 +2467,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 132,
+        "line": 133,
         "column": 46
       },
       "end": {
-        "line": 132,
+        "line": 133,
         "column": 76
       },
       "mutator": "ArrowFunction",
@@ -2481,11 +2481,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 133,
+        "line": 134,
         "column": 7
       },
       "end": {
-        "line": 133,
+        "line": 134,
         "column": 21
       },
       "mutator": "ConditionalExpression",
@@ -2495,11 +2495,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 144,
+        "line": 145,
         "column": 55
       },
       "end": {
-        "line": 144,
+        "line": 145,
         "column": 72
       },
       "mutator": "StringLiteral",
@@ -2509,11 +2509,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 153,
+        "line": 154,
         "column": 61
       },
       "end": {
-        "line": 153,
+        "line": 154,
         "column": 87
       },
       "mutator": "ArrowFunction",
@@ -2523,11 +2523,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 157,
+        "line": 158,
         "column": 26
       },
       "end": {
-        "line": 157,
+        "line": 158,
         "column": 60
       },
       "mutator": "ObjectLiteral",
@@ -2537,11 +2537,11 @@
     {
       "file": "packages/sandbox/src/profile.ts",
       "start": {
-        "line": 167,
+        "line": 168,
         "column": 32
       },
       "end": {
-        "line": 167,
+        "line": 168,
         "column": 49
       },
       "mutator": "StringLiteral",
@@ -2551,11 +2551,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 74,
+        "line": 76,
         "column": 29
       },
       "end": {
-        "line": 74,
+        "line": 76,
         "column": 38
       },
       "mutator": "ArithmeticOperator",
@@ -2565,11 +2565,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 84,
+        "line": 86,
         "column": 46
       },
       "end": {
-        "line": 92,
+        "line": 94,
         "column": 2
       },
       "mutator": "BlockStatement",
@@ -2579,11 +2579,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 86,
+        "line": 88,
         "column": 10
       },
       "end": {
-        "line": 86,
+        "line": 88,
         "column": 42
       },
       "mutator": "ConditionalExpression",
@@ -2593,11 +2593,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 86,
+        "line": 88,
         "column": 10
       },
       "end": {
-        "line": 86,
+        "line": 88,
         "column": 42
       },
       "mutator": "EqualityOperator",
@@ -2607,11 +2607,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 86,
+        "line": 88,
         "column": 28
       },
       "end": {
-        "line": 86,
+        "line": 88,
         "column": 42
       },
       "mutator": "StringLiteral",
@@ -2621,11 +2621,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 88,
+        "line": 90,
         "column": 9
       },
       "end": {
-        "line": 88,
+        "line": 90,
         "column": 23
       },
       "mutator": "ConditionalExpression",
@@ -2635,11 +2635,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 88,
+        "line": 90,
         "column": 9
       },
       "end": {
-        "line": 88,
+        "line": 90,
         "column": 23
       },
       "mutator": "EqualityOperator",
@@ -2649,11 +2649,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 96,
+        "line": 98,
         "column": 7
       },
       "end": {
-        "line": 96,
+        "line": 98,
         "column": 13
       },
       "mutator": "ArrayDeclaration",
@@ -2663,11 +2663,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 98,
+        "line": 100,
         "column": 9
       },
       "end": {
-        "line": 98,
+        "line": 100,
         "column": 11
       },
       "mutator": "ArrayDeclaration",
@@ -2677,11 +2677,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 99,
+        "line": 101,
         "column": 9
       },
       "end": {
-        "line": 101,
+        "line": 103,
         "column": 44
       },
       "mutator": "MethodExpression",
@@ -2691,11 +2691,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 99,
+        "line": 101,
         "column": 18
       },
       "end": {
-        "line": 99,
+        "line": 101,
         "column": 20
       },
       "mutator": "StringLiteral",
@@ -2705,11 +2705,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 105,
+        "line": 107,
         "column": 7
       },
       "end": {
-        "line": 105,
+        "line": 107,
         "column": 45
       },
       "mutator": "CallExpression",
@@ -2719,11 +2719,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 106,
+        "line": 108,
         "column": 11
       },
       "end": {
-        "line": 106,
+        "line": 108,
         "column": 39
       },
       "mutator": "ConditionalExpression",
@@ -2733,11 +2733,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 111,
+        "line": 113,
         "column": 26
       },
       "end": {
-        "line": 111,
+        "line": 113,
         "column": 45
       },
       "mutator": "StringLiteral",
@@ -2747,11 +2747,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 111,
+        "line": 113,
         "column": 47
       },
       "end": {
-        "line": 111,
+        "line": 113,
         "column": 81
       },
       "mutator": "StringLiteral",
@@ -2761,11 +2761,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 121,
+        "line": 123,
         "column": 25
       },
       "end": {
-        "line": 121,
+        "line": 123,
         "column": 63
       },
       "mutator": "StringLiteral",
@@ -2775,11 +2775,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 123,
+        "line": 125,
         "column": 20
       },
       "end": {
-        "line": 123,
+        "line": 125,
         "column": 94
       },
       "mutator": "MethodExpression",
@@ -2789,11 +2789,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 123,
+        "line": 125,
         "column": 56
       },
       "end": {
-        "line": 123,
+        "line": 125,
         "column": 93
       },
       "mutator": "ArrowFunction",
@@ -2803,11 +2803,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 123,
+        "line": 125,
         "column": 66
       },
       "end": {
-        "line": 123,
+        "line": 125,
         "column": 93
       },
       "mutator": "MethodExpression",
@@ -2817,11 +2817,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 138,
+        "line": 180,
         "column": 14
       },
       "end": {
-        "line": 138,
+        "line": 180,
         "column": 19
       },
       "mutator": "BooleanLiteral",
@@ -2831,11 +2831,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 139,
+        "line": 181,
         "column": 14
       },
       "end": {
-        "line": 139,
+        "line": 181,
         "column": 38
       },
       "mutator": "ArrayDeclaration",
@@ -2845,11 +2845,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 141,
+        "line": 183,
         "column": 20
       },
       "end": {
-        "line": 141,
+        "line": 183,
         "column": 27
       },
       "mutator": "StringLiteral",
@@ -2859,11 +2859,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 162,
+        "line": 204,
         "column": 51
       },
       "end": {
-        "line": 162,
+        "line": 204,
         "column": 103
       },
       "mutator": "StringLiteral",
@@ -2873,11 +2873,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 164,
+        "line": 206,
         "column": 59
       },
       "end": {
-        "line": 170,
+        "line": 212,
         "column": 6
       },
       "mutator": "ObjectLiteral",
@@ -2887,11 +2887,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 167,
+        "line": 209,
         "column": 17
       },
       "end": {
-        "line": 167,
+        "line": 209,
         "column": 21
       },
       "mutator": "BooleanLiteral",
@@ -2901,11 +2901,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 168,
+        "line": 210,
         "column": 14
       },
       "end": {
-        "line": 168,
+        "line": 210,
         "column": 19
       },
       "mutator": "BooleanLiteral",
@@ -2915,11 +2915,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 169,
+        "line": 211,
         "column": 14
       },
       "end": {
-        "line": 169,
+        "line": 211,
         "column": 23
       },
       "mutator": "StringLiteral",
@@ -2929,11 +2929,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 172,
+        "line": 214,
         "column": 21
       },
       "end": {
-        "line": 172,
+        "line": 214,
         "column": 83
       },
       "mutator": "ArrowFunction",
@@ -2943,11 +2943,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 172,
+        "line": 214,
         "column": 49
       },
       "end": {
-        "line": 172,
+        "line": 214,
         "column": 83
       },
       "mutator": "ArrowFunction",
@@ -2957,11 +2957,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 173,
+        "line": 215,
         "column": 54
       },
       "end": {
-        "line": 178,
+        "line": 220,
         "column": 6
       },
       "mutator": "ArrayDeclaration",
@@ -2971,11 +2971,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 174,
+        "line": 216,
         "column": 7
       },
       "end": {
-        "line": 174,
+        "line": 216,
         "column": 40
       },
       "mutator": "ArrayDeclaration",
@@ -2985,11 +2985,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 174,
+        "line": 216,
         "column": 8
       },
       "end": {
-        "line": 174,
+        "line": 216,
         "column": 18
       },
       "mutator": "StringLiteral",
@@ -2999,11 +2999,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 174,
+        "line": 216,
         "column": 28
       },
       "end": {
-        "line": 174,
+        "line": 216,
         "column": 38
       },
       "mutator": "StringLiteral",
@@ -3013,11 +3013,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 175,
+        "line": 217,
         "column": 7
       },
       "end": {
-        "line": 175,
+        "line": 217,
         "column": 36
       },
       "mutator": "ArrayDeclaration",
@@ -3027,11 +3027,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 175,
+        "line": 217,
         "column": 8
       },
       "end": {
-        "line": 175,
+        "line": 217,
         "column": 16
       },
       "mutator": "StringLiteral",
@@ -3041,11 +3041,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 175,
+        "line": 217,
         "column": 26
       },
       "end": {
-        "line": 175,
+        "line": 217,
         "column": 34
       },
       "mutator": "StringLiteral",
@@ -3055,11 +3055,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 176,
+        "line": 218,
         "column": 7
       },
       "end": {
-        "line": 176,
+        "line": 218,
         "column": 55
       },
       "mutator": "ArrayDeclaration",
@@ -3069,11 +3069,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 176,
+        "line": 218,
         "column": 8
       },
       "end": {
-        "line": 176,
+        "line": 218,
         "column": 17
       },
       "mutator": "StringLiteral",
@@ -3083,11 +3083,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 176,
+        "line": 218,
         "column": 19
       },
       "end": {
-        "line": 176,
+        "line": 218,
         "column": 54
       },
       "mutator": "ArrowFunction",
@@ -3097,11 +3097,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 177,
+        "line": 219,
         "column": 7
       },
       "end": {
-        "line": 177,
+        "line": 219,
         "column": 54
       },
       "mutator": "ArrayDeclaration",
@@ -3111,11 +3111,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 177,
+        "line": 219,
         "column": 8
       },
       "end": {
-        "line": 177,
+        "line": 219,
         "column": 16
       },
       "mutator": "StringLiteral",
@@ -3125,11 +3125,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 177,
+        "line": 219,
         "column": 18
       },
       "end": {
-        "line": 177,
+        "line": 219,
         "column": 53
       },
       "mutator": "ArrowFunction",
@@ -3139,11 +3139,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 179,
+        "line": 221,
         "column": 47
       },
       "end": {
-        "line": 179,
+        "line": 221,
         "column": 75
       },
       "mutator": "CallExpression",
@@ -3153,11 +3153,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 180,
+        "line": 222,
         "column": 9
       },
       "end": {
-        "line": 182,
+        "line": 224,
         "column": 6
       },
       "mutator": "BlockStatement",
@@ -3167,11 +3167,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 182,
+        "line": 224,
         "column": 15
       },
       "end": {
-        "line": 184,
+        "line": 226,
         "column": 6
       },
       "mutator": "BlockStatement",
@@ -3181,11 +3181,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 183,
+        "line": 225,
         "column": 49
       },
       "end": {
-        "line": 183,
+        "line": 225,
         "column": 78
       },
       "mutator": "CallExpression",
@@ -3195,11 +3195,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 190,
+        "line": 232,
         "column": 9
       },
       "end": {
-        "line": 190,
+        "line": 232,
         "column": 27
       },
       "mutator": "ConditionalExpression",
@@ -3209,11 +3209,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 190,
+        "line": 232,
         "column": 52
       },
       "end": {
-        "line": 190,
+        "line": 232,
         "column": 71
       },
       "mutator": "StringLiteral",
@@ -3223,11 +3223,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 190,
+        "line": 232,
         "column": 73
       },
       "end": {
-        "line": 190,
+        "line": 232,
         "column": 84
       },
       "mutator": "StringLiteral",
@@ -3237,11 +3237,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 197,
+        "line": 239,
         "column": 22
       },
       "end": {
-        "line": 197,
+        "line": 239,
         "column": 37
       },
       "mutator": "ObjectLiteral",
@@ -3251,11 +3251,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 198,
+        "line": 240,
         "column": 25
       },
       "end": {
-        "line": 198,
+        "line": 240,
         "column": 40
       },
       "mutator": "ObjectLiteral",
@@ -3265,11 +3265,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 209,
+        "line": 253,
         "column": 68
       },
       "end": {
-        "line": 212,
+        "line": 256,
         "column": 8
       },
       "mutator": "BlockStatement",
@@ -3279,11 +3279,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 211,
+        "line": 255,
         "column": 29
       },
       "end": {
-        "line": 211,
+        "line": 255,
         "column": 68
       },
       "mutator": "StringLiteral",
@@ -3293,11 +3293,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 211,
+        "line": 255,
         "column": 70
       },
       "end": {
-        "line": 211,
+        "line": 255,
         "column": 85
       },
       "mutator": "ObjectLiteral",
@@ -3307,11 +3307,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 216,
+        "line": 260,
         "column": 9
       },
       "end": {
-        "line": 216,
+        "line": 260,
         "column": 39
       },
       "mutator": "ConditionalExpression",
@@ -3321,11 +3321,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 216,
+        "line": 260,
         "column": 9
       },
       "end": {
-        "line": 216,
+        "line": 260,
         "column": 39
       },
       "mutator": "ConditionalExpression",
@@ -3335,11 +3335,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 216,
+        "line": 260,
         "column": 9
       },
       "end": {
-        "line": 216,
+        "line": 260,
         "column": 39
       },
       "mutator": "EqualityOperator",
@@ -3349,11 +3349,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 217,
+        "line": 261,
         "column": 13
       },
       "end": {
-        "line": 217,
+        "line": 261,
         "column": 15
       },
       "mutator": "ArrayDeclaration",
@@ -3363,11 +3363,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 218,
+        "line": 262,
         "column": 13
       },
       "end": {
-        "line": 218,
+        "line": 262,
         "column": 100
       },
       "mutator": "ArrayDeclaration",
@@ -3377,11 +3377,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 218,
+        "line": 262,
         "column": 89
       },
       "end": {
-        "line": 218,
+        "line": 262,
         "column": 98
       },
       "mutator": "ArrayDeclaration",
@@ -3391,25 +3391,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 220,
-        "column": 85
-      },
-      "end": {
-        "line": 220,
-        "column": 100
-      },
-      "mutator": "ObjectLiteral",
-      "original": "{ mode: 0o400 }",
-      "replacement": "{}"
-    },
-    {
-      "file": "packages/sandbox/src/srt-runner.ts",
-      "start": {
-        "line": 230,
+        "line": 275,
         "column": 39
       },
       "end": {
-        "line": 230,
+        "line": 275,
         "column": 62
       },
       "mutator": "ArrayDeclaration",
@@ -3419,11 +3405,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 249,
+        "line": 294,
         "column": 45
       },
       "end": {
-        "line": 249,
+        "line": 294,
         "column": 49
       },
       "mutator": "BooleanLiteral",
@@ -3433,11 +3419,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 264,
+        "line": 309,
         "column": 41
       },
       "end": {
-        "line": 264,
+        "line": 309,
         "column": 56
       },
       "mutator": "ObjectLiteral",
@@ -3447,25 +3433,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 270,
-        "column": 57
-      },
-      "end": {
-        "line": 270,
-        "column": 72
-      },
-      "mutator": "ObjectLiteral",
-      "original": "{ mode: 0o400 }",
-      "replacement": "{}"
-    },
-    {
-      "file": "packages/sandbox/src/srt-runner.ts",
-      "start": {
-        "line": 271,
+        "line": 312,
         "column": 33
       },
       "end": {
-        "line": 271,
+        "line": 312,
         "column": 61
       },
       "mutator": "ArrowFunction",
@@ -3475,11 +3447,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 273,
+        "line": 314,
         "column": 19
       },
       "end": {
-        "line": 273,
+        "line": 314,
         "column": 26
       },
       "mutator": "StringLiteral",
@@ -3489,11 +3461,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 274,
+        "line": 315,
         "column": 24
       },
       "end": {
-        "line": 274,
+        "line": 315,
         "column": 35
       },
       "mutator": "StringLiteral",
@@ -3503,11 +3475,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 285,
+        "line": 326,
         "column": 56
       },
       "end": {
-        "line": 285,
+        "line": 326,
         "column": 58
       },
       "mutator": "StringLiteral",
@@ -3517,11 +3489,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 289,
+        "line": 330,
         "column": 15
       },
       "end": {
-        "line": 291,
+        "line": 332,
         "column": 8
       },
       "mutator": "BlockStatement",
@@ -3531,11 +3503,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 290,
+        "line": 331,
         "column": 27
       },
       "end": {
-        "line": 290,
+        "line": 331,
         "column": 73
       },
       "mutator": "StringLiteral",
@@ -3545,11 +3517,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 292,
+        "line": 333,
         "column": 11
       },
       "end": {
-        "line": 292,
+        "line": 333,
         "column": 36
       },
       "mutator": "ConditionalExpression",
@@ -3559,11 +3531,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 292,
+        "line": 333,
         "column": 11
       },
       "end": {
-        "line": 292,
+        "line": 333,
         "column": 68
       },
       "mutator": "LogicalOperator",
@@ -3573,11 +3545,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 292,
+        "line": 333,
         "column": 40
       },
       "end": {
-        "line": 292,
+        "line": 333,
         "column": 68
       },
       "mutator": "ConditionalExpression",
@@ -3587,11 +3559,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 294,
+        "line": 335,
         "column": 15
       },
       "end": {
-        "line": 296,
+        "line": 337,
         "column": 6
       },
       "mutator": "BlockStatement",
@@ -3601,11 +3573,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 295,
+        "line": 336,
         "column": 7
       },
       "end": {
-        "line": 295,
+        "line": 336,
         "column": 22
       },
       "mutator": "CallExpression",
@@ -3615,11 +3587,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 304,
+        "line": 345,
         "column": 28
       },
       "end": {
-        "line": 304,
+        "line": 345,
         "column": 37
       },
       "mutator": "StringLiteral",
@@ -3629,11 +3601,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 305,
+        "line": 346,
         "column": 45
       },
       "end": {
-        "line": 305,
+        "line": 346,
         "column": 49
       },
       "mutator": "BooleanLiteral",
@@ -3643,11 +3615,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 308,
+        "line": 349,
         "column": 16
       },
       "end": {
-        "line": 308,
+        "line": 349,
         "column": 23
       },
       "mutator": "StringLiteral",
@@ -3657,11 +3629,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 308,
+        "line": 349,
         "column": 25
       },
       "end": {
-        "line": 308,
+        "line": 349,
         "column": 67
       },
       "mutator": "ArrowFunction",
@@ -3671,11 +3643,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 308,
+        "line": 349,
         "column": 38
       },
       "end": {
-        "line": 308,
+        "line": 349,
         "column": 66
       },
       "mutator": "ObjectLiteral",
@@ -3685,11 +3657,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 314,
+        "line": 355,
         "column": 24
       },
       "end": {
-        "line": 314,
+        "line": 355,
         "column": 33
       },
       "mutator": "StringLiteral",
@@ -3699,11 +3671,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 315,
+        "line": 356,
         "column": 28
       },
       "end": {
-        "line": 315,
+        "line": 356,
         "column": 65
       },
       "mutator": "ArrowFunction",
@@ -3713,11 +3685,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 315,
+        "line": 356,
         "column": 55
       },
       "end": {
-        "line": 315,
+        "line": 356,
         "column": 64
       },
       "mutator": "StringLiteral",
@@ -3727,11 +3699,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 318,
+        "line": 359,
         "column": 13
       },
       "end": {
-        "line": 320,
+        "line": 361,
         "column": 4
       },
       "mutator": "BlockStatement",
@@ -3741,11 +3713,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 319,
+        "line": 360,
         "column": 5
       },
       "end": {
-        "line": 319,
+        "line": 360,
         "column": 25
       },
       "mutator": "CallExpression",
@@ -3755,11 +3727,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 332,
+        "line": 373,
         "column": 40
       },
       "end": {
-        "line": 338,
+        "line": 379,
         "column": 6
       },
       "mutator": "ObjectLiteral",
@@ -3769,11 +3741,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 335,
+        "line": 376,
         "column": 17
       },
       "end": {
-        "line": 335,
+        "line": 376,
         "column": 21
       },
       "mutator": "BooleanLiteral",
@@ -3783,11 +3755,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 336,
+        "line": 377,
         "column": 14
       },
       "end": {
-        "line": 336,
+        "line": 377,
         "column": 19
       },
       "mutator": "BooleanLiteral",
@@ -3797,11 +3769,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 337,
+        "line": 378,
         "column": 14
       },
       "end": {
-        "line": 337,
+        "line": 378,
         "column": 38
       },
       "mutator": "ArrayDeclaration",
@@ -3811,11 +3783,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 339,
+        "line": 380,
         "column": 20
       },
       "end": {
-        "line": 339,
+        "line": 380,
         "column": 27
       },
       "mutator": "StringLiteral",
@@ -3825,11 +3797,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 340,
+        "line": 381,
         "column": 5
       },
       "end": {
-        "line": 340,
+        "line": 381,
         "column": 23
       },
       "mutator": "CallExpression",
@@ -3839,11 +3811,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 343,
+        "line": 384,
         "column": 11
       },
       "end": {
-        "line": 343,
+        "line": 384,
         "column": 46
       },
       "mutator": "ConditionalExpression",
@@ -3853,11 +3825,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 343,
+        "line": 384,
         "column": 11
       },
       "end": {
-        "line": 343,
+        "line": 384,
         "column": 46
       },
       "mutator": "EqualityOperator",
@@ -3867,11 +3839,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 345,
+        "line": 386,
         "column": 5
       },
       "end": {
-        "line": 345,
+        "line": 386,
         "column": 27
       },
       "mutator": "CallExpression",
@@ -3881,11 +3853,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 346,
+        "line": 387,
         "column": 30
       },
       "end": {
-        "line": 346,
+        "line": 387,
         "column": 67
       },
       "mutator": "ArrowFunction",
@@ -3895,11 +3867,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 346,
+        "line": 387,
         "column": 57
       },
       "end": {
-        "line": 346,
+        "line": 387,
         "column": 66
       },
       "mutator": "StringLiteral",
@@ -3909,11 +3881,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 348,
+        "line": 389,
         "column": 7
       },
       "end": {
-        "line": 348,
+        "line": 389,
         "column": 27
       },
       "mutator": "CallExpression",
@@ -3923,11 +3895,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 349,
+        "line": 390,
         "column": 28
       },
       "end": {
-        "line": 349,
+        "line": 390,
         "column": 37
       },
       "mutator": "StringLiteral",
@@ -3937,11 +3909,11 @@
     {
       "file": "packages/sandbox/src/srt-runner.ts",
       "start": {
-        "line": 352,
+        "line": 393,
         "column": 16
       },
       "end": {
-        "line": 352,
+        "line": 393,
         "column": 23
       },
       "mutator": "StringLiteral",

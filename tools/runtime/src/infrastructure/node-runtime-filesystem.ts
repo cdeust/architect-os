@@ -90,6 +90,13 @@ function pathInRun(root: string, below: Below): string | undefined {
   return below[0] === 'run' && below.length > 2 ? pathBelow(root, below) : undefined;
 }
 
+function sharedDirectoryIsSafe(stats: BigIntStats | undefined, device: bigint, below: Below): boolean {
+  if (!stats?.isDirectory() || stats.dev !== device) return false;
+  return (
+    below[0] !== 'state' || (stats.uid === BigInt(process.getuid!()) && (stats.mode & 0o7777n) === 0o700n)
+  );
+}
+
 export class NodeRuntimeFilesystem implements RuntimeFilesystem {
   private readonly calls: HostCalls;
 
@@ -180,7 +187,7 @@ export class NodeRuntimeFilesystem implements RuntimeFilesystem {
           throwIfNoEntry: false,
         });
         if (stats === undefined) return 'absent';
-        if (!stats.isDirectory() || stats.dev !== device) return 'unsafe';
+        if (!sharedDirectoryIsSafe(stats, device, below)) return 'unsafe';
       }
       return 'found';
     } catch {
@@ -199,7 +206,7 @@ export class NodeRuntimeFilesystem implements RuntimeFilesystem {
         if (codeOf(error) !== 'EEXIST') return 'failed';
       }
       const stats = this.calls.lstat(path);
-      if (stats?.isDirectory() !== true || stats.dev !== device) return 'unsafe';
+      if (!sharedDirectoryIsSafe(stats, device, below)) return 'unsafe';
     }
     return 'ok';
   }

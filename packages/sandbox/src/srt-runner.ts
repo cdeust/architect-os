@@ -51,6 +51,8 @@ export interface SrtRunnerOptions {
   readonly canaryProbe: string;
   /** Parent des dossiers temporaires par sandbox. */
   readonly tmpRoot: string;
+  readonly runtimeRoot: string;
+  readonly runDir: string;
   readonly home: string;
   readonly hostEnv: Readonly<Record<string, string | undefined>>;
   /** Chemins de confiance en plus (code du lanceur, plugins chargés) : refus s'ils sont inscriptibles. */
@@ -126,6 +128,46 @@ export function assertTrusted(settings: SrtSettings, paths: readonly string[]): 
   }
 }
 
+/** The pinned SRT accepts literal path entries. A bracket or star in a real directory name is never a glob. */
+export function engineSettings(settings: SrtSettings): string {
+  const filesystem = Object.fromEntries(
+    Object.entries(settings.filesystem).map(([rule, paths]) => [
+      rule,
+      paths.map((path) => ({ path, literal: true })),
+    ]),
+  );
+  return JSON.stringify({ ...settings, filesystem });
+}
+
+/** The host may reopen its own fixture checkout inside a run. Never reopen a neighbour or the common session parent. */
+export function bindSessionWorkspace(
+  settings: SrtSettings,
+  workspace: Pick<Worktree, 'repo' | 'worktree'>,
+  root: string,
+  run: string,
+  sessionParent: string,
+): void {
+  const runs = join(root, 'run');
+  const inside = (path: string, parent: string) => path === parent || path.startsWith(parent + '/');
+  for (const path of [workspace.repo, workspace.worktree]) {
+    if (
+      inside(path, join(root, 'cache')) ||
+      inside(path, join(root, 'state')) ||
+      inside(root, path) ||
+      (inside(path, runs) && (!inside(path, run) || inside(sessionParent, path)))
+    )
+      throw unavailable('workspace reopens protected runtime storage');
+  }
+  if ([root, runs, sessionParent].some((path) => isWritable(settings, path)))
+    throw unavailable('workspace grants writes to shared runtime storage');
+  if (inside(workspace.repo, runs)) {
+    // A Linux read-only bind of the primary checkout would cover the nested writable worktree.
+    // Git needs its common directory; a platform process instead consumes its separate source root.
+    const source = inside(workspace.worktree, workspace.repo) ? join(workspace.repo, '.git') : workspace.repo;
+    settings.filesystem.allowRead = [...(settings.filesystem.allowRead ?? []), source];
+  }
+}
+
 export class SrtSandboxRunner implements SandboxRunner {
   constructor(private readonly options: SrtRunnerOptions) {}
 
@@ -198,6 +240,7 @@ export class SrtSandboxRunner implements SandboxRunner {
       mkdirSync(config, { mode: 0o700 });
       const vars = {
         ...withSandboxes(o.variables, dir),
+        runtime: o.runtimeRoot,
         home: realpathSync(o.home),
         repo: wt.repo,
         worktree: wt.worktree,
@@ -206,6 +249,7 @@ export class SrtSandboxRunner implements SandboxRunner {
         config,
       };
       const profile = resolveProfile(template, vars);
+      bindSessionWorkspace(profile.settings, wt, o.runtimeRoot, o.runDir, dirname(dir));
       for (const [file, content] of Object.entries(profile.files)) {
         mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
         writeFileSync(file, `${JSON.stringify(content, null, 2)}\n`, { mode: 0o600 });
@@ -217,7 +261,8 @@ export class SrtSandboxRunner implements SandboxRunner {
           ? []
           : [resolveExecutable('env', env['PATH']), ...profile.env.unset.flatMap((n) => ['-u', n])];
       const settingsFile = join(dir, 'profile.json');
-      writeFileSync(settingsFile, `${JSON.stringify(profile.settings, null, 2)}\n`, { mode: 0o400 });
+      const settingsText = engineSettings(profile.settings);
+      writeFileSync(settingsFile, settingsText, { mode: 0o400 });
       assertTrusted(profile.settings, [
         settingsFile,
         o.srtCli,
@@ -229,7 +274,7 @@ export class SrtSandboxRunner implements SandboxRunner {
       const srtCli = realpathSync(o.srtCli);
       assertTrusted(profile.settings, [nodeModulesOf(srtCli)]);
       const cwd = realpathSync(resolve(wt.cwd ?? request.cwd));
-      await this.canary(profile.settings, srtCli, dir, cwd, env).finally(() => dropCanary(dir));
+      await this.canary(settingsText, srtCli, dir, cwd, env).finally(() => dropCanary(dir));
       return {
         // Les arguments portent les variables du profil : `--settings ${config}/settings.json` pour Claude Code.
         argv: [
@@ -253,7 +298,7 @@ export class SrtSandboxRunner implements SandboxRunner {
 
   /** Le profil réel ; un secret dans un dossier frère, qu'il doit cacher ; un port écouté par l'hôte, hors allowlist. */
   private async canary(
-    settings: SrtSettings,
+    settingsText: string,
     srtCli: string,
     dir: string,
     cwd: string,
@@ -262,12 +307,8 @@ export class SrtSandboxRunner implements SandboxRunner {
     const o = this.options;
     const secret = join(canaryFolder(dir), 'canary-secret');
     writeFileSync(secret, randomUUID(), { mode: 0o600 });
-    const canarySettings: SrtSettings = {
-      ...settings,
-      filesystem: settings.filesystem, // sans ajout : le parent des sandboxes, que le profil refuse, cache le secret
-    };
     const file = join(dir, 'canary.json');
-    writeFileSync(file, JSON.stringify(canarySettings), { mode: 0o400 });
+    writeFileSync(file, settingsText, { mode: 0o400 });
     const server = createServer((socket) => socket.destroy());
     await new Promise<void>((done, fail) => {
       server.once('error', fail);

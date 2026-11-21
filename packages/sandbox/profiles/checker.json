@@ -17,11 +17,14 @@
         "${home}/.claude",
         "${home}/.claude.json",
         "${home}/Library/Keychains",
-        "${sandboxes}"
+        "${sandboxes}",
+        "${home}/.npm",
+        "${runtime}/run",
+        "${runtime}/state"
       ],
-      "allowRead": ["${tmp}"],
+      "allowRead": ["${tmp}", "${worktree}"],
       "allowWrite": ["${tmp}"],
-      "denyWrite": []
+      "denyWrite": ["/tmp/claude", "/private/tmp/claude", "${runtime}/cache", "${runtime}/state"]
     }
   },
   "env": {
@@ -30,7 +33,8 @@
       "TMPDIR": "${tmp}",
       "npm_config_cache": "${tmp}/npm",
       "npm_config_offline": "true",
-      "npm_config_update_notifier": "false"
+      "npm_config_update_notifier": "false",
+      "CLAUDE_CODE_TMPDIR": "${tmp}"
     },
     "unset": ["NO_PROXY", "no_proxy"]
   },

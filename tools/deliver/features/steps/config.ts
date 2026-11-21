@@ -28,7 +28,7 @@ const base = (): Record<string, unknown> => ({
   gateCommand: ['npm', 'run', 'gate'],
   gateLog: 'reports/deliver-gate.log',
   environment: ['PATH', 'HOME', 'GH_TOKEN'],
-  log: '${home}/.local/state/architect-os/deliveries.jsonl',
+  log: '${state}/deliveries.jsonl',
   ciAttempts: 6,
   pollSeconds: 30,
   ciPolls: 90,

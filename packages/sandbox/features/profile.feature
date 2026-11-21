@@ -9,7 +9,6 @@ Feature: Builder profile template
     When I load the committed builder profile
     Then the profile allows writing to at least:
       | ${worktree}                                 |
-      | ${home}/.cache                              |
       | ${config}                                   |
       | ${tmp}                                      |
     And the profile allows writing to nothing under "${home}/.claude"
@@ -20,6 +19,10 @@ Feature: Builder profile template
       | ${worktree}/.claude/settings.local.json                    |
       | ${worktree}/steps                                          |
       | ${config}/settings.json                                    |
+      | /tmp/claude |
+      | /private/tmp/claude |
+      | ${runtime}/cache |
+      | ${runtime}/state |
     And the profile denies reading exactly:
       | ${home}/.ssh              |
       | ${home}/.aws              |
@@ -32,9 +35,13 @@ Feature: Builder profile template
       | ${home}/.claude.json      |
       | ${home}/Library/Keychains |
       | ${sandboxes}               |
+      | ${home}/.npm |
+      | ${runtime}/run |
+      | ${runtime}/state |
     And the profile allows reading exactly:
       | ${config} |
       | ${tmp} |
+      | ${worktree} |
     And the profile allows a pseudo-terminal
     And the profile sets the variable "CLAUDE_CODE_TMPDIR" to "${tmp}"
     And the profile unsets exactly the variables:
@@ -140,6 +147,7 @@ Feature: Builder profile template
       | NODE_OPTIONS            | --require x       |
       | SECRET                  | s                 |
     Then the closed environment is exactly:
+      | TMPDIR | /t/aos/tmp |
       | HOME                    | /h                                |
       | PATH                    | /usr/bin                          |
       | TERM                    | xterm                             |
@@ -149,4 +157,4 @@ Feature: Builder profile template
       | ANTHROPIC_API_KEY       | session-token                     |
       | CLAUDE_CODE_SUBPROCESS_ENV_SCRUB | 1                        |
       | TMPPREFIX                        | /t/aos/tmp/zsh                    |
-      | npm_config_cache        | /h/.cache/npm                     |
+      | npm_config_cache        | /t/aos/tmp/npm                     |

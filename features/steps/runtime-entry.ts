@@ -545,7 +545,7 @@ Then('the run of the probe holds its directories, two empty npm configurations a
   );
   assert.equal(readFileSync(join(run, 'config/npm/user.npmrc'), 'utf8'), '');
   assert.equal(readFileSync(join(run, 'config/npm/global.npmrc'), 'utf8'), '');
-  for (const shared of ['cache/npm', 'cache/xdg', 'cache/node']) {
+  for (const shared of ['cache/npm', 'cache/xdg', 'cache/node', 'state']) {
     assert.ok(existsSync(join(launcher(this).root, shared)), shared);
   }
 });

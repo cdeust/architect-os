@@ -6,6 +6,7 @@
   "license": "MIT",
   "description": "La commande de livraison : les décisions et la séquence, sur des ports (docs/design/orchestration-fable-5-2.md §14).",
   "dependencies": {
+    "@architect-os/sandbox": "0.1.0",
     "zod": "4.6.7"
   }
 }

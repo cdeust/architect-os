@@ -17,17 +17,24 @@
         "${home}/.claude",
         "${home}/.claude.json",
         "${home}/Library/Keychains",
-        "${sandboxes}"
+        "${sandboxes}",
+        "${home}/.npm",
+        "${runtime}/run",
+        "${runtime}/state"
       ],
-      "allowRead": ["${config}", "${tmp}"],
-      "allowWrite": ["${worktree}", "${home}/.cache", "${config}", "${tmp}"],
+      "allowRead": ["${config}", "${tmp}", "${worktree}"],
+      "allowWrite": ["${worktree}", "${config}", "${tmp}"],
       "denyWrite": [
         "${repo}/.git",
         "${worktree}/.git",
         "${worktree}/.claude/settings.json",
         "${worktree}/.claude/settings.local.json",
         "${worktree}/steps",
-        "${config}/settings.json"
+        "${config}/settings.json",
+        "/tmp/claude",
+        "/private/tmp/claude",
+        "${runtime}/cache",
+        "${runtime}/state"
       ]
     },
     "allowPty": true
@@ -53,7 +60,8 @@
       "ANTHROPIC_API_KEY": "${sessionToken}",
       "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1",
       "TMPPREFIX": "${tmp}/zsh",
-      "npm_config_cache": "${home}/.cache/npm"
+      "npm_config_cache": "${tmp}/npm",
+      "TMPDIR": "${tmp}"
     },
     "unset": ["NO_PROXY", "no_proxy"]
   },

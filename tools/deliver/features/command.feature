@@ -190,14 +190,14 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
         """
       And the log of the delivery command holds 0 lines
 
-    Scenario: a home that is not an absolute path: the log is refused before any act, and nothing is written
-      Given the delivery command is told its home as a path that is not absolute
+    Scenario: a runtime root that is not an absolute path: the log is refused before any act, and nothing is written
+      Given the delivery command is told its runtime root as a path that is not absolute
       When I run the delivery command with "step"
       Then the delivery command exited 3
       And the delivery command printed nothing on its standard output
       And the delivery command wrote on its standard error:
         """
-        architect-os deliver: the delivery log is not an absolute path
+        architect-os deliver: the runtime root for the log is not an absolute path
         """
       And the home of the delivery command holds no delivery log
       And the remote of the delivery command has no branch "sentinel/gate-1a-step"
@@ -245,7 +245,7 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
     Scenario: the dependencies of a process
       When I build the delivery dependencies of a fake process
       Then the delivery dependencies hold what the process gives
-      And the delivery dependencies hold git, gh, the home of the user and the timer of node
+      And the delivery dependencies hold git, gh and the timer of node
       And the delivery dependencies hold the descriptive file of this package
 
     Scenario: cli.ts hands the process to the command

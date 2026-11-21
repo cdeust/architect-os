@@ -7,12 +7,12 @@ Feature: code.json, the descriptive file of the 1a.0 tool
     And the tool launcher prompt file is "prompts/build.md"
     And the tool auth proxy upstream is "https://api.anthropic.com"
 
-  Scenario: the auth proxy options are those of code.json, the usage log under the home directory
+  Scenario: the auth proxy options are those of code.json, the usage log under the runtime root
     When I load the committed code.json
     And I build the auth proxy options with the session token "session-t"
     Then the auth proxy options carry the upstream, routes, betas and policy of code.json
     And the auth proxy options carry the session token "session-t" and the given credential source
-    And the auth proxy usage log is ".local/state/architect-os/usage.jsonl" under the home directory
+    And the auth proxy usage log is "state/usage.jsonl" under the runtime root
 
   Scenario: accepts a copy with two routes
     When I change a copy of the committed code.json to have two routes
@@ -36,7 +36,13 @@ Feature: code.json, the descriptive file of the 1a.0 tool
       | an absolute launcher prompt file |
       | a launcher prompt file outside the package |
       | an empty launcher prompt file |
+      | a usage log in the old host home |
+      | a usage log above persistent state |
       | no launcher prompt file |
+
+  Scenario: a usage journal outside runtime state reports which path policy was violated
+    When I break a copy of the committed code.json with a usage log above persistent state
+    Then parsing the broken code.json fails with the message "invalid runtime state log path"
 
   Scenario Outline: a launcher prompt file outside the launcher package is refused by name: <defect>
     When I break a copy of the committed code.json with <defect>
@@ -78,4 +84,6 @@ Feature: code.json, the descriptive file of the 1a.0 tool
       | an absolute launcher prompt file           |
       | a launcher prompt file outside the package |
       | an empty launcher prompt file              |
+      | a usage log in the old host home |
+      | a usage log above persistent state |
       | no launcher prompt file                    |

@@ -12,6 +12,8 @@ Feature: the options of the srt runner of a platform process
         "node": "/opt/node/bin/node",
         "canaryProbe": "/opt/platform/packages/sandbox/src/canary-probe.mjs",
         "tmpRoot": "<tmp>",
+        "runtimeRoot": "<runtime>",
+        "runDir": "<run>",
         "home": "<home>",
         "hostEnv": { "PATH": "/opt/node/bin:/usr/bin:/bin", "HOME": "<home>" },
         "trusted": [],
