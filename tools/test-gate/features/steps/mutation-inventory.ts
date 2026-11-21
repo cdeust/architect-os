@@ -36,6 +36,7 @@ Then('the registered native plugin reads the inventory from its working director
   try {
     process.chdir(repo.dir);
     const ignorer = plugin.factory();
+    assert.ok(ignorer, 'the registered factory returns an ignorer');
     const file = repo.path('src/scoped.mjs');
     assert.equal(ignorer.shouldIgnore({ hub: { file: { opts: { filename: file } } }, node: {} }), undefined);
   } finally {

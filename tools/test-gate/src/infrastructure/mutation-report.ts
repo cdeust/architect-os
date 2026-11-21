@@ -116,3 +116,10 @@ export function parseMutationReport(text: string, requireStatic = false): Mutati
     mutate: config.mutate,
   };
 }
+
+/** The hosted producer, projection and aggregate all require native static metadata. */
+export function requireNativeMutationReport(text: string): MutationReport {
+  const parsed = parseMutationReport(text, true);
+  if ('failure' in parsed) throw new Error(parsed.failure);
+  return parsed;
+}

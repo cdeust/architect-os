@@ -11,7 +11,7 @@ import { HOSTED_COSTS, HOSTED_LANES, planHostedSlices, type MutationCosts } from
 import { jsonText, parseJson } from './json.js';
 import { mutationLots } from './mutation-inventory.js';
 import { verifyMutationLots } from './mutation-lot-proof.js';
-import { parseMutationReport } from './mutation-report.js';
+import { requireNativeMutationReport } from './mutation-report.js';
 import { combineNative, projectNative } from './mutation-shards.js';
 import { verifyMutationCatalog } from './mutation-catalog.js';
 import { CucumberRunner, replayAll, sha256 } from './replay.js';
@@ -52,12 +52,12 @@ export async function runHostedGate(
     const config = parseGateConfig(read(CONFIG_PATH));
     if ('failure' in config) throw new Error(config.failure);
     const { canary, replay } = config;
-    if (canary === undefined || replay === undefined || jobOf(config, 'linux')?.mutation !== true)
-      throw new Error('configuration Linux sans canari, mutation ou rejeu');
     if (collecting) {
       workspace.remove(config.reports.mutation);
-      workspace.remove(replay.record);
+      if (replay !== undefined) workspace.remove(replay.record);
     }
+    if (canary === undefined || replay === undefined || jobOf(config, 'linux')?.mutation !== true)
+      throw new Error('configuration Linux sans canari, mutation ou rejeu');
     const repository = new GitRepository(root);
     const { head, firstParent } = repository.commits();
     const changes = changedFiles(repository, workspace, firstParent, (file) => isProduction(config, file));
@@ -80,8 +80,7 @@ export async function runHostedGate(
       const proof = projectNative(native, lots, patterns);
       if (canaryViolations(canary, proof.report).length !== 0)
         throw new Error('canari de mutation refusé dans le lot ' + number);
-      const projected = parseMutationReport(jsonText(proof.raw), true);
-      if ('failure' in projected) throw new Error(projected.failure);
+      const projected = requireNativeMutationReport(jsonText(proof.raw));
       return {
         proof,
         cases: replayCases(
@@ -138,8 +137,7 @@ export async function runHostedGate(
         receipts.push(...received.record.mutants.map((entry) => ({ ...entry, id: number + '/' + entry.id })));
       }
       const combined = jsonText(await combineNative(root, producers, full, canary.file, true));
-      const report = parseMutationReport(combined, true);
-      if ('failure' in report) throw new Error(report.failure);
+      const report = requireNativeMutationReport(combined);
       const expected = full.map((lot) =>
         lot.file === canary.file ? { ...lot, mutants: slices.flatMap(() => lot.mutants) } : lot,
       );

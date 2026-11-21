@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { loadConfiguration, loadSources } from '@cucumber/cucumber/api';
 import { globSync, readFileSync } from 'node:fs';
 import { matchesGlob, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -148,3 +149,41 @@ Then('a mutation profile that also drops features\\/integration is rejected', fu
   assert.notEqual(broken.paths.length, mutation.paths.length);
   assert.throws(() => assertMutationScope(base, broken));
 });
+
+Then(
+  'prioritizing mutated components preserves every scenario of the independent catalogue',
+  async function () {
+    const { mutation } = profiles(this);
+    const { mutationFeaturesFor } = (await import(pathToFileURL(join(ROOT, 'cucumber-paths.mjs')).href)) as {
+      mutationFeaturesFor(files: string[]): string[];
+    };
+    const paths = mutationFeaturesFor([
+      'tools/test-gate/canary/canary.ts',
+      'tools/test-gate/src/infrastructure/gate.ts',
+      'tools/test-gate/src/infrastructure/hosted-gate.ts',
+      'tools/deliver/src/infrastructure/gh-forge.ts',
+      'features/arch/should-not-enter.ts',
+      'tools/.hidden/src/should-not-enter.ts',
+    ]);
+    assert.deepEqual(paths.slice(0, 2), [
+      'tools/test-gate/features/**/*.feature',
+      'tools/deliver/features/**/*.feature',
+    ]);
+    assert.equal(
+      paths.some((path) => path.includes('/.hidden/')),
+      false,
+    );
+    const env = { cwd: ROOT };
+    const { runConfiguration } = await loadConfiguration({ profiles: ['mutation'] }, env);
+    const identities = async (scope: string[]) => {
+      const { plan, errors } = await loadSources({ ...runConfiguration.sources, paths: scope }, env);
+      assert.deepEqual(errors, []);
+      return plan.map(({ uri, location }) => uri + ':' + location.line);
+    };
+    const standard = await identities(mutation.paths);
+    const ordered = await identities(paths);
+    assert.ok(ordered[0]?.startsWith('tools/test-gate/features/'));
+    assert.equal(new Set(ordered).size, ordered.length);
+    assert.deepEqual(ordered.sort(), standard.sort());
+  },
+);

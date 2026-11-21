@@ -1,6 +1,6 @@
 import { distributeReplayFiles } from '../domain/replay-lots.js';
 import type { MutationReport } from '../domain/mutation.js';
-import { parseMutationReport } from './mutation-report.js';
+import { parseMutationReport, requireNativeMutationReport } from './mutation-report.js';
 import { verifyMutationLots, type Lot } from './mutation-lot-proof.js';
 import { mutationCatalog, verifyMutationCatalog } from './mutation-catalog.js';
 
@@ -33,7 +33,7 @@ export interface NativeProof {
 
 /** Validate the raw native report and preserve only in-lot identities and native ignores. */
 export function projectNative(text: string, lots: readonly Lot[], patterns?: readonly string[]): NativeProof {
-  const report = parseMutationReport(text, patterns !== undefined);
+  const report = patterns === undefined ? parseMutationReport(text) : requireNativeMutationReport(text);
   if ('failure' in report) throw new Error(report.failure);
   const outside = new Set<string>();
   const failure = verifyMutationLots(lots, report, (id) => outside.add(id), patterns);

@@ -5,6 +5,7 @@
 // `--mutate` on the command line overrides it. The runner reads cucumber.mjs (profile `mutation`, below): every
 // feature but features/repository and features/arch runs in the dry run; perTest coverage runs only the tests of a mutant.
 import { existsSync, readFileSync } from 'node:fs';
+import { mutationFeaturesFor } from './cucumber-paths.mjs';
 
 const PLAN = 'reports/gate-plan.json';
 const legacyPlan = existsSync(PLAN) ? JSON.parse(readFileSync(PLAN, 'utf8')) : { mutate: [] };
@@ -23,7 +24,12 @@ export default {
   // The `mutation` profile of cucumber.mjs: the default profile minus features/repository and features/arch; the
   // reasons are written in cucumber.mjs, at the profile.
   // Option `cucumber.profile`: node_modules/@stryker-mutator/cucumber-runner/dist/src-generated/cucumber-runner-options.d.ts.
-  cucumber: { profile: 'mutation' },
+  cucumber: {
+    profile: 'mutation',
+    ...(inventory?.patterns === undefined
+      ? {}
+      : { features: mutationFeaturesFor(inventory.lots.map(({ file }) => file)) }),
+  },
   coverageAnalysis: 'perTest',
   // One worker. The suite is not built to run in parallel: the workers share one sandbox and the machine (fixed ports of
   // the main.ts, files, PostgreSQL), so with several of them the status of a mutant depended on who collided with whom,

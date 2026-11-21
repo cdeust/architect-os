@@ -73,3 +73,24 @@ Then('the committed gate configuration declares the rule 7 controls:', function 
   assert.ok(!('failure' in config));
   assert.deepEqual({ canary: config.canary, replay: config.replay }, JSON.parse(text));
 });
+
+Then('the Gate path selector filters tracked, changed and untracked files', function () {
+  const repo = repository(this);
+  const git = new GitRepository(repo.dir);
+  const workspace = new Workspace(repo.dir);
+  const selected = (file: string) => file.endsWith('.mjs');
+  const paths = (parent: string | null) =>
+    changedFiles(git, workspace, parent, selected).map(({ path }) => path);
+
+  repo.write('src/kept.mjs', 'export const kept = 1;\n');
+  repo.write('note.txt', 'a tracked file outside the requested scope\n');
+  repo.commit('tracked paths');
+  const parent = git.commits().head;
+  repo.write('src/kept.mjs', 'export const kept = 2;\n');
+  repo.write('note.txt', 'a changed file outside the requested scope\n');
+  repo.write('src/new.mjs', 'export const fresh = 3;\n');
+  repo.write('fresh.txt', 'an untracked file outside the requested scope\n');
+
+  assert.deepEqual(paths(parent), ['src/kept.mjs', 'src/new.mjs']);
+  assert.deepEqual(paths(null), ['src/gone.mjs', 'src/kept.mjs', 'src/long.mjs', 'src/new.mjs']);
+});

@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
-import { basename, join, normalize } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { basename, extname, join, normalize } from 'node:path';
 import {
   judgeReplay,
   recheckDivergence,
@@ -13,10 +13,7 @@ import {
 import { parseCucumberReport } from './cucumber-report.js';
 import type { Workspace } from './workspace.js';
 
-const CUCUMBER = new URL(
-  import.meta.url.endsWith('.ts') ? './replay-cucumber.ts' : './replay-cucumber.js',
-  import.meta.url,
-).href;
+const CUCUMBER = new URL('./replay-cucumber' + extname(fileURLToPath(import.meta.url)), import.meta.url).href;
 const CUCUMBER_API = import.meta.resolve('@cucumber/cucumber/api');
 const SELECTION_PREFIX = 'AOS_REPLAY_SELECTION: ';
 const EXECUTION_PREFIX = 'AOS_REPLAY_EXECUTION: ';
