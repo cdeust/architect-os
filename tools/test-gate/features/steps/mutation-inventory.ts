@@ -3,7 +3,8 @@ import { Instrumenter } from '@stryker-mutator/instrumenter';
 import { readNativeLotIgnorer } from '../../src/infrastructure/stryker-lot-plugin.js';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { Then, When, repository } from './repository.js';
+import { join } from 'node:path';
+import { FIXTURES, Then, When, repository } from './repository.js';
 
 type Inventory = {
   head: string;
@@ -121,6 +122,83 @@ When('the native plugin instruments the inventory files', async function () {
   repo.write(
     'reports/mutation/native.json',
     JSON.stringify({ files, config: { mutate: lots.map(({ file }) => file) } }),
+  );
+});
+
+When('the gate inventories native shard {string}', function (shard: string) {
+  return repository(this).run(['inventory', '--shard', shard]);
+});
+
+When('the native producer {string} publishes its raw proof', function (shard: string) {
+  const repo = repository(this);
+  const directory = 'reports/mutation-shards/' + shard;
+  const nativePath = 'reports/mutation/native.json';
+  const raw = JSON.parse(repo.read(nativePath));
+  const testFixture = JSON.parse(readFileSync(join(FIXTURES, 'mutation/survivor.json'), 'utf8'));
+  raw.testFiles = testFixture.testFiles;
+  raw.schemaVersion = testFixture.schemaVersion;
+  raw.thresholds = testFixture.thresholds;
+  for (const { tests } of Object.values(raw.testFiles) as { tests: { id: string }[] }[]) {
+    for (const test of tests) test.id = shard + '/' + test.id;
+  }
+  for (const [file, result] of Object.entries(raw.files) as [
+    string,
+    {
+      language?: string;
+      mutants: { coveredBy: string[]; killedBy?: string[]; status?: string; static?: boolean }[];
+    },
+  ][]) {
+    result.language = 'javascript';
+    for (const mutant of result.mutants) {
+      mutant.static = false;
+      mutant.coveredBy = [shard + '/1'];
+      if (file === 'zz/probe.mjs') {
+        mutant.status = 'Killed';
+        mutant.killedBy = [shard + '/1'];
+      }
+    }
+  }
+  repo.write(directory + '/mutation/native.json', JSON.stringify(raw));
+  repo.write(directory + '/mutation-inventory.json', repo.read('reports/mutation-inventory.json'));
+});
+
+When('the gate collects the two native production lots', function () {
+  return repository(this).run(['inventory-collect', '--job', 'linux']);
+});
+
+Then(
+  'the native result from {string} is named {string} and covers {string}',
+  function (file: string, id: string, test: string) {
+    const repo = repository(this);
+    const report = JSON.parse(repo.read('reports/mutation/mutation.json'));
+    const [mutant] = report.files[file].mutants;
+    assert.equal(mutant.id, id);
+    assert.deepEqual(mutant.coveredBy, [test]);
+  },
+);
+
+Then('the aggregated report keeps the two certified canaries', function () {
+  const repo = repository(this);
+  const report = JSON.parse(repo.read('reports/mutation/mutation.json'));
+  const canaries = report.files['zz/probe.mjs'].mutants as { id: string; status: string }[];
+  assert.deepEqual([...new Set(canaries.map(({ id }) => id.split('/')[0]))], ['1', '2']);
+  assert(canaries.every(({ status }) => status === 'Killed'));
+  assert.equal(report.files['zz/probe.mjs'].language, 'javascript');
+  assert.equal(typeof report.schemaVersion, 'string');
+  assert.equal(typeof report.thresholds.high, 'number');
+  assert.equal(typeof report.testFiles['specs/green.feature'].tests[0].name, 'string');
+});
+
+Then('the replay receipt {string} contains only its own canary', function (shard: string) {
+  const repo = repository(this);
+  const receipt = JSON.parse(repo.read('reports/replay-shards/' + shard + '/replay.json'));
+  const canaries = receipt.mutants as { file: string; id: string; divergence: string | null }[];
+  assert(canaries.length > 0);
+  assert(
+    canaries.every(
+      ({ file, id, divergence }) =>
+        file === 'zz/probe.mjs' && id.startsWith(shard + '/') && divergence !== null,
+    ),
   );
 });
 

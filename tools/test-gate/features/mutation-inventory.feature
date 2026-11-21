@@ -62,6 +62,52 @@ Feature: The inventory projects native mutants onto changed production lines
       |           | false |
       | corrected | true  |
 
+  Scenario: separate native producers are both required and their local test IDs keep their exact scenario locations
+    Given a gate repository
+    And the gate repository holds the fixture specs "green.feature, second.feature"
+    And the gate repository can run the fixture suite with cucumber-js
+    And the gate mutation fixture declares its independent mutation profile
+    And the gate repository file "src/a.mjs" reads:
+      """
+      export const first = true;
+      """
+    And the gate repository file "src/b.mjs" reads:
+      """
+      export const second = false;
+      """
+    And the gate repository file "zz/probe.mjs" reads:
+      """
+      export function probe(value) {
+        return !value;
+      }
+      """
+    And the gate configuration declares the canary "zz/probe.mjs" with:
+      """
+      {"probe":"Killed"}
+      """
+    And the gate head is committed
+    When the gate inventories native shard "1"
+    And the native plugin instruments the inventory files
+    And the native producer "1" publishes its raw proof
+    And the gate collects the two native production lots
+    Then the gate exits with 1
+    And the gate output includes "inventaire absent"
+    When the gate inventories native shard "2"
+    And the native plugin instruments the inventory files
+    And the native producer "2" publishes its raw proof
+    And the gate collects the two native production lots
+    Then the gate exits with 0
+    And the native result from "src/a.mjs" is named "1/0" and covers "specs/green.feature:12"
+    And the native result from "src/b.mjs" is named "2/0" and covers "specs/green.feature:12"
+    And the aggregated report keeps the two certified canaries
+    Given the gate configuration declares the replay
+    When the gate replays mutation lot "1"
+    Then the gate exits with 1
+    And the replay receipt "1" contains only its own canary
+    When the gate replays mutation lot "2"
+    Then the gate exits with 1
+    And the replay receipt "2" contains only its own canary
+
   Scenario: a configured canary is inventoried whole with zero mutations
     Given a gate repository
     And the gate repository file "src/scoped.mjs" reads:

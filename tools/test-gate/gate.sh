@@ -43,7 +43,11 @@ fi
 if [ "$job" = linux ] && node -e 'process.exit(JSON.parse(require("fs").readFileSync("reports/gate-plan.json","utf8")).mutate.length > 0 ? 0 : 1)'; then
   started=$(date +%s)
   if [ "$report_only" = true ]; then
-    $gate inventory --job linux || exit 1
+    if [ -n "${AOS_MUTATION_SHARD:-}" ]; then
+      $gate inventory --shard "$AOS_MUTATION_SHARD" || exit 1
+    else
+      $gate inventory --job linux || exit 1
+    fi
     AOS_NATIVE_MUTATION_LOTS=1 stryker run
   else
     stryker run
@@ -52,6 +56,9 @@ if [ "$job" = linux ] && node -e 'process.exit(JSON.parse(require("fs").readFile
   echo "stryker: $(($(date +%s) - started)) s"
   if [ "$report_only" = true ]; then
     [ "$stryker_status" -eq 0 ] || exit "$stryker_status"
+    if [ -n "${AOS_MUTATION_SHARD:-}" ]; then
+      exec $gate inventory-project --shard "$AOS_MUTATION_SHARD"
+    fi
     exec $gate inventory-project --job linux
   fi
   started=$(date +%s)

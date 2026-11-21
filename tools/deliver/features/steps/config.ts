@@ -137,7 +137,8 @@ Then(
         producers: [
           'gate-linux-cucumber-1',
           'gate-linux-cucumber-2',
-          'gate-linux-mutation',
+          'gate-linux-mutation-1',
+          'gate-linux-mutation-2',
           'gate-linux-replay-1',
           'gate-linux-replay-2',
         ],

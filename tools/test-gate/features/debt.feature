@@ -1117,7 +1117,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     Then the gate exits with 1
     And the gate output is:
       """
-      porte de test : usage : test-gate plan|check|inventory|inventory-check|inventory-project [--job <nom>] | debt [realign] | replay [--all | --shard <1|2>] | replay-collect
+      porte de test : usage : test-gate plan|check|inventory|inventory-check|inventory-project|inventory-collect [--job <nom>] (inventory|inventory-project --shard <1|2>) | debt [realign] | replay [--all | --shard <1|2>] | replay-collect
       """
     And the gate repository holds no file "mutation-debt.json"
 

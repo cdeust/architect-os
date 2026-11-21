@@ -3,7 +3,7 @@ import type { MutantRecord, MutationReport } from '../domain/mutation.js';
 import type { ReadFailure } from '../domain/violation.js';
 import type { mutationLots } from './mutation-inventory.js';
 
-type Lot = Awaited<ReturnType<typeof mutationLots>>[number];
+export type Lot = Awaited<ReturnType<typeof mutationLots>>[number];
 
 function identity(
   startLine: number,

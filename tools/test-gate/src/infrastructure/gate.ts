@@ -132,14 +132,18 @@ async function replayCommand(
   }
   const reportHash = sha256(text as string);
   const cases = replayCases(report, selected);
+  const inReplayLot = (shard: 1 | 2, file: string, mutant: MutantRecord) => {
+    if (file === canary?.file && /^[12]\//.test(mutant.id)) return mutant.id.startsWith(String(shard) + '/');
+    return batches?.[shard === 1 ? 0 : 1].has(file) === true;
+  };
   if (batches !== undefined) {
     if (cases.some(({ file }) => !batches[0].has(file) && !batches[1].has(file)))
       throw new Error('mutant à rejouer sans lot');
     if (mode === 'collect') {
-      const collected = [1, 2].flatMap((shard) => {
+      const collected = ([1, 2] as const).flatMap((shard) => {
         const receiptText = workspace.read(replayShardPath(shard));
         const receipt = receiptText === null ? null : parseReplayRecord(receiptText);
-        const required = cases.filter(({ file }) => batches[shard - 1]?.has(file));
+        const required = cases.filter(({ file, mutant }) => inReplayLot(shard, file, mutant));
         if (receipt === null) throw new Error('lot de rejeu absent : ' + shard);
         const issues = replayViolations(required, receipt, reportHash);
         if (issues.length)
@@ -154,7 +158,8 @@ async function replayCommand(
   }
   workspace.remove(settings.work);
   const runner = new CucumberRunner(root, settings.profile, resolve(root, settings.work));
-  const due = mode === 1 || mode === 2 ? cases.filter(({ file }) => batches?.[mode - 1]?.has(file)) : cases;
+  const due =
+    mode === 1 || mode === 2 ? cases.filter(({ file, mutant }) => inReplayLot(mode, file, mutant)) : cases;
   const mutants = await replayAll(due, workspace, runner, settings.limitMs);
   workspace.write(target, jsonText({ report: reportHash, mutants }));
   const divergent = mutants.filter((entry) => entry.divergence !== null);
@@ -306,10 +311,11 @@ export async function runGate(
   if (
     command.name === 'inventory' ||
     command.name === 'inventory-check' ||
-    command.name === 'inventory-project'
+    command.name === 'inventory-project' ||
+    command.name === 'inventory-collect'
   ) {
     const project = command.name === 'inventory-project';
-    if (project) workspace.remove(config.reports.mutation);
+    if (project || command.name === 'inventory-collect') workspace.remove(config.reports.mutation);
     if (!job.mutation) return refuse('le job ne prévoit pas de mutation');
     try {
       const repository = new GitRepository(root);
@@ -325,28 +331,59 @@ export async function runGate(
         const bytes = workspace.readBytes(file);
         return bytes === null ? null : decoder.decode(bytes);
       });
-      const inventoryText = jsonText({ head, firstParent, job: job.name, lots });
+      const { combineNative, nativeScope, nativeShard, projectNative } = await import('./mutation-shards.js');
+      const canary = config.canary?.file;
+      const manifest = (shard?: 1 | 2) => {
+        const planned = shard === undefined ? lots : nativeShard(lots, canary, shard);
+        return {
+          planned,
+          text: jsonText({
+            head,
+            firstParent,
+            job: job.name,
+            ...(shard === undefined ? {} : { shard }),
+            lots: planned,
+          }),
+        };
+      };
+      const checkNative = (path: string, rawPath: string, shard?: 1 | 2) => {
+        const expected = manifest(shard);
+        if (workspace.readBytes(path)?.equals(Buffer.from(expected.text)) !== true)
+          throw new Error('inventaire absent ou différent du périmètre courant : ' + path);
+        const bytes = workspace.readBytes(rawPath);
+        if (bytes === null) throw new Error('rapport de mutation absent : ' + rawPath);
+        return projectNative(decoder.decode(bytes), expected.planned);
+      };
+      if (command.name === 'inventory-collect') {
+        const proofs = ([1, 2] as const).map((shard) => {
+          const directory = 'reports/mutation-shards/' + shard + '/';
+          const proof = checkNative(
+            directory + INVENTORY_PATH.slice('reports/'.length),
+            directory + NATIVE_MUTATION_PATH.slice('reports/'.length),
+            shard,
+          );
+          if (config.canary !== undefined && canaryViolations(config.canary, proof.report).length > 0)
+            throw new Error('canari de mutation refusé dans le lot ' + shard);
+          return proof;
+        });
+        const combined = await combineNative(root, proofs, lots, canary);
+        workspace.write(config.reports.mutation, jsonText(combined));
+        out.write('producteurs de mutation vérifiés : ' + proofs.length + '\n');
+        return 0;
+      }
+      const { planned, text: inventoryText } = manifest(command.shard);
       if (command.name !== 'inventory') {
-        if (workspace.readBytes(INVENTORY_PATH)?.equals(Buffer.from(inventoryText)) !== true)
-          return refuse('inventaire absent ou différent du périmètre courant');
-        const reportBytes = workspace.readBytes(project ? NATIVE_MUTATION_PATH : config.reports.mutation);
-        if (reportBytes === null) return refuse('rapport de mutation absent');
-        const reportText = decoder.decode(reportBytes);
-        const report = parseMutationReport(reportText);
-        if ('failure' in report) return refuse(report.failure);
-        const { verifyMutationLots } = await import('./mutation-lot-proof.js');
-        const bookkeeping = new Set<string>();
-        const failure = verifyMutationLots(lots, report, (_file, mutant) => bookkeeping.add(mutant.id));
-        if (failure !== null) return refuse(failure.failure);
-        if (project) {
-          const raw = JSON.parse(reportText) as { files: Record<string, { mutants: Array<{ id: string }> }> };
-          for (const file of Object.values(raw.files)) {
-            file.mutants = file.mutants.filter(({ id }) => !bookkeeping.has(id));
-          }
-          const gateNativeScope = lots.map(({ file, whole, lines }) => ({ file, whole, lines }));
-          workspace.write(config.reports.mutation, jsonText({ ...raw, gateNativeScope }));
-        }
-        out.write('lots de mutation vérifiés : ' + lots.length + '\n');
+        const { raw } = checkNative(
+          INVENTORY_PATH,
+          project ? NATIVE_MUTATION_PATH : config.reports.mutation,
+          command.shard,
+        );
+        if (project)
+          workspace.write(
+            config.reports.mutation,
+            jsonText({ ...raw, gateNativeScope: nativeScope(planned) }),
+          );
+        out.write('lots de mutation vérifiés : ' + planned.length + ' lot(s)\n');
         return 0;
       }
       workspace.write(INVENTORY_PATH, inventoryText);

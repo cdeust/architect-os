@@ -94,7 +94,7 @@ function assertGate(text: string): void {
     'gate-linux-replay',
   ]);
   assert.equal(doc.jobs['gate-linux-replay']?.needs, 'gate-linux-mutation');
-  for (const id of ['gate-linux-cucumber', 'gate-linux-replay'])
+  for (const id of ['gate-linux-cucumber', 'gate-linux-mutation', 'gate-linux-replay'])
     assert.deepEqual(doc.jobs[id]?.strategy, { 'fail-fast': false, matrix: { shard: [1, 2] } });
   assert.equal(doc.jobs['gate-linux']?.if, '${{ always() }}');
   const linuxSteps = doc.jobs['gate-linux']?.steps ?? [];
@@ -107,7 +107,9 @@ function assertGate(text: string): void {
   for (const [id, job] of Object.entries(doc.jobs))
     assert.equal(
       job.name,
-      id === 'gate-linux-cucumber' || id === 'gate-linux-replay' ? id + '-${{ matrix.shard }}' : id,
+      id === 'gate-linux-cucumber' || id === 'gate-linux-mutation' || id === 'gate-linux-replay'
+        ? id + '-${{ matrix.shard }}'
+        : id,
     );
   for (const step of Object.values(doc.jobs).flatMap((job) => job.steps)) {
     assert.ok(!('cache' in (step.with ?? {})), 'gate.yml must not use a cache');

@@ -77,9 +77,13 @@ jobs:
           if-no-files-found: error
 
   gate-linux-mutation:
-    name: gate-linux-mutation
+    name: gate-linux-mutation-${{ matrix.shard }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -116,6 +120,8 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Run mutation producer
+        env:
+          AOS_MUTATION_SHARD: ${{ matrix.shard }}
         run: |
           npm run gate -- --mutation-report-only
           git rev-parse --verify HEAD > reports/mutation/head
@@ -123,7 +129,7 @@ jobs:
       - name: Upload the mutation report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: gate-mutation-linux-${{ github.run_attempt }}
+          name: gate-mutation-linux-${{ github.run_attempt }}-${{ matrix.shard }}
           path: |
             reports/mutation/native.json
             reports/mutation/head
@@ -184,7 +190,7 @@ jobs:
           AOS_REPLAY_SHARD: ${{ matrix.shard }}
         run: |
           npm exec --no -- tsc -b
-          node --import tsx tools/test-gate/src/main.ts inventory-project --job linux
+          node --import tsx tools/test-gate/src/main.ts inventory-collect --job linux
           node --import tsx tools/test-gate/src/main.ts replay --shard "$AOS_REPLAY_SHARD" || test -s "reports/replay-shards/$AOS_REPLAY_SHARD/replay.json"
           git rev-parse --verify HEAD > "reports/replay-shards/$AOS_REPLAY_SHARD/head"
 
@@ -243,7 +249,7 @@ jobs:
 
       - name: Verify and collect independent replay lots
         run: |
-          node --import tsx tools/test-gate/src/main.ts inventory-project --job linux
+          node --import tsx tools/test-gate/src/main.ts inventory-collect --job linux
           node --import tsx tools/test-gate/src/main.ts replay-collect
 
       - name: Gate
