@@ -9,8 +9,9 @@ import { existsSync, readFileSync } from 'node:fs';
 const PLAN = 'reports/gate-plan.json';
 const legacyPlan = existsSync(PLAN) ? JSON.parse(readFileSync(PLAN, 'utf8')) : { mutate: [] };
 const native = process.env['AOS_NATIVE_MUTATION_LOTS'] === '1';
-const lots = native ? JSON.parse(readFileSync('reports/mutation-inventory.json', 'utf8')).lots : [];
-const mutate = native ? lots.map(({ file }) => file) : legacyPlan.mutate;
+const inventory = native ? JSON.parse(readFileSync('reports/mutation-inventory.json', 'utf8')) : null;
+const mutate =
+  inventory === null ? legacyPlan.mutate : (inventory.patterns ?? inventory.lots.map(({ file }) => file));
 
 export default {
   testRunner: 'cucumber',

@@ -59,7 +59,7 @@ export function changedFiles(
 }
 
 /** The mutation debt registry and the perimeter Stryker must mutate: rule 5's, plus the files of retired entries. */
-function mutationScope(
+export function mutationScope(
   config: GateConfig,
   changes: readonly ChangedFile[],
   workspace: Workspace,

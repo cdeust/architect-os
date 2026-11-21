@@ -137,10 +137,10 @@ Then(
         producers: [
           'gate-linux-cucumber-1',
           'gate-linux-cucumber-2',
-          'gate-linux-mutation-1',
-          'gate-linux-mutation-2',
-          'gate-linux-replay-1',
-          'gate-linux-replay-2',
+          ...Array.from({ length: 20 }, (_, i) => i + 1).flatMap((lane) => [
+            'gate-linux-lane-' + lane + ' / mutation',
+            'gate-linux-lane-' + lane + ' / replay',
+          ]),
         ],
         admissionStep: step,
       },

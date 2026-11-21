@@ -432,6 +432,14 @@ When('the gate receives a mutation lot report with {string}', function (variant:
       location: { start: { line: 5, column: 26 }, end: { line: 5, column: 30 } },
     });
   }
+  if (variant === 'ignored without reason') {
+    first.status = 'Ignored';
+    delete first.statusReason;
+  }
+  if (variant === 'active with a diagnostic') {
+    first.status = 'RuntimeError';
+    first.statusReason = 'fixture execution failed';
+  }
   if (variant === 'native ignore drift') {
     assert.equal(first.status, 'Ignored');
     first.statusReason = 'a different reason';

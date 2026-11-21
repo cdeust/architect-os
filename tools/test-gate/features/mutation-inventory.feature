@@ -389,18 +389,20 @@ Feature: The inventory projects native mutants onto changed production lines
     Then the mutation inventory check returns "<result>"
 
     Examples:
-      | case                   | result                                         |
-      | exact identities       | pass                                           |
-      | missing mutant         | mutant(s) du lot absents du rapport : 1        |
-      | duplicate identity     | mutant du lot répété ou motif d’ignorance      |
-      | outside active         | mutant actif hors lot                          |
-      | outside ignored        | pass                                           |
-      | wrong source           | source du rapport                              |
-      | stale inventory        | périmètre                                      |
-      | different file list    | fichiers du rapport différents des lots prévus |
-      | substituted file list  | fichiers du rapport différents des lots prévus |
-      | duplicated file list   | fichiers du rapport différents des lots prévus |
-      | unexpected report file | fichier de mutation hors inventaire            |
+      | case                     | result                                         |
+      | exact identities         | pass                                           |
+      | missing mutant           | mutant(s) du lot absents du rapport : 1        |
+      | duplicate identity       | mutant du lot répété ou motif d’ignorance      |
+      | ignored without reason   | mutant du lot répété ou motif d’ignorance      |
+      | active with a diagnostic | pass                                           |
+      | outside active           | mutant actif hors lot                          |
+      | outside ignored          | pass                                           |
+      | wrong source             | source du rapport                              |
+      | stale inventory          | périmètre                                      |
+      | different file list      | fichiers du rapport différents des lots prévus |
+      | substituted file list    | fichiers du rapport différents des lots prévus |
+      | duplicated file list     | fichiers du rapport différents des lots prévus |
+      | unexpected report file   | fichier de mutation hors inventaire            |
 
   Scenario Outline: the mutation report includes every configured file and unique IDs, <case>
     Given a gate repository

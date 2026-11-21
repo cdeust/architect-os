@@ -2,7 +2,7 @@ import { distributeReplayFiles } from '../domain/replay-lots.js';
 import type { MutationReport } from '../domain/mutation.js';
 import { parseMutationReport } from './mutation-report.js';
 import { verifyMutationLots, type Lot } from './mutation-lot-proof.js';
-import { verifyMutationCatalog } from './mutation-catalog.js';
+import { mutationCatalog, verifyMutationCatalog } from './mutation-catalog.js';
 
 type RawMutant = {
   readonly id: string;
@@ -32,11 +32,11 @@ export interface NativeProof {
 }
 
 /** Validate the raw native report and preserve only in-lot identities and native ignores. */
-export function projectNative(text: string, lots: readonly Lot[]): NativeProof {
-  const report = parseMutationReport(text);
+export function projectNative(text: string, lots: readonly Lot[], patterns?: readonly string[]): NativeProof {
+  const report = parseMutationReport(text, patterns !== undefined);
   if ('failure' in report) throw new Error(report.failure);
   const outside = new Set<string>();
-  const failure = verifyMutationLots(lots, report, (id) => outside.add(id));
+  const failure = verifyMutationLots(lots, report, (id) => outside.add(id), patterns);
   if (failure !== null) throw new Error(failure.failure);
   const raw = JSON.parse(text) as RawReport;
   const files = Object.fromEntries(
@@ -54,12 +54,14 @@ export async function combineNative(
   proofs: readonly NativeProof[],
   lots: readonly Lot[],
   canary: string | undefined,
+  allowSplitFiles = false,
 ) {
   const files = new Map<string, RawFile>();
   const first = proofs[0];
   if (first === undefined) throw new Error('aucun producteur de mutation');
+  const scenarios = await mutationCatalog(root);
   for (const [lane, { raw, report }] of proofs.entries()) {
-    await verifyMutationCatalog(root, report.tests);
+    await verifyMutationCatalog(root, report.tests, scenarios);
     const canonical = (ids: readonly string[] | undefined) =>
       (ids ?? []).map((id) => {
         const location = report.tests.get(id);
@@ -68,7 +70,10 @@ export async function combineNative(
       });
     for (const [name, file] of Object.entries(raw.files).sort(([a], [b]) => (a < b ? -1 : 1))) {
       const previous = files.get(name);
-      if (previous !== undefined && (name !== canary || previous.source !== file.source))
+      if (
+        previous !== undefined &&
+        ((name !== canary && !allowSplitFiles) || previous.source !== file.source)
+      )
         throw new Error('fichier de mutation répété entre lots : ' + name);
       const own = file.mutants.map((m) => ({
         ...m,

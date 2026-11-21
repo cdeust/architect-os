@@ -40,9 +40,9 @@ No check is trusted alone. Scenarios say what the code must do. Mutation asks wh
 
 ### Gate coverage and limits
 
-On `main`, the [Linux workflow](.github/workflows/gate.yml) runs Cucumber, Stryker and independent replay in one job. In this integration branch, two isolated Linux runners run the functional Cucumber lots. Two other runners produce Stryker reports for disjoint sets of files from the native mutation inventory. Each invocation runs the canary. Independent replay runs on two runners and verifies the report's scenario catalogue against the Cucumber mutation profile. The required `gate-linux` job verifies the successful producer attempts and checkout SHA before checking the combined scenario, mutation and replay results. The separate `gate-macos` job runs the sandbox scenarios.
+On `main`, the [Linux workflow](.github/workflows/gate.yml) runs Cucumber, Stryker and independent replay in one job. The integration branch splits functional Cucumber across two runners and runs twenty mutation and replay chains. Each chain uses a distinct runner for Stryker and another for independent replay. The Linux check requires the complete union of the planned mutants and replay receipts. The separate `gate-macos` job runs the sandbox scenarios.
 
-The inventory uses the first-parent diff and includes native mutant spans that intersect touched lines. The canary and files used to verify retired mutation debt have explicit whole-file scopes. The mutation producer checks its results against the inventory. Independent replay validates Cucumber's effective scenario selection and binds its result to the mutation report by SHA-256. Static and hybrid mutants can require the complete mutation profile. The hosted verdict and the 25-minute target are pending for this branch.
+The native inventory starts from changed production lines and includes native mutant spans that intersect them. The canary and files required to verify retirement of mutation debt have explicit whole-file scopes. A distribution of exact spans keeps nested groups apart on each runner. The verifier recalculates the inventory, checks the producer and receipt against the checkout and effective attempt, and ties the final replay record to the combined report by SHA-256. A static or hybrid mutant can still require the full mutation profile.
 
 ### The evidence desk
 

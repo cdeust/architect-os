@@ -24,13 +24,14 @@ export function verifyMutationLots(
   lots: readonly Lot[],
   report: MutationReport,
   recordBookkeeping: (id: string) => void,
+  patterns: readonly string[] = lots.map(({ file }) => file),
 ): ReadFailure | null {
   const files = new Set(lots.map(({ file }) => file));
   for (const file of report.files.keys()) {
     if (!files.has(file)) return { failure: file + ' : fichier de mutation hors inventaire' };
   }
   const configured = new Set(report.mutate);
-  if (report.mutate.length !== lots.length || lots.some(({ file }) => !configured.has(file)))
+  if (report.mutate.length !== patterns.length || patterns.some((pattern) => !configured.has(pattern)))
     return { failure: 'fichiers du rapport différents des lots prévus' };
   const ids = new Set<string>();
   for (const lot of lots) {
@@ -57,19 +58,20 @@ export function verifyMutationLots(
         m.replacement,
       );
       selected.add(span);
-      const key = JSON.stringify([span, m.ignored]);
+      const key = JSON.stringify([span, m.ignored !== null, m.ignored]);
       pending.set(key, (pending.get(key) ?? 0) + 1);
     }
     for (const m of found.mutants) {
       if (ids.has(m.id)) return { failure: lot.file + ' : identifiant de mutant en double : ' + m.id };
       ids.add(m.id);
       const span = identity(m.startLine, m.startColumn, m.endLine, m.endColumn, m.mutatorName, m.replacement);
-      const key = JSON.stringify([span, m.status === 'Ignored' ? (m.statusReason ?? '') : null]);
+      const ignored = m.status === 'Ignored';
+      const key = JSON.stringify([span, ignored, ignored ? m.statusReason : null]);
       const count = pending.get(key) ?? 0;
       if (count > 0) pending.set(key, count - 1);
       else if (selected.has(span))
         return { failure: lot.file + ' : mutant du lot répété ou motif d’ignorance différent : ' + m.id };
-      else if (m.status !== 'Ignored') return { failure: lot.file + ' : mutant actif hors lot : ' + m.id };
+      else if (!ignored) return { failure: lot.file + ' : mutant actif hors lot : ' + m.id };
       else recordBookkeeping(m.id);
     }
     const missing = [...pending.values()].reduce((sum, count) => sum + count, 0);
