@@ -465,13 +465,15 @@ Then('hosted planning balances measured spans and contains only within the same 
 
   const outer = { ...first, end: { line: 3, column: 9 } };
   const nesting = planHostedSlices(
-    [lot(measured), lot(file, [outer, later]), lot(canary)],
+    [lot(file, [outer, { ...later, end: outer.end }]), lot(measured), lot(canary)],
     canary,
     weightedRead,
     { ...costs, fallback: 2 },
     2,
   );
   assert.equal(nesting.filter(({ lots }) => lots.some((item) => item.file === file)).length, 2);
+  const withMeasured = nesting.find(({ lots }) => lots.some((item) => item.file === measured));
+  assert.equal(withMeasured?.lots.find((item) => item.file === file)?.mutants[0]?.replacement, 'later');
 
   const mid = { ...costs.files[fileFallback], fallback: 7 };
   const flipped = planHostedSlices(
@@ -488,6 +490,25 @@ Then('hosted planning balances measured spans and contains only within the same 
     flipped[0]?.lots.map(({ file }) => file),
     [canary, fileFallback, globalFallback],
   );
+
+  const equal = planHostedSlices(
+    [lot(measured), lot(fileFallback), lot(canary)],
+    canary,
+    read,
+    { fallback: 1, files: {} },
+    2,
+  );
+  assert.deepEqual(
+    equal.map(({ lots }) => lots.map(({ file }) => file)),
+    [
+      [canary, measured],
+      [canary, fileFallback],
+    ],
+  );
+
+  const empty = planHostedSlices([lot(file, []), lot(canary)], canary, read, costs, 2);
+  assert.deepEqual(empty[0]?.patterns, [file, canary]);
+  assert.equal(empty[0]?.lots[0]?.whole, true);
 });
 
 Then('the actual hosted entrypoint passes its arguments into Gate', async function () {
