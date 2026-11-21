@@ -18,6 +18,7 @@ Feature: the documents cite paths that exist
       | SECURITY.md               |
       | docs/agents.md            |
       | docs/architecture.md      |
+      | docs/bricks.md            |
       | docs/claude-code-watch.md |
       | docs/design.md            |
       | docs/infrastructure.md    |

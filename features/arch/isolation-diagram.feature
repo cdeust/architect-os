@@ -39,9 +39,10 @@ Feature: the image of the profiles is produced from the profile files, the hand-
   one file, no new directory and no other entry changed, and that the second run changes nothing: a new empty directory
   would be seen, and so would a file rewritten with the same bytes, by its times.
 
-  docs/diagrams/isolation.svg is drawn by hand: it shows who starts what, and what holds the credential. Its box of
-  Claude Code names two profiles and gives them a session token and their own folders, and an arrow says what they
-  reach; the lists of each profile are in the other image, which the first scenarios hold equal to the files. No
+  docs/diagrams/architecture.svg is drawn by hand: it is the one image of the architecture, and its part on the
+  sandboxes shows who starts what, and what holds the credential. Its box of Claude Code names two profiles and gives
+  them a session token and their own folders, and an arrow says what they reach; the lists of each profile are in the
+  other image, which the first scenarios hold equal to the files. No
   scenario backs the statements of the hand-drawn picture: they are read by the reviewer of each change, like the README
   (CLAUDE.md, « What the review must refuse », refuses a change that leaves a diagram as it was). The tripwire of the
   last rule refuses exactly two forms: a template string (a dollar and a brace) and a host of a network list of a
@@ -178,7 +179,7 @@ Feature: the image of the profiles is produced from the profile files, the hand-
       Then the copy listed before the runs holds exactly
         | docs/                                    |
         | docs/diagrams/                          |
-        | docs/diagrams/isolation.svg             |
+        | docs/diagrams/architecture.svg          |
         | packages/                               |
         | packages/sandbox/                       |
         | packages/sandbox/profiles/              |
@@ -193,23 +194,29 @@ Feature: the image of the profiles is produced from the profile files, the hand-
       And the first run wrote exactly one file, "docs/diagrams/isolation-profiles.svg"
       And the second run changed nothing in the copy
 
+  Rule: the README embeds the architecture and links to the generated profile details
+
+    Scenario: the README has one architecture diagram and a separate profile link
+      Given the text of the committed file "README.md"
+      Then the README embeds just the architecture and links to the profile diagram
+
   Rule: the tripwire on the hand-drawn picture stops the plain forms only
 
     Scenario: the committed hand-drawn picture passes its tripwire
       Given the five committed profile files of packages/sandbox
-      And the text of the committed file "docs/diagrams/isolation.svg"
+      And the text of the committed file "docs/diagrams/architecture.svg"
       Then the hand-drawn picture passes its tripwire
 
     Scenario: the hand-drawn picture with a template string is stopped
       Given the five committed profile files of packages/sandbox
-      And the text of the committed file "docs/diagrams/isolation.svg"
+      And the text of the committed file "docs/diagrams/architecture.svg"
       When the text "the credential stays on the host" is replaced by "the credential stays on the host, not in ${home}/.npm"
       Then the hand-drawn picture is stopped by its tripwire for exactly
         | a template string: ${home}/.npm |
 
     Scenario: the hand-drawn picture with a host of a profile in upper case is stopped
       Given the five committed profile files of packages/sandbox
-      And the text of the committed file "docs/diagrams/isolation.svg"
+      And the text of the committed file "docs/diagrams/architecture.svg"
       When the text "The authentication proxy on the host" is replaced by "The authentication proxy on REGISTRY.NPMJS.ORG"
       Then the hand-drawn picture is stopped by its tripwire for exactly
         | a host of a network list: registry.npmjs.org |

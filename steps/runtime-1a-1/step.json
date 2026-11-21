@@ -1,0 +1,69 @@
+{
+  "build": {
+    "model": "claude-opus-5-5",
+    "effort": "high",
+    "limitSeconds": 7200
+  },
+  "checks": [
+    {
+      "name": "format",
+      "command": [
+        "npx",
+        "prettier",
+        "--check",
+        "."
+      ],
+      "limitSeconds": 300
+    },
+    {
+      "name": "types-runtime",
+      "command": [
+        "npx",
+        "tsc",
+        "-p",
+        "tools/runtime",
+        "--noEmit",
+        "--composite",
+        "false",
+        "--incremental",
+        "false"
+      ],
+      "limitSeconds": 600
+    },
+    {
+      "name": "types-features",
+      "command": [
+        "npx",
+        "tsc",
+        "-p",
+        "features",
+        "--noEmit",
+        "--composite",
+        "false",
+        "--incremental",
+        "false"
+      ],
+      "limitSeconds": 600
+    },
+    {
+      "name": "docs",
+      "command": [
+        "npx",
+        "cucumber-js",
+        "--profile",
+        "replay",
+        "features/descriptive"
+      ],
+      "limitSeconds": 900
+    }
+  ],
+  "reviews": [
+    {
+      "name": "correctness",
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "limitSeconds": 3000
+    }
+  ],
+  "parallel": 2
+}
