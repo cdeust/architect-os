@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { MutantRecord, MutationReport } from '../domain/mutation.js';
+import type { MutationReport } from '../domain/mutation.js';
 import type { ReadFailure } from '../domain/violation.js';
 import type { mutationLots } from './mutation-inventory.js';
 
@@ -23,18 +23,14 @@ function identity(
 export function verifyMutationLots(
   lots: readonly Lot[],
   report: MutationReport,
-  onBookkeeping?: (file: string, mutant: MutantRecord) => void,
+  recordBookkeeping: (id: string) => void,
 ): ReadFailure | null {
-  const files = new Map(lots.map((lot) => [lot.file, lot]));
+  const files = new Set(lots.map(({ file }) => file));
   for (const file of report.files.keys()) {
     if (!files.has(file)) return { failure: file + ' : fichier de mutation hors inventaire' };
   }
   const configured = new Set(report.mutate);
-  if (
-    configured.size !== lots.length ||
-    report.mutate.length !== lots.length ||
-    lots.some(({ file }) => !configured.has(file))
-  )
+  if (report.mutate.length !== lots.length || lots.some(({ file }) => !configured.has(file)))
     return { failure: 'fichiers du rapport différents des lots prévus' };
   const ids = new Set<string>();
   for (const lot of lots) {
@@ -74,7 +70,7 @@ export function verifyMutationLots(
       else if (selected.has(span))
         return { failure: lot.file + ' : mutant du lot répété ou motif d’ignorance différent : ' + m.id };
       else if (m.status !== 'Ignored') return { failure: lot.file + ' : mutant actif hors lot : ' + m.id };
-      else onBookkeeping?.(lot.file, m);
+      else recordBookkeeping(m.id);
     }
     const missing = [...pending.values()].reduce((sum, count) => sum + count, 0);
     if (missing !== 0) return { failure: lot.file + ' : mutant(s) du lot absents du rapport : ' + missing };

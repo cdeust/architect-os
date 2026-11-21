@@ -242,7 +242,8 @@ When('the gate receives a mutation lot report with {string}', function (variant:
     );
     return;
   }
-  if (variant === 'cross-file id collision') {
+  if (variant === 'cross-file id collision' || variant === 'repeated configuration omits another file') {
+    const collision = variant === 'cross-file id collision';
     const [, other] = lots;
     assert.ok(other);
     repo.write(
@@ -253,7 +254,7 @@ When('the gate receives a mutation lot report with {string}', function (variant:
           [other.file]: {
             source: repo.read(other.file),
             mutants: other.mutants.map(({ start, end, mutatorName, replacement }, index) => ({
-              id: String(index),
+              id: collision ? String(index) : 'other-' + index,
               status: 'Killed',
               mutatorName,
               replacement,
@@ -261,7 +262,7 @@ When('the gate receives a mutation lot report with {string}', function (variant:
             })),
           },
         },
-        config: { mutate: [lot.file, other.file] },
+        config: { mutate: [lot.file, collision ? other.file : lot.file] },
       }),
     );
     return;
@@ -289,13 +290,19 @@ When('the gate receives a mutation lot report with {string}', function (variant:
   if (variant === 'wrong source') claimedSource += '\n';
   if (variant === 'lone surrogate in source') claimedSource = source.replace('�', '\ud800');
   const reportPath = 'reports/mutation/mutation.json';
-  repo.write(
-    reportPath,
-    JSON.stringify({
-      files: { [lot.file]: { source: claimedSource, mutants } },
-      config: { mutate: variant === 'different file list' ? [] : [lot.file] },
-    }),
-  );
+  const files: Record<string, { source: string; mutants: typeof mutants }> = {
+    [lot.file]: { source: claimedSource, mutants },
+  };
+  if (variant === 'unexpected report file') files['src/unplanned.mjs'] = { source: '', mutants: [] };
+  const mutate =
+    variant === 'different file list'
+      ? []
+      : variant === 'substituted file list'
+        ? ['src/unplanned.mjs']
+        : variant === 'duplicated file list'
+          ? [lot.file, lot.file]
+          : [lot.file];
+  repo.write(reportPath, JSON.stringify({ files, config: { mutate } }));
   if (variant === 'invalid UTF-8 inventory' || variant === 'invalid UTF-8 report') {
     const path = repo.path(
       variant === 'invalid UTF-8 report' ? reportPath : 'reports/mutation-inventory.json',

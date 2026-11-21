@@ -177,17 +177,20 @@ Feature: The inventory projects native mutants onto changed production lines
     Then the mutation inventory check returns "<result>"
 
     Examples:
-      | case                | result   |
-      | exact identities    | pass     |
-      | missing mutant      | mutant(s) du lot absents du rapport : 1 |
-      | duplicate identity  | répété   |
-      | outside active      | hors lot |
-      | outside ignored     | pass     |
-      | wrong source        | source   |
-      | stale inventory     | périmètre |
-      | different file list | fichiers |
+      | case                   | result                                         |
+      | exact identities       | pass                                           |
+      | missing mutant         | mutant(s) du lot absents du rapport : 1        |
+      | duplicate identity     | mutant du lot répété ou motif d’ignorance      |
+      | outside active         | mutant actif hors lot                          |
+      | outside ignored        | pass                                           |
+      | wrong source           | source du rapport                              |
+      | stale inventory        | périmètre                                      |
+      | different file list    | fichiers du rapport différents des lots prévus |
+      | substituted file list  | fichiers du rapport différents des lots prévus |
+      | duplicated file list   | fichiers du rapport différents des lots prévus |
+      | unexpected report file | fichier de mutation hors inventaire            |
 
-  Scenario: mutation report identifiers are unique across files of a single producer
+  Scenario Outline: the mutation report includes every configured file and unique IDs, <case>
     Given a gate repository
     And the gate repository file "src/first.mjs" reads:
       """
@@ -199,9 +202,14 @@ Feature: The inventory projects native mutants onto changed production lines
       """
     And the gate head is committed
     When the gate inventories the mutation scope
-    And the gate receives a mutation lot report with "cross-file id collision"
+    And the gate receives a mutation lot report with "<case>"
     And the gate checks its mutation inventory
-    Then the mutation inventory check returns "identifiant de mutant en double"
+    Then the mutation inventory check returns "<result>"
+
+    Examples:
+      | case                                      | result                                         |
+      | cross-file id collision                   | identifiant de mutant en double                |
+      | repeated configuration omits another file | fichiers du rapport différents des lots prévus |
 
   Scenario: an empty projected lot still requires source proof when the whole file has a mutant
     Given a gate repository
@@ -221,6 +229,18 @@ Feature: The inventory projects native mutants onto changed production lines
     And the gate receives a mutation lot report with "omitted native file"
     And the gate checks its mutation inventory
     Then the mutation inventory check returns "lot absent"
+
+  Scenario: a configured source with no native mutants may be omitted from the report
+    Given a gate repository
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export const value = Math.PI;
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    And the gate receives a mutation lot report with "omitted native file"
+    And the gate checks its mutation inventory
+    Then the mutation inventory check returns "pass"
 
   Scenario Outline: an expected ignored mutant retains its exact evidence, <case>
     Given a gate repository

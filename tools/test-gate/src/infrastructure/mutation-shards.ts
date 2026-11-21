@@ -36,7 +36,7 @@ export function projectNative(text: string, lots: readonly Lot[]): NativeProof {
   const report = parseMutationReport(text);
   if ('failure' in report) throw new Error(report.failure);
   const outside = new Set<string>();
-  const failure = verifyMutationLots(lots, report, (_file, mutant) => outside.add(mutant.id));
+  const failure = verifyMutationLots(lots, report, (id) => outside.add(id));
   if (failure !== null) throw new Error(failure.failure);
   const raw = JSON.parse(text) as RawReport;
   const files = Object.fromEntries(
