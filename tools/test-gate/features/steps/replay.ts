@@ -1,6 +1,7 @@
 import { loadConfiguration, loadSources, type runCucumber } from '@cucumber/cucumber/api';
 import { runReplayCucumber } from '../../src/infrastructure/replay-cucumber.js';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -201,6 +202,15 @@ When('the gate replays mutation lot {string}', function (lot: string) {
 
 When('the gate collects the mutation replay lots', function () {
   return repository(this).run(['replay-collect']);
+});
+
+Given('the gate removes replay lot {string}', function (lot: string) {
+  repository(this).remove('reports/replay-shards/' + lot + '/replay.json');
+});
+
+Given('the gate appends a newline to the mutation report', function () {
+  const repo = repository(this);
+  repo.write(MUTATION, repo.read(MUTATION) + '\n');
 });
 
 Given('the gate removes a scenario from the mutation report catalogue', function () {
@@ -502,7 +512,12 @@ Then('the gate replay record is:', function (text: string) {
     report: string;
     mutants: { file: string; id: string; status: string; divergence: string | null }[];
   };
-  assert.match(record.report, /^[0-9a-f]{64}$/);
+  assert.equal(
+    record.report,
+    createHash('sha256')
+      .update(readFileSync(repo.path(MUTATION)))
+      .digest('hex'),
+  );
   assert.deepEqual(
     record.mutants.map((m) => `${m.file} #${m.id} ${m.status} : ${m.divergence ?? 'confirmé'}`),
     text.split('\n'),

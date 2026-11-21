@@ -67,12 +67,42 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     When the gate collects the mutation replay lots
     Then the gate exits with 0
     And the gate output includes "lots de rejeu vérifiés : 3 mutant(s)"
+    And the gate replay record is:
+      """
+      src/math.mjs #0 Killed : confirmé
+      src/math.mjs #5 Survived : confirmé
+      src/other.mjs #other-5 Survived : confirmé
+      """
     And replay lot "1" contains just "src/math.mjs"
     And replay lot "2" contains just "src/other.mjs"
     Given the gate copies the first replay receipt into the second lot
     When the gate collects the mutation replay lots
     Then the gate exits with 1
-    And the gate output includes "rejeu hors périmètre"
+    And the gate output is:
+      """
+      porte de test : lot de rejeu 2 : src/other.mjs:7 EqualityOperator #other-5 : non rejoué
+      src/math.mjs #0 : rejeu hors périmètre
+      src/math.mjs #5 : rejeu hors périmètre
+      """
+    And the gate replay record is absent
+    Given the gate removes replay lot "2"
+    When the gate collects the mutation replay lots
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : lot de rejeu absent : 2
+      """
+    And the gate replay record is absent
+    When the gate replays mutation lot "2"
+    Then the gate exits with 0
+    Given the gate appends a newline to the mutation report
+    When the gate collects the mutation replay lots
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : lot de rejeu 1 : le rejeu porte sur un autre rapport de mutation
+      """
+    And the gate replay record is absent
 
   Scenario: a truncated static scenario catalogue is rejected before replay
     Given the gate mutation fixture declares its independent mutation profile
