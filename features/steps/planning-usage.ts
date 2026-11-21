@@ -77,7 +77,7 @@ function fixtureEnvironment(root: string): NodeJS.ProcessEnv {
   return { HOME: root, PATH: process.env.PATH, TSX_TSCONFIG_PATH: process.env.TSX_TSCONFIG_PATH };
 }
 
-function fakeDraftEnvironment(root: string, provider: string): NodeJS.ProcessEnv {
+function fakeDraftEnvironment(root: string, provider: string, refused = false): NodeJS.ProcessEnv {
   assert.ok(provider === 'gpt' || provider === 'gemini');
   const proposal = JSON.stringify({
     step: 'delivery',
@@ -101,7 +101,13 @@ function fakeDraftEnvironment(root: string, provider: string): NodeJS.ProcessEnv
         },
         {
           event: 'result',
-          result: { conversation_id: 'one', status: 'SUCCESS', num_turns: 1, response: proposal, usage },
+          result: {
+            conversation_id: 'one',
+            status: refused ? 'ERROR' : 'SUCCESS',
+            num_turns: 1,
+            response: proposal,
+            usage,
+          },
         },
       ];
   const dir = join(root, '.local', 'bin');
@@ -139,6 +145,8 @@ Then('a measured {string} draft supplies one receipt that binds the prepared Pla
     );
     const [start, finish] = events;
     assert.equal(start.attempt_id, finish.attempt_id);
+    assert.equal(finish.exit_code, 0);
+    assert.equal(finish.native_exit_code, 0);
     assert.equal(finish.provider, provider);
     assert.equal(finish.model_requested, 'gemini-fixture-model');
     assert.equal(finish.usage.input_tokens, 12);
@@ -178,7 +186,7 @@ Then('a measured draft without a provider installation publishes only a refusal 
       ...fixtureEnvironment(root),
       AOS_PLAN_GPT_BIN: join(root, '.local', 'bin', 'codex'),
     });
-    assert.equal(result.status, 2, result.stderr);
+    assert.equal(result.status, 1, result.stderr);
     assert.equal(result.stdout, '');
     assert.match(result.stderr, /PLAN_PROVIDER_FAILED/);
     const events = readFileSync(receipt, 'utf8')
@@ -265,3 +273,37 @@ Then('a measured Antigravity import supplies one receipt that binds the prepared
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+Then(
+  'both Plan entrypoints return one when a successful native Gemini process supplies a refused response',
+  () => {
+    const root = mkdtempSync(join(tmpdir(), 'gemini-exit-'));
+    try {
+      const { define } = planFixture(root);
+      const env = fakeDraftEnvironment(root, 'gemini', true);
+      for (const stage of ['draft', 'measured']) {
+        const path = join(root, stage + '.jsonl');
+        const args = ['gemini', 'gemini-fixture-model', 'delivery', define];
+        const response =
+          stage === 'draft'
+            ? spawnSync(
+                process.execPath,
+                ['--import', 'tsx', 'tools/plan/src/cli.ts', 'draft', ...args, path, '3000'],
+                { env, encoding: 'utf8' },
+              )
+            : measured([path, 'draft', ...args, '3000'], env);
+        assert.equal(response.status, 1, response.stderr);
+        assert.equal(response.stdout, '');
+        const [, terminal] = readFileSync(path, 'utf8')
+          .trimEnd()
+          .split('\n')
+          .map((s) => JSON.parse(s));
+        assert.equal(terminal.exit_code, 1);
+        assert.equal(terminal.native_exit_code, 0);
+        assert.equal(terminal.outcome, 'PLAN_PROVIDER_FAILED');
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);

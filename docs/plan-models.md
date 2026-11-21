@@ -69,3 +69,9 @@ At architect-os commit `7bf2ee04`, all three commands used the same accepted Def
 | Antigravity, Gemini 4 Neon High | Exit 0, 17.51 s | 9,827 / 711           | Unknown      | The launcher refused the response. The existing native transcript yielded the proposal and counters. A separate prepare accepted it as pending. |
 
 The Gemini transcript and launcher journal represent one attempt. The recovered proposal SHA-256 is `138845d4d6d7a424bc918c54ee5b91db269c9ee45023d73fe9e35c42c21e8aa6`; the separate recovery receipt SHA-256 is `95b75dd895a56c160b1057a6c6ed7aac0b0bfed2444484d154d36888c8ec34a5`. The original journal did not distinguish stderr warnings from rejected stream events. Google documents that individual accounts warn when given an enterprise-only unsandboxed rule. The personal-account command denies all commands with `command(*)`, which covers execution both inside and outside the sandbox. [Google CLI permission matching](https://antigravity.google/docs/permissions?tab=cli)
+
+## Exit status and receipt versions
+
+Both `plan draft` and `baseline:planning … draft` exit 0 only after accepting a proposal, 1 on provider or proposal refusal, and 2 on invalid arguments, invalid Define or an unavailable receipt. A refusal emits no proposal on stdout. Version 2 terminal receipts record the architect-os decision in `exit_code` and the launched process status in `native_exit_code`. When the CLI never starts or dies by signal, its native code is null. A native 0 with an architect-os 1 records a completed CLI whose answer was refused. Historical version 1 draft receipts used `exit_code` for the native process.
+
+`agy-result` uses the same decision codes. It exits 2 for an unavailable local stream file, and 1 for a supplied stream that fails verification. Its version 2 receipt always records `native_exit_code: null` because the importer does not launch the process. Version 1 import receipts had no exit-code fields.

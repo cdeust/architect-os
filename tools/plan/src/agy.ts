@@ -42,9 +42,9 @@ function reportedUsage(value: unknown) {
 
 export async function runAgyExchange(proc: PlanProcess): Promise<number> {
   const [mode, model = '', step = '', define = '', result, receipt, ...extra] = proc.argv.slice(2);
-  const fail = (outcome: string) => {
+  const fail = (outcome: string, exitCode = 2) => {
     proc.stderr.write('architect-os plan ' + mode + ': ' + outcome + '\n');
-    return 2;
+    return exitCode;
   };
   const exporting = mode === 'agy-request';
   if (
@@ -89,7 +89,7 @@ export async function runAgyExchange(proc: PlanProcess): Promise<number> {
     writeFileSync(
       journal.fd,
       JSON.stringify({
-        version: 1,
+        version: 2,
         attempt_id,
         stage: 'agy-result',
         provider: 'gemini',
@@ -106,8 +106,10 @@ export async function runAgyExchange(proc: PlanProcess): Promise<number> {
   let proposal: string | undefined;
   try {
     request = readRequest(model, step, define);
+    outcome = 'PLAN_AGY_INPUT_UNAVAILABLE';
+    const stream = readFileSync(result);
     outcome = 'PLAN_AGY_STREAM_INVALID';
-    response = readAgyTurn(readUtf8(readFileSync(result)), model);
+    response = readAgyTurn(readUtf8(stream), model);
     outcome = 'PLAN_AGY_RUN_FAILED';
     if (response.status !== 'SUCCESS') throw new Error('unsuccessful run');
     outcome = 'PLAN_AGY_REQUEST_MISMATCH';
@@ -122,8 +124,15 @@ export async function runAgyExchange(proc: PlanProcess): Promise<number> {
     // The raw model response and file paths stay outside the measurement.
   }
   const reportedDuration = response?.duration_seconds;
+  const exit_code = proposal
+    ? 0
+    : outcome === 'PLAN_DEFINE_INVALID' || outcome === 'PLAN_AGY_INPUT_UNAVAILABLE'
+      ? 2
+      : 1;
   write({
     event: 'finished',
+    exit_code,
+    native_exit_code: null,
     outcome,
     duration_ms: performance.now() - started,
     run_id: request?.handoff.run_id ?? null,
@@ -138,7 +147,7 @@ export async function runAgyExchange(proc: PlanProcess): Promise<number> {
     model_reported: null,
     cost_usd: null,
   });
-  if (!proposal) return fail(outcome);
+  if (!proposal) return fail(outcome, exit_code);
   proc.stdout.write(proposal);
   return 0;
 }

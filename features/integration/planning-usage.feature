@@ -18,3 +18,6 @@ Feature: Record local planning usage
 
   Scenario: A measured Antigravity import feeds the same approval gate
     Then a measured Antigravity import supplies one receipt that binds the prepared Plan
+
+  Scenario: A rejected native Gemini response preserves the separate process and decision codes
+    Then both Plan entrypoints return one when a successful native Gemini process supplies a refused response

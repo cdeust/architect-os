@@ -128,7 +128,8 @@ if(reply==='timeout'){setInterval(()=>{},10000);}else{if(reply==='diagnostic')pr
         stdout: { write: (s: string) => (out += s) },
         stderr: { write: (s: string) => (err += s) },
       };
-      assert.equal(await runPlanCommand(proc), outcome === 'proposed' ? 0 : 2);
+      const status = outcome === 'proposed' ? 0 : outcome === 'PLAN_DEFINE_INVALID' ? 2 : 1;
+      assert.equal(await runPlanCommand(proc), status);
       assert.equal(out, outcome === 'proposed' ? text + '\n' : '');
       assert.equal(err, outcome === 'proposed' ? '' : 'architect-os plan draft: ' + outcome + '\n');
       const journal = readFileSync(receipt, 'utf8');
@@ -160,8 +161,11 @@ if(reply==='timeout'){setInterval(()=>{},10000);}else{if(reply==='diagnostic')pr
       }
       assert.equal(start.attempt_id, finish.attempt_id);
       assert.equal(finish.outcome, outcome);
+      assert.equal(finish.exit_code, status);
+      assert.equal(finish.version, 2);
+      assert.equal(start.version, 2);
       if (outcome === 'proposed') {
-        assert.equal(finish.exit_code, 0);
+        assert.equal(finish.native_exit_code, 0);
         assert.equal(finish.usage.input_tokens, 12);
         assert.equal(finish.usage.output_tokens, 0);
         assert.equal(finish.usage.cost_usd, provider === 'claude' ? 0 : null);

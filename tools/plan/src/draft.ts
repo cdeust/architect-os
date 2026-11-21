@@ -21,9 +21,9 @@ function sha(s: string) {
 export async function runPlanCommand(proc: DraftProcess, run = requestDraft): Promise<number> {
   if (proc.argv[2] === 'agy-request' || proc.argv[2] === 'agy-result') return runAgyExchange(proc);
   if (proc.argv[2] !== 'draft') return runPlan(proc);
-  const fail = (message: string) => {
+  const fail = (message: string, exitCode = 2) => {
     proc.stderr.write('architect-os plan draft: ' + message + '\n');
-    return 2;
+    return exitCode;
   };
   const args = proc.argv.slice(3);
   const synopsis = 'usage: plan draft <claude|gpt|gemini> <model> <step> <define> <new-receipt> <timeout-ms>';
@@ -62,13 +62,13 @@ export async function runPlanCommand(proc: DraftProcess, run = requestDraft): Pr
   const write = (event: Record<string, unknown>) =>
     writeFileSync(
       journal.fd,
-      JSON.stringify({ version: 1, attempt_id, stage: 'draft', provider, model_requested: model, ...event }) +
+      JSON.stringify({ version: 2, attempt_id, stage: 'draft', provider, model_requested: model, ...event }) +
         '\n',
     );
   let run_id: string | null = null,
     define_sha256: string | null = null,
     usage: Awaited<ReturnType<typeof requestDraft>>['usage'] = null,
-    exit_code: number | null = null,
+    native_exit_code: number | null = null,
     signal: string | null = null;
   let native_failure: string | null = null;
   let outcome = 'PLAN_DEFINE_INVALID';
@@ -88,7 +88,7 @@ export async function runPlanCommand(proc: DraftProcess, run = requestDraft): Pr
     native_failure = 'launch_failed';
     const response = await run({ provider, model, step, handoff, timeoutMs }, proc.env);
     native_failure = response.failure ?? null;
-    exit_code = response.exit_code;
+    native_exit_code = response.exit_code;
     signal = response.signal;
     usage = response.usage;
     if (!response.text) throw new Error();
@@ -103,13 +103,15 @@ export async function runPlanCommand(proc: DraftProcess, run = requestDraft): Pr
       run_id,
       define_sha256,
       proposal_sha256: sha(bytes),
-      exit_code,
+      exit_code: 0,
+      native_exit_code,
       signal,
       usage,
     });
     proc.stdout.write(bytes);
     return 0;
   } catch {
+    const exit_code = outcome === 'PLAN_DEFINE_INVALID' ? 2 : 1;
     write({
       event: 'finished',
       outcome,
@@ -118,9 +120,10 @@ export async function runPlanCommand(proc: DraftProcess, run = requestDraft): Pr
       run_id,
       define_sha256,
       exit_code,
+      native_exit_code,
       signal,
       usage,
     });
-    return fail(outcome);
+    return fail(outcome, exit_code);
   }
 }
