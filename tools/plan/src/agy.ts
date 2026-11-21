@@ -28,20 +28,33 @@ function readRequest(model: string, step: string, path: string) {
   return { request_sha256, define_sha256, handoff };
 }
 
-const tokenFields = ['input_tokens', 'output_tokens', 'thinking_tokens', 'cache_read_tokens', 'total_tokens'];
 function reportedUsage(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
   const usage = record(value);
+  const tokenFields = [
+    'input_tokens',
+    'output_tokens',
+    'thinking_tokens',
+    'cache_read_tokens',
+    'total_tokens',
+  ];
   return Object.fromEntries(
     tokenFields.map((field) => {
       const count = usage[field];
-      return [field, typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count : null];
+      return [field, Number.isSafeInteger(count) && Number(count) >= 0 ? count : null];
     }),
   );
 }
 
 export async function runAgyExchange(proc: PlanProcess): Promise<number> {
-  const [mode, model = '', step = '', define = '', result, receipt, ...extra] = proc.argv.slice(2);
+  const [mode, model, step, define, result, receipt] = proc.argv.slice(2) as [
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+  ];
   const fail = (outcome: string, exitCode = 2) => {
     proc.stderr.write('architect-os plan ' + mode + ': ' + outcome + '\n');
     return exitCode;
@@ -51,8 +64,8 @@ export async function runAgyExchange(proc: PlanProcess): Promise<number> {
     !/^gemini-[a-z0-9][a-z0-9._-]*$/.test(model) ||
     !isStepName(step) ||
     !define ||
-    extra.length ||
-    (exporting ? proc.argv.length !== 6 : !result || !receipt)
+    proc.argv.length !== (exporting ? 6 : 8) ||
+    (!exporting && (!result || !receipt))
   ) {
     return fail(
       exporting
@@ -75,7 +88,6 @@ export async function runAgyExchange(proc: PlanProcess): Promise<number> {
       return fail('PLAN_DEFINE_INVALID');
     }
   }
-  if (!result || !receipt) return fail('PLAN_AGY_ARGUMENTS_INVALID');
   let handle;
   try {
     handle = await open(receipt, 'wx', 0o600);
@@ -111,13 +123,13 @@ export async function runAgyExchange(proc: PlanProcess): Promise<number> {
     outcome = 'PLAN_AGY_STREAM_INVALID';
     response = readAgyTurn(readUtf8(stream), model);
     outcome = 'PLAN_AGY_RUN_FAILED';
-    if (response.status !== 'SUCCESS') throw new Error('unsuccessful run');
+    if (response.status !== 'SUCCESS') throw new Error();
     outcome = 'PLAN_AGY_REQUEST_MISMATCH';
     const output = record(response.structured_output);
-    if (output.request_sha256 !== request.request_sha256) throw new Error('request mismatch');
+    if (output.request_sha256 !== request.request_sha256) throw new Error();
     outcome = 'PLAN_PROPOSAL_INVALID';
     const checked = coveredProposal(request.handoff, output.proposal);
-    if (checked.step !== step) throw new Error('step mismatch');
+    if (checked.step !== step) throw new Error();
     proposal = JSON.stringify(checked) + '\n';
     outcome = 'proposed';
   } catch {
@@ -140,9 +152,7 @@ export async function runAgyExchange(proc: PlanProcess): Promise<number> {
     define_sha256: request?.define_sha256 ?? null,
     proposal_sha256: proposal ? sha(proposal) : null,
     external_duration_seconds:
-      typeof reportedDuration === 'number' && Number.isFinite(reportedDuration) && reportedDuration >= 0
-        ? reportedDuration
-        : null,
+      Number.isFinite(reportedDuration) && Number(reportedDuration) >= 0 ? reportedDuration : null,
     usage: reportedUsage(response?.usage),
     model_reported: null,
     cost_usd: null,
