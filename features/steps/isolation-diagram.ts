@@ -34,12 +34,26 @@ import type { ArchitectWorld } from '../support/world.js';
 
 // The scenarios of features/arch/isolation-diagram.feature. Two files, two guarantees: docs/diagrams/isolation-profiles.svg
 // is the image that features/support/isolation-rows.ts produces from the five profile files, and the whole file must
-// equal it; docs/diagrams/isolation.svg is drawn by hand, and only a tripwire reads it. The text of the file under test
+// equal it; docs/diagrams/architecture.svg is drawn by hand, and only a tripwire reads it. The text of the file under test
 // is the one the step "the text of the committed file" stores under `sourceText`.
 
 type ListName = 'writes' | 'closes' | 'reaches';
 
 const REGENERATE = 'npm run diagram:isolation';
+
+Then(
+  'the README embeds just the architecture and links to the profile diagram',
+  function (this: ArchitectWorld) {
+    const readme = stored<string>(this, 'sourceText');
+    const architecture = 'docs/diagrams/architecture.svg';
+    const images = [...readme.matchAll(/!\[[^\]\n]*\]\(([^)\n]+)\)/g)].map((match) => match[1]);
+    assert.deepEqual(images, [architecture]);
+    assert.doesNotMatch(readme, /<\s*(?:img|picture|svg|object|iframe|embed)\b|!\[[^\]\n]*\](?:[ \t]*\[|:)/i);
+    assert.match(readme, /(?<!!)\[[^\]\n]+\]\(docs\/diagrams\/isolation-profiles\.svg\)/);
+    assert(statSync(join(ROOT, architecture)).isFile());
+    assert(statSync(join(ROOT, IMAGE_FILE)).isFile());
+  },
+);
 
 function listOf(template: ProfileTemplate, list: ListName): string[] {
   const { filesystem, network } = template.srt;
@@ -282,7 +296,7 @@ Given('a temporary copy of the repository holding the five profiles and a folder
   mkdirSync(join(root, 'packages', 'sandbox'), { recursive: true });
   cpSync(join(ROOT, PROFILES_DIR), join(root, PROFILES_DIR), { recursive: true });
   mkdirSync(join(root, 'docs', 'diagrams'), { recursive: true });
-  writeFileSync(join(root, 'docs', 'diagrams', 'isolation.svg'), 'hand-drawn');
+  writeFileSync(join(root, 'docs', 'diagrams', 'architecture.svg'), 'hand-drawn');
   this.state['copyRoot'] = root;
   this.state['snapshots'] = [snapshot(root)];
 });
