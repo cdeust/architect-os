@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseEnvelope, TestStepResultStatus } from '@cucumber/messages';
 import { parseCucumberShards } from '../../src/infrastructure/cucumber-report.js';
+import { parseMutationReport } from '../../src/infrastructure/mutation-report.js';
 import { FIXTURES, Given, Then, repository, type GateRepository } from './repository.js';
 
 const CUCUMBER = 'reports/cucumber.ndjson';
@@ -255,7 +256,10 @@ Then('the gate verdict is {string}', function (verdict: string) {
 });
 
 Then('the Cucumber lot parser refuses an empty list with {string}', function (failure: string) {
-  assert.deepEqual(parseCucumberShards([], () => true), { failure });
+  assert.deepEqual(
+    parseCucumberShards([], () => true),
+    { failure },
+  );
 });
 
 Then('the Cucumber lot outcome diagnostic is:', function (expected: string) {
@@ -321,4 +325,63 @@ Then('the GitHub step summary holds the gate report {int} time(s)', function (ti
 Then('the gate output is the gate report', function () {
   const repo = repository(this);
   assert.equal(repo.output, repo.read(REPORT));
+});
+
+Given('a native mutation report with {string}', function (variant: string) {
+  const source = 'export const value = true;';
+  const mutant = {
+    id: 'one',
+    status: 'Killed',
+    static: false,
+    mutatorName: 'BooleanLiteral',
+    replacement: 'false',
+    location: { start: { line: 1, column: 22 }, end: { line: 1, column: 26 } },
+  };
+  const { static: _static, ...withoutActivation } = mutant;
+  const raw: Record<string, unknown> = {
+    files: {
+      'src/a.mjs': { source, mutants: [mutant] },
+      'src/b.mjs': {
+        source,
+        mutants: [
+          { ...mutant, id: 'two' },
+          {
+            ...withoutActivation,
+            id: 'three',
+            status:
+              variant === 'duplicate scenario' || variant === 'duplicate scope' ? 'NoCoverage' : variant,
+          },
+        ],
+      },
+    },
+    config: { mutate: ['src/a.mjs', 'src/b.mjs'] },
+  };
+  if (variant === 'duplicate scenario') {
+    raw['testFiles'] = {
+      'specs/a.feature': { tests: [{ id: 'reused', location: { start: { line: 2, column: 1 } } }] },
+      'specs/b.feature': { tests: [{ id: 'reused', location: { start: { line: 7, column: 1 } } }] },
+    };
+  }
+  if (variant === 'duplicate scope') {
+    raw['gateNativeScope'] = [
+      { file: 'src/a.mjs', whole: false, lines: [1] },
+      { file: 'src/a.mjs', whole: true, lines: [] },
+    ];
+  }
+  this.state['native report reading'] = parseMutationReport(JSON.stringify(raw), true);
+});
+
+Then('strict native report reading fails with {string}', function (failure: string) {
+  assert.deepEqual(this.state['native report reading'], { failure });
+});
+
+Then('the uncovered native mutant has no optional report metadata', function () {
+  const report = this.state['native report reading'] as ReturnType<typeof parseMutationReport>;
+  assert.ok(!('failure' in report), JSON.stringify(report));
+  assert.equal(Object.hasOwn(report, 'gateNativeScope'), false);
+  const mutant = report.files.get('src/b.mjs')?.mutants.find(({ id }) => id === 'three');
+  assert.ok(mutant);
+  assert.equal(mutant.status, 'NoCoverage');
+  assert.equal(mutant.static, false);
+  assert.equal(Object.hasOwn(mutant, 'statusReason'), false);
 });

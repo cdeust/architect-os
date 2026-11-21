@@ -84,12 +84,10 @@ export function parseMutationReport(text: string, requireStatic = false): Mutati
   );
   const tests = new Map(testEntries);
   if (tests.size !== testEntries.length) return { failure: 'identifiant de test de mutation répété' };
-  const nativeScope = parsed.gateNativeScope?.map(
-    ({ file, whole, lines }) => [file, { whole, lines }] as const,
-  );
-  const coverage = nativeScope === undefined ? undefined : new Map(nativeScope);
-  if (coverage !== undefined && coverage.size !== nativeScope?.length)
-    return { failure: 'fichier de périmètre natif répété' };
+  const nativeScope = parsed.gateNativeScope;
+  const coverage =
+    nativeScope && new Map(nativeScope.map(({ file, whole, lines }) => [file, { whole, lines }]));
+  if (coverage?.size !== nativeScope?.length) return { failure: 'fichier de périmètre natif répété' };
   return {
     tests,
     ...(coverage === undefined ? {} : { gateNativeScope: coverage }),
