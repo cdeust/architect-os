@@ -1,3 +1,4 @@
+import '../../scripts/require-run.mjs';
 // Orchestrateur : npm run bench:sandbox. Lance chaque fichier de test dans son propre processus (groupe propre, delai
 // maximal), rassemble les enregistrements et ecrit reports/bench-sandbox-<os>.json. Un echec reste dans le rapport ;
 // le code de sortie est non nul s'il y a au moins un `fail`.

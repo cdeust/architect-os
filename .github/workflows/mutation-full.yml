@@ -24,10 +24,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       - name: Host dependencies
         run: |
@@ -46,10 +50,11 @@ jobs:
           echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
 
       - name: Install (lockfile, scripts disabled)
-        run: npm ci --ignore-scripts
+        run: ./aos -- npm ci --ignore-scripts
 
       - name: Plan - all the production files of gate.json, and its canary
         run: |
+          ./aos -- bash -e -o pipefail <<'ADMITTED'
           mkdir -p reports
           node -e '
             const { readFileSync, writeFileSync } = require("node:fs");
@@ -58,21 +63,24 @@ jobs:
             const mutate = [...include, config.canary.file, ...exclude.map((glob) => `!${glob}`)];
             writeFileSync("reports/gate-plan.json", JSON.stringify({ mutate }));
           '
+          ADMITTED
 
       - name: Stryker
-        run: npx stryker run
+        run: ./aos -- npx stryker run
 
       - name: Replay every verdict (rule 7)
-        run: node --import tsx tools/test-gate/src/main.ts replay --all
+        run: ./aos -- node --import tsx tools/test-gate/src/main.ts replay --all
 
       - name: Survivors against the registry
         if: success() || failure()
         run: |
+          ./aos -- bash -e -o pipefail <<'ADMITTED'
           cp tools/test-gate/mutation-debt.json reports/mutation-debt.committed.json
           rm tools/test-gate/mutation-debt.json
           node --import tsx tools/test-gate/src/main.ts debt
           cp tools/test-gate/mutation-debt.json reports/mutation-debt.computed.json
           git diff --stat --exit-code -- tools/test-gate/mutation-debt.json
+          ADMITTED
 
       - name: Upload reports
         if: always()

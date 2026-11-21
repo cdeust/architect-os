@@ -9,7 +9,7 @@ Les scénarios Gherkin du paquet sont dans `features/` (étapes dans `features/s
 Depuis un worktree du dépôt, `<repo>/.claude/worktrees/<w>` :
 
 ```bash
-npm --prefix <checkout du lanceur> run code -- <arguments de claude>
+"$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run code -- <arguments de claude>
 ```
 
 À chaque lancement, l'outil fait ceci, dans l'ordre (`code.json`, `profiles/builder.json`) :
@@ -39,7 +39,7 @@ Cinq fichiers portent les parties pures d'une étape de l'orchestration (`docs/d
 La commande qui les assemble, `src/step-tool.ts` (`src/step.ts` n'est que son point d'entrée), joue une étape de la boucle (§4) :
 
 ```bash
-npm --prefix <checkout du lanceur> run step -- <dossier>
+"$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run step -- <dossier>
 ```
 
 `<dossier>` est un chemin absolu, hors du dépôt, qui contient `step.json`, `brief.md` et, pour chaque éclaireur `<name>` de `step.json`, `scout.<name>.md`, sa question. Avant toute session, un refus (pas de dossier ou plusieurs, chemin relatif, `step.json` absent, pas du JSON ou refusé par `parseStepFile`, `brief.md` absent ou vide, `scout.<name>.md` absent, vide ou fait de blancs) écrit une ligne `architect-os step: <raison>` sur stderr et rend 2. D'abord les éclaireurs (`scout.json`, mêmes arguments que les revues dont `--json-schema` est le schéma des faits, leur question sur stdin, arrêtés à leur `limitSeconds`), au plus `parallel` à la fois, démarrés dans l'ordre du fichier et tous attendus, par le même mécanisme que les revues. Pour chacun, l'hôte lit les fichiers (`readSource`, une dépendance injectée ; la vraie ne rend un texte que si le chemin réel du fichier, liens suivis, est un fichier ordinaire sous le chemin réel du worktree, donc un lien qui en sort est `fichier absent`) et vérifie chaque citation avec `verifyFacts`. Un éclaireur invalide (pas de sortie structurée, ou refusée par le schéma), non terminé ou arrêté à sa limite ne donne aucun fait, et l'étape continue : le brief se suffit. Un éclaireur dont la session lève fait sortir l'étape en 2 après la fin des autres éclaireurs, sans construction. Puis la session de construction, dont le brief est `brief.md` suivi d'une ligne vide et du bloc de `renderFacts` sur les faits vérifiés de chaque éclaireur, dans l'ordre du fichier, s'il y en a au moins un (`code.json`, `-p --verbose --output-format stream-json --model <modèle> --effort <effort>`, le brief sur stdin), arrêtée à `build.limitSeconds` (la sandbox est stoppée, le flux écrit jusque-là est gardé) ; puis, seulement si la construction est terminée et non arrêtée, les contrôles (voir plus bas), puis, si tous ont passé, chaque revue de `step.json` (`review.json`, mêmes arguments plus `--json-schema` du schéma généré par `z.toJSONSchema` en draft-07, le brief de l'étape, suivi du bloc des contrôles s'il y en a, sur stdin), arrêtée à sa `limitSeconds`. Au plus `parallel` revues tournent en même temps ; elles démarrent dans l'ordre du fichier, chacune dès qu'une place se libère. Toutes sont attendues, quoi qu'il arrive aux autres : si une session lève (`ISOLATION_UNAVAILABLE`, …), les autres vont à leur fin, puis l'étape sort en 2 avec la ligne de la première en échec dans l'ordre du fichier. Le stderr des sessions passe tel quel sur celui de la commande.
@@ -61,7 +61,7 @@ L'empreinte `tree` (`src/tree-fingerprint.ts`) est prise avant toute session : `
 
 Le profil `builder` refuse toute écriture sous `steps/` du worktree (`denyWrite`, et `Edit` refusé dans ses réglages) ; `publish` écrit en créant chaque fichier (`wx`, mode 0644) et refuse (code 2) si `steps` n'est pas un vrai dossier du worktree (un lien, un fichier) ou si `steps/<nom>` existe, ce qu'il revérifie au moment d'écrire. La porte relit chaque dossier (`features/descriptive/steps.feature`) : ses fichiers et rien d'autre, `step.json` et `record.json` conformes à leur schéma, `record.step` est le nom du dossier, et chaque empreinte de `inputs` est celle du fichier voisin.
 
-**Rejouer une étape à la main** depuis son dossier : (1) créer un worktree au commit `record.tree.commit` ; si `record.tree.clean` est faux, l'étape est partie d'un arbre modifié, qui n'est pas rejouable depuis le dépôt seul (`record.tree.tree` permet de vérifier un arbre reconstruit) ; (2) copier `brief.md`, `step.json` et les `scout.<nom>.md` de `steps/<nom>/` vers un nouveau dossier hors du dépôt, sous un nouveau nom (le nom d'origine est pris) ; (3) depuis la racine de ce worktree, `npm --prefix <checkout du lanceur> run step -- <ce dossier>`. Rejouer n'est pas reproduire : une session de modèle n'est pas déterministe ; ce qui se rejoue est l'entrée, et ce qui se compare est l'enregistrement.
+**Rejouer une étape à la main** depuis son dossier : (1) créer un worktree au commit `record.tree.commit` ; si `record.tree.clean` est faux, l'étape est partie d'un arbre modifié, qui n'est pas rejouable depuis le dépôt seul (`record.tree.tree` permet de vérifier un arbre reconstruit) ; (2) copier `brief.md`, `step.json` et les `scout.<nom>.md` de `steps/<nom>/` vers un nouveau dossier hors du dépôt, sous un nouveau nom (le nom d'origine est pris) ; (3) depuis la racine de ce worktree, `"$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run step -- <ce dossier>`. Rejouer n'est pas reproduire : une session de modèle n'est pas déterministe ; ce qui se rejoue est l'entrée, et ce qui se compare est l'enregistrement.
 
 ### Les contrôles
 
@@ -80,7 +80,7 @@ Le dossier `prompts/` du lanceur porte un prompt par rôle : `prompts/build.md` 
 Une session de revue est le second lancement du même outil : `review.json` (`src/review.ts`, `npm run review`) donne à `src/code-tool.ts` le profil `reviewer` (worktree et `.git` en lecture seule, voir `profiles/reviewer.json`) et son prompt. Depuis le worktree à relire :
 
 ```bash
-npm --prefix <checkout du lanceur> run review -- -p --json-schema "$(cat <lanceur>/packages/sandbox/prompts/review-verdict.schema.json)" -- "<brief de l'étape>"
+"$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run review -- -p --json-schema "$(cat <lanceur>/packages/sandbox/prompts/review-verdict.schema.json)" -- "<brief de l'étape>"
 ```
 
 Les profils de `profiles/` : `builder` (la session de code), `reviewer` (revue et éclaireur : lecture seule, le proxy d'authentification seul joignable), `checker` (un contrôle de l'étape : lecture seule, aucun réseau, aucun secret, `tmp` seul inscriptible, voir « Les contrôles »), `module` et `worker` (la plateforme).

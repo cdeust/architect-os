@@ -14,7 +14,7 @@ import {
 } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { readCapped } from '../../src/capped.js';
 import { InMemorySandboxRunner } from '../../src/in-memory.js';
 import type { Sandbox, SandboxExit, SandboxRunner } from '../../src/port.js';
@@ -111,6 +111,18 @@ export function useSrt(
   world.state['srt'] = runner;
   world.state['cwd'] = repo.worktree;
 }
+
+Given('a real sandbox runner under this admission’s temporary directory', function () {
+  const root = process.env['ARCHITECT_OS_RUNTIME_ROOT'];
+  const run = process.env['ARCHITECT_OS_RUN_DIR'];
+  assert.ok(root && run, 'the parent command must be admitted');
+  assert.equal(dirname(run), join(root, 'run'));
+  const receipt = JSON.parse(readFileSync(join(run, 'admission.json'), 'utf8'));
+  assert.equal(receipt.run, basename(run));
+  assert.equal(realpathSync(tmpdir()), realpathSync(join(run, 'tmp')));
+  this.state['tmpRoot'] = tmpdir();
+  useSrt(this, () => ({}));
+});
 
 Given('a {string} sandbox runner', function (adapter: string) {
   if (adapter === 'in-memory') {

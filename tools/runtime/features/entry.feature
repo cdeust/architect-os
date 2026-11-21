@@ -104,3 +104,13 @@ Feature: The admission as a command (main.ts: what the shell entry aos reads of 
       | RUNTIME_HOME_SPACE_LOW      |
       | RUNTIME_SETUP_FAILED        |
     And the shell entry aos refuses with "USAGE", "RUNTIME_ROOT_REQUIRED", "RUNTIME_NODE_MISSING" and "RUNTIME_NODE_UNSUPPORTED", the first four of that list, in its order
+
+  Scenario: the bootstrap obtains a physical binding and receipt
+    Given a runtime command over a scratch root on the host marked "hosted-runner", and the policy text with floors of "1" byte
+    When the runtime bootstrap requests a binding with the internal flag "1"
+    Then the output carries the physical run identity and all issued receipt bytes
+
+  Scenario: any other internal flag preserves the public output
+    Given a runtime command over a scratch root on the host marked "hosted-runner", and the policy text with floors of "1" byte
+    When the runtime bootstrap requests a binding with the internal flag "0"
+    Then the runtime command exits 0, and the receipt of the run it prints names "hosted-runner", the kind "npm" and the device of the scratch root

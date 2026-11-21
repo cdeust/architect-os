@@ -2,6 +2,7 @@
 // Point d'entrée seulement : l'outil est `code-tool.ts`, décrit par `code.json`, son profil dans `profiles/`.
 // Le lanceur, srt et les plugins doivent vivre hors du worktree visé (refus sinon) : depuis le worktree,
 // `npm --prefix <checkout du lanceur> run code`.
-import { failureReporter, processDependencies, runCodeTool } from './code-tool.js';
+import '@architect-os/sandbox/require-run';
+const { failureReporter, processDependencies, runCodeTool } = await import('./code-tool.js');
 
 process.exitCode = await runCodeTool(processDependencies(process)).catch(failureReporter(process.stderr));

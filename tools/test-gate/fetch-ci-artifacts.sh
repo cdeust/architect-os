@@ -1,6 +1,8 @@
 #!/bin/sh
 # A failed-jobs rerun retains the successful producer jobs and their artifacts from earlier attempts.
 set -eu
+entry=$(CDPATH= cd -P -- "$(dirname -- "$0")/../.." && pwd -P) || exit 2
+node "$entry/scripts/require-run.mjs" || exit $?
 checkout_head=$(git rev-parse --verify HEAD)
 repository="repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 head=$(gh api "$repository" --jq .head_sha)
@@ -57,7 +59,7 @@ artifact_origin() {
 }
 download_artifact() {
   mkdir -p "$2"
-  archive=$(mktemp)
+  archive=$(mktemp "${TMPDIR:?}/artifact.XXXXXX")
   if ! gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$1/zip" > "$archive" ||
      ! unzip -oq "$archive" -d "$2"; then
     rm -f "$archive"

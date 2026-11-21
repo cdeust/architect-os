@@ -27,7 +27,7 @@ export interface AdmitDependencies {
 }
 
 export type Admission =
-  | { readonly admitted: true; readonly run: string; readonly receipt: string }
+  | { readonly admitted: true; readonly run: string; readonly receipt: string; readonly binding: string }
   | { readonly admitted: false; readonly code: RefusalCode };
 
 const refuse = (code: RefusalCode): Admission => ({ admitted: false, code });
@@ -109,7 +109,14 @@ export function admit(deps: AdmitDependencies, setting: string | undefined, comm
         home: homeObservation,
       });
       if (make(RECEIPT_FILE, (path) => filesystem.createFile(root, path, receipt)))
-        return { admitted: true, run: allocation.name, receipt };
+        return {
+          admitted: true,
+          run: allocation.name,
+          receipt,
+          binding: [allocation.device, allocation.inode, Buffer.from(receipt).toString('base64url')].join(
+            ':',
+          ),
+        };
     }
   } catch (error) {
     // Something nobody foresaw once the run is allocated: the run goes, and the error still reaches the entry.

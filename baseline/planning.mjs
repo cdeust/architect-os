@@ -72,6 +72,8 @@ export async function measure([receipt, stage, ...args], proc = process) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const { requireAdmittedRun } = await import('../packages/sandbox/src/runtime-context.ts');
+  requireAdmittedRun();
   try {
     process.exitCode = await measure(process.argv.slice(2));
   } catch (err) {

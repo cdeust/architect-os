@@ -21,6 +21,7 @@ export interface AdmissionDependencies {
   readonly stderr: { write(text: string): unknown };
   readonly filesystem: RuntimeFilesystem;
   /** The text of the policy file, or none when it cannot be read. */
+  readonly emitBinding?: boolean;
   readonly policyText: () => string | undefined;
   readonly clock: () => Date;
 }
@@ -47,7 +48,7 @@ export function runAdmission(deps: AdmissionDependencies): number {
       deps.stderr.write(`aos: ${admission.code}\n`);
       return 2;
     }
-    deps.stdout.write(`${admission.run}\n`);
+    deps.stdout.write((deps.emitBinding ? admission.run + ':' + admission.binding : admission.run) + '\n');
     return 0;
   } catch {
     deps.stderr.write('aos: RUNTIME_UNEXPECTED\n');
@@ -55,8 +56,9 @@ export function runAdmission(deps: AdmissionDependencies): number {
   }
 }
 
-/** The process, as far as the admission reads it: its arguments and two streams, not its environment nor its stdin. */
+/** The process, as far as the admission reads it: its arguments and two streams, and its internal bootstrap flag. */
 export interface AdmissionProcess {
+  readonly env: Readonly<NodeJS.ProcessEnv>;
   readonly argv: readonly string[];
   readonly stdout: { write(text: string): unknown };
   readonly stderr: { write(text: string): unknown };
@@ -65,6 +67,7 @@ export interface AdmissionProcess {
 export function admissionDependencies(proc: AdmissionProcess): AdmissionDependencies {
   return {
     argv: proc.argv.slice(2),
+    emitBinding: proc.env.ARCHITECT_OS_EMIT_BINDING === '1',
     stdout: proc.stdout,
     stderr: proc.stderr,
     filesystem: new NodeRuntimeFilesystem(),

@@ -9,6 +9,11 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
+    },
+    "./require-run": "./require-run.mjs",
+    "./runtime-context": {
+      "types": "./dist/src/runtime-context.d.ts",
+      "default": "./src/runtime-context.ts"
     }
   },
   "dependencies": {

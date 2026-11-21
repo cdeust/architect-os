@@ -1,3 +1,4 @@
+import { admittedEnvironment } from '../support/admitted-environment.js';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -74,7 +75,12 @@ function planFixture(root: string) {
 }
 
 function fixtureEnvironment(root: string): NodeJS.ProcessEnv {
-  return { HOME: root, PATH: process.env.PATH, TSX_TSCONFIG_PATH: process.env.TSX_TSCONFIG_PATH };
+  return {
+    ...admittedEnvironment(),
+    HOME: root,
+    PATH: process.env.PATH,
+    TSX_TSCONFIG_PATH: process.env.TSX_TSCONFIG_PATH,
+  };
 }
 
 function fakeDraftEnvironment(root: string, provider: string, refused = false): NodeJS.ProcessEnv {

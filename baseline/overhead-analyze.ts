@@ -1,3 +1,4 @@
+import '../scripts/require-run.mjs';
 // Analysis of measure A (the pre-registered protocols are in docs/design/journal.md §30 and following, and in the baseline/README.md of commit be831caa7fbe): `npm run baseline:overhead-analyze -- <file>`.
 // Per configuration, the median, p10 and p90 of the wall time, warm-up measures and failed measures left out (their
 // count is reported). For each hypothesis, the difference of medians and its 95 % percentile interval by bootstrap
