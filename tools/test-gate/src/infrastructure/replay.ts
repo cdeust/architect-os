@@ -14,7 +14,6 @@ import { parseCucumberReport } from './cucumber-report.js';
 import type { Workspace } from './workspace.js';
 
 const CUCUMBER = new URL('./replay-cucumber' + extname(fileURLToPath(import.meta.url)), import.meta.url).href;
-const CUCUMBER_API = import.meta.resolve('@cucumber/cucumber/api');
 const SELECTION_PREFIX = 'AOS_REPLAY_SELECTION: ';
 const EXECUTION_PREFIX = 'AOS_REPLAY_EXECUTION: ';
 
@@ -94,7 +93,7 @@ export class CucumberRunner implements Runner {
     writeFileSync(selectorPath, this.selector);
     const entry =
       'import * as cucumber from ' +
-      JSON.stringify(CUCUMBER_API) +
+      JSON.stringify(import.meta.resolve('@cucumber/cucumber/api')) +
       ';' +
       'import { runReplayCucumber } from ' +
       JSON.stringify(pathToFileURL(selectorPath).href) +

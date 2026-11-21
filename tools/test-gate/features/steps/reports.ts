@@ -385,3 +385,18 @@ Then('the uncovered native mutant has no optional report metadata', function () 
   assert.equal(mutant.static, false);
   assert.equal(Object.hasOwn(mutant, 'statusReason'), false);
 });
+
+Then('a valid native mutation report has a parsed source, position and active static flag', function () {
+  const bytes = readFileSync(join(FIXTURES, 'mutation/survivor.json'), 'utf8');
+  assert.doesNotThrow(() => {
+    const parsed = parseMutationReport(bytes, true);
+    assert.ok(!('failure' in parsed));
+    const file = parsed.files.get('src/math.mjs');
+    assert.ok(file !== undefined);
+    assert.match(file.source, /function sum/);
+    const first = file.mutants[0];
+    assert.ok(first !== undefined);
+    assert.equal(first.status, 'Killed');
+    assert.deepEqual([first.startLine, first.endLine, first.static], [2, 4, false]);
+  }, 'a valid native mutation report must parse in process');
+});

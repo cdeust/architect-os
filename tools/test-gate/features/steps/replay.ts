@@ -21,13 +21,21 @@ import {
   judgeReplay,
   mutatedSource,
   recheckDivergence,
+  replayCases,
   type Expectation,
   type Judgement,
   type RunResult,
 } from '../../src/domain/replay.js';
 import type { ExecutedPickle } from '../../src/domain/run.js';
-import { CucumberRunner, detectLimit, sha256, type Timed } from '../../src/infrastructure/replay.js';
+import {
+  CucumberRunner,
+  detectLimit,
+  replayAll,
+  sha256,
+  type Timed,
+} from '../../src/infrastructure/replay.js';
 import { parseMutationReport } from '../../src/infrastructure/mutation-report.js';
+import { Workspace } from '../../src/infrastructure/workspace.js';
 import { CONFIG_PATH } from '../../src/infrastructure/gate.js';
 import { FIXTURES, Given, Then, When, repository } from './repository.js';
 
@@ -850,4 +858,40 @@ Then('a nested logical mutation keeps its AST grouping during replay', function 
     endColumn: 15,
   } as MutantRecord;
   assert.equal(mutatedSource(source, mutant), '(left || middle) && right');
+});
+
+Then('the reported timeout is replayed with the precise bound and a fresh control', async function () {
+  const repo = repository(this);
+  const report = parseMutationReport(repo.read(MUTATION));
+  assert.ok(!('failure' in report));
+  const cases = replayCases(report, () => true);
+  assert.equal(cases.length, 1);
+  const candidate = cases[0];
+  assert.ok(candidate !== undefined);
+  const control = {
+    ms: 40.4,
+    result: runOf(candidate.tests.map(() => 'PASSED').join(' | ')),
+  };
+  const observed: number[] = [];
+  const workspace = new Workspace(repo.dir);
+  const result = await replayAll(
+    cases,
+    workspace,
+    {
+      async run(tests, timeout) {
+        assert.deepEqual(tests, candidate.tests);
+        observed.push(timeout);
+        if (observed.length === 2) {
+          assert.equal(repo.read(candidate.file), candidate.mutated);
+          return { ms: timeout, result: runOf('timeout') };
+        }
+        assert.equal(repo.read(candidate.file), candidate.source);
+        return control;
+      },
+    },
+    600_000,
+  );
+  assert.deepEqual(observed, [600_000, 10_122, 600_000]);
+  assert.deepEqual(result, [{ file: candidate.file, id: '0', status: 'Timeout', divergence: null }]);
+  assert.equal(repo.read(candidate.file), candidate.source);
 });

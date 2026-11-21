@@ -124,7 +124,7 @@ export function planHostedSlices(
     bucket.groups.push(group);
     bucket.cost += group.cost;
   }
-  // Start the costly chains first when GitHub has fewer workers available than the matrix requests.
+  // Number the heaviest planned lots first. GitHub controls the order in which its runners start them.
   return buckets
     .sort((a, b) => b.cost - a.cost)
     .map(({ groups: assigned, whole }) => {

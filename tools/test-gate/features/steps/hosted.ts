@@ -132,6 +132,21 @@ Then('the hosted verdict has all independently replayed mutations', async functi
 
 Then('a replaced producer or a missing receipt cannot reuse the hosted verdict', async function () {
   const repo = repository(this);
+
+  const goodReceiptPath = 'reports/replay-shards/2/replay.json';
+  const goodReceipt = repo.read(goodReceiptPath);
+  for (const field of ['producer', 'manifest']) {
+    const complete = JSON.parse(goodReceipt);
+    const digest = complete[field] as string;
+    for (const value of ['x' + digest, digest + 'x']) {
+      repo.write(goodReceiptPath, JSON.stringify({ ...complete, [field]: value }));
+      const malformed = await command(repo, 'collect');
+      assert.equal(malformed.status, 1, malformed.output);
+      assert.match(malformed.output, /hors schéma/);
+      assert.ok(malformed.output.includes(field), malformed.output);
+    }
+  }
+  repo.write(goodReceiptPath, goodReceipt);
   const origin = 'reports/mutation-shards/1/producer';
   const proof = repo.read(origin);
   repo.write(origin, 'replacement producer attempt');
@@ -278,6 +293,16 @@ Then('hosted planning keeps peers together and preserves a deeply nested file', 
   assert.equal(fallback.flatMap(({ lots }) => lots.filter((lot) => lot.file === file)).length, 1);
   assert.deepEqual(fallback[0]?.patterns, [file, canary]);
   assert.equal(fallback[0]?.lots[0], input[0]);
+
+  const sibling = 'src/unrelated.mjs';
+  const loaded = planHostedSlices([...input, lot(sibling, [innermost])], canary, read, costs, 2);
+  assert.ok(loaded.some(({ lots }) => lots.some((entry) => entry.file === file)));
+  assert.ok(loaded.some(({ lots }) => lots.some((entry) => entry.file === sibling)));
+  assert.ok(
+    !loaded.some(
+      ({ lots }) => lots.some((entry) => entry.file === file) && lots.some((entry) => entry.file === sibling),
+    ),
+  );
 });
 
 Then('hosted admission preserves unrelated receipts and rejects invalid lane arguments', async function () {
@@ -463,4 +488,53 @@ Then('hosted planning balances measured spans and contains only within the same 
     flipped[0]?.lots.map(({ file }) => file),
     [canary, fileFallback, globalFallback],
   );
+});
+
+Then('the actual hosted entrypoint passes its arguments into Gate', async function () {
+  const repo = repository(this);
+  repo.write(HOSTED_COSTS, JSON.stringify({ files: {}, fallback: 1 }));
+  const initial = { cwd: process.cwd(), argv: process.argv, exitCode: process.exitCode };
+  const entry = new URL('../../src/hosted.ts', import.meta.url);
+  entry.searchParams.set('fixture', repo.dir);
+  try {
+    process.chdir(repo.dir);
+    process.argv = [process.execPath, entry.pathname, 'inventory', '1'];
+    await import(entry.href);
+    assert.equal(process.exitCode, 0);
+    assert.equal(JSON.parse(repo.read(MANIFEST)).lane, 1);
+  } finally {
+    process.chdir(initial.cwd);
+    process.argv = initial.argv;
+    process.exitCode = initial.exitCode;
+  }
+});
+
+Then('each hosted producer must match its committed inventory and canary', async function () {
+  const repo = repository(this);
+  const directory = 'reports/mutation-shards/1/';
+  const native = directory + 'mutation/native.json';
+  const manifestPath = directory + 'mutation-inventory.json';
+  const receiptPath = 'reports/replay-shards/1/replay.json';
+  const original = repo.read(native);
+  const manifest = repo.read(manifestPath);
+  const receipt = repo.read(receiptPath);
+  try {
+    repo.write(manifestPath, manifest + '\n');
+    const wrongTree = await command(repo, 'replay', '1');
+    assert.equal(wrongTree.status, 1, wrongTree.output);
+    assert.match(wrongTree.output, /inventaire différent du périmètre courant pour le lot 1/);
+    assert.equal(repo.exists(receiptPath), false);
+    repo.write(manifestPath, manifest);
+    const report = JSON.parse(original);
+    for (const mutant of report.files['zz/probe.mjs'].mutants) mutant.status = 'NoCoverage';
+    repo.write(native, JSON.stringify(report));
+    const wrongCanary = await command(repo, 'replay', '1');
+    assert.equal(wrongCanary.status, 1, wrongCanary.output);
+    assert.match(wrongCanary.output, /canari de mutation refusé dans le lot 1/);
+    assert.equal(repo.exists(receiptPath), false);
+  } finally {
+    repo.write(manifestPath, manifest);
+    repo.write(native, original);
+    repo.write(receiptPath, receipt);
+  }
 });

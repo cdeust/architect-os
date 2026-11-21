@@ -319,16 +319,10 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       | 5  | confirmé                                      |
       | 6  | Ignored selon l'outil, mais sur le mutant : ["specs/green.feature","Green fixture",null,"an outline with <value>","small values",["1"]] : FAILED, ["specs/green.feature","Green fixture",null,"an outline with <value>","small values",["2"]] : FAILED, ["specs/second.feature","Second green fixture",null,"another passing scenario",null,null] : FAILED |
 
-  Scenario: a Timeout mutant whose run hangs is confirmed at three times its control plus ten seconds
+  Scenario: a reported Timeout is confirmed with the control-derived bound and a fresh witness
     Given the gate mutation report keeps only the mutants "0"
     And mutant "0" of the gate mutation report has the status "Timeout"
-    And mutant "0" of the gate mutation report is replaced by "{ const end = Date.now() + 60000; while (Date.now() < end); }"
-    When the gate replays every mutant of the mutation report
-    Then the gate exits with 0
-    And the gate replay record is:
-      """
-      src/math.mjs #0 Timeout : confirmé
-      """
+    Then the reported timeout is replayed with the precise bound and a fresh control
 
   Scenario: a survivor whose run hangs past the limit of gate.json diverges: it has no control to bound it
     Given the gate mutation report keeps only the mutants "0"

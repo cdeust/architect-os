@@ -28,6 +28,7 @@ Feature: Hosted mutation slices retain exhaustive producer and replay proof
     And the gate head is committed
     When the hosted mutation chains complete independently in "changed lines" mode
     Then the hosted verdict has all independently replayed mutations
+    And each hosted producer must match its committed inventory and canary
     And the static mutant contradicts a limited coverage claim
     And a replaced producer or a missing receipt cannot reuse the hosted verdict
 
@@ -78,6 +79,7 @@ Feature: Hosted mutation slices retain exhaustive producer and replay proof
     And the gate configuration declares the replay
     And the gate head is committed
     Then hosted admission preserves unrelated receipts and rejects invalid lane arguments
+    And the actual hosted entrypoint passes its arguments into Gate
 
   Scenario: invalid configuration or debt cannot produce a hosted manifest
     Given a gate repository
