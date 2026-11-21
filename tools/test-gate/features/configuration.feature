@@ -100,7 +100,7 @@ Feature: Test gate configuration and command line
     Then the gate exits with 1
     And the gate output is:
       """
-      porte de test : usage : test-gate plan|check|inventory|inventory-check [--job <nom>] | debt [realign] | replay [--all | --shard <1|2>] | replay-collect
+      porte de test : usage : test-gate plan|check|inventory|inventory-check|inventory-project [--job <nom>] | debt [realign] | replay [--all | --shard <1|2>] | replay-collect
       """
 
     Examples:

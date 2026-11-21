@@ -183,6 +183,32 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       - entrées retirées par ce diff : 0
       """
 
+  Scenario: native whole-file instrumentation does not claim to cover debt outside the changed lines
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "partial-line" with line 1 changed
+    And the gate debt registry is the fixture "partial-line"
+    And the gate first parent is committed
+    And the gate repository holds "src/math.mjs" of the mutation fixture "partial-line"
+    And the gate head is committed
+    And the gate mutation report is the fixture "partial-line"
+    And the projected native report has no mutants on the changed line
+    When the gate checks the "linux" job
+    Then the gate verdict is green
+    And the gate reports no violation
+
+  Scenario: an earlier partial projection of the same file cannot prove debt retirement
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "partial-line"
+    And the gate debt registry is the fixture "partial-line"
+    And the gate first parent is committed
+    And the gate debt registry is the fixture "empty"
+    And the gate head is committed
+    And the gate repository file "reports/mutation/mutation.json" reads:
+      """
+      {"files":{},"config":{"mutate":["src/math.mjs"]},"gateNativeScope":[{"file":"src/math.mjs","whole":false,"lines":[1]}]}
+      """
+    When the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate output includes "retrait non prouvé"
+
   Scenario: a single-line mutant on the first line of its file is identified from the first line of the source
     Given the gate repository holds "mod/a/src/a.mjs" of the mutation fixture "covered-by-feature" with line 1 changed
     And the gate debt registry is the fixture "a-survivor"
@@ -1091,7 +1117,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     Then the gate exits with 1
     And the gate output is:
       """
-      porte de test : usage : test-gate plan|check|inventory|inventory-check [--job <nom>] | debt [realign] | replay [--all | --shard <1|2>] | replay-collect
+      porte de test : usage : test-gate plan|check|inventory|inventory-check|inventory-project [--job <nom>] | debt [realign] | replay [--all | --shard <1|2>] | replay-collect
       """
     And the gate repository holds no file "mutation-debt.json"
 

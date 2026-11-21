@@ -24,6 +24,7 @@ import { resolve } from 'node:path';
 /** The descriptive configuration, relative to the repository root. */
 export const CONFIG_PATH = 'tools/test-gate/gate.json';
 const INVENTORY_PATH = 'reports/mutation-inventory.json';
+const NATIVE_MUTATION_PATH = 'reports/mutation/native.json';
 
 export interface Output {
   write(text: string): unknown;
@@ -302,7 +303,13 @@ export async function runGate(
   }
   const job = jobOf(config, command.job);
   if (job === null) return refuse(`job inconnu : ${command.job}`);
-  if (command.name === 'inventory' || command.name === 'inventory-check') {
+  if (
+    command.name === 'inventory' ||
+    command.name === 'inventory-check' ||
+    command.name === 'inventory-project'
+  ) {
+    const project = command.name === 'inventory-project';
+    if (project) workspace.remove(config.reports.mutation);
     if (!job.mutation) return refuse('le job ne prévoit pas de mutation');
     try {
       const repository = new GitRepository(root);
@@ -319,16 +326,26 @@ export async function runGate(
         return bytes === null ? null : decoder.decode(bytes);
       });
       const inventoryText = jsonText({ head, firstParent, job: job.name, lots });
-      if (command.name === 'inventory-check') {
+      if (command.name !== 'inventory') {
         if (workspace.readBytes(INVENTORY_PATH)?.equals(Buffer.from(inventoryText)) !== true)
           return refuse('inventaire absent ou différent du périmètre courant');
-        const reportBytes = workspace.readBytes(config.reports.mutation);
+        const reportBytes = workspace.readBytes(project ? NATIVE_MUTATION_PATH : config.reports.mutation);
         if (reportBytes === null) return refuse('rapport de mutation absent');
-        const report = parseMutationReport(decoder.decode(reportBytes));
+        const reportText = decoder.decode(reportBytes);
+        const report = parseMutationReport(reportText);
         if ('failure' in report) return refuse(report.failure);
         const { verifyMutationLots } = await import('./mutation-lot-proof.js');
-        const failure = verifyMutationLots(lots, report);
+        const bookkeeping = new Set<string>();
+        const failure = verifyMutationLots(lots, report, (_file, mutant) => bookkeeping.add(mutant.id));
         if (failure !== null) return refuse(failure.failure);
+        if (project) {
+          const raw = JSON.parse(reportText) as { files: Record<string, { mutants: Array<{ id: string }> }> };
+          for (const file of Object.values(raw.files)) {
+            file.mutants = file.mutants.filter(({ id }) => !bookkeeping.has(id));
+          }
+          const gateNativeScope = lots.map(({ file, whole, lines }) => ({ file, whole, lines }));
+          workspace.write(config.reports.mutation, jsonText({ ...raw, gateNativeScope }));
+        }
         out.write('lots de mutation vérifiés : ' + lots.length + '\n');
         return 0;
       }

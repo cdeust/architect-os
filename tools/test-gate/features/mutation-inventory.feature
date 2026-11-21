@@ -22,6 +22,45 @@ Feature: The inventory projects native mutants onto changed production lines
     And the gate head is committed
     When the gate inventories the mutation scope
     Then the mutation inventory retains the scoped multiline nodes
+    When the native plugin instruments the inventory files
+    And the gate projects the native report
+    Then the verified projection contains only the inventory mutants
+    When the gate checks its mutation inventory
+    Then the mutation inventory check returns "pass"
+
+  Scenario Outline: a CallExpression with no selected active child stays out of the projected report
+    Given a gate repository
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      function call(a, b) { return a && b; }
+      export const value = call(
+        true,
+        // Stryker disable next-line BooleanLiteral: equivalent fixture
+        true,
+      );
+      """
+    And the gate first parent is committed
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      function call(a, b) { return a && b; }
+      export const value = call(
+        true,
+        // Stryker disable next-line BooleanLiteral: equivalent fixture<comment>
+        <value>,
+      );
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    And the native plugin instruments the inventory files
+    And the gate projects the native report
+    Then the verified projection contains only the inventory mutants
+    When the gate checks its mutation inventory
+    Then the mutation inventory check returns "pass"
+
+    Examples:
+      | comment   | value |
+      |           | false |
+      | corrected | true  |
 
   Scenario: a configured canary is inventoried whole with zero mutations
     Given a gate repository

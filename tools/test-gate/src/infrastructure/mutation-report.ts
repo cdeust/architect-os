@@ -56,6 +56,11 @@ const ReportSchema = z.object({
     )
     .optional(),
   config: z.object({ mutate: z.array(z.string()) }),
+  gateNativeScope: z
+    .array(
+      z.strictObject({ file: z.string(), whole: z.boolean(), lines: z.array(z.number().int().positive()) }),
+    )
+    .optional(),
 });
 
 /** Parses reports/mutation/mutation.json into what rule 5 needs. */
@@ -79,8 +84,15 @@ export function parseMutationReport(text: string, requireStatic = false): Mutati
   );
   const tests = new Map(testEntries);
   if (tests.size !== testEntries.length) return { failure: 'identifiant de test de mutation répété' };
+  const nativeScope = parsed.gateNativeScope?.map(
+    ({ file, whole, lines }) => [file, { whole, lines }] as const,
+  );
+  const coverage = nativeScope === undefined ? undefined : new Map(nativeScope);
+  if (coverage !== undefined && coverage.size !== nativeScope?.length)
+    return { failure: 'fichier de périmètre natif répété' };
   return {
     tests,
+    ...(coverage === undefined ? {} : { gateNativeScope: coverage }),
     files: new Map(
       Object.entries(files).map(([path, file]) => [
         path,

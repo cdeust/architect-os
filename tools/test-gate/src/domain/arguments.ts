@@ -1,7 +1,10 @@
 import type { ReadFailure } from './violation.js';
 
 export type Command =
-  | { readonly name: 'plan' | 'check' | 'inventory' | 'inventory-check'; readonly job: string }
+  | {
+      readonly name: 'plan' | 'check' | 'inventory' | 'inventory-check' | 'inventory-project';
+      readonly job: string;
+    }
   /** Writes the mutation debt registry from the mutation report. */
   | { readonly name: 'debt' }
   /** `debt realign`: puts the entries of the registry back on their text. */
@@ -11,7 +14,7 @@ export type Command =
   | { readonly name: 'replay-collect' };
 
 const USAGE =
-  'usage : test-gate plan|check|inventory|inventory-check [--job <nom>] | debt [realign] | replay [--all | --shard <1|2>] | replay-collect';
+  'usage : test-gate plan|check|inventory|inventory-check|inventory-project [--job <nom>] | debt [realign] | replay [--all | --shard <1|2>] | replay-collect';
 
 /** `plan|check [--job <name>]` (the job defaults to linux), `debt [realign]`, or `replay [--all]`. */
 export function parseArguments(args: readonly string[]): Command | ReadFailure {
@@ -28,7 +31,13 @@ export function parseArguments(args: readonly string[]): Command | ReadFailure {
     if (options.length === 0) return { name, all: false };
     return options.length === 1 && options[0] === '--all' ? { name, all: true } : { failure: USAGE };
   }
-  if (name !== 'plan' && name !== 'check' && name !== 'inventory' && name !== 'inventory-check')
+  if (
+    name !== 'plan' &&
+    name !== 'check' &&
+    name !== 'inventory' &&
+    name !== 'inventory-check' &&
+    name !== 'inventory-project'
+  )
     return { failure: USAGE };
   if (options.length === 0) return { name, job: 'linux' };
   const [flag, job, ...rest] = options;

@@ -46,7 +46,7 @@ attempt_of() {
         end'
 }
 attempt=$(attempt_of gate-linux-mutation)
-gh run download "$GITHUB_RUN_ID" --name "gate-mutation-linux-$attempt" --dir reports/mutation
+gh run download "$GITHUB_RUN_ID" --name "gate-mutation-linux-$attempt" --dir reports
 test "$(cat reports/mutation/head)" = "$checkout_head"
 if [ "$#" -eq 1 ] && [ "$1" = mutation ]; then exit 0; fi
 test "$#" -eq 0

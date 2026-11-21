@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { Instrumenter } from '@stryker-mutator/instrumenter';
+import { readNativeLotIgnorer } from '../../src/infrastructure/stryker-lot-plugin.js';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Then, When, repository } from './repository.js';
@@ -67,6 +69,78 @@ Then('the inventory retains the native ignore reason', function () {
   const mutant = fixture.mutants.find(({ mutatorName }) => mutatorName === 'BooleanLiteral');
   assert.ok(mutant);
   assert.match(mutant.ignored ?? '', /fixture reason/);
+});
+
+When('the native plugin instruments the inventory files', async function () {
+  const repo = repository(this);
+  const { lots } = readInventory(this);
+  const disabled = () => false;
+  const silent = () => undefined;
+  const instrumenter = new Instrumenter({
+    isTraceEnabled: disabled,
+    isDebugEnabled: disabled,
+    isInfoEnabled: disabled,
+    isWarnEnabled: disabled,
+    isErrorEnabled: disabled,
+    isFatalEnabled: disabled,
+    trace: silent,
+    debug: silent,
+    info: silent,
+    warn: silent,
+    error: silent,
+    fatal: silent,
+  });
+  const inputs = lots.map(({ file }) => ({ name: repo.path(file), content: repo.read(file), mutate: true }));
+  const result = await instrumenter.instrument(inputs, {
+    plugins: null,
+    excludedMutations: [],
+    ignorers: [readNativeLotIgnorer(repo.dir)],
+  });
+  const files = Object.fromEntries(
+    lots.map(({ file }) => [
+      file,
+      {
+        source: repo.read(file),
+        mutants: result.mutants
+          .filter(({ fileName }) => fileName === repo.path(file))
+          .map((mutant) => {
+            const point = ({ line, column }: { line: number; column: number }) => ({
+              line: line + 1,
+              column: column + 1,
+            });
+            const { start, end } = mutant.location;
+            return {
+              ...mutant,
+              status: mutant.status ?? 'Pending',
+              location: { start: point(start), end: point(end) },
+            };
+          }),
+      },
+    ]),
+  );
+  repo.write(
+    'reports/mutation/native.json',
+    JSON.stringify({ files, config: { mutate: lots.map(({ file }) => file) } }),
+  );
+});
+
+When('the gate projects the native report', function () {
+  return repository(this).run(['inventory-project', '--job', 'linux']);
+});
+
+Then('the verified projection contains only the inventory mutants', function () {
+  const repo = repository(this);
+  const { lots } = readInventory(this);
+  const projected = JSON.parse(repo.read('reports/mutation/mutation.json'));
+  assert.deepEqual(
+    projected.gateNativeScope,
+    lots.map(({ file, whole, lines }) => ({ file, whole, lines })),
+  );
+  for (const lot of lots) {
+    const seen = projected.files[lot.file].mutants as unknown[];
+    assert.equal(seen.length, lot.mutants.length);
+  }
+  assert.ok(repo.exists('reports/mutation/native.json'));
 });
 
 When('the gate receives a mutation lot report with {string}', function (variant: string) {

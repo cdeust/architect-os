@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { MutationReport } from '../domain/mutation.js';
+import type { MutantRecord, MutationReport } from '../domain/mutation.js';
 import type { ReadFailure } from '../domain/violation.js';
 import type { mutationLots } from './mutation-inventory.js';
 
@@ -20,7 +20,11 @@ function identity(
  * Verify the mutant multiset against independently discovered lots. Only ignored extra rows can be bookkeeping.
  * Source hashes and native ignore reasons are retained. Scenario selection is a separate proof.
  */
-export function verifyMutationLots(lots: readonly Lot[], report: MutationReport): ReadFailure | null {
+export function verifyMutationLots(
+  lots: readonly Lot[],
+  report: MutationReport,
+  onBookkeeping?: (file: string, mutant: MutantRecord) => void,
+): ReadFailure | null {
   const files = new Map(lots.map((lot) => [lot.file, lot]));
   for (const file of report.files.keys()) {
     if (!files.has(file)) return { failure: file + ' : fichier de mutation hors inventaire' };
@@ -70,6 +74,7 @@ export function verifyMutationLots(lots: readonly Lot[], report: MutationReport)
       else if (selected.has(span))
         return { failure: lot.file + ' : mutant du lot répété ou motif d’ignorance différent : ' + m.id };
       else if (m.status !== 'Ignored') return { failure: lot.file + ' : mutant actif hors lot : ' + m.id };
+      else onBookkeeping?.(lot.file, m);
     }
     const missing = [...pending.values()].reduce((sum, count) => sum + count, 0);
     if (missing !== 0) return { failure: lot.file + ' : mutant(s) du lot absents du rapport : ' + missing };

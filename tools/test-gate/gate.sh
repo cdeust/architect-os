@@ -42,12 +42,17 @@ if [ "$mutation_only" = false ]; then
 fi
 if [ "$job" = linux ] && node -e 'process.exit(JSON.parse(require("fs").readFileSync("reports/gate-plan.json","utf8")).mutate.length > 0 ? 0 : 1)'; then
   started=$(date +%s)
-  stryker run
+  if [ "$report_only" = true ]; then
+    $gate inventory --job linux || exit 1
+    AOS_NATIVE_MUTATION_LOTS=1 stryker run
+  else
+    stryker run
+  fi
   stryker_status=$?
   echo "stryker: $(($(date +%s) - started)) s"
   if [ "$report_only" = true ]; then
-    [ "$stryker_status" -eq 0 ] && test -s reports/mutation/mutation.json
-    exit $?
+    [ "$stryker_status" -eq 0 ] || exit "$stryker_status"
+    exec $gate inventory-project --job linux
   fi
   started=$(date +%s)
   $gate replay

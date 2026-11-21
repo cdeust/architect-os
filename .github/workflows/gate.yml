@@ -124,7 +124,10 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gate-mutation-linux-${{ github.run_attempt }}
-          path: reports/mutation/
+          path: |
+            reports/mutation/native.json
+            reports/mutation/head
+            reports/mutation-inventory.json
           if-no-files-found: error
 
   gate-linux-replay:
@@ -181,6 +184,7 @@ jobs:
           AOS_REPLAY_SHARD: ${{ matrix.shard }}
         run: |
           npm exec --no -- tsc -b
+          node --import tsx tools/test-gate/src/main.ts inventory-project --job linux
           node --import tsx tools/test-gate/src/main.ts replay --shard "$AOS_REPLAY_SHARD" || test -s "reports/replay-shards/$AOS_REPLAY_SHARD/replay.json"
           git rev-parse --verify HEAD > "reports/replay-shards/$AOS_REPLAY_SHARD/head"
 
@@ -238,7 +242,9 @@ jobs:
           gh run download "$run_id" -n gate-base-linux -D reports/base -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-linux of run $run_id not downloadable"
 
       - name: Verify and collect independent replay lots
-        run: node --import tsx tools/test-gate/src/main.ts replay-collect
+        run: |
+          node --import tsx tools/test-gate/src/main.ts inventory-project --job linux
+          node --import tsx tools/test-gate/src/main.ts replay-collect
 
       - name: Gate
         env:
