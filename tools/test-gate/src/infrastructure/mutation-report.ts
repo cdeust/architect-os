@@ -32,7 +32,7 @@ const ReportSchema = z.object({
             statusReason: z.string().optional(),
             replacement: z.string(),
             location: z.object({ start: Position, end: Position }),
-            // Absent fields mean none (the schema marks them optional): no test killed or covered it, not static.
+            // The legacy parser tolerates absent static metadata. The hosted lot path requires it for active verdicts.
             static: z.boolean().optional(),
             killedBy: z.array(z.string()).optional(),
             coveredBy: z.array(z.string()).optional(),
@@ -59,16 +59,28 @@ const ReportSchema = z.object({
 });
 
 /** Parses reports/mutation/mutation.json into what rule 5 needs. */
-export function parseMutationReport(text: string): MutationReport | ReadFailure {
+export function parseMutationReport(text: string, requireStatic = false): MutationReport | ReadFailure {
   const parsed = parseJson(ReportSchema, text);
   if ('failure' in parsed) return parsed;
   const { files, config, testFiles } = parsed;
-  return {
-    tests: new Map(
-      Object.entries(testFiles ?? {}).flatMap(([path, file]) =>
-        file.tests.map(({ id, location }): [string, string] => [id, `${path}:${location.start.line}`]),
+  if (
+    requireStatic &&
+    Object.values(files).some(({ mutants }) =>
+      mutants.some(
+        (mutant) =>
+          mutant.static === undefined &&
+          ['Killed', 'Timeout', 'RuntimeError', 'Survived'].includes(mutant.status),
       ),
-    ),
+    )
+  )
+    return { failure: 'marquage statique absent pour un mutant actif' };
+  const testEntries = Object.entries(testFiles ?? {}).flatMap(([path, file]) =>
+    file.tests.map(({ id, location }): [string, string] => [id, path + ':' + location.start.line]),
+  );
+  const tests = new Map(testEntries);
+  if (tests.size !== testEntries.length) return { failure: 'identifiant de test de mutation répété' };
+  return {
+    tests,
     files: new Map(
       Object.entries(files).map(([path, file]) => [
         path,

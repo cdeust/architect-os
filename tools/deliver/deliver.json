@@ -8,7 +8,13 @@
   "requiredJobs": ["gate-linux", "gate-macos"],
   "jobDependencies": {
     "gate-linux": {
-      "producers": ["gate-linux-cucumber-1", "gate-linux-cucumber-2", "gate-linux-mutation"],
+      "producers": [
+        "gate-linux-cucumber-1",
+        "gate-linux-cucumber-2",
+        "gate-linux-mutation",
+        "gate-linux-replay-1",
+        "gate-linux-replay-2"
+      ],
       "admissionStep": "Require all producers"
     }
   },

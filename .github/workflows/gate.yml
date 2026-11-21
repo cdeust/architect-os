@@ -115,22 +115,86 @@ jobs:
       - name: Install (lockfile, scripts disabled)
         run: npm ci --ignore-scripts
 
-      - name: Run mutation and independent replay
+      - name: Run mutation producer
         run: |
-          npm run gate -- --mutation-only
+          npm run gate -- --mutation-report-only
           git rev-parse --verify HEAD > reports/mutation/head
 
-      - name: Upload mutation and replay
+      - name: Upload the mutation report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gate-mutation-linux-${{ github.run_attempt }}
           path: reports/mutation/
           if-no-files-found: error
 
+  gate-linux-replay:
+    name: gate-linux-replay-${{ matrix.shard }}
+    runs-on: ubuntu-24.04
+    needs: gate-linux-mutation
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bubblewrap socat ripgrep
+          bwrap --version
+
+      - name: Host requirement - allow unprivileged user namespaces with capabilities (E-07, R-13)
+        run: |
+          echo "before: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          echo "after: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)"
+
+      - name: PostgreSQL 17 (PGDG) with pgvector
+        run: |
+          sudo apt-get install -y --no-install-recommends postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends postgresql-17 postgresql-17-pgvector
+          echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
+          /usr/lib/postgresql/17/bin/postgres --version
+
+      - name: Install (lockfile, scripts disabled)
+        run: npm ci --ignore-scripts
+
+      - name: Fetch the mutation report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sh tools/test-gate/fetch-ci-artifacts.sh mutation
+
+      - name: Build and independently replay this lot
+        env:
+          AOS_REPLAY_SHARD: ${{ matrix.shard }}
+        run: |
+          npm exec --no -- tsc -b
+          node --import tsx tools/test-gate/src/main.ts replay --shard "$AOS_REPLAY_SHARD" || test -s "reports/replay-shards/$AOS_REPLAY_SHARD/replay.json"
+          git rev-parse --verify HEAD > "reports/replay-shards/$AOS_REPLAY_SHARD/head"
+
+      - name: Upload the replay lot
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gate-replay-linux-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: reports/replay-shards/${{ matrix.shard }}/
+          if-no-files-found: error
+
   gate-linux:
     name: gate-linux
     runs-on: ubuntu-24.04
-    needs: [gate-linux-cucumber, gate-linux-mutation]
+    needs: [gate-linux-cucumber, gate-linux-mutation, gate-linux-replay]
     if: ${{ always() }}
     steps:
       - name: Require all producers
@@ -138,7 +202,8 @@ jobs:
         env:
           CUCUMBER_RESULT: ${{ needs.gate-linux-cucumber.result }}
           MUTATION_RESULT: ${{ needs.gate-linux-mutation.result }}
-        run: test "$CUCUMBER_RESULT" = success && test "$MUTATION_RESULT" = success
+          REPLAY_RESULT: ${{ needs.gate-linux-replay.result }}
+        run: test "$CUCUMBER_RESULT" = success && test "$MUTATION_RESULT" = success && test "$REPLAY_RESULT" = success
 
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -171,6 +236,9 @@ jobs:
           run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/gate.yml/runs?branch=main&status=success&head_sha=$parent&per_page=1" --jq '.workflow_runs[0].id // empty' || true)
           if [ -z "$run_id" ]; then echo "base: no green main run for $parent"; exit 0; fi
           gh run download "$run_id" -n gate-base-linux -D reports/base -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-linux of run $run_id not downloadable"
+
+      - name: Verify and collect independent replay lots
+        run: node --import tsx tools/test-gate/src/main.ts replay-collect
 
       - name: Gate
         env:

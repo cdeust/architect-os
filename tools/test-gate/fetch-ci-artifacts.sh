@@ -45,11 +45,18 @@ attempt_of() {
         else error("producer failed: " + $name)
         end'
 }
+attempt=$(attempt_of gate-linux-mutation)
+gh run download "$GITHUB_RUN_ID" --name "gate-mutation-linux-$attempt" --dir reports/mutation
+test "$(cat reports/mutation/head)" = "$checkout_head"
+if [ "$#" -eq 1 ] && [ "$1" = mutation ]; then exit 0; fi
+test "$#" -eq 0
 for shard in 1 2; do
   attempt=$(attempt_of "gate-linux-cucumber-$shard")
   gh run download "$GITHUB_RUN_ID" --name "gate-cucumber-linux-$attempt-$shard" --dir "reports/cucumber-shards/$shard"
   test "$(cat "reports/cucumber-shards/$shard/cucumber-head")" = "$checkout_head"
 done
-attempt=$(attempt_of gate-linux-mutation)
-gh run download "$GITHUB_RUN_ID" --name "gate-mutation-linux-$attempt" --dir reports/mutation
-test "$(cat reports/mutation/head)" = "$checkout_head"
+for shard in 1 2; do
+  attempt=$(attempt_of "gate-linux-replay-$shard")
+  gh run download "$GITHUB_RUN_ID" --name "gate-replay-linux-$attempt-$shard" --dir "reports/replay-shards/$shard"
+  test "$(cat "reports/replay-shards/$shard/head")" = "$checkout_head"
+done

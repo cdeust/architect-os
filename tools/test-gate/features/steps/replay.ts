@@ -183,6 +183,56 @@ Given('the gate mutation report keeps only the mutants {string}', function (ids:
   });
 });
 
+Given('the gate mutation fixture declares its independent mutation profile', function () {
+  const repo = repository(this);
+  repo.write(
+    'cucumber.mjs',
+    repo.read('cucumber.mjs') + "export const mutation = { paths: ['specs/*.feature'] };\n",
+  );
+});
+
+When('the gate replays mutation lot {string}', function (lot: string) {
+  return repository(this).run(['replay', '--shard', lot]);
+});
+
+When('the gate collects the mutation replay lots', function () {
+  return repository(this).run(['replay-collect']);
+});
+
+Given('the gate removes a scenario from the mutation report catalogue', function () {
+  const repo = repository(this);
+  const report = JSON.parse(repo.read(MUTATION));
+  report.testFiles['specs/green.feature'].tests.pop();
+  repo.write(MUTATION, JSON.stringify(report));
+});
+
+Given('the gate report includes a second file with one surviving mutant', function () {
+  const repo = repository(this);
+  const report = JSON.parse(repo.read(MUTATION));
+  const original = report.files['src/math.mjs'];
+  const survivor = original.mutants.find(({ id }: { id: string }) => id === '5');
+  assert.ok(survivor);
+  report.config.mutate.push('src/other.mjs');
+  report.files['src/other.mjs'] = { source: original.source, mutants: [{ ...survivor, id: 'other-5' }] };
+  repo.write('src/other.mjs', original.source);
+  repo.write(MUTATION, JSON.stringify(report));
+});
+
+Then('replay lot {string} contains just {string}', function (lot: string, file: string) {
+  const receipt = JSON.parse(repository(this).read('reports/replay-shards/' + lot + '/replay.json'));
+  assert.deepEqual([...new Set(receipt.mutants.map((mutant: { file: string }) => mutant.file))], [file]);
+});
+
+Given('the gate copies the first replay receipt into the second lot', function () {
+  const repo = repository(this);
+  repo.write('reports/replay-shards/2/replay.json', repo.read('reports/replay-shards/1/replay.json'));
+});
+
+Then('the gate output includes {string}', function (expected: string) {
+  const actual = repository(this).output;
+  assert.ok(actual.includes(expected), actual);
+});
+
 When('the gate replays the mutation report', function () {
   return repository(this).run(['replay']);
 });
@@ -378,17 +428,26 @@ function runOf(text: string): RunResult {
   if (text.startsWith('hook ')) {
     return { run: { pickles: [], runHooks: [{ name: 'hook h', status: text.slice(5) }] }, timedOut: false };
   }
-  const pickles: ExecutedPickle[] = text.split(' | ').map((spec, index) => {
+  const incomplete = text === 'no finish run';
+  const unfinished = text === 'no finish attempt';
+  const badExit = text === 'exit failure';
+  const source = incomplete || unfinished || badExit ? 'PASSED' : text;
+  const pickles: ExecutedPickle[] = source.split(' | ').map((spec, index) => {
     const twice = spec.startsWith('2 attempts: ');
     const steps = (twice ? spec.slice(12) : spec).split(' ').map((status) => ({ name: 's', status }));
-    const attempt = (n: number) => ({ attempt: n, willBeRetried: false, steps });
+    const attempt = (n: number) => ({ attempt: n, willBeRetried: unfinished ? null : false, steps });
     return {
       id: `p${index + 1}`,
       pickleSteps: steps.length,
       attempts: twice ? [attempt(0), attempt(1)] : [attempt(0)],
     };
   });
-  return { run: { pickles, runHooks: [] }, timedOut: false };
+  return {
+    run: { pickles, runHooks: [] },
+    timedOut: false,
+    ...(incomplete ? { incomplete: true } : {}),
+    ...(badExit ? { badExit: true } : {}),
+  };
 }
 
 When(

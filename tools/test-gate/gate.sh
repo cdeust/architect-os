@@ -6,18 +6,24 @@
 #   4. test-gate replay: each verdict of Stryker in the perimeter and the canary replayed with cucumber-js directly;
 #      its exit code is never read either, check reads its record
 #   5. test-gate check: the verdict, from the reports only; its exit code is the exit code of this script
-# --mutation-only produces mutation and replay reports for the hosted gate to verify.
+# --mutation-only produces both reports; --mutation-report-only leaves replay to the hosted runners.
 # Previous reports are removed first: a stale report must never be read as the result of this run.
 set -u
 job=linux
 mutation_only=false
+report_only=false
+if [ "$#" -eq 1 ] && [ "$1" = --mutation-report-only ]; then
+  mutation_only=true
+  report_only=true
+  shift
+fi
 if [ "$#" -eq 1 ] && [ "$1" = --mutation-only ]; then
   mutation_only=true
   shift
 fi
 if [ "$#" -gt 0 ]; then
   if [ "$#" -ne 2 ] || [ "$1" != "--job" ]; then
-    echo "usage: npm run gate [-- --job <name> | --mutation-only]" >&2
+    echo "usage: npm run gate [-- --job <name> | --mutation-only | --mutation-report-only]" >&2
     exit 1
   fi
   job=$2
@@ -37,7 +43,12 @@ fi
 if [ "$job" = linux ] && node -e 'process.exit(JSON.parse(require("fs").readFileSync("reports/gate-plan.json","utf8")).mutate.length > 0 ? 0 : 1)'; then
   started=$(date +%s)
   stryker run
+  stryker_status=$?
   echo "stryker: $(($(date +%s) - started)) s"
+  if [ "$report_only" = true ]; then
+    [ "$stryker_status" -eq 0 ] && test -s reports/mutation/mutation.json
+    exit $?
+  fi
   started=$(date +%s)
   $gate replay
   echo "replay: $(($(date +%s) - started)) s"

@@ -16,6 +16,42 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     And the gate configuration declares the replay
     And the gate mutation report is the fixture "survivor"
 
+  Scenario: a static survivor is replayed in one lot and the collector verifies the exact union
+    Given the gate mutation fixture declares its independent mutation profile
+    And the gate mutation report keeps only the mutants "0, 5"
+    And mutant "5" of the gate mutation report is static
+    And the gate report includes a second file with one surviving mutant
+    When the gate replays mutation lot "1"
+    Then the gate exits with 0
+    When the gate replays mutation lot "2"
+    Then the gate exits with 0
+    When the gate collects the mutation replay lots
+    Then the gate exits with 0
+    And the gate output includes "lots de rejeu vérifiés : 3 mutant(s)"
+    And replay lot "1" contains just "src/math.mjs"
+    And replay lot "2" contains just "src/other.mjs"
+    Given the gate copies the first replay receipt into the second lot
+    When the gate collects the mutation replay lots
+    Then the gate exits with 1
+    And the gate output includes "rejeu hors périmètre"
+
+  Scenario: a truncated static scenario catalogue is rejected before replay
+    Given the gate mutation fixture declares its independent mutation profile
+    And the gate mutation report keeps only the mutants "5"
+    And mutant "5" of the gate mutation report is static
+    And the gate removes a scenario from the mutation report catalogue
+    When the gate replays mutation lot "1"
+    Then the gate exits with 1
+    And the gate output includes "catalogue des scénarios de mutation différent"
+
+  Scenario: a static verdict must carry the activation mode
+    Given the gate mutation fixture declares its independent mutation profile
+    And the gate mutation report keeps only the mutants "5"
+    And the static field of mutant "5" of the gate mutation report is absent
+    When the gate replays mutation lot "1"
+    Then the gate exits with 1
+    And the gate output includes "marquage statique absent"
+
   Scenario: every mutant is replayed: the two edited kills diverge, the file is written back
     When the gate replays every mutant of the mutation report
     Then the gate exits with 1

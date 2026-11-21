@@ -121,12 +121,14 @@ export class CucumberRunner implements Runner {
     let selectionFailure = diagnostics.includes('AOS_REPLAY_PLAN_VALID')
       ? undefined
       : (refused ?? 'précontrôle Cucumber non confirmé');
+    let runCompleted = false;
     const run = existsSync(report)
       ? parseCucumberReport(
           readFileSync(report, 'utf8'),
           () => true,
           false,
           (locations, completed) => {
+            runCompleted = completed;
             const remaining = new Set(expected);
             for (const location of locations) {
               if (location === null || !remaining.delete(location)) {
@@ -140,7 +142,16 @@ export class CucumberRunner implements Runner {
           },
         )
       : { failure: `cucumber-js n’a écrit aucun rapport : ${why}` };
-    return { result: { run, timedOut, ...(selectionFailure === undefined ? {} : { selectionFailure }) }, ms };
+    return {
+      result: {
+        run,
+        timedOut,
+        ...(runCompleted ? {} : { incomplete: true }),
+        ...(code === 0 ? {} : { badExit: true }),
+        ...(selectionFailure === undefined ? {} : { selectionFailure }),
+      },
+      ms,
+    };
   }
 }
 

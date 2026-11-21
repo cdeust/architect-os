@@ -30,6 +30,7 @@ const WorkflowSchema = z.object({
       needs: z.union([z.string(), z.array(z.string())]).optional(),
       if: z.string().optional(),
       environment: z.string().optional(),
+      strategy: z.unknown().optional(),
       steps: z.array(StepSchema),
     }),
   ),
@@ -84,9 +85,17 @@ function assertGate(text: string): void {
     'gate-linux',
     'gate-linux-cucumber',
     'gate-linux-mutation',
+    'gate-linux-replay',
     'gate-macos',
   ]);
-  assert.deepEqual(doc.jobs['gate-linux']?.needs, ['gate-linux-cucumber', 'gate-linux-mutation']);
+  assert.deepEqual(doc.jobs['gate-linux']?.needs, [
+    'gate-linux-cucumber',
+    'gate-linux-mutation',
+    'gate-linux-replay',
+  ]);
+  assert.equal(doc.jobs['gate-linux-replay']?.needs, 'gate-linux-mutation');
+  for (const id of ['gate-linux-cucumber', 'gate-linux-replay'])
+    assert.deepEqual(doc.jobs[id]?.strategy, { 'fail-fast': false, matrix: { shard: [1, 2] } });
   assert.equal(doc.jobs['gate-linux']?.if, '${{ always() }}');
   const linuxSteps = doc.jobs['gate-linux']?.steps ?? [];
   assert.equal(linuxSteps[0]?.id, 'admission');
@@ -96,7 +105,10 @@ function assertGate(text: string): void {
     '$' + "{{ always() && steps.admission.outcome == 'success' }}",
   );
   for (const [id, job] of Object.entries(doc.jobs))
-    assert.equal(job.name, id === 'gate-linux-cucumber' ? 'gate-linux-cucumber-${{ matrix.shard }}' : id);
+    assert.equal(
+      job.name,
+      id === 'gate-linux-cucumber' || id === 'gate-linux-replay' ? id + '-${{ matrix.shard }}' : id,
+    );
   for (const step of Object.values(doc.jobs).flatMap((job) => job.steps)) {
     assert.ok(!('cache' in (step.with ?? {})), 'gate.yml must not use a cache');
     if (step.uses?.startsWith('actions/checkout@') === true) {

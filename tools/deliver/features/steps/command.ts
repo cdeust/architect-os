@@ -80,6 +80,8 @@ Given(
         'gate-linux-cucumber-1',
         'gate-linux-cucumber-2',
         'gate-linux-mutation',
+        'gate-linux-replay-1',
+        'gate-linux-replay-2',
       ].map((name) => ({ name, conclusion: 'success', hadRunner: true, failedStep: false })),
     });
     for (const branch of ['feat/gate-1a', 'main']) gh.evaluated(branch, git.hashOf(commit), 'pass');

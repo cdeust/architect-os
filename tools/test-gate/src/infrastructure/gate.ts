@@ -5,7 +5,8 @@ import { isJobFeature, isProduction, matchesAny, type Job } from '../domain/layo
 import { retiredFiles } from '../domain/debt.js';
 import { canaryViolations } from '../domain/canary.js';
 import { inPerimeter, mutatePatterns, perimeterOf, type MutantRecord } from '../domain/mutation.js';
-import { replayCases } from '../domain/replay.js';
+import { replayCases, replayViolations } from '../domain/replay.js';
+import { distributeReplayFiles } from '../domain/replay-lots.js';
 import { baseOf, renderReport } from '../domain/report.js';
 import type { StaticSet } from '../domain/run.js';
 import { evaluate } from '../domain/verdict.js';
@@ -85,43 +86,91 @@ function controlOf(config: GateConfig, workspace: Workspace, mutationText: strin
  * `test-gate replay [--all]`: replays the verdicts of the mutation report (the perimeter of rule 5 and the canary, or
  * every mutant), writes the record `check` reads, and returns 1 when a verdict or the canary is contradicted.
  */
-async function replayCommand(config: GateConfig, root: string, all: boolean, out: Output): Promise<number> {
+async function replayCommand(
+  config: GateConfig,
+  root: string,
+  mode: 'all' | 'normal' | 'collect' | 1 | 2,
+  out: Output,
+): Promise<number> {
   const workspace = new Workspace(root);
   const settings = config.replay;
   if (settings === undefined) {
     out.write(`porte de test : ${CONFIG_PATH} ne déclare pas de rejeu\n`);
     return 1;
   }
-  const text = workspace.read(config.reports.mutation);
-  const report = text === null ? { failure: `${config.reports.mutation} absent` } : parseMutationReport(text);
+  const sharded = mode === 1 || mode === 2 || mode === 'collect';
+  const target = mode === 1 || mode === 2 ? replayShardPath(mode) : settings.record;
+  workspace.remove(target);
+  const bytes = workspace.readBytes(config.reports.mutation);
+  const text =
+    bytes === null ? null : new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+  const report =
+    text === null ? { failure: `${config.reports.mutation} absent` } : parseMutationReport(text, sharded);
   if ('failure' in report) {
     out.write(`porte de test : rapport de mutation illisible : ${report.failure}\n`);
     return 1;
   }
   const canary = config.canary;
   let selected = (_file: string, _mutant: MutantRecord) => true;
-  if (!all) {
+  let batches: ReturnType<typeof distributeReplayFiles> | undefined;
+  if (mode !== 'all') {
     const repository = new GitRepository(root);
     const { firstParent } = repository.commits();
     const changes = changedFiles(repository, workspace, firstParent);
-    const { perimeter } = mutationScope(config, changes, workspace, repository, firstParent);
+    const { perimeter, debt } = mutationScope(config, changes, workspace, repository, firstParent);
     selected = (file, mutant) => file === canary?.file || inPerimeter(perimeter, file, mutant);
+    if (sharded) {
+      if ('failure' in debt.current || (debt.parent !== null && 'failure' in debt.parent))
+        throw new Error('registre de dette illisible');
+      const { verifyMutationCatalog } = await import('./mutation-catalog.js');
+      await verifyMutationCatalog(root, report.tests);
+      const { mutationLots } = await import('./mutation-inventory.js');
+      const lots = await mutationLots(root, perimeter, canary?.file, (file) => workspace.read(file));
+      batches = distributeReplayFiles(lots);
+    }
+  }
+  const reportHash = sha256(text as string);
+  const cases = replayCases(report, selected);
+  if (batches !== undefined) {
+    if (cases.some(({ file }) => !batches[0].has(file) && !batches[1].has(file)))
+      throw new Error('mutant à rejouer sans lot');
+    if (mode === 'collect') {
+      const collected = [1, 2].flatMap((shard) => {
+        const receiptText = workspace.read(replayShardPath(shard));
+        const receipt = receiptText === null ? null : parseReplayRecord(receiptText);
+        const required = cases.filter(({ file }) => batches[shard - 1]?.has(file));
+        if (receipt === null) throw new Error('lot de rejeu absent : ' + shard);
+        const issues = replayViolations(required, receipt, reportHash);
+        if (issues.length)
+          throw new Error('lot de rejeu ' + shard + ' : ' + issues.map(({ text }) => text).join('\n'));
+        if ('failure' in receipt) throw new Error(receipt.failure);
+        return receipt.mutants;
+      });
+      workspace.write(target, jsonText({ report: reportHash, mutants: collected }));
+      out.write('lots de rejeu vérifiés : ' + collected.length + ' mutant(s)\n');
+      return 0;
+    }
   }
   workspace.remove(settings.work);
   const runner = new CucumberRunner(root, settings.profile, resolve(root, settings.work));
-  const mutants = await replayAll(replayCases(report, selected), workspace, runner, settings.limitMs);
-  workspace.write(settings.record, jsonText({ report: sha256(text as string), mutants }));
+  const due = mode === 1 || mode === 2 ? cases.filter(({ file }) => batches?.[mode - 1]?.has(file)) : cases;
+  const mutants = await replayAll(due, workspace, runner, settings.limitMs);
+  workspace.write(target, jsonText({ report: reportHash, mutants }));
   const divergent = mutants.filter((entry) => entry.divergence !== null);
   const wrongCanary = canary === undefined ? [] : canaryViolations(canary, report);
   out.write(
     [
-      `rejeu : ${mutants.length} mutant(s), ${divergent.length} divergence(s) -> ${settings.record}`,
+      `rejeu : ${mutants.length} mutant(s), ${divergent.length} divergence(s) -> ${target}`,
       ...divergent.map((entry) => `- ${entry.file} #${entry.id} ${entry.status} : ${entry.divergence}`),
       ...wrongCanary.map((violation) => `- ${violation.text}`),
       '',
     ].join('\n'),
   );
   return divergent.length === 0 && wrongCanary.length === 0 ? 0 : 1;
+}
+
+function replayShardPath(shard: number): string {
+  return 'reports/replay-shards/' + shard + '/replay.json';
 }
 
 function gate(
@@ -242,7 +291,15 @@ export async function runGate(
     out.write(written.summary);
     return 0;
   }
-  if (command.name === 'replay') return replayCommand(config, root, command.all, out);
+  if (command.name === 'replay' || command.name === 'replay-collect') {
+    const mode =
+      command.name === 'replay-collect' ? 'collect' : (command.shard ?? (command.all ? 'all' : 'normal'));
+    try {
+      return await replayCommand(config, root, mode, out);
+    } catch (error) {
+      return refuse((error as Error).message);
+    }
+  }
   const job = jobOf(config, command.job);
   if (job === null) return refuse(`job inconnu : ${command.job}`);
   if (command.name === 'inventory' || command.name === 'inventory-check') {

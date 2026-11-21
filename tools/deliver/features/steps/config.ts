@@ -134,7 +134,13 @@ Then(
     assert.ok(result.ok);
     assert.deepEqual(result.config.jobDependencies, {
       'gate-linux': {
-        producers: ['gate-linux-cucumber-1', 'gate-linux-cucumber-2', 'gate-linux-mutation'],
+        producers: [
+          'gate-linux-cucumber-1',
+          'gate-linux-cucumber-2',
+          'gate-linux-mutation',
+          'gate-linux-replay-1',
+          'gate-linux-replay-2',
+        ],
         admissionStep: step,
       },
     });

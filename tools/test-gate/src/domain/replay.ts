@@ -124,6 +124,8 @@ export interface RunResult {
   readonly run: CucumberRun | ReadFailure;
   /** The run was stopped at its time limit. */
   readonly timedOut: boolean;
+  readonly incomplete?: true;
+  readonly badExit?: true;
   /** A completed test identity differs from the explicit selection. This cannot confirm a kill. */
   readonly selectionFailure?: string;
 }
@@ -151,6 +153,10 @@ function unclean(
   let failed = true;
   for (const pickle of result.run.pickles) {
     if (pickle.attempts.length !== 1) return broken(`${pickle.id} : ${pickle.attempts.length} tentatives`);
+    const attempt = pickle.attempts[0];
+    if (attempt?.attempt !== 0 || attempt.willBeRetried !== false)
+      return broken(pickle.id + ' : tentative non terminée ou répétée');
+    if (pickle.pickleSteps === 0) return broken(pickle.id + ' : scénario sans step');
     const step = pickle.attempts.flatMap((attempt) => attempt.steps).find((s) => s.status !== PASSED);
     if (step === undefined) continue;
     failing.push(`${pickle.id} : ${step.status}`);
@@ -158,7 +164,9 @@ function unclean(
   }
   const ran = result.run.pickles.length;
   if (ran !== expected) return broken(`${ran} scénario(s) exécuté(s) sur ${expected}`);
-  return failing.length === 0 ? null : { failed, why: failing.join(', ') };
+  if (result.incomplete) return broken('rapport Cucumber sans fin de run');
+  if (failing.length > 0) return { failed, why: failing.join(', ') };
+  return result.badExit ? broken('Cucumber a échoué sans step en échec') : null;
 }
 
 /** The judgement of one replay. */

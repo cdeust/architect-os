@@ -38,6 +38,15 @@ Feature: Test gate, rule 7: how one replay is judged against the status the tool
       | Killed | 1 | hook FAILED      | FAILED | témoin : hook h : FAILED                           | no    | no |
       | Killed | 1 | 2 attempts: PASSED | FAILED | témoin : p1 : 2 tentatives                       | no    | no |
 
+    Examples: incomplete evidence cannot confirm a pass
+      | status   | n | control           | mutant            | divergence                                                               | retry | recheck |
+      | Killed   | 1 | no finish run     | FAILED            | témoin : rapport Cucumber sans fin de run                                | no    | no      |
+      | Killed   | 1 | no finish attempt | FAILED            | témoin : p1 : tentative non terminée ou répétée                          | no    | no      |
+      | Killed   | 1 | exit failure      | FAILED            | témoin : Cucumber a échoué sans step en échec                             | no    | no      |
+      | Killed   | 1 | PASSED            | no finish run     | none                                                                     | no    | yes     |
+      | Survived | 1 | none              | no finish run     | Survived selon l'outil, mais sur le mutant : rapport Cucumber sans fin de run | no | no      |
+      | Survived | 1 | none              | no finish attempt | Survived selon l'outil, mais sur le mutant : p1 : tentative non terminée ou répétée | no | no |
+
     Examples: survivors
       | status   | n | control | mutant                 | divergence                                                            | retry | recheck |
       | Survived | 2 | none    | PASSED \| PASSED       | none                                                                  | no    | no |
