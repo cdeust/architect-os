@@ -1,3 +1,5 @@
+import { loadConfiguration, loadSources, type runCucumber } from '@cucumber/cucumber/api';
+import { runReplayCucumber } from '../../src/infrastructure/replay-cucumber.js';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
@@ -232,6 +234,70 @@ Then('the gate output includes {string}', function (expected: string) {
   const actual = repository(this).output;
   assert.ok(actual.includes(expected), actual);
 });
+
+When('the instrumented runner exercises the replay selector with {string}', async function (variant: string) {
+  const repo = repository(this);
+  const profiles: Record<string, object> = {
+    shard: { shard: '1/2' },
+    retry: { retry: 1 },
+    dryRun: { dryRun: true },
+    failFast: { failFast: true },
+    parallel: { parallel: 2 },
+    extra: { paths: ['specs/second.feature'] },
+    plugins: { plugin: ['unused-example'] },
+  };
+  const profile = profiles[variant];
+  if (profile !== undefined)
+    repo.write(
+      'cucumber.mjs',
+      repo.read('cucumber.mjs') + '\nexport const probe = ' + JSON.stringify(profile) + ';\n',
+    );
+  if (variant === 'syntax') repo.write('specs/invalid.feature', 'Scenario: missing feature header\n');
+  const location =
+    variant === 'missing'
+      ? 'specs/green.feature:9999'
+      : variant === 'syntax'
+        ? 'specs/invalid.feature:1'
+        : 'specs/green.feature:12';
+  const args = [profile === undefined ? 'replay' : 'probe', repo.path('reports/replay.ndjson'), location];
+  if (variant === 'profile absent') args[0] = 'absent';
+  if (variant === 'no profile') args[0] = '';
+  if (variant === 'no report') args[1] = '';
+  if (variant === 'no locations') args.pop();
+  let diagnostics = '';
+  let called = 0;
+  const status = await runReplayCucumber(
+    args,
+    {
+      write(text) {
+        diagnostics += text;
+      },
+    },
+    { cwd: repo.dir },
+    {
+      loadConfiguration,
+      async loadSources(...sourceArgs) {
+        const result = await loadSources(...sourceArgs);
+        return variant === 'duplicate' ? { ...result, plan: [...result.plan, ...result.plan] } : result;
+      },
+      async runCucumber() {
+        called++;
+        return { success: variant !== 'step failed', support: {} } as Awaited<ReturnType<typeof runCucumber>>;
+      },
+    },
+  );
+  this.state['replaySelector'] = { status, called, diagnostics };
+});
+
+Then(
+  'the replay selector exits with {int} and authorizes execution {int} times with {string}',
+  function (status: number, called: number, expected: string) {
+    const actual = this.state['replaySelector'] as { status: number; called: number; diagnostics: string };
+    assert.equal(actual.status, status, actual.diagnostics);
+    assert.equal(actual.called, called);
+    assert.ok(actual.diagnostics.includes(expected), actual.diagnostics);
+  },
+);
 
 When('the gate replays the mutation report', function () {
   return repository(this).run(['replay']);

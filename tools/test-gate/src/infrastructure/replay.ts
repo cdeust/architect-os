@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { basename, join, normalize } from 'node:path';
 import {
   judgeReplay,
@@ -13,9 +12,15 @@ import {
 import { parseCucumberReport } from './cucumber-report.js';
 import type { Workspace } from './workspace.js';
 
-const CUCUMBER = fileURLToPath(
-  new URL(import.meta.url.endsWith('.ts') ? './replay-cucumber.ts' : './replay-cucumber.js', import.meta.url),
-);
+const CUCUMBER = new URL(
+  import.meta.url.endsWith('.ts') ? './replay-cucumber.ts' : './replay-cucumber.js',
+  import.meta.url,
+).href;
+const REPLAY_ENTRY =
+  'import { runReplayCucumber } from ' +
+  JSON.stringify(CUCUMBER) +
+  ';' +
+  'process.exitCode = await runReplayCucumber(process.argv.slice(1), process.stderr);';
 const SELECTION_PREFIX = 'AOS_REPLAY_SELECTION: ';
 
 /** The signal of a run stopped at its limit, and of its group once it is gone; nothing else sends it. */
@@ -86,7 +91,7 @@ export class CucumberRunner implements Runner {
     const errors = join(this.work, `run-${this.runs}.err`);
     mkdirSync(this.work, { recursive: true });
     const stderr = openSync(errors, 'w');
-    const args = [CUCUMBER, this.profile, report, ...tests];
+    const args = ['--input-type=module', '--eval', REPLAY_ENTRY, '--', this.profile, report, ...tests];
     const started = performance.now();
     // child_process.spawn options detached, stdio, timeout and killSignal: node_modules/@types/node/child_process.d.ts.
     // Standard output is ignored, never piped: an unread pipe that fills blocks the run. At `timeout`, Node kills the

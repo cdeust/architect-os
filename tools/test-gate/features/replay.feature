@@ -16,6 +16,29 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     And the gate configuration declares the replay
     And the gate mutation report is the fixture "survivor"
 
+  Scenario Outline: the instrumented runner can exercise each replay selection decision
+    When the instrumented runner exercises the replay selector with "<variant>"
+    Then the replay selector exits with <status> and authorizes execution <calls> times with "<diagnostic>"
+
+    Examples:
+      | variant        | status | calls | diagnostic                         |
+      | success        | 0      | 1     | AOS_REPLAY_PLAN_VALID               |
+      | step failed    | 1      | 1     | AOS_REPLAY_PLAN_VALID               |
+      | profile absent | 2      | 0     | précontrôle Cucumber impossible    |
+      | no profile     | 2      | 0     | arguments de rejeu invalides       |
+      | no report      | 2      | 0     | arguments de rejeu invalides       |
+      | no locations   | 2      | 0     | arguments de rejeu invalides       |
+      | extra          | 2      | 0     | scénario de rejeu inattendu        |
+      | missing        | 2      | 0     | scénario de rejeu manquant         |
+      | duplicate      | 2      | 0     | scénario de rejeu répété           |
+      | syntax         | 2      | 0     | sources de rejeu illisibles        |
+      | shard          | 2      | 0     | profil de rejeu invalide           |
+      | retry          | 2      | 0     | profil de rejeu invalide           |
+      | dryRun         | 2      | 0     | profil de rejeu invalide           |
+      | failFast       | 2      | 0     | profil de rejeu invalide           |
+      | parallel       | 2      | 0     | profil de rejeu invalide           |
+      | plugins        | 2      | 0     | profil de rejeu invalide           |
+
   Scenario: a static survivor is replayed in one lot and the collector verifies the exact union
     Given the gate mutation fixture declares its independent mutation profile
     And the gate mutation report keeps only the mutants "0, 5"
