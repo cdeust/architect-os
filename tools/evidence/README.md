@@ -5,8 +5,8 @@ The evidence desk: the orchestrator asks factual questions, a librarian answers 
 ## Commands
 
 ```bash
-npm run evidence -- ask <ledger> <desk> <id> < question.txt   # prints {"asked":"<id>","question":"<desk>/out/<id>.question.json"}
-npm run evidence -- verify <ledger> <desk>                    # prints {"verified":[],"rejected":[],"deferred":[],"pending":[]}
+./aos -- npm run evidence -- ask <ledger> <desk> <id> < question.txt   # prints {"asked":"<id>","question":"<desk>/out/<id>.question.json"}
+./aos -- npm run evidence -- verify <ledger> <desk>                    # prints {"verified":[],"rejected":[],"deferred":[],"pending":[]}
 ```
 
 `verify` exits with 0 when nothing is rejected or deferred, 1 otherwise. Any refusal (arguments, a folder, an invalid or repeated question, a missing skill file) exits with 2 and one line `architect-os evidence: <reason>` on stderr. An error nobody foresaw exits with 3 and one line `architect-os evidence: unexpected: <error>`, so that a caller reading the code alone tells a crash from a rejection. `verify` calls `doi.org` and nothing else.

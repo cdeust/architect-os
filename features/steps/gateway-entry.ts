@@ -1,3 +1,4 @@
+import { admittedEnvironment } from '../support/admitted-environment.js';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -98,6 +99,7 @@ Given(
     // The process is given its configuration and nothing else of this environment.
     const child = spawn(process.execPath, [join(ROOT, 'gateway', 'dist', 'src', 'serve.js')], {
       env: {
+        ...admittedEnvironment(),
         GATEWAY_TOKENS: `${TOKEN}=${SUBJECT}`,
         GATEWAY_PORT: String(port),
         GATEWAY_QUOTA_PER_MINUTE: '100',

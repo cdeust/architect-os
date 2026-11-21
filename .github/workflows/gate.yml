@@ -31,10 +31,14 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       - name: Host dependencies
         run: |
@@ -57,15 +61,17 @@ jobs:
           /usr/lib/postgresql/17/bin/postgres --version
 
       - name: Install (lockfile, scripts disabled)
-        run: npm ci --ignore-scripts
+        run: ./aos -- npm ci --ignore-scripts
 
       - name: Run the functional suite lot
         env:
           AOS_SHARD: ${{ matrix.shard }}
         run: |
+          ./aos -- bash -e -o pipefail <<'ADMITTED'
           npm exec --no -- tsc -b
           npm exec --no -- cucumber-js --shard "$AOS_SHARD/2" || test -s reports/cucumber.ndjson
           git rev-parse --verify HEAD > reports/cucumber-head
+          ADMITTED
 
       - name: Upload the functional report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -105,23 +111,28 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       - name: Install (lockfile, scripts disabled)
-        run: npm ci --ignore-scripts
+        run: ./aos -- npm ci --ignore-scripts
 
       - name: Fetch reports from the effective producer jobs
         env:
           GH_TOKEN: ${{ github.token }}
-        run: sh tools/test-gate/fetch-ci-artifacts.sh
+        run: ./aos -- sh tools/test-gate/fetch-ci-artifacts.sh
 
       - name: Base of the count (artifact of the last green main run)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          ./aos -- sh -e <<'BASE'
           # docs/design/platform-v3-srt.md §7.2: the run of gate.yml on main whose head_sha is the first parent.
           # Nothing found, expired or no first parent: download nothing, the gate applies its written fallback and says so.
           mkdir -p reports/base
@@ -130,14 +141,15 @@ jobs:
           run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/gate.yml/runs?branch=main&status=success&head_sha=$parent&per_page=1" --jq '.workflow_runs[0].id // empty' || true)
           if [ -z "$run_id" ]; then echo "base: no green main run for $parent"; exit 0; fi
           gh run download "$run_id" -n gate-base-linux -D reports/base -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-linux of run $run_id not downloadable"
+          BASE
 
       - name: Verify and collect independent replay lots
-        run: node --import tsx tools/test-gate/src/hosted.ts collect
+        run: ./aos -- node --import tsx tools/test-gate/src/hosted.ts collect
 
       - name: Gate
         env:
           AOS_CUCUMBER_SHARDS: '2'
-        run: node --import tsx tools/test-gate/src/main.ts check --job linux
+        run: ./aos -- node --import tsx tools/test-gate/src/main.ts check --job linux
 
       - name: Upload reports
         if: ${{ always() && steps.admission.outcome == 'success' }}
@@ -167,19 +179,33 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       # features/sandbox/ needs no Postgres: none is installed, a @postgres scenario landing there fails visibly.
+      - name: Install the pinned host Node for admission
+        run: |
+          bin=/opt/hostedtoolcache/node/26.11.1/arm64/bin
+          sdk=${RUNNER_TOOL_CACHE:?}/node/26.11.1/arm64/bin/node
+          test "$(command -v node)" -ef "$sdk"
+          test "$("$sdk" --version)" = "v$(cat "$GITHUB_WORKSPACE/.nvmrc")"
+          sudo install -d -m 0755 "$bin"
+          test "$sdk" -ef "$bin/node" || sudo install -m 0755 "$sdk" "$bin/node"
+
       - name: Install (lockfile, scripts disabled)
-        run: npm ci --ignore-scripts
+        run: ./aos -- npm ci --ignore-scripts
 
       - name: Base of the count (artifact of the last green main run)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          ./aos -- sh -e <<'BASE'
           # docs/design/platform-v3-srt.md §7.2: the run of gate.yml on main whose head_sha is the first parent.
           # Nothing found, expired or no first parent: download nothing, the gate applies its written fallback and says so.
           mkdir -p reports/base
@@ -188,9 +214,10 @@ jobs:
           run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/gate.yml/runs?branch=main&status=success&head_sha=$parent&per_page=1" --jq '.workflow_runs[0].id // empty' || true)
           if [ -z "$run_id" ]; then echo "base: no green main run for $parent"; exit 0; fi
           gh run download "$run_id" -n gate-base-macos -D reports/base -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-macos of run $run_id not downloadable"
+          BASE
 
       - name: Gate
-        run: npm run gate -- --job macos
+        run: ./aos -- npm run gate -- --job macos
 
       - name: Upload reports
         if: always()

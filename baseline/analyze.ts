@@ -1,3 +1,4 @@
+import '../scripts/require-run.mjs';
 // Analysis of a baseline campaign: `node --import tsx baseline/analyze.ts baseline/results/campaign-<date>.jsonl`.
 // Writes <file>.md beside it. The design is paired: every task runs in every configuration, so the cost ratios are
 // computed task by task (mean of the repetitions of a cell) and their 95 % interval comes from a bootstrap over the

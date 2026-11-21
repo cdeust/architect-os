@@ -992,7 +992,9 @@ Règle pour la suite de cette conception : aucune simplification ne retire une b
 - **Deux commits, chacun livrable.** Le premier rend l'admission disponible sans rien changer aux commandes actuelles ; le second la rend obligatoire et fait passer tous les appelants et les cinq workflows par elle, dans le même commit.
 - **Corrections.** Le jeton d'une session est masqué avant que le premier octet n'en soit stocké, sur les deux canaux, même coupé entre deux morceaux (étape 3) ; en (1a), l'entrée contrôle l'admission et les lieux d'écriture, et le code candidat de la porte tourne encore en tant qu'hôte : le confinement entier reste l'étape de la porte sous sandbox.
 
-Le premier commit construit `tools/runtime` (domaine, application, infrastructure, une racine de composition), l'entrée `./aos`, la politique et ses scénarios ; aucun script, aucun workflow ni aucune entrée ne l'appelle encore. L'environnement est donné par la marque, non à l'entrée comme le disait le paragraphe des planchers plus haut.
+Le premier commit a livré `tools/runtime`, l’entrée `./aos` et ses scénarios. La marque de la racine détermine l’environnement. La seconde tranche de 1a fait passer les commandes du dépôt et les jobs qui les exécutent par `./aos -- PROGRAMME [ARG ...]`. Une invocation directe d’un point d’entrée protégé refuse avant de lancer sa charge de travail. La préparation de l’hôte et les actions externes gardent leurs propres points d’entrée.
+
+La suite commence à (1b) : déplacer les écritures des profils et le cache de session sous la racine, puis vérifier les accès sur le moteur réel. Le verrou et les sorties de la porte, le cycle de vie des traces et la mesure des pics restent dans les tranches (2) à (4).
 
 ### Un constructeur d'un autre fournisseur, derrière un proxy de l'hôte : conception (19 novembre 2026, avant le code)
 

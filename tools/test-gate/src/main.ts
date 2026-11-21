@@ -1,6 +1,7 @@
 // Composition root and CLI of the CI gate (doc §7): `node --import tsx tools/test-gate/src/main.ts plan|check|inventory
 // [--job <name>]`, `debt` or `replay [--all]`, run from the repository root. Everything else lives in runGate, exercised in-process by the
 // scenarios of tools/test-gate/features; this file holds no branch, literal or call Stryker could mutate.
-import { runGate } from './infrastructure/gate.js';
+import '@architect-os/sandbox/require-run';
+const { runGate } = await import('./infrastructure/gate.js');
 
 process.exitCode = await runGate(process.argv, process.cwd(), process.env, process.stdout);

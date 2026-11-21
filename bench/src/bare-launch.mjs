@@ -1,3 +1,4 @@
+import '../../scripts/require-run.mjs';
 // Sonde du lancement --bare de l'outil de code (journal, §21) : `npm --prefix bench run bench:bare`.
 // Lance le Claude Code de l'hôte avec la commande de packages/sandbox/code.json et le settings.json du profil builder,
 // contre un faux amont local, sans srt et sans aucune clé réelle. Vérifie quatre faits et sort en 1 si l'un manque :

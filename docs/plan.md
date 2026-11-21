@@ -1,15 +1,15 @@
 # Prepare and approve one Step input bundle
 
-After installing the pinned dependencies and running `npm run typecheck`, save the accepted JSON output of [Define](define.md) in a local file. For an ai-architect-mcp-spec checkpoint, read the producer's verified proposal for the same run and Step. The operator selects the trusted plugin root and local Step policy. Keep the exact file bytes, including the trailing newline.
+After installing the pinned dependencies and running `./aos -- npm run typecheck`, save the accepted JSON output of [Define](define.md) in a local file. For an ai-architect-mcp-spec checkpoint, read the producer's verified proposal for the same run and Step. The operator selects the trusted plugin root and local Step policy. Keep the exact file bytes, including the trailing newline.
 
 ```sh
-npm run --silent plan:proposal -- "$RUN_ID" "$PLUGIN_ROOT" delivery define.json > proposal.json
+./aos -- npm run --silent plan:proposal -- "$RUN_ID" "$PLUGIN_ROOT" delivery define.json > proposal.json
 ```
 
 The reader requests `get_pipeline_state(format: "verified_plan_v1", plan_step: "delivery")`. It checks the run, Step name, and the producer's SHA-256 values for the saved Define, proposal and binding. A refused projection exits with empty stdout. These digests check consistency with the operator-selected producer. The operator can also supply a proposal using the schema below. Prepare the preview with:
 
 ```sh
-npm run --silent plan -- prepare define.json proposal.json policy.json > preview.json
+./aos -- npm run --silent plan -- prepare define.json proposal.json policy.json > preview.json
 ```
 
 For model-assisted drafting, [choose Claude, GPT or Gemini](plan-models.md).
@@ -32,7 +32,7 @@ The preview contains the exact UTF-8 output texts and their manifest. The manife
 After inspecting the preview and its inputs, an operator may record an explicit decision in a separate local file. The file has `version: 1`, `decision: "approve"` and `approval_sha256` copied from the reviewed preview. This is a local decision record. It has no cryptographic identity attestation. The producer's implementation decision is independent and this command leaves it untouched.
 
 ```sh
-npm run --silent plan -- materialize define.json proposal.json policy.json decision.json /absolute/intake/delivery
+./aos -- npm run --silent plan -- materialize define.json proposal.json policy.json decision.json /absolute/intake/delivery
 ```
 
 The destination must be new, match the approved Step name and stay outside every Git checkout, including linked worktrees and the `steps/` archive. Materialization revalidates the sources and output fingerprints before making the folder. It writes `brief.md`, configured scout questions and `step.json` last. Missing, refused or stale decisions produce exit 2 and leave the destination untouched. Only a separate invocation of `npm run step -- <folder>` can start the sessions. Its own archive records the hashes of the inputs it actually read.
@@ -49,17 +49,17 @@ Use a fresh receipt filename for every attempt. These wrappers run the same comm
 
 ```sh
 set -e
-npm run --silent baseline:planning -- 01.jsonl define "$RUN_ID" "$PLUGIN_ROOT" > define.json
-npm run --silent baseline:planning -- 02.jsonl proposal "$RUN_ID" "$PLUGIN_ROOT" delivery define.json > proposal.json
-npm run --silent baseline:planning -- 03.jsonl prepare define.json proposal.json policy.json > preview.json
+./aos -- npm run --silent baseline:planning -- 01.jsonl define "$RUN_ID" "$PLUGIN_ROOT" > define.json
+./aos -- npm run --silent baseline:planning -- 02.jsonl proposal "$RUN_ID" "$PLUGIN_ROOT" delivery define.json > proposal.json
+./aos -- npm run --silent baseline:planning -- 03.jsonl prepare define.json proposal.json policy.json > preview.json
 # After an independent decision on the preview:
-npm run --silent baseline:planning -- 04.jsonl materialize define.json proposal.json policy.json decision.json "$INTAKE/delivery"
+./aos -- npm run --silent baseline:planning -- 04.jsonl materialize define.json proposal.json policy.json decision.json "$INTAKE/delivery"
 ```
 
 To measure a model-drafted proposal, run `draft` in place of `proposal` after `define`. This path selects one provider and model. It uses the native draft receipt, which includes the reported provider usage when available.
 
 ```sh
-npm run --silent baseline:planning -- 02-draft.jsonl draft "$PROVIDER" "$MODEL" delivery define.json "$TIMEOUT_MS" > proposal.json
+./aos -- npm run --silent baseline:planning -- 02-draft.jsonl draft "$PROVIDER" "$MODEL" delivery define.json "$TIMEOUT_MS" > proposal.json
 ```
 
 Use the same `prepare` and independent approval commands. Match `run_id`, `define_sha256` and `proposal_sha256` in the draft receipt to the prepared manifest. `proposal` remains the route for the verified Spec projection. See [model drafting](plan-models.md) for the native account setup and receipt fields.

@@ -1,3 +1,4 @@
+import { runLocations } from '@architect-os/sandbox/runtime-context';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -277,17 +278,23 @@ Then('the delivery dependencies hold the descriptive file of this package', func
 });
 
 When('I start cli.ts of the delivery command with no argument', function () {
+  const keys = [
+    'ARCHITECT_OS_RUNTIME_ROOT',
+    'ARCHITECT_OS_RUN_DIR',
+    'ARCHITECT_OS_HOST_XDG_CONFIG_HOME',
+    'ARCHITECT_OS_ADMISSION_BINDING',
+    ...Object.keys(runLocations('/', '/run')),
+  ];
+  const env: Record<string, string> = { PATH: process.env.PATH ?? '' };
+  for (const key of keys) if (process.env[key] !== undefined) env[key] = process.env[key]!;
+  const stderr = join(temporaryDirectory(this), 'cli.stderr');
   this.state['started'] = runToEnd(
-    process.execPath,
-    ['--import', 'tsx', 'tools/deliver/src/cli.ts'],
+    '/bin/sh',
+    ['-c', 'exec "$@" 2>"$0"', stderr, process.execPath, '--import', 'tsx', 'tools/deliver/src/cli.ts'],
     REPOSITORY,
-    // TMPDIR: tsx keeps its cache there; without it tsx falls back on the global temporary directory, where a check
-    // played under the profile of the checks was refused a write; with it the child writes where the process may.
-    {
-      PATH: process.env['PATH'] ?? '',
-      ...(process.env['TMPDIR'] === undefined ? {} : { TMPDIR: process.env['TMPDIR'] }),
-    },
+    env,
   );
+  assert.equal(readFileSync(stderr, 'utf8'), 'architect-os deliver: usage: deliver <name> [--until ci]\n');
 });
 
 Then(

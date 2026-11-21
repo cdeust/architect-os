@@ -71,3 +71,10 @@ Feature: SandboxRunner contract on the real srt adapter
     When I start profile "module" with command "touch ${repo}/written", close its input, drain its output and wait for it to end
     Then it does not exit with code 0
     And the platform root holds no file "written"
+
+  Scenario: an admitted host starts real srt under this run's temporary directory
+    Given a real sandbox runner under this admission’s temporary directory
+    When I start profile "builder" with command "cat"
+    And I send the line "admitted" on its standard input and close it
+    Then its standard output is the line "admitted"
+    And it exits with code 0

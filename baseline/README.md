@@ -17,9 +17,9 @@ Les trois reçoivent le même modèle, la même consigne, `--permission-mode acc
 ## Lancer
 
 ```bash
-npm run baseline:pilot
-npm run baseline:campaign
-npm run baseline:analyze -- baseline/results/campaign-<date>.jsonl
+./aos -- npm run baseline:pilot
+./aos -- npm run baseline:campaign
+./aos -- npm run baseline:analyze -- baseline/results/campaign-<date>.jsonl
 ```
 
 `BASELINE_DRY=1` prépare et vérifie chaque copie sans lancer de session ; `BASELINE_TASKS` et `BASELINE_CONFIGS` restreignent le run. Les sessions consomment le forfait du propriétaire ; le coût publié est `total_cost_usd` de `claude -p --output-format json`, au tarif public. Chaque session écrit une ligne dans `results/pilot-<date>.jsonl` (usage, coût, tours, durées, résolution, diff, texte final) ; `results/pilot-<date>.usage.jsonl` est le journal d'usage du proxy pour `host-bare`.
@@ -42,7 +42,7 @@ Les protocoles pré-enregistrés, leurs amendements et les hôtes mesurés sont 
 ## Analyser les mesures de surcoût
 
 ```bash
-npm run baseline:overhead-analyze -- baseline/results/overhead-<date>.jsonl
+./aos -- npm run baseline:overhead-analyze -- baseline/results/overhead-<date>.jsonl
 ```
 
 `overhead-analyze.ts` lit un fichier de résultats : médiane, p10 et p90, écarts de médianes avec intervalle à 95 % par bootstrap (10 000 tirages, graine 42). Il ne lance aucun programme.

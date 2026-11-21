@@ -21,10 +21,14 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       - name: Host dependencies
         run: |
@@ -47,17 +51,19 @@ jobs:
           /usr/lib/postgresql/17/bin/postgres --version
 
       - name: Install (lockfile, scripts disabled)
-        run: npm ci --ignore-scripts
+        run: ./aos -- npm ci --ignore-scripts
 
       - name: Run mutation producer
         env:
           AOS_LANE: ${{ inputs.lane }}
         run: |
+          ./aos -- bash -e -o pipefail <<'ADMITTED'
           npm exec --no -- tsc -b
           node --import tsx tools/test-gate/src/hosted.ts inventory "$AOS_LANE"
           AOS_NATIVE_MUTATION_LOTS=1 npm exec --no -- stryker run
           node --import tsx tools/test-gate/src/hosted.ts verify "$AOS_LANE"
           git rev-parse --verify HEAD > reports/mutation/head
+          ADMITTED
 
       - name: Upload the mutation report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -81,10 +87,14 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       - name: Host dependencies
         run: |
@@ -107,21 +117,23 @@ jobs:
           /usr/lib/postgresql/17/bin/postgres --version
 
       - name: Install (lockfile, scripts disabled)
-        run: npm ci --ignore-scripts
+        run: ./aos -- npm ci --ignore-scripts
 
       - name: Fetch the mutation report
         env:
           GH_TOKEN: ${{ github.token }}
           AOS_LANE: ${{ inputs.lane }}
-        run: sh tools/test-gate/fetch-ci-artifacts.sh mutation "$AOS_LANE"
+        run: ./aos -- sh tools/test-gate/fetch-ci-artifacts.sh mutation "$AOS_LANE"
 
       - name: Build and independently replay this lot
         env:
           AOS_LANE: ${{ inputs.lane }}
         run: |
+          ./aos -- bash -e -o pipefail <<'ADMITTED'
           npm exec --no -- tsc -b
           node --import tsx tools/test-gate/src/hosted.ts replay "$AOS_LANE"
           git rev-parse --verify HEAD > "reports/replay-shards/$AOS_LANE/head"
+          ADMITTED
 
       - name: Upload the replay lot
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -59,6 +59,7 @@ function command(world: RuntimeWorld, filesystem: RuntimeFilesystem, policy: () 
   world.state['command'] = (argv: readonly string[]): number =>
     runAdmission({
       argv,
+      emitBinding: world.state['emitBinding'] === true,
       stdout: { write: (text: string) => (recorded.stdout += text) },
       stderr: { write: (text: string) => (recorded.stderr += text) },
       filesystem,
@@ -170,7 +171,12 @@ Then(
 When(
   'I build the runtime command dependencies of a fake process with the arguments {string}',
   function (argv: string) {
-    const fake = { argv: argv.split(' '), stdout: { write: () => true }, stderr: { write: () => true } };
+    const fake = {
+      env: {},
+      argv: argv.split(' '),
+      stdout: { write: () => true },
+      stderr: { write: () => true },
+    };
     this.state['fakeProcess'] = fake;
     this.state['dependencies'] = admissionDependencies(fake);
   },
@@ -253,3 +259,24 @@ Then(
     assert.deepEqual(REFUSAL_CODES.slice(0, codes.length), codes);
   },
 );
+
+When('the runtime bootstrap requests a binding with the internal flag {string}', function (value: string) {
+  const deps = admissionDependencies({
+    env: { ARCHITECT_OS_EMIT_BINDING: value },
+    argv: [],
+    stdout: process.stdout,
+    stderr: process.stderr,
+  });
+  this.state['emitBinding'] = deps.emitBinding;
+  runCommand(this, [kept<string>(this, 'scratchRoot'), 'npm']);
+});
+Then('the output carries the physical run identity and all issued receipt bytes', function () {
+  const root = kept<string>(this, 'scratchRoot');
+  const output = kept<Recorded>(this, 'recorded');
+  const name = output.stdout.split(':')[0]!;
+  const path = join(root, 'run', name);
+  const st = lstatSync(path, { bigint: true });
+  const encoded = readFileSync(join(path, 'admission.json')).toString('base64url');
+  assert.deepEqual(output, { stdout: [name, st.dev, st.ino, encoded].join(':') + '\n', stderr: '' });
+  assert.equal(kept(this, 'exit'), 0);
+});

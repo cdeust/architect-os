@@ -1,3 +1,4 @@
+import '../scripts/require-run.mjs';
 // Candidate defects for baseline/tasks.json: `node --import tsx baseline/find-defects.ts <dir> <sources> -- <check>`.
 // For each source file (comma-separated, relative to <dir>), tries one-token mutations of its lines (a comparison,
 // a boolean operator, a constant), each alone, and runs <check> in <dir>. Prints, as JSON lines, the mutations that

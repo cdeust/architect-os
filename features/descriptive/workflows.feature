@@ -160,3 +160,29 @@ Feature: GitHub workflows
   Scenario: a claude-review.yml without the link of the run is rejected
     Given the committed workflow "claude-review.yml"
     Then a review workflow without the link of the run is rejected
+
+  Scenario Outline: every hosted package job admits its own project commands in <file>
+    Given the committed workflow "<file>"
+    Then each hosted package job provisions its root before setup and admits its project commands
+
+    Examples:
+      | file              |
+      | gate.yml          |
+      | gate-lane.yml     |
+      | mutation-full.yml |
+      | broker-live.yml   |
+      | watch.yml         |
+      | bench-sandbox.yml |
+
+  Scenario Outline: the independent advisory runner refuses <fault>
+    Given the committed workflow "watch.yml"
+    Then a copy with "<fault>" is refused by hosted admission policy
+
+    Examples:
+      | fault                   |
+      | a late marker           |
+      | a bare audit            |
+      | a raised severity       |
+      | a cached setup          |
+      | a bare operational Node |
+      | an unguarded npx        |

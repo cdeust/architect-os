@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict';
 import type { DataTable } from '@cucumber/cucumber';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { parse } from 'yaml';
+import { spawnSync } from 'node:child_process';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join } from 'node:path';
+import { parse, stringify } from 'yaml';
 import { z } from 'zod';
 import { Given, ROOT, Then, stored } from './helpers.js';
 
@@ -271,8 +282,8 @@ const LIVE_BREAKS: Record<string, (yaml: string) => string> = {
     yaml.replace('  id-token: write\n', '  id-token: write\n  actions: read\n'),
   'with a stored secret': (yaml) =>
     yaml.replace(
-      'run: npm run broker:live',
-      () => 'run: echo "${{ secrets.ANTHROPIC_TEST_KEY }}" && npm run broker:live',
+      'run: ./aos -- npm run broker:live',
+      () => 'run: echo "${{ secrets.ANTHROPIC_TEST_KEY }}" && ./aos -- npm run broker:live',
     ),
   'with a traced run line': (yaml) =>
     yaml.replace('          set -euo pipefail\n', '          set -euxo pipefail\n'),
@@ -377,4 +388,245 @@ Then('a gate workflow with broader permissions is rejected', function () {
   const broken = text(this).replace('  actions: read\n', '  actions: write\n');
   assert.notEqual(broken, text(this));
   assert.throws(() => assertGate(broken));
+});
+
+const provision = 'sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"';
+
+function assertHostedAdmission(source: string, file: string): void {
+  for (const [id, job] of Object.entries(workflow(source).jobs)) {
+    if (job.uses) continue; // The called workflow has its own runner and provisioning check.
+    const list = job.steps;
+    const checkout = list.findIndex((step) => step.uses?.startsWith('actions/checkout@'));
+    const setup = list.findIndex((step) => step.uses?.startsWith('actions/setup-node@'));
+    assert.ok(checkout >= 0 && setup > checkout + 1, id);
+    assert.deepEqual(list[checkout + 1], { name: 'Provision the job runtime root', run: provision });
+    assert.equal(list.filter((step) => step.run === provision).length, 1, id);
+    assert.ok(
+      list.every((step) => !step.uses?.startsWith('actions/cache@') && !('cache' in (step.with ?? {}))),
+    );
+    if (file !== 'bench-sandbox.yml') assert.equal(list[setup]?.with?.['package-manager-cache'], false, id);
+    const entry = file === 'bench-sandbox.yml' ? '../aos -- ' : './aos -- ';
+    const commands = list.flatMap(({ run }) => (run ? [run.trimEnd()] : []));
+    const packages = commands.filter((cmd) => /(?:^|[\s;&|])(?:npm|npx|node)(?=\s)/m.test(cmd));
+    assert.ok(packages.length > 0, id);
+    for (const cmd of packages) {
+      assert.ok(list.findIndex((step) => step.run?.trimEnd() === cmd) > setup, cmd);
+      assert.ok(cmd.startsWith(entry), cmd);
+      const payload = cmd.slice(entry.length);
+      if (payload.startsWith("bash -e -o pipefail <<'ADMITTED'\n")) {
+        assert.equal(payload.split('\n').indexOf('ADMITTED'), payload.split('\n').length - 1, cmd);
+      } else {
+        assert.match(payload, /^(?:npm|npx|node) [^\n;&|\x60<>]+$/, cmd);
+      }
+    }
+    if (id === 'advisories') assert.deepEqual(packages, [entry + 'npm audit --audit-level=moderate']);
+  }
+}
+
+Then('each hosted package job provisions its root before setup and admits its project commands', function () {
+  const loaded = stored<Loaded>(this, 'workflow');
+  assertHostedAdmission(loaded.text, loaded.path.split('/').at(-1) ?? '');
+});
+
+Then('a copy with {string} is refused by hosted admission policy', function (fault: string) {
+  const { text: source, path } = stored<Loaded>(this, 'workflow');
+  const doc = parse(source);
+  const job = Object.values(doc.jobs).find((item) => {
+    const steps = (item as { steps?: { run?: string }[] }).steps;
+    return steps?.some((step) => step.run?.includes('npm audit'));
+  }) as { steps: { run?: string; uses?: string; with?: Record<string, unknown> }[] };
+  const steps = job.steps;
+  const marked = steps.findIndex((step) => step.run === provision);
+  const audit = steps.find((step) => step.run?.includes('npm audit'));
+  const setup = steps.find((step) => step.uses?.startsWith('actions/setup-node@'));
+  assert.ok(marked >= 0 && audit?.run && setup?.with);
+  switch (fault) {
+    case 'a late marker':
+      [steps[marked], steps[marked + 1]] = [steps[marked + 1]!, steps[marked]!];
+      break;
+    case 'a bare audit':
+      audit.run = 'npm audit --audit-level=moderate';
+      break;
+    case 'a raised severity':
+      audit.run = audit.run.replace('moderate', 'high');
+      break;
+    case 'a cached setup':
+      setup.with['package-manager-cache'] = true;
+      break;
+    case 'a bare operational Node':
+      steps.push({ run: 'node tools/watch/bin/run.ts' });
+      break;
+    case 'an unguarded npx':
+      steps.push({ run: 'npx tsc' });
+      break;
+    default:
+      assert.fail(fault);
+  }
+  assert.notDeepEqual(doc, parse(source));
+  assert.throws(() => assertHostedAdmission(stringify(doc), path.split('/').at(-1) ?? ''));
+});
+
+const runnerEnv = (dir: string): Record<string, string> => ({
+  PATH: '/usr/bin:/bin',
+  RUNNER_TEMP: dir,
+  GITHUB_ENV: join(dir, 'job.env'),
+});
+
+Then('separate hosted jobs publish only their own private marked root and refuse reuse', function () {
+  const session = mkdtempSync(join(tmpdir(), 'aos-hosted-'));
+  try {
+    for (const name of ['first', 'second']) {
+      const dir = realpathSync(mkdtempSync(join(session, name)));
+      const env = runnerEnv(dir);
+      const script = join(ROOT, 'tools/runtime/provision-hosted.sh');
+      const root = join(dir, 'a');
+      const marker = join(root, '.architect-os-runtime-root');
+      const run = () => spawnSync('/bin/sh', [script], { env, encoding: 'utf8' });
+      const first = run();
+      assert.equal(first.status, 0, first.stderr);
+      assert.equal(readFileSync(env['GITHUB_ENV']!, 'utf8'), 'ARCHITECT_OS_RUNTIME_ROOT=' + root + '\n');
+      assert.equal(readFileSync(marker, 'utf8'), 'architect-os-runtime-root/v2\nenvironment=hosted-runner\n');
+      assert.equal(statSync(root).mode & 0o777, 0o700);
+      assert.equal(statSync(marker).mode & 0o777, 0o600);
+      writeFileSync(marker, 'protected');
+      assert.notEqual(run().status, 0);
+      assert.equal(readFileSync(marker, 'utf8'), 'protected');
+      assert.equal(readFileSync(env['GITHUB_ENV']!, 'utf8'), 'ARCHITECT_OS_RUNTIME_ROOT=' + root + '\n');
+    }
+  } finally {
+    rmSync(session, { recursive: true, force: true });
+  }
+});
+
+Then('two payloads in a hosted job receive distinct matching admission receipts', function () {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'aos-job-')));
+  try {
+    const env = runnerEnv(dir);
+    const provisioned = spawnSync('/bin/sh', [join(ROOT, 'tools/runtime/provision-hosted.sh')], { env });
+    assert.equal(provisioned.status, 0, provisioned.stderr.toString());
+    const root = readFileSync(join(dir, 'job.env'), 'utf8')
+      .trimEnd()
+      .slice('ARCHITECT_OS_RUNTIME_ROOT='.length);
+    const launch = () => {
+      const child = spawnSync(
+        join(ROOT, 'aos'),
+        ['--', '/bin/sh', '-c', 'printf "%s" "$ARCHITECT_OS_RUN_DIR"'],
+        {
+          env: { ...env, ARCHITECT_OS_RUNTIME_ROOT: root },
+          encoding: 'utf8',
+        },
+      );
+      assert.equal(child.status, 0, child.stderr);
+      const location = child.stdout;
+      assert.equal(dirname(location), join(root, 'run'));
+      const receipt = JSON.parse(readFileSync(join(location, 'admission.json'), 'utf8'));
+      assert.equal(receipt.run, basename(location));
+      assert.equal(receipt.environment, 'hosted-runner');
+      return location;
+    };
+    const first = launch();
+    assert.notEqual(launch(), first);
+    assert.equal(JSON.parse(readFileSync(join(first, 'admission.json'), 'utf8')).run, basename(first));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+Then(
+  'the broker workflow removes its synthetic credential after {word} exchange',
+  function (outcome: string) {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'aos-exchange-')));
+    try {
+      const list = workflow(text(this)).jobs['broker-live']?.steps ?? [];
+      const exchange = list.find((step) => step.name?.startsWith('Access token file'));
+      const cleanup = list.find((step) => step.name === 'Remove the access token file');
+      assert.equal(cleanup?.if, 'always()');
+      assert.ok(exchange?.run && cleanup?.run);
+      const env = {
+        ...runnerEnv(dir),
+        FEDERATION_RULE_ID: 'rule',
+        ORGANIZATION_ID: 'org',
+        SERVICE_ACCOUNT_ID: 'acct',
+        WORKSPACE_ID: 'space',
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'synthetic',
+        ACTIONS_ID_TOKEN_REQUEST_URL: 'https://offline.invalid/?test',
+        OUTCOME: outcome,
+      };
+      const stub = [
+        'curl() {',
+        '  if [[ "$*" == *"--data @-"* ]]; then',
+        '    cat >/dev/null',
+        '    printf \'{"access_token":"fixture-access"}\' > "$RUNNER_TEMP/anthropic-exchange.json"',
+        '    [[ "$OUTCOME" == successful ]]',
+        '  else',
+        '    printf \'{"value":"fixture-identity"}\'',
+        '  fi',
+        '}',
+      ].join('\n');
+      const attempt = spawnSync('/bin/bash', ['-c', stub + '\n' + exchange.run], { env, encoding: 'utf8' });
+      assert.equal(attempt.status, outcome === 'successful' ? 0 : 1, attempt.stderr);
+      const key = join(dir, 'anthropic-test-key');
+      const exchangeFile = join(dir, 'anthropic-exchange.json');
+      if (outcome === 'successful') {
+        assert.equal(readFileSync(key, 'utf8'), 'fixture-access');
+        assert.equal(statSync(key).mode & 0o777, 0o600);
+        assert.ok(attempt.stdout.includes('::add-mask::fixture-access'));
+      } else {
+        assert.ok(!existsSync(key));
+      }
+      assert.ok(!existsSync(exchangeFile));
+      const removed = spawnSync('/bin/sh', ['-c', cleanup.run], { env });
+      assert.equal(removed.status, 0, removed.stderr.toString());
+      assert.ok(!existsSync(key));
+      assert.ok(!existsSync(exchangeFile));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+Then('the hosted install leaves the lifecycle witness untouched', function () {
+  const job = workflow(text(this)).jobs['watch'];
+  const cmd = job?.steps.find((step) => step.run?.includes('npm ci'))?.run;
+  assert.equal(cmd, './aos -- npm ci --ignore-scripts');
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'aos-install-')));
+  try {
+    const common = runnerEnv(dir);
+    const created = spawnSync('/bin/sh', [join(ROOT, 'tools/runtime/provision-hosted.sh')], { env: common });
+    assert.equal(created.status, 0, created.stderr.toString());
+    const env = {
+      ...common,
+      PATH: dirname(process.execPath) + ':' + common['PATH'],
+      ARCHITECT_OS_RUNTIME_ROOT: join(dir, 'a'),
+      npm_config_offline: 'true',
+      npm_config_audit: 'false',
+      npm_config_fund: 'false',
+    };
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({
+        name: 'install-witness',
+        version: '1.0.0',
+        scripts: { postinstall: "node -e \"require('node:fs').writeFileSync('installed','yes')\"" },
+      }),
+    );
+    writeFileSync(
+      join(dir, 'package-lock.json'),
+      JSON.stringify({
+        name: 'install-witness',
+        version: '1.0.0',
+        lockfileVersion: 3,
+        packages: { '': { name: 'install-witness', version: '1.0.0', hasInstallScript: true } },
+      }),
+    );
+    const run = (args: string[]) => spawnSync(join(ROOT, 'aos'), args, { cwd: dir, env, encoding: 'utf8' });
+    const install = run(cmd.split(' ').slice(1));
+    assert.equal(install.status, 0, install.stderr);
+    assert.ok(!existsSync(join(dir, 'installed')));
+    const control = run(['--', 'npm', 'ci', '--ignore-scripts=false']);
+    assert.equal(control.status, 0, control.stderr);
+    assert.equal(readFileSync(join(dir, 'installed'), 'utf8'), 'yes');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

@@ -1,3 +1,4 @@
+import '../../scripts/require-run.mjs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeProfilesImage } from '../support/isolation-rows.js';

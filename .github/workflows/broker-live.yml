@@ -47,13 +47,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       - name: Install (lockfile, scripts disabled)
-        run: npm ci --ignore-scripts
+        run: ./aos -- npm ci --ignore-scripts
 
       - name: Access token file, 0600, from the identity of this run
         env:
@@ -102,7 +106,7 @@ jobs:
           echo "ANTHROPIC_TEST_KEY_SCHEME=bearer" >> "$GITHUB_ENV"
 
       - name: T-04R, the broker against api.anthropic.com
-        run: npm run broker:live
+        run: ./aos -- npm run broker:live
 
       - name: Remove the access token file
         if: always()

@@ -1,3 +1,4 @@
+import '../scripts/require-run.mjs';
 // Cost baseline, pilot (docs/design/platform-v3-srt.md, brick 0): `npm run baseline:pilot`.
 // Every task of baseline/tasks.json runs once in each of three configurations, on a fresh disposable checkout:
 //   host       the owner's Claude Code as usual (plugins, MCP servers, hooks, memory, CLAUDE.md read by itself);

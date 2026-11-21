@@ -35,10 +35,23 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 26.11.1
+
+      - name: Install the pinned host Node for admission
+        if: runner.os == 'macOS'
+        run: |
+          bin=/opt/hostedtoolcache/node/26.11.1/arm64/bin
+          sdk=${RUNNER_TOOL_CACHE:?}/node/26.11.1/arm64/bin/node
+          test "$(command -v node)" -ef "$sdk"
+          test "$("$sdk" --version)" = "v$(cat "$GITHUB_WORKSPACE/.nvmrc")"
+          sudo install -d -m 0755 "$bin"
+          test "$sdk" -ef "$bin/node" || sudo install -m 0755 "$sdk" "$bin/node"
 
       - name: Host dependencies (Linux)
         if: runner.os == 'Linux'
@@ -75,13 +88,13 @@ jobs:
           "$(brew --prefix postgresql@17)/bin/postgres" --version
 
       - name: Install (lockfile, scripts disabled)
-        run: npm ci --ignore-scripts
+        run: ../aos -- npm ci --ignore-scripts
 
       - name: Typecheck
-        run: npm run typecheck
+        run: ../aos -- npm run typecheck
 
       - name: Bench
-        run: npm run bench:sandbox
+        run: ../aos -- npm run bench:sandbox
 
       - name: Upload report
         if: always()

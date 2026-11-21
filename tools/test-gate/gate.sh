@@ -9,6 +9,8 @@
 # --mutation-only produces both reports; --mutation-report-only leaves replay to the hosted runners.
 # Previous reports are removed first: a stale report must never be read as the result of this run.
 set -u
+entry=$(CDPATH= cd -P -- "$(dirname -- "$0")/../.." && pwd -P) || exit 2
+node "$entry/scripts/require-run.mjs" || exit $?
 job=linux
 mutation_only=false
 report_only=false

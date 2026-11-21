@@ -1,6 +1,6 @@
 #!/bin/sh
 # ./aos -- PROGRAM [ARG ...]: the admission of a run, then PROGRAM in its place (docs/design/orchestration-fable-5-2.md
-# §14, « Un seul lieu d'écriture, imposé par l'hôte »). Optional until the next commit makes it compulsory.
+# §14, « Un seul lieu d'écriture, imposé par l'hôte »). Required before repository commands.
 #
 # The one setting is ARCHITECT_OS_RUNTIME_ROOT: an existing physical directory, marked once by its installer
 # (<root>/.architect-os-runtime-root, which names the environment); no default, nothing created in its place. This
@@ -86,9 +86,9 @@ names=$(/usr/bin/env -u NODE_COMPILE_CACHE NODE_DISABLE_COMPILE_CACHE=1 \
   "$node" "$checkout/tools/runtime/src/npm-names.ts" </dev/null) || fail
 
 # The admission. Its environment is the closed list below: no inherited NODE_OPTIONS, loader, coverage output or
-# compile cache. On success it prints the identifier of the run it allocated, alone; on a refusal or an error it
+# compile cache. On success it returns the run identifier and its physical binding; on a refusal or an error it
 # caught, it has already printed `aos: <CODE>`.
-run=$(/usr/bin/env -i PATH=/usr/bin:/bin NODE_DISABLE_COMPILE_CACHE=1 \
+context=$(/usr/bin/env -i PATH=/usr/bin:/bin NODE_DISABLE_COMPILE_CACHE=1 ARCHITECT_OS_EMIT_BINDING=1 \
   "$node" "$checkout/tools/runtime/src/cli.ts" "$root" "$kind" </dev/null)
 case $? in
   0) ;;
@@ -96,6 +96,9 @@ case $? in
   3) exit 3 ;;
   *) fail ;;
 esac
+run=${context%%:*}
+ARCHITECT_OS_ADMISSION_BINDING=${context#*:}
+export ARCHITECT_OS_ADMISSION_BINDING
 case $run in
   r[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9]) ;;
   *) fail ;;

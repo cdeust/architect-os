@@ -9,8 +9,8 @@ Choose one provider and an available native model. Sign in using that CLI’s ow
 | `gemini` | `agy`             | Personal Google account using Antigravity CLI |
 
 ```sh
-npm run --silent plan -- draft "$PROVIDER" "$MODEL" delivery define.json draft-01.jsonl "$TIMEOUT_MS" > proposal.json
-npm run --silent plan -- prepare define.json proposal.json policy.json > preview.json
+./aos -- npm run --silent plan -- draft "$PROVIDER" "$MODEL" delivery define.json draft-01.jsonl "$TIMEOUT_MS" > proposal.json
+./aos -- npm run --silent plan -- prepare define.json proposal.json policy.json > preview.json
 ```
 
 The final operand is the CLI process timeout in milliseconds. A provider can accept a request before the timeout. The draft path has no output-token or monetary cap. Use a new receipt path per attempt. Each receipt binds the requested provider/model, Define digest and run ID to a duration and terminal outcome. A valid draft also records its digest. The operator's approval is still required before materialization. To prepare an existing proposal again, pass its saved file directly to `plan prepare`.
@@ -31,7 +31,7 @@ Run the exchange from the Architect OS checkout. Set `PLAN_FILES` to an absolute
 (
   set -euC
   umask 077
-  npm run --silent plan -- agy-request "$MODEL" delivery "$PLAN_FILES/define.json" > "$PLAN_FILES/request.jsonl"
+  ./aos -- npm run --silent plan -- agy-request "$MODEL" delivery "$PLAN_FILES/define.json" > "$PLAN_FILES/request.jsonl"
   SCHEMA='{"type":"object","required":["request_sha256","proposal"],"properties":{"request_sha256":{"type":"string"},"proposal":{"type":"object","required":["step","objective","verification","acceptance_ids"],"properties":{"step":{"type":"string"},"objective":{"type":"string"},"verification":{"type":"string"},"acceptance_ids":{"type":"array","items":{"type":"string"}}}}}}'
   SETTINGS='{"modelProvider":"","agentMode":"","useG1Credits":false,"toolPermission":"strict","permissions":{"deny":["read_file(*)","write_file(*)","read_url(*)","execute_url(*)","command(*)","mcp(*)"]}}'
   (
@@ -41,9 +41,9 @@ Run the exchange from the Architect OS checkout. Set `PLAN_FILES` to an absolute
       --model "$MODEL" --json-schema "$SCHEMA" --input-format stream-json --output-format stream-json \
       < "$PLAN_FILES/request.jsonl" > "$PLAN_FILES/response.jsonl"
   )
-  npm run --silent baseline:planning -- "$PLAN_FILES/agy-01.jsonl" agy-result \
+  ./aos -- npm run --silent baseline:planning -- "$PLAN_FILES/agy-01.jsonl" agy-result \
     "$MODEL" delivery "$PLAN_FILES/define.json" "$PLAN_FILES/response.jsonl" > "$PLAN_FILES/proposal.json"
-  npm run --silent plan -- prepare "$PLAN_FILES/define.json" "$PLAN_FILES/proposal.json" \
+  ./aos -- npm run --silent plan -- prepare "$PLAN_FILES/define.json" "$PLAN_FILES/proposal.json" \
     "$PLAN_FILES/policy.json" > "$PLAN_FILES/preview.json"
 )
 ```

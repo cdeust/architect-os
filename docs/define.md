@@ -1,9 +1,9 @@
 # Read a pending Define handoff
 
-After `npm ci` and `npm run typecheck`, run the reader with the run ID and the root of a trusted local prd-gen plugin.
+After `./aos -- npm ci --ignore-scripts` and `./aos -- npm run typecheck`, run the reader with the run ID and the root of a trusted local prd-gen plugin.
 
 ```sh
-npm run --silent define -- <run_id> <prd-gen-plugin-root>
+./aos -- npm run --silent define -- <run_id> <prd-gen-plugin-root>
 ```
 
 The root is the directory that contains the plugin's `.mcp.json`, `bin/ensure-deps.mjs` and bundled server. The operator selects that directory. The adapter starts the fixed launcher and passes only its fixed paths and the skill configuration. The SDK inherits its standard environment allowlist so that prd-gen reads the checkpoints under the same user home as the host. The launcher and its locked dependencies must be trusted by that user.

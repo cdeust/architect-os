@@ -943,7 +943,8 @@ const SCRIPTED_GH = [
 /** The gate of these scenarios: it records the XDG_CONFIG_HOME it sees and leaves the verdict of the commit. */
 const SCRIPTED_GATE = [
   "import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';",
-  'const [witness, verdict] = process.argv.slice(2);',
+  'const [witness, verdict, guard] = process.argv.slice(2);',
+  "await import((await import('node:url')).pathToFileURL(guard).href);",
   "appendFileSync(witness, `${process.env['XDG_CONFIG_HOME'] ?? '(unset)'}\\n`);",
   "mkdirSync('reports', { recursive: true });",
   "writeFileSync('reports/gate-base.json', verdict);",
@@ -1028,7 +1029,13 @@ Given(
       config,
       JSON.stringify({
         ...committed,
-        gateCommand: [process.execPath, join(scripts, 'gate.mjs'), gateWitness, verdict],
+        gateCommand: [
+          process.execPath,
+          join(scripts, 'gate.mjs'),
+          gateWitness,
+          verdict,
+          join(ROOT, 'scripts/require-run.mjs'),
+        ],
       }),
     );
     const state: Delivery = {
@@ -1133,7 +1140,9 @@ Then(
 
 Then('the gate of the delivery through the launcher saw the XDG_CONFIG_HOME of its run', function () {
   const { root } = launcher(this);
-  const [run] = readdirSync(join(root, 'run'));
+  const runs = readdirSync(join(root, 'run'));
+  assert.equal(runs.length, 1);
+  const [run] = runs;
   assert.equal(
     readFileSync(delivery(this).gateWitness, 'utf8'),
     `${join(root, 'run', run as string, 'config')}\n`,

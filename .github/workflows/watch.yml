@@ -27,16 +27,20 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       - name: Install (lockfile, scripts disabled)
-        run: npm ci --ignore-scripts
+        run: ./aos -- npm ci --ignore-scripts
 
       - name: The register against the sources
-        run: npm run --silent watch -- check
+        run: ./aos -- npm run --silent watch -- check
 
   advisories:
     name: advisories
@@ -48,10 +52,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       - name: The advisories on the locked dependencies
-        run: npm audit --audit-level=moderate
+        run: ./aos -- npm audit --audit-level=moderate
