@@ -8,6 +8,7 @@ const commands = new Map([
   ['define', 'tools/define/src/cli.ts'],
   ['proposal', 'tools/define/src/proposal-cli.ts'],
   ['draft', planCli],
+  ['agy-result', planCli],
   ['prepare', planCli],
   ['materialize', planCli],
 ]);
@@ -30,10 +31,10 @@ export async function measure([receipt, stage, ...args], proc = process) {
   const command = commands.get(stage);
   if (!receipt || !command)
     throw new Error(
-      'usage: baseline:planning <new-receipt> <define|proposal|draft|prepare|materialize> <command arguments...>',
+      'usage: baseline:planning <new-receipt> <define|proposal|draft|agy-result|prepare|materialize> <command arguments...>',
     );
-  if (stage === 'draft') {
-    // The drafter owns the receipt and records provider usage on the same attempt.
+  if (stage === 'draft' || stage === 'agy-result') {
+    // The draft and import commands own their receipts and record usage on the same attempt.
     const [code] = await launch(proc, command, [stage, ...args.toSpliced(4, 0, receipt)]);
     return code ?? 1;
   }

@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { runPlan } from './main.js';
+import { runAgyExchange } from './agy.js';
 import { parseDefinePlanningReply } from '@architect-os/contracts';
 import { coveredProposal } from './application/prepare.js';
 import { isStepName } from './infrastructure/step-inputs.js';
@@ -18,6 +19,7 @@ function sha(s: string) {
 }
 
 export async function runPlanCommand(proc: DraftProcess, send: typeof fetch = fetch): Promise<number> {
+  if (proc.argv[2] === 'agy-request' || proc.argv[2] === 'agy-result') return runAgyExchange(proc);
   if (proc.argv[2] !== 'draft') return runPlan(proc);
   const fail = (message: string) => {
     proc.stderr.write('architect-os plan draft: ' + message + '\n');
