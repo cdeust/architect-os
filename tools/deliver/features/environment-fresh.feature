@@ -198,3 +198,57 @@ Feature: the closed environment of the delivery, under fresh inputs
     Scenario: a name that the host does not set, and that every object answers, is not given
       When I close the environment of the names "constructor" over a host that sets "" with "" added
       Then the closed environment is ""
+
+  Rule: a delivery admitted by ./aos gives git and the client of the forge the XDG_CONFIG_HOME of the caller of ./aos
+
+    # expected because: « Preserve delivery's explicitly supported host XDG_CONFIG_HOME for its git/gh adapter only, capturing its original value separately before rebinding XDG for the command. If it was unset, preserve absence » (step 1a specification, adopted with the decisions on its review)
+    Scenario Outline: what ./aos hands over, <handed>, gives git and the client of the forge the XDG_CONFIG_HOME <given>
+      When the host environment of a delivery is taken from a process with "PATH=/bin,XDG_CONFIG_HOME=/run/config,ARCHITECT_OS_HOST_XDG_CONFIG_HOME=<handed>"
+      Then the host environment of the delivery is "PATH=/bin,ARCHITECT_OS_HOST_XDG_CONFIG_HOME=<handed><given>"
+
+      Examples:
+        | handed              | given                             |
+        | unset               |                                   |
+        | set:/host/config    | ,XDG_CONFIG_HOME=/host/config     |
+        | set:                | ,XDG_CONFIG_HOME=                 |
+        | set:/a:b=c          | ,XDG_CONFIG_HOME=/a:b=c           |
+        | set:set:/x          | ,XDG_CONFIG_HOME=set:/x           |
+
+    # expected because: « Direct delivery must retain its current behavior » (decisions on the review of step 1a, R1)
+    Scenario Outline: a delivery started without ./aos takes the environment of its process as it is: <process>
+      When the host environment of a delivery is taken from a process with "<process>"
+      Then the host environment of the delivery is "<process>"
+
+      Examples:
+        | process                                 |
+        | PATH=/bin,XDG_CONFIG_HOME=/run/config   |
+        | PATH=/bin                               |
+
+    # contract silent: on a handover in neither form; the delivery refuses before any act rather than guess
+    Scenario Outline: a handover that is <handed> is refused before any act
+      Given a delivery command over a throwaway repository, the commit "h1" ahead of both branches at "p0"
+      And the process of the delivery command has the variable "ARCHITECT_OS_HOST_XDG_CONFIG_HOME" set to "<handed>"
+      When I run the delivery command with "step --until ci"
+      Then the delivery command exited 2
+      And the delivery command wrote on its standard error:
+        """
+        architect-os deliver: ARCHITECT_OS_HOST_XDG_CONFIG_HOME is neither "unset" nor "set:<value>"
+        """
+      And the remote of the delivery command has no branch "sentinel/gate-1a-step"
+
+      Examples:
+        | handed        |
+        |               |
+        | Unset         |
+        | /host/config  |
+        | unset:        |
+        | set           |
+
+    # expected because: R1 of the decisions: the run's XDG_CONFIG_HOME must not reach the client of the forge of an admitted delivery
+    Scenario: a delivery whose caller of ./aos had no XDG_CONFIG_HOME gives none to the client of the forge, though its process has the run's
+      Given a delivery command over a throwaway repository, the commit "h1" ahead of both branches at "p0"
+      And the process of the delivery command has the variable "GH_TOKEN" set to "token-1"
+      And the process of the delivery command has the variable "ARCHITECT_OS_HOST_XDG_CONFIG_HOME" set to "unset"
+      When I run the delivery command with "step --until ci"
+      Then the delivery command exited 0
+      And every call of the scripted forge received exactly the variables of the list that the process had set but XDG_CONFIG_HOME
