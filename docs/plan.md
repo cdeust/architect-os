@@ -6,6 +6,8 @@ After installing the pinned dependencies and running `npm run typecheck`, save t
 npm run --silent plan -- prepare define.json proposal.json policy.json > preview.json
 ```
 
+For model-assisted drafting, [choose Claude, GPT or Gemini](plan-models.md).
+
 The proposal has one Step name, an objective, an observable verification and the acceptance IDs for the work. The first slice plans one coherent Step that covers every criterion in the handoff once. A criterion can refer to several requirements.
 
 ```json

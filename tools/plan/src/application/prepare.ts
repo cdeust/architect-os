@@ -12,9 +12,11 @@ export interface StepInputs {
   readonly questions: Readonly<Record<string, string>>;
 }
 
-export function preparePlan(sources: PlanSources, inputs: StepInputs) {
-  const { handoff } = parseDefinePlanningReply([{ type: 'text', text: sources.define }]);
-  const proposal = parsePlanProposal(JSON.parse(sources.proposal));
+export function coveredProposal(
+  handoff: ReturnType<typeof parseDefinePlanningReply>['handoff'],
+  value: unknown,
+) {
+  const proposal = parsePlanProposal(value);
   const expected = new Set(handoff.acceptance.map(({ id }) => id));
   const chosen = proposal.acceptance_ids;
   if (
@@ -25,6 +27,12 @@ export function preparePlan(sources: PlanSources, inputs: StepInputs) {
     throw new Error('PLAN_COVERAGE_INVALID');
   }
 
+  return proposal;
+}
+
+export function preparePlan(sources: PlanSources, inputs: StepInputs) {
+  const { handoff } = parseDefinePlanningReply([{ type: 'text', text: sources.define }]);
+  const proposal = coveredProposal(handoff, JSON.parse(sources.proposal));
   // The model sees these strings as data in one JSON block. Only Step's host policy can select commands and models.
   const data = {
     run_id: handoff.run_id,
