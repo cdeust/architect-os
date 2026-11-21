@@ -3,11 +3,10 @@
 // ESM API (node_modules/tsx/package.json exports './esm/api'); cucumber imports the support code after this file.
 // tsx reads TSX_TSCONFIG_PATH: features/tsconfig.json carries the `paths` that map @architect-os/contracts to its sources.
 import { register } from 'tsx/esm/api';
+import { COMPONENTS, mutationPaths } from './cucumber-paths.mjs';
 
 process.env['TSX_TSCONFIG_PATH'] ??= new URL('./features/tsconfig.json', import.meta.url).pathname;
 register();
-
-const COMPONENTS = ['packages/*', 'data', 'gateway', 'services/*', 'modules/*', 'tools/*'];
 
 const config = {
   paths: ['features/**/*.feature', ...COMPONENTS.map((c) => `${c}/features/**/*.feature`)],
@@ -45,18 +44,15 @@ export const macos = { ...config, paths: ['features/sandbox/**/*.feature'] };
 // - features/arch/isolation-diagram: reads five profile files and two images, and calls one production function, the
 //   loader of the profiles, which the mutation judges elsewhere (packages/sandbox/features/profile.feature). It is
 //   outside only because its area is.
+// - features/arch/runtime-entry: starts the shell entry `aos` as a host process, from a copy of the launcher whose
+//   sources would be the instrumented ones on the copy; a child process executes no production line in process. The
+//   decisions of the admission are judged in process by tools/runtime/features. It also reads the import specifiers of
+//   tools/runtime/src as text, which on the copy would be another text.
 // Both areas stay in the default profile (`npm test`, and the counted run of the gate's Linux job); the mutation
 // profile lists the other four root areas, and the components' features.
 // A scope by path, like `macos`: `features/**` is spelled as the root areas other than repository and arch;
 // features/descriptive/cucumber-profiles.feature checks that no area is forgotten.
-const ROOT_AREAS = ['descriptive', 'infra', 'integration', 'sandbox'];
-export const mutation = {
-  ...config,
-  paths: [
-    ...ROOT_AREAS.map((area) => `features/${area}/**/*.feature`),
-    ...COMPONENTS.map((c) => `${c}/features/**/*.feature`),
-  ],
-};
+export const mutation = { ...config, paths: mutationPaths };
 
 // The replay profile is used only by `test-gate replay` (tools/test-gate/src/infrastructure/replay.ts), which names the
 // scenarios of one mutant as `<feature>:<line>` and its own `--format message:<file>`. Cucumber adds the paths and

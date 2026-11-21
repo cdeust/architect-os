@@ -20,7 +20,8 @@ function parseJobs(text: string): CiJob[] {
       name,
       conclusion: conclusion === 'null' ? null : (conclusion as CiJob['conclusion']),
       hadRunner: runner === 'runner',
-      failedStep: step === 'failed-step',
+      failedStep: step !== undefined,
+      ...(step === undefined || step === 'failed-step' ? {} : { firstStepFailure: step }),
     };
   });
 }
@@ -49,6 +50,18 @@ Then(
   'the CI state of the {string} run with the jobs {string} and the required jobs {string} is {string}',
   function (kind: string, jobs: string, required: string, state: string) {
     assert.equal(ciState(parseRun(kind, jobs), required.split(', ')), state);
+  },
+);
+
+Then(
+  'the completed gate with producers {string} and jobs {string} is {string}',
+  function (producerNames: string, jobs: string, state: string) {
+    assert.equal(
+      ciState(parseRun('completed', jobs), ['linux', 'macos'], {
+        linux: { producers: producerNames.split(', '), admissionStep: 'Require all producers' },
+      }),
+      state,
+    );
   },
 );
 

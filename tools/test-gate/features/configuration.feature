@@ -3,6 +3,12 @@ Feature: Test gate configuration and command line
   and the jobs: it is a descriptive file, loaded against its zod schema; a broken copy is rejected. The command
   line is `plan|check [--job <name>]`; anything else is refused with exit code 1.
 
+  Scenario: collecting and replaying a shard accept distinct arguments
+    Then the replay commands keep their explicit argument contracts
+
+  Scenario: a valid native report exposes its parsed source, positions and static status
+    Then a valid native mutation report has a parsed source, position and active static flag
+
   Scenario: the committed configuration and the fixture configuration load against the schema
     Then the committed gate configuration loads against its schema
     And the fixture gate configuration loads against its schema
@@ -100,7 +106,7 @@ Feature: Test gate configuration and command line
     Then the gate exits with 1
     And the gate output is:
       """
-      porte de test : usage : test-gate plan|check [--job <nom>] | debt [realign] | replay [--all]
+      porte de test : usage : test-gate plan|check|inventory|inventory-check|inventory-project|inventory-collect [--job <nom>] (inventory|inventory-project --shard <1|2>) | debt [realign] | replay [--all | --shard <1|2>] | replay-collect
       """
 
     Examples:
@@ -112,3 +118,13 @@ Feature: Test gate configuration and command line
       | plan --job linux extra   |
       | replay --some            |
       | replay --all extra       |
+      | replay --all 1           |
+      | replay --shard           |
+      | replay --shard 3         |
+      | replay --shard 1 extra   |
+      | replay --other 1         |
+      | inventory --other 1      |
+      | inventory --shard       |
+      | inventory --shard 3     |
+      | inventory --shard 1 extra |
+      | inventory-check --shard 1 |

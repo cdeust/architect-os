@@ -58,6 +58,15 @@ function configSchema(): z.ZodType<DeliverConfig> {
     trialPrefix: refName.refine((value) => /[-/]$/.test(value), 'a prefix ends with - or /'),
     workflow: label,
     requiredJobs: z.array(label).min(1).max(8).refine(different, 'the jobs are all different'),
+    jobDependencies: z
+      .record(
+        label,
+        z.strictObject({
+          producers: z.array(label).min(1).refine(different, 'the producers are all different'),
+          admissionStep: label,
+        }),
+      )
+      .optional(),
     appendOnly: z.array(path).max(8),
     gateVerdict: path,
     gateCommand: z.array(word).min(1).max(16),
@@ -72,10 +81,23 @@ function configSchema(): z.ZodType<DeliverConfig> {
     ciPolls: count(600),
     ruleSuitePolls: count(60),
   });
-  return object.refine(
-    (config) => config.branches.every((branch) => !branch.startsWith(config.trialPrefix)),
-    { path: ['trialPrefix'], message: 'a trial branch is never a branch to publish' },
-  );
+  return object
+    .refine(
+      ({ requiredJobs, jobDependencies = {} }) =>
+        Object.entries(jobDependencies).every(
+          ([name, group]) =>
+            requiredJobs.includes(name) &&
+            group.producers.every((job) => !Object.hasOwn(jobDependencies, job)),
+        ),
+      {
+        path: ['jobDependencies'],
+        message: 'an aggregate must be required and its producers must be leaf jobs',
+      },
+    )
+    .refine((config) => config.branches.every((branch) => !branch.startsWith(config.trialPrefix)), {
+      path: ['trialPrefix'],
+      message: 'a trial branch is never a branch to publish',
+    });
 }
 
 export const parseDeliverConfig: ParseConfig = (raw) => {

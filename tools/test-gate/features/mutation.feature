@@ -376,3 +376,20 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     When the gate checks the "linux" job
     Then the gate verdict is green
     And the gate report has the line "- fichiers du périmètre : 0"
+
+  Scenario Outline: strict native report reading checks activation and unique identities
+    Given a native mutation report with "<variant>"
+    Then strict native report reading fails with "<diagnostic>"
+
+    Examples:
+      | variant            | diagnostic                                        |
+      | Killed             | marquage statique absent pour un mutant actif     |
+      | Timeout            | marquage statique absent pour un mutant actif     |
+      | RuntimeError       | marquage statique absent pour un mutant actif     |
+      | Survived           | marquage statique absent pour un mutant actif     |
+      | duplicate scenario | identifiant de test de mutation répété            |
+      | duplicate scope    | fichier de périmètre natif répété                 |
+
+  Scenario: an uncovered native mutant may omit activation and report metadata
+    Given a native mutation report with "NoCoverage"
+    Then the uncovered native mutant has no optional report metadata

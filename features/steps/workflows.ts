@@ -12,6 +12,9 @@ import { Given, ROOT, Then, stored } from './helpers.js';
  * YAML 1.2 (the `yaml` package default) reads the key `on` as a string, not as a boolean.
  */
 const StepSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().optional(),
+  if: z.string().optional(),
   uses: z.string().optional(),
   run: z.string().optional(),
   with: z.record(z.string(), z.unknown()).optional(),
@@ -22,12 +25,22 @@ const WorkflowSchema = z.object({
   permissions: z.record(z.string(), z.string()).optional(),
   jobs: z.record(
     z.string(),
-    z.object({
-      name: z.string().optional(),
-      if: z.string().optional(),
-      environment: z.string().optional(),
-      steps: z.array(StepSchema),
-    }),
+    z
+      .object({
+        name: z.string().optional(),
+        needs: z.union([z.string(), z.array(z.string())]).optional(),
+        if: z.string().optional(),
+        environment: z.string().optional(),
+        permissions: z.unknown().optional(),
+        secrets: z.unknown().optional(),
+        strategy: z.unknown().optional(),
+        uses: z.string().optional(),
+        with: z.record(z.string(), z.unknown()).optional(),
+        'runs-on': z.unknown().optional(),
+        steps: z.array(StepSchema).optional(),
+      })
+      .refine((job) => (job.uses === undefined) !== (job.steps === undefined))
+      .transform((job) => ({ ...job, steps: job.steps ?? [] })),
   ),
 });
 type Workflow = z.infer<typeof WorkflowSchema>;
@@ -50,6 +63,9 @@ function steps(text: string): z.infer<typeof StepSchema>[] {
 function assertPinned(text: string): void {
   for (const { uses } of steps(text)) {
     if (uses !== undefined) assert.match(uses, PINNED, `action not pinned by a 40-hex SHA: ${uses}`);
+  }
+  for (const { uses } of Object.values(workflow(text).jobs)) {
+    if (uses !== undefined) assert.equal(uses, './.github/workflows/gate-lane.yml');
   }
 }
 
@@ -76,8 +92,44 @@ function assertGate(text: string): void {
   assert.ok(!('pull_request_target' in doc.on), 'gate.yml must not use pull_request_target');
   assert.deepEqual(doc.permissions, { contents: 'read', actions: 'read' });
   assert.ok(!text.includes('secrets.'), 'gate.yml must not use a secret');
-  assert.deepEqual(Object.keys(doc.jobs).sort(), ['gate-linux', 'gate-macos']);
-  for (const [id, job] of Object.entries(doc.jobs)) assert.equal(job.name, id);
+  assert.deepEqual(Object.keys(doc.jobs).sort(), [
+    'gate-linux',
+    'gate-linux-cucumber',
+    'gate-linux-lane',
+    'gate-macos',
+  ]);
+  assert.deepEqual(doc.jobs['gate-linux']?.needs, ['gate-linux-cucumber', 'gate-linux-lane']);
+  assert.deepEqual(doc.jobs['gate-linux-cucumber']?.strategy, {
+    'fail-fast': false,
+    matrix: { shard: [1, 2] },
+  });
+  const lane = doc.jobs['gate-linux-lane'];
+  assert.deepEqual(lane?.strategy, {
+    'fail-fast': false,
+    matrix: { lane: Array.from({ length: 16 }, (_, i) => i + 1) },
+  });
+  assert.equal(lane?.uses, './.github/workflows/gate-lane.yml');
+  assert.deepEqual(lane?.with, { lane: '${{ matrix.lane }}' });
+  assert.equal(doc.jobs['gate-linux']?.if, '${{ always() }}');
+  const linuxSteps = doc.jobs['gate-linux']?.steps ?? [];
+  assert.equal(linuxSteps[0]?.id, 'admission');
+  assert.equal(linuxSteps[0]?.name, 'Require all producers');
+  assert.equal(
+    linuxSteps.find(({ name }) => name === 'Upload reports')?.if,
+    '$' + "{{ always() && steps.admission.outcome == 'success' }}",
+  );
+  for (const [id, job] of Object.entries(doc.jobs)) {
+    assert.equal(job.permissions, undefined);
+    assert.equal(job.secrets, undefined);
+    assert.equal(
+      job.name,
+      id === 'gate-linux-cucumber'
+        ? id + '-${{ matrix.shard }}'
+        : id === 'gate-linux-lane'
+          ? id + '-${{ matrix.lane }}'
+          : id,
+    );
+  }
   for (const step of Object.values(doc.jobs).flatMap((job) => job.steps)) {
     assert.ok(!('cache' in (step.with ?? {})), 'gate.yml must not use a cache');
     if (step.uses?.startsWith('actions/checkout@') === true) {
@@ -85,6 +137,33 @@ function assertGate(text: string): void {
     }
   }
 }
+
+function assertGateLane(text: string): void {
+  const doc = workflow(text);
+  assert.deepEqual(doc.on, { workflow_call: { inputs: { lane: { type: 'number', required: true } } } });
+  assert.deepEqual(doc.permissions, { contents: 'read', actions: 'read' });
+  assert.ok(!text.includes('secrets.'));
+  assert.deepEqual(Object.keys(doc.jobs).sort(), ['mutation', 'replay']);
+  assert.equal(doc.jobs['mutation']?.needs, undefined);
+  assert.equal(doc.jobs['replay']?.needs, 'mutation');
+  assertPinned(text);
+  assertNpmCiSafe(text);
+  assertCheckoutWithoutCredentials(text);
+  for (const [id, job] of Object.entries(doc.jobs)) {
+    assert.equal(job.permissions, undefined);
+    assert.equal(job.secrets, undefined);
+    assert.equal(job.name, id);
+    assert.equal(job['runs-on'], 'ubuntu-24.04');
+    for (const step of job.steps) {
+      assert.ok(!('cache' in (step.with ?? {})));
+      if (step.uses?.startsWith('actions/checkout@')) assert.equal(step.with?.['fetch-depth'], 2);
+    }
+  }
+}
+
+Then('it satisfies the native lane workflow rules', function () {
+  assertGateLane(text(this));
+});
 
 /** The environment that holds the test key of T-04R, and its one secret (docs/infrastructure.md, Secrets broker). */
 /** A workflow that may ask GitHub for the identity token of a run. */
@@ -165,6 +244,16 @@ Then('every checkout in it has persist-credentials false', function () {
 
 Then('it satisfies the gate workflow rules', function () {
   assertGate(text(this));
+});
+
+Then('Gate jobs reject explicit secrets and permissions', function () {
+  const original = text(this);
+  const verify = original.includes('workflow_call:') ? assertGateLane : assertGate;
+  for (const setting of ['secrets: inherit', 'permissions: write-all']) {
+    const edited = original.replace(/^(    name: .+)$/m, '$1\n    ' + setting);
+    assert.notEqual(edited, original);
+    assert.throws(() => verify(edited));
+  }
 });
 
 Then('it satisfies the live workflow rules', function () {
