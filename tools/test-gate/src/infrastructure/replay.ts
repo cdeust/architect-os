@@ -197,7 +197,7 @@ export class CucumberRunner implements Runner {
       ? undefined
       : (refused ?? 'précontrôle Cucumber non confirmé');
     let runCompleted = false;
-    let executed: readonly (string | null)[] = [];
+    let executed: readonly (string | null)[] | undefined;
     const observed = existsSync(report)
       ? parseCucumberReport(
           readFileSync(report, 'utf8'),
@@ -228,7 +228,9 @@ export class CucumberRunner implements Runner {
       ...(selectionFailure === undefined ? {} : { selectionFailure }),
     };
     const witness =
-      code === 1 && (discover || tests.length === 1) ? failureWitness(result, executed) : undefined;
+      code === 1 && executed !== undefined && (discover || tests.length === 1)
+        ? failureWitness(result, executed)
+        : undefined;
     return { result, ms, ...(witness === undefined ? {} : { witness }) };
   }
 }

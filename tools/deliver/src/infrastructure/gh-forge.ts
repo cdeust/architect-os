@@ -36,7 +36,8 @@ function jobSchema() {
 type ForgeJob = z.infer<ReturnType<typeof jobSchema>>;
 
 /** GitHub may include an automatic setup and completion around the workflow steps. */
-function firstStepFailure(steps: NonNullable<ForgeJob['steps']>): string | undefined {
+function firstStepFailure(steps: ForgeJob['steps']): string | undefined {
+  if (steps === undefined) return undefined;
   const first = steps[0]?.name === 'Set up job' && steps[0].conclusion === 'success' ? 1 : 0;
   const step = steps[first];
   if (step?.conclusion !== 'failure' || !step.name) return undefined;
@@ -116,15 +117,17 @@ export class GhForge implements Forge {
       completed: version.status === 'completed',
       ...(version.run_attempt === undefined ? {} : { attempt: version.run_attempt }),
       jobs: jobs.map((job) => {
-        const steps = job.steps ?? [];
+        const steps = job.steps;
         const firstFailure = firstStepFailure(steps);
         return {
           name: job.name,
           conclusion: conclusionOf(job.conclusion),
           hadRunner:
             Boolean(job.runner_name) ||
-            steps.some((step) => step.name && step.conclusion !== null && step.conclusion !== 'skipped'),
-          failedStep: steps.some((step) => step.conclusion === 'failure'),
+            Boolean(
+              steps?.some((step) => step.name && step.conclusion !== null && step.conclusion !== 'skipped'),
+            ),
+          failedStep: Boolean(steps?.some((step) => step.conclusion === 'failure')),
           ...(firstFailure === undefined ? {} : { firstStepFailure: firstFailure }),
         };
       }),

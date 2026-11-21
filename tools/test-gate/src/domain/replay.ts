@@ -89,12 +89,13 @@ export function replayCases(
   selected: (file: string, mutant: MutantRecord) => boolean,
 ): ReplayCase[] {
   const cases: ReplayCase[] = [];
+  const all = [...report.tests.keys()];
   const locations = (ids: readonly string[]) => [...new Set(ids.map((id) => report.tests.get(id) as string))];
   for (const [file, { source, mutants }] of report.files) {
     for (const mutant of mutants) {
       const expectation = expectationOf(mutant.status);
       if (expectation === undefined || !selected(file, mutant)) continue;
-      const covering = coveringIds(mutant, [...report.tests.keys()]);
+      const covering = coveringIds(mutant, all);
       const killed = mutant.status === 'Killed';
       const ids = killed ? mutant.killedBy : covering;
       const fallback = killed ? covering : [];

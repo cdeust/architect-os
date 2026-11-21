@@ -16,6 +16,34 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     And the gate configuration declares the replay
     And the gate mutation report is the fixture "survivor"
 
+  Scenario Outline: the replay refuses an invalid scenario list before launching Cucumber
+    When the replay runner is given the following scenario list:
+      """
+      <locations>
+      """
+    Then the invalid replay selection creates no run artifacts
+
+    Examples:
+      | locations                                         |
+      | []                                                |
+      | ["specs/green.feature"]                           |
+      | ["specs/green.feature:4","specs/green.feature:4"] |
+      | ["specs/green.feature:4","specs/*.feature:4"]     |
+      | ["specs/../specs/green.feature:4"]                |
+      | ["/specs/green.feature:4"]                        |
+      | ["../specs/green.feature:4"]                      |
+      | ["-specs/green.feature:4"]                        |
+      | ["specs/@green.feature:4"]                        |
+      | ["specs/green.feature:0"]                         |
+      | ["specs/green.feature:04"]                        |
+      | ["specs/green.feature:٤"]                         |
+      | ["specs/green.feature:9007199254740992"]          |
+      | ["prefix:specs/green.feature:4"]                  |
+      | ["specs/green.feature:4suffix"]                   |
+
+  Scenario: replay admission rejects incomplete and duplicate scenario or mutant identities
+    Then the independent replay rejects a missing attempt, zero steps or duplicate native identity
+
   Scenario Outline: the instrumented runner can exercise each replay selection decision
     When the instrumented runner exercises the replay selector with "<variant>"
     Then the replay selector exits with <status> and authorizes execution <calls> times with "<diagnostic>"
@@ -23,6 +51,7 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     Examples:
       | variant        | status | calls | diagnostic                         |
       | success        | 0      | 1     | AOS_REPLAY_PLAN_VALID               |
+      | discovery      | 0      | 1     | AOS_REPLAY_PLAN_VALID              |
       | step failed    | 1      | 1     | AOS_REPLAY_PLAN_VALID               |
       | execution error | 1     | 1     | AOS_REPLAY_EXECUTION: Error: fixture execution failure |
       | missing format | 2      | 0     | rapport Messages de rejeu invalide |
@@ -51,7 +80,7 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     When the replay child fails after creating its Messages file
     Then the replay records the execution error from the child
 
-  Scenario Outline: runner result reflects the actual Messages stream and process exit
+  Scenario Outline: runner result reflects the actual Messages stream and process exit (<variant>)
     When the replay child returns "<variant>"
     Then the replay of the observed report records:
       """
@@ -61,6 +90,15 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     Examples:
       | variant                                 | result                                                                                                                                                                                               |
       | completed                               | {}                                                                                                                                                                                                   |
+      | single failure                          | {"badExit":true,"witness":"specs/green.feature:4"} |
+      | ordinary multiple failures              | {"badExit":true} |
+      | discovery failure                       | {"badExit":true,"witness":"specs/green.feature:4"} |
+      | unexpected failed scenario              | {"badExit":true,"selection":"scénario de rejeu inattendu : specs/second.feature:3"} |
+      | failed report without completion        | {"badExit":true,"incomplete":true} |
+      | failed report with unfinished attempt   | {"badExit":true} |
+      | failed report with retried attempt      | {"badExit":true} |
+      | failed report with noninitial attempt   | {"badExit":true} |
+      | failing step with successful exit       | {} |
       | missing scenario                        | {"selection":"scénario de rejeu manquant : specs/second.feature:3"}                                                                                                                                  |
       | unexpected scenario                     | {"selection":"scénario de rejeu inattendu : specs/second.feature:3"}                                                                                                                                 |
       | repeated scenario                       | {"selection":"scénario de rejeu inattendu : specs/green.feature:4"}                                                                                                                                  |
@@ -111,6 +149,14 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       src/math.mjs #0 : rejeu hors périmètre
       src/math.mjs #5 : rejeu hors périmètre
       """
+    And the gate replay record is absent
+    Given the gate repository file "reports/replay-shards/2/replay.json" reads:
+      """
+      {}
+      """
+    When the gate collects the mutation replay lots
+    Then the gate exits with 1
+    And the gate output includes "lot de rejeu 2 : rejeu des verdicts illisible : "
     And the gate replay record is absent
     Given the gate removes replay lot "2"
     When the gate collects the mutation replay lots
@@ -579,31 +625,6 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     When the replay runner runs "specs/green.feature:4" once within 20000 ms
     Then the replay refuses its scenario selection with "scénario de rejeu inattendu : specs/second.feature:3"
 
-  Scenario Outline: the replay refuses an invalid scenario list before launching Cucumber
-    When the replay runner is given the following scenario list:
-      """
-      <locations>
-      """
-    Then the invalid replay selection creates no run artifacts
-
-    Examples:
-      | locations                                         |
-      | []                                                |
-      | ["specs/green.feature"]                           |
-      | ["specs/green.feature:4","specs/green.feature:4"] |
-      | ["specs/green.feature:4","specs/*.feature:4"]     |
-      | ["specs/../specs/green.feature:4"]                |
-      | ["/specs/green.feature:4"]                        |
-      | ["../specs/green.feature:4"]                      |
-      | ["-specs/green.feature:4"]                        |
-      | ["specs/@green.feature:4"]                        |
-      | ["specs/green.feature:0"]                         |
-      | ["specs/green.feature:04"]                        |
-      | ["specs/green.feature:٤"]                         |
-      | ["specs/green.feature:9007199254740992"]          |
-      | ["prefix:specs/green.feature:4"]                  |
-      | ["specs/green.feature:4suffix"]                   |
-
   Scenario: a completed replay that skipped a selected scenario cannot confirm a kill
     Given the gate repository file "cucumber.mjs" reads:
       """
@@ -614,11 +635,17 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
     Then the replay refuses its scenario selection with "scénario de rejeu manquant : specs/green.feature:4"
 
   Scenario Outline: discovery only supplies a candidate for independent RuntimeError replay: <kind>
-    When independent runtime replay tries a <kind> failure
+    When independent runtime replay tries a "<kind>" failure
     Then the runtime proof used <processes> separate processes and <singletons> singleton reports
 
     Examples:
       | kind    | processes | singletons |
+      | passing-hook  | 3         | 2          |
+      | passing-global-hook | 3   | 2          |
+      | after-failure | 3         | 0          |
+      | disabled      | 2         | 0          |
+      | ordinary-kill | 2         | 0          |
+      | run-only      | 2         | 0          |
       | step    | 3         | 2          |
       | load    | 4         | 0          |
       | hook    | 3         | 0          |
@@ -626,6 +653,3 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
 
   Scenario: discovery requires the same original scenario and Gherkin failure step
     Then discovery cannot substitute another original identity or failing step
-
-  Scenario: replay admission rejects incomplete and duplicate scenario or mutant identities
-    Then the independent replay rejects a missing attempt, zero steps or duplicate native identity

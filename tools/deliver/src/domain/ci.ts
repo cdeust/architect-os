@@ -22,19 +22,16 @@ export function ciState(
     if (job === undefined) return 'failed';
     const group = Object.hasOwn(dependencies, name) ? dependencies[name] : undefined;
     if (group !== undefined) {
-      let missingRunner = false;
+      let producerDidNotSucceed = false;
       for (const producer of group.producers) {
         const upstream = uniqueJob(producer);
         if (upstream === undefined || upstream.failedStep) return 'failed';
-        if (upstream.conclusion !== 'success') {
-          if (upstream.hadRunner) return 'failed';
-          missingRunner = true;
-        }
+        producerDidNotSucceed ||= upstream.conclusion !== 'success';
         jobs.push(upstream);
       }
-      if (job.conclusion === 'success' && (missingRunner || job.failedStep)) return 'failed';
+      if (job.conclusion === 'success' && (producerDidNotSucceed || job.failedStep)) return 'failed';
       if (
-        missingRunner &&
+        producerDidNotSucceed &&
         job.hadRunner &&
         job.conclusion === 'failure' &&
         job.failedStep &&

@@ -352,6 +352,18 @@ Feature: The inventory projects native mutants onto changed production lines
     When the gate inventories the mutation scope
     Then the mutation inventory is refused
 
+  Scenario: an inventory command with unreadable debt removes the previous inventory
+    Given a gate repository
+    And the gate head is committed
+    And the gate repository file "reports/mutation-inventory.json" reads:
+      """
+      {"previous":true}
+      """
+    And the debt registry is unreadable in the "working tree"
+    When the gate inventories the mutation scope
+    Then the mutation inventory is refused
+    And the gate output includes "registre de dette illisible"
+
   Scenario: an ignored native mutant retains its reason for future scope validation
     Given a gate repository
     And the gate repository file "src/scoped.mjs" reads:
@@ -488,3 +500,10 @@ Feature: The inventory projects native mutants onto changed production lines
     And the gate mutation fixture declares its independent mutation profile
     Then the aggregate rejects empty proofs, foreign coverage and conflicting source copies
     And the complete native union refuses missing identities and extra bookkeeping rows
+
+  Scenario: mutation inventory is refused for the macOS job
+    Given a gate repository
+    And the gate head is committed
+    When the gate runs with the arguments "inventory --job macos"
+    Then the gate exits with 1
+    And the gate output includes "le job ne prévoit pas de mutation"

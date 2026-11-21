@@ -346,12 +346,18 @@ When('the instrumented runner exercises the replay selector with {string}', asyn
       },
       async runCucumber(configuration) {
         called++;
+        assert.equal(
+          configuration.runtime.failFast,
+          variant === 'discovery',
+          'only discovery may stop early in an admitted selection',
+        );
         assert.deepEqual(configuration.formats.files, { [repo.path('reports/replay.ndjson')]: 'message' });
         if (variant === 'execution error') throw new Error('fixture execution failure');
         return { success: variant !== 'step failed', support: {} } as Awaited<ReturnType<typeof runCucumber>>;
       },
     },
     { cwd: repo.dir },
+    variant === 'discovery' ? true : undefined,
   );
   this.state['replaySelector'] = { status, called, diagnostics };
 });
@@ -406,7 +412,9 @@ When('the replay child fails after creating its Messages file', async function (
     repo.path('reports/replay'),
     pathToFileURL(repo.path(file)),
   );
-  this.state['timed'] = await runner.run(['specs/green.feature:4'], 600_000);
+  const run = runner.run(['specs/green.feature:4'], 600_000);
+  await assert.doesNotReject(run, 'a child execution error must be recorded as a structured result');
+  this.state['timed'] = await run;
 });
 
 Then('the replay records the execution error from the child', function () {
@@ -419,10 +427,15 @@ When('the replay child returns {string}', async function (variant: string) {
   const repo = repository(this);
   const one = ['specs/green.feature:4'];
   const both = [...one, 'specs/second.feature:3'];
-  const unexpected =
-    variant === 'unexpected scenario' || variant === 'torn report with an unexpected scenario';
+  const multiple = variant === 'ordinary multiple failures' || variant === 'discovery failure';
+  const unexpected = [
+    'unexpected scenario',
+    'unexpected failed scenario',
+    'torn report with an unexpected scenario',
+  ].includes(variant);
+  const failingStep = /fail(ure|ures|ing|ed)/.test(variant);
   const original = new CucumberRunner(repo.dir, 'replay', repo.path('reports/original'));
-  const witness = await original.run(unexpected ? both : one, 600_000);
+  const witness = await original.run(unexpected || multiple ? both : one, 600_000);
   assert.ok(!('failure' in witness.result.run), JSON.stringify(witness.result));
   assert.equal(witness.result.selectionFailure, undefined);
   assert.equal(witness.result.incomplete, undefined);
@@ -430,6 +443,37 @@ When('the replay child returns {string}', async function (variant: string) {
   const envelopes = repo.read('reports/original/run-1.ndjson').trimEnd().split('\n').map(parseEnvelope);
   const last = envelopes.at(-1)?.testRunFinished;
   assert.ok(last);
+  if (failingStep) {
+    const step = envelopes.findIndex(({ testStepFinished }) => testStepFinished !== undefined);
+    const finished = envelopes[step]?.testStepFinished;
+    assert.ok(finished);
+    envelopes[step] = {
+      testStepFinished: {
+        ...finished,
+        testStepResult: {
+          ...finished.testStepResult,
+          status: 'FAILED' as typeof finished.testStepResult.status,
+        },
+      },
+    };
+  }
+  if (variant === 'failed report with unfinished attempt') {
+    const finish = envelopes.findIndex(({ testCaseFinished }) => testCaseFinished !== undefined);
+    assert.notEqual(finish, -1);
+    envelopes.splice(finish, 1);
+  }
+  if (variant === 'failed report with retried attempt') {
+    const finish = envelopes.findIndex(({ testCaseFinished }) => testCaseFinished !== undefined);
+    const original = envelopes[finish]?.testCaseFinished;
+    assert.ok(original);
+    envelopes[finish] = { testCaseFinished: { ...original, willBeRetried: true } };
+  }
+  if (variant === 'failed report with noninitial attempt') {
+    const start = envelopes.findIndex(({ testCaseStarted }) => testCaseStarted !== undefined);
+    const original = envelopes[start]?.testCaseStarted;
+    assert.ok(original);
+    envelopes[start] = { testCaseStarted: { ...original, attempt: 1 } };
+  }
   if (variant === 'foreign terminal') {
     envelopes[envelopes.length - 1] = { testRunFinished: { ...last, testRunStartedId: 'foreign' } };
   }
@@ -449,14 +493,15 @@ When('the replay child returns {string}', async function (variant: string) {
   if (
     variant === 'unfinished report' ||
     variant === 'unfinished report missing a scenario' ||
+    variant === 'failed report without completion' ||
     variant === 'torn report with an unexpected scenario'
   )
     envelopes.pop();
   const text = envelopes.map((entry) => JSON.stringify(entry)).join('\n');
-  let expected = one;
+  let expected = multiple ? both : one;
   let report: string | null = text;
   let stderr = 'AOS_REPLAY_PLAN_VALID\n';
-  let status = 0;
+  let status = failingStep && variant !== 'failing step with successful exit' ? 1 : 0;
   switch (variant) {
     case 'missing scenario':
     case 'unfinished report missing a scenario':
@@ -513,11 +558,14 @@ When('the replay child returns {string}', async function (variant: string) {
     repo.path('reports/replay'),
     pathToFileURL(repo.path(selector)),
   );
-  this.state['timed'] = await runner.run(expected, 600_000);
+  const run =
+    variant === 'discovery failure' ? runner.discover(expected, 600_000) : runner.run(expected, 600_000);
+  await assert.doesNotReject(run, 'the runner must classify the observed process and Messages');
+  this.state['timed'] = await run;
 });
 
 Then('the replay of the observed report records:', function (text: string) {
-  const { result } = this.state['timed'] as Timed;
+  const { result, witness } = this.state['timed'] as Timed;
   assert.equal(result.timedOut, false);
   const failure = 'failure' in result.run ? result.run.failure : undefined;
   assert.deepEqual(
@@ -526,6 +574,7 @@ Then('the replay of the observed report records:', function (text: string) {
       ...(result.incomplete === undefined ? {} : { incomplete: result.incomplete }),
       ...(result.badExit === undefined ? {} : { badExit: result.badExit }),
       ...(failure === undefined ? {} : { failure }),
+      ...(Object.hasOwn(this.state['timed'] as Timed, 'witness') ? { witness: witness?.location } : {}),
     },
     JSON.parse(text),
   );
@@ -613,6 +662,7 @@ Then('the replay run passed within its limit', function () {
     ),
     ['PASSED'],
   );
+  assert.equal(Object.hasOwn(result, 'selectionFailure'), false);
 });
 
 Given('the gate repository holds a scenario that writes a megabyte to its standard output', function () {
@@ -849,7 +899,9 @@ Given('the gate mutation report mutated {string}', function (patterns: string) {
 When('the replay runner is given the following scenario list:', async function (text: string) {
   const repo = repository(this);
   const runner = new CucumberRunner(repo.dir, 'replay', repo.path('reports/replay'));
-  this.state['timed'] = await runner.run(JSON.parse(text) as string[], 600_000);
+  const run = runner.run(JSON.parse(text) as string[], 600_000);
+  await assert.doesNotReject(run, 'an invalid scenario list must be refused before starting a child');
+  this.state['timed'] = await run;
 });
 
 Then('the invalid replay selection creates no run artifacts', function () {
@@ -918,7 +970,7 @@ Then('the reported timeout is replayed with the precise bound and a fresh contro
   assert.equal(repo.read(candidate.file), candidate.source);
 });
 
-When('independent runtime replay tries a {word} failure', async function (kind: string) {
+When('independent runtime replay tries a {string} failure', async function (kind: string) {
   const repo = repository(this);
   const file = 'src/runtime-probe.mjs';
   const source =
@@ -947,13 +999,20 @@ When('independent runtime replay tries a {word} failure', async function (kind: 
       "Given('prior state is established', () => prime());\n" +
       "Given('the runtime probe is exercised', () => probe());\n" +
       "Given('the trailing scenario has no failure', () => {});\n" +
+      (kind === 'passing-global-hook'
+        ? "import { BeforeAll } from '@cucumber/cucumber';\nBeforeAll(() => {});\n"
+        : '') +
+      (kind === 'after-failure'
+        ? "import { After } from '@cucumber/cucumber';\nAfter(({pickle}) => { if (pickle.name === 'execute the observed step') probe(); });\n"
+        : '') +
+      (kind === 'passing-hook' ? "import { Before } from '@cucumber/cucumber';\nBefore(() => {});\n" : '') +
       (kind === 'hook'
         ? "import { Before } from '@cucumber/cucumber';\nBefore(({ pickle }) => { if (pickle.name === 'execute the observed step') probe(); });\n"
         : ''),
   );
   const replay: ReplayCase = {
     file,
-    mutant: { id: 'native', status: 'RuntimeError' } as MutantRecord,
+    mutant: { id: 'native', status: kind === 'ordinary-kill' ? 'Killed' : 'RuntimeError' } as MutantRecord,
     expectation: { survives: false },
     tests: Array.from({ length: 24 }, (_, index) => 'specs/runtime.feature:' + (2 + index * 2)),
     fallback: [],
@@ -962,14 +1021,12 @@ When('independent runtime replay tries a {word} failure', async function (kind: 
     problem: null,
   };
   const work = repo.path('reports/runtime-proof');
-  const found = await replayAll(
-    [replay],
-    new Workspace(repo.dir),
-    new CucumberRunner(repo.dir, 'replay', work),
-    600_000,
-    { discoverRuntimeErrors: true },
-  );
-  assert.deepEqual(found, [{ file, id: 'native', status: 'RuntimeError', divergence: null }]);
+  const cucumber = new CucumberRunner(repo.dir, 'replay', work);
+  const runner = kind === 'run-only' ? { run: cucumber.run.bind(cucumber) } : cucumber;
+  const found = await replayAll([replay], new Workspace(repo.dir), runner, 600_000, {
+    discoverRuntimeErrors: kind !== 'disabled',
+  });
+  assert.deepEqual(found, [{ file, id: 'native', status: replay.mutant.status, divergence: null }]);
   assert.equal(repo.read(file), source);
   this.state['runtime replay proof'] = { work };
 });
@@ -1024,6 +1081,11 @@ Then('discovery cannot substitute another original identity or failing step', as
   });
   for (const [control, found] of [
     [step('other pickle identity', name, 'PASSED'), witness],
+    [undefined, witness],
+    [step(pickle, name, 'FAILED'), witness],
+    [step(pickle, name, 'PASSED'), undefined],
+    [step(pickle, name, 'PASSED'), { ...witness, pickle: 'wrong reproduced pickle' }],
+    [step(pickle, name, 'PASSED'), { ...witness, location: tests[0] as string }],
     [step(pickle, 'step « a different original step »', 'PASSED'), witness],
     [step(pickle, name, 'PASSED'), { ...witness, name: 'step « a different failing step »' }],
     [step(pickle, name, 'PASSED'), { ...witness, step: 1 }],
@@ -1042,8 +1104,11 @@ Then('discovery cannot substitute another original identity or failing step', as
         async run(paths) {
           calls.push([...paths]);
           const isOriginal = repo.read(file) === source;
-          if (paths.length === 1 && isOriginal) return timed(control);
-          if (paths.length === 1) return { ...timed(step(pickle, found.name, 'FAILED')), witness: found };
+          if (paths.length === 1 && isOriginal) return control === undefined ? timed() : timed(control);
+          if (paths.length === 1) {
+            const observed = timed(step(pickle, found?.name ?? name, 'FAILED'));
+            return found === undefined ? observed : { ...observed, witness: found };
+          }
           return timed(
             step('prior scenario', 'step « prior »', 'PASSED'),
             step(pickle, name, isOriginal ? 'PASSED' : 'FAILED'),
@@ -1061,6 +1126,8 @@ Then('discovery cannot substitute another original identity or failing step', as
 
   const short = { ...replay, tests: tests.slice(0, 2) };
   const calls: string[][] = [];
+  const captured: { id: string; elapsedMs: number }[] = [];
+  const started = performance.now();
   const small = await replayAll(
     [short],
     new Workspace(repo.dir),
@@ -1077,8 +1144,17 @@ Then('discovery cannot substitute another original identity or failing step', as
       },
     },
     600_000,
-    { discoverRuntimeErrors: true },
+    {
+      discoverRuntimeErrors: true,
+      onTiming: (entry, elapsedMs) => captured.push({ id: entry.id, elapsedMs }),
+    },
   );
+  const elapsed = performance.now() - started;
+  assert.deepEqual(
+    captured.map(({ id }) => id),
+    ['native'],
+  );
+  assert.ok(captured.every(({ elapsedMs }) => elapsedMs >= 0 && elapsedMs <= elapsed));
   assert.deepEqual(calls, [short.tests, short.tests]);
   assert.equal(small[0]?.divergence, null);
   assert.equal(repo.read(file), source);
@@ -1110,8 +1186,10 @@ Then(
       [{ ...first, pickleSteps: 0 }, 'scénario sans step'],
     ] as const) {
       const malformed = { ...clean, run: { ...clean.run, pickles: [changed] } };
-      const verdict = judgeReplay(replay, 1, null, malformed);
-      assert.ok(verdict.divergence?.includes(reason), JSON.stringify(verdict));
+      assert.doesNotThrow(() => {
+        const verdict = judgeReplay(replay, 1, null, malformed);
+        assert.ok(verdict.divergence?.includes(reason), JSON.stringify(verdict));
+      }, 'malformed attempt must yield a structured divergence');
     }
     const record = {
       report: 'digest',

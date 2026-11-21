@@ -350,11 +350,16 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | [{"conclusion":"success"}]                | false  |
         | [{"name":"","conclusion":"success"}]      | false  |
 
-    Scenario: a job without steps has no failed step
+    Scenario Outline: a job without steps has no failed step
       Given a delivery forge of the gh adapter
       And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
-      And the gh forge answers the jobs of "7" with '{"jobs":[{"name":"gate-linux","conclusion":"success","runner_name":"r"}]}'
-      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 7, completed "yes", with the jobs '[{"name":"gate-linux","conclusion":"success","hadRunner":true,"failedStep":false}]'
+      And the gh forge answers the jobs of "7" with '{"jobs":[{"name":"gate-linux","conclusion":"success","runner_name":<runner>}]}'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 7, completed "yes", with the jobs '[{"name":"gate-linux","conclusion":"success","hadRunner":<observed>,"failedStep":false}]'
+
+      Examples:
+        | runner | observed |
+        | "r"    | true     |
+        | null   | false    |
 
     Scenario Outline: a step that failed is a failed step, one that did not is not
       Given a delivery forge of the gh adapter

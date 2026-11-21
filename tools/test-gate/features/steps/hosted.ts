@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { Instrumenter } from '@stryker-mutator/instrumenter';
 import { noopLogger } from '@stryker-mutator/util';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runHostedGate } from '../../src/infrastructure/hosted-gate.js';
 import { CONFIG_PATH } from '../../src/infrastructure/gate.js';
@@ -75,6 +75,56 @@ async function nativeFixture(repo: GateRepository, file: string, retirement: boo
   const catalogue = JSON.parse(readFileSync(join(FIXTURES, 'mutation/survivor.json'), 'utf8'));
   repo.write(file, JSON.stringify({ files, testFiles: catalogue.testFiles, config: { mutate: patterns } }));
 }
+
+When('the hosted collector receives a canary-only proof from each runner', async function () {
+  const repo = repository(this);
+  repo.write(HOSTED_COSTS, JSON.stringify({ files: {}, fallback: 1 }));
+  const file = 'zz/probe.mjs';
+  const digest = (value: string) => createHash('sha256').update(value).digest('hex');
+  const expected: string[] = [];
+  for (const lane of LANES) {
+    const inventory = await command(repo, 'inventory', String(lane));
+    assert.equal(inventory.status, 0, inventory.output);
+    await nativeFixture(repo, NATIVE, false);
+    const manifest = repo.read(MANIFEST);
+    const report = repo.read(NATIVE);
+    const native = JSON.parse(report).files[file].mutants as { id: string; status: string }[];
+    assert.ok(native.length > 0);
+    assert.ok(native.every(({ status }) => status === 'Survived'));
+    const producer = 'canary proof from runner ' + lane;
+    const directory = 'reports/mutation-shards/' + lane + '/';
+    repo.write(directory + 'mutation-inventory.json', manifest);
+    repo.write(directory + 'mutation/native.json', report);
+    repo.write(directory + 'producer', producer);
+    const mutants = native.map(({ id, status }) => ({ file, id, status, divergence: null }));
+    repo.write(
+      'reports/replay-shards/' + lane + '/replay.json',
+      JSON.stringify({
+        producer: digest(producer),
+        manifest: digest(manifest),
+        record: { report: digest(report), mutants },
+      }),
+    );
+    expected.push(...mutants.map(({ id }) => lane + '/' + id));
+  }
+  this.state['qualified canary ids'] = expected.sort();
+});
+
+Then('the hosted collector preserves all canary-qualified IDs exactly once', async function () {
+  const repo = repository(this);
+  const collected = await command(repo, 'collect');
+  const expected = this.state['qualified canary ids'] as string[];
+  assert.equal(collected.status, 0, collected.output);
+  assert.equal(
+    collected.output,
+    LANES.length + ' producteurs vérifiés, ' + expected.length + ' verdict(s) rejoué(s)\n',
+  );
+  const report = repo.read(aggregate);
+  const receipt = JSON.parse(repo.read('reports/mutation/replay.json'));
+  assert.equal(receipt.report, createHash('sha256').update(report).digest('hex'));
+  assert.deepEqual(Object.keys(JSON.parse(report).files), ['zz/probe.mjs']);
+  assert.deepEqual(receipt.mutants.map(({ id }: { id: string }) => id).sort(), expected);
+});
 
 When('the hosted mutation chains complete independently in {string} mode', async function (mode: string) {
   const repo = repository(this);
@@ -214,6 +264,14 @@ Then('the retirement retains whole-file proof and replays only the canary', asyn
   assert.equal(collected.status, 0, collected.output);
   const combined = JSON.parse(repo.read(aggregate));
   assert.ok(combined.files['src/math.mjs'].mutants.length > 1);
+  assert.deepEqual(
+    combined.gateNativeScope.find(({ file }: { file: string }) => file === 'src/math.mjs'),
+    {
+      file: 'src/math.mjs',
+      whole: true,
+      lines: [],
+    },
+  );
   assert.ok(
     combined.gateNativeScope.some(
       ({ file, whole }: { file: string; whole: boolean }) => file === 'src/math.mjs' && whole,
@@ -387,6 +445,20 @@ Then('hosted admission preserves unrelated receipts and rejects invalid lane arg
   const unplanned = await invoke('verify', '10');
   assert.equal(unplanned.status, 1, unplanned.output);
   assert.match(unplanned.output, /inventaire différent du périmètre courant pour le lot 10/);
+  const cost = repo.read(HOSTED_COSTS);
+  writeFileSync(
+    repo.path(HOSTED_COSTS),
+    Buffer.concat([
+      Buffer.from('{"fallback":1,"files":{},"reference":"'),
+      Buffer.from([255]),
+      Buffer.from('"}'),
+    ]),
+  );
+  const invalidEncoding = await invoke('inventory', '10');
+  assert.equal(invalidEncoding.status, 1, invalidEncoding.output);
+  assert.match(invalidEncoding.output, /utf-8/i);
+  assert.equal(repo.exists(MANIFEST), false);
+  repo.write(HOSTED_COSTS, cost);
   const valid = await invoke('inventory', '10');
   assert.equal(valid.status, 0, valid.output);
   assert.equal(JSON.parse(repo.read(MANIFEST)).lane, 10);
