@@ -169,6 +169,19 @@ export function bindSessionWorkspace(
   }
 }
 
+export function bindFrozenLauncher(settings: SrtSettings, run: string, launcher: string): void {
+  const frozen = realpathSync(launcher);
+  if (
+    frozen !== launcher ||
+    dirname(frozen) !== join(run, 'tmp') ||
+    !/^aos-launcher-[a-zA-Z0-9]{6}$/.test(basename(frozen))
+  )
+    throw unavailable('invalid frozen launcher location');
+  assertTrusted(settings, [frozen]);
+  const fs = settings.filesystem;
+  fs.allowRead = [...(fs.allowRead ?? []), frozen];
+}
+
 export class SrtSandboxRunner implements SandboxRunner {
   constructor(private readonly options: SrtRunnerOptions) {}
 
@@ -251,18 +264,7 @@ export class SrtSandboxRunner implements SandboxRunner {
       };
       const profile = resolveProfile(template, vars);
       bindSessionWorkspace(profile.settings, wt, o.runtimeRoot, o.runDir, dirname(dir));
-      if (o.frozenLauncher !== undefined) {
-        const frozen = realpathSync(o.frozenLauncher);
-        if (
-          frozen !== o.frozenLauncher ||
-          dirname(frozen) !== join(o.runDir, 'tmp') ||
-          !/^aos-launcher-[a-zA-Z0-9]{6}$/.test(basename(frozen))
-        )
-          throw unavailable('invalid frozen launcher location');
-        assertTrusted(profile.settings, [frozen]);
-        const fs = profile.settings.filesystem;
-        fs.allowRead = [...(fs.allowRead ?? []), frozen];
-      }
+      if (o.frozenLauncher !== undefined) bindFrozenLauncher(profile.settings, o.runDir, o.frozenLauncher);
       for (const [file, content] of Object.entries(profile.files)) {
         mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
         writeFileSync(file, `${JSON.stringify(content, null, 2)}\n`, { mode: 0o600 });

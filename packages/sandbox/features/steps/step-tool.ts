@@ -5,14 +5,16 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  realpathSync,
   readFileSync,
   rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import os, { tmpdir } from 'node:os';
+import { syncBuiltinESMExports } from 'node:module';
+import { dirname, join } from 'node:path';
 import { mock } from 'node:test';
 import { createHash } from 'node:crypto';
 import { PassThrough } from 'node:stream';
@@ -23,14 +25,21 @@ import {
   type CodeToolDependencies,
 } from '../../src/code-tool.js';
 import { SandboxError } from '../../src/port.js';
-import { freezeStepLauncher, requireStepAdmission } from '../../src/step-admission.js';
+import {
+  freezeStepLauncher,
+  requireStepAdmission,
+  stepAdmissionAuthority,
+} from '../../src/step-admission.js';
 import { admittedFixture } from './admission-fixture.js';
 import { factsJsonSchema } from '../../src/scout-facts.js';
 import { stepRecordSchema } from '../../src/step-record.js';
 import { stepsFolder } from '../../src/steps-folder.js';
+import { repoOf } from './runner.js';
+import { parseStepFile } from '../../src/step-file.js';
 import type { TreeFingerprint } from '../../src/tree-fingerprint.js';
 import {
   codeToolSession,
+  launcherFiles,
   runStep,
   stepDependencies,
   toolDependencies,
@@ -1078,11 +1087,97 @@ Then('native launch reads the frozen launcher even after the original changes', 
     assert.equal(readFileSync(native.systemPrompt(), 'utf8'), 'Reviewed system prompt');
     const options = srtOptions(process, {}, frozen.dir);
     assert.equal(readFileSync(join(options.profilesDir, 'builder.json'), 'utf8'), 'Reviewed profile bytes');
-    assert.ok(options.trusted.includes(frozen.dir));
+    const manifest = join(PKG, '..', '..', 'package.json');
+    assert.deepEqual(options.trusted, [PKG, frozen.dir, manifest, stepAdmissionAuthority()]);
+    assert.deepEqual(srtOptions(process, {}).trusted, [PKG, manifest]);
     assert.equal(options.frozenLauncher, frozen.dir);
     assert.equal(srtOptions(process, {}).frozenLauncher, undefined);
   } finally {
     frozen.dispose();
     rmSync(target, { recursive: true });
+  }
+});
+
+Then('the standalone code entry writes only its required Step diagnostic', async function () {
+  const before = process.exitCode;
+  let err = '';
+  const write = mock.method(process.stderr, 'write', (chunk: string) => {
+    err += chunk;
+    return true;
+  });
+  try {
+    await import('../../src/code.js');
+    assert.equal(process.exitCode, 2);
+    assert.equal(err, 'architect-os code: STEP_ADMISSION_REQUIRED. Start the approved Step instead.\n');
+  } finally {
+    write.mock.restore();
+    process.exitCode = before;
+  }
+});
+
+Then('an isolated Step host binds its fixture receipt and releases the snapshot', async function () {
+  const { worktree } = repoOf(this);
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'step-host-fixture-')));
+  this.cleanups.push(() => rmSync(home, { recursive: true, force: true }));
+  const user = os.userInfo();
+  const info = mock.method(os, 'userInfo', () => ({ ...user, homedir: home }));
+  syncBuiltinESMExports();
+  try {
+    const authority = stepAdmissionAuthority();
+    mkdirSync(authority, { recursive: true, mode: 0o700 });
+    const receipt = join(authority, 'fixture.json');
+    const proc = {
+      ...process,
+      env: { ...process.env, INIT_CWD: worktree, ARCHITECT_OS_STEP_EVIDENCE: receipt },
+      cwd: () => worktree,
+      argv: [],
+      stderr: new PassThrough(),
+      stdout: new PassThrough(),
+      stdin: new PassThrough(),
+    };
+    const deps = stepDependencies(proc);
+    const request = () => deps.session('never-launch.json' as ToolFile, [], '', 1, () => {});
+    await assert.rejects(request, { message: 'STEP_ADMISSION_REQUIRED' });
+    deps.dispose!();
+    const step = parseStepFile({ build: { model: 'fixture', effort: 'low', limitSeconds: 1 }, reviews: [] });
+    const subject = {
+      name: 'fixture',
+      worktree,
+      step,
+      tree: deps.fingerprint(),
+      inputs: { 'brief.md': 'Fixture only.', 'step.json': JSON.stringify(step) },
+      launcher: launcherFiles(deps.readLauncher, step),
+    };
+    const witness = admittedFixture(subject);
+    writeFileSync(receipt, JSON.stringify(witness), { mode: 0o600 });
+    const original = new Set(readdirSync(tmpdir()));
+    assert.equal(deps.admit(subject), witness.approved_sha256);
+    let frozen: string | undefined;
+    try {
+      await assert.rejects(request, (error: NodeJS.ErrnoException) => {
+        assert.equal(error.code, 'ENOENT');
+        frozen = dirname(error.path!);
+        assert.equal(dirname(frozen), realpathSync(tmpdir()));
+        assert.ok(!original.has(frozen.split('/').at(-1)!));
+        assert.equal(readFileSync(join(frozen, 'code.json'), 'utf8'), subject.launcher['code.json']);
+        return true;
+      });
+    } finally {
+      deps.dispose!();
+    }
+    assert.ok(frozen);
+    assert.equal(existsSync(frozen), false);
+    let released = 0;
+    await runStep({
+      ...deps,
+      folderArguments: [],
+      dispose: () => {
+        released++;
+      },
+    });
+    assert.equal(released, 1);
+  } finally {
+    info.mock.restore();
+    syncBuiltinESMExports();
   }
 });

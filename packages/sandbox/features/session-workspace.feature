@@ -30,3 +30,6 @@ Feature: Only the intended checkout and session are reopened beneath a runtime
 
   Scenario: The public host template vocabulary includes the admitted runtime
     Then the public host template variables identify the runtime and session locations
+
+  Scenario: Frozen launchers reopen exactly one physical read-only path
+    Then frozen launcher binding keeps existing reads and rejects unsafe paths

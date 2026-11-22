@@ -2,6 +2,12 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
   `npm run step -- <folder>` plays the build session with the brief, then the reviews of the step, several at the
   same time, and leaves in the folder what a third party needs. step.ts only hands it the process; everything it does is here.
 
+  Scenario: The public code entry refuses even within a runtime allocation
+    Then the standalone code entry writes only its required Step diagnostic
+
+  Scenario: The native Step host releases its admitted launcher
+    Then an isolated Step host binds its fixture receipt and releases the snapshot
+
   Rule: refusals come before any session, with exit code 2 and one line on stderr
 
     Scenario Outline: missing, stale or unsuccessful evidence refuses before any Builder session
