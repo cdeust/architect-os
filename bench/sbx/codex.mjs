@@ -2,25 +2,18 @@
 // The Linux tarball is @openai/codex@0.170.0-linux-arm64 from the npm registry.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { requireAdmittedRun } from '../../packages/sandbox/src/runtime-context.ts';
+import { codexGuest, installCodex, verifyArchive } from './codex-client.mjs';
 import { withOfflineSbx } from './runtime.mjs';
 import { createWitness, readWitness } from './witness.mjs';
 
-const expectedArchive =
-  'mJLm5eia/GcukCrRfVEnYVD5dOXGE7cmpd9dJ/ixkSiKifzDAPaGq83ZEmwVhk3PxbdTPUSLRpnXZQKbNS5HoA==';
 const expectedMarker = 'architect-os-sbx-b0\n';
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 async function run(archive) {
-  if (!archive) throw new Error('expected the pinned Codex Linux ARM64 npm tarball');
-  const digest = createHash('sha512');
-  for await (const bytes of createReadStream(archive)) digest.update(bytes);
-  assert.equal(digest.digest('base64'), expectedArchive, 'unexpected Codex archive digest');
-  const guest = fileURLToPath(new URL('./codex-guest.py', import.meta.url));
+  await verifyArchive(archive);
   const start = performance.now();
   await using resources = new AsyncDisposableStack();
   let witness;
@@ -38,19 +31,8 @@ async function run(archive) {
       },
     },
     async ({ workspace, copyIn, exec }) => {
-      await copyIn(archive, '/tmp/aos-b0-codex.tgz');
-      await copyIn(guest, '/tmp/aos-b0-codex-guest.py');
-      const argv = [
-        '/usr/bin/env',
-        '-i',
-        'PATH=/usr/bin:/bin',
-        'LANG=C.UTF-8',
-        '/usr/bin/python3',
-        '/tmp/aos-b0-codex-guest.py',
-      ];
-      const setup = await exec([...argv, 'install'], { user: '0:0' });
-      if (setup.code !== 0) throw new Error('Codex fixture installation failed');
-      const result = await exec([...argv, 'probe'], { user: '65534:65534', cwd: workspace });
+      await installCodex({ copyIn, exec }, archive);
+      const result = await exec(codexGuest('probe'), { user: '65534:65534', cwd: workspace });
       if (result.code !== 0) throw new Error('Codex fixture failed');
       const receipt = JSON.parse(result.stdout);
       assert.equal(receipt.client_version, 'codex-cli 0.170.0');

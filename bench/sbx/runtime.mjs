@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { requireAdmittedRun } from '../../packages/sandbox/src/runtime-context.ts';
 
 import isolation from './isolation.json' with { type: 'json' };
+import { exchangeFrames } from './exchange.mjs';
 import { runOfflineProbe } from './lifecycle.mjs';
 
 const kit = isolation.shellImage;
@@ -168,6 +169,15 @@ export async function withOfflineSbx({ limitMs, prepare, verify }, use) {
           limitMs,
           input,
         );
+      },
+      execExchange(args, initialObject, onRequest) {
+        const { HOME, PATH, TMPDIR } = process.env;
+        const child = spawn(
+          'sbx',
+          ['--no-input', 'exec', '-i', '--user', '65534:65534', '-w', workspace, '--', name, ...args],
+          { env: { HOME, PATH, TMPDIR }, stdio: ['pipe', 'pipe', 'pipe'] },
+        );
+        return exchangeFrames(child, initialObject, onRequest, limitMs);
       },
     });
   }

@@ -71,3 +71,12 @@ The native macOS sandbox runs inside the admitted temporary directory. The real 
 The five 1b profiles passed the real macOS session-location probes on an admitted workstation. The native runner Stryker scope recorded 48 killed and two runtime errors; the Step scope killed all 83 mutants. The host journal and admission adapter suites rejected all 165 and 77 instrumenter substitutions respectively. The [hosted Linux and macOS functional checks](https://github.com/cdeust/architect-os/actions/runs/44960509640) passed 4,126 scenarios and 99 scenarios respectively on fa05f48f. The hosted mutation campaign killed both former 0400 settings-file mutants and exposed two assertion gaps. Those checks are now covered; the current [PR](https://github.com/cdeust/architect-os/pull/120) tracks the final full Gate and independent replay.
 
 The [milestone 2 integration](https://github.com/cdeust/architect-os/pull/124) exercises a real full Linux Gate on a disposable checkout. The same admission plans, publishes the checked commit, preserves it on a new plan and revokes it on a red check. Local interruption and recovery tests include aliases, a different runtime root, a damaged recovery record, worktree edits and a trusted external issuer. The hosted 16-lane verdict remains open.
+
+## SBX host-mediated native turn
+
+- [x] Add a single text challenge over the verified offline VM's process pipes, with bounded messages, model binding and independent host/guest receipt comparison.
+- [x] Run the pinned Codex native fixture, the existing write witness and the Google refusal through the admitted workstation launcher.
+- [ ] Verify one tool-free Astra subscription inference and its billing on a separately consented host route.
+- [ ] Qualify a production Builder and independent review through the admitted Step.
+
+The admitted workstation reproduced the write witness, one read-only host fixture turn with matching synthetic usage (8 input, 4 output), and the Google ACP refusal (-32000, process exit 1). No subscription inference was made during these checks.
