@@ -54,8 +54,14 @@ export function preparePlan(sources: PlanSources, inputs: StepInputs) {
     )
       throw new Error('PLAN_REVIEW_EVIDENCE_MISMATCH');
   }
-  const covered = coveredProposal(handoff, candidate?.proposal ?? parsed);
-  const proposal = candidate?.proposal ?? covered;
+  const proposal = candidate?.proposal ?? coveredProposal(handoff, parsed);
+  // A reviewed Spec projection binds the Define sequence as written, including identifier bytes.
+  if (
+    candidate &&
+    (proposal.acceptance_ids.length !== handoff.acceptance.length ||
+      handoff.acceptance.some(({ id }, index) => id !== proposal.acceptance_ids[index]))
+  )
+    throw new Error('PLAN_COVERAGE_INVALID');
   // The model sees these strings as data in one JSON block. Only Step's host policy can select commands and models.
   const data = {
     run_id: handoff.run_id,

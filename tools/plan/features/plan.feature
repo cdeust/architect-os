@@ -162,3 +162,26 @@ Feature: Prepare and explicitly approve one step from Define v1
       | proposal |
       | null     |
       | true     |
+
+  Scenario Outline: Reviewed criteria must match the original Define sequence as written
+    Given a recorded delivery Plan input
+    And the proposal uses "<change>" criterion IDs
+    And the recorded proposal carries independent Define and Plan reviews
+    Then preparing the reviewed proposal refuses its coverage
+
+    Examples:
+      | change          |
+      | padded          |
+      | reordered       |
+      | extra trailing  |
+
+  Scenario Outline: Legacy unreviewed input still supports unordered, trimmed criterion IDs
+    Given a recorded delivery Plan input
+    And the proposal uses "<change>" criterion IDs
+    When I prepare the Plan once
+    Then the prepared Plan contains the normalized criteria in the supplied order
+
+    Examples:
+      | change    |
+      | padded    |
+      | reordered |

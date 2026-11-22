@@ -582,3 +582,43 @@ Then('Plan reports a schema error for the JSON primitive {string}', function (th
     name: 'ZodError',
   });
 });
+
+Given('the proposal uses {string} criterion IDs', function (this: World, change: string) {
+  const item = scenario(this),
+    proposal = load(item.proposal);
+  switch (change) {
+    case 'padded':
+      proposal.acceptance_ids[0] = ' ' + proposal.acceptance_ids[0] + ' ';
+      break;
+    case 'reordered':
+      proposal.acceptance_ids.reverse();
+      break;
+    case 'extra trailing':
+      proposal.acceptance_ids.push('AC-099');
+      break;
+    default:
+      assert.fail(change);
+  }
+  json(item.proposal, proposal);
+});
+
+Then('preparing the reviewed proposal refuses its coverage', function (this: World) {
+  const item = scenario(this),
+    define = readFileSync(item.define, 'utf8'),
+    proposal = readFileSync(item.proposal, 'utf8'),
+    policy = readFileSync(item.policy, 'utf8');
+  assert.throws(() => preparePlan({ define, proposal, policy }, readStepInputs(policy)), {
+    message: 'PLAN_COVERAGE_INVALID',
+  });
+});
+
+Then('the prepared Plan contains the normalized criteria in the supplied order', function (this: World) {
+  const item = scenario(this);
+  assert.equal(item.result?.code, 0);
+  const brief = item.preview!.files['brief.md']!;
+  const data = JSON.parse(brief.split('```json\n')[1]!.split('\n```')[0]!);
+  assert.deepEqual(
+    data.acceptance_ids,
+    load(item.proposal).acceptance_ids.map((id: string) => id.trim()),
+  );
+});
