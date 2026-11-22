@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { requireAdmittedRun } from '../../packages/sandbox/src/runtime-context.ts';
 
 import isolation from './isolation.json' with { type: 'json' };
-import { exchangeFrames, pipeLimit } from './exchange.mjs';
+import { exchangeFrames } from './exchange.mjs';
+import { frameByteLimit as pipeLimit } from './json-frame.mjs';
 import { runOfflineProbe, stopOwnedVm, useUntilInterrupted, withProbeSignals } from './lifecycle.mjs';
 
 const kit = isolation.shellImage;

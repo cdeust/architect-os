@@ -70,7 +70,14 @@ export function fixtureResponse(challenge) {
   return {
     model,
     status: 'completed',
-    output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: challenge }] }],
-    usage: { input_tokens: 8, output_tokens: 4 },
+    output: [
+      {
+        type: 'message',
+        role: 'assistant',
+        status: 'completed',
+        content: [{ type: 'output_text', text: challenge }],
+      },
+    ],
+    usage: { input_tokens: 8, output_tokens: 4, total_tokens: 12 },
   };
 }

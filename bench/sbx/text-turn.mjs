@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { requireAdmittedRun } from '../../packages/sandbox/src/runtime-context.ts';
 import { clientSha256, clientVersion, codexGuest, installCodex, verifyArchive } from './codex-client.mjs';
+import { parseResponse } from './subscription-stream.mjs';
 import { withOfflineSbx } from './runtime.mjs';
 import { fixtureResponse, model, nativeTextStream, verifiedText } from './text-response.mjs';
 
@@ -75,7 +76,16 @@ export async function runHostedTurn(archive, requestText) {
 export async function runFixtureTurn(archive) {
   requireAdmittedRun();
   await verifyArchive(archive);
-  return turn(archive, 'fixture', ({ challenge }) => fixtureResponse(challenge));
+  return turn(archive, 'fixture', ({ prompt, challenge }) => {
+    const id = 'resp_fixture';
+    const events = [
+      { type: 'response.created', response: { id, model, status: 'in_progress' } },
+      { type: 'response.metadata', response_id: id, headers: { 'openai-model': model } },
+      { type: 'response.completed', response: { id, ...fixtureResponse(challenge) } },
+    ];
+    const wire = events.map((event) => 'data: ' + JSON.stringify(event) + '\n\n').join('');
+    return parseResponse(wire, challenge, Buffer.byteLength(prompt));
+  });
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

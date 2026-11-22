@@ -26,7 +26,7 @@ Run repository commands through `./aos -- PROGRAM [ARG ...]`. Admission checks t
 
 Read the loop from phase 1 through phase 8 in the diagram. Each row names its owner and groups its available capabilities and planned extensions. [Open the full-size diagram](docs/diagrams/architecture.svg).
 
-**Builder qualification.** Step uses Claude Code under SRT. In the [native SBX bench](bench/sbx/README.md), Codex wrote a witness file and completed a separate read-only text turn through the host. The host and client agreed on the fixture’s token counts. Gemini (agy) initialized, then exited 1 when session creation was refused. The Astra subscription trial found the model and sent one request. The account owner confirmed the quota was exhausted. The host recorded a stream refusal before native completion, with no token or cost receipt. Production integration and independent review remain open.
+**Builder qualification.** Step uses Claude Code under SRT. In the [native SBX bench](bench/sbx/README.md), Codex wrote a witness file and completed a separate read-only text turn through the host. The host and client agreed on the fixture’s token counts. Gemini (agy) initialized, then exited 1 when session creation was refused. Two separately authorized Astra subscription trials found the model and each sent one request. The account owner confirmed quota exhaustion for the first. During the second, the host refused a `response.metadata` event after the stream opened. The corrected decoder passed a native offline replay with informational metadata. Neither trial produced a native completion, token count or measured cost. Production integration and independent review remain open.
 
 ### One sandbox per session
 

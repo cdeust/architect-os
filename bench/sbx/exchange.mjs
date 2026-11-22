@@ -1,22 +1,6 @@
-// Preserve the bench's original execFile per-stream bound, including newlines.
-export const pipeLimit = 1024 * 1024;
-const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+import { frameByteLimit as pipeLimit, parseUniqueJson } from './json-frame.mjs';
 
-function parseFrame(bytes) {
-  const raw = utf8.decode(bytes);
-  let fields = 0;
-  const frame = JSON.parse(raw, (_key, value) => {
-    if (value && typeof value === 'object' && !Array.isArray(value)) fields += Object.keys(value).length;
-    return value;
-  });
-  // JSON.parse keeps only the last duplicate member. In valid JSON only member names
-  // have a colon after the string token. Every such token must survive decoding.
-  for (const token of raw.matchAll(/"(?:[^"\\]|\\.)*"\s*(:)?/gu)) {
-    if (token[1]) fields--;
-  }
-  if (fields !== 0) throw Error();
-  return frame;
-}
+const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 /** A single guest request and a final receipt on a pre-scoped SBX child. */
 export function exchangeFrames(child, initialObject, onRequest, limitMs, signal) {
@@ -100,7 +84,7 @@ export function exchangeFrames(child, initialObject, onRequest, limitMs, signal)
         if (end < 0) break;
         const newline = previous + end;
         try {
-          processFrame(parseFrame(buffer.subarray(frameStart, newline)));
+          processFrame(parseUniqueJson(utf8.decode(buffer.subarray(frameStart, newline))));
         } catch {
           return fail('PROTOCOL');
         }
