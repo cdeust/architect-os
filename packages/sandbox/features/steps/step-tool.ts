@@ -16,12 +16,19 @@ import { join } from 'node:path';
 import { mock } from 'node:test';
 import { createHash } from 'node:crypto';
 import { PassThrough } from 'node:stream';
-import type { CodeProcess, CodeToolDependencies } from '../../src/code-tool.js';
+import {
+  processDependencies,
+  srtOptions,
+  type CodeProcess,
+  type CodeToolDependencies,
+} from '../../src/code-tool.js';
 import { SandboxError } from '../../src/port.js';
+import { freezeStepLauncher, readStepAdmission, requireStepAdmission } from '../../src/step-admission.js';
+import { admittedFixture } from './admission-fixture.js';
 import { factsJsonSchema } from '../../src/scout-facts.js';
 import { stepRecordSchema } from '../../src/step-record.js';
 import { stepsFolder } from '../../src/steps-folder.js';
-import type { TreeFingerprint } from '../../src/tree-fingerprint.js';
+import { fingerprintTree, type TreeFingerprint } from '../../src/tree-fingerprint.js';
 import {
   codeToolSession,
   runStep,
@@ -79,6 +86,9 @@ const newPhase = (): Phase => ({
   runningWhenStarted: [],
 });
 interface Step {
+  refusedAdmission?: string;
+  planAdmission?: { path: string; target: string; authority: string };
+  acceptedAdmission?: string;
   folder: string;
   outputs: { retained: string; streams: string };
   calls: Call[];
@@ -394,8 +404,13 @@ const launcherFile =
   (s: Step) =>
   (file: string): string => {
     if (s.missing.has(file)) throw new Error(`missing launcher file ${file}`);
+    if (s.planAdmission) return readFileSync(join(PKG, file), 'utf8');
     return /^(code|review|scout)\.json$/.test(file) ? readFileSync(join(PKG, file), 'utf8') : `fixed:${file}`;
   };
+
+Given('the step has {string} admission evidence', function (reason: string) {
+  step(this).refusedAdmission = reason;
+});
 
 const start = (s: Step, args: string): Promise<void> => {
   const stdout = new PassThrough();
@@ -432,7 +447,7 @@ const start = (s: Step, args: string): Promise<void> => {
     date: () => s.date,
     root: () => {
       if (s.rootRefusal !== undefined) throw s.rootRefusal;
-      return '/the/worktree';
+      return s.planAdmission?.target ?? '/the/worktree';
     },
     fingerprint: () => {
       s.fingerprints++;
@@ -440,6 +455,28 @@ const start = (s: Step, args: string): Promise<void> => {
       return s.fingerprint;
     },
     readLauncher: launcherFile(s),
+    admit: (subject) => {
+      if (s.planAdmission) {
+        const { path, target, authority } = s.planAdmission;
+        s.acceptedAdmission = requireStepAdmission(readStepAdmission(path, target, authority), subject);
+        return s.acceptedAdmission;
+      }
+      const evidence = admittedFixture(subject);
+      if (s.refusedAdmission === 'missing') return requireStepAdmission(undefined, subject);
+      if (s.refusedAdmission === 'missing approval') {
+        const { approval: _approval, ...payload } = evidence.payload;
+        return requireStepAdmission({ ...evidence, payload }, subject);
+      }
+      if (s.refusedAdmission === 'stale') evidence.payload.inputs_sha256['brief.md'] = 'a'.repeat(64);
+      if (s.refusedAdmission === 'failed specimen') {
+        evidence.payload.specimens[0]!.results[0]!.observed = { verdict: 'refuse', findings: [] };
+        evidence.approved_sha256 = createHash('sha256')
+          .update(JSON.stringify(evidence.payload))
+          .digest('hex');
+      }
+      s.acceptedAdmission = requireStepAdmission(evidence, subject);
+      return s.acceptedAdmission;
+    },
     steps: {
       prepare: () => void s.prepared.push(s.calls.length),
       exists: (name) => s.taken.has(name),
@@ -942,21 +979,10 @@ When(
   },
 );
 
-Then(
-  'the real check of the step dependencies is refused by the real runner, before any process',
-  async function () {
-    const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
-    // The real runner loads the profile `checker` first (a wrong name is PROFILE_INVALID), then makes its folder (refused
-    // as ISOLATION_UNAVAILABLE where the temporary directory is too long for a Unix socket), then resolves the folder
-    // INIT_CWD names: a folder that is no worktree is NOT_A_WORKTREE, while `/elsewhere`, the cwd of the process, does not
-    // exist and would be a plain ENOENT. Either refusal is a SandboxError, before any process.
-    await assert.rejects(
-      () => deps.check(['true'], 1),
-      (error: unknown) =>
-        error instanceof SandboxError && ['NOT_A_WORKTREE', 'ISOLATION_UNAVAILABLE'].includes(error.code),
-    );
-  },
-);
+Then('the check port refuses to start a process without admitted launcher bytes', function () {
+  const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+  assert.throws(() => deps.check(['true'], 1), { message: 'STEP_ADMISSION_REQUIRED' });
+});
 Then(
   'the tool dependencies of a process for {string} describe the tool {string} in {string}',
   function (file: string, profile: string, cwd: string) {
@@ -1031,13 +1057,41 @@ Then('the step dependencies read the source {string} as undefined', function (pa
 });
 
 Given('the step uses the materialized Plan folder', function () {
-  step(this).folder = stored<string>(this, 'planFolder');
+  const s = step(this);
+  s.folder = stored<string>(this, 'planFolder');
+  s.planAdmission = stored<{ path: string; target: string; authority: string }>(this, 'planAdmission');
+  s.fingerprint = fingerprintTree(s.planAdmission.target);
 });
 
-Then('the Step record binds the two approved input files', function () {
-  const expected = stored<{ files_sha256: Record<string, string> }>(this, 'planManifest');
-  const archive = step(this).published.get('delivery');
+Then('the Step record binds the approved inputs and the original admission receipt', function () {
+  const expected = stored<{ step: string; files_sha256: Record<string, string> }>(this, 'planManifest');
+  const archive = step(this).published.get(expected.step);
   assert.ok(archive);
   const record = stepRecordSchema().parse(JSON.parse(archive['record.json']!));
   assert.deepEqual(record.inputs, expected.files_sha256);
+  const { path } = stored<{ path: string }>(this, 'planAdmission');
+  const approved = JSON.parse(readFileSync(path, 'utf8')) as { approved_sha256: string };
+  assert.equal(record.admission_sha256, approved.approved_sha256);
+});
+
+Then('native launch reads the frozen launcher even after the original changes', function () {
+  const target = mkdtempSync(join(tmpdir(), 'aos-freeze-target-'));
+  const original = {
+    'code.json': readFileSync(join(PKG, 'code.json'), 'utf8'),
+    'prompts/build.md': 'Reviewed system prompt',
+    'profiles/builder.json': 'Reviewed profile bytes',
+  };
+  const frozen = freezeStepLauncher(original, target);
+  try {
+    original['prompts/build.md'] = 'Modified system prompt';
+    original['profiles/builder.json'] = 'Modified profile bytes';
+    const native = processDependencies(process, () => false, 'code.json', frozen.dir);
+    assert.equal(readFileSync(native.systemPrompt(), 'utf8'), 'Reviewed system prompt');
+    const options = srtOptions(process, {}, frozen.dir);
+    assert.equal(readFileSync(join(options.profilesDir, 'builder.json'), 'utf8'), 'Reviewed profile bytes');
+    assert.ok(options.trusted.includes(frozen.dir));
+  } finally {
+    frozen.dispose();
+    rmSync(target, { recursive: true });
+  }
 });

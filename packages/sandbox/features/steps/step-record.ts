@@ -33,6 +33,7 @@ interface RecordStep {
   fingerprint: TreeFingerprint | Error;
   fingerprints: number;
   rootRefusal?: Error;
+  acceptedAdmission?: string;
   stdout: string;
   publication?: Error;
   rewrites: { file: string; content: string }[];
@@ -154,7 +155,10 @@ Then('the published record is JSON on two-space indentation with a final line br
 });
 
 Then('the published record, without its launcher, is:', function (expected: string) {
-  const { launcher, inputs, ...rest } = record(this);
+  const { launcher, inputs, admission_sha256, ...rest } = record(this);
+  const { acceptedAdmission } = step(this);
+  assert.match(admission_sha256, /^[a-f0-9]{64}$/);
+  assert.equal(admission_sha256, acceptedAdmission);
   assert.equal(typeof launcher, 'object');
   assert.deepEqual(Object.keys(inputs), ['brief.md', 'step.json', 'scout.files.md']);
   assert.deepEqual({ ...rest, inputs: 'the hashes' }, JSON.parse(expected));

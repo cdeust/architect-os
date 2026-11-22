@@ -41,6 +41,12 @@ import { buildRecord, isStepName, stepRecordSchema, type RecordedSession } from 
 import { reserveStepOutputs, type StepOutputs } from './step-outputs.js';
 import { stepsFolder, type StepsFolder } from './steps-folder.js';
 import { parseTool } from './tool.js';
+import {
+  freezeStepLauncher,
+  readStepAdmission,
+  requireStepAdmission,
+  type StepAdmissionSubject,
+} from './step-admission.js';
 import { fingerprintTree, type TreeFingerprint } from './tree-fingerprint.js';
 import { resolveWorktree } from './worktree.js';
 
@@ -80,6 +86,8 @@ export interface StepDependencies {
   readonly fingerprint: () => TreeFingerprint;
   /** Le texte d'un fichier du lanceur, chemin relatif à `packages/sandbox` ; lève s'il manque. */
   readonly readLauncher: (file: string) => string;
+  readonly admit: (subject: StepAdmissionSubject) => string;
+  readonly dispose?: () => void;
   /** Le dossier `steps/` du worktree. */
   readonly steps: StepsFolder;
   readonly stdout: Writable;
@@ -368,7 +376,10 @@ function recorded(
  * Les fichiers du lanceur dont l'étape dépend, par chemin relatif à `packages/sandbox` : le fichier de chaque outil
  * qu'elle emploie, avec le prompt et le profil qu'il nomme. Lus ici, avant toute session.
  */
-function launcherFiles(deps: StepDependencies, step: StepFile): Record<string, string> {
+export function launcherFiles(
+  readLauncher: StepDependencies['readLauncher'],
+  step: StepFile,
+): Record<string, string> {
   const tools: ToolFile[] = [
     'code.json',
     ...(step.reviews.length > 0 ? (['review.json'] as const) : []),
@@ -376,16 +387,16 @@ function launcherFiles(deps: StepDependencies, step: StepFile): Record<string, s
   ];
   const files = new Map<string, string>();
   for (const toolFile of tools) {
-    const text = deps.readLauncher(toolFile);
+    const text = readLauncher(toolFile);
     files.set(toolFile, text);
     const tool = parseTool(JSON.parse(text));
     for (const file of [tool.launcherPromptFile, `profiles/${tool.profile}.json`]) {
-      files.set(file, deps.readLauncher(file));
+      files.set(file, readLauncher(file));
     }
   }
   // Les contrôles tournent sous le profil `checker`, qu'aucun fichier d'outil ne nomme.
   const checker = 'profiles/checker.json';
-  if (step.checks.length > 0) files.set(checker, deps.readLauncher(checker));
+  if (step.checks.length > 0) files.set(checker, readLauncher(checker));
   return Object.fromEntries([...files.keys()].sort().map((file) => [file, files.get(file) as string]));
 }
 
@@ -400,10 +411,9 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     if (!isStepName(name))
       throw new Refusal(`le nom de l'étape doit suivre ^[a-z][a-z0-9-]{0,31}$ : ${name}`);
     if (deps.steps.exists(name)) throw new Refusal(`l'étape ${name} a déjà un dossier dans steps/`);
-    deps.steps.prepare();
     // Pris avant toute session, et les textes lus ici sont ceux que l'hôte publiera : jamais relus à la fin.
     const tree = deps.fingerprint();
-    const launcher = launcherFiles(deps, step);
+    const launcher = launcherFiles(deps.readLauncher, step);
     const startedAt = deps.date();
     const inputs = {
       'brief.md': brief,
@@ -412,6 +422,13 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         step.scouts.map(({ name: scout }, index) => [`scout.${scout}.md`, questions[index] as string]),
       ),
     };
+    let admission_sha256: string;
+    try {
+      admission_sha256 = deps.admit({ name, worktree, tree, inputs, step, launcher });
+    } catch {
+      throw new Refusal('STEP_ADMISSION_REQUIRED');
+    }
+    deps.steps.prepare();
     const outputs = deps.reserveOutputs(name, folder, worktree);
     const scoutOutcomes = await playBounded(step.scouts, step.parallel, (config, index) =>
       scout(deps, outputs, config, questions[index] as string),
@@ -488,6 +505,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     const code = built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 0 : 1;
     const record = buildRecord({
       step: name,
+      admission_sha256,
       startedAt,
       tree,
       inputs,
@@ -542,6 +560,8 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       return 2;
     }
     return failureReporter(deps.stderr, 'step')(error);
+  } finally {
+    deps.dispose?.();
   }
 }
 
@@ -663,6 +683,13 @@ function rootOf(cwd: string): string {
 export function stepDependencies(proc: CodeProcess): StepDependencies {
   const cwd = proc.env['INIT_CWD'] ?? proc.cwd();
   const root = (): string => rootOf(cwd);
+  const readLauncher = (file: string) => readFileSync(join(PKG, file), 'utf8');
+  let snapshot: ReturnType<typeof freezeStepLauncher> | undefined;
+  function admittedRoot() {
+    if (!snapshot) throw new Refusal('STEP_ADMISSION_REQUIRED');
+    return snapshot.dir;
+  }
+  const launch = codeToolSession((tool) => processDependencies(proc, isatty, tool, admittedRoot()));
   return {
     folderArguments: proc.argv.slice(2),
     readFile: (path) => (existsSync(path) && statSync(path).isFile() ? readText(path) : undefined),
@@ -677,13 +704,21 @@ export function stepDependencies(proc: CodeProcess): StepDependencies {
         closeSync(descriptor);
       }
     },
-    session: codeToolSession(toolDependencies(proc)),
-    check: sandboxCheck(new SrtSandboxRunner(srtOptions(proc, {})), cwd),
+    session: launch,
+    check: (...args) =>
+      sandboxCheck(new SrtSandboxRunner(srtOptions(proc, {}, admittedRoot())), cwd)(...args),
     now: () => Date.now(),
     date: () => new Date(),
     root,
     fingerprint: () => fingerprintTree(root()),
-    readLauncher: (file) => readFileSync(join(PKG, file), 'utf8'),
+    readLauncher,
+    admit: (subject) => {
+      const receipt = readStepAdmission(proc.env.ARCHITECT_OS_STEP_EVIDENCE, root());
+      const digest = requireStepAdmission(receipt, subject);
+      snapshot = freezeStepLauncher(subject.launcher, root());
+      return digest;
+    },
+    dispose: () => snapshot?.dispose(),
     steps: stepsFolder(root),
     stdout: proc.stdout,
     stderr: proc.stderr,
