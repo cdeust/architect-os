@@ -473,3 +473,54 @@ Then('the Plan publisher detects the invalid destination', function (this: World
     message: 'PLAN_DESTINATION_INVALID',
   });
 });
+
+Given('the recorded proposal carries independent Define and Plan reviews', function (this: World) {
+  const item = scenario(this);
+  const proposal = load(item.proposal);
+  const binding = {
+    version: 1,
+    run_id: load(item.define).handoff.run_id,
+    define_sha256: hash(readFileSync(item.define, 'utf8')),
+    proposal_sha256: hash(JSON.stringify(proposal) + '\n'),
+  };
+  const plan_sha256 = hash(JSON.stringify(binding) + '\n');
+  const drafter = { provider: 'openai', model: 'fixture-drafter' };
+  const reviewer = { provider: 'google', model: 'fixture-reviewer' };
+  const clear = { status: 'clear', citations: [] };
+  json(item.proposal, {
+    reviewed_plan: {
+      ...binding,
+      plan_sha256,
+      proposal,
+      drafter,
+      reviewer,
+      verdict: { plan_sha256, status: 'clear', findings: [] },
+    },
+    define_review: {
+      version: 1,
+      define_sha256: binding.define_sha256,
+      input_sha256: hash('Define fixture'),
+      drafter,
+      reviewer,
+      axes: { scope_creep: clear, missing_edge_case: clear },
+    },
+  });
+});
+
+When('the reviewed Plan bytes are changed after review', function (this: World) {
+  const item = scenario(this);
+  const receipt = load(item.proposal);
+  receipt.reviewed_plan.proposal.objective = 'A different plan.';
+  json(item.proposal, receipt);
+});
+
+Then('the Plan preview binds the complete review receipt', function (this: World) {
+  const item = scenario(this);
+  assert.equal(item.result?.code, 0);
+  assert.equal(item.preview?.status, 'pending');
+  assert.equal(
+    item.preview?.manifest.source_sha256['reviewed_plan'],
+    hash(readFileSync(item.proposal, 'utf8')),
+  );
+  assert.equal(existsSync(item.folder), false);
+});

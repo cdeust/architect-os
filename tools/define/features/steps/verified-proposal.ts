@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { runProposal } from '../../src/proposal.js';
 import { Then } from '@cucumber/cucumber';
-import { verifiedProposal } from '../../src/application/verified-proposal.js';
+import { reviewedProposal, verifiedProposal } from '../../src/application/verified-proposal.js';
 
 Then('the verified proposal with {string} yields {string}', async function (change: string, outcome: string) {
   const file = (v: unknown) => JSON.stringify(v) + '\n';
@@ -50,6 +50,37 @@ Then('the verified proposal with {string} yields {string}', async function (chan
     !['missing 0', 'missing 1', 'missing 2', 'missing 3', 'extra', 'refusal', 'transport'].includes(change)
   )
     assert.throws(consume);
+  const drafter = { provider: 'openai', model: 'fixture-author' };
+  const reviewer = { provider: 'google', model: 'fixture-reviewer' };
+  const axis = { status: 'clear', citations: [] };
+  const reviewed = {
+    reviewed_plan: {
+      ...plan,
+      drafter,
+      reviewer,
+      verdict: { plan_sha256: plan.plan_sha256, status: 'clear', findings: [] },
+    },
+    define_review: {
+      version: 1,
+      define_sha256: plan.define_sha256,
+      input_sha256: sha(define),
+      drafter,
+      reviewer,
+      axes: { scope_creep: axis, missing_edge_case: axis },
+    },
+  };
+  const consumeReviewed = () =>
+    reviewedProposal(
+      Buffer.from(define + (change === 'define bytes' ? '\n' : '')),
+      run,
+      change === 'step' ? 'different' : 'audit',
+      [{ type: 'text', text: file(reviewed) }],
+    );
+  if (outcome === 'accept') assert.equal(consumeReviewed(), file(reviewed));
+  else if (
+    !['missing 0', 'missing 1', 'missing 2', 'missing 3', 'extra', 'refusal', 'transport'].includes(change)
+  )
+    assert.throws(consumeReviewed);
   const root = mkdtempSync(join(tmpdir(), 'verified-proposal-'));
   try {
     const path = join(root, 'define');

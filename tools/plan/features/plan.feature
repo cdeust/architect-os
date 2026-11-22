@@ -120,3 +120,24 @@ Feature: Prepare and explicitly approve one step from Define v1
     When I prepare the Plan once
     And the Plan destination is "relative"
     Then the Plan publisher detects the invalid destination
+
+  Scenario: Preview the exact independently reviewed Spec Plan
+    Given a recorded delivery Plan input
+    And the recorded proposal carries independent Define and Plan reviews
+    When I prepare the Plan once
+    Then the Plan preview binds the complete review receipt
+
+  Scenario: Refuse a changed proposal despite its earlier independent review
+    Given a recorded delivery Plan input
+    And the recorded proposal carries independent Define and Plan reviews
+    When the reviewed Plan bytes are changed after review
+    And I prepare the Plan once
+    Then Plan refuses with "PLAN_INPUT_INVALID" and publishes nothing
+
+  Scenario: Operator approval alone cannot materialize the paired Spec Plan
+    Given a recorded delivery Plan input
+    And the recorded proposal carries independent Define and Plan reviews
+    When I prepare the Plan once
+    And the operator records an approval of the preview
+    And I materialize the Plan
+    Then Plan refuses with "PLAN_SPECIMEN_EVIDENCE_REQUIRED" and publishes nothing

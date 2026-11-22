@@ -8,3 +8,4 @@ export * from './modules.js';
 export * from './evidence.js';
 export * from './define.js';
 export * from './plan.js';
+export * from './spec-pipeline.js';
