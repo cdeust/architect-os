@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { readGateReceipt } from '@architect-os/sandbox/gate-receipt';
 import { repository } from '../../tools/test-gate/features/steps/repository.js';
 import { publishCheckedGate, runLocked } from '../../tools/test-gate/src/infrastructure/locked-command.js';
+import { HOSTED_COSTS } from '../../tools/test-gate/src/infrastructure/hosted-lots.js';
 import { GateConfigSchema } from '../../tools/test-gate/src/infrastructure/config.js';
 import { Workspace } from '../../tools/test-gate/src/infrastructure/workspace.js';
 import {
@@ -31,6 +32,12 @@ import {
   runGateWithLease,
 } from '../../tools/test-gate/src/infrastructure/tree-lease.js';
 import { ROOT, Then } from './helpers.js';
+
+// Preserve Node's native environment object. A spawn with no options inherits the OS environment.
+function installNativeEnvironment(env: NodeJS.ProcessEnv): void {
+  for (const name of Object.keys(process.env)) delete process.env[name];
+  Object.assign(process.env, env);
+}
 
 const sha = 'a'.repeat(40);
 const adapters: Record<string, () => unknown> = {
@@ -282,7 +289,7 @@ Then(
     assert.equal(readGateReceipt(root, repo.dir), checked);
     const formerArgv = process.argv;
     const former = process.cwd(),
-      env = process.env,
+      env = { ...process.env },
       fd = openSync(repo.dir, 'r');
     try {
       const owner = childProcess.spawnSync(
@@ -293,7 +300,14 @@ Then(
       assert.equal(owner.status, 0);
       process.chdir(repo.dir);
       process.argv = ['node', 'host', 'unrelated-parent-argument'];
-      process.env = { ...admission, AOS_GATE_LEASE_FD: String(fd) };
+      installNativeEnvironment({ ...admission, AOS_GATE_LEASE_FD: String(fd) });
+      // A failed lease forwarding still starts in this scenario's allocation.
+      assert.equal(
+        childProcess
+          .execFileSync(process.execPath, ['-p', 'process.env.ARCHITECT_OS_RUN_DIR'], { encoding: 'utf8' })
+          .trim(),
+        run,
+      );
       assert.equal(await runLocked('local', ['plan', '--job', 'linux']), 0);
       assert.equal(readGateReceipt(root, repo.dir), checked);
       assert.equal(await runLocked('local', ['check', '--job', 'linux']), 0);
@@ -317,7 +331,7 @@ Then(
       assert.equal(readGateReceipt(root, repo.dir), undefined);
     } finally {
       closeSync(fd);
-      process.env = env;
+      installNativeEnvironment(env);
       process.argv = formerArgv;
       process.chdir(former);
     }
@@ -355,4 +369,18 @@ Then('both public Gate entries propagate the native lease status and arguments',
     process.argv = previousArgs;
     process.exitCode = previousCode;
   }
+});
+
+Then('the actual hosted entrypoint passes its arguments into Gate', function () {
+  const repo = repository(this);
+  repo.write(HOSTED_COSTS, JSON.stringify({ files: {}, fallback: 1 }));
+  const env = repo.admittedEnvironment();
+  const command = childProcess.spawnSync(
+    process.execPath,
+    ['--import', import.meta.resolve('tsx'), join(ROOT, 'tools/test-gate/src/hosted.ts'), 'inventory', '1'],
+    { cwd: repo.dir, env, encoding: 'utf8' },
+  );
+  assert.equal(command.status, 0, command.stderr + command.stdout);
+  const manifest = join(env.ARCHITECT_OS_RUN_DIR!, 'reports/mutation-inventory.json');
+  assert.equal(JSON.parse(readFileSync(manifest, 'utf8')).lane, 1);
 });

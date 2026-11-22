@@ -202,7 +202,7 @@ Everything is in `baseline/`: tasks, harness, defect generator, raw data and ana
 
 ## Quick start
 
-Requires Node 26 LTS (`.nvmrc`) and npm. The sandbox scenarios need what srt needs: nothing more on macOS; `bubblewrap`, `socat` and `ripgrep` on Linux; on Windows, WSL2.
+Requires Node 26 LTS (`.nvmrc`) and npm. Gate also uses `/usr/bin/git` and the standard library of `/usr/bin/python3` (3.9 or newer) for the checkout lock and recovery. The sandbox scenarios need what srt needs: nothing more on macOS; `bubblewrap`, `socat` and `ripgrep` on Linux; on Windows, WSL2.
 
 Configure `ARCHITECT_OS_RUNTIME_ROOT` with the absolute path of an existing physical directory. Its installer marks it once with the environment (`workstation`, `hosted-runner` or `server`). For a newly provisioned workstation root:
 
@@ -220,6 +220,8 @@ nvm use
 ./aos -- npm run gate
 ./aos -- npm run deliver -- "$DELIVERY_NAME" --until ci  # pushes the trial branch and checks CI
 ```
+
+Run Gate from a committed worktree. Tracked edits stop startup, and untracked, unignored files prevent issuance of a delivery receipt. After an interrupted replay, use the original runtime root so Gate can restore its recorded change.
 
 Set `DELIVERY_NAME` to the trial name before running Deliver. To publish the same commit to the configured delivery branches after CI, repeat the command without `--until ci`.
 

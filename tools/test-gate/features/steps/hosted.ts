@@ -769,28 +769,6 @@ Then('hosted planning balances measured spans and contains only within the same 
   assert.equal(empty[0]?.lots[0]?.whole, true);
 });
 
-Then('the actual hosted entrypoint passes its arguments into Gate', async function () {
-  const repo = repository(this);
-  repo.write(HOSTED_COSTS, JSON.stringify({ files: {}, fallback: 1 }));
-  const initial = { cwd: process.cwd(), argv: process.argv, exitCode: process.exitCode, env: process.env };
-  const admitted = repo.admittedEnvironment();
-  const entry = new URL('../../src/hosted.ts', import.meta.url);
-  entry.searchParams.set('fixture', repo.dir);
-  try {
-    process.chdir(repo.dir);
-    process.env = { ...initial.env, ...admitted };
-    process.argv = [process.execPath, entry.pathname, 'inventory', '1'];
-    await import(entry.href);
-    assert.equal(process.exitCode, 0);
-    assert.equal(JSON.parse(readFileSync(join(admitted.ARCHITECT_OS_RUN_DIR!, MANIFEST), 'utf8')).lane, 1);
-  } finally {
-    process.env = initial.env;
-    process.chdir(initial.cwd);
-    process.argv = initial.argv;
-    process.exitCode = initial.exitCode;
-  }
-});
-
 Then('each hosted producer must match its committed inventory and canary', async function () {
   const repo = repository(this);
   const directory = 'reports/mutation-shards/1/';
