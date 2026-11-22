@@ -80,7 +80,10 @@ Then('the verified proposal with {string} yields {string}', async function (chan
   else if (
     !['missing 0', 'missing 1', 'missing 2', 'missing 3', 'extra', 'refusal', 'transport'].includes(change)
   )
-    assert.throws(consumeReviewed);
+    assert.throws(
+      consumeReviewed,
+      change === 'unknown field' ? { name: 'ZodError' } : { message: 'PLAN_REVIEW_EVIDENCE_MISMATCH' },
+    );
   const root = mkdtempSync(join(tmpdir(), 'verified-proposal-'));
   try {
     const path = join(root, 'define');
@@ -183,5 +186,28 @@ Then('the projection rejects malformed or prefixed Define bytes even with a matc
         },
       ]),
     );
+    const drafter = { provider: 'openai', model: 'author' };
+    const reviewer = { provider: 'google', model: 'reviewer' };
+    const axis = { status: 'clear', citations: [] };
+    const plan_sha256 = sha(file(binding));
+    const receipt = {
+      reviewed_plan: {
+        ...binding,
+        plan_sha256,
+        proposal,
+        drafter,
+        reviewer,
+        verdict: { plan_sha256, status: 'clear', findings: [] },
+      },
+      define_review: {
+        version: 1,
+        define_sha256: sha(bytes),
+        input_sha256: sha(bytes),
+        drafter,
+        reviewer,
+        axes: { scope_creep: axis, missing_edge_case: axis },
+      },
+    };
+    assert.throws(() => reviewedProposal(bytes, 'id', 'x', [{ type: 'text', text: file(receipt) }]));
   }
 });

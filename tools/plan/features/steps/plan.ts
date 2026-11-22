@@ -30,6 +30,7 @@ interface TextResult {
   err: string;
 }
 interface Preview {
+  independent_reviews?: unknown;
   status: string;
   approval_sha256: string;
   files: Record<string, string>;
@@ -500,8 +501,8 @@ Given('the recorded proposal carries independent Define and Plan reviews', funct
       version: 1,
       define_sha256: binding.define_sha256,
       input_sha256: hash('Define fixture'),
-      drafter,
-      reviewer,
+      drafter: { provider: 'anthropic', model: 'define-author' },
+      reviewer: { provider: 'openai', model: 'define-reviewer' },
       axes: { scope_creep: clear, missing_edge_case: clear },
     },
   });
@@ -522,5 +523,62 @@ Then('the Plan preview binds the complete review receipt', function (this: World
     item.preview?.manifest.source_sha256['reviewed_plan'],
     hash(readFileSync(item.proposal, 'utf8')),
   );
+  const receipt = load(item.proposal);
+  assert.equal(
+    item.preview?.manifest.source_sha256['proposal'],
+    hash(JSON.stringify(receipt.reviewed_plan.proposal) + '\n'),
+  );
+  assert.deepEqual(item.preview?.independent_reviews, {
+    define: {
+      drafter: receipt.define_review.drafter,
+      reviewer: receipt.define_review.reviewer,
+      status: 'clear',
+    },
+    plan: {
+      drafter: receipt.reviewed_plan.drafter,
+      reviewer: receipt.reviewed_plan.reviewer,
+      status: 'clear',
+    },
+  });
   assert.equal(existsSync(item.folder), false);
+});
+
+Then(
+  'preparing the independently reviewed receipt with a changed {string} rejects the binding',
+  function (this: World, field: string) {
+    const item = scenario(this);
+    const define = readFileSync(item.define, 'utf8');
+    const policy = readFileSync(item.policy, 'utf8');
+    const receipt = load(item.proposal);
+    const plan = receipt.reviewed_plan;
+    switch (field) {
+      case 'run':
+        plan.run_id += '-other';
+        break;
+      case 'Define digest':
+        plan.define_sha256 = receipt.define_review.define_sha256 = hash('different Define');
+        break;
+      case 'proposal digest':
+        plan.proposal_sha256 = hash('different proposal');
+        break;
+      case 'binding digest':
+        plan.plan_sha256 = plan.verdict.plan_sha256 = hash('different binding');
+        break;
+      default:
+        assert.fail(field);
+    }
+    assert.throws(
+      () => preparePlan({ define, proposal: JSON.stringify(receipt), policy }, readStepInputs(policy)),
+      { message: 'PLAN_REVIEW_EVIDENCE_MISMATCH' },
+    );
+  },
+);
+
+Then('Plan reports a schema error for the JSON primitive {string}', function (this: World, proposal: string) {
+  const item = scenario(this);
+  const define = readFileSync(item.define, 'utf8');
+  const policy = readFileSync(item.policy, 'utf8');
+  assert.throws(() => preparePlan({ define, proposal, policy }, readStepInputs(policy)), {
+    name: 'ZodError',
+  });
 });

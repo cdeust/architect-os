@@ -141,3 +141,24 @@ Feature: Prepare and explicitly approve one step from Define v1
     And the operator records an approval of the preview
     And I materialize the Plan
     Then Plan refuses with "PLAN_SPECIMEN_EVIDENCE_REQUIRED" and publishes nothing
+
+  Scenario Outline: Each reviewed binding must match the independently read sources
+    Given a recorded delivery Plan input
+    And the recorded proposal carries independent Define and Plan reviews
+    Then preparing the independently reviewed receipt with a changed "<field>" rejects the binding
+
+    Examples:
+      | field           |
+      | run             |
+      | Define digest   |
+      | proposal digest |
+      | binding digest  |
+
+  Scenario Outline: JSON primitives reach contract validation
+    Given a recorded delivery Plan input
+    Then Plan reports a schema error for the JSON primitive "<proposal>"
+
+    Examples:
+      | proposal |
+      | null     |
+      | true     |
