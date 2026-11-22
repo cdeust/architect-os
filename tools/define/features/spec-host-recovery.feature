@@ -88,3 +88,36 @@ Feature: Recover a Spec host transaction from its durable artifacts
 
   Scenario: Reuse an immutable written artifact when the producer repeats the request
     Then the Spec host acknowledges the same producer file twice
+
+  Scenario Outline: Bind durable native evidence to the queued invocations before reuse
+    Then the Spec host resumes "<case>" batch evidence as "<outcome>"
+
+    Examples:
+      | case                          | outcome        |
+      | reversed completion order     | accepted       |
+      | saved mixed outcomes          | accepted       |
+      | pristine pending              | accepted       |
+      | pending saved native          | mismatch       |
+      | dispatching saved quota       | unknown        |
+      | saved quota refusal           | accepted       |
+      | wrong provider                | native refusal |
+      | wrong route model             | native refusal |
+      | wrong requested model         | native refusal |
+      | saved wrong provider          | native refusal |
+      | saved changed response route  | mismatch       |
+      | saved changed native text     | mismatch       |
+      | duplicate stored invocation   | mismatch       |
+      | saved reordered responses     | mismatch       |
+      | saved missing response        | mismatch       |
+      | saved wrong batch             | mismatch       |
+      | saved wrong result kind       | mismatch       |
+      | saved response without calls  | mismatch       |
+      | saved refusal after reserving | unknown        |
+      | pending with receipts         | mismatch       |
+      | pending with reservations     | mismatch       |
+      | submitting without result     | mismatch       |
+      | nonbatch with receipts        | mismatch       |
+      | nonbatch with batch result    | mismatch       |
+
+  Scenario: Load persisted native records through the host's private journal
+    Then a stored invocation identifier alone cannot be submitted on recovery

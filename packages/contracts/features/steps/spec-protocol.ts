@@ -152,3 +152,31 @@ Then(
 Then('a Spec request rejects field {string} with value {string}', function (field: string, value: string) {
   assert.equal(specPlanningConfig.safeParse({ ...config, [field]: value }).success, false);
 });
+
+Then(
+  'the Spec wire result and persisted receipts both reject the {string} native outcome',
+  function (change: string) {
+    const shapes: Record<string, object> = {
+      'missing outcome': {},
+      'missing route': { raw_text: 'ok' },
+      'missing text': { model_receipt: route },
+      'blank text': { raw_text: '  ', model_receipt: route },
+      'blank error': { error: ' ' },
+      'success and error': { raw_text: 'ok', model_receipt: route, error: 'refused' },
+      'error with route': { model_receipt: route, error: 'refused' },
+      'error with text': { raw_text: 'ok', error: 'refused' },
+      'empty identity': { invocation_id: '', error: 'refused' },
+    };
+    assert.ok(Object.hasOwn(shapes, change));
+    const receipt = { invocation_id: 'first', ...shapes[change] };
+    const result = { kind: 'subagent_batch_result', batch_id: 'drafts', responses: [receipt] };
+    assert.equal(specHostResult.safeParse(result).success, false);
+    const saved = journal('dispatching');
+    const entry = saved.history[0]!;
+    assert.equal(
+      specHostJournal.safeParse({ ...saved, history: [{ ...entry, receipts: [receipt] }] }).success,
+      false,
+    );
+    assert.equal(specHostJournal.safeParse({ ...saved, history: [{ ...entry, result }] }).success, false);
+  },
+);

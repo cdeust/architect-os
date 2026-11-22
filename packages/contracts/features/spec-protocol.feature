@@ -120,3 +120,18 @@ Feature: Spec planning host wire protocol
       | plan_step           | draft!      |
       | prd_context         | unknown     |
       | request_size        | unbounded   |
+
+  Scenario Outline: Decode the same exclusive native outcome in a journal and a submitted response
+    Then the Spec wire result and persisted receipts both reject the "<case>" native outcome
+
+    Examples:
+      | case              |
+      | missing outcome   |
+      | missing route     |
+      | missing text      |
+      | blank text        |
+      | blank error       |
+      | success and error |
+      | error with route  |
+      | error with text   |
+      | empty identity    |

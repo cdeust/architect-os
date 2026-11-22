@@ -52,18 +52,17 @@ export const specActionPage = z.object({
   action: specHostAction,
   __page: z.object({ offset, count: offset, total: offset, next_offset: offset.nullable() }),
 });
+// A native success preserves its exact output bytes. A refusal contains only its diagnostic.
+const nonblank = z.string().regex(/\S/);
+const modelReceipt = z.union([
+  z.strictObject({ invocation_id: id, raw_text: nonblank, model_receipt: specRoute }),
+  z.strictObject({ invocation_id: id, error: nonblank }),
+]);
 export const specHostResult = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('subagent_batch_result'),
     batch_id: id,
-    responses: z.array(
-      z.object({
-        invocation_id: id,
-        raw_text: z.string().optional(),
-        error: z.string().optional(),
-        model_receipt: specRoute.optional(),
-      }),
-    ),
+    responses: z.array(modelReceipt),
   }),
   z.object({ kind: z.literal('user_answer'), question_id: id, selected: z.array(id), freeform: z.string() }),
   z.object({ kind: z.literal('file_written'), path: id, bytes: offset }),
@@ -110,12 +109,6 @@ export const specHostAnswer = z.strictObject({
 });
 export type SpecHostAnswer = z.infer<typeof specHostAnswer>;
 
-const modelReceipt = z.object({
-  invocation_id: id,
-  raw_text: z.string().optional(),
-  error: z.string().optional(),
-  model_receipt: specRoute.optional(),
-});
 export const specHostJournal = z.strictObject({
   version: z.literal(1),
   config_sha256: digest,

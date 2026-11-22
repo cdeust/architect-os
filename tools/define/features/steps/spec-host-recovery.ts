@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { openPlanningJournal } from '../../src/infrastructure/planning-journal.js';
 import { Then } from '@cucumber/cucumber';
-import { specPlanningConfig, type SpecHostJournal } from '@architect-os/contracts';
+import { specHostJournal, specPlanningConfig, type SpecHostJournal } from '@architect-os/contracts';
 import { actionDigest, driveSpec, type SpecHost } from '../../src/application/drive-spec.js';
 
 const run = 'run_host_bound';
@@ -518,7 +522,7 @@ Then('the Spec host audits the {string} mixed batch', async function (change: st
   };
   const drive = driveSpec(host, policy, true);
   if (change === 'ambiguous earlier batch') {
-    await assert.rejects(drive, /SPEC_ACKNOWLEDGED_BATCH_REISSUED/);
+    await assert.rejects(drive, /SPEC_INVOCATION_OUTCOME_UNKNOWN/);
     assert.equal(turns, 0);
     assert.equal(submissions, 0);
     return;
@@ -566,4 +570,165 @@ Then('the Spec host acknowledges the same producer file twice', async function (
   };
   assert.equal((await driveSpec(host, config, false)).status, 'failed');
   assert.equal(writes, 2);
+});
+
+Then(
+  'the Spec host resumes {string} batch evidence as {string}',
+  async function (change: string, outcome: string) {
+    const { host, config } = fixture();
+    const action = batch('one');
+    const firstInvocation = action.invocations[0]!;
+    action.invocations.push({
+      ...firstInvocation,
+      invocation_id: 'two',
+      model: reviewer.model,
+      model_route: reviewer,
+    });
+    const accepted = { invocation_id: 'one', raw_text: '  useful result  ', model_receipt: { ...author } };
+    const refused = { invocation_id: 'two', error: 'SPEC_NATIVE_RECEIPT_REFUSED' };
+    const recorded = [refused, accepted];
+    const denied = action.invocations.map(({ invocation_id }) => ({
+      invocation_id,
+      error: 'SPEC_ACCOUNT_OR_QUOTA_REFUSED',
+    }));
+    const saved = change.startsWith('saved');
+    const expected = change === 'saved quota refusal' ? denied : [accepted, refused];
+    const result = { kind: 'subagent_batch_result', batch_id: 'batch', responses: structuredClone(expected) };
+    const entry: Record<string, unknown> = {
+      action,
+      phase: 'dispatching',
+      receipts: recorded,
+      reservations: ['["openai","openai"]', '["google","google"]'],
+    };
+    if (saved) entry['result'] = result;
+    if (change === 'wrong provider' || change === 'saved wrong provider')
+      accepted.model_receipt.provider = 'anthropic';
+    if (change === 'wrong route model') firstInvocation.model_route = { ...author, model: 'alternate' };
+    if (change === 'wrong requested model') firstInvocation.model = 'alternate';
+    if (change === 'saved changed response route')
+      Object.assign(result.responses[0]!, { model_receipt: reviewer });
+    if (change === 'saved changed native text')
+      Object.assign(result.responses[0]!, { raw_text: 'rewritten' });
+    if (change === 'saved reordered responses') result.responses.reverse();
+    if (change === 'saved missing response') result.responses.pop();
+    if (change === 'duplicate stored invocation') action.invocations[1]!.invocation_id = 'one';
+    if (change === 'saved wrong batch') result.batch_id = 'another';
+    if (change === 'saved wrong result kind') entry['result'] = { kind: 'file_written', path: 'x', bytes: 1 };
+    if (change === 'saved quota refusal' || change === 'saved response without calls') {
+      entry['receipts'] = [];
+      entry['reservations'] = [];
+      entry['phase'] = 'pending';
+    }
+    if (change === 'saved refusal after reserving') {
+      entry['receipts'] = [];
+      result.responses = denied;
+    }
+    if (change === 'pending with receipts') {
+      entry['phase'] = 'pending';
+      entry['reservations'] = [];
+    }
+    if (change === 'pending with reservations') {
+      entry['phase'] = 'pending';
+      entry['receipts'] = [];
+    }
+    if (change === 'submitting without result') {
+      entry['phase'] = 'submitting';
+      entry['receipts'] = [];
+      entry['reservations'] = [];
+    }
+    if (change === 'pending saved native') {
+      entry['phase'] = 'pending';
+      entry['result'] = result;
+    }
+    if (change === 'dispatching saved quota') {
+      entry['result'] = { ...result, responses: denied };
+      entry['receipts'] = [];
+      entry['reservations'] = [];
+    }
+    if (change === 'pristine pending') {
+      entry['phase'] = 'pending';
+      entry['receipts'] = [];
+      entry['reservations'] = [];
+      host.authorize = async () => true;
+      host.invoke = async (inv, account) => {
+        if (inv.invocation_id === 'two') throw Error('offline');
+        return {
+          account: account.account,
+          billing: account.billing,
+          route: account.route,
+          text: accepted.raw_text,
+        };
+      };
+    }
+    if (change.startsWith('nonbatch')) {
+      entry['action'] = question;
+      if (change === 'nonbatch with batch result') {
+        entry['receipts'] = [];
+        entry['result'] = result;
+      }
+    }
+    host.save(
+      specHostJournal.parse({
+        version: 1,
+        run_id: run,
+        config_sha256: actionDigest(config),
+        history: [entry],
+      }),
+    );
+    let producerCalls = 0;
+    let submissions = 0;
+    host.call = async (tool, args) => {
+      producerCalls++;
+      if (tool === 'submit_action_result') {
+        assert.equal(++submissions, 1);
+        assert.deepEqual(args['result'], {
+          kind: 'subagent_batch_result',
+          batch_id: 'batch',
+          responses: expected,
+        });
+        return json({ run_id: run });
+      }
+      assert.equal(tool, 'get_pipeline_state');
+      return json(page(submissions ? failed : action, 0, 2, 2));
+    };
+    const drive = driveSpec(host, config, true);
+    if (outcome === 'accepted') {
+      assert.equal((await drive).status, 'failed');
+      assert.equal(submissions, 1);
+    } else {
+      const reasons: Record<string, string> = {
+        'native refusal': 'SPEC_NATIVE_RECEIPT_REFUSED',
+        unknown: 'SPEC_INVOCATION_OUTCOME_UNKNOWN',
+        mismatch: 'SPEC_SAVED_RESULT_MISMATCH',
+      };
+      await assert.rejects(drive, new RegExp(reasons[outcome]!));
+      assert.equal(producerCalls, 0);
+    }
+  },
+);
+
+Then('a stored invocation identifier alone cannot be submitted on recovery', async function () {
+  const { host, config } = fixture();
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'spec-receipt-')));
+  try {
+    const journal = openPlanningJournal(join(root, 'run'));
+    try {
+      const entry = {
+        action: batch('one'),
+        phase: 'dispatching',
+        receipts: [{ invocation_id: 'one' }],
+        reservations: ['["openai","openai"]'],
+      };
+      writeFileSync(
+        join(journal.home, '.host.json'),
+        json({ version: 1, config_sha256: actionDigest(config), run_id: run, history: [entry] }),
+        { mode: 0o600 },
+      );
+      await assert.rejects(driveSpec({ ...host, ...journal }, config, true), { name: 'ZodError' });
+    } finally {
+      journal.release();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

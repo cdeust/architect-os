@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
 import {
   parseReviewedPlanReply,
@@ -104,6 +105,59 @@ function authorizedAccounts(config: SpecPlanningConfig) {
   return { accounts, limits };
 }
 
+function quotaRefusals(action: Batch) {
+  return action.invocations.map(({ invocation_id }) => ({
+    invocation_id,
+    error: 'SPEC_ACCOUNT_OR_QUOTA_REFUSED',
+  }));
+}
+
+function orderedReceipts(action: Batch, receipts: Entry['receipts']) {
+  const byId = new Map(receipts.map((receipt) => [receipt.invocation_id, receipt]));
+  if (receipts.length !== action.invocations.length) throw Error('SPEC_INVOCATION_OUTCOME_UNKNOWN');
+  return action.invocations.map((invocation) => {
+    const receipt = byId.get(invocation.invocation_id);
+    if (!receipt) throw Error('SPEC_INVOCATION_OUTCOME_UNKNOWN');
+    if (
+      'model_receipt' in receipt &&
+      (invocation.model !== receipt.model_receipt.model ||
+        !matches(receipt.model_receipt, invocation.model_route))
+    )
+      throw Error('SPEC_NATIVE_RECEIPT_REFUSED');
+    return receipt;
+  });
+}
+
+/** The journal decoder verifies receipt shapes. Bind persisted responses to the action that produced them. */
+function verifyRecoveredEntry(entry: Entry) {
+  const { action, result, receipts, phase } = entry;
+  if (action.kind !== 'spawn_subagents') {
+    if (receipts.length || result?.kind === 'subagent_batch_result')
+      throw Error('SPEC_SAVED_RESULT_MISMATCH');
+    return;
+  }
+  if (
+    new Set(action.invocations.map(({ invocation_id }) => invocation_id)).size !== action.invocations.length
+  )
+    throw Error('SPEC_SAVED_RESULT_MISMATCH');
+  if (phase === 'pending' && (receipts.length || entry.reservations.length))
+    throw Error('SPEC_SAVED_RESULT_MISMATCH');
+  if (!result && phase !== 'dispatching') {
+    if (phase !== 'pending') throw Error('SPEC_SAVED_RESULT_MISMATCH');
+    return;
+  }
+  // A denied batch saves its result before dispatch, with neither a reservation nor a native receipt.
+  const native = phase === 'dispatching' || entry.reservations.length || receipts.length;
+  const expected = {
+    kind: 'subagent_batch_result' as const,
+    batch_id: action.batch_id,
+    responses: native ? orderedReceipts(action, receipts) : quotaRefusals(action),
+  };
+  if (result && !isDeepStrictEqual(result, expected)) throw Error('SPEC_SAVED_RESULT_MISMATCH');
+  // A crash after the last receipt can precede the first result save. Reassemble without spending again.
+  entry.result = expected;
+}
+
 async function dispatchBatch(
   host: SpecHost,
   state: SpecHostJournal,
@@ -111,14 +165,6 @@ async function dispatchBatch(
   action: Batch,
   { accounts, limits }: ReturnType<typeof authorizedAccounts>,
 ): Promise<SpecHostResult> {
-  if (entry.phase === 'dispatching') {
-    const receipts = new Map(entry.receipts.map((receipt) => [receipt.invocation_id, receipt]));
-    const responses = action.invocations.map(({ invocation_id }) => receipts.get(invocation_id));
-    if (entry.receipts.length !== responses.length || !responses.every((reply) => reply !== undefined)) {
-      throw Error('SPEC_INVOCATION_OUTCOME_UNKNOWN');
-    }
-    return { kind: 'subagent_batch_result', batch_id: action.batch_id, responses };
-  }
   const selected = action.invocations.map((item) =>
     item.model === item.model_route.model
       ? accounts.find((account) => matches(account.route, item.model_route))
@@ -138,10 +184,7 @@ async function dispatchBatch(
     return {
       kind: 'subagent_batch_result',
       batch_id: action.batch_id,
-      responses: action.invocations.map(({ invocation_id }) => ({
-        invocation_id,
-        error: 'SPEC_ACCOUNT_OR_QUOTA_REFUSED',
-      })),
+      responses: quotaRefusals(action),
     };
   entry.phase = 'dispatching';
   entry.reservations = checked.map(accountKey);
@@ -215,6 +258,7 @@ export async function driveSpec(
     host.save(state);
   }
   if (!state.run_id) throw Error('SPEC_START_OUTCOME_UNKNOWN');
+  if (existing) existing.history.forEach(verifyRecoveredEntry);
   const run_id = state.run_id;
   const reviewedOutcome = { status: 'reviewed' as const, run_id, step: config.plan_step };
   if (state.terminal) {

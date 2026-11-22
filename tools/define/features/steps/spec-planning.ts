@@ -136,11 +136,12 @@ Then('Spec planning handles {string} without an unapproved model call', async fu
     const result = submitted();
     assert.equal(result?.kind, 'subagent_batch_result');
     for (const reply of result!.responses) {
+      assert.ok('error' in reply);
       assert.equal(
         reply.error,
         receiptFailure ? 'SPEC_NATIVE_RECEIPT_REFUSED' : 'SPEC_ACCOUNT_OR_QUOTA_REFUSED',
       );
-      assert.equal(reply.model_receipt, undefined);
+      assert.equal('model_receipt' in reply, false);
     }
   }
 });
