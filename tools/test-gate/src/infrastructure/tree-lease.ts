@@ -3,12 +3,6 @@ import { fstatSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, extname, join } from 'node:path';
 
-/** The fixed POSIX adapter is shared by the native CLI, the local shell and hosted jobs. */
-const helper = join(
-  dirname(createRequire(import.meta.url).resolve('@architect-os/test-gate/package.json')),
-  'with-tree-lock.py',
-);
-
 function native(args: string[], input?: string): number {
   const fd = Number(process.env.AOS_GATE_LEASE_FD);
   const inherited = process.env.AOS_GATE_LEASE_FD !== undefined;
@@ -26,6 +20,11 @@ function native(args: string[], input?: string): number {
     stdio.push(fd);
     env.AOS_GATE_LEASE_FD = '3';
   }
+  // Resolve inside the operation. Importing the Gate's test support must not start or locate a native process.
+  const helper = join(
+    dirname(createRequire(import.meta.url).resolve('@architect-os/test-gate/package.json')),
+    'with-tree-lock.py',
+  );
   const child = spawnSync('/usr/bin/python3', ['-I', helper, ...args], { env, stdio, input });
   if (child.error) throw child.error;
   return child.status ?? 1;

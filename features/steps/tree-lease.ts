@@ -90,12 +90,16 @@ Then('the native Gate adapter performs {string} through the fixed interpreter', 
     for (const inherited of [false, true])
       withDescriptor(inherited ? String(fd) : undefined, () =>
         withNative({ status: 0 }, (calls) => {
-          const result = adapters[kind]!();
+          let result: unknown;
+          assert.doesNotThrow(() => {
+            result = adapters[kind]!();
+          }, 'the installed lease helper resolves and accepts the command');
           assert.equal(calls.length, 1);
           const { program, args, options } = calls[0]!;
           assert.equal(program, '/usr/bin/python3');
           assert.equal(args[0], '-I');
           assert.ok(args[1]!.endsWith('/tools/test-gate/with-tree-lock.py'));
+          assert.ok(options.env, 'the native lease command receives an explicit environment');
           assert.equal(options.env.AOS_GATE_LEASE_FD, inherited ? '3' : undefined);
           assert.equal(options.env.PATH, process.env.PATH);
           assert.deepEqual(options.stdio, [
