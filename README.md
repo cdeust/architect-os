@@ -26,7 +26,9 @@ Run repository commands through `./aos -- PROGRAM [ARG ...]`. Admission checks t
 
 Read the loop from phase 1 through phase 8 in the diagram. Each row names its owner and groups its available capabilities and planned extensions. [Open the full-size diagram](docs/diagrams/architecture.svg).
 
-**Builder qualification.** Step uses Claude Code under SRT. In the [native SBX offline bench](bench/sbx/README.md), Codex wrote the witness file. Gemini (agy) initialized, then exited 1 when session creation was refused. Subscription access and the production adapter still need qualification and integration.
+**Builder qualification.** Step uses Claude Code under SRT. In the offline SBX bench, Codex wrote a witness file and completed a separate read-only text turn. The host and client agreed on the synthetic token counts. Gemini (agy) initialized and exited 1 when session creation was refused.
+
+Three separately authorized Astra subscription trials each sent one request. The third received HTTP 200, then the host refused stream metadata that required native handling. All three ended before native completion. Their provider token counts and monetary costs remain unknown. The host can now record validated usage from a provider terminal independently of the native verdict. The production Builder and independent review still require qualification. [Trial results and receipt semantics](bench/sbx/README.md#astra-subscription-trials-on-22-november-2026)
 
 ### One sandbox per session
 

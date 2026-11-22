@@ -71,3 +71,15 @@ The native macOS sandbox runs inside the admitted temporary directory. The real 
 The five 1b profiles passed the real macOS session-location probes on an admitted workstation. The native runner Stryker scope recorded 48 killed and two runtime errors; the Step scope killed all 83 mutants. The host journal and admission adapter suites rejected all 165 and 77 instrumenter substitutions respectively. The [hosted Linux and macOS functional checks](https://github.com/cdeust/architect-os/actions/runs/44960509640) passed 4,126 scenarios and 99 scenarios respectively on fa05f48f. The hosted mutation campaign killed both former 0400 settings-file mutants and exposed two assertion gaps. Those checks are now covered; the current [PR](https://github.com/cdeust/architect-os/pull/120) tracks the final full Gate and independent replay.
 
 The [milestone 2 integration](https://github.com/cdeust/architect-os/pull/124) exercises a real full Linux Gate on a disposable checkout. The same admission plans, publishes the checked commit, preserves it on a new plan and revokes it on a red check. Local interruption and recovery tests include aliases, a different runtime root, a damaged recovery record, worktree edits and a trusted external issuer. The hosted 16-lane verdict remains open.
+
+## SBX host-mediated native turn
+
+- [x] Add a single text challenge over the verified offline VM's process pipes, with bounded messages, model binding and independent host/guest receipt comparison.
+- [x] Run the pinned Codex native fixture, the existing write witness and the Google refusal through the admitted workstation launcher.
+- [x] Observe a model-bound provider terminal and validate its usage independently when native stream admission refuses an earlier event.
+- [ ] Verify one tool-free Astra subscription inference and its billing on a separately consented host route.
+- [ ] Qualify a production Builder and independent review through the admitted Step.
+
+The admitted workstation reproduced the write witness, one read-only host fixture turn with matching synthetic usage (8 input and 4 output tokens), and the Google ACP refusal (`-32000`, process exit 1). These fixtures made zero upstream calls.
+
+Each of the three authorized Astra trials sent one request. The account owner confirmed quota exhaustion for the first. The second receipt fingerprinted `response.metadata` after creation. The third recorded `UPSTREAM_REFUSED` with `provider_metadata / requires_native_handling`. The historical receipts contain no native completion, measured usage or monetary cost. The host now observes a response terminal and validates its token counts separately from native admission. [Qualification evidence](../bench/sbx/README.md#astra-subscription-trials-on-22-november-2026)
