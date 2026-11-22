@@ -4,14 +4,14 @@ The platform holds things of Anthropic: two pinned packages (the Claude Agent SD
 
 ## State
 
-The state is the register, not a table here. `npm run watch -- check` compares it with the sources and says, source by source, `à jour`, `en retard` or `illisible`; the workflow `watch.yml` runs it every Monday.
+The state is the register, not a table here. `./aos -- npm run watch -- check` compares it with the sources and says, source by source, `à jour`, `en retard` or `illisible`; the workflow `watch.yml` runs it every Monday.
 
 ## How a reading is done
 
-1. `npm run watch -- check --keep <a folder outside the repository>`: for each page or changelog that moved, the new text is kept beside the one read last time. Read the difference, not the page.
+1. `./aos -- npm run watch -- check --keep <a folder outside the repository>`: for each page or changelog that moved, the new text is kept beside the one read last time. Read the difference, not the page.
 2. Classify each change. **Mandatory**: a deprecation, a change of default, a removal, a migration, a security fix; it is taken, at a named step, before the platform is forced to. **Pertinent**: it touches a mechanism of the platform or offers it something; it is kept, with its decision. **Not applicable**: it touches nothing of the platform; it is recorded with its reason. A change is kept because it is pertinent, whether or not it brings security or lowers a cost (the owner's decision, 17 November 2026): security and cost order what is done first, they filter nothing out. For a page, `check` names the files to read again.
 3. Add a section to this page: the source, the range or the date, the entries that apply and the decision for each, and what the reading cost.
-4. `npm run watch -- read <id>...` records the reading in the register. A pin is not recorded this way: it moves in its manifest (below).
+4. `./aos -- npm run watch -- read <id>...` records the reading in the register. A pin is not recorded this way: it moves in its manifest (below).
 
 No source leaves the register because its changes led to no decision: it costs one comparison a week, and taking it out would mean reading it whole again the day it matters (the owner's decision, 17 November 2026).
 
@@ -64,6 +64,6 @@ What proves the pin: the gate, whose scenarios launch the real binary before a f
 ## How to move a pin
 
 1. Read the changelog between the pinned version and the published one (`check` gives both), for what touches a headless run, the Agent SDK, the sandbox, hooks, and what a session sends to the API.
-2. Add a section to this page: the range, the entries that apply, and the decision for each; record the reading of the changelog with `npm run watch -- read`.
+2. Add a section to this page: the range, the entries that apply, and the decision for each; record the reading of the changelog with `./aos -- npm run watch -- read`.
 3. Move one pin at a time, `npm install --ignore-scripts`, and replay the scenarios that launch the binary or srt before moving the other.
-4. `npm run watch -- check` says the pin is up to date; then the gate and the CI as for any change.
+4. `./aos -- npm run watch -- check` says the pin is up to date; then the gate and the CI as for any change.

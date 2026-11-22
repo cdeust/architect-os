@@ -35,7 +35,13 @@ After inspecting the preview and its inputs, an operator may record an explicit 
 ./aos -- npm run --silent plan -- materialize define.json proposal.json policy.json decision.json /absolute/intake/delivery
 ```
 
-The destination must be new, match the approved Step name and stay outside every Git checkout, including linked worktrees and the `steps/` archive. Materialization revalidates the sources and output fingerprints before making the folder. It writes `brief.md`, configured scout questions and `step.json` last. Missing, refused or stale decisions produce exit 2 and leave the destination untouched. Only a separate invocation of `npm run step -- <folder>` can start the sessions. Its own archive records the hashes of the inputs it actually read.
+The destination must be new, match the approved Step name and stay outside every Git checkout, including linked worktrees and the `steps/` archive. Materialization revalidates the sources and output fingerprints before making the folder. It writes `brief.md`, configured scout questions and `step.json` last. Missing, refused or stale decisions produce exit 2 and leave the destination untouched. To start the sessions, run Step from the root of the target linked worktree. Set `LAUNCHER` to the absolute path of the trusted launcher checkout and pass the folder that Plan just materialized:
+
+```sh
+"$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run step -- /absolute/intake/delivery
+```
+
+Step reads the approved folder once. The host archives the input hashes in `steps/<name>/record.json` in the target worktree. Under `ARCHITECT_OS_RUNTIME_ROOT`, reports and verdicts go to `state/steps/<run-id>/delivery/` and raw streams to `run/<run-id>/tmp/steps/delivery/`.
 
 The integration scenario runs that Step reader with controlled in-memory sessions and checks the archive against the Plan manifest. Automated exploration before approval and a measured replay through Deliver remain future work.
 
