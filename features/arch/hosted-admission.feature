@@ -30,3 +30,25 @@ Feature: Hosted runtime admission
       | macos base |
       | lane       |
       | aggregate  |
+
+  Scenario Outline: partial reruns bind the downloaded evidence to its physical producer
+    Then the Gate resolves the producer history for "<history>"
+
+    Examples:
+      | history                          |
+      | repeated reuse                   |
+      | missing attempt field            |
+      | reuse after a genuine rerun      |
+      | genuine rerun                    |
+      | genuine rerun without artifact   |
+      | conflicting alias artifact       |
+      | changed runner                   |
+      | changed steps                    |
+      | missing completion               |
+      | missed newer execution           |
+      | copied failed producer           |
+      | missing origin                   |
+      | missing reused row               |
+      | artifact without a job           |
+      | duplicate attempt row            |
+      | first attempt                    |

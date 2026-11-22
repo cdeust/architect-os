@@ -93,7 +93,14 @@ function providerFixture(dir: string) {
     'const reply=value=>process.stdout.write(JSON.stringify(value));',
     "if(endpoint.endsWith('/runs/51'))process.stdout.write(env.FIXTURE_HEAD);",
     "else if(endpoint.includes('workflows/gate.yml/runs?')&&endpoint.includes('head_sha='+env.FIXTURE_HEAD))process.stdout.write('33');",
-    "else if(endpoint.includes('/runs/51/jobs?'))reply([{jobs:JSON.parse(fs.readFileSync(env.JOBS,'utf8'))}]);",
+    "else if(endpoint.includes('/runs/51/attempts/')){",
+    "  const n=Number(endpoint.split('/attempts/')[1].split('/')[0]);",
+    "  if(endpoint.includes('/jobs?')){",
+    "    const jobs=JSON.parse(fs.readFileSync(env.JOBS,'utf8')).filter(j=>j.run_attempt===n);",
+    "    if(env.OMIT_ATTEMPT==='yes')for(const job of jobs)delete job.run_attempt;",
+    '    reply([{jobs}]);',
+    "  }else reply({id:51,run_attempt:n,head_sha:env.FIXTURE_HEAD,run_started_at:new Date(Date.UTC(2026,10,22,n)).toISOString().replace('.000','')});",
+    '}',
     "else if(endpoint.includes('/runs/51/artifacts?'))reply([{artifacts:JSON.parse(fs.readFileSync(env.ARTIFACTS,'utf8'))}]);",
     "else if(endpoint.endsWith('/zip'))process.stdout.write(fs.readFileSync(env.ARCHIVE));",
     'else process.exit(44);',
@@ -121,7 +128,13 @@ function providerFixture(dir: string) {
     head_sha: head,
     status: 'completed',
     conclusion: 'success',
+    runner_id: i + 1,
+    started_at: name === prior ? '2026-11-22T01:01:00Z' : '2026-11-22T02:01:00Z',
+    completed_at: name === prior ? '2026-11-22T01:02:00Z' : '2026-11-22T02:02:00Z',
+    steps: [{ number: 1, name: 'Upload report', status: 'completed', conclusion: 'success' }],
   }));
+  const original = jobs.find((row) => row.name === prior)!;
+  jobs.push({ ...original, id: 9001, run_attempt: 2 });
   const artifacts = names.map(([job, name], i) => ({
     name: job === prior ? name!.replace('linux-2', 'linux-1') : name,
     id: 200 + i,
@@ -299,6 +312,17 @@ Then(
         assert.ok(!existsSync(join(reports, 'mutation-shards/3')));
       }
       const accepted = shell(command, scoped);
+      if (kind === 'aggregate') {
+        const calls = readFileSync(env.CALLS, 'utf8')
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line) as string[]);
+        for (const n of [1, 2]) {
+          const attempt = 'repos/fixture/repo/actions/runs/51/attempts/' + n;
+          for (const endpoint of [attempt, attempt + '/jobs?per_page=100'])
+            assert.equal(calls.filter((args) => args.includes(endpoint)).length, 1, endpoint);
+        }
+      }
       assert.equal(accepted.status, 0, accepted.stderr);
       if (kind.endsWith(' base')) {
         assert.equal(
@@ -366,3 +390,130 @@ Then(
     }
   },
 );
+
+Then('the Gate resolves the producer history for {string}', function (history: string) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'gate-producer-history-')));
+  try {
+    const provider = providerFixture(dir);
+    const rows = JSON.parse(readFileSync(provider.JOBS, 'utf8'));
+    const original = rows.find(
+      (j: { name: string; run_attempt: number }) =>
+        j.name === 'gate-linux-lane-3 / mutation' && j.run_attempt === 1,
+    );
+    const copy = { ...original, run_attempt: 2, id: 2100 };
+    const latest = { ...original, run_attempt: 3, id: 3100 };
+    const jobs = [original, copy, latest];
+    const producer = JSON.parse(readFileSync(provider.ARTIFACTS, 'utf8')).find(
+      (a: { name: string }) => a.name === 'gate-mutation-linux-1-3',
+    );
+    const artifacts = [producer];
+    const fresh = (n: number) => ({
+      started_at: '2026-11-22T0' + n + ':01:00Z',
+      completed_at: '2026-11-22T0' + n + ':02:00Z',
+      runner_id: 99,
+    });
+    let accepted = false;
+    let expected = original,
+      artifact = producer;
+    let attempt = '3';
+    switch (history) {
+      case 'first attempt':
+        attempt = '1';
+        accepted = true;
+        break;
+      case 'missing attempt field':
+      case 'repeated reuse':
+        accepted = true;
+        break;
+      case 'reuse after a genuine rerun':
+        Object.assign(copy, fresh(2));
+        Object.assign(latest, fresh(2));
+        expected = copy;
+        artifact = { ...producer, name: 'gate-mutation-linux-2-3', id: 2200 };
+        artifacts.push(artifact);
+        accepted = true;
+        break;
+      case 'genuine rerun':
+        Object.assign(latest, fresh(3));
+        expected = latest;
+        artifact = { ...producer, name: 'gate-mutation-linux-3-3', id: 3200 };
+        artifacts.push(artifact);
+        accepted = true;
+        break;
+      case 'genuine rerun without artifact':
+        Object.assign(latest, fresh(3));
+        break;
+      case 'conflicting alias artifact':
+        artifacts.push({ ...producer, name: 'gate-mutation-linux-3-3', id: 3200 });
+        break;
+      case 'changed runner':
+        latest.runner_id++;
+        break;
+      case 'changed steps':
+        latest.steps = [{ ...original.steps[0], name: 'unrelated' }];
+        break;
+      case 'missing completion':
+        latest.completed_at = null;
+        break;
+      case 'missed newer execution':
+        Object.assign(copy, fresh(2));
+        break;
+      case 'copied failed producer':
+        original.conclusion = 'failure';
+        break;
+      case 'missing reused row':
+        jobs.pop();
+        accepted = true;
+        break;
+      case 'artifact without a job':
+        jobs.pop();
+        artifacts.push({ ...producer, name: 'gate-mutation-linux-3-3', id: 3200 });
+        break;
+      case 'missing origin':
+        jobs.shift();
+        break;
+      case 'duplicate attempt row':
+        jobs.push({ ...latest, id: 3111 });
+        break;
+      default:
+        throw Error(history);
+    }
+    writeFileSync(provider.JOBS, JSON.stringify(jobs));
+    writeFileSync(provider.ARTIFACTS, JSON.stringify(artifacts));
+    const root = join(dir, 'runtime');
+    mkdirSync(root);
+    writeFileSync(
+      join(root, '.architect-os-runtime-root'),
+      'architect-os-runtime-root/v2\nenvironment=hosted-runner\n',
+    );
+    const admitted = this.admitFixture(root);
+    const result = spawnSync(
+      '/bin/sh',
+      [join(ROOT, 'tools/test-gate/fetch-ci-artifacts.sh'), 'mutation', '3'],
+      {
+        cwd: dir,
+        encoding: 'utf8',
+        env: {
+          ...admitted,
+          ...provider,
+          GITHUB_RUN_ATTEMPT: attempt,
+          OMIT_ATTEMPT: history === 'missing attempt field' ? 'yes' : 'no',
+        },
+      },
+    );
+    const target = join(admitted.ARCHITECT_OS_RUN_DIR!, 'reports/mutation-shards/3');
+    if (accepted) {
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(
+        readFileSync(join(target, 'producer'), 'utf8'),
+        ['51', head, expected.run_attempt, expected.id, artifact.id].join('\t') + '\n',
+      );
+    } else {
+      assert.notEqual(result.status, 0);
+      assert.ok(!existsSync(target));
+      assert.ok(!readFileSync(provider.CALLS, 'utf8').includes('/zip'));
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
