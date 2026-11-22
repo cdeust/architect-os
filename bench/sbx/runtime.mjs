@@ -1,11 +1,12 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { mkdtemp, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { requireAdmittedRun } from '../../packages/sandbox/src/runtime-context.ts';
 
 import isolation from './isolation.json' with { type: 'json' };
+import { runOfflineProbe } from './lifecycle.mjs';
 
 const kit = isolation.shellImage;
 const digest = kit.split('@')[1];
@@ -77,7 +78,7 @@ async function requireOfflinePolicy(name, limitMs) {
 }
 
 /** A disposable offline probe. Its only host mount is the synthetic workspace created here. */
-export async function withOfflineSbx({ limitMs, prepare }, use) {
+export async function withOfflineSbx({ limitMs, prepare, verify }, use) {
   requireAdmittedRun();
   if (!Number.isSafeInteger(limitMs) || limitMs < 1) throw Error('SBX_LIMIT_REQUIRED');
   const cliVersion = (await checked(['--version'], limitMs)).trim();
@@ -89,11 +90,11 @@ export async function withOfflineSbx({ limitMs, prepare }, use) {
     (item) => item.flavor === 'shell' && item.digest === digest && item.id === digest,
   );
   if (!template) throw Error('SBX_PINNED_SHELL_REQUIRED');
-  const workspace = await realpath(await mkdtemp(join(tmpdir(), 'sbx-witness-')));
   const name = 'aos-b0-' + randomUUID();
+  const workspace = await mkdtemp(join(await realpath(tmpdir()), 'sbx-witness-'));
   const names = async () => JSON.parse(await checked(['ls', '--json'], limitMs)).map((item) => item.name);
   let creating = false;
-  try {
+  async function run() {
     if (prepare) await prepare(workspace);
     if ((await names()).includes(name)) throw Error('SBX_NAME_IN_USE');
     creating = true;
@@ -169,11 +170,12 @@ export async function withOfflineSbx({ limitMs, prepare }, use) {
         );
       },
     });
-  } finally {
+  }
+  async function stop() {
     if (creating && (await names()).includes(name)) {
       await checked(['rm', '--force', name], limitMs);
       if ((await names()).includes(name)) throw Error('SBX_CLEANUP_INCOMPLETE: ' + name);
     }
-    await rm(workspace, { recursive: true, force: true });
   }
+  return runOfflineProbe({ name, workspace, run, stop, verify });
 }

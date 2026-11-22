@@ -38,8 +38,11 @@ async function preflight(archive, limitMs) {
       ],
       { user: '65534:65534', cwd: '/tmp' },
     );
-    if (run.code !== 0) throw new Error('agy initialization failed: ' + run.stderr.trim());
-    return { release, ...JSON.parse(run.stdout) };
+    if (run.code !== 0) throw new Error('agy initialization failed');
+    const receipt = JSON.parse(run.stdout);
+    if (receipt.session?.created !== false || receipt.session.errorCode !== -32000)
+      throw new Error('SBX_EXPECTED_OFFLINE_SESSION_REFUSAL');
+    return { release, ...receipt };
   });
 }
 
@@ -50,4 +53,4 @@ if (process.argv.length !== 4 || !archive || !Number.isSafeInteger(limitMs) || l
   throw new Error('usage: sbx-agy.mjs <official Linux arm64 archive> <timeout ms>');
 const receipt = await preflight(archive, limitMs);
 console.log(JSON.stringify(receipt, null, 2));
-if (!receipt.session.created) process.exitCode = 1;
+process.exitCode = 1;
