@@ -208,8 +208,9 @@ export function readStepAdmission(
   const fromWorktree = relative(realpathSync(worktree), path);
   if (!fromWorktree.startsWith('..' + sep)) throw new Error('STEP_ADMISSION_REQUIRED');
   const uid = process.getuid?.();
+  if (uid === undefined) throw new Error('STEP_ADMISSION_REQUIRED');
   const parent = statSync(dirname(path));
-  if (uid === undefined || parent.uid !== uid || !parent.isDirectory() || (parent.mode & 0o077) !== 0) {
+  if (parent.uid !== uid || !parent.isDirectory() || (parent.mode & 0o077) !== 0) {
     throw new Error('STEP_ADMISSION_REQUIRED');
   }
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
