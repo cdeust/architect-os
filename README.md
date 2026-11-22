@@ -18,6 +18,8 @@ An MCP platform for agent work, built in public, and the method used to build it
 
 ## How it works
 
+**The loop on main.** Define reads the Spec handoff. Plan prepares a one-Step preview and a local approval materializes its inputs. Step verifies scout citations, runs the Builder, executes model-free checks, then starts independent read-only reviews up to the configured parallel limit. The host archives the inputs and verdicts, replays the changes and commits. Deliver checks the required Linux and macOS jobs for that commit before publishing. After a refusal, the orchestrator writes the next brief.
+
 ![Architect OS architecture: native gateway, Define–Plan–Step, sandbox isolation, verification and Gate, evidence desk, and Anthropic watch](docs/diagrams/architecture.svg)
 
 Run repository commands through `./aos -- PROGRAM [ARG ...]`. Admission checks the marked runtime root and available space before starting the program. See the [quick start](#quick-start).
