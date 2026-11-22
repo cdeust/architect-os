@@ -79,7 +79,7 @@ function digestFiles(files: Readonly<Record<string, string>>) {
   return Object.fromEntries(
     Object.keys(files)
       .sort()
-      .map((name) => [name, admissionDigest(files[name] ?? '')]),
+      .map((name) => [name, admissionDigest(files[name]!)]),
   );
 }
 
@@ -206,8 +206,7 @@ export function readStepAdmission(
   )
     throw new Error('STEP_ADMISSION_REQUIRED');
   const fromWorktree = relative(realpathSync(worktree), path);
-  if (!fromWorktree.startsWith('..' + sep) || fromWorktree === '..')
-    throw new Error('STEP_ADMISSION_REQUIRED');
+  if (!fromWorktree.startsWith('..' + sep)) throw new Error('STEP_ADMISSION_REQUIRED');
   const uid = process.getuid?.();
   const parent = statSync(dirname(path));
   if (uid === undefined || parent.uid !== uid || !parent.isDirectory() || (parent.mode & 0o077) !== 0) {
