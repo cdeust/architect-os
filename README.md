@@ -237,7 +237,7 @@ From a worktree at `<repo>/.claude/worktrees/<name>`, set `LAUNCHER` to the abso
 "$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run step -- "$INTAKE/delivery"
 ```
 
-`INTAKE` is the absolute parent of the approved Step folder. After Step returns, find its archived inputs and verdict in `steps/delivery/` of the target worktree. For the evidence desk, run these commands from the launcher checkout:
+`INTAKE` is the absolute parent of the approved Step folder. After Step returns, find its archived inputs and verdict in `steps/<name>/` of the target worktree (here the name is `delivery`). For the evidence desk, run these commands from the launcher checkout:
 
 ```bash
 ./aos -- npm run evidence -- ask <ledger> <desk> <id> < question.txt

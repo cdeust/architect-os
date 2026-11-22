@@ -41,7 +41,7 @@ The destination must be new, match the approved Step name and stay outside every
 "$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run step -- /absolute/intake/delivery
 ```
 
-Step reads the approved folder once. The host archives the input hashes in `steps/delivery/record.json` in the target worktree. Under `ARCHITECT_OS_RUNTIME_ROOT`, reports and verdicts go to `state/steps/<run-id>/delivery/` and raw streams to `run/<run-id>/tmp/steps/delivery/`.
+Step reads the approved folder once. The host archives the input hashes in `steps/<name>/record.json` in the target worktree. Under `ARCHITECT_OS_RUNTIME_ROOT`, reports and verdicts go to `state/steps/<run-id>/delivery/` and raw streams to `run/<run-id>/tmp/steps/delivery/`.
 
 The integration scenario runs that Step reader with controlled in-memory sessions and checks the archive against the Plan manifest. Automated exploration before approval and a measured replay through Deliver remain future work.
 
