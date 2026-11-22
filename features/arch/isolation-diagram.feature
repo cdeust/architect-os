@@ -200,6 +200,9 @@ Feature: the image of the profiles is produced from the profile files, the hand-
       Given the text of the committed file "README.md"
       Then the README embeds just the architecture and links to the profile diagram
 
+  Scenario: The README loop groups each capability with its phase and follows the numbered path
+    Then each orchestration phase owns its cards and connects to the next phase
+
   Rule: the tripwire on the hand-drawn picture stops the plain forms only
 
     Scenario: the committed hand-drawn picture passes its tripwire
