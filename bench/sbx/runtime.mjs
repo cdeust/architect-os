@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -6,47 +6,77 @@ import { join } from 'node:path';
 import { requireAdmittedRun } from '../../packages/sandbox/src/runtime-context.ts';
 
 import isolation from './isolation.json' with { type: 'json' };
-import { exchangeFrames } from './exchange.mjs';
-import { runOfflineProbe } from './lifecycle.mjs';
+import { exchangeFrames, pipeLimit } from './exchange.mjs';
+import { runOfflineProbe, stopOwnedVm, useUntilInterrupted, withProbeSignals } from './lifecycle.mjs';
 
 const kit = isolation.shellImage;
 const digest = kit.split('@')[1];
 
-function command(args, timeout, input) {
+// The terminal can signal an entire foreground process group. Only the host owns
+// cancellation of CLI operations; in particular create, stop and confirmation must settle.
+function spawnSbx(args) {
   const { HOME, PATH, TMPDIR } = process.env;
-  return new Promise((resolve, reject) => {
-    const child = execFile(
-      'sbx',
-      ['--no-input', ...args],
-      {
-        env: { HOME, PATH, TMPDIR },
-        timeout,
-        killSignal: 'SIGKILL',
-        encoding: 'utf8',
-      },
-      (error, stdout, stderr) => {
-        if (error && typeof error.code !== 'number')
-          reject(new Error('SBX_PROCESS_FAILED', { cause: new Error(String(error.code ?? error.signal)) }));
-        else resolve({ code: error?.code ?? 0, stdout, stderr });
-      },
-    );
-    child.stdin.on('error', (error) => {
-      if (error.code !== 'EPIPE') reject(error);
-    });
-    child.stdin.end(input);
+  return spawn('sbx', ['--no-input', ...args], {
+    detached: true,
+    env: { HOME, PATH, TMPDIR },
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
 }
 
-async function checked(args, timeout) {
-  const result = await command(args, timeout);
+async function readPipe(stream) {
+  const chunks = [];
+  let length = 0;
+  for await (const bytes of stream) {
+    length += bytes.length;
+    if (length > pipeLimit) throw Error('SBX_PROCESS_OUTPUT_LIMIT');
+    chunks.push(bytes);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function command(args, timeout, input, signal) {
+  signal?.throwIfAborted();
+  const child = spawnSbx(args);
+  const closed = new Promise((resolve) => child.once('close', resolve));
+  const { promise: failed, reject: rejectProcess } = Promise.withResolvers();
+  const interrupt = () => rejectProcess(signal.reason);
+  signal?.addEventListener('abort', interrupt, { once: true });
+  const deadline = setTimeout(() => rejectProcess(Error('SBX_PROCESS_FAILED')), timeout);
+  child.once('error', () => rejectProcess(Error('SBX_PROCESS_FAILED')));
+  child.stdin.on('error', (error) => {
+    if (error.code !== 'EPIPE') rejectProcess(Error('SBX_PROCESS_FAILED'));
+  });
+  try {
+    child.stdin.end(input);
+    const [code, stdout, stderr] = await Promise.race([
+      failed,
+      Promise.all([closed, readPipe(child.stdout), readPipe(child.stderr)]),
+    ]);
+    if (code === null) throw Error('SBX_PROCESS_FAILED');
+    return { code, stdout, stderr };
+  } catch (error) {
+    child.kill('SIGKILL');
+    for (const stream of child.stdio) stream.destroy();
+    await closed;
+    throw error;
+  } finally {
+    clearTimeout(deadline);
+    signal?.removeEventListener('abort', interrupt);
+  }
+}
+
+async function checked(args, timeout, signal) {
+  const result = await command(args, timeout, undefined, signal);
   if (result.code !== 0) throw Error('SBX_' + args[0].toUpperCase() + '_FAILED (' + result.code + ')');
   return result.stdout;
 }
 
 // Native 0.54.0 inspect and policy responses. Fail closed if the backend changes shape.
-async function requireOfflinePolicy(name, limitMs) {
+async function requireOfflinePolicy(name, limitMs, signal) {
   const scope = 'sandbox:' + name;
-  const { rules } = JSON.parse(await checked(['policy', 'ls', name, '--json', '--type', 'network'], limitMs));
+  const { rules } = JSON.parse(
+    await checked(['policy', 'ls', name, '--json', '--type', 'network'], limitMs, signal),
+  );
   if (!Array.isArray(rules) || rules.some((rule) => rule.decision !== 'deny')) {
     throw Error('SBX_NETWORK_POLICY_MISMATCH');
   }
@@ -63,6 +93,8 @@ async function requireOfflinePolicy(name, limitMs) {
     const result = await command(
       ['policy', 'check', 'network', '--sandbox', name, '--json', '--protocol', protocol, 'example.com:443'],
       limitMs,
+      undefined,
+      signal,
     );
     if (result.code !== 1) throw Error('SBX_NETWORK_DECISION_MISMATCH');
     const decision = JSON.parse(result.stdout);
@@ -79,26 +111,34 @@ async function requireOfflinePolicy(name, limitMs) {
 }
 
 /** A disposable offline probe. Its only host mount is the synthetic workspace created here. */
-export async function withOfflineSbx({ limitMs, prepare, verify }, use) {
+export function withOfflineSbx(options, use) {
+  return withProbeSignals((signal) => scopedProbe(options, use, signal));
+}
+
+async function scopedProbe({ limitMs, prepare, verify }, use, signal) {
   requireAdmittedRun();
   if (!Number.isSafeInteger(limitMs) || limitMs < 1) throw Error('SBX_LIMIT_REQUIRED');
-  const cliVersion = (await checked(['--version'], limitMs)).trim();
+  const cliVersion = (await checked(['--version'], limitMs, signal)).trim();
   if (cliVersion !== 'sbx version v0.54.0 4bec4a5ce093466e54b034146965b143d065dc09') {
     throw Error('SBX_PINNED_CLI_REQUIRED');
   }
-  const templates = JSON.parse(await checked(['template', 'ls', '--json'], limitMs));
+  const templates = JSON.parse(await checked(['template', 'ls', '--json'], limitMs, signal));
   const template = templates.find(
     (item) => item.flavor === 'shell' && item.digest === digest && item.id === digest,
   );
   if (!template) throw Error('SBX_PINNED_SHELL_REQUIRED');
   const name = 'aos-b0-' + randomUUID();
   const workspace = await mkdtemp(join(await realpath(tmpdir()), 'sbx-witness-'));
-  const names = async () => JSON.parse(await checked(['ls', '--json'], limitMs)).map((item) => item.name);
-  let creating = false;
+  const names = async (signal) =>
+    JSON.parse(await checked(['ls', '--json'], limitMs, signal)).map((item) => item.name);
+  let creation = 'unused';
   async function run() {
-    if (prepare) await prepare(workspace);
-    if ((await names()).includes(name)) throw Error('SBX_NAME_IN_USE');
-    creating = true;
+    if (prepare) await prepare(workspace, signal);
+    if ((await names(signal)).includes(name)) throw Error('SBX_NAME_IN_USE');
+    signal.throwIfAborted();
+    creation = 'requested';
+    // Do not interrupt an in-flight creation. A prematurely cancelled RPC might create
+    // the VM after the host has listed it as absent and unlinked its mount.
     await checked(
       [
         'create',
@@ -119,7 +159,8 @@ export async function withOfflineSbx({ limitMs, prepare, verify }, use) {
       ],
       limitMs,
     );
-    const observed = JSON.parse(await checked(['inspect', '--json', name], limitMs));
+    creation = 'acknowledged';
+    const observed = JSON.parse(await checked(['inspect', '--json', name], limitMs, signal));
     const mounts = observed.host_mounts;
     if (
       observed.name !== name ||
@@ -140,7 +181,7 @@ export async function withOfflineSbx({ limitMs, prepare, verify }, use) {
     ) {
       throw Error('SBX_FIXTURE_BINDING_MISMATCH');
     }
-    await requireOfflinePolicy(name, limitMs);
+    await requireOfflinePolicy(name, limitMs, signal);
     // Run the access check as the client identity before either pinned client is staged.
     await checked(
       [
@@ -157,35 +198,56 @@ export async function withOfflineSbx({ limitMs, prepare, verify }, use) {
         isolation.forbiddenHostSocket,
       ],
       limitMs,
+      signal,
     );
-    return await use({
-      workspace,
-      copyIn(source, destination) {
-        return checked(['cp', '--', source, name + ':' + destination], limitMs);
-      },
-      exec(args, { user = '65534:65534', cwd = workspace, input } = {}) {
-        return command(
-          ['exec', ...(input === undefined ? [] : ['-i']), '--user', user, '-w', cwd, '--', name, ...args],
-          limitMs,
-          input,
-        );
-      },
-      execExchange(args, initialObject, onRequest) {
-        const { HOME, PATH, TMPDIR } = process.env;
-        const child = spawn(
-          'sbx',
-          ['--no-input', 'exec', '-i', '--user', '65534:65534', '-w', workspace, '--', name, ...args],
-          { env: { HOME, PATH, TMPDIR }, stdio: ['pipe', 'pipe', 'pipe'] },
-        );
-        return exchangeFrames(child, initialObject, onRequest, limitMs);
-      },
-    });
+    return useUntilInterrupted(signal, limitMs, (start, activeSignal) =>
+      use({
+        workspace,
+        signal: activeSignal,
+        copyIn(source, destination) {
+          return start(() => checked(['cp', '--', source, name + ':' + destination], limitMs, activeSignal));
+        },
+        exec(args, { user = '65534:65534', cwd = workspace, input } = {}) {
+          return start(() =>
+            command(
+              [
+                'exec',
+                ...(input === undefined ? [] : ['-i']),
+                '--user',
+                user,
+                '-w',
+                cwd,
+                '--',
+                name,
+                ...args,
+              ],
+              limitMs,
+              input,
+              activeSignal,
+            ),
+          );
+        },
+        execExchange(args, initialObject, onRequest) {
+          return start(() => {
+            const child = spawnSbx([
+              'exec',
+              '-i',
+              '--user',
+              '65534:65534',
+              '-w',
+              workspace,
+              '--',
+              name,
+              ...args,
+            ]);
+            return exchangeFrames(child, initialObject, onRequest, limitMs, activeSignal);
+          });
+        },
+      }),
+    );
   }
-  async function stop() {
-    if (creating && (await names()).includes(name)) {
-      await checked(['rm', '--force', name], limitMs);
-      if ((await names()).includes(name)) throw Error('SBX_CLEANUP_INCOMPLETE: ' + name);
-    }
+  function stop() {
+    return stopOwnedVm(name, creation, names, (owned) => checked(['rm', '--force', owned], limitMs));
   }
-  return runOfflineProbe({ name, workspace, run, stop, verify });
+  return runOfflineProbe({ name, workspace, run, stop, verify, signal });
 }

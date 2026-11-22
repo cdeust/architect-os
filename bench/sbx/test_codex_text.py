@@ -147,6 +147,12 @@ class TextContract(unittest.TestCase):
                   {"type": "item.completed", "item": {"type": "agent_message", "text": TEXT}},
                   {"type": "turn.completed", "usage": USAGE.copy()}]
         self.assertEqual(guest.observed_turn(ndjson(native)), (TEXT, USAGE))
+        native[-1]["usage"]["total_tokens"] = sum(USAGE.values())
+        self.assertEqual(guest.observed_turn(ndjson(native)), (TEXT, USAGE))
+        for invalid_total in (True, None, sum(USAGE.values()) - 1, float(sum(USAGE.values()))):
+            frame = {"type": "turn.completed", "usage": {**USAGE, "total_tokens": invalid_total}}
+            with self.subTest(total=invalid_total), self.assertRaises(ValueError):
+                guest.observed_turn(ndjson(native[:-1] + [frame]))
         for bad in (native[:-1], native + native, native[:-1] + [{"type": "turn.failed"}],
                     native[:2] + [{"type": "item.completed", "item": {"type": "command_execution"}}] + native[3:],
                     native[:2] + [{"type": "approval.requested"}] + native[2:]):

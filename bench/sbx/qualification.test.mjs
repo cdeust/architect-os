@@ -3,7 +3,7 @@ import { access, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { runOfflineProbe } from './lifecycle.mjs';
+import { runOfflineProbe, stopOwnedVm, useUntilInterrupted } from './lifecycle.mjs';
 import { createWitness, readWitness } from './witness.mjs';
 
 async function workspace(t) {
@@ -85,6 +85,122 @@ test('an unconfirmed stop retains the mount and both original failures', async (
     },
   );
   await access(dir);
+});
+
+test('a timed-out creation and an empty list retain the named mount for recovery', async (t) => {
+  const dir = await workspace(t);
+  const failure = Error('creation RPC timed out');
+  await assert.rejects(
+    runOfflineProbe({
+      name: 'delayed-vm',
+      workspace: dir,
+      run: async () => {
+        throw failure;
+      },
+      stop: () =>
+        stopOwnedVm(
+          'delayed-vm',
+          'requested',
+          async () => [],
+          () => assert.fail('unknown VM removed'),
+        ),
+    }),
+    (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.errors[0], failure);
+      assert.equal(error.errors[1].message, 'SBX_CREATE_UNCONFIRMED');
+      assert.ok(error.message.includes(dir) && error.message.includes('delayed-vm'));
+      return true;
+    },
+  );
+  await access(dir);
+});
+
+test('a visible VM after an ambiguous creation is removed by its exact name and checked again', async () => {
+  let present = true;
+  let lists = 0;
+  await stopOwnedVm(
+    'owned-vm',
+    'requested',
+    async () => {
+      lists++;
+      return present ? ['another-vm', 'owned-vm'] : ['another-vm'];
+    },
+    async (name) => {
+      assert.equal(name, 'owned-vm');
+      present = false;
+    },
+  );
+  assert.equal(lists, 2);
+});
+
+test('cancellation revokes an idle consumer and waits for the active command to settle', async () => {
+  const controller = new AbortController();
+  const ready = Promise.withResolvers();
+  const command = Promise.withResolvers();
+  const reason = Error('interrupted');
+  let capability;
+  const running = useUntilInterrupted(controller.signal, 5000, (start) => {
+    capability = start;
+    start(() => command.promise);
+    ready.resolve();
+    return new Promise(() => {});
+  });
+  await ready.promise;
+  controller.abort(reason);
+  assert.throws(
+    () => capability(() => assert.fail('ran after interruption')),
+    (error) => error === reason,
+  );
+  let released = false;
+  const rejected = assert.rejects(running, (error) => {
+    released = true;
+    return error === reason;
+  });
+  await new Promise(setImmediate);
+  assert.equal(released, false);
+  command.resolve();
+  await rejected;
+});
+
+test('a retained capability cannot dispatch work after a successful probe', async () => {
+  const capability = await useUntilInterrupted(new AbortController().signal, 5000, (start) => start);
+  assert.throws(() => capability(() => assert.fail('ran after probe')), { message: 'SBX_CAPABILITY_CLOSED' });
+});
+
+test('a consumer blocked after VM creation expires, cancels its pending work and releases the mount', async (t) => {
+  const dir = await workspace(t);
+  const phases = [];
+  await assert.rejects(
+    runOfflineProbe({
+      name: 'owned',
+      workspace: dir,
+      run: () =>
+        useUntilInterrupted(new AbortController().signal, 35, (start, signal) => {
+          start(
+            () =>
+              new Promise((resolve) =>
+                signal.addEventListener(
+                  'abort',
+                  () => {
+                    phases.push('cancelled');
+                    resolve();
+                  },
+                  { once: true },
+                ),
+              ),
+          );
+          return new Promise(() => {});
+        }),
+      stop: async () => {
+        phases.push('stopped');
+      },
+      verify: () => assert.fail('expired consumer was accepted'),
+    }),
+    { message: 'SBX_USE_TIMEOUT' },
+  );
+  assert.deepEqual(phases, ['cancelled', 'stopped']);
+  await assert.rejects(access(dir), { code: 'ENOENT' });
 });
 
 for (const failedPhase of ['run', 'verify']) {

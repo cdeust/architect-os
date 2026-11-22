@@ -1,5 +1,5 @@
-// Match the 1 MiB per-stream bound of the bench's execFile calls, including newlines.
-const pipeLimit = 1024 * 1024;
+// Preserve the bench's original execFile per-stream bound, including newlines.
+export const pipeLimit = 1024 * 1024;
 const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 function parseFrame(bytes) {
@@ -19,7 +19,7 @@ function parseFrame(bytes) {
 }
 
 /** A single guest request and a final receipt on a pre-scoped SBX child. */
-export function exchangeFrames(child, initialObject, onRequest, limitMs) {
+export function exchangeFrames(child, initialObject, onRequest, limitMs, signal) {
   return new Promise((resolve, reject) => {
     const controller = new AbortController();
     const buffer = Buffer.allocUnsafe(pipeLimit);
@@ -32,11 +32,12 @@ export function exchangeFrames(child, initialObject, onRequest, limitMs) {
     let failure;
     let expectedModel;
     const deadline = setTimeout(() => fail('TIMEOUT'), limitMs);
+    const interrupt = () => fail('INTERRUPTED', signal.reason);
 
-    function fail(reason) {
+    function fail(reason, error = new Error('SBX_EXCHANGE_' + reason)) {
       if (failure) return;
-      failure = new Error('SBX_EXCHANGE_' + reason);
-      controller.abort();
+      failure = error;
+      controller.abort(error);
       child.kill('SIGKILL');
       // A descendant can retain a pipe after the CLI exits. Do not wait for its EOF.
       for (const stream of child.stdio) stream.destroy();
@@ -120,10 +121,13 @@ export function exchangeFrames(child, initialObject, onRequest, limitMs) {
     });
     child.once('close', (code) => {
       clearTimeout(deadline);
+      signal?.removeEventListener('abort', interrupt);
       if (!failure && (code !== 0 || phase !== 'done' || frameStart !== stdoutBytes)) fail('INCOMPLETE');
       if (failure) reject(failure);
       else resolve(receipt);
     });
+    if (signal?.aborted) return interrupt();
+    signal?.addEventListener('abort', interrupt, { once: true });
     try {
       if (
         typeof initialObject?.model !== 'string' ||

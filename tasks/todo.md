@@ -79,4 +79,4 @@ The [milestone 2 integration](https://github.com/cdeust/architect-os/pull/124) e
 - [ ] Verify one tool-free Astra subscription inference and its billing on a separately consented host route.
 - [ ] Qualify a production Builder and independent review through the admitted Step.
 
-The admitted workstation reproduced the write witness, one read-only host fixture turn with matching synthetic usage (8 input, 4 output), and the Google ACP refusal (-32000, process exit 1). No subscription inference was made during these checks.
+The admitted workstation reproduced the write witness, one read-only host fixture turn with matching synthetic usage (8 input, 4 output), and the Google ACP refusal (-32000, process exit 1). These fixtures made no upstream calls. The separate one-request Astra subscription trial stopped on an unrecognized stream event after HTTP 200. The account owner confirmed quota exhaustion. Native completion failed, and token usage and cost were not measured.

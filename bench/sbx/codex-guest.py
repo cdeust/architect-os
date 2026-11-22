@@ -182,6 +182,10 @@ def usage_counts(value):
     counts = {key: value[key] for key in ("input_tokens", "output_tokens")}
     if any(type(n) is not int or not 0 <= n <= 2**53 - 1 for n in counts.values()):
         raise ValueError("invalid interoperable usage count")
+    total = sum(counts.values())
+    if total > 2**53 - 1 or ("total_tokens" in value and
+                               (type(value["total_tokens"]) is not int or value["total_tokens"] != total)):
+        raise ValueError("inconsistent terminal token total")
     return counts
 
 
