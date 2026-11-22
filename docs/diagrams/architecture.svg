@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 4800.5" width="1400" height="4800.5" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="t">architect-os: what is ready, and where what comes next will join</title>
-  <desc id="d">The architecture of architect-os in one image, in five parts. Ready marks bricks available on main. Next marks planned work or pending integration beside the brick it will join. 1. Serving a call: a client calls the gateway over HTTP on the loopback with a bearer token; the gateway starts two native children on stdio, data, only child given the PostgreSQL URL, and the broker, sole holder of the API key, which alone reaches api.anthropic.com; it starts modules and workers in srt sandboxes; a module calls back the gateway with its call identifier; a worker reaches only the broker, with the token of its task. 2. Define reads a validated prd-gen handoff over MCP. Plan accepts the verified Spec proposal or a draft from Claude Code, Codex or Antigravity. It can also import a completed Antigravity exchange. Plan previews one Step and requires local approval to materialize it. The host verifies scout citations against repository lines before including them in the Builder brief. The orchestration loop takes a brief, those verified facts, a build session, checks without a model, the replay of the host, reviews that cannot write the worktree, the gate, and the delivery of the same commit to the branch and then to main; after a refusal, the orchestrator writes a new brief; the host writes steps/&lt;name&gt;/ into the worktree. 3. Every Step session runs inside an srt sandbox, from one of five profiles. The Builder writes the worktree while the host controls Git metadata. The authentication proxy on the host alone holds the credential of the owner. The required ./aos entry checks the marked runtime root and the available space on the root and home filesystems before npm, then records admission in the new run directory. Repository automation uses this entry. All five profiles use private session directories. The host retains Step results and journals under the root and writes raw streams to the run temporary directory. Gate locks each physical checkout, writes to its run reports directory, and retains the checked Linux receipt for Deliver. A canary under the same profile must fail before each command. What each profile opens is the generated image isolation-profiles.svg, held equal to the five profile files by the gate. 4. Five checks before the gate, then the host gate and npm run deliver. In CI, Linux splits the full scenario suite into two shards and checks mutants in sixteen lanes with independent replay. macOS runs the sandbox scenarios. 5. The evidence desk verifies each DOI at doi.org and matches normalized passages in the supplied full text; the watch of Anthropic compares the public sources the platform relies on with a committed register.</desc>
+  <desc id="d">The architecture of architect-os in one image, in five parts. Ready marks bricks available on main. Next marks planned work or pending integration beside the brick it will join. 1. Serving a call: a client calls the gateway over HTTP on the loopback with a bearer token; the gateway starts two native children on stdio, data, only child given the PostgreSQL URL, and the broker, sole holder of the API key, which alone reaches api.anthropic.com; it starts modules and workers in srt sandboxes; a module calls back the gateway with its call identifier; a worker reaches only the broker, with the token of its task. 2. Define reads a validated prd-gen handoff over MCP. The admitted planning host can drive a pinned Spec bundle through drafting and independent review and resume from its private journal. Plan accepts the verified Spec proposal or a draft from Claude Code, Codex or Antigravity. It can also import a completed Antigravity exchange. Plan previews one Step. A plain proposal can be materialized with local approval. The independently reviewed Spec projection stops at preview. Step verifies a separate host receipt for its inputs, target tree, launcher, independent reviews and prompt specimens. The host verifies scout citations against repository lines before including them in the Builder brief. The orchestration loop takes a brief, those verified facts, a build session, checks without a model, the replay of the host, reviews that cannot write the worktree, the gate, and the delivery of the same commit to the branch and then to main; after a refusal, the orchestrator writes a new brief; the host writes steps/&lt;name&gt;/ into the worktree. Production uses Claude Code under SRT. In the separate native SBX offline bench, Codex writes the witness and Gemini (agy) exits 1 at session creation. The subscription route and production adapter remain planned. 3. Every Step session runs inside an srt sandbox, from one of five profiles. The Builder writes the worktree while the host controls Git metadata. The authentication proxy on the host alone holds the credential of the owner. The required ./aos entry checks the marked runtime root and the available space on the root and home filesystems before npm, then records admission in the new run directory. Repository automation uses this entry. All five profiles use private session directories. The host retains Step results and journals under the root and writes raw streams to the run temporary directory. Gate locks each physical checkout, writes to its run reports directory, and retains the checked Linux receipt for Deliver. A canary under the same profile must fail before each command. What each profile opens is the generated image isolation-profiles.svg, held equal to the five profile files by the gate. 4. Five checks before the gate, then the host gate and npm run deliver. In CI, Linux splits the full scenario suite into two shards and checks mutants in sixteen lanes with independent replay. macOS runs the sandbox scenarios. 5. The evidence desk verifies each DOI at doi.org and matches normalized passages in the supplied full text; the watch of Anthropic compares the public sources the platform relies on with a committed register.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
     <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#cf222e"/></marker>
@@ -155,22 +155,22 @@
   <text x="283" y="1094" font-size="19" fill="#1f2328" font-weight="600">Define v1</text>
   <rect x="757" y="1074" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
   <text x="792" y="1093" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1122" font-size="18.5" fill="#57606a">Read the validated Spec handoff over MCP.</text>
+  <text x="283" y="1122" font-size="18.5" fill="#57606a">Drive Spec or read its validated Define handoff.</text>
 </g>
 <g role="group" aria-label="Plan v1 · ready">
   <rect x="269" y="1140" width="570" height="65" rx="6" fill="#ffffff" stroke="#1a7f37"/>
   <text x="283" y="1168" font-size="19" fill="#1f2328" font-weight="600">Plan v1</text>
   <rect x="757" y="1148" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
   <text x="792" y="1167" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1196" font-size="18.5" fill="#57606a">Preview one Step; local approval writes its inputs.</text>
+  <text x="283" y="1196" font-size="18.5" fill="#57606a">Preview the independently reviewed Spec Plan.</text>
 </g>
   <text x="283" y="1237" font-size="18.5" fill="#57606a">The orchestrator gives each session its scoped brief.</text>
-<g role="group" aria-label="Independent spec judge · next">
+<g role="group" aria-label="Optional spec-only judge · next">
   <rect x="854" y="1066" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1094" font-size="19" fill="#1f2328" font-weight="600">Independent spec judge</text>
+  <text x="868" y="1094" font-size="19" fill="#1f2328" font-weight="600">Optional spec-only judge</text>
   <rect x="1277" y="1074" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
   <text x="1312" y="1093" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1122" font-size="18.5" fill="#57606a">Use another provider for the specification only;</text>
+  <text x="868" y="1122" font-size="18.5" fill="#57606a">Request an extra opinion on the specification;</text>
   <text x="868" y="1146" font-size="18.5" fill="#57606a">off by default.</text>
 </g>
 <g role="group" aria-label="Reflection · next">
@@ -211,13 +211,19 @@
   <rect x="24" y="1477" width="1352" height="215" rx="6" fill="#ffffff" stroke="#d0d7de"/>
   <rect x="36" y="1491" width="216" height="187" rx="6" fill="#ffffff" stroke="#bf8700"/>
   <text x="50" y="1526" font-size="25" fill="#1f2328" font-weight="600" id="phase-build">3 · Build</text>
-  <text x="50" y="1557" font-size="18" fill="#57606a">Step · Builder srt</text>
+  <text x="50" y="1557" font-size="18" fill="#57606a">Claude Code · SRT</text>
   <rect x="50" y="1573" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
   <text x="85" y="1592" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1514" font-size="18.5" fill="#57606a">Claude Code can edit the worktree. Git metadata and the</text>
-  <text x="283" y="1538" font-size="18.5" fill="#57606a">commit belong to the host.</text>
+  <text x="283" y="1514" font-size="18.5" fill="#57606a">Step checks host evidence before Builder writes.</text>
+  <text x="283" y="1538" font-size="18.5" fill="#57606a">Git metadata and the commit belong to the host.</text>
   <text x="283" y="1579" font-size="18.5" fill="#57606a">The Builder owns the design, implementation and</text>
   <text x="283" y="1603" font-size="18.5" fill="#57606a">maintenance of the code it changes.</text>
+<g role="group" aria-label="SBX offline qualification bench · ready">
+  <text x="283" y="1637" font-size="19" fill="#1f2328" font-weight="600">SBX offline qualification bench</text>
+  <rect x="689" y="1617" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="724" y="1636" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1664" font-size="18.5" fill="#57606a">Codex writes the witness; Gemini (agy) exits 1.</text>
+</g>
 <g role="group" aria-label="Independent scenarios · next">
   <rect x="854" y="1491" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
   <text x="868" y="1519" font-size="19" fill="#1f2328" font-weight="600">Independent scenarios</text>
@@ -231,8 +237,8 @@
   <text x="868" y="1617" font-size="19" fill="#1f2328" font-weight="600">Second build provider</text>
   <rect x="1277" y="1597" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
   <text x="1312" y="1616" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1645" font-size="18.5" fill="#57606a">A second host proxy runs a Builder reviewed by</text>
-  <text x="868" y="1669" font-size="18.5" fill="#57606a">another provider.</text>
+  <text x="868" y="1645" font-size="18.5" fill="#57606a">Qualify the subscription route and integrate</text>
+  <text x="868" y="1669" font-size="18.5" fill="#57606a">the production adapter for cross-provider review.</text>
 </g>
 </g>
 <g id="loop-checks" role="group" aria-labelledby="phase-checks">
@@ -431,9 +437,9 @@
   <text x="38.0" y="1712.5" font-size="13" fill="#1f2328" font-weight="600">Host</text>
   <rect x="40.0" y="1730.5" width="300.0" height="83.5" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
   <text x="51.0" y="1752.5" font-size="12.5" fill="#1f2328" font-weight="600">Launcher (1a.0, O.1)</text>
-  <text x="51.0" y="1770.5" font-size="11.5" fill="#57606a">npm run code · review · step, called from a</text>
-  <text x="51.0" y="1786.0" font-size="11.5" fill="#57606a">worktree; system prompts from its library,</text>
-  <text x="51.0" y="1801.5" font-size="11.5" fill="#57606a">never from the worktree</text>
+  <text x="51.0" y="1770.5" font-size="11.5" fill="#57606a">npm run review · step from a linked worktree;</text>
+  <text x="51.0" y="1786.0" font-size="11.5" fill="#57606a">the admitted Builder reads the host’s frozen</text>
+  <text x="51.0" y="1801.5" font-size="11.5" fill="#57606a">launcher prompts.</text>
   <rect x="284.0" y="1722.0" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
   <text x="307.0" y="1734.5" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
   <rect x="40.0" y="1828.0" width="300.0" height="83.5" rx="6" fill="#f6f8fa" stroke="#cf222e"/>
