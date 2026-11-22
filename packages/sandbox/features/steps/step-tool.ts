@@ -5,25 +5,41 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  realpathSync,
   readFileSync,
   rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import os, { tmpdir } from 'node:os';
+import { syncBuiltinESMExports } from 'node:module';
+import { dirname, join } from 'node:path';
 import { mock } from 'node:test';
 import { createHash } from 'node:crypto';
 import { PassThrough } from 'node:stream';
-import type { CodeProcess, CodeToolDependencies } from '../../src/code-tool.js';
+import {
+  processDependencies,
+  srtOptions,
+  type CodeProcess,
+  type CodeToolDependencies,
+} from '../../src/code-tool.js';
 import { SandboxError } from '../../src/port.js';
+import {
+  freezeStepLauncher,
+  requireStepAdmission,
+  stepAdmissionAuthority,
+} from '../../src/step-admission.js';
+import { admittedFixture } from './admission-fixture.js';
 import { factsJsonSchema } from '../../src/scout-facts.js';
 import { stepRecordSchema } from '../../src/step-record.js';
 import { stepsFolder } from '../../src/steps-folder.js';
+import { repoOf } from './runner.js';
+import { parseStepFile } from '../../src/step-file.js';
 import type { TreeFingerprint } from '../../src/tree-fingerprint.js';
 import {
   codeToolSession,
+  launcherFiles,
   runStep,
   stepDependencies,
   toolDependencies,
@@ -79,6 +95,8 @@ const newPhase = (): Phase => ({
   runningWhenStarted: [],
 });
 interface Step {
+  refusedAdmission?: string;
+  acceptedAdmission?: string;
   folder: string;
   outputs: { retained: string; streams: string };
   calls: Call[];
@@ -397,6 +415,10 @@ const launcherFile =
     return /^(code|review|scout)\.json$/.test(file) ? readFileSync(join(PKG, file), 'utf8') : `fixed:${file}`;
   };
 
+Given('the step has {string} admission evidence', function (reason: string) {
+  step(this).refusedAdmission = reason;
+});
+
 const start = (s: Step, args: string): Promise<void> => {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -440,6 +462,23 @@ const start = (s: Step, args: string): Promise<void> => {
       return s.fingerprint;
     },
     readLauncher: launcherFile(s),
+    admit: (subject) => {
+      const evidence = admittedFixture(subject);
+      if (s.refusedAdmission === 'missing') return requireStepAdmission(undefined, subject);
+      if (s.refusedAdmission === 'missing approval') {
+        const { approval: _approval, ...payload } = evidence.payload;
+        return requireStepAdmission({ ...evidence, payload }, subject);
+      }
+      if (s.refusedAdmission === 'stale') evidence.payload.inputs_sha256['brief.md'] = 'a'.repeat(64);
+      if (s.refusedAdmission === 'failed specimen') {
+        evidence.payload.specimens[0]!.results[0]!.observed = { verdict: 'refuse', findings: [] };
+        evidence.approved_sha256 = createHash('sha256')
+          .update(JSON.stringify(evidence.payload))
+          .digest('hex');
+      }
+      s.acceptedAdmission = requireStepAdmission(evidence, subject);
+      return s.acceptedAdmission;
+    },
     steps: {
       prepare: () => void s.prepared.push(s.calls.length),
       exists: (name) => s.taken.has(name),
@@ -942,21 +981,10 @@ When(
   },
 );
 
-Then(
-  'the real check of the step dependencies is refused by the real runner, before any process',
-  async function () {
-    const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
-    // The real runner loads the profile `checker` first (a wrong name is PROFILE_INVALID), then makes its folder (refused
-    // as ISOLATION_UNAVAILABLE where the temporary directory is too long for a Unix socket), then resolves the folder
-    // INIT_CWD names: a folder that is no worktree is NOT_A_WORKTREE, while `/elsewhere`, the cwd of the process, does not
-    // exist and would be a plain ENOENT. Either refusal is a SandboxError, before any process.
-    await assert.rejects(
-      () => deps.check(['true'], 1),
-      (error: unknown) =>
-        error instanceof SandboxError && ['NOT_A_WORKTREE', 'ISOLATION_UNAVAILABLE'].includes(error.code),
-    );
-  },
-);
+Then('the check port refuses to start a process without admitted launcher bytes', function () {
+  const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+  assert.throws(() => deps.check(['true'], 1), { message: 'STEP_ADMISSION_REQUIRED' });
+});
 Then(
   'the tool dependencies of a process for {string} describe the tool {string} in {string}',
   function (file: string, profile: string, cwd: string) {
@@ -1031,13 +1059,125 @@ Then('the step dependencies read the source {string} as undefined', function (pa
 });
 
 Given('the step uses the materialized Plan folder', function () {
-  step(this).folder = stored<string>(this, 'planFolder');
+  const s = step(this);
+  s.folder = stored<string>(this, 'planFolder');
 });
 
 Then('the Step record binds the two approved input files', function () {
-  const expected = stored<{ files_sha256: Record<string, string> }>(this, 'planManifest');
-  const archive = step(this).published.get('delivery');
+  const expected = stored<{ step: string; files_sha256: Record<string, string> }>(this, 'planManifest');
+  const archive = step(this).published.get(expected.step);
   assert.ok(archive);
   const record = stepRecordSchema().parse(JSON.parse(archive['record.json']!));
   assert.deepEqual(record.inputs, expected.files_sha256);
+  assert.equal(record.admission_sha256, step(this).acceptedAdmission);
+});
+
+Then('native launch reads the frozen launcher even after the original changes', function () {
+  const target = mkdtempSync(join(tmpdir(), 'aos-freeze-target-'));
+  const original = {
+    'code.json': readFileSync(join(PKG, 'code.json'), 'utf8'),
+    'prompts/build.md': 'Reviewed system prompt',
+    'profiles/builder.json': 'Reviewed profile bytes',
+  };
+  const frozen = freezeStepLauncher(original, target);
+  try {
+    original['prompts/build.md'] = 'Modified system prompt';
+    original['profiles/builder.json'] = 'Modified profile bytes';
+    const native = processDependencies(process, () => false, 'code.json', frozen.dir);
+    assert.equal(readFileSync(native.systemPrompt(), 'utf8'), 'Reviewed system prompt');
+    const options = srtOptions(process, {}, frozen.dir);
+    assert.equal(readFileSync(join(options.profilesDir, 'builder.json'), 'utf8'), 'Reviewed profile bytes');
+    const manifest = join(PKG, '..', '..', 'package.json');
+    assert.deepEqual(options.trusted, [PKG, frozen.dir, manifest, stepAdmissionAuthority()]);
+    assert.deepEqual(srtOptions(process, {}).trusted, [PKG, manifest]);
+    assert.equal(options.frozenLauncher, frozen.dir);
+    assert.equal(srtOptions(process, {}).frozenLauncher, undefined);
+  } finally {
+    frozen.dispose();
+    rmSync(target, { recursive: true });
+  }
+});
+
+Then('the standalone code entry writes only its required Step diagnostic', async function () {
+  const before = process.exitCode;
+  let err = '';
+  const write = mock.method(process.stderr, 'write', (chunk: string) => {
+    err += chunk;
+    return true;
+  });
+  try {
+    await import('../../src/code.js');
+    assert.equal(process.exitCode, 2);
+    assert.equal(err, 'architect-os code: STEP_ADMISSION_REQUIRED. Start the approved Step instead.\n');
+  } finally {
+    write.mock.restore();
+    process.exitCode = before;
+  }
+});
+
+Then('an isolated Step host binds its fixture receipt and releases the snapshot', async function () {
+  const { worktree } = repoOf(this);
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'step-host-fixture-')));
+  this.cleanups.push(() => rmSync(home, { recursive: true, force: true }));
+  const user = os.userInfo();
+  const info = mock.method(os, 'userInfo', () => ({ ...user, homedir: home }));
+  syncBuiltinESMExports();
+  try {
+    const authority = stepAdmissionAuthority();
+    mkdirSync(authority, { recursive: true, mode: 0o700 });
+    const receipt = join(authority, 'fixture.json');
+    const proc = {
+      ...process,
+      env: { ...process.env, INIT_CWD: worktree, ARCHITECT_OS_STEP_EVIDENCE: receipt },
+      cwd: () => worktree,
+      argv: [],
+      stderr: new PassThrough(),
+      stdout: new PassThrough(),
+      stdin: new PassThrough(),
+    };
+    const deps = stepDependencies(proc);
+    const request = () => deps.session('never-launch.json' as ToolFile, [], '', 1, () => {});
+    await assert.rejects(request, { message: 'STEP_ADMISSION_REQUIRED' });
+    deps.dispose!();
+    const step = parseStepFile({ build: { model: 'fixture', effort: 'low', limitSeconds: 1 }, reviews: [] });
+    const subject = {
+      name: 'fixture',
+      worktree,
+      step,
+      tree: deps.fingerprint(),
+      inputs: { 'brief.md': 'Fixture only.', 'step.json': JSON.stringify(step) },
+      launcher: launcherFiles(deps.readLauncher, step),
+    };
+    const witness = admittedFixture(subject);
+    writeFileSync(receipt, JSON.stringify(witness), { mode: 0o600 });
+    const original = new Set(readdirSync(tmpdir()));
+    assert.equal(deps.admit(subject), witness.approved_sha256);
+    let frozen: string | undefined;
+    try {
+      await assert.rejects(request, (error: NodeJS.ErrnoException) => {
+        assert.equal(error.code, 'ENOENT');
+        frozen = dirname(error.path!);
+        assert.equal(dirname(frozen), realpathSync(tmpdir()));
+        assert.ok(!original.has(frozen.split('/').at(-1)!));
+        assert.equal(readFileSync(join(frozen, 'code.json'), 'utf8'), subject.launcher['code.json']);
+        return true;
+      });
+    } finally {
+      deps.dispose!();
+    }
+    assert.ok(frozen);
+    assert.equal(existsSync(frozen), false);
+    let released = 0;
+    await runStep({
+      ...deps,
+      folderArguments: [],
+      dispose: () => {
+        released++;
+      },
+    });
+    assert.equal(released, 1);
+  } finally {
+    info.mock.restore();
+    syncBuiltinESMExports();
+  }
 });

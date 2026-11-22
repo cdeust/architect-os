@@ -1,5 +1,8 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { bindSessionWorkspace, engineSettings } from '../../src/srt-runner.js';
+import { bindFrozenLauncher, bindSessionWorkspace, engineSettings } from '../../src/srt-runner.js';
 import { PROFILE_VARIABLES, type SrtSettings } from '../../src/profile.js';
 import { Then } from './helpers.js';
 
@@ -133,4 +136,33 @@ Then('the public host template variables identify the runtime and session locati
     'config',
     'sandboxes',
   ]);
+});
+
+Then('frozen launcher binding keeps existing reads and rejects unsafe paths', function () {
+  const run = realpathSync(mkdtempSync(join(tmpdir(), 'bind-frozen-')));
+  this.cleanups.push(() => rmSync(run, { recursive: true, force: true }));
+  const temp = join(run, 'tmp');
+  mkdirSync(temp);
+  const canonical = join(temp, 'aos-launcher-Ab12Cd');
+  mkdirSync(canonical);
+  const settings: SrtSettings = {
+    network: { allowedDomains: [], deniedDomains: [] },
+    filesystem: { denyRead: [run], allowWrite: [], denyWrite: [] },
+  };
+  bindFrozenLauncher(settings, run, canonical);
+  assert.deepEqual(settings.filesystem.allowRead, [canonical]);
+  settings.filesystem.allowRead = ['/existing'];
+  bindFrozenLauncher(settings, run, canonical);
+  assert.deepEqual(settings.filesystem.allowRead, ['/existing', canonical]);
+  const alias = join(temp, 'aos-launcher-Xy12Cd');
+  symlinkSync(canonical, alias);
+  const foreign = join(run, 'aos-launcher-Ab12Cd'),
+    prefixed = join(temp, 'bad-aos-launcher-Ab12Cd'),
+    suffixed = join(temp, 'aos-launcher-Ab12Cd-extra');
+  for (const path of [foreign, prefixed, suffixed]) mkdirSync(path);
+  for (const path of [alias, foreign, prefixed, suffixed])
+    assert.throws(() => bindFrozenLauncher(settings, run, path), /invalid frozen launcher location/);
+  settings.filesystem.allowWrite = [canonical];
+  assert.throws(() => bindFrozenLauncher(settings, run, canonical), /chemin de confiance inscriptible/);
+  assert.deepEqual(settings.filesystem.allowRead, ['/existing', canonical]);
 });

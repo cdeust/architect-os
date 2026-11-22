@@ -15,6 +15,7 @@ import {
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+import { freezeStepLauncher } from '../../src/step-admission.js';
 import { readCapped } from '../../src/capped.js';
 import { InMemorySandboxRunner } from '../../src/in-memory.js';
 import type { Sandbox, SandboxExit, SandboxRunner } from '../../src/port.js';
@@ -574,3 +575,42 @@ Then('the worktree holds no file {string}', function (name: string) {
 Then('the platform root holds no file {string}', function (name: string) {
   assert.equal(existsSync(join(stored<string>(this, 'cwd'), name)), false);
 });
+
+Then(
+  'the native sandbox reads the frozen prompt and denies its modification and sibling reads',
+  async function () {
+    const { worktree } = repoOf(this);
+    const frozen = freezeStepLauncher({ 'prompts/build.md': 'approved bytes' }, worktree);
+    const sibling = freezeStepLauncher({ 'private.txt': 'private bytes' }, worktree);
+    try {
+      const prompt = join(frozen.dir, 'prompts/build.md');
+      const privateFile = join(sibling.dir, 'private.txt');
+      const probe = `
+      const fs = require('node:fs'), assert = require('node:assert/strict');
+      const [prompt, privateFile, newFile] = process.argv.slice(1);
+      assert.equal(fs.readFileSync(prompt, 'utf8'), 'approved bytes');
+      assert.throws(() => fs.readFileSync(privateFile), { code: /^(EACCES|EPERM|ENOENT)$/ });
+      const writeDenied = { code: /^(EACCES|EPERM|EROFS)$/ };
+      assert.throws(() => fs.writeFileSync(prompt, 'changed'), writeDenied);
+      assert.throws(() => fs.writeFileSync(newFile, 'changed'), writeDenied);
+    `;
+      const runner = new SrtSandboxRunner(srtOptions({ frozenLauncher: frozen.dir }));
+      const child = await runner.start({
+        profile: 'checker',
+        cwd: worktree,
+        command: [process.execPath, '-e', probe, prompt, privateFile, join(frozen.dir, 'new-file')],
+      });
+      child.stdin.end();
+      assert.equal((await child.exited).code, 0);
+      assert.equal(readFileSync(prompt, 'utf8'), 'approved bytes');
+      const broad = new SrtSandboxRunner(srtOptions({ frozenLauncher: dirname(frozen.dir) }));
+      await assert.rejects(
+        broad.start({ profile: 'checker', cwd: worktree, command: [process.execPath] }),
+        /invalid frozen launcher location/,
+      );
+    } finally {
+      sibling.dispose();
+      frozen.dispose();
+    }
+  },
+);

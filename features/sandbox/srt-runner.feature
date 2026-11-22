@@ -78,3 +78,6 @@ Feature: SandboxRunner contract on the real srt adapter
     And I send the line "admitted" on its standard input and close it
     Then its standard output is the line "admitted"
     And it exits with code 0
+
+  Scenario: Only the frozen launcher is readable under the private run
+    Then the native sandbox reads the frozen prompt and denies its modification and sibling reads

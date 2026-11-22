@@ -45,6 +45,7 @@ export function stepRecordSchema() {
     startedAt: z.iso.datetime(),
     tree: z.strictObject({ commit: commit(), tree: commit(), clean: z.boolean() }),
     inputs: keyed(/^(brief\.md|step\.json|scout\.[a-z][a-z0-9-]{0,31}\.md)$/, digest()),
+    admission_sha256: digest().optional(),
     launcher: keyed(/^(?!.*\.\.)[a-z0-9][a-z0-9./-]*$/, digest()),
     sessions: z.array(
       z.strictObject({
@@ -108,6 +109,7 @@ export interface RecordedSession {
 
 export interface RecordParts {
   step: string;
+  admission_sha256?: string;
   startedAt: Date;
   tree: TreeFingerprint;
   /** Le texte lu au départ de chaque fichier d'entrée, par nom de fichier. */
@@ -129,6 +131,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
     step: parts.step,
     startedAt: parts.startedAt.toISOString(),
     tree: parts.tree,
+    ...(parts.admission_sha256 ? { admission_sha256: parts.admission_sha256 } : {}),
     inputs: digests(parts.inputs),
     launcher: digests(parts.launcher),
     sessions: parts.sessions.map((session) => ({

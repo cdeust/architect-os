@@ -1,3 +1,4 @@
+import { stepAdmissionAuthority } from './step-admission.js';
 // L'outil de code isolé de la brique 1a.0 : Claude Code sous srt dans le worktree courant. `code.ts` lui passe le
 // processus ; tout ce que l'outil fait est ici, testé. Aucun secret ne franchit la frontière : le proxy
 // d'authentification, hors sandbox, détient l'identifiant ; la sandbox reçoit un jeton de session aléatoire, révoqué
@@ -116,9 +117,14 @@ export interface CodeProcess {
 }
 
 /** Les options de l'adaptateur srt : profils, srt épinglé et canari du paquet ; code du lanceur de confiance. */
-export function srtOptions(proc: CodeProcess, variables: Readonly<Record<string, string>>): SrtRunnerOptions {
+export function srtOptions(
+  proc: CodeProcess,
+  variables: Readonly<Record<string, string>>,
+  launcherRoot = PKG,
+): SrtRunnerOptions {
   return {
-    profilesDir: join(PKG, 'profiles'),
+    ...(launcherRoot === PKG ? {} : { frozenLauncher: launcherRoot }),
+    profilesDir: join(launcherRoot, 'profiles'),
     srtCli: createRequire(import.meta.url).resolve('@anthropic-ai/sandbox-runtime/dist/cli.js'),
     node: proc.execPath,
     canaryProbe: join(PKG, 'src', 'canary-probe.mjs'),
@@ -127,7 +133,10 @@ export function srtOptions(proc: CodeProcess, variables: Readonly<Record<string,
     runDir: proc.env.ARCHITECT_OS_RUN_DIR!,
     home: homedir(),
     hostEnv: proc.env,
-    trusted: [PKG, join(ROOT, 'package.json')],
+    trusted: [
+      ...new Set([PKG, launcherRoot, join(ROOT, 'package.json')]),
+      ...(launcherRoot === PKG ? [] : [stepAdmissionAuthority()]),
+    ],
     variables,
   };
 }
@@ -140,14 +149,15 @@ export function processDependencies(
   proc: CodeProcess,
   isTerminalFd: (fd: number) => boolean = isatty,
   toolFile = 'code.json',
+  launcherRoot = PKG,
 ): CodeToolDependencies {
-  const tool = loadTool(join(PKG, toolFile));
+  const tool = loadTool(join(launcherRoot, toolFile));
   const cwd = proc.env['INIT_CWD'] ?? proc.cwd();
   return {
     tool,
     runtimeRoot: proc.env['ARCHITECT_OS_RUNTIME_ROOT'],
     systemPrompt: () => {
-      const file = join(PKG, tool.launcherPromptFile);
+      const file = join(launcherRoot, tool.launcherPromptFile);
       if (!existsSync(file)) {
         throw new SandboxError('ISOLATION_UNAVAILABLE', `prompt du lanceur introuvable : ${file}`);
       }
@@ -155,7 +165,7 @@ export function processDependencies(
     },
     credential: commandCredential(tool.authProxy.credentialCommand),
     startProxy: startAuthProxy,
-    runner: (variables) => new SrtSandboxRunner(srtOptions(proc, variables)),
+    runner: (variables) => new SrtSandboxRunner(srtOptions(proc, variables, launcherRoot)),
     sessionToken: () => randomBytes(32).toString('hex'),
     cwd,
     argv: proc.argv.slice(2),

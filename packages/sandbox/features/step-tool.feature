@@ -2,7 +2,33 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
   `npm run step -- <folder>` plays the build session with the brief, then the reviews of the step, several at the
   same time, and leaves in the folder what a third party needs. step.ts only hands it the process; everything it does is here.
 
+  Scenario: The public code entry refuses even within a runtime allocation
+    Then the standalone code entry writes only its required Step diagnostic
+
+  Scenario: The native Step host releases its admitted launcher
+    Then an isolated Step host binds its fixture receipt and releases the snapshot
+
   Rule: refusals come before any session, with exit code 2 and one line on stderr
+
+    Scenario Outline: missing, stale or unsuccessful evidence refuses before any Builder session
+      Given a step folder
+      And the step folder holds a step.json with a build and "no review"
+      And the step folder holds the file "brief.md" with the content "Build from the accepted plan."
+      And the step has "<evidence>" admission evidence
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: STEP_ADMISSION_REQUIRED"
+      And no session was started
+
+      Examples:
+        | evidence        |
+        | missing         |
+        | stale           |
+        | failed specimen |
+        | missing approval |
+
+    Scenario: approved prompts and profiles are frozen before any opening of the proxy
+      Then native launch reads the frozen launcher even after the original changes
 
     Scenario: no folder argument
       Given a step folder
@@ -1291,9 +1317,9 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the tool dependencies of a process for "code.json" describe the tool "builder" in "/target"
       And the tool dependencies of a process for "scout.json" describe the tool "reviewer" in "/target"
 
-    Scenario: the real check of the process dependencies runs the profile checker in the folder the process names
+    Scenario: the native check port requires an admitted launcher
       When I build the step dependencies of a process whose INIT_CWD is a folder that is not a worktree
-      Then the real check of the step dependencies is refused by the real runner, before any process
+      Then the check port refuses to start a process without admitted launcher bytes
 
   Rule: the real readSource gives a file of the worktree, and nothing that is not one
 
