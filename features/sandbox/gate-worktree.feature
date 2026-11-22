@@ -15,3 +15,4 @@ Feature: A physical checkout has one live Gate and restores only its own interru
       | different marked root |
       | trusted issuer        |
       | unchecked source      |
+      | incomplete journal    |

@@ -69,3 +69,5 @@ export function clearGateReceipt(): void {
 export function requireCheckedCommit(sha: string): void {
   if (native(['verify', sha]) !== 0) throw new Error('GATE_RECEIPT_TREE_CHANGED');
 }
+
+export const nativeReplacement = { begin: changeReplayFile, restore: restoreReplayFile };

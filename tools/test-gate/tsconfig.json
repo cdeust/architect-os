@@ -4,11 +4,7 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": [
-    "src",
-    "features",
-    "canary"
-  ],
+  "include": ["src", "features", "canary"],
   "references": [
     {
       "path": "../../packages/sandbox"

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
+import fs from 'node:fs';
 import {
   closeSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   openSync,
@@ -16,17 +18,19 @@ import { tmpdir } from 'node:os';
 import { mock } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { readGateReceipt } from '@architect-os/sandbox/gate-receipt';
-import { publishCheckedGate } from '../../tools/test-gate/src/infrastructure/locked-command.js';
+import { repository } from '../../tools/test-gate/features/steps/repository.js';
+import { publishCheckedGate, runLocked } from '../../tools/test-gate/src/infrastructure/locked-command.js';
 import { GateConfigSchema } from '../../tools/test-gate/src/infrastructure/config.js';
 import { Workspace } from '../../tools/test-gate/src/infrastructure/workspace.js';
 import {
   changeReplayFile,
+  nativeReplacement,
   clearGateReceipt,
   requireCheckedCommit,
   restoreReplayFile,
   runGateWithLease,
 } from '../../tools/test-gate/src/infrastructure/tree-lease.js';
-import { Then } from './helpers.js';
+import { ROOT, Then } from './helpers.js';
 
 const sha = 'a'.repeat(40);
 const adapters: Record<string, () => unknown> = {
@@ -72,6 +76,8 @@ function withDescriptor(value: string | undefined, action: () => void) {
   }
 }
 Then('the native Gate adapter performs {string} through the fixed interpreter', function (kind: string) {
+  assert.equal(nativeReplacement.begin, changeReplayFile);
+  assert.equal(nativeReplacement.restore, restoreReplayFile);
   const fd = openSync(tmpdir(), 'r');
   try {
     for (const inherited of [false, true])
@@ -99,7 +105,10 @@ Then('the native Gate adapter performs {string} through the fixed interpreter', 
           );
           if (kind === 'hosted' || kind === 'local') {
             assert.equal(result, 0);
-            const entry = new URL('../../tools/test-gate/src/infrastructure/locked-command.ts', import.meta.url).href;
+            const entry = new URL(
+              '../../tools/test-gate/src/infrastructure/locked-command.ts',
+              import.meta.url,
+            ).href;
             assert.deepEqual(args.slice(2), [
               'exec',
               process.execPath,
@@ -124,9 +133,21 @@ Then('the native Gate adapter performs {string} through the fixed interpreter', 
 });
 Then('the native Gate adapter refuses {string}', function (kind: string) {
   if (kind === 'invalid descriptor') {
-    withDescriptor('bogus', () =>
-      withNative({ status: 0 }, () => assert.throws(() => adapters.local!(), /GATE_ACTIVE_LEASE_REQUIRED/)),
-    );
+    const stat = mock.method(fs, 'fstatSync', () => {
+      throw Error('an invalid descriptor must not be inspected');
+    });
+    syncBuiltinESMExports();
+    try {
+      for (const invalid of ['bogus', '2', '1.5'])
+        withDescriptor(invalid, () =>
+          withNative({ status: 0 }, () =>
+            assert.throws(() => adapters.local!(), /GATE_ACTIVE_LEASE_REQUIRED/),
+          ),
+        );
+    } finally {
+      stat.mock.restore();
+      syncBuiltinESMExports();
+    }
     return;
   }
   if (kind === 'non-directory') {
@@ -216,9 +237,7 @@ Then('the receipt publisher exercises {string} in a private Git checkout', funct
                 ? /GATE_RECEIPT_PLAN_REQUIRED/
                 : kind === 'wrong HEAD'
                   ? /GATE_RECEIPT_TREE_CHANGED/
-                  : kind === 'no markdown'
-                    ? /GATE_RECEIPT_PROOF_INVALID/
-                    : /JSON/,
+                  : /GATE_RECEIPT_ARTIFACTS_REQUIRED/,
           );
           assert.equal(calls.length, policy || plan ? 0 : 1);
           assert.equal(readGateReceipt(root, tree), undefined);
@@ -230,5 +249,106 @@ Then('the receipt publisher exercises {string} in a private Git checkout', funct
     process.env.ARCHITECT_OS_RUNTIME_ROOT = oldRoot;
     process.env.ARCHITECT_OS_RUN_DIR = oldRun;
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+Then(
+  'a real full Gate publishes the checked commit, preserves it on plan and revokes it on red',
+  async function () {
+    const repo = repository(this),
+      root = realpathSync(mkdtempSync(join(tmpdir(), 'gate-authority-')));
+    this.cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+    writeFileSync(
+      join(root, '.architect-os-runtime-root'),
+      'architect-os-runtime-root/v2\nenvironment=hosted-runner\n',
+    );
+    const admission = this.admitFixture(root),
+      run = admission.ARCHITECT_OS_RUN_DIR!;
+    cpSync(repo.path('reports'), join(run, 'reports'), { recursive: true });
+    const cli = (...args: string[]) =>
+      childProcess.spawnSync(
+        process.execPath,
+        ['--import', import.meta.resolve('tsx'), join(ROOT, 'tools/test-gate/src/main.ts'), ...args],
+        { cwd: repo.dir, env: admission, encoding: 'utf8' },
+      );
+    const planned = cli('plan');
+    assert.equal(planned.status, 0, planned.stderr);
+    assert.equal(readGateReceipt(root, repo.dir), undefined);
+    const native = cli('check');
+    assert.equal(native.status, 0, native.stderr + native.stdout);
+    const checked = childProcess
+      .execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo.dir, encoding: 'utf8' })
+      .trim();
+    assert.equal(readGateReceipt(root, repo.dir), checked);
+    const former = process.cwd(),
+      env = process.env,
+      fd = openSync(repo.dir, 'r');
+    try {
+      const owner = childProcess.spawnSync(
+        '/usr/bin/python3',
+        ['-I', '-c', 'import fcntl; fcntl.flock(3, fcntl.LOCK_EX | fcntl.LOCK_NB)'],
+        { stdio: ['ignore', 'ignore', 'inherit', fd] },
+      );
+      assert.equal(owner.status, 0);
+      process.chdir(repo.dir);
+      process.env = { ...admission, AOS_GATE_LEASE_FD: String(fd) };
+      assert.equal(await runLocked('local', ['plan', '--job', 'linux']), 0);
+      assert.equal(readGateReceipt(root, repo.dir), checked);
+      assert.equal(await runLocked('local', ['check', '--job', 'linux']), 0);
+      assert.equal(readGateReceipt(root, repo.dir), checked);
+      const writes: string[] = [];
+      const output = mock.method(process.stdout, 'write', (value: string) => {
+        writes.push(value);
+        return true;
+      });
+      try {
+        assert.equal(await runLocked('hosted', ['invalid']), 1);
+      } finally {
+        output.mock.restore();
+      }
+      assert.match(writes.join(''), /usage : hosted-gate/);
+      assert.equal(await runLocked('local', ['check', '--job', 'does-not-exist']), 1);
+      assert.equal(readGateReceipt(root, repo.dir), checked);
+      rmSync(join(run, 'reports', 'cucumber.ndjson'));
+      assert.equal(await runLocked('local', ['check']), 1);
+      assert.equal(readGateReceipt(root, repo.dir), undefined);
+    } finally {
+      closeSync(fd);
+      process.env = env;
+      process.chdir(former);
+    }
+  },
+);
+
+Then('both public Gate entries propagate the native lease status and arguments', async function () {
+  const previousArgs = process.argv,
+    previousCode = process.exitCode;
+  const calls: { args: string[] }[] = [];
+  const capture = mock.method(childProcess, 'spawnSync', (_program: string, args: string[]) => {
+    calls.push({ args });
+    return { status: 17 };
+  });
+  syncBuiltinESMExports();
+  try {
+    for (const [entry, mode] of [
+      ['main', 'local'],
+      ['hosted', 'hosted'],
+    ] as const) {
+      process.exitCode = undefined;
+      process.argv = ['node', 'gate-cli', 'inventory', '11'];
+      const url = new URL('../../tools/test-gate/src/' + entry + '.ts', import.meta.url);
+      url.searchParams.set('fixture', String(Date.now()));
+      await import(url.href);
+      assert.equal(process.exitCode, 17);
+      const args = calls.at(-1)!.args;
+      assert.ok(args.includes('exec'));
+      assert.ok(args.some((arg) => arg.includes('await runLocked("' + mode + '"')));
+      assert.deepEqual(args.slice(-3), ['--', 'inventory', '11']);
+    }
+  } finally {
+    capture.mock.restore();
+    syncBuiltinESMExports();
+    process.argv = previousArgs;
+    process.exitCode = previousCode;
   }
 });

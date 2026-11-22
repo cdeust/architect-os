@@ -60,3 +60,25 @@ Feature: The full Linux gate publishes its checked commit and artifacts under pr
       | extra permission bits |
       | malformed |
       | directory at latest |
+
+  Scenario Outline: Physical receipt evidence handles <case>
+    Then the retained Gate receipt exercises "<case>"
+
+    Examples:
+      | case |
+      | private durability |
+      | physical identities |
+      | unsafe state directory |
+      | alternate uid |
+      | alternate device |
+      | changed named inode |
+      | changed named device |
+      | moved parent after reading |
+      | missing receipt |
+      | invalid encoding option |
+      | incomplete hash prefix |
+      | incomplete hash suffix |
+      | run prefix |
+      | run suffix |
+      | invalid directory message |
+      | invalid proof message |

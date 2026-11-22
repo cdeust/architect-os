@@ -290,3 +290,150 @@ Then('a failed Gate publication keeps the previous receipt and removes its parti
   assert.deepEqual(fs.readdirSync(dirname(r.file)), ['latest.json']);
   assert.equal(readGateReceipt(r.root, r.tree), sha);
 });
+
+Then('the retained Gate receipt exercises {string}', function (kind: string) {
+  const r = stored<Fixture>(this, 'receiptFixture');
+  if (kind === 'invalid directory message') {
+    const file = join(r.dir, 'file');
+    writeFileSync(file, '');
+    assert.throws(
+      () => publishGateReceipt(r.root, file, r.run, sha, value, report),
+      /GATE_RECEIPT_DIRECTORY_INVALID/,
+    );
+    return;
+  }
+  if (kind === 'invalid proof message') {
+    assert.throws(() => write(r, sha, value, 'red'), /GATE_RECEIPT_PROOF_INVALID/);
+    return;
+  }
+  if (kind === 'incomplete hash prefix' || kind === 'incomplete hash suffix') {
+    const bad = kind.endsWith('prefix') ? 'x' + sha : sha + 'x';
+    assert.throws(() => write(r, bad, value.replace(sha, bad), report.replace(sha, bad)));
+    return;
+  }
+  if (kind === 'run prefix' || kind === 'run suffix') {
+    const name = kind.endsWith('prefix') ? 'xrAbCd12' : 'rAbCd12x';
+    assert.throws(() => publishGateReceipt(r.root, r.tree, join(r.root, 'run', name), sha, value, report));
+    return;
+  }
+  if (kind === 'private durability') {
+    const opened = new Map<number, string>();
+    const events: string[] = [];
+    const rawOpen = fs.openSync,
+      rawClose = fs.closeSync,
+      rawSync = fs.fsyncSync,
+      rawRename = fs.renameSync;
+    const a = mock.method(fs, 'openSync', (path: fs.PathLike, flags: number, mode?: number) => {
+      const fd = rawOpen(path, flags, mode);
+      if (String(path).includes('/publish-') || String(path) === dirname(r.file)) {
+        const directory = String(path) === dirname(r.file);
+        assert.equal(
+          flags,
+          directory
+            ? fs.constants.O_DIRECTORY | fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW
+            : fs.constants.O_NOFOLLOW | fs.constants.O_EXCL | fs.constants.O_CREAT | fs.constants.O_WRONLY,
+        );
+        opened.set(fd, directory ? 'parent' : 'file');
+        events.push('open ' + opened.get(fd));
+      }
+      return fd;
+    });
+    const b = mock.method(fs, 'fsyncSync', (fd: number) => {
+      events.push('sync ' + opened.get(fd));
+      rawSync(fd);
+    });
+    const c = mock.method(fs, 'closeSync', (fd: number) => {
+      if (opened.has(fd)) {
+        events.push('close ' + opened.get(fd));
+        opened.delete(fd);
+      }
+      rawClose(fd);
+    });
+    const d = mock.method(fs, 'renameSync', (from: fs.PathLike, to: fs.PathLike) => {
+      assert.equal(to, r.file);
+      events.push('rename');
+      rawRename(from, to);
+    });
+    syncBuiltinESMExports();
+    try {
+      write(r);
+    } finally {
+      for (const hook of [a, b, c, d]) hook.mock.restore();
+      syncBuiltinESMExports();
+    }
+    assert.deepEqual(events, [
+      'open file',
+      'sync file',
+      'close file',
+      'rename',
+      'open parent',
+      'sync parent',
+      'close parent',
+    ]);
+    assert.equal(opened.size, 0);
+    return;
+  }
+  if (kind === 'missing receipt') {
+    mkdirSync(dirname(r.file), { recursive: true, mode: 0o700 });
+    assert.equal(readGateReceipt(r.root, r.tree), undefined);
+    return;
+  }
+  write(r);
+  if (kind === 'unsafe state directory') {
+    chmodSync(dirname(r.file), 0o755);
+    assert.equal(readGateReceipt(r.root, r.tree), undefined);
+    return;
+  }
+  const rawFstat = fs.fstatSync,
+    rawLstat = fs.lstatSync,
+    rawRead = fs.readFileSync,
+    rawReal = fs.realpathSync,
+    rawClose = fs.closeSync;
+  const close: number[] = [];
+  let descriptor = -1,
+    read = false;
+  const hooks = [
+    mock.method(fs, 'lstatSync', (path: fs.PathLike, opt?: { bigint?: boolean }) => {
+      if (kind === 'physical identities' && (path === r.root || path === r.tree))
+        assert.equal(opt?.bigint, true);
+      const st = rawLstat(path, { bigint: true });
+      if (path === r.file && kind === 'changed named inode') st.ino += 1n;
+      if (path === r.file && (kind === 'changed named device' || kind === 'alternate device')) st.dev += 1n;
+      return st;
+    }),
+    mock.method(fs, 'fstatSync', (fd: number) => {
+      descriptor = fd;
+      const st = rawFstat(fd, { bigint: true });
+      if (kind === 'alternate uid') st.uid += 1n;
+      if (kind === 'alternate device') st.dev += 1n;
+      return st;
+    }),
+    mock.method(fs, 'readFileSync', (fd: number, encoding: BufferEncoding) => {
+      read = true;
+      assert.equal(encoding, 'utf8');
+      return rawRead(fd, encoding);
+    }),
+    mock.method(fs, 'realpathSync', (path: fs.PathLike) =>
+      kind === 'moved parent after reading' && read && path === dirname(r.file) ? r.dir : rawReal(path),
+    ),
+    mock.method(fs, 'closeSync', (fd: number) => {
+      close.push(fd);
+      rawClose(fd);
+    }),
+  ];
+  syncBuiltinESMExports();
+  let result;
+  try {
+    result = readGateReceipt(r.root, r.tree);
+  } finally {
+    for (const hook of hooks) hook.mock.restore();
+    syncBuiltinESMExports();
+  }
+  assert.equal(
+    result,
+    kind === 'physical identities' || kind === 'invalid encoding option' ? sha : undefined,
+  );
+  assert.ok(descriptor >= 0);
+  assert.deepEqual(close, [descriptor]);
+  assert.throws(() => rawFstat(descriptor), { code: 'EBADF' });
+});

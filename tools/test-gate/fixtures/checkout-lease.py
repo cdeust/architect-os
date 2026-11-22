@@ -184,6 +184,14 @@ assert p.returncode==1 and 'GATE_TREE_BUSY' in p.stderr,p
                     src.read_bytes() == original
                     and not (ledger(tree) / "pending.json").exists()
                 )
+            elif mode == "incomplete journal":
+                journal = ledger(tree) / "pending.json"
+                data = json.loads(journal.read_text())
+                data["source"] = "unconfirmed original"
+                journal.write_text(json.dumps(data))
+                proc = launch(tree, "/usr/bin/true", check=False)
+                assert proc.returncode == 1 and "GATE_RECOVERY_SOURCE_DIFFERS_FROM_COMMIT" in proc.stderr
+                assert src.read_bytes() == mutated and journal.is_file()
             elif mode == "operator edit":
                 src.write_bytes(b"operator's edits")
                 proc = launch(tree, "/usr/bin/true", check=False)

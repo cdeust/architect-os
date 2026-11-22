@@ -189,6 +189,12 @@ function replayShardPath(shard: number): string {
   return 'reports/replay-shards/' + shard + '/replay.json';
 }
 
+/** A production checkout lease can revoke or publish the checked Linux result. */
+export interface GateReceiptAuthority {
+  discard(): void;
+  publish(config: GateConfig, workspace: Workspace): void;
+}
+
 function gate(
   config: GateConfig,
   job: Job,
@@ -197,6 +203,7 @@ function gate(
   env: NodeJS.ProcessEnv,
   out: Output,
   workspace: Workspace,
+  receipt?: GateReceiptAuthority,
 ) {
   const repository = new GitRepository(root);
   const { head, firstParent } = repository.commits();
@@ -269,6 +276,7 @@ function gate(
   if (verdict.green) workspace.write(reports.baseOut, jsonText(baseOf(verdict)));
   else workspace.remove(reports.baseOut);
   out.write(report);
+  if (verdict.green && job.name === 'linux') receipt?.publish(config, workspace);
   return verdict.green ? 0 : 1;
 }
 
@@ -282,6 +290,7 @@ export async function runGate(
   env: NodeJS.ProcessEnv,
   out: Output,
   workspace = new Workspace(root),
+  receipt?: GateReceiptAuthority,
 ): Promise<number> {
   const refuse = (failure: string) => {
     out.write(`porte de test : ${failure}\n`);
@@ -290,6 +299,7 @@ export async function runGate(
   const [, , ...args] = argv;
   const command = parseArguments(args);
   if ('failure' in command) return refuse(command.failure);
+  if (command.name === 'check' && command.job === 'linux') receipt?.discard();
   if (command.name === 'inventory') workspace.remove(INVENTORY_PATH);
   const text = workspace.read(CONFIG_PATH);
   if (text === null) return refuse(`${CONFIG_PATH} absent`);
@@ -414,5 +424,5 @@ export async function runGate(
       return refuse((error as Error).message);
     }
   }
-  return gate(config, job, command.name, root, env, out, workspace);
+  return gate(config, job, command.name, root, env, out, workspace, receipt);
 }

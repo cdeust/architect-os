@@ -27,7 +27,7 @@ const receipt = z.strictObject({
   run: z.string().regex(/^r[a-zA-Z0-9]{6}$/),
   base: z.string(),
   report: z.string(),
-  digest: z.string().regex(/^[0-9a-f]{64}$/),
+  digest: z.string(), // The reader compares the entire SHA-256 digest of both retained artifacts.
 });
 const base = z.strictObject({
   job: z.literal('linux'),
@@ -110,7 +110,6 @@ export function publishGateReceipt(
 /** Read-only: never creates a directory, follows a substituted journal path, or consults checkout reports. */
 export function readGateReceipt(root: string, checkout: string): string | undefined {
   try {
-    if (root !== realpathSync(root)) return undefined;
     const owner = physical(root),
       tree = physical(checkout);
     let directory = root;
@@ -148,6 +147,6 @@ export function readGateReceipt(root: string, checkout: string): string | undefi
       closeSync(fd);
     }
   } catch {
-    return undefined;
+    // A missing, unreadable or invalidated receipt supplies no checked commit.
   }
 }

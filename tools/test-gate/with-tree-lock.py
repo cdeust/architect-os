@@ -163,6 +163,12 @@ def write_source(stream, content):
     os.fsync(stream.fileno())
 
 
+def committed_source(head, name, expected):
+    blob = git("cat-file", "blob", head + ":" + name)
+    if blob.returncode or blob.stdout != expected:
+        raise Refusal("GATE_RECOVERY_SOURCE_DIFFERS_FROM_COMMIT")
+
+
 def recover(fd, state):
     try:
         raw = os.open(state / PENDING, FILE | os.O_RDONLY)
@@ -180,6 +186,7 @@ def recover(fd, state):
         raise Refusal("GATE_RECOVERY_COMMIT_CHANGED")
     original = data["source"].encode("utf8")
     mutated = data["mutated"].encode("utf8")
+    committed_source(data["head"], data["file"], original)
     with source(fd, data["file"]) as (stream, found):
         current = stream.read()
         if list(found) != data["identity"] or current not in (original, mutated):
@@ -201,9 +208,7 @@ def begin(fd, state, data):
         raise Refusal("GATE_RECOVERY_PENDING")
     original = data["source"].encode("utf8")
     head = git("rev-parse", "HEAD").stdout.decode().strip()
-    blob = git("cat-file", "blob", head + ":" + data["file"])
-    if blob.returncode or blob.stdout != original:
-        raise Refusal("GATE_RECOVERY_SOURCE_DIFFERS_FROM_COMMIT")
+    committed_source(head, data["file"], original)
     with source(fd, data["file"]) as (stream, found):
         if stream.read() != original:
             raise Refusal("GATE_RECOVERY_SOURCE_CHANGED")

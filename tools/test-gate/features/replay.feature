@@ -617,3 +617,9 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       | load    | 4         | 0          |
       | hook    | 3         | 0          |
       | ordered | 5         | 2          |
+
+  Scenario: A selected replay cannot install a mutation without a source replacement authority
+    Then a replay without the host replacement port refuses before changing source
+
+  Scenario: Replayed tests inherit normal test settings without acquiring the host lease
+    Then the actual replay subprocess keeps ordinary test variables and drops the Gate lease

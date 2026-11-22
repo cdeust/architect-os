@@ -1344,3 +1344,53 @@ Then('the replay witness refuses malformed attempts, failing hooks and invalid s
     name,
   });
 });
+
+import { Workspace as UnprivilegedWorkspace } from '../../src/infrastructure/workspace.js';
+import { runGate as runUnprivileged } from '../../src/infrastructure/gate.js';
+
+Then('a replay without the host replacement port refuses before changing source', async function () {
+  const repo = repository(this);
+  const original = repo.read('src/math.mjs');
+  let output = '';
+  const code = await runUnprivileged(
+    ['node', 'gate', 'replay'],
+    repo.dir,
+    {},
+    {
+      write: (line) => {
+        output += line;
+      },
+    },
+    new UnprivilegedWorkspace(repo.dir),
+  );
+  assert.equal(code, 1);
+  assert.match(output, /GATE_ACTIVE_LEASE_REQUIRED/);
+  assert.equal(repo.read('src/math.mjs'), original);
+});
+Then(
+  'the actual replay subprocess keeps ordinary test variables and drops the Gate lease',
+  async function () {
+    const repo = repository(this),
+      file = 'specs/probe.mts',
+      observed = repo.path('replay-env.json');
+    repo.write(
+      file,
+      "import {writeFileSync} from 'node:fs';export async function runReplayCucumber(){writeFileSync(" +
+        JSON.stringify(observed) +
+        ',JSON.stringify({marker:process.env.AOS_GATE_LEASE_FD,ordinary:process.env.AOS_TEST_PUBLIC_VALUE}));return 0;}',
+    );
+    const previous = process.env;
+    process.env = { ...previous, AOS_GATE_LEASE_FD: '9', AOS_TEST_PUBLIC_VALUE: 'fixture' };
+    try {
+      await new CucumberRunner(
+        repo.dir,
+        'replay',
+        repo.path('reports/probe'),
+        pathToFileURL(repo.path(file)),
+      ).run(['specs/green.feature:4'], 600000);
+    } finally {
+      process.env = previous;
+    }
+    assert.deepEqual(JSON.parse(repo.read('replay-env.json')), { ordinary: 'fixture' });
+  },
+);
