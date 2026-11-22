@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess as sp
 import sys
 import tempfile
@@ -149,6 +150,76 @@ assert p.returncode==1 and 'GATE_TREE_BUSY' in p.stderr,p
             assert (tree / "other.ts").read_text() == "unchecked"
             (tree / "other.ts").unlink()
             assert launch(tree, python, "-I", guard, "verify", sha).returncode == 0
+        elif mode == "interrupted validator":
+            names = (
+                ".nvmrc",
+                "tools/runtime/node-locations",
+                "tools/test-gate/with-tree-lock.py",
+                "packages/sandbox/src/runtime-context.ts",
+            )
+            for name in names:
+                (tree / name).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(project / name, tree / name)
+            run(tree, "git", "add", "-A")
+            run(
+                tree,
+                "git",
+                "-c",
+                "user.name=fixture",
+                "-c",
+                "user.email=t@example.invalid",
+                "commit",
+                "-qm",
+                "installed validator",
+            )
+            validator = tree / names[-1]
+            local_guard = str(tree / names[2])
+            trusted = validator.read_text()
+            token = {
+                "file": names[-1],
+                "source": trusted,
+                "mutated": "throw Error('interrupted validator');\n",
+            }
+            code = """import os,subprocess,sys
+fd=int(os.environ['AOS_GATE_LEASE_FD'])
+subprocess.run([sys.executable,'-I',sys.argv[1],'begin'],pass_fds=(fd,),input=sys.argv[2],text=True,check=True)
+os.kill(os.getpid(), 9)
+"""
+            proc = run(
+                tree,
+                python,
+                "-I",
+                local_guard,
+                "exec",
+                python,
+                "-I",
+                "-c",
+                code,
+                local_guard,
+                json.dumps(token),
+                check=False,
+            )
+            assert (
+                proc.returncode == -signal.SIGKILL
+                and validator.read_text() == token["mutated"]
+            ), proc
+            run(tree, python, "-I", local_guard, "recover")
+            assert validator.read_text() == trusted
+        elif mode == "admission lost":
+            known = ledger(tree)
+            code = """import os,subprocess,sys
+fd=int(os.environ['AOS_GATE_LEASE_FD'])
+env=dict(os.environ)
+del env['ARCHITECT_OS_ADMISSION_BINDING']
+for action in ('begin','restore','discard','verify'):
+    args=[sys.executable,'-I',sys.argv[1],action]
+    if action=='verify': args.append('a'*40)
+    proc=subprocess.run(args,env=env,pass_fds=(fd,),input='{}',capture_output=True,text=True)
+    assert proc.returncode==1 and 'GATE_ADMISSION_REQUIRED' in proc.stderr,proc
+"""
+            launch(tree, python, "-I", "-c", code, guard)
+            assert not (known / "pending.json").exists()
+            assert (tree / "src/item.txt").read_bytes() == original
         elif mode == "unowned descriptor":
             fd = os.open(tree, os.O_RDONLY | os.O_DIRECTORY)
             try:
@@ -190,7 +261,10 @@ assert p.returncode==1 and 'GATE_TREE_BUSY' in p.stderr,p
                 data["source"] = "unconfirmed original"
                 journal.write_text(json.dumps(data))
                 proc = launch(tree, "/usr/bin/true", check=False)
-                assert proc.returncode == 1 and "GATE_RECOVERY_SOURCE_DIFFERS_FROM_COMMIT" in proc.stderr
+                assert (
+                    proc.returncode == 1
+                    and "GATE_RECOVERY_SOURCE_DIFFERS_FROM_COMMIT" in proc.stderr
+                )
                 assert src.read_bytes() == mutated and journal.is_file()
             elif mode == "operator edit":
                 src.write_bytes(b"operator's edits")

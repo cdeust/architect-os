@@ -254,9 +254,32 @@ def verify_admission():
         or k in ("TMPDIR", "TMP", "TEMP", "NODE_COMPILE_CACHE")
     }
     env["NODE_DISABLE_COMPILE_CACHE"] = "1"
-    checked = subprocess.run(
-        [node, launcher / "scripts/require-run.mjs"], env=env, stdin=subprocess.DEVNULL
-    )
+    # All verbs, including restore, validate the same admission. When replay mutates the
+    # validator itself, its worktree bytes cannot decide whether recovery is authorized.
+    # A Git installation uses its committed, native-only validator, an independent
+    # distribution uses the read-only module shipped with the installed launcher.
+    if (launcher / ".git").exists():
+        validator = git(
+            "-C",
+            launcher,
+            "cat-file",
+            "blob",
+            "HEAD:packages/sandbox/src/runtime-context.ts",
+        )
+        if validator.returncode:
+            raise Refusal("GATE_ADMISSION_REQUIRED")
+        checked = subprocess.run(
+            [node, "--input-type=module-typescript", "-"],
+            cwd=launcher,
+            input=validator.stdout + b"\nrequireAdmittedRun();\n",
+            env=env,
+        )
+    else:
+        checked = subprocess.run(
+            [node, launcher / "scripts/require-run.mjs"],
+            env=env,
+            stdin=subprocess.DEVNULL,
+        )
     if checked.returncode:
         raise Refusal("GATE_ADMISSION_REQUIRED")
 
@@ -286,8 +309,7 @@ def main(args):
         len(args) == 2 and args[0] == "verify"
     )
     candidate = len(args) > 1 and args[0] == "candidate"
-    if not editing:
-        verify_admission()
+    verify_admission()
     tree = checkout()
     fd, reused = lease(tree, editing or candidate)
     state = state_directory(fd)

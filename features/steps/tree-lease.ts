@@ -280,6 +280,7 @@ Then(
       .execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo.dir, encoding: 'utf8' })
       .trim();
     assert.equal(readGateReceipt(root, repo.dir), checked);
+    const formerArgv = process.argv;
     const former = process.cwd(),
       env = process.env,
       fd = openSync(repo.dir, 'r');
@@ -291,6 +292,7 @@ Then(
       );
       assert.equal(owner.status, 0);
       process.chdir(repo.dir);
+      process.argv = ['node', 'host', 'unrelated-parent-argument'];
       process.env = { ...admission, AOS_GATE_LEASE_FD: String(fd) };
       assert.equal(await runLocked('local', ['plan', '--job', 'linux']), 0);
       assert.equal(readGateReceipt(root, repo.dir), checked);
@@ -308,6 +310,7 @@ Then(
       }
       assert.match(writes.join(''), /usage : hosted-gate/);
       assert.equal(await runLocked('local', ['check', '--job', 'does-not-exist']), 1);
+      assert.equal(await runLocked('local', ['check', '--job', 'macos']), 0);
       assert.equal(readGateReceipt(root, repo.dir), checked);
       rmSync(join(run, 'reports', 'cucumber.ndjson'));
       assert.equal(await runLocked('local', ['check']), 1);
@@ -315,6 +318,7 @@ Then(
     } finally {
       closeSync(fd);
       process.env = env;
+      process.argv = formerArgv;
       process.chdir(former);
     }
   },

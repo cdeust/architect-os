@@ -16,3 +16,5 @@ Feature: A physical checkout has one live Gate and restores only its own interru
       | trusted issuer        |
       | unchecked source      |
       | incomplete journal    |
+      | admission lost        |
+      | interrupted validator |
