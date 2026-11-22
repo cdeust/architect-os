@@ -177,7 +177,11 @@ function admitResponse(wire, challenge, maxOutput, controls) {
     }
   }
   if (!terminal) throw Error('MISSING_TERMINAL');
-  return textResponse(challenge, verifiedText(terminal, challenge, maxOutput));
+  return textResponse(
+    challenge,
+    verifiedText(terminal, challenge, maxOutput),
+    controls.moderationPresentation,
+  );
 }
 
 export function parseResponse(wire, challenge, maxOutput) {

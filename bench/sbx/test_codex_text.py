@@ -22,17 +22,21 @@ PROMPT = "Reply with exactly this value: " + TEXT
 USAGE = {"input_tokens": 8, "output_tokens": 4}
 
 
-def response_events():
+def response_events(*, inline=False):
     header = {"id": "resp_fixture", "object": "response", "model": MODEL}
     item = {"id": "msg_fixture", "type": "message", "role": "assistant", "status": "completed",
             "content": [{"type": "output_text", "text": TEXT, "annotations": []}]}
-    return [
+    events = [
         {"type": "response.created", "response": {**header, "status": "in_progress"}},
         {"type": "response.output_item.done", "output_index": 0, "item": item},
         {"type": "response.completed",
          "response": {**header, "status": "completed", "output": [item],
                       "usage": {**USAGE, "total_tokens": sum(USAGE.values())}}},
     ]
+    if inline:
+        events.insert(1, {"type": "response.metadata", "response_id": header["id"], "metadata": {
+            "openai_chatgpt_moderation_metadata": {"presentation": "inline"}}})
+    return events
 
 
 def sse(events):
@@ -47,13 +51,14 @@ class TextContract(unittest.TestCase):
     def test_only_an_admitted_http_request_can_trigger_one_host_turn(self):
         body = json.dumps({"model": MODEL, "stream": True, "input": [
             {"role": "user", "content": [{"type": "input_text", "text": PROMPT}]}]}).encode()
-        reply = ndjson([{"kind": "response", "body": sse(response_events())}])
 
         def new_server():
             return SimpleNamespace(server_port=80, model=MODEL, prompt=PROMPT, challenge=TEXT,
                                    requested=False, refused=False, expected=None)
 
-        def invoke(server, method="POST", path="/v1/responses", extra_header=None):
+        def invoke(server, method="POST", path="/v1/responses", extra_header=None, inline=False):
+            expected_body = sse(response_events(inline=inline))
+            reply = ndjson([{"kind": "response", "body": expected_body}])
             headers = [f"{method} {path} HTTP/1.0", "Host: 127.0.0.1:80", "Content-Type: application/json",
                        f"Content-Length: {len(body)}"]
             if extra_header:
@@ -68,6 +73,8 @@ class TextContract(unittest.TestCase):
                 local.shutdown(socket.SHUT_WR)
                 with remote.makefile("rb") as response:
                     status = int(response.readline().split()[1])
+                    if status == 200:
+                        self.assertEqual(response.read().split(b"\r\n\r\n", 1)[1].decode(), expected_body)
                 return status, output.getvalue()
 
         fresh = new_server()
@@ -75,7 +82,11 @@ class TextContract(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual([json.loads(line) for line in emitted.splitlines()], [{"kind": "request", "model": MODEL}])
         self.assertEqual(fresh.expected, (TEXT, USAGE))
+        self.assertIsNone(fresh.served_presentation)
         self.assertEqual(invoke(fresh), (403, ""))
+        with_notice = new_server()
+        self.assertEqual(invoke(with_notice, inline=True)[0], 200)
+        self.assertEqual(with_notice.served_presentation, "inline")
         for fields in ({"method": "GET"}, {"path": "/elsewhere"}, {"extra_header": "Authorization: synthetic"},
                        {"extra_header": "Transfer-Encoding: chunked"}, {"extra_header": "Content-Length: 1"}):
             fresh = new_server()
@@ -122,7 +133,7 @@ class TextContract(unittest.TestCase):
 
     def test_validate_host_turn_before_relay(self):
         valid = response_events()
-        self.assertEqual(guest.text_response(sse(valid), MODEL, TEXT), (TEXT, USAGE))
+        self.assertEqual(guest.text_response(sse(valid), MODEL, TEXT), (TEXT, USAGE, None))
         for field, value in (("status", "incomplete"), ("model", "other"), ("id", "other"), ("output", []),
                              ("usage", {**USAGE, "input_tokens": True})):
             events = copy.deepcopy(valid)
@@ -140,6 +151,22 @@ class TextContract(unittest.TestCase):
                 guest.text_response(sse(events), MODEL, TEXT)
         for bad in (valid + valid, valid[:2], valid[:1] + [{"type": "response.function_call_arguments.delta"}] + valid[1:]):
             with self.subTest(length=len(bad)), self.assertRaises(ValueError):
+                guest.text_response(sse(bad), MODEL, TEXT)
+
+    def test_require_one_exact_presentation_bound_to_the_same_response_before_the_answer(self):
+        events = response_events(inline=True)
+        self.assertEqual(guest.text_response(sse(events), MODEL, TEXT), (TEXT, USAGE, "inline"))
+        start, notice, answer, end = events
+        for bad in (
+                [start, notice, notice, answer, end], [start, answer, notice, end],
+                [start, {**notice, "response_id": "resp_other"}, answer, end],
+                [start, {**notice, "headers": {}}, answer, end],
+                [start, {**notice, "metadata": {"guardian": {}}}, answer, end],
+                [start, {**notice, "metadata": {"openai_chatgpt_moderation_metadata": {
+                    "presentation": "inline", "safety_block": {}}}}, answer, end],
+                [start, {**notice, "metadata": {"openai_chatgpt_moderation_metadata": {
+                    "presentation": "hidden"}}}, answer, end]):
+            with self.subTest(events=bad), self.assertRaises(ValueError):
                 guest.text_response(sse(bad), MODEL, TEXT)
 
     def test_require_the_native_text_and_terminal_usage(self):

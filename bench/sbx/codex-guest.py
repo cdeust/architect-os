@@ -230,11 +230,15 @@ def eligible_request(body, model, prompt):
 
 
 def text_response(body, model, challenge):
-    """Only the normalized text-only transcript can reach the native client."""
+    """Validate the closed transcript, including the optional presentation-only notice."""
     blocks = body.split("\n\n")
-    types = ("response.created", "response.output_item.done", "response.completed")
-    if len(blocks) != len(types) + 1 or blocks[-1] != "":
+    if len(blocks) not in (4, 5) or blocks[-1] != "":
         raise ValueError("invalid SSE framing")
+    presentation = "inline" if len(blocks) == 5 else None
+    types = ["response.created"]
+    if presentation is not None:
+        types.append("response.metadata")
+    types.extend(("response.output_item.done", "response.completed"))
     events = []
     for block, kind in zip(blocks, types):
         label, data = block.split("\n")
@@ -244,25 +248,29 @@ def text_response(body, model, challenge):
         if value.get("type") != kind:
             raise ValueError("SSE type mismatch")
         events.append(value)
-    opening, item, terminal = events[0]["response"], events[1]["item"], events[2]["response"]
+    opening, item, terminal = events[0]["response"], events[-2]["item"], events[-1]["response"]
     usage = terminal["usage"]
     counts = usage_counts(usage)
     text = item["content"][0]["text"]
     if (not all(isinstance(i, str) and i for i in (opening["id"], item["id"])) or text != challenge
-            or type(events[1]["output_index"]) is not int or type(usage["total_tokens"]) is not int):
+            or type(events[-2]["output_index"]) is not int or type(usage["total_tokens"]) is not int):
         raise ValueError("unexpected probe metadata")
     # Rebuild the complete permitted SSE envelope to reject fields the pinned client could interpret.
     header = {"id": opening["id"], "object": "response", "model": model}
     message = {"id": item["id"], "type": "message", "status": "completed", "role": "assistant",
                "content": [{"type": "output_text", "text": text, "annotations": []}]}
-    if events != [
-        {"type": types[0], "response": {**header, "status": "in_progress"}},
-        {"type": types[1], "output_index": 0, "item": message},
-        {"type": types[2], "response": {**header, "status": "completed", "output": [message],
+    expected = [{"type": "response.created", "response": {**header, "status": "in_progress"}}]
+    if presentation is not None:
+        expected.append({"type": "response.metadata", "response_id": opening["id"], "metadata": {
+            "openai_chatgpt_moderation_metadata": {"presentation": "inline"}}})
+    expected.extend((
+        {"type": "response.output_item.done", "output_index": 0, "item": message},
+        {"type": "response.completed", "response": {**header, "status": "completed", "output": [message],
          "usage": {**counts, "total_tokens": sum(counts.values())}}},
-    ]:
+    ))
+    if events != expected:
         raise ValueError("unexpected response")
-    return text, counts
+    return text, counts, presentation
 
 
 class TextServer(HTTPServer):
@@ -306,13 +314,15 @@ class TextResponses(BaseHTTPRequestHandler):
             reply = read_frame(sys.stdin.buffer)
             if set(reply) != {"kind", "body"} or reply["kind"] != "response" or not isinstance(reply["body"], str):
                 raise ValueError("unexpected host response")
-            server.expected = text_response(reply["body"], server.model, server.challenge)
+            text, counts, presentation = text_response(reply["body"], server.model, server.challenge)
             payload = reply["body"].encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
             self.wfile.write(payload)
+            server.expected = (text, counts)
+            server.served_presentation = presentation
         except (AttributeError, IndexError, KeyError, OSError, TypeError, ValueError, RecursionError):
             self.send_error(400)
 
@@ -392,8 +402,11 @@ def text_probe():
                             'web_search="disabled"', 'project_doc_max_bytes=0', 'check_for_update_on_startup=false'):
                 command += ["-c", setting]
             text, counts = run_text_client(server, [*command, "--", server.prompt], work, env)
-    print(json.dumps({"kind": "receipt", "model": spec["model"], "text": text, "usage": counts,
-                      "client_sha256": BINARY_SHA256, "client_version": EXPECTED_VERSION, "exit_code": 0}), flush=True)
+    receipt = {"kind": "receipt", "model": spec["model"], "text": text, "usage": counts,
+               "client_sha256": BINARY_SHA256, "client_version": EXPECTED_VERSION, "exit_code": 0}
+    if server.served_presentation is not None:
+        receipt["served_moderation_presentation"] = server.served_presentation
+    print(json.dumps(receipt), flush=True)
 
 
 class ProbeDeadline(BaseException):

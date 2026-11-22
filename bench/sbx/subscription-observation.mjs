@@ -21,6 +21,51 @@ const knownMetadata = new Map([
   ['openai_chatgpt_moderation_metadata', 'moderation_metadata'],
 ]);
 const modelHeaders = new Set(['openai-model', 'x-openai-model']);
+const moderationObjects = new Map([
+  ['prompt', 'moderation_prompt_report'],
+  ['safety_block', 'moderation_safety_block'],
+  ['final_answer_moderation', 'moderation_final_answer_marker'],
+]);
+const bufferingFields = new Set(['type', 'use_cases', 'reasons', 'retry_model']);
+
+// Classify only named positions in the moderation envelope. prompt, safety_block and
+// final_answer_moderation can contain private reports or item IDs. Never descend into them.
+// Codex rust-v0.170.0 app-server/tests/suite/v2/safety_check_downgrade.rs and openai/codex#50605.
+function observeModeration(value, categories) {
+  const fields = object(value) ? Object.keys(value) : [];
+  if (!fields.length) {
+    categories.add('moderation_opaque');
+    return;
+  }
+  for (const field of fields) {
+    if (field === 'presentation' && value.presentation === 'inline')
+      categories.add('moderation_presentation_inline');
+    else if (moderationObjects.has(field) && object(value[field]))
+      categories.add(moderationObjects.get(field));
+    else categories.add('moderation_opaque');
+  }
+}
+
+// SafetyBuffering in codex-api/src/common.rs requires two string arrays. Values and
+// retry-model identities are never copied. Unknown shapes never establish a native treatment.
+function observeBuffering(value, categories) {
+  categories.add('safety_control_present');
+  if (value === false) categories.add('safety_buffering_false');
+  else if (value === null) categories.add('safety_buffering_null');
+  else if (value === true) categories.add('safety_buffering_true');
+  else if (
+    object(value) &&
+    Array.isArray(value.use_cases) &&
+    value.use_cases.every((entry) => typeof entry === 'string') &&
+    Array.isArray(value.reasons) &&
+    value.reasons.every((entry) => typeof entry === 'string') &&
+    (value.retry_model == null || typeof value.retry_model === 'string')
+  ) {
+    categories.add('safety_buffering_notification');
+    if (Object.keys(value).some((field) => !bufferingFields.has(field)))
+      categories.add('safety_buffering_opaque');
+  } else categories.add('safety_buffering_opaque');
+}
 
 function metering(usage) {
   if (usage == null) return { usage: null, usage_status: 'absent' };
@@ -55,7 +100,7 @@ function metadataObserver(model) {
   function inspect(source, responseId, explicit) {
     if (!object(source)) return;
     if (Object.hasOwn(source, 'headers') && !object(source.headers)) modelConflict = true;
-    if (Object.hasOwn(source, 'safety_buffering')) categories.add('safety_control_present');
+    if (Object.hasOwn(source, 'safety_buffering')) observeBuffering(source.safety_buffering, categories);
     if (!explicit && !Object.hasOwn(source, 'headers') && !Object.hasOwn(source, 'metadata')) return;
     const event = explicit ? source : { type: 'response.metadata' };
     if (!explicit) {
@@ -65,11 +110,19 @@ function metadataObserver(model) {
     categories.add(disposition);
     if (disposition === 'model_mismatch' || disposition === 'ambiguous_model') modelConflict = true;
     for (const name of Object.keys(event)) if (!envelope.has(name)) unknown('envelope', name);
-    if (object(event.metadata))
+    if (object(event.metadata)) {
+      const moderation = 'openai_chatgpt_moderation_metadata';
+      if (Object.hasOwn(event.metadata, moderation))
+        observeModeration(event.metadata[moderation], categories);
+      if (Object.hasOwn(event.metadata, 'safety_buffering'))
+        observeBuffering(event.metadata.safety_buffering, categories);
+      const bufferingEnvelope = event.metadata.type === 'safety_buffering';
+      if (bufferingEnvelope) observeBuffering(event.metadata, categories);
       for (const name of Object.keys(event.metadata)) {
         if (knownMetadata.has(name)) categories.add(knownMetadata.get(name));
-        else unknown('metadata', name);
+        else if (!bufferingEnvelope && name !== 'safety_buffering') unknown('metadata', name);
       }
+    }
     if (object(event.headers))
       for (const key of Object.keys(event.headers)) {
         const name = key.toLowerCase();

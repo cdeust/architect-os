@@ -43,6 +43,10 @@ const windowMetric =
   /^x-codex-(?:(?:primary|secondary)-(?:used-percent|window-minutes|reset-at)|limit-name)$/u;
 const controlNamespace = /^(?:openai-|x-openai-|codex-|x-codex-|x-models-|x-reasoning-)/u;
 const turnStateHeader = 'x-codex-turn-state';
+// The pinned client assigns no response semantics to this HTTP gateway version.
+// v0.1 was also observed on a gateway response before the model stream started:
+// https://github.com/openai/codex/issues/44313
+const proxyVersionHeader = 'x-openai-proxy-wasm';
 
 function unknownHttpControl(name) {
   return (
@@ -50,6 +54,7 @@ function unknownHttpControl(name) {
     !modelHeaders.has(name) &&
     !controlHeaders.has(name) &&
     name !== turnStateHeader &&
+    name !== proxyVersionHeader &&
     !httpDiagnostics.has(name) &&
     !windowMetric.test(name)
   );
@@ -105,6 +110,7 @@ function notifications(source) {
   if (!record(metadata)) return 'invalid_metadata';
   if (metadata.type === 'safety_buffering' || Object.hasOwn(metadata, 'safety_buffering'))
     return 'safety_buffering';
+  let presentation = false;
   for (const [field, veto] of notificationFields) {
     if (!Object.hasOwn(metadata, field)) continue;
     // Codex produces no model-verification event for the empty list. Validate every other field.
@@ -114,11 +120,25 @@ function notifications(source) {
       metadata[field].length === 0
     )
       continue;
+    // The native app-server fixture emits this exact presentation-only notification.
+    // https://github.com/openai/codex/blob/29eb79e9866b3262a777fdf8195c1b9e63684c91/codex-rs/app-server/tests/suite/v2/safety_check_downgrade.rs#L278-L339
+    if (field === 'openai_chatgpt_moderation_metadata') {
+      const value = metadata[field];
+      if (
+        record(value) &&
+        Object.keys(value).length === 1 &&
+        Object.hasOwn(value, 'presentation') &&
+        value.presentation === 'inline'
+      ) {
+        presentation = true;
+        continue;
+      }
+    }
     return veto;
   }
-  return Object.keys(metadata).some((field) => !notificationFields.has(field))
-    ? 'requires_native_handling'
-    : informational;
+  if (Object.keys(metadata).some((field) => !notificationFields.has(field)))
+    return 'requires_native_handling';
+  return presentation ? 'inline_presentation' : informational;
 }
 
 /** Owns routing state for exactly one HTTP response. The capability exposes only fixed dispositions. */
@@ -128,10 +148,12 @@ export function createSubscriptionControls(model) {
   let receivedEvent = false;
   let boundResponseId;
   let turnState;
+  let moderationPresentation;
   function close() {
     active = false;
     turnState = undefined;
     boundResponseId = undefined;
+    moderationPresentation = undefined;
   }
   function verdict(disposition) {
     if (disposition !== informational) close();
@@ -142,6 +164,7 @@ export function createSubscriptionControls(model) {
     if (identity !== informational) return identity;
     for (const headers of groups) {
       let receivedState = false;
+      let receivedProxyVersion = false;
       for (const key of Object.keys(headers)) {
         const name = key.toLowerCase();
         if (modelHeaders.has(name)) continue;
@@ -152,6 +175,10 @@ export function createSubscriptionControls(model) {
             return 'ambiguous_turn_state';
           turnState = value;
           receivedState = true;
+        } else if (http && name === proxyVersionHeader) {
+          if (receivedProxyVersion || singleton(headers[key], true) !== 'v0.1')
+            return 'unrecognized_proxy_version';
+          receivedProxyVersion = true;
         } else if (!http || unknownHttpControl(name)) {
           return 'requires_native_handling';
         }
@@ -181,7 +208,10 @@ export function createSubscriptionControls(model) {
     if (disposition !== informational) return disposition;
     for (const source of sources) {
       const veto = notifications(source);
-      if (veto !== informational) return veto;
+      if (veto === 'inline_presentation') {
+        if (!explicit || source !== event || moderationPresentation !== undefined) return 'turn_moderation';
+        moderationPresentation = 'inline';
+      } else if (veto !== informational) return veto;
     }
     if (explicit) {
       if (
@@ -202,6 +232,9 @@ export function createSubscriptionControls(model) {
     event(event, responseId) {
       receivedEvent = true;
       return verdict(inspectEvent(event, responseId));
+    },
+    get moderationPresentation() {
+      return moderationPresentation;
     },
     close,
   };

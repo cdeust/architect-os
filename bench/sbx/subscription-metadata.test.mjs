@@ -41,7 +41,7 @@ test('control fields on explicit, ordinary and nested events veto delivery', () 
     [{ future: 'private', guardian: null }, 'guardian_assessment'],
     [{ openai_verification_recommendation: ['trusted_access_for_cyber'] }, 'model_verification'],
     [{ openai_verification_recommendation: { unexpected: true } }, 'model_verification'],
-    [{ openai_chatgpt_moderation_metadata: { presentation: 'inline' } }, 'turn_moderation'],
+    [{ openai_chatgpt_moderation_metadata: { presentation: 'inline', display: {} } }, 'turn_moderation'],
     [{ openai_chatgpt_moderation_metadata: null }, 'turn_moderation'],
     [{ type: 'safety_buffering', retry_model: 'private-substitute' }, 'safety_buffering'],
     [{ safety_buffering: { retry_model: 'private-substitute' } }, 'safety_buffering'],
@@ -84,6 +84,57 @@ test('the documented empty verification list never masks a sibling control', () 
   }
   assert.equal(classify({ metadata: empty, safety_buffering: true }), 'safety_buffering');
   assert.equal(classify({ metadata: empty, headers: { 'openai-model': 'other' } }), 'model_mismatch');
+});
+
+test('the fourth trial identified the gateway header by name; only the observed public wire version is understood', () => {
+  const name = 'x-openai-proxy-wasm';
+  assert.equal(
+    createHash('sha256').update(name).digest('hex'),
+    'a5b017a27edeb0ac49e363aa14c45553bdceb0131dd02d4ac238a871745e7867',
+  );
+  const inspect = (headers) => createSubscriptionControls(model).http(headers);
+  assert.equal(inspect({ [name]: ['v0.1'] }), 'informational');
+  for (const value of [[], ['v0.2'], ['v0.1', 'v0.1'], ['v0.1, v0.1'], 'v0.1', [null]]) {
+    assert.equal(inspect({ [name]: value }), 'unrecognized_proxy_version');
+  }
+  assert.equal(inspect({ [name.toUpperCase()]: ['v0.1'], [name]: ['v0.1'] }), 'unrecognized_proxy_version');
+  assert.equal(classify({ headers: { [name]: 'v0.1' } }), 'requires_native_handling');
+  assert.equal(inspect({ [name]: ['v0.1'], 'x-openai-proxy-new': ['v0.1'] }), 'requires_native_handling');
+  assert.equal(
+    inspect({ [name]: ['v0.1'], 'x-codex-safety-buffering-enabled': ['true'] }),
+    'safety_buffering',
+  );
+});
+
+test('the host carries one bound inline notification and clears it on a refusal or close', () => {
+  const key = 'openai_chatgpt_moderation_metadata';
+  const metadata = { [key]: { presentation: 'inline' } };
+  const notice = { type, response_id: id, metadata };
+  const start = () => createSubscriptionControls(model);
+  const valid = start();
+  assert.equal(valid.event(notice, id), 'informational');
+  assert.equal(valid.moderationPresentation, 'inline');
+  assert.equal(valid.event(notice, id), 'turn_moderation');
+  assert.equal(valid.moderationPresentation, undefined);
+  const closed = start();
+  assert.equal(closed.event(notice, id), 'informational');
+  closed.close();
+  assert.equal(closed.moderationPresentation, undefined);
+  for (const event of [
+    { ...notice, response_id: 'another' },
+    { ...notice, type: 'response.created' },
+    { type: 'response.in_progress', response: { metadata } },
+    { ...notice, metadata: { ...metadata, unknown: false } },
+    { ...notice, metadata: { ...metadata, guardian: {} } },
+    { ...notice, safety_buffering: true },
+    { ...notice, metadata: { [key]: { presentation: 'inline', final_answer_moderation: {} } } },
+    { ...notice, metadata: { [key]: { presentation: 'other' } } },
+    { ...notice, metadata: { [key]: ['inline'] } },
+  ]) {
+    const controls = start();
+    assert.notEqual(controls.event(event, id), 'informational');
+    assert.equal(controls.moderationPresentation, undefined);
+  }
 });
 
 test('HTTP diagnostics and private account telemetry are never read', () => {

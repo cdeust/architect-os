@@ -101,6 +101,37 @@ test('explicit wrong or duplicate media types refuse even a valid transcript', a
   }
 });
 
+test('gateway version and inline notice survive the host boundary without masking a subsequent policy event', async () => {
+  const headers = { 'x-openai-proxy-wasm': ['v0.1'] };
+  const notice = {
+    type: 'response.metadata',
+    response_id: 'r',
+    metadata: { openai_chatgpt_moderation_metadata: { presentation: 'inline' } },
+  };
+  const withNotice = (...more) => events((a) => a.splice(1, 0, notice, ...more));
+  const reply = await decodeUpstream(upstream(headers, withNotice()), text, 70);
+  assert.equal(reply.moderation_presentation, 'inline');
+  assert.deepEqual(reply.output, parseResponse(events(), text, 70).output);
+  const receipt = {};
+  await assert.rejects(
+    decodeUpstream(
+      upstream(
+        headers,
+        withNotice({
+          ...notice,
+          metadata: { openai_chatgpt_moderation_metadata: { final_answer_moderation: { moderated: true } } },
+        }),
+      ),
+      text,
+      70,
+      receipt,
+    ),
+    /UPSTREAM_REFUSED/,
+  );
+  assert.deepEqual(receipt.stream_refusal, { kind: 'provider_metadata', disposition: 'turn_moderation' });
+  assert.equal(receipt.provider_observation.terminal, 'completed');
+});
+
 const privateString = 'never-emit-this-account-message@example.invalid';
 const created = { type: 'response.created', response: { id: 'r', model, status: 'in_progress' } };
 const eventStream = (items) => items.map((e) => 'data: ' + JSON.stringify(e) + '\n\n').join('');

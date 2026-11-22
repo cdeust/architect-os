@@ -43,6 +43,8 @@ test('provider accounting survives an earlier mandatory native rejection with no
         'ambiguous_turn_state',
         'effective_model_header',
         'moderation_metadata',
+        'moderation_opaque',
+        'safety_buffering_true',
         'safety_control_present',
         'turn_state_header',
         'unknown_envelope',
@@ -68,6 +70,126 @@ test('provider accounting survives an earlier mandatory native rejection with no
     hash(secret),
   ])
     assert.ok(!published.includes(value));
+});
+
+test('moderation evidence records nonexclusive shapes without inspecting private reports', () => {
+  const privateKey = 'sensitive_provider_category';
+  const privateReport = { [privateKey]: { results: [secret, id] } };
+  const payload = {
+    presentation: 'inline',
+    prompt: privateReport,
+    safety_block: privateReport,
+    final_answer_moderation: { item_id: id, display: privateReport },
+    [privateKey]: secret,
+  };
+  const metadata = { openai_chatgpt_moderation_metadata: payload };
+  for (const frame of [
+    { type: 'response.metadata', response_id: id, metadata },
+    { type: 'response.in_progress', response_id: id, metadata },
+    { type: 'response.in_progress', response: { id, model, metadata } },
+  ]) {
+    const result = observe(opened, frame, end());
+    assert.equal(result.evidence, 'bound');
+    assert.deepEqual(
+      result.metadata.categories.filter((label) => label.startsWith('moderation_')),
+      [
+        'moderation_final_answer_marker',
+        'moderation_metadata',
+        'moderation_opaque',
+        'moderation_presentation_inline',
+        'moderation_prompt_report',
+        'moderation_safety_block',
+      ],
+    );
+    assert.deepEqual(result.metadata.unknown_names_sha256, {});
+    for (const value of [privateKey, secret, id, hash(privateKey), hash(secret), hash(id)]) {
+      assert.ok(!JSON.stringify(result).includes(value));
+    }
+  }
+});
+
+test('malformed, empty and misplaced moderation structures never acquire a recognized shape', () => {
+  for (const value of [
+    null,
+    true,
+    secret,
+    [],
+    {},
+    { presentation: secret, prompt: [], safety_block: 0, final_answer_moderation: null },
+    { nested: { presentation: 'inline', prompt: {} } },
+  ]) {
+    const frame = { type: 'response.metadata', metadata: { openai_chatgpt_moderation_metadata: value } };
+    const result = observe(opened, frame, end());
+    assert.deepEqual(
+      result.metadata.categories.filter((label) => label.startsWith('moderation_')),
+      ['moderation_metadata', 'moderation_opaque'],
+    );
+    assert.deepEqual(result.metadata.unknown_names_sha256, {});
+  }
+  const misplaced = {
+    item: { metadata: { openai_chatgpt_moderation_metadata: { prompt: {} } }, safety_buffering: true },
+  };
+  const result = observe(opened, { type: 'response.in_progress', ...misplaced }, end());
+  assert.deepEqual(result.metadata.categories, []);
+});
+
+test('buffering evidence distinguishes explicit values and a typed notification without copying its contents', () => {
+  const typed = { use_cases: [secret], reasons: [secret], retry_model: secret };
+  for (const [value, expected] of [
+    [false, ['false']],
+    [null, ['null']],
+    [true, ['true']],
+    [typed, ['notification']],
+    [{ ...typed, private_extension: id }, ['notification', 'opaque']],
+    [{ ...typed, reasons: [1] }, ['opaque']],
+    [{ ...typed, use_cases: {} }, ['opaque']],
+    [{ ...typed, retry_model: [] }, ['opaque']],
+    [secret, ['opaque']],
+  ]) {
+    for (const fields of [{ safety_buffering: value }, { metadata: { safety_buffering: value } }]) {
+      for (const frame of [
+        { type: 'response.metadata', ...fields },
+        { type: 'response.in_progress', response: { id, ...fields } },
+      ]) {
+        const result = observe(opened, frame, end());
+        assert.deepEqual(
+          result.metadata.categories.filter((label) => label.startsWith('safety_buffering_')),
+          expected.map((suffix) => 'safety_buffering_' + suffix),
+        );
+        assert.deepEqual(result.metadata.unknown_names_sha256, {});
+        assert.ok(!JSON.stringify(result).includes(secret));
+      }
+    }
+  }
+  const mixed = observe(
+    opened,
+    {
+      type: 'response.metadata',
+      safety_buffering: false,
+      metadata: { type: 'safety_buffering', ...typed, private_extension: secret },
+    },
+    end(),
+  );
+  assert.deepEqual(
+    mixed.metadata.categories.filter((label) => label.startsWith('safety_buffering_')),
+    ['safety_buffering_false', 'safety_buffering_notification', 'safety_buffering_opaque'],
+  );
+  assert.deepEqual(mixed.metadata.unknown_names_sha256, {});
+});
+
+test('control shape belonging to another response cannot be attributed to this request', () => {
+  const controls = {
+    metadata: { openai_chatgpt_moderation_metadata: { prompt: {} } },
+    safety_buffering: true,
+  };
+  for (const frame of [
+    { type: 'response.metadata', response_id: 'foreign', ...controls },
+    { type: 'response.in_progress', response_id: id, response: { id: 'foreign', ...controls } },
+  ]) {
+    const result = observe(opened, frame, end());
+    assert.equal(result.evidence, 'unbound');
+    assert.deepEqual(result.metadata.categories, []);
+  }
 });
 
 for (const status of ['failed', 'incomplete']) {
