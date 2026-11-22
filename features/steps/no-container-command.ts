@@ -126,6 +126,10 @@ function cleanEntries(world: ArchitectWorld): string[] {
   });
 }
 
+Then('the isolation data in {string} equals', function (path: string, expected: string) {
+  assert.equal(files(this).get(path)?.trim(), expected.trim());
+});
+
 Then('no file outside the closed list holds docker or colima', function () {
   assert.deepEqual(holdersOutside(this), []);
 });

@@ -1,0 +1,4 @@
+{
+  "shellImage": "docker.io/sbx/shell@sha256:036c56158d78d741238079a4db9e36f072e6d047eb89debffab700b8cb0c3a96",
+  "forbiddenHostSocket": "/var/run/docker.sock"
+}

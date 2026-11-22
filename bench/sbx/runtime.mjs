@@ -5,9 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { requireAdmittedRun } from '../../packages/sandbox/src/runtime-context.ts';
 
-// Docker Sandboxes 0.54.0, local shell template from the native admission preflight.
-const digest = 'sha256:036c56158d78d741238079a4db9e36f072e6d047eb89debffab700b8cb0c3a96';
-const kit = 'docker.io/sbx/shell@' + digest;
+import isolation from './isolation.json' with { type: 'json' };
+
+const kit = isolation.shellImage;
+const digest = kit.split('@')[1];
 
 function command(args, timeout, input) {
   const { HOME, PATH, TMPDIR } = process.env;
@@ -138,6 +139,23 @@ export async function withOfflineSbx({ limitMs, prepare }, use) {
       throw Error('SBX_FIXTURE_BINDING_MISMATCH');
     }
     await requireOfflinePolicy(name, limitMs);
+    // Run the access check as the client identity before either pinned client is staged.
+    await checked(
+      [
+        'exec',
+        '--user',
+        '65534:65534',
+        '-w',
+        workspace,
+        '--',
+        name,
+        '/usr/bin/test',
+        '!',
+        '-w',
+        isolation.forbiddenHostSocket,
+      ],
+      limitMs,
+    );
     return await use({
       workspace,
       copyIn(source, destination) {

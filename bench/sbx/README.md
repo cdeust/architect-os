@@ -2,14 +2,14 @@
 
 These operator-run probes exercise the pinned Linux ARM64 clients in Docker Sandboxes 0.54.0. They implement the offline part of the [builder qualification design](../../docs/design/orchestration-fable-5-2.md). Step continues to use its admitted Claude builder under SRT.
 
-Start the commands through the repository launcher, with the two release archives on the development volume. The Codex input is the npm tarball for `@openai/codex@0.170.0-linux-arm64`. The [Antigravity probe](antigravity.md) records Google's original release URL and checksum. The locally installed Docker shell template must match the digest in `runtime.mjs`. Both probes verify the archive and Linux executable.
+Start the commands through the repository launcher, with the two release archives on the development volume. The Codex input is the npm tarball for `@openai/codex@0.170.0-linux-arm64`. The [Antigravity probe](antigravity.md) records Google's original release URL and checksum. The locally installed Docker shell template must match the digest in `isolation.json`. Both probes verify the archive and Linux executable.
 
 ```sh
 ./aos -- node bench/sbx/codex.mjs "$CODEX_LINUX_ARM64_TGZ"
 ./aos -- node bench/sbx/agy.mjs "$AGY_LINUX_ARM64_TGZ" 180000
 ```
 
-The host creates one synthetic workspace under the admitted run. Before either client starts, it checks the host mounts, runtime mounts, published ports, static MCP server set and effective network policy. An active sandbox-scoped wildcard denial must cover TCP and UDP, with zero allow rules. The policy engine must explicitly refuse a destination for each protocol. The guest receives the pinned probe assets and runs the client under UID 65534. The host removes the named VM and verifies its absence before deleting the temporary workspace.
+The host creates one synthetic workspace under the admitted run. Before either client starts, it checks the host mounts, runtime mounts, published ports, static MCP server set and effective network policy. An active sandbox-scoped wildcard denial must cover TCP and UDP, with zero allow rules. The policy engine must explicitly refuse a destination for each protocol. The host checks that the unprivileged client cannot write the guest daemon socket before staging either client. The guest receives the pinned probe assets and runs the client under UID 65534. The host removes the named VM and verifies its absence before deleting the temporary workspace.
 
 | Native result on 22 November 2026                                                             | Outcome                                                                                                                                                                                                                                                                                                          |
 | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
