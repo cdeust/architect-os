@@ -1,36 +1,37 @@
-import { mkdirSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readGateReceipt } from '@architect-os/sandbox/gate-receipt';
+import { gateReportPath } from '@architect-os/sandbox/gate-reports';
+import { runLocations } from '@architect-os/sandbox/runtime-context';
 import type { Gate } from '../domain/ports.js';
-import { runToFile } from './host-process.js';
+import { closedEnvironment, runToFile } from './host-process.js';
 
-/**
- * `Gate` over a child process: `command` (an argv, never through a shell) started in the delivery worktree, its two
- * outputs written to `log`; the verdict is the file `verdict` that the gate leaves when it is green. Both paths are
- * relative to the worktree.
- */
+/** A nested Gate uses the admitted run. Only Git and the forge use the caller's identity. */
 export class ProcessGate implements Gate {
   constructor(
     private readonly worktree: string,
     private readonly command: string[],
     private readonly log: string,
-    private readonly verdict: string,
+    private readonly env: Readonly<NodeJS.ProcessEnv>,
   ) {}
 
   verdictHash(): string | undefined {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(String(readFileSync(join(this.worktree, this.verdict))));
-    } catch {
-      // Absent, unreadable or not JSON: nothing was parsed, and the lines below give no verdict.
-    }
-    const sha = (parsed as { sha?: unknown } | null)?.sha;
-    return typeof sha === 'string' && /^[0-9a-f]{40}$/.test(sha) ? sha : undefined;
+    return readGateReceipt(this.env.ARCHITECT_OS_RUNTIME_ROOT!, this.worktree);
   }
 
   async run(): Promise<number> {
-    const log = join(this.worktree, this.log);
-    mkdirSync(dirname(log), { recursive: true });
+    const log = gateReportPath(this.env, this.log);
+    const root = this.env.ARCHITECT_OS_RUNTIME_ROOT!,
+      run = this.env.ARCHITECT_OS_RUN_DIR!;
+    const environment = closedEnvironment(
+      { names: ['PATH', 'PG_BIN'], env: this.env },
+      {
+        ...runLocations(root, run),
+        ARCHITECT_OS_RUNTIME_ROOT: root,
+        ARCHITECT_OS_RUN_DIR: run,
+        ARCHITECT_OS_ADMISSION_BINDING: this.env.ARCHITECT_OS_ADMISSION_BINDING!,
+        ARCHITECT_OS_HOST_XDG_CONFIG_HOME: 'unset',
+      },
+    );
     const [program, ...args] = this.command;
-    return runToFile(program as string, args, this.worktree, log);
+    return runToFile(program as string, args, this.worktree, log, environment);
   }
 }

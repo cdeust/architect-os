@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { closeSync, openSync } from 'node:fs';
+import { closeSync, constants, fstatSync, ftruncateSync, openSync } from 'node:fs';
 
 /**
  * The only file of tools/deliver that starts processes: named exception of the rule child-process-only-in-sandbox in
@@ -58,20 +58,30 @@ export function runToEnd(
 /**
  * Runs `program` in `cwd` with both outputs written to the file `log` (created, or emptied) and no input, and gives its
  * exit code: 1 when a signal ended it or it could not be started, whether `spawn` says so by an event or by throwing.
- * It starts the gate command, a whole suite, and keeps inheriting the environment of the host (the default of
- * `spawn`): the closed list is for git and the client of the forge, not for the suite, whose own calls to git are
- * closed by their own rule.
+ * Only the explicitly supplied environment reaches the Gate.
  */
 export async function runToFile(
   program: string,
   args: readonly string[],
   cwd: string,
   log: string,
+  environment: Readonly<Record<string, string>>,
 ): Promise<number> {
-  const descriptor = openSync(log, 'w');
+  const descriptor = openSync(
+    log,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    0o600,
+  );
   try {
+    const file = fstatSync(descriptor);
+    if (!file.isFile() || file.nlink !== 1) return 1;
+    ftruncateSync(descriptor, 0);
     return await new Promise<number>((resolve) => {
-      const child = spawn(program, args, { cwd, stdio: ['ignore', descriptor, descriptor] });
+      const child = spawn(program, args, {
+        cwd,
+        env: environment,
+        stdio: ['ignore', descriptor, descriptor],
+      });
       child.on('error', () => resolve(1));
       child.on('close', (code) => resolve(code ?? 1));
     });

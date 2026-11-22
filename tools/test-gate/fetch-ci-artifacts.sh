@@ -57,16 +57,32 @@ artifact_origin() {
       else error("artifact absent or ambiguous: " + $name)
       end'
 }
-download_artifact() {
-  mkdir -p "$2"
-  archive=$(mktemp "${TMPDIR:?}/artifact.XXXXXX")
-  if ! gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$1/zip" > "$archive" ||
-     ! unzip -oq "$archive" -d "$2"; then
-    rm -f "$archive"
-    return 1
+# Extract only the files this producer owns. Publish a complete, head-checked lot.
+download_artifact() (
+  id=$1
+  target=$2
+  logical=reports/${target#"$ARCHITECT_OS_RUN_DIR/reports/"}
+  test "$(node "$entry/tools/test-gate/report-files.mjs" path "$logical")" = "$target"
+  head_file=$3
+  shift 3
+  stage=$(mktemp -d "${TMPDIR:?}/artifact.XXXXXX")
+  trap 'rm -rf "$stage"' EXIT
+  mkdir "$stage/files"
+  gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$stage/archive"
+  unzip -Z -1 "$stage/archive" > "$stage/members"
+  for member in "$head_file" "$@"; do
+    test "$(grep -Fxc "$member" "$stage/members")" = 1
+    mkdir -p "$stage/files/$(dirname "$member")"
+    unzip -p "$stage/archive" "$member" > "$stage/files/$member"
+  done
+  test "$(cat "$stage/files/$head_file")" = "$checkout_head"
+  if [ "$head_file" = mutation/head ]; then
+    printf '%s\t%s\t%s\t%s\t%s\n' "$GITHUB_RUN_ID" "$head" "$attempt" "$job" "$id" > "$stage/files/producer"
   fi
-  rm -f "$archive"
-}
+  mkdir -p "$(dirname "$target")"
+  test ! -e "$target" && test ! -L "$target" || exit 1
+  mv "$stage/files" "$target"
+)
 download_mutation() {
   lane=$1
   binding=$(job_origin "gate-linux-lane-$lane / mutation")
@@ -74,10 +90,8 @@ download_mutation() {
   job=${binding#* }
   name="gate-mutation-linux-$attempt-$lane"
   artifact=$(artifact_origin "$name")
-  target="reports/mutation-shards/$lane"
-  download_artifact "$artifact" "$target"
-  test "$(cat "$target/mutation/head")" = "$checkout_head"
-  printf '%s\t%s\t%s\t%s\t%s\n' "$GITHUB_RUN_ID" "$head" "$attempt" "$job" "$artifact" > "$target/producer"
+  target="${ARCHITECT_OS_RUN_DIR:?}/reports/mutation-shards/$lane"
+  download_artifact "$artifact" "$target" mutation/head mutation/native.json mutation-inventory.json
 }
 valid_lane() {
   case "$1" in
@@ -96,9 +110,8 @@ for part in 1 2; do
   attempt=${binding%% *}
   name="gate-cucumber-linux-$attempt-$part"
   artifact=$(artifact_origin "$name")
-  target="reports/cucumber-shards/$part"
-  download_artifact "$artifact" "$target"
-  test "$(cat "$target/cucumber-head")" = "$checkout_head"
+  target="${ARCHITECT_OS_RUN_DIR:?}/reports/cucumber-shards/$part"
+  download_artifact "$artifact" "$target" cucumber-head cucumber.ndjson
 done
 download_replay() {
   part=$1
@@ -107,9 +120,8 @@ download_replay() {
   attempt=${binding%% *}
   name="gate-replay-linux-$attempt-$part"
   artifact=$(artifact_origin "$name")
-  target="reports/replay-shards/$part"
-  download_artifact "$artifact" "$target"
-  test "$(cat "$target/head")" = "$checkout_head"
+  target="${ARCHITECT_OS_RUN_DIR:?}/reports/replay-shards/$part"
+  download_artifact "$artifact" "$target" head replay.json timings.json
 }
 pids=
 failed=0

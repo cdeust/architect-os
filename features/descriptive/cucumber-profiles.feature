@@ -9,9 +9,9 @@ Feature: Cucumber profiles
     Then its default profile has no tags, no name, retry 0 and strict
     And its default profile covers every feature file of the gate
 
-  Scenario: the mutation profile differs from the default only by excluding features/repository and features/arch
+  Scenario: the mutation profile has its own evidence and excludes only features/repository and features/arch
     Given the committed cucumber configuration
-    Then its mutation profile differs from the default profile only by its paths
+    Then its mutation profile keeps the default runner options and writes its own admitted report
     And its mutation profile covers every feature file of the default profile except those of features/repository and features/arch
 
   Scenario: component priority only permutes the mutation profile
@@ -25,6 +25,7 @@ Feature: Cucumber profiles
   Scenario: Stryker uses the mutation profile
     Given the committed Stryker configuration
     Then its cucumber runner profile is "mutation"
+    And its scratch and JSON reporter belong to the admitted run
 
   Scenario: Stryker gives its first run an explicit bound
     Given the committed Stryker configuration

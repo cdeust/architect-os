@@ -8,13 +8,22 @@
 - [x] Exercise missing, forged and substituted contexts, partial-setup rollback, caller locations, Git and forge identity, hosted floors and the native sandbox.
 - [x] Bind local and hosted receipts to the single integration commit and update the roadmap after validation.
 
-## Active milestone — isolated session writes (1b)
+## Isolated session writes (1b)
 
 - [x] Give the pinned engine and its child the same private temporary directory. Prevent each profile from writing host-home caches, global temporary files, shared caches and other runs, or reading another run or host state.
 - [x] Exercise the five production profiles with the native engine on macOS and Linux, including the default writable locations of the pinned SRT, an existing sibling file, and a successful private write.
 - [x] Put host usage and delivery logs in the admitted durable state while retaining forge identity and the original journals.
 - [x] Keep approved input separate from retained Step reports and disposable streams, with exclusive creation and an unchanged evidence archive.
-- [ ] Run repository checks, mutation and independent replay on the published commit. Record the actual jobs before closing this milestone.
+- [x] Run repository checks, mutation and independent replay on the published commit. Record the actual jobs before closing this milestone.
+
+## Active milestone — Gate and delivery (2)
+
+- [x] Verify the previous integration on main. [Gate after #120](https://github.com/cdeust/architect-os/actions/runs/44963755418) passed all 36 jobs on f675623b.
+- [ ] Take a kernel lock per physical checkout. Recover the recorded source before loading a candidate or altering prior reports. Refuse conflicting operator edits.
+- [ ] Move reports, mutation copies and replay work below the admitted run. Keep the identity of every producer and replay and resume only the allocation bound to its hosted job.
+- [ ] Publish the successful commit-bound Gate receipt and prove that Deliver uses it with a closed process environment.
+- [ ] Exercise kill/restart, concurrent and distinct checkouts, aliases, alternate runtime roots, receipt substitutions, both native operating systems, the 16 hosted producers and independent replay.
+- [ ] Align README, roadmap and diagram with the verified paths, then record the integrated result.
 
 ## Remaining work in order
 

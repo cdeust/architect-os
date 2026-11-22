@@ -1075,6 +1075,51 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       - total : 1
       """
 
+  Scenario: full mutation compares the generated registry without changing the tracked file
+    Given the gate debt registry is absent
+    And the gate mutation report is the fixture "unsorted"
+    When the gate runs with the arguments "debt"
+    Then the gate exits with 0
+    Given the gate head is committed
+    When the gate runs with the arguments "debt compare"
+    Then the gate exits with 0
+    Given a different debt registry is staged without touching the working copy
+    When the gate runs with the arguments "debt compare"
+    Then the gate exits with 0
+    And the gate output includes "registre de dette écrit : reports/mutation-debt.computed.json"
+    And both comparison reports match the tracked debt registry
+    Given the gate mutation report is the fixture "no-mutant"
+    When the gate runs with the arguments "debt compare"
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : registre de dette différent du rapport complet
+      """
+    And the committed comparison report matches the untouched tracked debt registry
+    Given the gate repository file "reports/mutation/mutation.json" is removed
+    When the gate runs with the arguments "debt compare"
+    Then the gate exits with 1
+    And the gate output includes "rapport de mutation illisible : reports/mutation/mutation.json absent"
+    And the gate repository holds no file "reports/mutation-debt.computed.json"
+    And the committed comparison report matches the untouched tracked debt registry
+
+  Scenario: a missing committed registry cannot reuse either prior comparison file
+    Given the gate debt registry is absent
+    And the gate head is committed
+    And the gate repository file "reports/mutation-debt.committed.json" reads:
+      """
+      stale
+      """
+    And the gate repository file "reports/mutation-debt.computed.json" reads:
+      """
+      stale
+      """
+    When the gate runs with the arguments "debt compare"
+    Then the gate exits with 1
+    And the gate output includes "HEAD:mutation-debt.json"
+    And the gate repository holds no file "reports/mutation-debt.committed.json"
+    And the gate repository holds no file "reports/mutation-debt.computed.json"
+
   Scenario: debt does not regenerate an existing registry
     Given the gate debt registry is the fixture "survivor"
     And the gate mutation report is the fixture "unsorted"
@@ -1110,20 +1155,21 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       """
     And the gate repository holds no file "mutation-debt.json"
 
-  Scenario Outline: debt takes no argument but realign, alone: <arguments>
+  Scenario Outline: debt accepts only realign or compare, alone: <arguments>
     Given the gate debt registry is absent
     And the gate mutation report is the fixture "unsorted"
     When the gate runs with the arguments "<arguments>"
     Then the gate exits with 1
     And the gate output is:
       """
-      porte de test : usage : test-gate plan|check|inventory|inventory-check|inventory-project|inventory-collect [--job <nom>] (inventory|inventory-project --shard <1|2>) | debt [realign] | replay [--all | --shard <1|2>] | replay-collect
+      porte de test : usage : test-gate plan|check|inventory|inventory-check|inventory-project|inventory-collect [--job <nom>] (inventory|inventory-project --shard <1|2>) | debt [realign|compare] | replay [--all | --shard <1|2>] | replay-collect
       """
     And the gate repository holds no file "mutation-debt.json"
 
     Examples:
       | arguments       |
       | debt now        |
+      | debt compare now |
       | debt --job macos |
       | debt realign now |
 

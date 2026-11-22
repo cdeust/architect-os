@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+import { mock } from 'node:test';
+import fs, { linkSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   closedEnvironment,
@@ -141,7 +143,7 @@ Given('the file already holds {string}', function (text: string) {
 const toFile = async (world: DeliverWorld, program: string, args: string[]): Promise<void> => {
   const run = runOf(world);
   const before = openDescriptors();
-  run.exitCode = await runToFile(program, args, run.directory, run.file);
+  run.exitCode = await runToFile(program, args, run.directory, run.file, {});
   run.descriptors = [before, openDescriptors()];
 };
 
@@ -174,4 +176,27 @@ Then('the file holds {string}', function (text: string) {
 Then('the file holds the directory it ran in', function () {
   const run = runOf(this);
   assert.equal(readFileSync(run.file, 'utf8'), run.directory);
+});
+
+Given('the file also has a second hard link', function () {
+  const run = runOf(this);
+  linkSync(run.file, join(run.directory, 'other.log'));
+});
+
+Then('the host rejects a character device before trying to truncate it', async function () {
+  const run = runOf(this);
+  const truncate = mock.method(fs, 'ftruncateSync', () => {
+    throw new Error('unexpected truncation');
+  });
+  syncBuiltinESMExports();
+  try {
+    assert.equal(
+      await runToFile(process.execPath, ['-e', 'process.exit(0)'], run.directory, '/dev/null', {}),
+      1,
+    );
+    assert.equal(truncate.mock.callCount(), 0);
+  } finally {
+    truncate.mock.restore();
+    syncBuiltinESMExports();
+  }
 });

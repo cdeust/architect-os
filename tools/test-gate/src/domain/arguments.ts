@@ -11,19 +11,23 @@ export type Command =
   | { readonly name: 'debt' }
   /** `debt realign`: puts the entries of the registry back on their text. */
   | { readonly name: 'realign' }
+  | { readonly name: 'compare' }
   /** Replays the verdicts of the mutation report: the perimeter and the canary, or `--all` of them. */
   | { readonly name: 'replay'; readonly all: boolean; readonly shard?: 1 | 2 }
   | { readonly name: 'replay-collect' };
 
 const USAGE =
-  'usage : test-gate plan|check|inventory|inventory-check|inventory-project|inventory-collect [--job <nom>] (inventory|inventory-project --shard <1|2>) | debt [realign] | replay [--all | --shard <1|2>] | replay-collect';
+  'usage : test-gate plan|check|inventory|inventory-check|inventory-project|inventory-collect [--job <nom>] (inventory|inventory-project --shard <1|2>) | debt [realign|compare] | replay [--all | --shard <1|2>] | replay-collect';
 
-/** `plan|check [--job <name>]` (the job defaults to linux), `debt [realign]`, or `replay [--all]`. */
+/** `plan|check [--job <name>]` (the job defaults to linux), `debt [realign|compare]`, or `replay [--all]`. */
 export function parseArguments(args: readonly string[]): Command | ReadFailure {
   const [name, ...options] = args;
   if (name === 'debt') {
     if (options.length === 0) return { name };
-    return options.length === 1 && options[0] === 'realign' ? { name: 'realign' } : { failure: USAGE };
+    const [action] = options;
+    return options.length === 1 && (action === 'realign' || action === 'compare')
+      ? { name: action }
+      : { failure: USAGE };
   }
   if (name === 'replay-collect' && options.length === 0) return { name };
   const [flag, value, ...rest] = options;

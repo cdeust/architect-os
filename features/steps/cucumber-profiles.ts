@@ -60,9 +60,9 @@ function assertCoversGate(profile: Profile): void {
 const NOT_MUTATION_AREAS = ['repository', 'arch'];
 
 function assertMutationScope(base: Profile, mutation: Profile): void {
-  const { paths: _basePaths, ...baseRest } = base;
-  const { paths: _mutationPaths, ...mutationRest } = mutation;
-  assert.deepEqual(mutationRest, baseRest, 'the mutation profile differs from the default beyond its paths');
+  const { paths: _basePaths, format: _baseFormat, ...baseRest } = base;
+  const { paths: _mutationPaths, format: _mutationFormat, ...mutationRest } = mutation;
+  assert.deepEqual(mutationRest, baseRest, 'the mutation profile changes a runner option');
   for (const file of gateFeatureFiles()) {
     const expected =
       covers(base, file) && !NOT_MUTATION_AREAS.some((area) => file.startsWith(`features/${area}/`));
@@ -94,10 +94,13 @@ Then('its default profile covers every feature file of the gate', function () {
   assertCoversGate(profiles(this).default);
 });
 
-Then('its mutation profile differs from the default profile only by its paths', function () {
+Then('its mutation profile keeps the default runner options and writes its own admitted report', function () {
   const { default: base, mutation } = profiles(this);
-  const { paths: _a, ...baseRest } = base;
-  const { paths: _b, ...mutationRest } = mutation;
+  const { paths: _a, format: baseFormat, ...baseRest } = base;
+  const messages = join(process.env.ARCHITECT_OS_RUN_DIR!, 'reports');
+  assert.deepEqual(baseFormat, ['message:' + join(messages, 'cucumber.ndjson'), 'progress']);
+  const { paths: _b, format: mutationFormat, ...mutationRest } = mutation;
+  assert.deepEqual(mutationFormat, ['message:' + join(messages, 'mutation/cucumber.ndjson'), 'progress']);
   assert.deepEqual(mutationRest, baseRest);
   assertPlainScope(mutation);
 });
@@ -115,6 +118,22 @@ Then(
     }
   },
 );
+
+Then('its scratch and JSON reporter belong to the admitted run', function () {
+  const config = z
+    .object({ tempDirName: z.string(), jsonReporter: z.object({ fileName: z.string() }) })
+    .parse(stored(this, 'stryker'));
+  const run = process.env.ARCHITECT_OS_RUN_DIR!;
+  assert.equal(config.tempDirName, join(run, 'tmp', 'stryker'));
+  assert.equal(
+    config.jsonReporter.fileName,
+    join(
+      run,
+      'reports/mutation',
+      process.env.AOS_NATIVE_MUTATION_LOTS === '1' ? 'native.json' : 'mutation.json',
+    ),
+  );
+});
 
 Then('its first run has an explicit bound of {int} minutes', function (minutes: number) {
   const config = z.object({ dryRunTimeoutMinutes: z.number() }).parse(stored(this, 'stryker'));

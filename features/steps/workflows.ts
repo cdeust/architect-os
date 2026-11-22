@@ -127,7 +127,7 @@ function assertGate(text: string): void {
   assert.equal(linuxSteps[0]?.name, 'Require all producers');
   assert.equal(
     linuxSteps.find(({ name }) => name === 'Upload reports')?.if,
-    '$' + "{{ always() && steps.admission.outcome == 'success' }}",
+    '$' + "{{ always() && steps.admission.outcome == 'success' && steps.exports.outcome == 'success' }}",
   );
   for (const [id, job] of Object.entries(doc.jobs)) {
     assert.equal(job.permissions, undefined);
@@ -405,14 +405,54 @@ function assertHostedAdmission(source: string, file: string): void {
       list.every((step) => !step.uses?.startsWith('actions/cache@') && !('cache' in (step.with ?? {}))),
     );
     if (file !== 'bench-sandbox.yml') assert.equal(list[setup]?.with?.['package-manager-cache'], false, id);
-    const entry = file === 'bench-sandbox.yml' ? '../aos -- ' : './aos -- ';
+    const isGate = ['gate.yml', 'gate-lane.yml', 'mutation-full.yml'].includes(file);
+    const capture = './aos -- node tools/runtime/gate-job.mjs capture';
+    const entry = isGate
+      ? 'sh tools/runtime/gate-job.sh -- '
+      : file === 'bench-sandbox.yml'
+        ? '../aos -- '
+        : './aos -- ';
+    if (isGate) {
+      assert.equal(list.filter((step) => step.id === 'runtime' && step.run === capture).length, 1, id);
+      for (const step of list.filter((step) => step.uses?.startsWith('actions/upload-artifact@'))) {
+        const paths = String(step.with?.path).trimEnd().split('\n');
+        assert.ok(
+          paths.every((path) => path.startsWith('${{ steps.exports.outputs.reports }}/')),
+          id,
+        );
+      }
+    }
     const commands = list.flatMap(({ run }) => (run ? [run.trimEnd()] : []));
     const packages = commands.filter((cmd) => /(?:^|[\s;&|])(?:npm|npx|node)(?=\s)/m.test(cmd));
     assert.ok(packages.length > 0, id);
     for (const cmd of packages) {
       assert.ok(list.findIndex((step) => step.run?.trimEnd() === cmd) > setup, cmd);
+      if (isGate && cmd === capture) continue;
+      if (isGate)
+        assert.equal(
+          list.find((step) => step.run?.trimEnd() === cmd)?.env?.AOS_GATE_CONTEXT_SHA,
+          '${{ steps.runtime.outputs.context_sha }}',
+        );
       assert.ok(cmd.startsWith(entry), cmd);
-      const payload = cmd.slice(entry.length);
+      if (isGate)
+        assert.ok(
+          list.findIndex((step) => step.run?.trimEnd() === cmd) >
+            list.findIndex((step) => step.id === 'runtime'),
+        );
+      const lock = '/usr/bin/python3 -I tools/test-gate/with-tree-lock.py exec ';
+      const invocation = cmd.slice(entry.length);
+      const candidate =
+        isGate && (invocation.includes('bash -e -o pipefail') || invocation.endsWith('npx stryker run'));
+      if (candidate) assert.ok(invocation.startsWith(lock), cmd);
+      const guard = '/usr/bin/python3 -I tools/test-gate/with-tree-lock.py candidate ';
+      let payload = candidate ? invocation.slice(lock.length) : invocation;
+      if (candidate) {
+        for (const line of payload
+          .split('\n')
+          .filter((line) => /\b(tsc -b|cucumber-js --shard|stryker run)\b/.test(line)))
+          assert.ok(line.includes(guard), line);
+        if (payload.startsWith(guard)) payload = payload.slice(guard.length);
+      }
       if (payload.startsWith("bash -e -o pipefail <<'ADMITTED'\n")) {
         assert.equal(payload.split('\n').indexOf('ADMITTED'), payload.split('\n').length - 1, cmd);
       } else {

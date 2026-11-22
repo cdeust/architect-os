@@ -18,6 +18,14 @@
     "./state-journal": {
       "types": "./dist/src/state-journal.d.ts",
       "default": "./src/state-journal.ts"
+    },
+    "./gate-receipt": {
+      "types": "./dist/src/gate-receipt.d.ts",
+      "default": "./src/gate-receipt.ts"
+    },
+    "./gate-reports": {
+      "types": "./dist/src/gate-reports.d.ts",
+      "default": "./src/gate-reports.ts"
     }
   },
   "dependencies": {

@@ -123,8 +123,12 @@ export class CucumberRunner implements Runner {
     // child_process.spawn options detached, stdio, timeout and killSignal: node_modules/@types/node/child_process.d.ts.
     // Standard output is ignored, never piped: an unread pipe that fills blocks the run. At `timeout`, Node kills the
     // child with `killSignal`; the group is killed once the child is gone, its own children with it.
+    // Candidate tests receive no lease capability. The host alone owns and restores a mutated source.
+    const candidateEnv = { ...process.env };
+    delete candidateEnv.AOS_GATE_LEASE_FD;
     const child = spawn(process.execPath, args, {
       cwd: this.root,
+      env: candidateEnv,
       detached: true,
       stdio: ['ignore', 'ignore', stderr],
       timeout: limitMs,
@@ -237,11 +241,13 @@ export async function replayAll(
       continue;
     }
     const runMutant = async (run: () => Promise<Timed>) => {
-      workspace.write(replay.file, replay.mutated);
+      const replacement = workspace.replacement;
+      if (!replacement) throw new Error('GATE_ACTIVE_LEASE_REQUIRED');
+      replacement.begin(replay.file, replay.source, replay.mutated);
       try {
         return await run();
       } finally {
-        workspace.write(replay.file, replay.source);
+        replacement.restore();
       }
     };
     if (

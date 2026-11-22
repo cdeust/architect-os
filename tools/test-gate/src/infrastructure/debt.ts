@@ -91,6 +91,24 @@ export function generateDebt(config: GateConfig, workspace: Workspace): { summar
   return { summary: renderGenerated(config.debt, survivors) };
 }
 
+/** Compare the committed registry with the native report without changing the checkout. */
+export function compareDebt(
+  config: GateConfig,
+  workspace: Workspace,
+  git: GitRepository,
+): { summary: string } | ReadFailure {
+  const committed = 'reports/mutation-debt.committed.json';
+  const computed = 'reports/mutation-debt.computed.json';
+  workspace.remove(committed);
+  workspace.remove(computed);
+  const text = git.show('HEAD', config.debt);
+  workspace.write(committed, text);
+  const result = generateDebt({ ...config, debt: computed }, workspace);
+  if ('failure' in result) return result;
+  if (workspace.read(computed) !== text) return { failure: 'registre de dette différent du rapport complet' };
+  return result;
+}
+
 /**
  * `test-gate debt realign`: puts the entries of the registry back on their text and writes it when one moved. The
  * summary to print and whether every entry points at its text afterwards, or the reason the gate refuses.

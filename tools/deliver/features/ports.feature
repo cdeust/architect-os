@@ -706,6 +706,14 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       When I run the delivery gate
       Then the delivery gate exited 1
 
+    Scenario: Delivery projects only the admitted allocation and required host binaries to its nested Gate
+      Given a delivery gate of the process adapter
+      Then a real Gate subprocess has exactly its admitted paths, PATH and PG_BIN
+
+    Scenario: Delivery ignores a green-looking file created in the checkout
+      Given a delivery gate of the process adapter
+      Then a legacy checkout verdict cannot satisfy the delivery Gate
+
   Rule: Clock
 
     Scenario Outline: a sleep resolves

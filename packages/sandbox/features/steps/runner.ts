@@ -58,11 +58,18 @@ function makeRepo(): { root: string; worktree: string } {
   return { root, worktree: join(repo, '.claude', 'worktrees', 'w') };
 }
 
+// The child executes just this uninstrumented probe. Resolve the installed workspace package even when
+// this suite runs from Stryker's private copy, which the sandbox deliberately cannot read.
+const installedPackage = dirname(
+  createRequire(join(PKG, '../../package.json')).resolve('@architect-os/sandbox/require-run'),
+);
+const installedProbe = join(installedPackage, 'src', 'canary-probe.mjs');
+
 const srtOptions = (extra: Partial<SrtRunnerOptions> = {}): SrtRunnerOptions => ({
   profilesDir: join(PKG, 'profiles'),
   srtCli: SRT_CLI,
   node: process.execPath,
-  canaryProbe: join(PKG, 'src', 'canary-probe.mjs'),
+  canaryProbe: installedProbe,
   tmpRoot: tmpdir(),
   runtimeRoot: process.env.ARCHITECT_OS_RUNTIME_ROOT!,
   runDir: process.env.ARCHITECT_OS_RUN_DIR!,

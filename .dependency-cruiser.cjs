@@ -114,6 +114,7 @@ module.exports = {
           SANDBOX,
           '^tools/test-gate/src/infrastructure/git\\.ts$',
           '^tools/test-gate/src/infrastructure/replay\\.ts$',
+          '^tools/test-gate/src/infrastructure/tree-lease\\.ts$', // Fixed native worktree lease and recovery adapter.
           '^tools/deliver/src/infrastructure/host-process\\.ts$',
         ],
       },

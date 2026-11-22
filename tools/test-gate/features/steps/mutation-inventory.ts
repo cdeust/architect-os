@@ -4,7 +4,7 @@ import { noopLogger } from '@stryker-mutator/util';
 import { PluginKind } from '@stryker-mutator/api/plugin';
 import { readNativeLotIgnorer, strykerPlugins } from '../../src/infrastructure/stryker-lot-plugin.js';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runGate } from '../../src/infrastructure/gate.js';
 import { mutationCatalog } from '../../src/infrastructure/mutation-catalog.js';
@@ -17,6 +17,12 @@ import {
 import { requireCompleteMutationLots, type Lot } from '../../src/infrastructure/mutation-lot-proof.js';
 import { requireNativeMutationReport } from '../../src/infrastructure/mutation-report.js';
 import { FIXTURES, Given, Then, When, repository } from './repository.js';
+
+export function fixtureIgnorer(repo: ReturnType<typeof repository>) {
+  const ignorer = readNativeLotIgnorer(repo.dir, repo.path('reports/mutation-inventory.json'));
+  assert.ok(ignorer, 'the native inventory must produce a working ignorer for the instrumenter');
+  return ignorer;
+}
 
 type Inventory = {
   head: string;
@@ -43,7 +49,16 @@ Then('the registered native plugin reads the inventory from its working director
   assert.equal(plugin.name, 'gate-native-lots');
   assert.equal(plugin.kind, PluginKind.Ignore);
   const cwd = process.cwd();
+  const previous = process.env;
+  const env = repo.admittedEnvironment();
+  mkdirSync(join(env.ARCHITECT_OS_RUN_DIR!, 'reports'), { recursive: true });
+  writeFileSync(
+    join(env.ARCHITECT_OS_RUN_DIR!, 'reports', 'mutation-inventory.json'),
+    repo.read('reports/mutation-inventory.json'),
+  );
+  repo.remove('reports/mutation-inventory.json');
   try {
+    process.env = { ...previous, ...env };
     process.chdir(repo.dir);
     const ignorer = plugin.factory();
     assert.ok(ignorer, 'the registered factory returns an ignorer');
@@ -51,6 +66,7 @@ Then('the registered native plugin reads the inventory from its working director
     assert.equal(ignorer.shouldIgnore({ hub: { file: { opts: { filename: file } } }, node: {} }), undefined);
   } finally {
     process.chdir(cwd);
+    process.env = previous;
   }
 });
 
@@ -63,9 +79,14 @@ Then('the native plugin refuses an inventory with invalid UTF-8 bytes or a byte-
   assert(insideQuotedPath >= 0);
   malformed[insideQuotedPath] = 255;
   writeFileSync(path, malformed);
-  assert.throws(() => readNativeLotIgnorer(repo.dir), { code: 'ERR_ENCODING_INVALID_ENCODED_DATA' });
+  assert.throws(() => readNativeLotIgnorer(repo.dir, repo.path('reports/mutation-inventory.json')), {
+    code: 'ERR_ENCODING_INVALID_ENCODED_DATA',
+  });
   writeFileSync(path, Buffer.concat([Buffer.from('\uFEFF'), valid]));
-  assert.throws(() => readNativeLotIgnorer(repo.dir), SyntaxError);
+  assert.throws(
+    () => readNativeLotIgnorer(repo.dir, repo.path('reports/mutation-inventory.json')),
+    SyntaxError,
+  );
 });
 
 Given('the gate source {string} begins with a byte-order mark', function (file: string) {
@@ -109,7 +130,7 @@ Then('the inventory files are {string}', function (paths: string) {
 
 Then('the mutation plugin retains an unlocated node of {string}', function (file: string) {
   const repo = repository(this);
-  const plugin = readNativeLotIgnorer(repo.dir);
+  const plugin = readNativeLotIgnorer(repo.dir, repo.path('reports/mutation-inventory.json'));
   assert.equal(
     plugin.shouldIgnore({ hub: { file: { opts: { filename: repo.path(file) } } }, node: {} }),
     undefined,
@@ -118,7 +139,7 @@ Then('the mutation plugin retains an unlocated node of {string}', function (file
 
 Then('the whole-file plugin retains the unmutated identifier of {string}', function (file: string) {
   const repo = repository(this);
-  const plugin = readNativeLotIgnorer(repo.dir);
+  const plugin = readNativeLotIgnorer(repo.dir, repo.path('reports/mutation-inventory.json'));
   const loc = { start: { line: 1, column: 13 }, end: { line: 1, column: 18 } };
   assert.equal(
     plugin.shouldIgnore({ hub: { file: { opts: { filename: repo.path(file) } } }, node: { loc } }),
@@ -133,7 +154,7 @@ Then('native instrumentation refuses the unplanned file {string}', async functio
     new Instrumenter(noopLogger).instrument([{ name, content: 'export const value = true;', mutate: true }], {
       plugins: null,
       excludedMutations: [],
-      ignorers: [readNativeLotIgnorer(repo.dir)],
+      ignorers: [fixtureIgnorer(repo)],
     }),
     { message: 'instrumentation hors inventaire : ' + name },
   );
@@ -211,7 +232,7 @@ When('the native plugin instruments the inventory files', async function () {
   const result = await instrumenter.instrument(inputs, {
     plugins: null,
     excludedMutations: [],
-    ignorers: [readNativeLotIgnorer(repo.dir)],
+    ignorers: [fixtureIgnorer(repo)],
   });
   const files = Object.fromEntries(
     lots.map(({ file }) => [

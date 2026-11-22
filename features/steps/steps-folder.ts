@@ -21,7 +21,8 @@ import {
   type StepFile,
 } from '@architect-os/sandbox';
 import type { ArchitectWorld } from '../support/world.js';
-import { Given, ROOT, Then, When, stored } from './helpers.js';
+import { installedWorkspace } from '../support/installed-workspace.js';
+import { Given, Then, When, stored } from './helpers.js';
 
 // The gate reads steps/ (docs/design/orchestration-fable-5-2.md, §14): the rule of one folder is a function, which the
 // scenarios on broken copies reuse.
@@ -183,7 +184,10 @@ function writeValid(steps: string, name: string): void {
 }
 
 Given('the committed folder steps\\/ of the repository', function () {
-  this.state['stepsFolder'] = { steps: join(ROOT, 'steps'), repository: ROOT } satisfies Steps;
+  this.state['stepsFolder'] = {
+    steps: join(installedWorkspace, 'steps'),
+    repository: installedWorkspace,
+  } satisfies Steps;
 });
 
 /**

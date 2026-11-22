@@ -69,9 +69,10 @@ function configSchema(): z.ZodType<DeliverConfig> {
       )
       .optional(),
     appendOnly: z.array(path).max(8),
-    gateVerdict: path,
     gateCommand: z.array(word).min(1).max(16),
-    gateLog: path,
+    gateLog: z
+      .string()
+      .regex(/^reports\/[A-Za-z0-9_-][A-Za-z0-9._-]*$/, 'the gate log is a filename under reports/'),
     log: z
       .string()
       .startsWith('${state}/', 'the log path starts with ${state}/')

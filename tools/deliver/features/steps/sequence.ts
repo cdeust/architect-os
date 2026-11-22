@@ -134,7 +134,6 @@ Given(
         workflow: 'gate',
         requiredJobs: ['gate-linux', 'gate-macos'],
         appendOnly: ['docs/design/journal.md'],
-        gateVerdict: 'reports/gate-base.json',
         gateCommand: ['npm', 'run', 'gate'],
         gateLog: 'reports/deliver-gate.log',
         log: '${state}/deliveries.jsonl',

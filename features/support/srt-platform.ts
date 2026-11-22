@@ -1,4 +1,5 @@
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { installedWorkspace } from './installed-workspace.js';
 import { join } from 'node:path';
 import type { MemoryItem } from '@architect-os/contracts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -28,7 +29,7 @@ import { keyFile, startTestBroker, testConfig } from '../../modules/broker/featu
 import { startFakeModel, type FakeModel, type ModelTurn } from './fake-model.js';
 
 /** The platform root: the module and the worker read their code there, and write nothing there. */
-export const ROOT = realpathSync(new URL('../../', import.meta.url).pathname);
+export const ROOT = installedWorkspace;
 /** The built entry points topology/modules.mcp.json launches (tsc -b: npm test and the gate build first). */
 const ENTRY_POINTS = ['modules/memory/dist/src/serve.js', 'services/memory/dist/worker/task-serve.js'];
 /** A fake key of the broker, in a throwaway file: never a real one. */

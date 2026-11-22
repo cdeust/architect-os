@@ -1,5 +1,17 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "outDir": "dist", "rootDir": "." },
-  "include": ["src", "features", "canary"]
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "."
+  },
+  "include": [
+    "src",
+    "features",
+    "canary"
+  ],
+  "references": [
+    {
+      "path": "../../packages/sandbox"
+    }
+  ]
 }

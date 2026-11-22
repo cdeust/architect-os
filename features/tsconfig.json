@@ -10,6 +10,7 @@
     { "path": "../modules/broker" },
     { "path": "../modules/memory" },
     { "path": "../tools/evidence" },
-    { "path": "../tools/watch" }
+    { "path": "../tools/watch" },
+    { "path": "../tools/test-gate" }
   ]
 }

@@ -71,10 +71,9 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | requiredJobs   | ["a","b","c","d","e","f","g","h"]                      |
         | appendOnly     | []                                                     |
         | appendOnly     | ["a","b","c","d","e","f","g","h"]                      |
-        | gateVerdict    | "a"                                                    |
         | gateCommand    | ["a"]                                                  |
         | gateCommand    | ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p"] |
-        | gateLog        | "a"                                                    |
+        | gateLog        | "reports/a"                                                    |
         | log            | "${state}/a"                                            |
         | log            | "${state}/a.b/c"                                        |
         | ciAttempts     | 1                                                      |
@@ -125,7 +124,6 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | requiredJobs   |
         | environment    |
         | appendOnly     |
-        | gateVerdict    |
         | gateCommand    |
         | gateLog        |
         | log            |
@@ -197,10 +195,6 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | appendOnly     | ["a\\\\b"]                     | $.appendOnly.0 a repository path is relative       |
         | appendOnly     | [""]                           | $.appendOnly.0                                     |
         | appendOnly     | "docs/design/journal.md"       | $.appendOnly                                       |
-        | gateVerdict    | ""                             | $.gateVerdict                                      |
-        | gateVerdict    | "/reports/gate-base.json"      | $.gateVerdict a repository path is relative        |
-        | gateVerdict    | "../gate-base.json"            | $.gateVerdict a repository path is relative        |
-        | gateVerdict    | "reports\\\\gate-base.json"    | $.gateVerdict a repository path is relative        |
         | gateCommand    | []                             | $.gateCommand                                      |
         | gateCommand    | ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q"] | $.gateCommand        |
         | gateCommand    | [""]                           | $.gateCommand.0                                    |
@@ -209,10 +203,12 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | gateCommand    | ["a\\n"]                        | $.gateCommand.0 a word of the command is 1 to 200 characters |
         | gateCommand    | 1                              | $.gateCommand                                      |
         | gateCommand    | "npm run gate"                 | $.gateCommand                                      |
+        | gateLog        | "state/other"                  | $.gateLog the gate log is a filename under reports/ |
+        | gateLog        | "reports/nested/child"         | $.gateLog the gate log is a filename under reports/ |
         | gateLog        | ""                             | $.gateLog                                          |
-        | gateLog        | "/reports/gate.log"            | $.gateLog a repository path is relative            |
-        | gateLog        | "../gate.log"                  | $.gateLog a repository path is relative            |
-        | gateLog        | "reports\\\\gate.log"          | $.gateLog a repository path is relative            |
+        | gateLog        | "/reports/gate.log"            | $.gateLog the gate log is a filename under reports/            |
+        | gateLog        | "../gate.log"                  | $.gateLog the gate log is a filename under reports/            |
+        | gateLog        | "reports\\\\gate.log"          | $.gateLog the gate log is a filename under reports/            |
         | log            | ""                             | $.log the log path starts with ${state}/            |
         | log            | "/var/log/deliveries.jsonl"    | $.log the log path starts with ${state}/            |
         | log            | "$HOME/a"                      | $.log the log path starts with ${state}/            |

@@ -24,7 +24,6 @@ const base = (): Record<string, unknown> => ({
   workflow: 'gate',
   requiredJobs: ['gate-linux', 'gate-macos'],
   appendOnly: ['docs/design/journal.md'],
-  gateVerdict: 'reports/gate-base.json',
   gateCommand: ['npm', 'run', 'gate'],
   gateLog: 'reports/deliver-gate.log',
   environment: ['PATH', 'HOME', 'GH_TOKEN'],

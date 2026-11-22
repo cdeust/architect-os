@@ -11,6 +11,12 @@
 set -u
 entry=$(CDPATH= cd -P -- "$(dirname -- "$0")/../.." && pwd -P) || exit 2
 node "$entry/scripts/require-run.mjs" || exit $?
+# Keep the kernel lease across plan, candidate tests, mutation, replay and receipt publication.
+# The shell program is literal; the user's arguments remain separate argv entries.
+exec /usr/bin/python3 -I "$entry/tools/test-gate/with-tree-lock.py" full /bin/sh -c "$(cat <<'AOS_LOCKED_GATE'
+set -u
+candidate() { /usr/bin/python3 -I tools/test-gate/with-tree-lock.py candidate "$@"; }
+reports="$ARCHITECT_OS_RUN_DIR/reports"
 job=linux
 mutation_only=false
 report_only=false
@@ -31,18 +37,18 @@ if [ "$#" -gt 0 ]; then
   job=$2
 fi
 gate="node --import tsx tools/test-gate/src/main.ts"
-rm -rf reports/cucumber.ndjson reports/mutation reports/replay reports/gate-plan.json reports/gate-report.md reports/gate-base.json
+node tools/test-gate/report-files.mjs clean || exit $?
 $gate plan --job "$job" || exit 1
 # The platform launches its modules and workers from their built entry points (topology/modules.mcp.json): build first.
-npx tsc -b || exit 1
+candidate npx tsc -b || exit 1
 if [ "$mutation_only" = false ]; then
   if [ "$job" = linux ]; then
-    cucumber-js
+    candidate cucumber-js
   else
-    cucumber-js --profile "$job"
+    candidate cucumber-js --profile "$job"
   fi
 fi
-if [ "$job" = linux ] && node -e 'process.exit(JSON.parse(require("fs").readFileSync("reports/gate-plan.json","utf8")).mutate.length > 0 ? 0 : 1)'; then
+if [ "$job" = linux ] && node -e 'process.exit(JSON.parse(require("fs").readFileSync(process.env.ARCHITECT_OS_RUN_DIR + "/reports/gate-plan.json","utf8")).mutate.length > 0 ? 0 : 1)'; then
   started=$(date +%s)
   if [ "$report_only" = true ]; then
     if [ -n "${AOS_MUTATION_SHARD:-}" ]; then
@@ -50,9 +56,9 @@ if [ "$job" = linux ] && node -e 'process.exit(JSON.parse(require("fs").readFile
     else
       $gate inventory --job linux || exit 1
     fi
-    AOS_NATIVE_MUTATION_LOTS=1 stryker run
+    AOS_NATIVE_MUTATION_LOTS=1 candidate stryker run
   else
-    stryker run
+    candidate stryker run
   fi
   stryker_status=$?
   echo "stryker: $(($(date +%s) - started)) s"
@@ -68,7 +74,9 @@ if [ "$job" = linux ] && node -e 'process.exit(JSON.parse(require("fs").readFile
   echo "replay: $(($(date +%s) - started)) s"
 fi
 if [ "$mutation_only" = true ]; then
-  test -s reports/mutation/mutation.json && test -s reports/mutation/replay.json
+  test -s "$reports/mutation/mutation.json" && test -s "$reports/mutation/replay.json"
   exit $?
 fi
 exec $gate check --job "$job"
+AOS_LOCKED_GATE
+)" gate "$@"

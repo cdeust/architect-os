@@ -2,11 +2,14 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
   existsSync,
+  linkSync,
+  symlinkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   readdirSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -40,11 +43,14 @@ function downloads(file: string, doc: Gate) {
       assert.equal(step.env?.['GH_TOKEN'], token);
       if (step.name === base) {
         const lines = step.run?.trimEnd().split('\n') ?? [];
-        assert.equal(lines[0], "./aos -- sh -e <<'BASE'");
+        assert.equal(lines[0], "sh tools/runtime/gate-job.sh -- sh -e <<'BASE'");
         assert.equal(lines.indexOf('BASE'), lines.length - 1);
       } else {
         const args = step.name === mutation ? ' mutation "$AOS_LANE"' : '';
-        assert.equal(step.run, './aos -- sh tools/test-gate/fetch-ci-artifacts.sh' + args);
+        assert.equal(
+          step.run,
+          'sh tools/runtime/gate-job.sh -- sh tools/test-gate/fetch-ci-artifacts.sh' + args,
+        );
       }
     }
   }
@@ -60,7 +66,7 @@ Then('every Gate download keeps its token scoped to an admitted retrieval step',
       for (const step of job.steps ?? []) {
         if (step.env?.['GH_TOKEN'] !== token) continue;
         const command = step.run!;
-        step.run = command.replace('./aos -- ', '');
+        step.run = command.replace('sh tools/runtime/gate-job.sh -- ', '');
         assert.notEqual(step.run, command);
         assert.throws(() => downloads(file, doc));
         step.run = command;
@@ -81,7 +87,7 @@ function providerFixture(dir: string) {
     'const [cmd,...args]=process.argv.slice(2),env=process.env;',
     "if(env.GH_TOKEN!=='fixture-read-token') process.exit(42);",
     "fs.appendFileSync(env.CALLS,JSON.stringify([cmd,...args])+'\\n');",
-    "if(cmd==='run'){fs.writeFileSync('reports/base/downloaded',args[args.indexOf('-n')+1]);process.exit(0);}",
+    "if(cmd==='run'){fs.writeFileSync(args[args.indexOf('-D')+1]+'/downloaded',args[args.indexOf('-n')+1]);process.exit(0);}",
     "if(cmd!=='api')process.exit(43);",
     "const endpoint=args.find(value=>value.startsWith('repos/'));",
     'const reply=value=>process.stdout.write(JSON.stringify(value));',
@@ -105,16 +111,22 @@ function providerFixture(dir: string) {
       ]),
     ).flat(),
   ];
+  // A failed-jobs rerun retains the successful third mutation producer from attempt one.
+  const prior = 'gate-linux-lane-3 / mutation';
   const jobs = names.map(([name], i) => ({
     name,
     id: 100 + i,
     run_id: 51,
-    run_attempt: 2,
+    run_attempt: name === prior ? 1 : 2,
     head_sha: head,
     status: 'completed',
     conclusion: 'success',
   }));
-  const artifacts = names.map(([, name], i) => ({ name, id: 200 + i, expired: false }));
+  const artifacts = names.map(([job, name], i) => ({
+    name: job === prior ? name!.replace('linux-2', 'linux-1') : name,
+    id: 200 + i,
+    expired: false,
+  }));
   const jobsFile = join(dir, 'jobs.json'),
     artifactsFile = join(dir, 'artifacts.json'),
     archive = join(dir, 'proof.zip');
@@ -122,7 +134,18 @@ function providerFixture(dir: string) {
   writeFileSync(artifactsFile, JSON.stringify(artifacts));
   mkdirSync(join(dir, 'mutation'));
   for (const path of ['head', 'cucumber-head', 'mutation/head']) writeFileSync(join(dir, path), head + '\n');
-  const zip = spawnSync('/usr/bin/zip', ['-q', archive, 'head', 'cucumber-head', 'mutation/head'], {
+  const members = [
+    'head',
+    'cucumber-head',
+    'mutation/head',
+    'cucumber.ndjson',
+    'mutation/native.json',
+    'mutation-inventory.json',
+    'replay.json',
+    'timings.json',
+  ];
+  for (const member of members.slice(3)) writeFileSync(join(dir, member), 'fixture evidence');
+  const zip = spawnSync('/usr/bin/zip', ['-q', archive, ...members], {
     cwd: dir,
   });
   assert.equal(zip.status, 0, zip.stderr.toString());
@@ -155,11 +178,19 @@ Then(
       assert.ok(step?.run);
       // Keep the checkout executable and script fixed while reports belong to the disposable cwd.
       const command = step.run
-        .replace('./aos', '"$LAUNCHER"')
+        .replace('tools/runtime/gate-job.sh', '"$JOB_WRAPPER"')
         .replace('tools/test-gate/fetch-ci-artifacts.sh', '"$FETCH_SCRIPT"');
       const runner = {
         ...env,
         LAUNCHER: join(ROOT, 'aos'),
+        GATE_JOB: join(ROOT, 'tools/runtime/gate-job.mjs'),
+        JOB_WRAPPER: join(ROOT, 'tools/runtime/gate-job.sh'),
+        RUNNER_TEMP: dir,
+        GITHUB_WORKSPACE: ROOT,
+        GITHUB_JOB: job,
+        GITHUB_SHA: head,
+        AOS_GATE_JOB: job,
+        GITHUB_OUTPUT: join(dir, 'outputs'),
         FETCH_SCRIPT: join(ROOT, 'tools/test-gate/fetch-ci-artifacts.sh'),
       };
       const shell = (cmd: string, extra: Record<string, string> = {}) =>
@@ -181,29 +212,153 @@ Then(
         join(root, '.architect-os-runtime-root'),
         'architect-os-runtime-root/v2\nenvironment=hosted-runner\n',
       );
-      const accepted = shell(command, { ARCHITECT_OS_RUNTIME_ROOT: root });
+      const allocation = { ARCHITECT_OS_RUNTIME_ROOT: root };
+      const captured = shell('"$LAUNCHER" -- node "$GATE_JOB" capture', allocation);
+      assert.equal(captured.status, 0, captured.stderr);
+      const output = readFileSync(runner.GITHUB_OUTPUT, 'utf8');
+      assert.match(output, /^context_sha=[a-f0-9]{64}\n$/);
+      const scoped = { ...allocation, AOS_GATE_CONTEXT_SHA: output.trim().slice('context_sha='.length) };
+      const reports = join(root, 'run', readdirSync(join(root, 'run'))[0]!, 'reports');
+      assert.equal(shell(command, { ...scoped, AOS_GATE_CONTEXT_SHA: '0'.repeat(64) }).status, 2);
+      if (kind === 'lane') {
+        const certificate = join(root, 'state/gate-job.json');
+        const original = join(dir, 'first-job-certificate');
+        const otherOutput = join(dir, 'second-job-output');
+        renameSync(certificate, original);
+        try {
+          const second = shell('"$LAUNCHER" -- node "$GATE_JOB" capture', {
+            ...allocation,
+            GITHUB_OUTPUT: otherOutput,
+          });
+          assert.equal(second.status, 0, second.stderr);
+          const replacement = readFileSync(otherOutput, 'utf8').trim().slice('context_sha='.length);
+          assert.notEqual(replacement, scoped.AOS_GATE_CONTEXT_SHA);
+          const ping = 'sh "$JOB_WRAPPER" -- node -p "process.env.ARCHITECT_OS_RUN_DIR"';
+          const secondRun = shell(ping, { ...scoped, AOS_GATE_CONTEXT_SHA: replacement });
+          assert.equal(secondRun.status, 0, secondRun.stderr);
+          assert.notEqual(secondRun.stdout.trim(), dirname(reports));
+          assert.equal(shell(ping, scoped).status, 2);
+        } finally {
+          renameSync(original, certificate);
+        }
+      }
+      if (kind === 'lane') {
+        const npmConfig = join(dirname(reports), 'config/npm/user.npmrc');
+        writeFileSync(npmConfig, 'unexpected contents');
+        try {
+          assert.equal(shell('sh "$JOB_WRAPPER" -- /usr/bin/true', scoped).status, 2);
+        } finally {
+          writeFileSync(npmConfig, '');
+        }
+      }
+      const duplicate = shell('sh "$JOB_WRAPPER" -- node "$GATE_JOB" capture', scoped);
+      assert.equal(duplicate.status, 2, duplicate.stderr);
+      for (const key of [
+        'GITHUB_RUN_ID',
+        'GITHUB_RUN_ATTEMPT',
+        'AOS_GATE_JOB',
+        'GITHUB_JOB',
+        'GITHUB_SHA',
+        'GITHUB_REPOSITORY',
+      ]) {
+        const other = shell(command, { ...scoped, [key]: 'different' });
+        assert.equal(other.status, 2, other.stderr);
+      }
+      if (kind === 'lane') {
+        const executable =
+          'sh "$JOB_WRAPPER" -- node -p \'JSON.stringify([process.env.npm_config_cache,process.env.NODE_OPTIONS,process.env.NODE_V8_COVERAGE,process.env.NODE_REDIRECT_WARNINGS,process.env.NPM_CONFIG_NODE_OPTIONS,process.env.AOS_GATE_CONTEXT_SHA,process.env.GH_TOKEN])\'';
+        const closed = shell(executable, {
+          ...scoped,
+          GH_TOKEN: 'current-step-only',
+          NODE_OPTIONS: '--require does-not-exist',
+          NODE_V8_COVERAGE: join(dir, 'unwanted-coverage'),
+          NODE_REDIRECT_WARNINGS: join(dir, 'unwanted-warnings'),
+          NPM_CONFIG_NODE_OPTIONS: '--require does-not-exist',
+          npm_config_cache: join(dir, 'wrong-cache'),
+        });
+        assert.equal(closed.status, 0, closed.stderr);
+        assert.deepEqual(JSON.parse(closed.stdout), [
+          join(root, 'cache/npm'),
+          null,
+          null,
+          null,
+          null,
+          null,
+          'current-step-only',
+        ]);
+        assert.ok(!existsSync(join(dir, 'unwanted-coverage')));
+        assert.ok(!existsSync(join(dir, 'unwanted-warnings')));
+      }
+      assert.ok(!existsSync(env.CALLS));
+      assert.ok(!readFileSync(join(root, 'state/gate-job.json'), 'utf8').includes(env.GH_TOKEN));
+      if (kind === 'lane') {
+        const incomplete = join(dir, 'incomplete.zip');
+        const archive = spawnSync('/usr/bin/zip', ['-q', incomplete, 'mutation/head'], { cwd: dir });
+        assert.equal(archive.status, 0);
+        assert.notEqual(shell(command, { ...scoped, ARCHIVE: incomplete }).status, 0);
+        assert.ok(!existsSync(join(reports, 'mutation-shards/3')));
+      }
+      const accepted = shell(command, scoped);
       assert.equal(accepted.status, 0, accepted.stderr);
       if (kind.endsWith(' base')) {
         assert.equal(
-          readFileSync(join(dir, 'reports/base/downloaded'), 'utf8'),
+          readFileSync(join(reports, 'base/downloaded'), 'utf8'),
           'gate-base-' + kind.split(' ')[0],
         );
       } else {
         const lane = kind === 'lane' ? 3 : 16;
         assert.equal(
-          readFileSync(join(dir, 'reports/mutation-shards', String(lane), 'mutation/head'), 'utf8').trim(),
+          readFileSync(join(reports, 'mutation-shards', String(lane), 'mutation/head'), 'utf8').trim(),
           head,
         );
         assert.match(
-          readFileSync(join(dir, 'reports/mutation-shards', String(lane), 'producer'), 'utf8'),
-          new RegExp('^51\\t' + head + '\\t2\\t\\d+\\t\\d+\\n$'),
+          readFileSync(join(reports, 'mutation-shards', String(lane), 'producer'), 'utf8'),
+          new RegExp('^51\\t' + head + '\\t' + (lane === 3 ? 1 : 2) + '\\t\\d+\\t\\d+\\n$'),
+        );
+        const repeated = shell(command, scoped);
+        assert.notEqual(repeated.status, 0);
+        assert.equal(
+          readFileSync(join(reports, 'mutation-shards', String(lane), 'mutation/native.json'), 'utf8'),
+          'fixture evidence',
         );
         if (kind === 'aggregate')
-          assert.equal(readFileSync(join(dir, 'reports/replay-shards/16/head'), 'utf8').trim(), head);
+          assert.equal(readFileSync(join(reports, 'replay-shards/16/head'), 'utf8').trim(), head);
       }
+      const uploadStep = actual(file).jobs[job]!.steps!.find(
+        (step) => step.name === 'Verify the report tree for upload',
+      );
+      assert.equal(
+        uploadStep?.run,
+        'sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs publish',
+      );
+      const upload = 'sh "$JOB_WRAPPER" -- node "$GITHUB_WORKSPACE/tools/test-gate/report-files.mjs" publish';
+      const published = join(dir, 'publish-output');
+      if (kind === 'lane') {
+        const alias = join(reports, 'mutation-shards/3/alias');
+        for (const create of [symlinkSync, linkSync]) {
+          create(join(dir, 'reports/existing'), alias);
+          assert.notEqual(shell(upload, { ...scoped, GITHUB_OUTPUT: published }).status, 0);
+          assert.ok(!existsSync(published));
+          rmSync(alias);
+        }
+      }
+      if (kind === 'lane') {
+        const clean = 'sh "$JOB_WRAPPER" -- node "$GITHUB_WORKSPACE/tools/test-gate/report-files.mjs" clean';
+        const witness = join(reports, 'cucumber.ndjson');
+        writeFileSync(witness, 'unconsumed');
+        symlinkSync(join(dir, 'reports/existing'), join(reports, 'gate-plan.json'));
+        assert.notEqual(shell(clean, scoped).status, 0);
+        assert.equal(readFileSync(witness, 'utf8'), 'unconsumed');
+        rmSync(join(reports, 'gate-plan.json'));
+        assert.equal(shell(clean, scoped).status, 0);
+        assert.ok(!existsSync(witness));
+      }
+      const checked = shell(upload, { ...scoped, GITHUB_OUTPUT: published });
+      assert.equal(checked.status, 0, checked.stderr);
+      assert.equal(readFileSync(published, 'utf8'), 'reports=' + reports + '\n');
       const runs = readdirSync(join(root, 'run'));
-      assert.equal(runs.length, 1);
-      const receipt = readFileSync(join(root, 'run', runs[0]!, 'admission.json'), 'utf8');
+      assert.equal(runs.length, kind === 'lane' ? 2 : 1);
+      const receipt = readFileSync(join(dirname(reports), 'admission.json'), 'utf8');
       assert.ok(!receipt.includes(env.GH_TOKEN));
       assert.equal(readFileSync(join(dir, 'reports/existing'), 'utf8'), 'kept');
     } finally {

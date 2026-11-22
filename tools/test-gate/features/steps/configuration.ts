@@ -5,6 +5,7 @@ import { parseArguments } from '../../src/domain/arguments.js';
 import { changedFiles } from '../../src/infrastructure/gate.js';
 import { jobOf, parseGateConfig } from '../../src/infrastructure/config.js';
 import { GitRepository } from '../../src/infrastructure/git.js';
+import { gateReportPath } from '../../src/infrastructure/report-paths.js';
 import { Workspace } from '../../src/infrastructure/workspace.js';
 import { FIXTURES, Then, repository } from './repository.js';
 
@@ -102,4 +103,25 @@ Then('the replay commands keep their explicit argument contracts', function () {
   assert.ok('failure' in parseArguments(['replay', '--unknown']));
   assert.deepEqual(parseArguments(['replay', '--shard', '1']), { name: 'replay', all: false, shard: 1 });
   assert.deepEqual(parseArguments(['replay', '--all']), { name: 'replay', all: true });
+});
+
+Then('Gate file operations preserve the checkout report decoy in an admitted run', function () {
+  const repo = repository(this);
+  const env = repo.admittedEnvironment();
+  const workspace = new Workspace(repo.dir, (path) => gateReportPath(env, path));
+  const path = 'reports/nested/file';
+  repo.write(path, 'checkout decoy');
+  repo.write('source', 'source contents');
+  assert.equal(workspace.read('source'), 'source contents');
+  assert.equal(workspace.read(path), null);
+  assert.equal(workspace.exists(path), false);
+  workspace.write(path, 'run');
+  workspace.append(path, ' contents');
+  assert.equal(workspace.read(path), 'run contents');
+  assert.equal(workspace.readBytes(path)?.toString(), 'run contents');
+  assert.equal(workspace.exists(path), true);
+  workspace.remove(path);
+  assert.equal(workspace.readBytes(path), null);
+  assert.equal(repo.read(path), 'checkout decoy');
+  assert.throws(() => workspace.path('reports/../escape'), /GATE_REPORT_PATH_INVALID/);
 });

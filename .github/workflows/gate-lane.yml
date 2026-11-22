@@ -13,6 +13,8 @@ jobs:
   mutation:
     name: mutation
     runs-on: ubuntu-24.04
+    env:
+      AOS_GATE_JOB: mutation-${{ inputs.lane }}
     timeout-minutes: 360
     steps:
       - name: Checkout
@@ -50,34 +52,50 @@ jobs:
           echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
           /usr/lib/postgresql/17/bin/postgres --version
 
+      - name: Admit the Gate job
+        id: runtime
+        run: ./aos -- node tools/runtime/gate-job.mjs capture
+
       - name: Install (lockfile, scripts disabled)
-        run: ./aos -- npm ci --ignore-scripts
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- npm ci --ignore-scripts
 
       - name: Run mutation producer
         env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
           AOS_LANE: ${{ inputs.lane }}
         run: |
-          ./aos -- bash -e -o pipefail <<'ADMITTED'
-          npm exec --no -- tsc -b
+          sh tools/runtime/gate-job.sh -- /usr/bin/python3 -I tools/test-gate/with-tree-lock.py exec bash -e -o pipefail <<'ADMITTED'
+          /usr/bin/python3 -I tools/test-gate/with-tree-lock.py candidate npm exec --no -- tsc -b
           node --import tsx tools/test-gate/src/hosted.ts inventory "$AOS_LANE"
-          AOS_NATIVE_MUTATION_LOTS=1 npm exec --no -- stryker run
+          AOS_NATIVE_MUTATION_LOTS=1 /usr/bin/python3 -I tools/test-gate/with-tree-lock.py candidate npm exec --no -- stryker run
           node --import tsx tools/test-gate/src/hosted.ts verify "$AOS_LANE"
-          git rev-parse --verify HEAD > reports/mutation/head
+          git rev-parse --verify HEAD > "$ARCHITECT_OS_RUN_DIR/reports/mutation/head"
           ADMITTED
+
+      - name: Verify the report tree for upload
+        id: exports
+        if: always() && steps.runtime.outcome == 'success'
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs publish
 
       - name: Upload the mutation report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gate-mutation-linux-${{ github.run_attempt }}-${{ inputs.lane }}
           path: |
-            reports/mutation/native.json
-            reports/mutation/head
-            reports/mutation-inventory.json
+            ${{ steps.exports.outputs.reports }}/mutation/native.json
+            ${{ steps.exports.outputs.reports }}/mutation/head
+            ${{ steps.exports.outputs.reports }}/mutation-inventory.json
           if-no-files-found: error
 
   replay:
     name: replay
     runs-on: ubuntu-24.04
+    env:
+      AOS_GATE_JOB: replay-${{ inputs.lane }}
     needs: mutation
     timeout-minutes: 360
     steps:
@@ -116,28 +134,43 @@ jobs:
           echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
           /usr/lib/postgresql/17/bin/postgres --version
 
+      - name: Admit the Gate job
+        id: runtime
+        run: ./aos -- node tools/runtime/gate-job.mjs capture
+
       - name: Install (lockfile, scripts disabled)
-        run: ./aos -- npm ci --ignore-scripts
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- npm ci --ignore-scripts
 
       - name: Fetch the mutation report
         env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
           GH_TOKEN: ${{ github.token }}
           AOS_LANE: ${{ inputs.lane }}
-        run: ./aos -- sh tools/test-gate/fetch-ci-artifacts.sh mutation "$AOS_LANE"
+        run: sh tools/runtime/gate-job.sh -- sh tools/test-gate/fetch-ci-artifacts.sh mutation "$AOS_LANE"
 
       - name: Build and independently replay this lot
         env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
           AOS_LANE: ${{ inputs.lane }}
         run: |
-          ./aos -- bash -e -o pipefail <<'ADMITTED'
-          npm exec --no -- tsc -b
+          sh tools/runtime/gate-job.sh -- /usr/bin/python3 -I tools/test-gate/with-tree-lock.py exec bash -e -o pipefail <<'ADMITTED'
+          /usr/bin/python3 -I tools/test-gate/with-tree-lock.py candidate npm exec --no -- tsc -b
           node --import tsx tools/test-gate/src/hosted.ts replay "$AOS_LANE"
-          git rev-parse --verify HEAD > "reports/replay-shards/$AOS_LANE/head"
+          git rev-parse --verify HEAD > "$ARCHITECT_OS_RUN_DIR/reports/replay-shards/$AOS_LANE/head"
           ADMITTED
+
+      - name: Verify the report tree for upload
+        id: exports
+        if: always() && steps.runtime.outcome == 'success'
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs publish
 
       - name: Upload the replay lot
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gate-replay-linux-${{ github.run_attempt }}-${{ inputs.lane }}
-          path: reports/replay-shards/${{ inputs.lane }}/
+          path: ${{ steps.exports.outputs.reports }}/replay-shards/${{ inputs.lane }}/
           if-no-files-found: error

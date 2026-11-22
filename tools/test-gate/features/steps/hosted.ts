@@ -8,7 +8,7 @@ import { runHostedGate } from '../../src/infrastructure/hosted-gate.js';
 import { CONFIG_PATH } from '../../src/infrastructure/gate.js';
 import { HOSTED_COSTS, planHostedSlices } from '../../src/infrastructure/hosted-lots.js';
 import type { Lot } from '../../src/infrastructure/mutation-lot-proof.js';
-import { readNativeLotIgnorer } from '../../src/infrastructure/stryker-lot-plugin.js';
+import { fixtureIgnorer } from './mutation-inventory.js';
 import { projectNative } from '../../src/infrastructure/mutation-shards.js';
 import { mutationCatalog } from '../../src/infrastructure/mutation-catalog.js';
 import { FIXTURES, Given, Then, When, repository, type GateRepository } from './repository.js';
@@ -20,7 +20,13 @@ const aggregate = 'reports/mutation/mutation.json';
 
 async function command(repo: GateRepository, ...args: string[]) {
   let output = '';
-  const status = await runHostedGate(args, repo.dir, { write: (text) => (output += text) }, LANES.length);
+  const status = await runHostedGate(
+    args,
+    repo.dir,
+    { write: (text) => (output += text) },
+    LANES.length,
+    repo.workspace(),
+  );
   return { status, output };
 }
 
@@ -47,7 +53,7 @@ async function nativeFixture(repo: GateRepository, file: string, retirement: boo
   const { mutants } = await instrumenter.instrument(sources, {
     plugins: null,
     excludedMutations: [],
-    ignorers: [readNativeLotIgnorer(repo.dir)],
+    ignorers: [fixtureIgnorer(repo)],
   });
   const toReport = ({ line, column }: { line: number; column: number }) => ({
     line: line + 1,
@@ -541,7 +547,13 @@ Then('hosted admission preserves unrelated receipts and rejects invalid lane arg
   const repo = repository(this);
   const invoke = async (...args: string[]) => {
     let output = '';
-    const status = await runHostedGate(args, repo.dir, { write: (text) => (output += text) }, 12);
+    const status = await runHostedGate(
+      args,
+      repo.dir,
+      { write: (text) => (output += text) },
+      12,
+      repo.workspace(),
+    );
     return { status, output };
   };
   const selected = 'reports/replay-shards/10/replay.json';
@@ -760,16 +772,19 @@ Then('hosted planning balances measured spans and contains only within the same 
 Then('the actual hosted entrypoint passes its arguments into Gate', async function () {
   const repo = repository(this);
   repo.write(HOSTED_COSTS, JSON.stringify({ files: {}, fallback: 1 }));
-  const initial = { cwd: process.cwd(), argv: process.argv, exitCode: process.exitCode };
+  const initial = { cwd: process.cwd(), argv: process.argv, exitCode: process.exitCode, env: process.env };
+  const admitted = repo.admittedEnvironment();
   const entry = new URL('../../src/hosted.ts', import.meta.url);
   entry.searchParams.set('fixture', repo.dir);
   try {
     process.chdir(repo.dir);
+    process.env = { ...initial.env, ...admitted };
     process.argv = [process.execPath, entry.pathname, 'inventory', '1'];
     await import(entry.href);
     assert.equal(process.exitCode, 0);
-    assert.equal(JSON.parse(repo.read(MANIFEST)).lane, 1);
+    assert.equal(JSON.parse(readFileSync(join(admitted.ARCHITECT_OS_RUN_DIR!, MANIFEST), 'utf8')).lane, 1);
   } finally {
+    process.env = initial.env;
     process.chdir(initial.cwd);
     process.argv = initial.argv;
     process.exitCode = initial.exitCode;

@@ -52,6 +52,7 @@ Feature: Test gate configuration and command line
       | jobs.linux.features   | [""]        | hors schéma : ✖ Too small: expected string to have >=1 characters   → at jobs.linux.features[0] |
       | jobs.linux.tags       | "@fast"     | hors schéma : ✖ Unrecognized key: "tags"   → at jobs.linux |
       | reports.plan          | ""          | hors schéma : ✖ Too small: expected string to have >=1 characters   → at reports.plan |
+      | reports.report          | "gate-report.md"          | hors schéma : ✖ Invalid string: must start with "reports/"   → at reports.report |
       | name                  | "smoke"     | hors schéma : ✖ Unrecognized key: "name" |
       | canary.file           | ""          | hors schéma : ✖ Too small: expected string to have >=1 characters   → at canary.file |
       | canary.functions.sum  | "Timeout"   | hors schéma : ✖ Invalid option: expected one of "Killed"\|"Survived"\|"NoCoverage"   → at canary.functions.sum |
@@ -106,7 +107,7 @@ Feature: Test gate configuration and command line
     Then the gate exits with 1
     And the gate output is:
       """
-      porte de test : usage : test-gate plan|check|inventory|inventory-check|inventory-project|inventory-collect [--job <nom>] (inventory|inventory-project --shard <1|2>) | debt [realign] | replay [--all | --shard <1|2>] | replay-collect
+      porte de test : usage : test-gate plan|check|inventory|inventory-check|inventory-project|inventory-collect [--job <nom>] (inventory|inventory-project --shard <1|2>) | debt [realign|compare] | replay [--all | --shard <1|2>] | replay-collect
       """
 
     Examples:
@@ -128,3 +129,7 @@ Feature: Test gate configuration and command line
       | inventory --shard 3     |
       | inventory --shard 1 extra |
       | inventory-check --shard 1 |
+
+  Scenario: reports belong to the admitted run while source files belong to the checkout
+    Given a gate repository
+    Then Gate file operations preserve the checkout report decoy in an admitted run

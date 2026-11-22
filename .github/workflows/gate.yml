@@ -20,6 +20,8 @@ jobs:
   gate-linux-cucumber:
     name: gate-linux-cucumber-${{ matrix.shard }}
     runs-on: ubuntu-24.04
+    env:
+      AOS_GATE_JOB: cucumber-${{ matrix.shard }}
     strategy:
       fail-fast: false
       matrix:
@@ -60,26 +62,40 @@ jobs:
           echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
           /usr/lib/postgresql/17/bin/postgres --version
 
+      - name: Admit the Gate job
+        id: runtime
+        run: ./aos -- node tools/runtime/gate-job.mjs capture
+
       - name: Install (lockfile, scripts disabled)
-        run: ./aos -- npm ci --ignore-scripts
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- npm ci --ignore-scripts
 
       - name: Run the functional suite lot
         env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
           AOS_SHARD: ${{ matrix.shard }}
         run: |
-          ./aos -- bash -e -o pipefail <<'ADMITTED'
-          npm exec --no -- tsc -b
-          npm exec --no -- cucumber-js --shard "$AOS_SHARD/2" || test -s reports/cucumber.ndjson
-          git rev-parse --verify HEAD > reports/cucumber-head
+          sh tools/runtime/gate-job.sh -- /usr/bin/python3 -I tools/test-gate/with-tree-lock.py exec bash -e -o pipefail <<'ADMITTED'
+          /usr/bin/python3 -I tools/test-gate/with-tree-lock.py candidate npm exec --no -- tsc -b
+          /usr/bin/python3 -I tools/test-gate/with-tree-lock.py candidate npm exec --no -- cucumber-js --shard "$AOS_SHARD/2" || test -s "$ARCHITECT_OS_RUN_DIR/reports/cucumber.ndjson"
+          git rev-parse --verify HEAD > "$ARCHITECT_OS_RUN_DIR/reports/cucumber-head"
           ADMITTED
+
+      - name: Verify the report tree for upload
+        id: exports
+        if: always() && steps.runtime.outcome == 'success'
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs publish
 
       - name: Upload the functional report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gate-cucumber-linux-${{ github.run_attempt }}-${{ matrix.shard }}
           path: |
-            reports/cucumber.ndjson
-            reports/cucumber-head
+            ${{ steps.exports.outputs.reports }}/cucumber.ndjson
+            ${{ steps.exports.outputs.reports }}/cucumber-head
           if-no-files-found: error
 
   gate-linux-lane:
@@ -95,6 +111,8 @@ jobs:
   gate-linux:
     name: gate-linux
     runs-on: ubuntu-24.04
+    env:
+      AOS_GATE_JOB: gate-linux
     needs: [gate-linux-cucumber, gate-linux-lane]
     if: ${{ always() }}
     steps:
@@ -120,43 +138,67 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
 
+      - name: Admit the Gate job
+        id: runtime
+        run: ./aos -- node tools/runtime/gate-job.mjs capture
+
       - name: Install (lockfile, scripts disabled)
-        run: ./aos -- npm ci --ignore-scripts
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- npm ci --ignore-scripts
 
       - name: Fetch reports from the effective producer jobs
         env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
           GH_TOKEN: ${{ github.token }}
-        run: ./aos -- sh tools/test-gate/fetch-ci-artifacts.sh
+        run: sh tools/runtime/gate-job.sh -- sh tools/test-gate/fetch-ci-artifacts.sh
 
       - name: Base of the count (artifact of the last green main run)
         env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          ./aos -- sh -e <<'BASE'
+          sh tools/runtime/gate-job.sh -- sh -e <<'BASE'
           # docs/design/platform-v3-srt.md §7.2: the run of gate.yml on main whose head_sha is the first parent.
           # Nothing found, expired or no first parent: download nothing, the gate applies its written fallback and says so.
-          mkdir -p reports/base
+          base=$(node "$GITHUB_WORKSPACE/tools/test-gate/report-files.mjs" path reports/base)
+          mkdir -p "$base"
           parent=$(git rev-parse --verify --quiet HEAD^1 || true)
           if [ -z "$parent" ]; then echo "base: no first parent"; exit 0; fi
           run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/gate.yml/runs?branch=main&status=success&head_sha=$parent&per_page=1" --jq '.workflow_runs[0].id // empty' || true)
           if [ -z "$run_id" ]; then echo "base: no green main run for $parent"; exit 0; fi
-          gh run download "$run_id" -n gate-base-linux -D reports/base -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-linux of run $run_id not downloadable"
+          gh run download "$run_id" -n gate-base-linux -D "$base" -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-linux of run $run_id not downloadable"
           BASE
 
+      - name: Bind the Gate plan to this checkout
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/main.ts plan --job linux
+
       - name: Verify and collect independent replay lots
-        run: ./aos -- node --import tsx tools/test-gate/src/hosted.ts collect
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts collect
 
       - name: Gate
         env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
           AOS_CUCUMBER_SHARDS: '2'
-        run: ./aos -- node --import tsx tools/test-gate/src/main.ts check --job linux
+        run: sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/main.ts check --job linux
+
+      - name: Verify the report tree for upload
+        id: exports
+        if: always() && steps.runtime.outcome == 'success'
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs publish
 
       - name: Upload reports
-        if: ${{ always() && steps.admission.outcome == 'success' }}
+        if: ${{ always() && steps.admission.outcome == 'success' && steps.exports.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gate-reports-linux
-          path: reports/
+          path: ${{ steps.exports.outputs.reports }}/
           if-no-files-found: warn
 
       - name: Upload base for the next run
@@ -164,13 +206,15 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gate-base-linux
-          path: reports/gate-base.json
+          path: ${{ steps.exports.outputs.reports }}/gate-base.json
           if-no-files-found: error
 
   gate-macos:
     name: gate-macos
     # Pinned image: macos-latest moves without notice. The green runs of 2026-11-04 ran macos-26-arm64 (macOS 26.6.2).
     runs-on: macos-26
+    env:
+      AOS_GATE_JOB: gate-macos
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -198,33 +242,50 @@ jobs:
           sudo install -d -m 0755 "$bin"
           test "$sdk" -ef "$bin/node" || sudo install -m 0755 "$sdk" "$bin/node"
 
+      - name: Admit the Gate job
+        id: runtime
+        run: ./aos -- node tools/runtime/gate-job.mjs capture
+
       - name: Install (lockfile, scripts disabled)
-        run: ./aos -- npm ci --ignore-scripts
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- npm ci --ignore-scripts
 
       - name: Base of the count (artifact of the last green main run)
         env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          ./aos -- sh -e <<'BASE'
+          sh tools/runtime/gate-job.sh -- sh -e <<'BASE'
           # docs/design/platform-v3-srt.md §7.2: the run of gate.yml on main whose head_sha is the first parent.
           # Nothing found, expired or no first parent: download nothing, the gate applies its written fallback and says so.
-          mkdir -p reports/base
+          base=$(node "$GITHUB_WORKSPACE/tools/test-gate/report-files.mjs" path reports/base)
+          mkdir -p "$base"
           parent=$(git rev-parse --verify --quiet HEAD^1 || true)
           if [ -z "$parent" ]; then echo "base: no first parent"; exit 0; fi
           run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/gate.yml/runs?branch=main&status=success&head_sha=$parent&per_page=1" --jq '.workflow_runs[0].id // empty' || true)
           if [ -z "$run_id" ]; then echo "base: no green main run for $parent"; exit 0; fi
-          gh run download "$run_id" -n gate-base-macos -D reports/base -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-macos of run $run_id not downloadable"
+          gh run download "$run_id" -n gate-base-macos -D "$base" -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-macos of run $run_id not downloadable"
           BASE
 
       - name: Gate
-        run: ./aos -- npm run gate -- --job macos
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- npm run gate -- --job macos
+
+      - name: Verify the report tree for upload
+        id: exports
+        if: always() && steps.runtime.outcome == 'success'
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs publish
 
       - name: Upload reports
-        if: always()
+        if: always() && steps.exports.outcome == 'success'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gate-reports-macos
-          path: reports/
+          path: ${{ steps.exports.outputs.reports }}/
           if-no-files-found: warn
 
       - name: Upload base for the next run
@@ -232,5 +293,5 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gate-base-macos
-          path: reports/gate-base.json
+          path: ${{ steps.exports.outputs.reports }}/gate-base.json
           if-no-files-found: error

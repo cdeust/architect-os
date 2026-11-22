@@ -1,3 +1,4 @@
+import { gateRuntime } from './gate-runtime.js';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { DeliveryEntry, RuleSuite } from '../../src/domain/ports.js';
@@ -15,7 +16,6 @@ import {
 import { REPOSITORY, type DeliverWorld } from './support.js';
 
 const FAKE_GATE = `${REPOSITORY}tools/deliver/fixtures/fake-gate.mjs`;
-const VERDICT = 'reports/gate-base.json';
 const GATE_LOG = 'reports/deliver-gate.log';
 
 /** The gate of the `process` row: the script of `fixtures/` in a directory of its own, as the delivery worktree. */
@@ -23,36 +23,35 @@ export interface ProcessGateFixture extends GateFixture {
   /** The delivery worktree. */
   worktree: string;
   /** The gate leaves this text as its verdict file (`undefined`: none), writes on both outputs when `noisy`. */
-  leaves(text: string | undefined, code: number, mode: 'quiet' | 'noisy' | 'signal'): void;
+  leaves(text: string | undefined, code: number, mode: 'quiet' | 'noisy' | 'signal' | 'publish'): void;
   /** The gate command is this argv instead of the script. */
   commandIs(argv: string[]): void;
+  runtime: ReturnType<typeof gateRuntime>;
   logPath: string;
   log(): string;
 }
 
 export function processGate(world: DeliverWorld): ProcessGateFixture {
   const worktree = temporaryDirectory(world);
+  const runtime = gateRuntime(world);
   let command: string[] = [];
   const fixture: ProcessGateFixture = {
     worktree,
-    logPath: join(worktree, GATE_LOG),
+    runtime,
+    logPath: join(runtime.run, GATE_LOG),
     get gate() {
-      return new ProcessGate(worktree, command, GATE_LOG, VERDICT);
+      return new ProcessGate(worktree, command, GATE_LOG, runtime.env);
     },
     willLeave(verdict, code) {
-      fixture.leaves(
-        verdict === undefined ? undefined : JSON.stringify({ sha: verdict, scenarios: [{ name: 'a' }] }),
-        code,
-        'quiet',
-      );
+      fixture.leaves(verdict, code, 'publish');
     },
     leaves(text, code, mode) {
-      command = [process.execPath, FAKE_GATE, mode, VERDICT, text ?? 'none', String(code)];
+      command = [process.execPath, FAKE_GATE, mode, text ?? 'none', String(code)];
     },
     commandIs(argv) {
       command = argv;
     },
-    log: () => readFileSync(join(worktree, GATE_LOG), 'utf8'),
+    log: () => readFileSync(join(runtime.run, GATE_LOG), 'utf8'),
   };
   return fixture;
 }

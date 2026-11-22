@@ -4,18 +4,27 @@
 // `mutate` comes from reports/gate-plan.json, written by `test-gate plan` (the perimeter of rule 5); a
 // `--mutate` on the command line overrides it. The runner reads cucumber.mjs (profile `mutation`, below): every
 // feature but features/repository and features/arch runs in the dry run; perTest coverage runs only the tests of a mutant.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync } from 'node:fs';
+import { checkPrivateDirectory } from '@architect-os/sandbox/state-journal';
+import { gateReportPath } from './tools/test-gate/src/infrastructure/report-paths.ts';
+import { join } from 'node:path';
 import { mutationFeaturesFor } from './cucumber-paths.mjs';
 
-const PLAN = 'reports/gate-plan.json';
+const report = (name) => gateReportPath(process.env, 'reports/' + name);
+const PLAN = report('gate-plan.json');
+// Stryker removes an empty tempDirName on success. Its parent remains part of the admission.
+const scratch = join(process.env.TMPDIR, 'stryker');
+mkdirSync(scratch, { recursive: true, mode: 0o700 });
+checkPrivateDirectory(scratch, lstatSync(process.env.ARCHITECT_OS_RUN_DIR, { bigint: true }).dev);
 const legacyPlan = existsSync(PLAN) ? JSON.parse(readFileSync(PLAN, 'utf8')) : { mutate: [] };
 const native = process.env['AOS_NATIVE_MUTATION_LOTS'] === '1';
-const inventory = native ? JSON.parse(readFileSync('reports/mutation-inventory.json', 'utf8')) : null;
+const inventory = native ? JSON.parse(readFileSync(report('mutation-inventory.json'), 'utf8')) : null;
 const mutate =
   inventory === null ? legacyPlan.mutate : (inventory.patterns ?? inventory.lots.map(({ file }) => file));
 
 export default {
   testRunner: 'cucumber',
+  tempDirName: scratch,
   plugins: [
     '@stryker-mutator/cucumber-runner',
     ...(native ? ['./tools/test-gate/dist/src/infrastructure/stryker-lot-plugin.js'] : []),
@@ -42,6 +51,6 @@ export default {
   dryRunTimeoutMinutes: 20,
   mutate,
   reporters: ['json', 'clear-text', 'progress'],
-  jsonReporter: { fileName: native ? 'reports/mutation/native.json' : 'reports/mutation/mutation.json' },
+  jsonReporter: { fileName: report(native ? 'mutation/native.json' : 'mutation/mutation.json') },
   thresholds: { high: 100, low: 100, break: null },
 };

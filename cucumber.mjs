@@ -2,6 +2,7 @@
 // tsx refuses to be a --loader (node_modules/tsx/dist/register-*.mjs), so it is registered here with its documented
 // ESM API (node_modules/tsx/package.json exports './esm/api'); cucumber imports the support code after this file.
 // tsx reads TSX_TSCONFIG_PATH: features/tsconfig.json carries the `paths` that map @architect-os/contracts to its sources.
+import { gateReportPath } from './tools/test-gate/src/infrastructure/report-paths.ts';
 import { register } from 'tsx/esm/api';
 import { COMPONENTS, mutationPaths } from './cucumber-paths.mjs';
 
@@ -15,7 +16,7 @@ const config = {
     'features/steps/**/*.ts',
     ...COMPONENTS.map((c) => `${c}/features/steps/**/*.ts`),
   ],
-  format: ['message:reports/cucumber.ndjson', 'progress'],
+  format: ['message:' + gateReportPath(process.env, 'reports/cucumber.ndjson'), 'progress'],
   retry: 0,
   strict: true,
 };
@@ -52,7 +53,11 @@ export const macos = { ...config, paths: ['features/sandbox/**/*.feature'] };
 // profile lists the other four root areas, and the components' features.
 // A scope by path, like `macos`: `features/**` is spelled as the root areas other than repository and arch;
 // features/descriptive/cucumber-profiles.feature checks that no area is forgotten.
-export const mutation = { ...config, paths: mutationPaths };
+export const mutation = {
+  ...config,
+  paths: mutationPaths,
+  format: ['message:' + gateReportPath(process.env, 'reports/mutation/cucumber.ndjson'), 'progress'],
+};
 
 // The replay profile is used only by `test-gate replay` (tools/test-gate/src/infrastructure/replay.ts), which names the
 // scenarios of one mutant as `<feature>:<line>` and its own `--format message:<file>`. Cucumber adds the paths and
