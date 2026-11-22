@@ -10,44 +10,65 @@ case "$head" in
   ''|*[!0-9a-f]*) exit 1 ;;
 esac
 test "${#head}" -eq 40
-jobs=$(gh api --paginate --slurp "$repository/jobs?filter=all&per_page=100")
-# Some jobs responses omit run_attempt. In that case, establish provenance with the attempt-specific endpoint.
-if ! printf '%s\n' "$jobs" | jq -e 'all(.[].jobs[]; has("run_attempt"))' >/dev/null; then
-  jobs=$(
-    n=1
-    while [ "$n" -le "$GITHUB_RUN_ATTEMPT" ]; do
-      pages=$(gh api --paginate --slurp "$repository/attempts/$n/jobs?per_page=100") || exit 1
-      printf '%s\n' "$pages" | jq -ce --argjson n "$n" '
-        .[] | .jobs |= map(
-          if has("run_attempt") and .run_attempt != $n then error("producer attempt differs")
-          else .run_attempt = $n end
-        )' || exit 1
-      n=$((n + 1))
-    done
-  )
-  jobs=$(printf '%s\n' "$jobs" | jq -cs '.')
-fi
-job_origin() {
-  printf '%s\n' "$jobs" | jq -er --arg name "$1" --arg head "$head" \
-    --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT" '
-      [.[].jobs[] | select(.name == $name)] as $rows
-      | if ($rows | length) > 0 and
-          ($rows | all(
-            .run_id == $run and .head_sha == $head and
-            (.run_attempt | type == "number") and
-            .run_attempt >= 1 and .run_attempt <= $attempt and
-            (.id | type == "number") and .id > 0
-          )) and
-          ($rows | group_by(.run_attempt) | all(length == 1)) and
-          ($rows | map(.id) | unique | length) == ($rows | length)
-        then $rows | max_by(.run_attempt)
-        else error("producer absent or ambiguous: " + $name)
-        end
-      | if .status == "completed" and .conclusion == "success" then "\(.run_attempt) \(.id)"
-        else error("producer failed: " + $name)
-        end'
-}
+# Attempt-scoped pages distinguish a real execution from a successful job copied by a partial rerun.
+# Fetch each set of pages and its boundary once, before the parallel lot downloads.
+jobs=$(
+  n=1
+  while [ "$n" -le "$GITHUB_RUN_ATTEMPT" ]; do
+    start=null
+    if [ "$GITHUB_RUN_ATTEMPT" -gt 1 ]; then
+      meta=$(gh api "$repository/attempts/$n") || exit 1
+      start=$(printf '%s\n' "$meta" | jq -er --argjson n "$n" --argjson run "$GITHUB_RUN_ID" --arg head "$head" '
+        select(.run_attempt == $n and .id == $run and .head_sha == $head) | .run_started_at | fromdateiso8601') || exit 1
+    fi
+    pages=$(gh api --paginate --slurp "$repository/attempts/$n/jobs?per_page=100") || exit 1
+    printf '%s\n' "$pages" | jq -ce --argjson n "$n" --argjson start "$start" '
+      {attempt:$n, start:$start, jobs:[.[].jobs[] |
+        if has("run_attempt") and .run_attempt != $n then error("producer attempt differs")
+        else .run_attempt = $n end]}' || exit 1
+    n=$((n + 1))
+  done
+)
+jobs=$(printf '%s\n' "$jobs" | jq -cse '
+  if length == 1 or ([.[].start] as $s | $s == ($s | sort | unique)) then .
+  else error("ambiguous attempt boundaries") end')
 artifacts=$(gh api --paginate --slurp "$repository/artifacts?per_page=100")
+artifact_names=$(printf '%s\n' "$artifacts" | jq -c '[.[].artifacts[].name]')
+job_origin() {
+  printf '%s\n' "$jobs" | jq -er --arg name "$1" --arg prefix "$2" --arg suffix "$3" --arg head "$head" \
+    --argjson artifacts "$artifact_names" --argjson run "$GITHUB_RUN_ID" '
+      def success: .status == "completed" and .conclusion == "success";
+      def signature: [.runner_id, .started_at, .completed_at,
+        [.steps[] | {number, name, status, conclusion, started_at, completed_at}]];
+      . as $attempts | [.[].jobs[] | select(.name == $name)] as $rows
+      | if ($rows | length) == 0 or
+          ($rows | any(.run_id != $run or .head_sha != $head or (.id | type != "number" or . <= 0))) or
+          ($rows | group_by(.run_attempt) | any(length != 1)) or
+          any($attempts[]; .attempt as $n |
+            ($rows | all(.run_attempt != $n)) and
+            ($artifacts | index($prefix + ($n | tostring) + $suffix)) != null) or
+          ($rows | map(.id) | unique | length) != ($rows | length)
+        then error("producer absent or ambiguous: " + $name) else . end
+      | reduce $rows[] as $job (null;
+          ($attempts[$job.run_attempt - 1].start) as $start
+          | ($attempts[$job.run_attempt].start) as $next
+          | if $start == null then $job
+            elif ($job.started_at | fromdateiso8601) >= $start then
+              if ($job | success) and (
+                ($job.completed_at | fromdateiso8601) < ($job.started_at | fromdateiso8601) or
+                ($next != null and ($job.completed_at | fromdateiso8601) >= $next))
+              then error("producer outside attempt: " + $name) else $job end
+            elif . != null and success and ($job | success) and
+              ($job.completed_at | fromdateiso8601) < $start and
+              ($job.started_at | fromdateiso8601) <= ($job.completed_at | fromdateiso8601) and
+              ($job.runner_id | type == "number" and . > 0) and
+              ($job.steps | type == "array" and length > 0 and
+                all(.[]; (.name | type == "string" and length > 0) and (.number | type == "number"))) and
+              signature == ($job | signature) and
+              ($artifacts | index($prefix + ($job.run_attempt | tostring) + $suffix)) == null
+            then . else error("unproven reused producer: " + $name) end)
+      | if success then "\(.run_attempt) \(.id)" else error("producer failed: " + $name) end'
+}
 artifact_origin() {
   printf '%s\n' "$artifacts" | jq -er --arg name "$1" '
     [.[].artifacts[] | select(.name == $name)] as $rows
@@ -57,27 +78,41 @@ artifact_origin() {
       else error("artifact absent or ambiguous: " + $name)
       end'
 }
-download_artifact() {
-  mkdir -p "$2"
-  archive=$(mktemp "${TMPDIR:?}/artifact.XXXXXX")
-  if ! gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$1/zip" > "$archive" ||
-     ! unzip -oq "$archive" -d "$2"; then
-    rm -f "$archive"
-    return 1
+# Extract only the files this producer owns. Publish a complete, head-checked lot.
+download_artifact() (
+  id=$1
+  target=$2
+  logical=reports/${target#"$ARCHITECT_OS_RUN_DIR/reports/"}
+  test "$(node "$entry/tools/test-gate/report-files.mjs" path "$logical")" = "$target"
+  head_file=$3
+  shift 3
+  stage=$(mktemp -d "${TMPDIR:?}/artifact.XXXXXX")
+  trap 'rm -rf "$stage"' EXIT
+  mkdir "$stage/files"
+  gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$stage/archive"
+  unzip -Z -1 "$stage/archive" > "$stage/members"
+  for member in "$head_file" "$@"; do
+    test "$(grep -Fxc "$member" "$stage/members")" = 1
+    mkdir -p "$stage/files/$(dirname "$member")"
+    unzip -p "$stage/archive" "$member" > "$stage/files/$member"
+  done
+  test "$(cat "$stage/files/$head_file")" = "$checkout_head"
+  if [ "$head_file" = mutation/head ]; then
+    printf '%s\t%s\t%s\t%s\t%s\n' "$GITHUB_RUN_ID" "$head" "$attempt" "$job" "$id" > "$stage/files/producer"
   fi
-  rm -f "$archive"
-}
+  mkdir -p "$(dirname "$target")"
+  test ! -e "$target" && test ! -L "$target" || exit 1
+  mv "$stage/files" "$target"
+)
 download_mutation() {
   lane=$1
-  binding=$(job_origin "gate-linux-lane-$lane / mutation")
+  binding=$(job_origin "gate-linux-lane-$lane / mutation" gate-mutation-linux- "-$lane")
   attempt=${binding%% *}
   job=${binding#* }
   name="gate-mutation-linux-$attempt-$lane"
   artifact=$(artifact_origin "$name")
-  target="reports/mutation-shards/$lane"
-  download_artifact "$artifact" "$target"
-  test "$(cat "$target/mutation/head")" = "$checkout_head"
-  printf '%s\t%s\t%s\t%s\t%s\n' "$GITHUB_RUN_ID" "$head" "$attempt" "$job" "$artifact" > "$target/producer"
+  target="${ARCHITECT_OS_RUN_DIR:?}/reports/mutation-shards/$lane"
+  download_artifact "$artifact" "$target" mutation/head mutation/native.json mutation-inventory.json
 }
 valid_lane() {
   case "$1" in
@@ -92,24 +127,22 @@ if [ "$#" -eq 2 ] && [ "$1" = mutation ]; then
 fi
 test "$#" -eq 0
 for part in 1 2; do
-  binding=$(job_origin "gate-linux-cucumber-$part")
+  binding=$(job_origin "gate-linux-cucumber-$part" gate-cucumber-linux- "-$part")
   attempt=${binding%% *}
   name="gate-cucumber-linux-$attempt-$part"
   artifact=$(artifact_origin "$name")
-  target="reports/cucumber-shards/$part"
-  download_artifact "$artifact" "$target"
-  test "$(cat "$target/cucumber-head")" = "$checkout_head"
+  target="${ARCHITECT_OS_RUN_DIR:?}/reports/cucumber-shards/$part"
+  download_artifact "$artifact" "$target" cucumber-head cucumber.ndjson
 done
 download_replay() {
   part=$1
   download_mutation "$part"
-  binding=$(job_origin "gate-linux-lane-$part / replay")
+  binding=$(job_origin "gate-linux-lane-$part / replay" gate-replay-linux- "-$part")
   attempt=${binding%% *}
   name="gate-replay-linux-$attempt-$part"
   artifact=$(artifact_origin "$name")
-  target="reports/replay-shards/$part"
-  download_artifact "$artifact" "$target"
-  test "$(cat "$target/head")" = "$checkout_head"
+  target="${ARCHITECT_OS_RUN_DIR:?}/reports/replay-shards/$part"
+  download_artifact "$artifact" "$target" head replay.json timings.json
 }
 pids=
 failed=0

@@ -39,7 +39,6 @@ import {
   type Timed,
 } from '../../src/infrastructure/replay.js';
 import { parseMutationReport } from '../../src/infrastructure/mutation-report.js';
-import { Workspace } from '../../src/infrastructure/workspace.js';
 import { CONFIG_PATH } from '../../src/infrastructure/gate.js';
 import { FIXTURES, Given, Then, When, repository } from './repository.js';
 
@@ -972,7 +971,7 @@ Then('the reported timeout is replayed with the precise bound and a fresh contro
     result: runOf(candidate.tests.map(() => 'PASSED').join(' | ')),
   };
   const observed: number[] = [];
-  const workspace = new Workspace(repo.dir);
+  const workspace = repo.workspace();
   const result = await replayAll(
     cases,
     workspace,
@@ -1051,7 +1050,7 @@ When('independent runtime replay tries a {string} failure', async function (kind
   const work = repo.path('reports/runtime-proof');
   const cucumber = new CucumberRunner(repo.dir, 'replay', work);
   const runner = kind === 'run-only' ? { run: cucumber.run.bind(cucumber) } : cucumber;
-  const found = await replayAll([replay], new Workspace(repo.dir), runner, 600_000, {
+  const found = await replayAll([replay], repo.workspace(), runner, 600_000, {
     discoverRuntimeErrors: kind !== 'disabled',
   });
   assert.deepEqual(found, [{ file, id: 'native', status: replay.mutant.status, divergence: null }]);
@@ -1141,7 +1140,7 @@ Then('discovery cannot substitute another original identity or failing step', as
     const calls: string[][] = [];
     const work = replayAll(
       [replay],
-      new Workspace(repo.dir),
+      repo.workspace(),
       {
         async discover(paths) {
           calls.push([...paths]);
@@ -1182,7 +1181,7 @@ Then('discovery cannot substitute another original identity or failing step', as
     const selected: string[][] = [];
     const work = replayAll(
       [variant],
-      new Workspace(repo.dir),
+      repo.workspace(),
       {
         async discover() {
           assert.fail('discovery requires an opted-in RuntimeError');
@@ -1208,7 +1207,7 @@ Then('discovery cannot substitute another original identity or failing step', as
   const started = performance.now();
   const small = await replayAll(
     [short],
-    new Workspace(repo.dir),
+    repo.workspace(),
     {
       async discover() {
         throw new Error('a short selection must use normal replay');
@@ -1345,3 +1344,53 @@ Then('the replay witness refuses malformed attempts, failing hooks and invalid s
     name,
   });
 });
+
+import { Workspace as UnprivilegedWorkspace } from '../../src/infrastructure/workspace.js';
+import { runGate as runUnprivileged } from '../../src/infrastructure/gate.js';
+
+Then('a replay without the host replacement port refuses before changing source', async function () {
+  const repo = repository(this);
+  const original = repo.read('src/math.mjs');
+  let output = '';
+  const code = await runUnprivileged(
+    ['node', 'gate', 'replay'],
+    repo.dir,
+    {},
+    {
+      write: (line) => {
+        output += line;
+      },
+    },
+    new UnprivilegedWorkspace(repo.dir),
+  );
+  assert.equal(code, 1);
+  assert.match(output, /GATE_ACTIVE_LEASE_REQUIRED/);
+  assert.equal(repo.read('src/math.mjs'), original);
+});
+Then(
+  'the actual replay subprocess keeps ordinary test variables and drops the Gate lease',
+  async function () {
+    const repo = repository(this),
+      file = 'specs/probe.mts',
+      observed = repo.path('replay-env.json');
+    repo.write(
+      file,
+      "import {writeFileSync} from 'node:fs';export async function runReplayCucumber(){writeFileSync(" +
+        JSON.stringify(observed) +
+        ',JSON.stringify({marker:process.env.AOS_GATE_LEASE_FD,ordinary:process.env.AOS_TEST_PUBLIC_VALUE}));return 0;}',
+    );
+    const previous = process.env;
+    process.env = { ...previous, AOS_GATE_LEASE_FD: '9', AOS_TEST_PUBLIC_VALUE: 'fixture' };
+    try {
+      await new CucumberRunner(
+        repo.dir,
+        'replay',
+        repo.path('reports/probe'),
+        pathToFileURL(repo.path(file)),
+      ).run(['specs/green.feature:4'], 600000);
+    } finally {
+      process.env = previous;
+    }
+    assert.deepEqual(JSON.parse(repo.read('replay-env.json')), { ordinary: 'fixture' });
+  },
+);

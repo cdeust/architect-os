@@ -1,3 +1,4 @@
+import { gateRuntime } from './gate-runtime.js';
 import { runLocations } from '@architect-os/sandbox/runtime-context';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -20,7 +21,6 @@ import { REPOSITORY, Given, Then, When, type DeliverWorld } from './support.js';
 
 const FAKE_GATE = `${REPOSITORY}tools/deliver/fixtures/fake-gate.mjs`;
 const COMMITTED = `${REPOSITORY}tools/deliver/deliver.json`;
-const VERDICT = 'reports/gate-base.json';
 const LOG = 'state/deliveries.jsonl';
 
 interface Command {
@@ -51,15 +51,8 @@ const commandOf = (world: DeliverWorld): Command => world.state['command'] as Co
 /** The descriptive file of the repository, with the gate of the scenario as its gate command. */
 function writeConfig(command: Command): void {
   const hash = command.git.hashOf('h1');
-  const verdict = JSON.stringify({ sha: hash, scenarios: [{ name: 'a' }] });
   const committed = JSON.parse(readFileSync(COMMITTED, 'utf8')) as Record<string, unknown>;
-  const gateCommand = [
-    process.execPath,
-    FAKE_GATE,
-    'quiet',
-    VERDICT,
-    command.gateCode === 0 ? verdict : 'none',
-  ];
+  const gateCommand = [process.execPath, FAKE_GATE, 'publish', command.gateCode === 0 ? hash : 'none'];
   writeFileSync(
     command.config,
     JSON.stringify({ ...committed, gateCommand: [...gateCommand, String(command.gateCode)] }),
@@ -93,14 +86,18 @@ Given(
     });
     for (const branch of ['feat/gate-1a', 'main']) gh.evaluated(branch, git.hashOf(commit), 'pass');
     const home = temporaryDirectory(this);
-    const runtimeRoot = temporaryDirectory(this);
-    mkdirSync(join(runtimeRoot, 'state'), { mode: 0o700 });
+    const runtime = gateRuntime(this);
+    const runtimeRoot = runtime.root;
     const command: Command = {
       runtimeRoot,
       git,
       gh,
       home,
-      environment: { ...(hostOf(this).env as Record<string, string>) },
+      environment: {
+        ...(hostOf(this).env as Record<string, string>),
+        ...runtime.env,
+        ARCHITECT_OS_HOST_XDG_CONFIG_HOME: 'set:' + home,
+      },
       gateCode: 0,
       config: join(home, 'deliver.json'),
       stdout: '',

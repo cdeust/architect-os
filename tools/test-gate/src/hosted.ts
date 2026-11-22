@@ -1,4 +1,3 @@
 import '@architect-os/sandbox/require-run';
-const { runHostedGate } = await import('./infrastructure/hosted-gate.js');
-
-process.exitCode = await runHostedGate(process.argv.slice(2), process.cwd(), process.stdout);
+const { runGateWithLease } = await import('./infrastructure/tree-lease.js');
+process.exitCode = runGateWithLease('hosted', process.argv.slice(2));

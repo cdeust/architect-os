@@ -414,7 +414,7 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
   Scenario: replay refuses a configuration without a replay
     Given the gate configuration reads:
       """
-      {"production": {"include": ["src/**/*.mjs"], "exclude": []}, "features": {"include": ["specs/**/*.feature"], "exclude": []}, "jobs": {}, "debt": "mutation-debt.json", "reports": {"cucumber": "c", "mutation": "m", "base": "b", "plan": "p", "report": "r", "baseOut": "o"}}
+      {"production": {"include": ["src/**/*.mjs"], "exclude": []}, "features": {"include": ["specs/**/*.feature"], "exclude": []}, "jobs": {}, "debt": "mutation-debt.json", "reports": {"cucumber": "reports/cucumber.ndjson", "mutation": "reports/mutation/mutation.json", "base": "reports/base/gate-base.json", "plan": "reports/gate-plan.json", "report": "reports/gate-report.md", "baseOut": "reports/gate-base.json"}}
       """
     When the gate replays every mutant of the mutation report
     Then the gate exits with 1
@@ -617,3 +617,9 @@ Feature: Test gate, rule 7: the verdicts of the mutation tool are replayed, neve
       | load    | 4         | 0          |
       | hook    | 3         | 0          |
       | ordered | 5         | 2          |
+
+  Scenario: A selected replay cannot install a mutation without a source replacement authority
+    Then a replay without the host replacement port refuses before changing source
+
+  Scenario: Replayed tests inherit normal test settings without acquiring the host lease
+    Then the actual replay subprocess keeps ordinary test variables and drops the Gate lease

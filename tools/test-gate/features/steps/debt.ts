@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { git } from '../../src/infrastructure/git.js';
 import type { DataTable } from '@cucumber/cucumber';
 import { DEBT_PATH, FIXTURES, Given, Then, repository, type GateRepository } from './repository.js';
 
@@ -196,4 +197,24 @@ Given('the debt registry is unreadable in the {string}', function (revision: str
 
 Then('the gate repository holds a file {string}', function (file: string) {
   assert.equal(repository(this).exists(file), true);
+});
+
+Given('a different debt registry is staged without touching the working copy', function () {
+  const repo = repository(this);
+  const current = repo.read(DEBT_PATH);
+  repo.write(DEBT_PATH, '{"survivors":[]}\n');
+  git(repo.dir, ['add', '--', DEBT_PATH]);
+  repo.write(DEBT_PATH, current);
+});
+
+Then('both comparison reports match the tracked debt registry', function () {
+  const repo = repository(this);
+  assert.equal(repo.read('reports/mutation-debt.committed.json'), repo.read(DEBT_PATH));
+  assert.equal(repo.read('reports/mutation-debt.computed.json'), repo.read(DEBT_PATH));
+});
+Then('the committed comparison report matches the untouched tracked debt registry', function () {
+  const repo = repository(this);
+  const committed = git(repo.dir, ['show', 'HEAD:' + DEBT_PATH]);
+  assert.equal(repo.read(DEBT_PATH), committed);
+  assert.equal(repo.read('reports/mutation-debt.committed.json'), committed);
 });

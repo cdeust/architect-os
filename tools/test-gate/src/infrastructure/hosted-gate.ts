@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { resolve } from 'node:path';
+
 import { canaryViolations } from '../domain/canary.js';
 import { isProduction } from '../domain/layout.js';
 import { inPerimeter } from '../domain/mutation.js';
@@ -39,12 +39,12 @@ export async function runHostedGate(
   root: string,
   out: Output,
   count = HOSTED_LANES,
+  workspace = new Workspace(root),
 ): Promise<number> {
   const [command, selected] = args;
   const lane = Number(selected);
   const validLane = args.length === 2 && /^[1-9][0-9]*$/.test(String(selected)) && lane <= count;
   const collecting = command === 'collect' && args.length === 1;
-  const workspace = new Workspace(root);
   try {
     if (!collecting && (!validLane || !LANE_COMMANDS.includes(command)))
       throw new Error('usage : hosted-gate inventory|verify|replay <lot> | collect');
@@ -115,7 +115,7 @@ export async function runHostedGate(
       const { cases, nativeHash, manifestHash, tests } = proved(lane, directory);
       await verifyMutationCatalog(root, tests);
       const producer = sha256(read(directory + '/producer'));
-      const work = resolve(root, replay.work);
+      const work = workspace.path(replay.work);
       workspace.remove(work);
       const timings: { file: string; id: string; status: string; elapsedMs: number }[] = [];
       const entries = await replayAll(

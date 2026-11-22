@@ -1,3 +1,4 @@
+import { Workspace } from '../../src/infrastructure/workspace.js';
 import assert from 'node:assert/strict';
 import {
   chmodSync,
@@ -19,6 +20,7 @@ import { git, gitWithOptions, GitRepository } from '../../src/infrastructure/git
 
 /** Structural view of the root World (features/support/world.ts); a component cannot import across projects. */
 export interface GateWorld {
+  admitFixture: (root: string) => NodeJS.ProcessEnv;
   state: Record<string, unknown>;
   cleanups: (() => Promise<void> | void)[];
 }
@@ -43,11 +45,21 @@ export class GateRepository {
   output = '';
   exitCode: number | undefined;
 
-  constructor() {
+  constructor(private readonly admitFixture: GateWorld['admitFixture']) {
     git(this.dir, ['init', '-q']);
     this.write(CONFIG_PATH, readFileSync(join(FIXTURES, 'gate.json'), 'utf8'));
     this.write('.gitignore', 'reports/\n');
     this.write(DEBT_PATH, '{"survivors": []}\n');
+  }
+
+  admittedEnvironment(): NodeJS.ProcessEnv {
+    const root = this.path('runtime');
+    mkdirSync(root);
+    writeFileSync(
+      join(root, '.architect-os-runtime-root'),
+      'architect-os-runtime-root/v2\nenvironment=hosted-runner\n',
+    );
+    return this.admitFixture(root);
   }
 
   path(relative: string): string {
@@ -111,14 +123,37 @@ export class GateRepository {
     return text.replaceAll('<head>', this.rev('HEAD')).replaceAll('<parent>', parent);
   }
 
+  /** An explicit test adapter over this scenario's disposable Git fixture. */
+  workspace(): Workspace {
+    let pending: { file: string; original: string } | undefined;
+    return new Workspace(this.dir, undefined, {
+      begin: (file, original, mutated) => {
+        assert.equal(this.read(file), original);
+        pending = { file, original };
+        this.write(file, mutated);
+      },
+      restore: () => {
+        assert.ok(pending);
+        this.write(pending.file, pending.original);
+        pending = undefined;
+      },
+    });
+  }
+
   async run(
     args: readonly string[],
     env: NodeJS.ProcessEnv = { GITHUB_STEP_SUMMARY: this.path('summary.md') },
   ): Promise<void> {
     let output = '';
-    const verdict = runGate(['node', 'main.ts', ...args], this.dir, env, {
-      write: (text: string) => (output += text),
-    });
+    const verdict = runGate(
+      ['node', 'main.ts', ...args],
+      this.dir,
+      env,
+      {
+        write: (text: string) => (output += text),
+      },
+      this.workspace(),
+    );
     await assert.doesNotReject(verdict, 'Gate must return a verdict or a refusal diagnostic');
     this.exitCode = await verdict;
     this.output = output;
@@ -137,7 +172,7 @@ export function names(list: string): string[] {
 }
 
 Given('a gate repository', function () {
-  const created = new GateRepository();
+  const created = new GateRepository(this.admitFixture);
   this.state['gateRepository'] = created;
   this.cleanups.push(() => rmSync(created.dir, { recursive: true, force: true }));
 });
@@ -242,7 +277,7 @@ function secondRepository(world: GateWorld): GateRepository {
 }
 
 Given('a second gate repository with its own commit', function () {
-  const other = new GateRepository();
+  const other = new GateRepository(this.admitFixture);
   this.cleanups.push(() => rmSync(other.dir, { recursive: true, force: true }));
   other.write('other.txt', 'other\n');
   other.commit('other');

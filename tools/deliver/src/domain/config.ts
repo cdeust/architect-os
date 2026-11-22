@@ -14,10 +14,9 @@ export interface DeliverConfig {
   jobDependencies?: Record<string, { producers: string[]; admissionStep: string }>;
   /** Files that may only grow between the parent and the commit. */
   appendOnly: string[];
-  gateVerdict: string;
   /** The gate as an argv, started in the delivery worktree. */
   gateCommand: string[];
-  /** Where the two outputs of the gate are written, relative to the delivery worktree. */
+  /** Where the two outputs of the gate are written, under the reports directory of the admitted run. */
   gateLog: string;
   /** The log of the deliveries, a path that starts with `${state}/`. */
   log: string;

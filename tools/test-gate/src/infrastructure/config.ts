@@ -8,6 +8,7 @@ import { parseJson } from './json.js';
 const Glob = z.string().min(1);
 const FileSet = z.strictObject({ include: z.array(Glob).min(1), exclude: z.array(Glob) });
 const Path = z.string().min(1);
+const ReportPath = Path.pipe(z.string().startsWith('reports/'));
 
 /** Schema of tools/test-gate/gate.json, the descriptive configuration of the gate. */
 export const GateConfigSchema = z.strictObject({
@@ -30,18 +31,18 @@ export const GateConfigSchema = z.strictObject({
   replay: z
     .strictObject({
       profile: z.string().min(1),
-      record: Path,
-      work: Path,
+      record: ReportPath,
+      work: ReportPath,
       limitMs: z.number().int().positive(),
     })
     .optional(),
   reports: z.strictObject({
-    cucumber: Path,
-    mutation: Path,
-    base: Path,
-    plan: Path,
-    report: Path,
-    baseOut: Path,
+    cucumber: ReportPath,
+    mutation: ReportPath,
+    base: ReportPath,
+    plan: ReportPath,
+    report: ReportPath,
+    baseOut: ReportPath,
   }),
 });
 

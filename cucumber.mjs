@@ -2,6 +2,7 @@
 // tsx refuses to be a --loader (node_modules/tsx/dist/register-*.mjs), so it is registered here with its documented
 // ESM API (node_modules/tsx/package.json exports './esm/api'); cucumber imports the support code after this file.
 // tsx reads TSX_TSCONFIG_PATH: features/tsconfig.json carries the `paths` that map @architect-os/contracts to its sources.
+import { gateReportPath } from './tools/test-gate/src/infrastructure/report-paths.ts';
 import { register } from 'tsx/esm/api';
 import { COMPONENTS, mutationPaths } from './cucumber-paths.mjs';
 
@@ -15,16 +16,27 @@ const config = {
     'features/steps/**/*.ts',
     ...COMPONENTS.map((c) => `${c}/features/steps/**/*.ts`),
   ],
-  format: ['message:reports/cucumber.ndjson', 'progress'],
   retry: 0,
   strict: true,
 };
 
-export default config;
+// Preflight loads this module even for independent replay. Resolve a report only when Cucumber
+// selects the profile that writes it, so a mutant cannot invalidate selection of its own witness.
+function withReport(options, report) {
+  return {
+    ...config,
+    ...options,
+    get format() {
+      return ['message:' + gateReportPath(process.env, report), 'progress'];
+    },
+  };
+}
+
+export default withReport({}, 'reports/cucumber.ndjson');
 
 // The gate-macos job (docs/design/platform-v3-srt.md §7) runs features/sandbox only: `cucumber-js --profile macos`.
 // A scope by path, not a filter: tools/test-gate/gate.json scopes the static count of the job identically.
-export const macos = { ...config, paths: ['features/sandbox/**/*.feature'] };
+export const macos = withReport({ paths: ['features/sandbox/**/*.feature'] }, 'reports/cucumber.ndjson');
 
 // The mutation profile is used only by Stryker (stryker.config.mjs: cucumber.profile). It is a scope by area, and the
 // two areas features/repository and features/arch are outside it as wholes. This comment is the one place that says
@@ -52,7 +64,7 @@ export const macos = { ...config, paths: ['features/sandbox/**/*.feature'] };
 // profile lists the other four root areas, and the components' features.
 // A scope by path, like `macos`: `features/**` is spelled as the root areas other than repository and arch;
 // features/descriptive/cucumber-profiles.feature checks that no area is forgotten.
-export const mutation = { ...config, paths: mutationPaths };
+export const mutation = withReport({ paths: mutationPaths }, 'reports/mutation/cucumber.ndjson');
 
 // The replay profile is used only by `test-gate replay` (tools/test-gate/src/infrastructure/replay.ts), which names the
 // scenarios of one mutant as `<feature>:<line>` and its own `--format message:<file>`. Cucumber adds the paths and

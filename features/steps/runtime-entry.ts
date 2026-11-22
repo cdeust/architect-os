@@ -942,12 +942,14 @@ const SCRIPTED_GH = [
 
 /** The gate of these scenarios: it records the XDG_CONFIG_HOME it sees and leaves the verdict of the commit. */
 const SCRIPTED_GATE = [
-  "import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';",
-  'const [witness, verdict, guard] = process.argv.slice(2);',
+  "import { appendFileSync } from 'node:fs';",
+  'const [witness, sha, guard, publisher] = process.argv.slice(2);',
   "await import((await import('node:url')).pathToFileURL(guard).href);",
   "appendFileSync(witness, `${process.env['XDG_CONFIG_HOME'] ?? '(unset)'}\\n`);",
-  "mkdirSync('reports', { recursive: true });",
-  "writeFileSync('reports/gate-base.json', verdict);",
+  'const { publishGateReceipt } = await import(publisher);',
+  "const base = JSON.stringify({ job: 'linux', sha, count: 1, pickles: ['scenario'] });",
+  "const report = '# Porte de test, job linux : VERTE\\n- tête : ' + sha + '\\n';",
+  'publishGateReceipt(process.env.ARCHITECT_OS_RUNTIME_ROOT, process.cwd(), process.env.ARCHITECT_OS_RUN_DIR, sha, base, report);',
 ].join('\n');
 
 /** The delivery command through its composition root, with the process aos made: its environment is not touched. */
@@ -1024,7 +1026,6 @@ Given(
       }),
     );
     const config = join(scripts, 'deliver.json');
-    const verdict = JSON.stringify({ sha: hash, scenarios: [{ name: 'a' }] });
     writeFileSync(
       config,
       JSON.stringify({
@@ -1033,8 +1034,9 @@ Given(
           process.execPath,
           join(scripts, 'gate.mjs'),
           gateWitness,
-          verdict,
+          hash,
           join(ROOT, 'scripts/require-run.mjs'),
+          import.meta.resolve('@architect-os/sandbox/gate-receipt'),
         ],
       }),
     );

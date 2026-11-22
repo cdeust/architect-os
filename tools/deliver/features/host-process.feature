@@ -113,7 +113,18 @@ Feature: The one file of the delivery command that starts processes (programs ev
       When I run the script "process.stdout.write(process.cwd())" to a file
       Then the file holds the directory it ran in
 
-    Scenario: the program inherits the environment of this process: it is the gate command, a whole suite
+    Scenario: the Gate subprocess receives no ambient variables
       Given this process has the variable "HOST_PROCESS_INHERITED" set to "inherited" until the scenario ends
-      When I run the script "process.stdout.write(process.env.HOST_PROCESS_INHERITED)" to a file
-      Then the file holds "inherited"
+      When I run the script "process.stdout.write(String(process.env.HOST_PROCESS_INHERITED))" to a file
+      Then the file holds "undefined"
+
+    Scenario: an existing log with another hard link must remain intact
+      Given the file already holds "operator evidence"
+      And the file also has a second hard link
+      When I run the script "process.exit(0)" to a file
+      Then the program exited 1
+      And the file holds "operator evidence"
+      And the run left no descriptor open
+
+    Scenario: a non-regular Gate log is rejected before truncation
+      Then the host rejects a character device before trying to truncate it

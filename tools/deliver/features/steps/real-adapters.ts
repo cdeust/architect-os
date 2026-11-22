@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { hasAdmittedRun } from '@architect-os/sandbox/runtime-context';
+import { ProcessGate } from '../../src/infrastructure/process-gate.js';
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DeliveryEntry, Repository, RuleSuite } from '../../src/domain/ports.js';
@@ -18,6 +20,45 @@ import { Given, Then, When, type DeliverWorld } from './support.js';
 const gitOf = (world: DeliverWorld): GitFixture => world.state['portRepository'] as GitFixture;
 const gateOf = (world: DeliverWorld): ProcessGateFixture => world.state['portGate'] as ProcessGateFixture;
 const logOf = (world: DeliverWorld): FileLogFixture => world.state['portLog'] as FileLogFixture;
+
+Then('a real Gate subprocess has exactly its admitted paths, PATH and PG_BIN', async function () {
+  const { runtime, worktree, log, logPath } = gateOf(this);
+  const original = {
+    ...runtime.env,
+    PATH: '/usr/bin:/bin',
+    PG_BIN: '/operator/postgresql',
+    HOME: '/operator/home',
+    GH_TOKEN: 'test',
+    GITHUB_TOKEN: 'test',
+    SSH_AUTH_SOCK: 'agent',
+    ANTHROPIC_API_KEY: 'test',
+    NODE_OPTIONS: 'no-node-injection',
+    ARCHITECT_OS_HOST_XDG_CONFIG_HOME: 'set:/operator/identity',
+  };
+  const gate = new ProcessGate(worktree, ['/usr/bin/env'], 'reports/deliver-gate.log', original);
+  assert.equal(await gate.run(), 0);
+  const child = Object.fromEntries(
+    log()
+      .trimEnd()
+      .split('\n')
+      .map((entry) => {
+        const separator = entry.indexOf('=');
+        return [entry.slice(0, separator), entry.slice(separator + 1)];
+      }),
+  );
+  assert.deepEqual(child, { ...runtime.env, PATH: original.PATH, PG_BIN: original.PG_BIN });
+  assert.equal(hasAdmittedRun(child), true);
+  assert.equal(modeOf(logPath), '600');
+  assert.equal(modeOf(join(runtime.run, 'reports')), '700');
+});
+Then('a legacy checkout verdict cannot satisfy the delivery Gate', function () {
+  const { gate, worktree, runtime } = gateOf(this);
+  for (const parent of [worktree, runtime.run]) {
+    mkdirSync(join(parent, 'reports'), { mode: 0o700 });
+    writeFileSync(join(parent, 'reports/gate-base.json'), JSON.stringify({ sha: '1'.repeat(40) }));
+  }
+  assert.equal(gate.verdictHash(), undefined);
+});
 
 // Repository over git
 
@@ -159,7 +200,7 @@ Given('the delivery gate command is {string}', function (program: string) {
 
 Given('the delivery gate log already holds {string}', function (text: string) {
   const { logPath } = gateOf(this);
-  mkdirSync(join(logPath, '..'), { recursive: true });
+  mkdirSync(join(logPath, '..'), { recursive: true, mode: 0o700 });
   writeFileSync(logPath, text);
 });
 

@@ -13,14 +13,13 @@ import type { StaticSet } from '../domain/run.js';
 import { evaluate } from '../domain/verdict.js';
 import { jobOf, parseGateBase, parseGateConfig, parseReplayRecord, type GateConfig } from './config.js';
 import { parseCucumberReport, parseCucumberShards } from './cucumber-report.js';
-import { generateDebt, readDebt, realignDebt } from './debt.js';
+import { compareDebt, generateDebt, readDebt, realignDebt } from './debt.js';
 import { GitRepository } from './git.js';
 import { compileFeature } from './gherkin.js';
 import { jsonText } from './json.js';
 import { parseMutationReport } from './mutation-report.js';
 import { CucumberRunner, replayAll, sha256 } from './replay.js';
 import { Workspace } from './workspace.js';
-import { resolve } from 'node:path';
 
 /** The descriptive configuration, relative to the repository root. */
 export const CONFIG_PATH = 'tools/test-gate/gate.json';
@@ -104,8 +103,8 @@ async function replayCommand(
   root: string,
   mode: 'all' | 'collect' | 1 | 2 | undefined,
   out: Output,
+  workspace: Workspace,
 ): Promise<number> {
-  const workspace = new Workspace(root);
   const settings = config.replay;
   if (settings === undefined) {
     out.write(`porte de test : ${CONFIG_PATH} ne déclare pas de rejeu\n`);
@@ -170,7 +169,7 @@ async function replayCommand(
     due = byLot[mode];
   }
   workspace.remove(settings.work);
-  const runner = new CucumberRunner(root, settings.profile, resolve(root, settings.work));
+  const runner = new CucumberRunner(root, settings.profile, workspace.path(settings.work));
   const mutants = await replayAll(due, workspace, runner, settings.limitMs);
   workspace.write(target, jsonText({ report: reportHash, mutants }));
   const divergent = mutants.filter((entry) => entry.divergence !== null);
@@ -190,6 +189,12 @@ function replayShardPath(shard: number): string {
   return 'reports/replay-shards/' + shard + '/replay.json';
 }
 
+/** A production checkout lease can revoke or publish the checked Linux result. */
+export interface GateReceiptAuthority {
+  discard(): void;
+  publish(config: GateConfig, workspace: Workspace): void;
+}
+
 function gate(
   config: GateConfig,
   job: Job,
@@ -197,8 +202,9 @@ function gate(
   root: string,
   env: NodeJS.ProcessEnv,
   out: Output,
+  workspace: Workspace,
+  receipt?: GateReceiptAuthority,
 ) {
-  const workspace = new Workspace(root);
   const repository = new GitRepository(root);
   const { head, firstParent } = repository.commits();
   const changes = changedFiles(repository, workspace, firstParent);
@@ -270,11 +276,12 @@ function gate(
   if (verdict.green) workspace.write(reports.baseOut, jsonText(baseOf(verdict)));
   else workspace.remove(reports.baseOut);
   out.write(report);
+  if (verdict.green && job.name === 'linux') receipt?.publish(config, workspace);
   return verdict.green ? 0 : 1;
 }
 
 /**
- * `test-gate plan|check [--job <name>]`, `test-gate debt [realign]` or `test-gate replay [--all]` run in `root`, the process argv as given by Node.
+ * `test-gate plan|check [--job <name>]`, `test-gate debt [realign|compare]` or `test-gate replay [--all]` run in `root`, the process argv as given by Node.
  * Returns the exit code: 0 green (or plan or debt registry written), 1 red or unusable input. Never throws on a bad input: it is reported and red.
  */
 export async function runGate(
@@ -282,6 +289,8 @@ export async function runGate(
   root: string,
   env: NodeJS.ProcessEnv,
   out: Output,
+  workspace = new Workspace(root),
+  receipt?: GateReceiptAuthority,
 ): Promise<number> {
   const refuse = (failure: string) => {
     out.write(`porte de test : ${failure}\n`);
@@ -290,20 +299,30 @@ export async function runGate(
   const [, , ...args] = argv;
   const command = parseArguments(args);
   if ('failure' in command) return refuse(command.failure);
-  const workspace = new Workspace(root);
+  if (command.name === 'check' && command.job === 'linux') receipt?.discard();
   if (command.name === 'inventory') workspace.remove(INVENTORY_PATH);
   const text = workspace.read(CONFIG_PATH);
   if (text === null) return refuse(`${CONFIG_PATH} absent`);
   const config = parseGateConfig(text);
   if ('failure' in config) return refuse(`${CONFIG_PATH} : ${config.failure}`);
   if (command.name === 'realign') {
-    const realigned = realignDebt(config, new Workspace(root));
+    const realigned = realignDebt(config, workspace);
     if ('failure' in realigned) return refuse(realigned.failure);
     out.write(realigned.summary);
     return realigned.aligned ? 0 : 1;
   }
+  if (command.name === 'compare') {
+    try {
+      const result = compareDebt(config, workspace, new GitRepository(root));
+      if ('failure' in result) return refuse(result.failure);
+      out.write(result.summary);
+      return 0;
+    } catch (error) {
+      return refuse((error as Error).message);
+    }
+  }
   if (command.name === 'debt') {
-    const written = generateDebt(config, new Workspace(root));
+    const written = generateDebt(config, workspace);
     if ('failure' in written) return refuse(written.failure);
     out.write(written.summary);
     return 0;
@@ -312,7 +331,7 @@ export async function runGate(
     const mode =
       command.name === 'replay-collect' ? 'collect' : (command.shard ?? (command.all ? 'all' : undefined));
     try {
-      return await replayCommand(config, root, mode, out);
+      return await replayCommand(config, root, mode, out, workspace);
     } catch (error) {
       return refuse((error as Error).message);
     }
@@ -405,5 +424,5 @@ export async function runGate(
       return refuse((error as Error).message);
     }
   }
-  return gate(config, job, command.name, root, env, out);
+  return gate(config, job, command.name, root, env, out, workspace, receipt);
 }

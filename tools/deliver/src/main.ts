@@ -63,8 +63,7 @@ export const HANDED_XDG_CONFIG_HOME = 'ARCHITECT_OS_HOST_XDG_CONFIG_HOME';
 /**
  * The environment from which git and the client of the forge take the names of the list: the one of the process when
  * nothing is handed over (a delivery started without `./aos`); else the same, with the XDG_CONFIG_HOME the caller of
- * `./aos` had, set, empty or absent as it was. None when what is handed over has neither form. The nested gate keeps
- * the environment of the process, and with it the XDG_CONFIG_HOME of the run.
+ * `./aos` had, set, empty or absent as it was. None when what is handed over has neither form. The nested Gate separately receives its admitted paths and no forge identity.
  */
 export function hostEnvironment(
   env: Readonly<Record<string, string | undefined>>,
@@ -109,7 +108,7 @@ export async function runDeliver(deps: DeliverDependencies): Promise<number> {
     const ports = {
       repository: new GitRepository(worktree, config.remote, deps.git, host),
       forge: new GhForge(config.repository, deps.gh.program, deps.gh.prefix, worktree, host),
-      gate: new ProcessGate(worktree, config.gateCommand, config.gateLog, config.gateVerdict),
+      gate: new ProcessGate(worktree, config.gateCommand, config.gateLog, deps.env),
       clock: new TimerClock(deps.setTimer),
       log: new FileLog(config.log, deps.env['ARCHITECT_OS_RUNTIME_ROOT']),
       progress: new StreamProgress(deps.stderr),
