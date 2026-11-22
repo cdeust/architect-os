@@ -111,7 +111,9 @@ async function refused(items, category, expected) {
     assert.deepEqual(error.diagnostic, expected);
     return true;
   });
-  assert.deepEqual(receipt, {
+  const { provider_observation, ...admission } = receipt;
+  assert.ok(provider_observation);
+  assert.deepEqual(admission, {
     provider_requests: 1,
     http_status: 200,
     usage: null,
@@ -286,7 +288,7 @@ test('informational metadata cannot escape the host or replace the terminal rece
   for (const fields of [
     { response_id: 'other' },
     { headers: { 'openai-model': 'other' } },
-    { metadata: { openai_verification_recommendation: [] } },
+    { metadata: { openai_verification_recommendation: ['required'] } },
     { metadata: { unknown: 'private' } },
   ]) {
     assert.throws(
@@ -306,7 +308,7 @@ test('informational metadata cannot escape the host or replace the terminal rece
         text,
         70,
       ),
-    (e) => e.diagnostic?.kind === 'requires_native_handling',
+    (e) => e.diagnostic?.kind === 'provider_metadata',
   );
 });
 
@@ -335,4 +337,58 @@ test('effective model and policy notifications on ordinary response events are c
       ),
     (e) => e.diagnostic?.disposition === 'requires_native_handling',
   );
+});
+
+test('the operator observes one upstream body even when a policy decision precludes native delivery', async () => {
+  const body = events((items) =>
+    items.splice(1, 0, {
+      type: 'response.metadata',
+      metadata: { openai_verification_recommendation: [privateString] },
+    }),
+  );
+  let reads = 0;
+  const receipt = { usage: null, cost_usd: null, native_completed: false };
+  const reply = {
+    statusCode: 200,
+    headersDistinct: {},
+    async *[Symbol.asyncIterator]() {
+      assert.equal(++reads, 1);
+      yield Buffer.from(body);
+    },
+  };
+  await assert.rejects(decodeUpstream(reply, text, 70, receipt), /UPSTREAM_REFUSED/);
+  assert.equal(receipt.provider_observation.terminal, 'completed');
+  assert.deepEqual(receipt.provider_observation.usage, {
+    input_tokens: 20,
+    output_tokens: 12,
+    total_tokens: 32,
+  });
+  assert.equal(receipt.native_completed, false);
+  assert.equal(receipt.usage, null);
+  assert.equal(receipt.cost_usd, null);
+  assert.ok(!JSON.stringify(receipt).includes(privateString));
+});
+
+test('a substituted or ambiguous HTTP model cannot provide Astra usage or native text', async () => {
+  for (const values of [['unexpected'], [model, model]]) {
+    const receipt = {};
+    await assert.rejects(
+      decodeUpstream(upstream({ 'openai-model': values }, events()), text, 70, receipt),
+      /UPSTREAM_REFUSED/,
+    );
+    assert.equal(receipt.stream_refusal.kind, 'http_controls');
+    assert.equal(receipt.provider_observation.evidence, 'unbound');
+    assert.equal(receipt.provider_observation.usage, null);
+  }
+});
+
+test('an intermediate response cannot change the bound identity', () => {
+  for (const patch of [
+    { response_id: 'another' },
+    { response: { id: 'another' } },
+    { response: { model: 'another' } },
+  ]) {
+    const wire = events((items) => items.splice(1, 0, { type: 'response.in_progress', ...patch }));
+    assert.throws(() => parseResponse(wire, text, 70), /UPSTREAM_REFUSED/);
+  }
 });

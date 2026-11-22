@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fixtureResponse, model, nativeTextStream, verifiedText } from './text-response.mjs';
+import {
+  fixtureResponse,
+  model,
+  nativeTextStream,
+  verifiedBrokerText,
+  verifiedText,
+} from './text-response.mjs';
 
 const challenge = 'AOS-challenge';
 const counts = { input_tokens: 8, output_tokens: 4 };
@@ -8,10 +14,12 @@ const counts = { input_tokens: 8, output_tokens: 4 };
 test('only the exact text and measured terminal usage reach the native client', () => {
   const r = fixtureResponse(challenge);
   r.id = 'private-provider-response';
+  r.end_turn = true;
+  r.output[0].phase = 'final_answer';
   r.usage.internal = 'provider metadata';
   r.output[0].content[0].annotations = [{ extra: 'provider annotation' }];
   r.output.unshift({ type: 'reasoning', summary: [], encrypted_content: 'opaque reasoning' });
-  const usage = verifiedText(r, challenge);
+  const usage = verifiedText(r, challenge, 70);
   assert.deepEqual(usage, counts);
   const stream = nativeTextStream(challenge, usage);
   assert.doesNotMatch(
@@ -34,6 +42,15 @@ test('only the exact text and measured terminal usage reach the native client', 
 });
 
 for (const [name, change] of Object.entries({
+  'continuation required': (r) => {
+    r.end_turn = false;
+  },
+  'partial answer': (r) => {
+    r.output[0].phase = 'partial_answer';
+  },
+  commentary: (r) => {
+    r.output[0].phase = 'commentary';
+  },
   'incomplete response': (r) => {
     r.status = 'incomplete';
   },
@@ -42,6 +59,19 @@ for (const [name, change] of Object.entries({
   },
   'incomplete item': (r) => {
     r.output[0].status = 'incomplete';
+  },
+  'missing final item status': (r) => {
+    delete r.output[0].status;
+  },
+  'non-null incomplete details': (r) => {
+    r.incomplete_details = { reason: 'content_filter' };
+  },
+  'missing total': (r) => {
+    delete r.usage.total_tokens;
+  },
+  'output above host grant': (r) => {
+    r.usage.output_tokens = 71;
+    r.usage.total_tokens = 79;
   },
   'inconsistent total': (r) => {
     r.usage.total_tokens = 0;
@@ -80,6 +110,29 @@ for (const [name, change] of Object.entries({
   test('refuses ' + name, () => {
     const r = fixtureResponse(challenge);
     change(r);
-    assert.throws(() => verifiedText(r, challenge), /SBX_SUBSCRIPTION_/);
+    assert.throws(() => verifiedText(r, challenge, 70), /SBX_SUBSCRIPTION_/);
   });
 }
+
+test('the hosted port requires an already projected response', () => {
+  const valid = fixtureResponse(challenge);
+  assert.deepEqual(verifiedBrokerText(valid, challenge, 4), counts);
+  for (const change of [
+    (r) => {
+      r.headers = { 'x-openai-model': 'another' };
+    },
+    (r) => {
+      r.metadata = { openai_verification_recommendation: [] };
+    },
+    (r) => {
+      r.output[0].safety_buffering = true;
+    },
+    (r) => {
+      r.usage.private = 'private';
+    },
+  ]) {
+    const response = structuredClone(valid);
+    change(response);
+    assert.throws(() => verifiedBrokerText(response, challenge, 4), /SBX_SUBSCRIPTION_BROKER_SHAPE/);
+  }
+});

@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
-import { frameByteLimit as maxBytes, parseUniqueJson } from './json-frame.mjs';
-import { subscriptionMetadata } from './subscription-metadata.mjs';
-import { model, verifiedText } from './text-response.mjs';
+import { frameByteLimit as maxBytes } from './json-frame.mjs';
+import { subscriptionFrames, streamDone } from './subscription-frames.mjs';
+import { createSubscriptionControls } from './subscription-metadata.mjs';
+import { observeSubscription } from './subscription-observation.mjs';
+import { model, textResponse, verifiedText } from './text-response.mjs';
 
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 async function collect(body) {
@@ -51,21 +53,8 @@ function unknownEvent(name, started) {
   return new StreamRefusal(started ? 'UNEXPECTED_EVENT' : 'SSE_START', detail);
 }
 
-function parseEvent(data) {
-  try {
-    const event = parseUniqueJson(data);
-    if (event && typeof event === 'object' && !Array.isArray(event)) return event;
-  } catch {
-    // Never expose raw provider bytes or parser diagnostics.
-  }
-  throw Error('SSE_FRAME');
-}
-
-export function parseResponse(wire, challenge, maxOutput) {
+function admitResponse(wire, challenge, maxOutput, controls) {
   if (!Number.isSafeInteger(maxOutput) || maxOutput < 1) throw Error('USAGE_REFUSED');
-  if (typeof wire !== 'string' || Buffer.byteLength(wire) > maxBytes) throw Error('PAYLOAD_LIMIT');
-  const blocks = wire.replaceAll('\r\n', '\n').split('\n\n');
-  if (blocks.pop() !== '') throw Error('TRUNCATED_STREAM');
   let terminal;
   let started;
   let done = false;
@@ -82,28 +71,14 @@ export function parseResponse(wire, challenge, maxOutput) {
     'response.reasoning_summary_text.delta',
     'response.reasoning_summary_text.done',
   ]);
-  for (const block of blocks) {
-    if (!block || (block.startsWith(':') && block.split('\n').every((line) => line.startsWith(':'))))
-      continue;
+  for (const e of subscriptionFrames(wire)) {
     if (done) throw Error('EXTRA_FRAME');
-    const lines = block.split('\n');
-    const labels = lines.filter((line) => line.startsWith('event:')).map((line) => line.slice(6).trim());
-    const data = lines
-      .filter((line) => line.startsWith('data:'))
-      .map((line) => line.slice(5).replace(/^ /, ''))
-      .join('\n');
-    if (!data || labels.length > 1 || lines.some((line) => !/^(?:data:|event:|:)/.test(line)))
-      throw Error('SSE_FRAME');
-    if (data === '[DONE]') {
-      if (!terminal || labels.length) throw Error('SSE_DONE');
+    if (e === streamDone) {
+      if (!terminal) throw Error('SSE_DONE');
       done = true;
       continue;
     }
-    const e = parseEvent(data);
-    if ((labels.length && e.type !== labels[0]) || terminal) throw Error('SSE_ORDER');
-    if (Object.hasOwn(e, 'safety_buffering') && e.safety_buffering !== false) {
-      throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'requires_native_handling' });
-    }
+    if (terminal) throw Error('SSE_ORDER');
     if (e.type === 'error') {
       throw new StreamRefusal('UPSTREAM_REFUSED', {
         kind: 'stream_error',
@@ -155,11 +130,6 @@ export function parseResponse(wire, challenge, maxOutput) {
       )
         throw Error('SSE_START');
       started = e.response.id;
-    } else if (e.type === 'response.metadata') {
-      const disposition = subscriptionMetadata(e, started, model);
-      if (disposition !== 'informational') {
-        throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'provider_metadata', disposition });
-      }
     } else if (e.type === 'response.output_item.added' || e.type === 'response.output_item.done') {
       if (!['reasoning', 'message'].includes(e.item?.type)) throw Error('UNEXPECTED_ITEM');
       if (
@@ -188,39 +158,35 @@ export function parseResponse(wire, challenge, maxOutput) {
         e.part?.type === 'refusal')
     ) {
       throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'model_refusal' });
-    } else if (!simple.has(e.type)) throw unknownEvent(e.type, true);
-    // Codex also reads effective-model headers from ordinary response events.
-    // Validate their values before accepting text from this pinned subscription route.
-    if (e.type !== 'response.metadata') {
-      for (const object of [e, e.response]) {
-        if (!object || typeof object !== 'object') continue;
-        const control = { type: 'response.metadata' };
-        for (const key of ['headers', 'metadata']) if (Object.hasOwn(object, key)) control[key] = object[key];
-        if (Object.keys(control).length === 1) continue;
-        const disposition = subscriptionMetadata(control, started ?? e.response?.id, model);
-        if (disposition !== 'informational') {
-          throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'provider_metadata', disposition });
-        }
-      }
+    } else if (e.type !== 'response.metadata' && !simple.has(e.type)) {
+      throw unknownEvent(e.type, true);
+    }
+    if (
+      (Object.hasOwn(e, 'response_id') && e.response_id !== started) ||
+      (e.response && Object.hasOwn(e.response, 'id') && e.response.id !== started) ||
+      (e.response && Object.hasOwn(e.response, 'model') && e.response.model !== model)
+    ) {
+      throw new StreamRefusal('UPSTREAM_REFUSED', {
+        kind: 'provider_metadata',
+        disposition: 'unbound_metadata',
+      });
+    }
+    const disposition = controls.event(e, started);
+    if (disposition !== 'informational') {
+      throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'provider_metadata', disposition });
     }
   }
   if (!terminal) throw Error('MISSING_TERMINAL');
-  const { input_tokens: i, output_tokens: o } = verifiedText(terminal, challenge);
-  if (terminal.output.at(-1).status !== 'completed') throw Error('UNEXPECTED_TEXT');
-  if (o > maxOutput || terminal.usage.total_tokens !== i + o) throw Error('USAGE_REFUSED');
-  return {
-    model,
-    status: 'completed',
-    output: [
-      {
-        type: 'message',
-        role: 'assistant',
-        status: 'completed',
-        content: [{ type: 'output_text', text: challenge }],
-      },
-    ],
-    usage: { input_tokens: i, output_tokens: o, total_tokens: i + o },
-  };
+  return textResponse(challenge, verifiedText(terminal, challenge, maxOutput));
+}
+
+export function parseResponse(wire, challenge, maxOutput) {
+  const controls = createSubscriptionControls(model);
+  try {
+    return admitResponse(wire, challenge, maxOutput, controls);
+  } finally {
+    controls.close();
+  }
 }
 
 // Historical SIWC HTTP 200 responses sometimes omit Content-Type. The bytes must
@@ -237,10 +203,21 @@ export async function decodeUpstream(reply, challenge, maxOutput, receipt) {
   ) {
     throw Error('UPSTREAM_REFUSED');
   }
+  const controls = createSubscriptionControls(model);
   try {
-    return parseResponse(await collect(reply), challenge, maxOutput);
+    const http = controls.http(reply.headersDistinct);
+    const wire = await collect(reply);
+    if (receipt) {
+      receipt.provider_observation = observeSubscription(wire, model, http);
+    }
+    if (http !== 'informational') {
+      throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'http_controls', disposition: http });
+    }
+    return admitResponse(wire, challenge, maxOutput, controls);
   } catch (error) {
     if (receipt && error instanceof StreamRefusal) receipt.stream_refusal = error.diagnostic;
     throw error;
+  } finally {
+    controls.close();
   }
 }

@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { runOfflineProbe, stopOwnedVm, useUntilInterrupted } from './lifecycle.mjs';
 import { createWitness, readWitness } from './witness.mjs';
+import isolation from './isolation.json' with { type: 'json' };
+import { requireSbxBindings } from './runtime.mjs';
 
 async function workspace(t) {
   const dir = await mkdtemp(join(tmpdir(), 'sbx-qualification-'));
@@ -224,3 +226,34 @@ for (const failedPhase of ['run', 'verify']) {
     await assert.rejects(access(dir), { code: 'ENOENT' });
   });
 }
+
+test('the runtime attests the installed base image and shell kit independently', () => {
+  const name = 'probe';
+  const workspace = '/admitted/workspace';
+  const required = {
+    name,
+    workspace,
+    agent: 'shell',
+    image_digest: isolation.shellTemplate.split('@')[1],
+    kits: [isolation.shellKit],
+    mcp_mode: 'static',
+    mcp_servers: [],
+    runtime_mounts: [],
+    host_mounts: [{ host_path: workspace, container_target: workspace, read_only: false }],
+  };
+  requireSbxBindings(required, name, workspace);
+  for (const change of [
+    { agent: 'other' },
+    { image_digest: undefined },
+    { image_digest: 'sha256:' + '0'.repeat(64) },
+    { image: isolation.shellTemplate, image_digest: null },
+    { kits: [isolation.shellTemplate] },
+    { kits: [] },
+    { kits: [isolation.shellKit, 'extra'] },
+    { host_mounts: [] },
+  ]) {
+    assert.throws(() => requireSbxBindings({ ...required, ...change }, name, workspace), {
+      message: 'SBX_FIXTURE_BINDING_MISMATCH',
+    });
+  }
+});

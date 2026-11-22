@@ -1,15 +1,18 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 export const model = 'gpt-6.2-astra';
 
 // The host accepts only the challenge it generated. Provider IDs, metadata, reasoning
 // and native tool declarations never cross the host/guest stream.
-export function verifiedText(response, challenge) {
+export function verifiedText(response, challenge, maxOutput) {
   const output = response?.output;
   if (
     response?.model !== model ||
     response.status !== 'completed' ||
     response.error != null ||
+    response.incomplete_details != null ||
+    (Object.hasOwn(response, 'end_turn') && response.end_turn !== true) ||
     !Array.isArray(output)
   )
     throw Error('SBX_SUBSCRIPTION_TEXT_MISMATCH');
@@ -22,7 +25,8 @@ export function verifiedText(response, challenge) {
   if (
     item?.type !== 'message' ||
     item.role !== 'assistant' ||
-    (item.status !== undefined && item.status !== 'completed') ||
+    item.status !== 'completed' ||
+    (Object.hasOwn(item, 'phase') && item.phase !== 'final_answer') ||
     !Array.isArray(item.content) ||
     item.content.length !== 1 ||
     part?.type !== 'output_text' ||
@@ -34,7 +38,12 @@ export function verifiedText(response, challenge) {
     throw Error('SBX_SUBSCRIPTION_USAGE_MISSING');
   }
   const total = usage.input_tokens + usage.output_tokens;
-  if (!Number.isSafeInteger(total) || (usage.total_tokens !== undefined && usage.total_tokens !== total)) {
+  if (
+    !Number.isSafeInteger(total) ||
+    usage.total_tokens !== total ||
+    !Number.isSafeInteger(maxOutput) ||
+    usage.output_tokens > maxOutput
+  ) {
     throw Error('SBX_SUBSCRIPTION_USAGE_MISMATCH');
   }
   return { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens };
@@ -65,8 +74,7 @@ export function nativeTextStream(text, usage) {
   return events.map((e) => 'event: ' + e.type + '\ndata: ' + JSON.stringify(e) + '\n\n').join('');
 }
 
-export function fixtureResponse(challenge) {
-  // Deliberately synthetic counters; the receipt labels this source explicitly.
+export function textResponse(challenge, usage) {
   return {
     model,
     status: 'completed',
@@ -78,6 +86,21 @@ export function fixtureResponse(challenge) {
         content: [{ type: 'output_text', text: challenge }],
       },
     ],
-    usage: { input_tokens: 8, output_tokens: 4, total_tokens: 12 },
+    usage: { ...usage, total_tokens: usage.input_tokens + usage.output_tokens },
   };
+}
+
+// Both hosted and fixture routes consume the same, closed broker result.
+// Native controls and provider-private fields must be resolved by the upstream host.
+export function verifiedBrokerText(result, challenge, maxOutput) {
+  const usage = verifiedText(result, challenge, maxOutput);
+  if (!isDeepStrictEqual(result, textResponse(challenge, usage)))
+    throw Error('SBX_SUBSCRIPTION_BROKER_SHAPE');
+  return usage;
+}
+
+export const fixtureUsage = Object.freeze({ input_tokens: 8, output_tokens: 4, total_tokens: 12 });
+
+export function fixtureResponse(challenge) {
+  return textResponse(challenge, fixtureUsage);
 }

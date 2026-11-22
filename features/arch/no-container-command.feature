@@ -63,7 +63,7 @@ Feature: no file the rule reads holds docker or colima outside a closed list (do
 
     Background:
       Given the closed list of the files that may hold docker or colima
-        | bench/sbx/isolation.json                         | offline SBX qualification data: only the immutable shell image and the forbidden guest socket specified in the scenario below |
+        | bench/sbx/isolation.json                         | offline SBX qualification data: only the immutable shell kit, base template and forbidden guest socket specified in the scenario below |
         | baseline/overhead-analyze.ts                     | labels the kept results of the measure of the overhead (docker configurations); it reads and writes files and starts nothing |
         | docs/design/platform-v3.html                     | the vision of 29 October 2026, before decisions 21 and 22, a dated record of the container design (Dockerfile trees, a Docker exposure), still cited by invariant A of platform-v3-srt.md (figure 1); it opens with a dated line (19 November 2026): since decisions 21 and 22 the platform has one means of isolation, srt, and no container, and what the page says of containers is history |
         | features/descriptive/doc-paths.feature           | prose: it says that two commits removed the first realisation and Docker |
@@ -72,11 +72,12 @@ Feature: no file the rule reads holds docker or colima outside a closed list (do
         | features/steps/no-container-command.ts           | the step file of this guard: the pattern of the two words |
       And the files of the tree that the rule reads
 
-    Scenario: the offline SBX policy is data with exactly two pinned literals
+    Scenario: the offline SBX policy is data with exactly three pinned literals
       Then the isolation data in "bench/sbx/isolation.json" equals
         """
         {
-          "shellImage": "docker.io/sbx/shell@sha256:036c56158d78d741238079a4db9e36f072e6d047eb89debffab700b8cb0c3a96",
+          "shellKit": "docker.io/sbx/shell@sha256:036c56158d78d741238079a4db9e36f072e6d047eb89debffab700b8cb0c3a96",
+          "shellTemplate": "docker.io/library/sandbox-kit-assembled@sha256:036c56158d78d741238079a4db9e36f072e6d047eb89debffab700b8cb0c3a96",
           "forbiddenHostSocket": "/var/run/docker.sock"
         }
         """

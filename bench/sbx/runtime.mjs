@@ -10,8 +10,7 @@ import { exchangeFrames } from './exchange.mjs';
 import { frameByteLimit as pipeLimit } from './json-frame.mjs';
 import { runOfflineProbe, stopOwnedVm, useUntilInterrupted, withProbeSignals } from './lifecycle.mjs';
 
-const kit = isolation.shellImage;
-const digest = kit.split('@')[1];
+const [templateRepository, templateDigest] = isolation.shellTemplate.split('@');
 
 // The terminal can signal an entire foreground process group. Only the host owns
 // cancellation of CLI operations; in particular create, stop and confirmation must settle.
@@ -111,6 +110,34 @@ async function requireOfflinePolicy(name, limitMs, signal) {
   }
 }
 
+// The installed base image and the agent kit are separate artifacts selected by create.
+export function requireSbxBindings(observed, name, workspace) {
+  const mounts = observed.host_mounts;
+  if (
+    observed.name !== name ||
+    observed.agent !== 'shell' ||
+    observed.image_digest !== templateDigest ||
+    observed.mcp_mode !== 'static' ||
+    !Array.isArray(observed.mcp_servers) ||
+    observed.mcp_servers.length !== 0 ||
+    (observed.published_ports !== undefined &&
+      (!Array.isArray(observed.published_ports) || observed.published_ports.length !== 0)) ||
+    !Array.isArray(observed.kits) ||
+    observed.kits.length !== 1 ||
+    observed.kits[0] !== isolation.shellKit ||
+    observed.workspace !== workspace ||
+    !Array.isArray(mounts) ||
+    mounts.length !== 1 ||
+    mounts[0].host_path !== workspace ||
+    mounts[0].container_target !== workspace ||
+    mounts[0].read_only !== false ||
+    !Array.isArray(observed.runtime_mounts) ||
+    observed.runtime_mounts.length !== 0
+  ) {
+    throw Error('SBX_FIXTURE_BINDING_MISMATCH');
+  }
+}
+
 /** A disposable offline probe. Its only host mount is the synthetic workspace created here. */
 export function withOfflineSbx(options, use) {
   return withProbeSignals((signal) => scopedProbe(options, use, signal));
@@ -123,11 +150,17 @@ async function scopedProbe({ limitMs, prepare, verify }, use, signal) {
   if (cliVersion !== 'sbx version v0.54.0 4bec4a5ce093466e54b034146965b143d065dc09') {
     throw Error('SBX_PINNED_CLI_REQUIRED');
   }
-  const templates = JSON.parse(await checked(['template', 'ls', '--json'], limitMs, signal));
-  const template = templates.find(
-    (item) => item.flavor === 'shell' && item.digest === digest && item.id === digest,
-  );
-  if (!template) throw Error('SBX_PINNED_SHELL_REQUIRED');
+  const templates = JSON.parse(await checked(['template', 'ls', '--all', '--json'], limitMs, signal));
+  if (
+    !templates.some(
+      (item) =>
+        item.flavor === 'shell' &&
+        item.repository === templateRepository &&
+        item.digest === templateDigest &&
+        item.id === templateDigest,
+    )
+  )
+    throw Error('SBX_PINNED_SHELL_REQUIRED');
   const name = 'aos-b0-' + randomUUID();
   const workspace = await mkdtemp(join(await realpath(tmpdir()), 'sbx-witness-'));
   const names = async (signal) =>
@@ -154,34 +187,15 @@ async function scopedProbe({ limitMs, prepare, verify }, use, signal) {
         '--deny-network',
         '**',
         '--template',
-        template.repository + ':' + template.tag,
-        kit,
+        isolation.shellTemplate,
+        isolation.shellKit,
         workspace,
       ],
       limitMs,
     );
     creation = 'acknowledged';
     const observed = JSON.parse(await checked(['inspect', '--json', name], limitMs, signal));
-    const mounts = observed.host_mounts;
-    if (
-      observed.name !== name ||
-      observed.mcp_mode !== 'static' ||
-      !Array.isArray(observed.mcp_servers) ||
-      observed.mcp_servers.length !== 0 ||
-      (observed.published_ports !== undefined &&
-        (!Array.isArray(observed.published_ports) || observed.published_ports.length !== 0)) ||
-      observed.kits.length !== 1 ||
-      observed.kits[0] !== kit ||
-      observed.workspace !== workspace ||
-      mounts.length !== 1 ||
-      mounts[0].host_path !== workspace ||
-      mounts[0].container_target !== workspace ||
-      mounts[0].read_only !== false ||
-      !Array.isArray(observed.runtime_mounts) ||
-      observed.runtime_mounts.length !== 0
-    ) {
-      throw Error('SBX_FIXTURE_BINDING_MISMATCH');
-    }
+    requireSbxBindings(observed, name, workspace);
     await requireOfflinePolicy(name, limitMs, signal);
     // Run the access check as the client identity before either pinned client is staged.
     await checked(

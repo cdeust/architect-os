@@ -5,9 +5,15 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { requireAdmittedRun } from '../../packages/sandbox/src/runtime-context.ts';
 import { clientSha256, clientVersion, codexGuest, installCodex, verifyArchive } from './codex-client.mjs';
-import { parseResponse } from './subscription-stream.mjs';
+import { decodeUpstream } from './subscription-stream.mjs';
 import { withOfflineSbx } from './runtime.mjs';
-import { fixtureResponse, model, nativeTextStream, verifiedText } from './text-response.mjs';
+import {
+  fixtureResponse,
+  fixtureUsage,
+  model,
+  nativeTextStream,
+  verifiedBrokerText,
+} from './text-response.mjs';
 
 async function turn(archive, route, respond) {
   const challenge = 'AOS-' + randomUUID();
@@ -30,7 +36,11 @@ async function turn(archive, route, respond) {
         async (request, signal) => {
           if (++calls !== 1 || !isDeepStrictEqual(request, { kind: 'request', model }))
             throw Error('SBX_TEXT_REQUEST_REFUSED');
-          usage = verifiedText(await respond({ prompt, challenge, signal }), challenge);
+          usage = verifiedBrokerText(
+            await respond({ prompt, challenge, signal }),
+            challenge,
+            Buffer.byteLength(prompt),
+          );
           return { kind: 'response', body: nativeTextStream(challenge, usage) };
         },
       );
@@ -73,22 +83,66 @@ export async function runHostedTurn(archive, requestText) {
   return turn(archive, 'host_broker', ({ prompt, signal }) => requestText({ model, prompt }, signal));
 }
 
-export async function runFixtureTurn(archive) {
+function fixtureReply(challenge, metadata) {
+  const id = 'resp_fixture';
+  const routing = 'opaque-single-turn-fixture';
+  const events = [
+    { type: 'response.created', response: { id, model, status: 'in_progress' } },
+    {
+      type: 'response.metadata',
+      response_id: id,
+      metadata,
+      headers: { 'openai-model': model, 'x-codex-turn-state': routing },
+    },
+    { type: 'response.completed', response: { id, ...fixtureResponse(challenge) } },
+  ];
+  const wire = events.map((event) => 'data: ' + JSON.stringify(event) + '\n\n').join('');
+  const reply = {
+    statusCode: 200,
+    headersDistinct: {
+      'content-type': ['text/event-stream'],
+      'openai-model': [model],
+      'x-codex-turn-state': [routing],
+    },
+    async *[Symbol.asyncIterator]() {
+      yield Buffer.from(wire);
+    },
+  };
+  return reply;
+}
+
+export async function runFixtureTurn(archive, mode = 'complete') {
   requireAdmittedRun();
   await verifyArchive(archive);
-  return turn(archive, 'fixture', ({ prompt, challenge }) => {
-    const id = 'resp_fixture';
-    const events = [
-      { type: 'response.created', response: { id, model, status: 'in_progress' } },
-      { type: 'response.metadata', response_id: id, headers: { 'openai-model': model } },
-      { type: 'response.completed', response: { id, ...fixtureResponse(challenge) } },
-    ];
-    const wire = events.map((event) => 'data: ' + JSON.stringify(event) + '\n\n').join('');
-    return parseResponse(wire, challenge, Buffer.byteLength(prompt));
-  });
+  if (mode !== 'complete' && mode !== 'moderation') throw Error('SBX_FIXTURE_MODE');
+  const metadata =
+    mode === 'moderation'
+      ? { openai_chatgpt_moderation_metadata: { presentation: 'inline' } }
+      : { openai_verification_recommendation: [] };
+  const receipt = { route: 'fixture', provider_requests: 0, cost_usd: 0 };
+  try {
+    const result = await turn(archive, 'fixture', ({ prompt, challenge }) =>
+      decodeUpstream(fixtureReply(challenge, metadata), challenge, Buffer.byteLength(prompt), receipt),
+    );
+    if (mode === 'moderation') throw Error('SBX_FIXTURE_UNEXPECTED_NATIVE_COMPLETION');
+    return result;
+  } catch (error) {
+    if (
+      mode !== 'moderation' ||
+      error.message !== 'SBX_EXCHANGE_REPLY' ||
+      receipt.stream_refusal?.disposition !== 'turn_moderation' ||
+      receipt.provider_observation?.terminal !== 'completed' ||
+      !isDeepStrictEqual(receipt.provider_observation.usage, fixtureUsage)
+    )
+      throw error;
+    return { ...receipt, native_completed: false };
+  }
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  if (process.argv.length !== 3) throw Error('usage: text-turn.mjs <pinned Codex Linux ARM64 archive>');
-  console.log(JSON.stringify(await runFixtureTurn(resolve(process.argv[2]))));
+  const [, , archive, flag] = process.argv;
+  if (!archive || process.argv.length > 4 || (flag !== undefined && flag !== '--moderation-fixture')) {
+    throw Error('usage: text-turn.mjs <pinned Codex Linux ARM64 archive> [--moderation-fixture]');
+  }
+  console.log(JSON.stringify(await runFixtureTurn(resolve(archive), flag ? 'moderation' : 'complete')));
 }
