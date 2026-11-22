@@ -9,6 +9,9 @@ Feature: Cucumber profiles
     Then its default profile has no tags, no name, retry 0 and strict
     And its default profile covers every feature file of the gate
 
+  Scenario: Independent replay preflights a selected scenario while the functional report directory is unavailable
+    Then only a Cucumber profile that writes a Gate report resolves its path
+
   Scenario: the mutation profile has its own evidence and excludes only features/repository and features/arch
     Given the committed cucumber configuration
     Then its mutation profile keeps the default runner options and writes its own admitted report

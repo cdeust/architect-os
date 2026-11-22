@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { loadConfiguration, loadSources } from '@cucumber/cucumber/api';
-import { globSync, readFileSync } from 'node:fs';
+import fs, { globSync, readFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+import { mock } from 'node:test';
 import { matchesGlob, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
@@ -215,3 +217,54 @@ Then(
     assert.deepEqual(ordered.sort(), standard.sort());
   },
 );
+
+Then('only a Cucumber profile that writes a Gate report resolves its path', async function () {
+  const directory = join(process.env.ARCHITECT_OS_RUN_DIR!, 'reports');
+  const report = join(directory, 'independent.ndjson');
+  const location = 'packages/sandbox/features/gate-reports.feature:3';
+  const mkdir = fs.mkdirSync;
+  let attempts = 0;
+  const unavailable = mock.method(fs, 'mkdirSync', (path: fs.PathLike, options?: fs.MakeDirectoryOptions) => {
+    if (path === directory) {
+      attempts++;
+      throw Object.assign(new Error('reports unavailable'), { code: 'ENOSPC' });
+    }
+    return mkdir(path, options);
+  });
+  syncBuiltinESMExports();
+  try {
+    const { runConfiguration } = await loadConfiguration(
+      {
+        profiles: ['replay'],
+        provided: { paths: [location], format: ['message:' + report] },
+      },
+      { cwd: ROOT },
+    );
+    const { plan, errors } = await loadSources(runConfiguration.sources, { cwd: ROOT });
+    assert.deepEqual(errors, []);
+    assert.deepEqual(
+      plan.map(({ uri, location }) => uri + ':' + location.line),
+      [location],
+    );
+    assert.deepEqual(runConfiguration.formats.files, { [report]: 'message' });
+    const live = await loadConfiguration({ profiles: ['live'] }, { cwd: ROOT });
+    assert.deepEqual(live.runConfiguration.formats.files, {});
+    assert.equal(attempts, 0);
+    for (const profile of ['default', 'macos', 'mutation']) {
+      const before: number = attempts;
+      await assert.rejects(loadConfiguration({ profiles: [profile] }, { cwd: ROOT }));
+      assert.ok(attempts > before, profile);
+    }
+  } finally {
+    unavailable.mock.restore();
+    syncBuiltinESMExports();
+  }
+  for (const [profile, filename] of [
+    ['default', 'cucumber.ndjson'],
+    ['macos', 'cucumber.ndjson'],
+    ['mutation', 'mutation/cucumber.ndjson'],
+  ] as const) {
+    const { runConfiguration } = await loadConfiguration({ profiles: [profile] }, { cwd: ROOT });
+    assert.deepEqual(runConfiguration.formats.files, { [join(directory, filename)]: 'message' });
+  }
+});
