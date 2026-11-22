@@ -57,30 +57,29 @@ async function pendingAction(host: SpecHost, run_id: string): Promise<SpecHostAc
     if (page.__page.next_offset !== null) throw Error('SPEC_ACTION_PAGE_INVALID');
     return page.action;
   }
-  const batch = { ...page.action, invocations: [...page.action.invocations] };
+  const batch = { ...page.action, invocations: [] as SpecInvocation[] };
   const total = page.__page.total;
-  let cursor = page;
+  let action = page.action;
+  let paging = page.__page;
   for (;;) {
-    if (
-      cursor.action.kind !== 'spawn_subagents' ||
-      cursor.__page.count !== cursor.action.invocations.length ||
-      cursor.__page.total !== total ||
-      batch.invocations.length > total
-    )
+    if (paging.count !== action.invocations.length || paging.total !== total)
       throw Error('SPEC_ACTION_PAGE_INVALID');
-    const offset = cursor.__page.next_offset;
+    batch.invocations.push(...action.invocations);
+    const offset = paging.next_offset;
     if (offset === null) break;
     if (offset !== batch.invocations.length || offset >= total) throw Error('SPEC_ACTION_PAGE_INVALID');
-    cursor = await request(offset);
-    if (
-      cursor.run_id !== run_id ||
-      cursor.__page.offset !== offset ||
-      cursor.action.kind !== 'spawn_subagents' ||
-      cursor.action.batch_id !== batch.batch_id ||
-      cursor.action.purpose !== batch.purpose
-    )
-      throw Error('SPEC_ACTION_PAGE_CHANGED');
-    batch.invocations.push(...cursor.action.invocations);
+    const next = await request(offset);
+    if (next.run_id !== run_id || next.__page.offset !== offset) throw Error('SPEC_ACTION_PAGE_CHANGED');
+    switch (next.action.kind) {
+      case 'spawn_subagents':
+        if (next.action.batch_id !== batch.batch_id || next.action.purpose !== batch.purpose)
+          throw Error('SPEC_ACTION_PAGE_CHANGED');
+        action = next.action;
+        paging = next.__page;
+        break;
+      default:
+        throw Error('SPEC_ACTION_PAGE_CHANGED');
+    }
   }
   if (
     batch.invocations.length !== total ||
@@ -132,7 +131,9 @@ async function dispatchBatch(
   const refused =
     checked.length !== selected.length ||
     [...counts].some(([key, count]) => count > (limits.get(key) ?? 0)) ||
-    !(await Promise.all(checked.map((account) => host.authorize(account).catch(() => false)))).every(Boolean);
+    !(await Promise.all(checked.map((account) => host.authorize(account).catch(() => undefined)))).every(
+      Boolean,
+    );
   if (refused)
     return {
       kind: 'subagent_batch_result',
@@ -146,43 +147,39 @@ async function dispatchBatch(
   entry.reservations = checked.map(accountKey);
   host.save(state);
   let journalFailure: { error: unknown } | undefined;
-  const turns = await Promise.allSettled(
-    action.invocations.map(async (invocation, index) => {
-      const account = checked[index]!;
-      const response = await Promise.resolve()
-        .then(() => host.invoke(invocation, account))
-        .then((reply) => {
-          if (
-            reply.account !== account.account ||
-            reply.billing !== account.billing ||
-            !matches(reply.route, account.route) ||
-            !reply.text.trim()
-          )
-            throw Error('invalid receipt');
-          return {
-            invocation_id: invocation.invocation_id,
-            raw_text: reply.text,
-            model_receipt: reply.route,
-          };
-        })
-        .catch(() => ({ invocation_id: invocation.invocation_id, error: 'SPEC_NATIVE_RECEIPT_REFUSED' }));
-      if (!journalFailure) {
-        entry.receipts.push(response);
-        try {
-          host.save(state);
-        } catch (error) {
-          journalFailure = { error };
-        }
+  const turns = action.invocations.map(async (invocation, index) => {
+    const account = checked[index]!;
+    const response = await Promise.resolve()
+      .then(() => host.invoke(invocation, account))
+      .then((reply) => {
+        if (
+          reply.account !== account.account ||
+          reply.billing !== account.billing ||
+          !matches(reply.route, account.route) ||
+          !reply.text.trim()
+        )
+          return { invocation_id: invocation.invocation_id, error: 'SPEC_NATIVE_RECEIPT_REFUSED' };
+        return {
+          invocation_id: invocation.invocation_id,
+          raw_text: reply.text,
+          model_receipt: reply.route,
+        };
+      })
+      .catch(() => ({ invocation_id: invocation.invocation_id, error: 'SPEC_NATIVE_RECEIPT_REFUSED' }));
+    if (!journalFailure) {
+      entry.receipts.push(response);
+      try {
+        host.save(state);
+      } catch (error) {
+        journalFailure = { error };
       }
-      return response;
-    }),
-  );
-  if (journalFailure) throw journalFailure.error;
-  const responses = turns.map((turn) => {
-    if (turn.status === 'rejected') throw turn.reason;
-    return turn.value;
+    }
+    return response;
   });
-  return { kind: 'subagent_batch_result', batch_id: action.batch_id, responses };
+  // The journal owns the whole batch even if one turn rejects; wait for every turn before returning its error.
+  await Promise.allSettled(turns);
+  if (journalFailure) throw journalFailure.error;
+  return { kind: 'subagent_batch_result', batch_id: action.batch_id, responses: await Promise.all(turns) };
 }
 
 function artifactPath(run: string, path: string) {
@@ -238,12 +235,10 @@ export async function driveSpec(
       entry.phase = 'acknowledged';
     }
     if (!entry || entry.phase === 'acknowledged') {
+      // A new entry follows acknowledgment of its predecessor. An earlier matching batch cannot run again.
       if (
         action.kind === 'spawn_subagents' &&
-        state.history.some(
-          ({ action: prior, phase }) =>
-            phase === 'acknowledged' && prior.kind === 'spawn_subagents' && actionDigest(prior) === sha,
-        )
+        state.history.some(({ action: prior }) => actionDigest(prior) === sha)
       ) {
         throw Error('SPEC_ACKNOWLEDGED_BATCH_REISSUED');
       }
@@ -287,23 +282,24 @@ export async function driveSpec(
     }
 
     let result = entry.result;
-    if (!result && action.kind === 'ask_user') {
-      if (!answer) return { status: 'question' as const, run_id, action_sha256: sha, action };
-      if (answer.run_id !== run_id || answer.action_sha256 !== sha) throw Error('SPEC_ANSWER_MISMATCH');
-      result = {
-        kind: 'user_answer',
-        question_id: action.question_id,
-        selected: answer.selected,
-        freeform: answer.freeform,
-      };
-      answer = undefined;
-    } else if (!result && action.kind === 'write_file') {
-      host.writeArtifact(artifactPath(run_id, action.path), action.content);
-      result = { kind: 'file_written', path: action.path, bytes: Buffer.byteLength(action.content) };
-    } else if (!result && action.kind === 'spawn_subagents') {
-      result = await dispatchBatch(host, state, entry, action, authority);
+    if (!result) {
+      if (action.kind === 'ask_user') {
+        if (!answer) return { status: 'question' as const, run_id, action_sha256: sha, action };
+        if (answer.run_id !== run_id || answer.action_sha256 !== sha) throw Error('SPEC_ANSWER_MISMATCH');
+        result = {
+          kind: 'user_answer',
+          question_id: action.question_id,
+          selected: answer.selected,
+          freeform: answer.freeform,
+        };
+        answer = undefined;
+      } else if (action.kind === 'write_file') {
+        host.writeArtifact(artifactPath(run_id, action.path), action.content);
+        result = { kind: 'file_written', path: action.path, bytes: Buffer.byteLength(action.content) };
+      } else {
+        result = await dispatchBatch(host, state, entry, action, authority);
+      }
     }
-    if (!result) throw Error('SPEC_ACTION_UNHANDLED');
     entry.result = result;
     host.save(state);
     entry.phase = 'submitting';
