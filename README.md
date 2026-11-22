@@ -78,7 +78,7 @@ Plan prepares a preview for one Step from an accepted Define handoff, a proposal
 
 ## Orchestration with Spec
 
-On `main`, Architect OS reads a pending Spec checkpoint over MCP stdio. It requests `define_handoff_v1` for the validated requirements and acceptance criteria, then `verified_plan_v1` for a proposal bound to the same Define bytes and Step name. Plan prepares a preview. An operator approves its fingerprint before materialization, and a separate Step command starts the sandbox sessions. After delivery, Spec can prepare an implementation review dossier for a named revision. [Spec checkpoint formats](https://github.com/cdeust/ai-architect-mcp-spec/blob/2a05669c941bfdc6a0153b9059747dd2df46f9b3/README.md#L423-L431) · [Architect OS Plan and approval](docs/plan.md)
+On `main`, Architect OS reads a pending Spec checkpoint over MCP stdio. It requests `define_handoff_v1` for the validated requirements and acceptance criteria, then `verified_plan_v1` for a proposal bound to the same Define bytes and Step name. Plan prepares a preview. An operator approves its fingerprint before materialization, and Step checks a separate host admission receipt before starting sandbox sessions. After delivery, Spec can prepare an implementation review dossier for a named revision. [Spec checkpoint formats](https://github.com/cdeust/ai-architect-mcp-spec/blob/2a05669c941bfdc6a0153b9059747dd2df46f9b3/README.md#L423-L431) · [Architect OS Plan and approval](docs/plan.md)
 
 **Offline prototype.** Work on a separate host and Spec planner has exercised a draft and a review with two deterministic model fixtures. The reported replay produced a `reviewed_plan_v1` handoff that Plan accepted as a pending preview. Resuming the recorded run dispatched no further model calls. This is the observed fixture result for the proposed integration.
 
@@ -244,12 +244,11 @@ What the process needs of its host, what each refusal at start means, how long a
 From a worktree at `<repo>/.claude/worktrees/<name>`, set `LAUNCHER` to the absolute path of the trusted launcher checkout. Start the sandbox sessions from the target worktree:
 
 ```bash
-"$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run code                 # Claude Code in a sandbox, builder profile
 "$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run review               # a read-only review session
 "$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run step -- "$INTAKE/delivery"
 ```
 
-`INTAKE` is the absolute parent of the approved Step folder. After Step returns, find its archived inputs and verdict in `steps/<name>/` of the target worktree (here the name is `delivery`). For the evidence desk, run these commands from the launcher checkout:
+`INTAKE` is the absolute parent of the approved Step folder. The host supplies `ARCHITECT_OS_STEP_EVIDENCE` as the absolute path to its private admission receipt. Step checks it against the target tree, the actual inputs and the launcher before starting any session. Missing or stale evidence returns exit code 2. Production receipt issuance from independently measured specimens is still pending. After Step returns, find its archived inputs and verdict in `steps/<name>/` of the target worktree (here the name is `delivery`). For the evidence desk, run these commands from the launcher checkout:
 
 ```bash
 ./aos -- npm run evidence -- ask <ledger> <desk> <id> < question.txt
