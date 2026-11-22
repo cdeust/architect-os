@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { frameByteLimit as maxBytes } from './json-frame.mjs';
 import { subscriptionFrames, streamDone } from './subscription-frames.mjs';
-import { createSubscriptionControls } from './subscription-metadata.mjs';
+import { createSubscriptionControls, unknownHttpControlFingerprint } from './subscription-metadata.mjs';
 import { observeSubscription } from './subscription-observation.mjs';
 import { model, textResponse, verifiedText } from './text-response.mjs';
 
@@ -211,7 +211,12 @@ export async function decodeUpstream(reply, challenge, maxOutput, receipt) {
       receipt.provider_observation = observeSubscription(wire, model, http);
     }
     if (http !== 'informational') {
-      throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'http_controls', disposition: http });
+      const diagnostic = { kind: 'http_controls', disposition: http };
+      if (http === 'requires_native_handling') {
+        const hash = unknownHttpControlFingerprint(reply.headersDistinct);
+        if (hash) diagnostic.header_name_sha256 = hash;
+      }
+      throw new StreamRefusal('UPSTREAM_REFUSED', diagnostic);
     }
     return admitResponse(wire, challenge, maxOutput, controls);
   } catch (error) {

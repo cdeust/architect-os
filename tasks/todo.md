@@ -83,3 +83,8 @@ The [milestone 2 integration](https://github.com/cdeust/architect-os/pull/124) e
 The admitted workstation reproduced the write witness, one read-only host fixture turn with matching synthetic usage (8 input and 4 output tokens), and the Google ACP refusal (`-32000`, process exit 1). These fixtures made zero upstream calls.
 
 Each of the three authorized Astra trials sent one request. The account owner confirmed quota exhaustion for the first. The second receipt fingerprinted `response.metadata` after creation. The third recorded `UPSTREAM_REFUSED` with `provider_metadata / requires_native_handling`. The historical receipts contain no native completion, measured usage or monetary cost. The host now observes a response terminal and validates its token counts separately from native admission. [Qualification evidence](../bench/sbx/README.md#astra-subscription-trials-on-22-november-2026)
+
+## Astra subscription request
+
+- [x] Exercise the exact SIWC request body at the host dispatch boundary with an offline transport.
+- [ ] Verify a single, explicitly authorized request through the pinned SBX guest and record provider usage, native completion and billing evidence separately.

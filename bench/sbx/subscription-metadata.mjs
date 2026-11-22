@@ -2,6 +2,8 @@
 // https://github.com/openai/codex/blob/rust-v0.170.0/codex-rs/codex-api/src/sse/responses.rs
 // https://github.com/openai/codex/blob/rust-v0.170.0/codex-rs/codex-api/src/safety_buffering.rs
 // https://github.com/openai/codex/blob/rust-v0.170.0/codex-rs/codex-api/src/guardian_assessment.rs
+import { createHash } from 'node:crypto';
+
 const informational = 'informational';
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const envelope = new Set([
@@ -40,6 +42,32 @@ const httpDiagnostics = new Set([
 const windowMetric =
   /^x-codex-(?:(?:primary|secondary)-(?:used-percent|window-minutes|reset-at)|limit-name)$/u;
 const controlNamespace = /^(?:openai-|x-openai-|codex-|x-codex-|x-models-|x-reasoning-)/u;
+const turnStateHeader = 'x-codex-turn-state';
+
+function unknownHttpControl(name) {
+  return (
+    controlNamespace.test(name) &&
+    !modelHeaders.has(name) &&
+    !controlHeaders.has(name) &&
+    name !== turnStateHeader &&
+    !httpDiagnostics.has(name) &&
+    !windowMetric.test(name)
+  );
+}
+
+/** Call only after a requires_native_handling HTTP verdict. Inspect names in the same
+ * wire order as admission. An unsafe first name must never be attributed to a later one. */
+export function unknownHttpControlFingerprint(headers) {
+  if (!record(headers)) return undefined;
+  for (const key of Object.keys(headers)) {
+    const name = key.toLowerCase();
+    if (!unknownHttpControl(name)) continue;
+    if (/^[A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*$/u.exec(key)?.[0] !== key) return undefined;
+    if (/(?:^|[-_])(?:sk[-_]|(?:resp|req|msg)_|eyj[a-z0-9])/iu.test(name)) return undefined;
+    return createHash('sha256').update(name, 'utf8').digest('hex');
+  }
+  return undefined;
+}
 
 // Only a single, unjoined wire value can identify a model or a routing state.
 function singleton(value, http) {
@@ -118,16 +146,13 @@ export function createSubscriptionControls(model) {
         const name = key.toLowerCase();
         if (modelHeaders.has(name)) continue;
         if (controlHeaders.has(name)) return controlHeaders.get(name);
-        if (name === 'x-codex-turn-state') {
+        if (name === turnStateHeader) {
           const value = singleton(headers[key], http);
           if (receivedState || !value || (turnState !== undefined && turnState !== value))
             return 'ambiguous_turn_state';
           turnState = value;
           receivedState = true;
-        } else if (
-          !http ||
-          (controlNamespace.test(name) && !httpDiagnostics.has(name) && !windowMetric.test(name))
-        ) {
+        } else if (!http || unknownHttpControl(name)) {
           return 'requires_native_handling';
         }
       }

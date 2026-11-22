@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
-import { createSubscriptionControls, subscriptionMetadata } from './subscription-metadata.mjs';
+import {
+  createSubscriptionControls,
+  subscriptionMetadata,
+  unknownHttpControlFingerprint,
+} from './subscription-metadata.mjs';
 
 const type = 'response.metadata';
 const model = 'gpt-6.2-astra';
@@ -103,6 +107,67 @@ test('HTTP diagnostics and private account telemetry are never read', () => {
   assert.equal(createSubscriptionControls(model).http(headers), 'informational');
   // Only the HTTP layer can carry unrelated transport headers.
   assert.equal(classify({ headers: { 'set-cookie': 'private' } }), 'requires_native_handling');
+});
+
+test('only the canonical name of the first unknown HTTP control is fingerprinted', () => {
+  const name = 'X-OpenAI-Future-Control';
+  const expected = createHash('sha256').update(name.toLowerCase()).digest('hex');
+  const headers = Object.create(null);
+  for (const key of [
+    'content-type',
+    'set-cookie',
+    'x-codex-credits-balance',
+    'x-codex-secondary-reset-at',
+    name,
+    'x-codex-next-control',
+  ]) {
+    Object.defineProperty(headers, key, {
+      enumerable: true,
+      get: () => assert.fail('read a private HTTP value'),
+    });
+  }
+  assert.equal(unknownHttpControlFingerprint(headers), expected);
+  assert.equal(unknownHttpControlFingerprint({ [name]: ['private provider value'] }), expected);
+  assert.equal(unknownHttpControlFingerprint({ [name.toLowerCase()]: ['another value'] }), expected);
+  assert.equal(createSubscriptionControls(model).http(headers), 'requires_native_handling');
+});
+
+test('known controls, ordinary HTTP names and malformed envelopes cannot produce a fingerprint', () => {
+  for (const headers of [
+    null,
+    [],
+    'private text',
+    {},
+    {
+      'OpenAI-Model': ['different'],
+      'x-codex-turn-state': ['opaque'],
+      'x-codex-safety-buffering-enabled': ['true'],
+      'x-models-etag': ['hidden'],
+      'x-reasoning-included': ['true'],
+      'x-codex-rate-limit-reached-type': ['hidden'],
+      'OpenAI-Organization': ['private'],
+      'x-codex-primary-window-minutes': ['private'],
+      authorization: ['private'],
+      'x-unrelated-private-name': ['private'],
+    },
+  ])
+    assert.equal(unknownHttpControlFingerprint(headers), undefined);
+});
+
+test('unsafe refused names are never fingerprinted or replaced with a later candidate', () => {
+  for (const key of [
+    'x-codex-private text',
+    'x-codex-\u212Aey',
+    'x-codex-trailing\n',
+    'x-codex-sk-fixture',
+    'x-openai-resp_fixture',
+    'openai-eyJprivate',
+    'x-codex-two--parts',
+  ]) {
+    const headers = { [key]: ['private'], 'x-codex-next-control': ['private'] };
+    assert.equal(createSubscriptionControls(model).http(headers), 'requires_native_handling');
+    assert.equal(unknownHttpControlFingerprint(headers), undefined);
+  }
 });
 
 test('native HTTP treatments are blocked on presence, including the false flag and fallback alone', () => {

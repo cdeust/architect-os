@@ -37,6 +37,8 @@ The native Codex client runs with a fresh home and a read-only sandbox. Its loop
 
 The CLI command above uses a synthetic response. Its receipt identifies the fixture, zero upstream requests, and synthetic token counts. The host entry point `runHostedTurn(archive, requestText)` accepts a model response from a separately controlled host broker. That broker owns consent, subscription eligibility, the upstream destination, and evidence of the actual request and its billing. The bench has no token parameter. A successful broker callback alone proves the native exchange and does not establish account eligibility or cost.
 
+For the account route, the host calls `requestSubscriptionText` with its single-use receipt and its own HTTPS transport. The checked-in request constructor accepts the host's UUID challenge and sends an input array, an empty tool list, `store: false` and `stream: true`. SIWC lists `max_output_tokens` as unsupported. The host checks the accepted answer locally after generation. Its private receipt records the dispatch time and a randomly generated client request ID for billing support. [SIWC preview limits](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations) · [OpenAI request IDs](https://developers.openai.com/api/reference/overview#supplying-your-own-request-id-with-x-client-request-id)
+
 ### Astra subscription trials on 22 November 2026
 
 Each trial used the host account broker, a tool-free challenge, and a separate authorization for one request. The owner attested that credit fallback was disabled. In all three trials the account catalog listed `gpt-6.2-astra` and both the catalog and Responses endpoints returned HTTP 200.
