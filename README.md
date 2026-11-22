@@ -24,7 +24,7 @@ An MCP platform for agent work, built in public, and the method used to build it
 
 Run repository commands through `./aos -- PROGRAM [ARG ...]`. Admission checks the marked runtime root and available space before starting the program. See the [quick start](#quick-start).
 
-The architecture diagram marks implemented components as `ready` and planned work as `next`.
+Read the loop from phase 1 through phase 8 in the diagram. Each row names its owner and groups its available capabilities and planned extensions. [Open the full-size diagram](docs/diagrams/architecture.svg).
 
 ### One sandbox per session
 

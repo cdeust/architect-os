@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { join, relative } from 'node:path';
 import type { ProfileTemplate } from '@architect-os/sandbox';
 import { Given, ROOT, Then, When, stored } from './helpers.js';
@@ -441,3 +442,9 @@ Then(
       assert.match(attributes, new RegExp(` font-size="${measured.replace('.', '\\.')}"`), inner);
   },
 );
+
+Then('each orchestration phase owns its cards and connects to the next phase', function () {
+  execFileSync('python3', ['features/scripts/architecture-loop.py', 'docs/diagrams/architecture.svg'], {
+    cwd: ROOT,
+  });
+});
