@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { parseDefinePlanningReply, parsePlanProposal } from '@architect-os/contracts';
+import { parseDefinePlanningReply, parsePlanProposal, parseReviewedPlan } from '@architect-os/contracts';
 
 export interface PlanSources {
   readonly define: string;
@@ -32,7 +32,36 @@ export function coveredProposal(
 
 export function preparePlan(sources: PlanSources, inputs: StepInputs) {
   const { handoff } = parseDefinePlanningReply([{ type: 'text', text: sources.define }]);
-  const proposal = coveredProposal(handoff, JSON.parse(sources.proposal));
+  const parsed: unknown = JSON.parse(sources.proposal);
+  const receipt =
+    parsed !== null && typeof parsed === 'object' && 'reviewed_plan' in parsed
+      ? parseReviewedPlan(parsed)
+      : undefined;
+  const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
+  const candidate = receipt?.reviewed_plan;
+  if (candidate) {
+    const binding = {
+      version: candidate.version,
+      run_id: handoff.run_id,
+      define_sha256: sha256(sources.define),
+      proposal_sha256: sha256(JSON.stringify(candidate.proposal) + '\n'),
+    };
+    if (
+      candidate.run_id !== binding.run_id ||
+      candidate.define_sha256 !== binding.define_sha256 ||
+      candidate.proposal_sha256 !== binding.proposal_sha256 ||
+      candidate.plan_sha256 !== sha256(JSON.stringify(binding) + '\n')
+    )
+      throw new Error('PLAN_REVIEW_EVIDENCE_MISMATCH');
+  }
+  const proposal = candidate?.proposal ?? coveredProposal(handoff, parsed);
+  // A reviewed Spec projection binds the Define sequence as written, including identifier bytes.
+  if (
+    candidate &&
+    (proposal.acceptance_ids.length !== handoff.acceptance.length ||
+      handoff.acceptance.some(({ id }, index) => id !== proposal.acceptance_ids[index]))
+  )
+    throw new Error('PLAN_COVERAGE_INVALID');
   // The model sees these strings as data in one JSON block. Only Step's host policy can select commands and models.
   const data = {
     run_id: handoff.run_id,
@@ -51,17 +80,37 @@ export function preparePlan(sources: PlanSources, inputs: StepInputs) {
     '',
   ].join('\n');
   const files = { 'brief.md': brief, ...inputs.questions, 'step.json': inputs.stepJson };
-  const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
   const manifest = {
     version: 1,
     run_id: handoff.run_id,
     step: proposal.step,
     source_sha256: {
       define: sha256(sources.define),
-      proposal: sha256(sources.proposal),
+      proposal: candidate?.proposal_sha256 ?? sha256(sources.proposal),
+      ...(receipt ? { reviewed_plan: sha256(sources.proposal) } : {}),
       policy: sha256(sources.policy),
     },
     files_sha256: Object.fromEntries(Object.entries(files).map(([name, text]) => [name, sha256(text)])),
   };
-  return { manifest, approval_sha256: sha256(JSON.stringify(manifest)), files };
+  return {
+    manifest,
+    approval_sha256: sha256(JSON.stringify(manifest)),
+    files,
+    ...(receipt
+      ? {
+          independent_reviews: {
+            define: {
+              drafter: receipt.define_review.drafter,
+              reviewer: receipt.define_review.reviewer,
+              status: 'clear' as const,
+            },
+            plan: {
+              drafter: receipt.reviewed_plan.drafter,
+              reviewer: receipt.reviewed_plan.reviewer,
+              status: 'clear' as const,
+            },
+          },
+        }
+      : {}),
+  };
 }

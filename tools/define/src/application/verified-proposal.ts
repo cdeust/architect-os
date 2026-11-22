@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
-import { parseDefinePlanningReply, parseVerifiedPlanReply } from '@architect-os/contracts';
+import {
+  parseDefinePlanningReply,
+  parseReviewedPlanReply,
+  parseVerifiedPlanReply,
+} from '@architect-os/contracts';
 
 function digest(bytes: Uint8Array | string) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -35,4 +39,33 @@ export function verifiedProposal(
   )
     throw new Error();
   return proposal;
+}
+
+/** Bind both independent verdicts to the exact Define and proposal consumed downstream. */
+export function reviewedProposal(
+  define: Uint8Array,
+  runId: string,
+  step: string,
+  content: readonly unknown[],
+): string {
+  const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(define);
+  const { handoff } = parseDefinePlanningReply([{ type: 'text', text }]);
+  const receipt = parseReviewedPlanReply(content);
+  const plan = receipt.reviewed_plan;
+  const binding = {
+    version: plan.version,
+    run_id: runId,
+    define_sha256: digest(define),
+    proposal_sha256: digest(jsonFile(plan.proposal)),
+  };
+  if (
+    handoff.run_id !== runId ||
+    plan.run_id !== runId ||
+    plan.proposal.step !== step ||
+    plan.define_sha256 !== binding.define_sha256 ||
+    plan.proposal_sha256 !== binding.proposal_sha256 ||
+    plan.plan_sha256 !== digest(jsonFile(binding))
+  )
+    throw new Error('PLAN_REVIEW_EVIDENCE_MISMATCH');
+  return jsonFile(receipt);
 }

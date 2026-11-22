@@ -56,6 +56,7 @@ export function runPlan(proc: PlanProcess): number {
   } catch {
     return refuse('PLAN_NOT_APPROVED');
   }
+  if (draft.manifest.source_sha256.reviewed_plan) return refuse('PLAN_SPECIMEN_EVIDENCE_REQUIRED');
   try {
     publishStepInputs(folder!, draft.manifest.step, draft.files);
   } catch {

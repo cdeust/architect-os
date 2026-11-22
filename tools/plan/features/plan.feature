@@ -120,3 +120,68 @@ Feature: Prepare and explicitly approve one step from Define v1
     When I prepare the Plan once
     And the Plan destination is "relative"
     Then the Plan publisher detects the invalid destination
+
+  Scenario: Preview the exact independently reviewed Spec Plan
+    Given a recorded delivery Plan input
+    And the recorded proposal carries independent Define and Plan reviews
+    When I prepare the Plan once
+    Then the Plan preview binds the complete review receipt
+
+  Scenario: Refuse a changed proposal despite its earlier independent review
+    Given a recorded delivery Plan input
+    And the recorded proposal carries independent Define and Plan reviews
+    When the reviewed Plan bytes are changed after review
+    And I prepare the Plan once
+    Then Plan refuses with "PLAN_INPUT_INVALID" and publishes nothing
+
+  Scenario: Operator approval alone cannot materialize the paired Spec Plan
+    Given a recorded delivery Plan input
+    And the recorded proposal carries independent Define and Plan reviews
+    When I prepare the Plan once
+    And the operator records an approval of the preview
+    And I materialize the Plan
+    Then Plan refuses with "PLAN_SPECIMEN_EVIDENCE_REQUIRED" and publishes nothing
+
+  Scenario Outline: Each reviewed binding must match the independently read sources
+    Given a recorded delivery Plan input
+    And the recorded proposal carries independent Define and Plan reviews
+    Then preparing the independently reviewed receipt with a changed "<field>" rejects the binding
+
+    Examples:
+      | field           |
+      | run             |
+      | Define digest   |
+      | proposal digest |
+      | binding digest  |
+
+  Scenario Outline: JSON primitives reach contract validation
+    Given a recorded delivery Plan input
+    Then Plan reports a schema error for the JSON primitive "<proposal>"
+
+    Examples:
+      | proposal |
+      | null     |
+      | true     |
+
+  Scenario Outline: Reviewed criteria must match the original Define sequence as written
+    Given a recorded delivery Plan input
+    And the proposal uses "<change>" criterion IDs
+    And the recorded proposal carries independent Define and Plan reviews
+    Then preparing the reviewed proposal refuses its coverage
+
+    Examples:
+      | change          |
+      | padded          |
+      | reordered       |
+      | extra trailing  |
+
+  Scenario Outline: Legacy unreviewed input still supports unordered, trimmed criterion IDs
+    Given a recorded delivery Plan input
+    And the proposal uses "<change>" criterion IDs
+    When I prepare the Plan once
+    Then the prepared Plan contains the normalized criteria in the supplied order
+
+    Examples:
+      | change    |
+      | padded    |
+      | reordered |
