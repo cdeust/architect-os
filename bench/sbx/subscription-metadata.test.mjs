@@ -101,8 +101,8 @@ test('the fourth trial identified the gateway header by name; only the observed 
   assert.equal(classify({ headers: { [name]: 'v0.1' } }), 'requires_native_handling');
   assert.equal(inspect({ [name]: ['v0.1'], 'x-openai-proxy-new': ['v0.1'] }), 'requires_native_handling');
   assert.equal(
-    inspect({ [name]: ['v0.1'], 'x-codex-safety-buffering-enabled': ['true'] }),
-    'safety_buffering',
+    inspect({ [name]: ['v0.1'], 'x-reasoning-included': ['true'] }),
+    'reasoning_control',
   );
 });
 
@@ -221,10 +221,42 @@ test('unsafe refused names are never fingerprinted or replaced with a later cand
   }
 });
 
-test('native HTTP treatments are blocked on presence, including the false flag and fallback alone', () => {
+test('HTTP buffering parameters are response scoped and remain controls inside event headers', () => {
+  const enabled = 'x-codex-safety-buffering-enabled';
+  const fallback = 'x-codex-safety-buffering-faster-model';
+  for (const [name, value] of [
+    [enabled, 'true'],
+    [enabled, 'false'],
+    [fallback, 'gpt-faster-fixture'],
+  ]) {
+    assert.equal(createSubscriptionControls(model).http({ [name]: [value] }), 'informational');
+    assert.equal(classify({ headers: { [name]: value } }), 'safety_buffering');
+    for (const invalid of [value, [], [value, value], [value + ',' + value], [null], [true], [''], [' ']]) {
+      assert.equal(
+        createSubscriptionControls(model).http({ [name]: invalid }),
+        'ambiguous_buffering_treatment',
+      );
+    }
+    const duplicate = { [name]: [value], [name.toUpperCase()]: [value] };
+    assert.equal(createSubscriptionControls(model).http(duplicate), 'ambiguous_buffering_treatment');
+  }
+  for (const [name, value] of [
+    [enabled, '0'],
+    [enabled, 'unknown'],
+    [fallback, 'https://private.invalid'],
+  ]) {
+    assert.equal(
+      createSubscriptionControls(model).http({ [name]: [value] }),
+      'ambiguous_buffering_treatment',
+    );
+  }
+  const controls = createSubscriptionControls(model);
+  assert.equal(controls.http({ [enabled]: ['false'], [fallback]: ['gpt-faster-fixture'] }), 'informational');
+  assert.equal(controls.http({}), 'unbound_metadata');
+});
+
+test('other provider control headers veto delivery in HTTP and event contexts', () => {
   for (const [name, value, disposition] of [
-    ['x-codex-safety-buffering-enabled', 'false', 'safety_buffering'],
-    ['X-Codex-Safety-Buffering-Faster-Model', 'private-substitute', 'safety_buffering'],
     ['x-models-etag', 'private-catalog', 'catalog_refresh'],
     ['x-reasoning-included', 'false', 'reasoning_control'],
     ['x-codex-rate-limit-reached-type', 'private-snapshot', 'rate_limit_control'],

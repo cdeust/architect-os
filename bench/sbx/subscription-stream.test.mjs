@@ -101,6 +101,64 @@ test('explicit wrong or duplicate media types refuse even a valid transcript', a
   }
 });
 
+test('HTTP buffering parameters alone never select another model or release partial text', async () => {
+  const fallback = 'gpt-private-fixture';
+  const headers = {
+    'x-codex-safety-buffering-enabled': ['true'],
+    'x-codex-safety-buffering-faster-model': [fallback],
+    authorization: ['private-fixture-credential'],
+  };
+  const passive = { type: 'response.metadata', response_id: 'r', safety_buffering: false };
+  const receipt = {};
+  const body = events((items) => items.splice(1, 0, passive));
+  const reply = await decodeUpstream(upstream(headers, body), text, 70, receipt);
+  assert.deepEqual(reply, parseResponse(events(), text, 70));
+  for (const secret of [fallback, headers.authorization[0]]) {
+    assert.ok(!JSON.stringify({ reply, receipt }).includes(secret));
+  }
+  await assert.rejects(
+    decodeUpstream(upstream(headers, eventStream([created, passive])), text, 70),
+    /MISSING_TERMINAL/,
+  );
+  await assert.rejects(decodeUpstream(upstream(headers, body.slice(0, -1)), text, 70), /TRUNCATED_STREAM/);
+  const reroute = events((items) => {
+    items[2].response.model = fallback;
+  });
+  await assert.rejects(decodeUpstream(upstream(headers, reroute), text, 70), /SSE_TERMINAL/);
+});
+
+test('buffering and independent policy notifications stop release with and without HTTP treatment', async () => {
+  const fallback = 'gpt-private-fixture';
+  const typed = { use_cases: [], reasons: [] };
+  for (const headers of [
+    {},
+    { 'x-codex-safety-buffering-enabled': ['false'] },
+    { 'x-codex-safety-buffering-faster-model': [fallback] },
+    { 'x-codex-safety-buffering-enabled': ['true'], 'x-codex-safety-buffering-faster-model': [fallback] },
+  ]) {
+    for (const [fields, disposition] of [
+      [{ safety_buffering: typed }, 'safety_buffering'],
+      [{ safety_buffering: { ...typed, retry_model: null } }, 'safety_buffering'],
+      [{ metadata: { type: 'safety_buffering', ...typed, retry_model: fallback } }, 'safety_buffering'],
+      [{ safety_buffering: { reasons: 'malformed' } }, 'safety_buffering'],
+      [{ safety_buffering: false, metadata: { guardian: {} } }, 'guardian_assessment'],
+      [
+        { safety_buffering: false, metadata: { openai_chatgpt_moderation_metadata: { prompt: {} } } },
+        'turn_moderation',
+      ],
+    ]) {
+      const body = events((items) =>
+        items.splice(1, 0, { type: 'response.metadata', response_id: 'r', ...fields }),
+      );
+      const receipt = {};
+      await assert.rejects(decodeUpstream(upstream(headers, body), text, 70, receipt), /UPSTREAM_REFUSED/);
+      assert.deepEqual(receipt.stream_refusal, { kind: 'provider_metadata', disposition });
+      assert.equal(receipt.provider_observation.terminal, 'completed');
+      assert.ok(!JSON.stringify(receipt).includes(fallback));
+    }
+  }
+});
+
 test('gateway version and inline notice survive the host boundary without masking a subsequent policy event', async () => {
   const headers = { 'x-openai-proxy-wasm': ['v0.1'] };
   const notice = {

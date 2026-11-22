@@ -78,6 +78,7 @@ test('moderation evidence records nonexclusive shapes without inspecting private
   const payload = {
     presentation: 'inline',
     prompt: privateReport,
+    generation: privateReport,
     safety_block: privateReport,
     final_answer_moderation: { item_id: id, display: privateReport },
     [privateKey]: secret,
@@ -94,6 +95,7 @@ test('moderation evidence records nonexclusive shapes without inspecting private
       result.metadata.categories.filter((label) => label.startsWith('moderation_')),
       [
         'moderation_final_answer_marker',
+        'moderation_generation_report',
         'moderation_metadata',
         'moderation_opaque',
         'moderation_presentation_inline',

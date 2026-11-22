@@ -15,9 +15,11 @@ const envelope = new Set([
   'safety_buffering',
 ]);
 const modelHeaders = new Set(['openai-model', 'x-openai-model']);
+const bufferingEnabled = 'x-codex-safety-buffering-enabled';
+const bufferingModel = 'x-codex-safety-buffering-faster-model';
 const controlHeaders = new Map([
-  ['x-codex-safety-buffering-enabled', 'safety_buffering'],
-  ['x-codex-safety-buffering-faster-model', 'safety_buffering'],
+  [bufferingEnabled, 'safety_buffering'],
+  [bufferingModel, 'safety_buffering'],
   ['x-models-etag', 'catalog_refresh'],
   ['x-reasoning-included', 'reasoning_control'],
   ['x-codex-rate-limit-reached-type', 'rate_limit_control'],
@@ -82,6 +84,16 @@ function singleton(value, http) {
   } else if (http) return undefined;
   if (typeof value !== 'string' || !value.length || /[^!-~]|,/u.test(value)) return undefined;
   return value;
+}
+
+// Codex applies these HTTP parameters only to a subsequent typed buffering notification.
+// This single-model route stops on every such notification, including malformed ones.
+// No retry destination is retained. A valid header by itself never authorizes text.
+// https://github.com/openai/codex/blob/29eb79e9866b3262a777fdf8195c1b9e63684c91/codex-rs/codex-api/src/sse/responses.rs#L276-L297
+function validBufferingParameter(name, wire) {
+  const value = singleton(wire, true);
+  if (name === bufferingEnabled) return value === 'true' || value === 'false';
+  return value !== undefined && /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/u.test(value);
 }
 
 function modelIdentity(groups, model, http) {
@@ -165,9 +177,16 @@ export function createSubscriptionControls(model) {
     for (const headers of groups) {
       let receivedState = false;
       let receivedProxyVersion = false;
+      const receivedBufferingParameters = new Set();
       for (const key of Object.keys(headers)) {
         const name = key.toLowerCase();
         if (modelHeaders.has(name)) continue;
+        if (http && (name === bufferingEnabled || name === bufferingModel)) {
+          if (receivedBufferingParameters.has(name) || !validBufferingParameter(name, headers[key]))
+            return 'ambiguous_buffering_treatment';
+          receivedBufferingParameters.add(name);
+          continue;
+        }
         if (controlHeaders.has(name)) return controlHeaders.get(name);
         if (name === turnStateHeader) {
           const value = singleton(headers[key], http);

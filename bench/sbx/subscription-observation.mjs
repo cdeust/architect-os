@@ -23,6 +23,9 @@ const knownMetadata = new Map([
 const modelHeaders = new Set(['openai-model', 'x-openai-model']);
 const moderationObjects = new Map([
   ['prompt', 'moderation_prompt_report'],
+  // The pinned final-answer fixture pairs a private generation report with a public display decision.
+  // https://github.com/openai/codex/blob/29eb79e9866b3262a777fdf8195c1b9e63684c91/codex-rs/core/tests/suite/model_request.rs#L461-L511
+  ['generation', 'moderation_generation_report'],
   ['safety_block', 'moderation_safety_block'],
   ['final_answer_moderation', 'moderation_final_answer_marker'],
 ]);

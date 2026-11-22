@@ -110,6 +110,7 @@ function fixtureReply(challenge, metadata) {
       'openai-model': [model],
       'x-codex-turn-state': [routing],
       'x-openai-proxy-wasm': ['v0.1'],
+      'x-codex-safety-buffering-enabled': ['true'],
     },
     async *[Symbol.asyncIterator]() {
       yield Buffer.from(wire);
