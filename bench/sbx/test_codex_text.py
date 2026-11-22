@@ -2,6 +2,7 @@
 
 import copy
 from contextlib import redirect_stdout
+from http.client import parse_headers
 import importlib.util
 import io
 import json
@@ -56,9 +57,10 @@ class TextContract(unittest.TestCase):
             return SimpleNamespace(server_port=80, model=MODEL, prompt=PROMPT, challenge=TEXT,
                                    requested=False, refused=False, expected=None)
 
-        def invoke(server, method="POST", path="/v1/responses", extra_header=None, inline=False):
+        def invoke(server, method="POST", path="/v1/responses", extra_header=None, inline=False, fields=None):
             expected_body = sse(response_events(inline=inline))
-            reply = ndjson([{"kind": "response", "body": expected_body}])
+            fields = {} if fields is None else fields
+            reply = ndjson([{"kind": "response", "body": expected_body, **fields}])
             headers = [f"{method} {path} HTTP/1.0", "Host: 127.0.0.1:80", "Content-Type: application/json",
                        f"Content-Length: {len(body)}"]
             if extra_header:
@@ -73,8 +75,11 @@ class TextContract(unittest.TestCase):
                 local.shutdown(socket.SHUT_WR)
                 with remote.makefile("rb") as response:
                     status = int(response.readline().split()[1])
+                    response_headers = parse_headers(response)
+                    reasoning = response_headers.get_all("X-Reasoning-Included")
+                    self.assertEqual(reasoning, ["true"] if status == 200 and fields.get("reasoning_included") is True else None)
                     if status == 200:
-                        self.assertEqual(response.read().split(b"\r\n\r\n", 1)[1].decode(), expected_body)
+                        self.assertEqual(response.read().decode(), expected_body)
                 return status, output.getvalue()
 
         fresh = new_server()
@@ -83,10 +88,22 @@ class TextContract(unittest.TestCase):
         self.assertEqual([json.loads(line) for line in emitted.splitlines()], [{"kind": "request", "model": MODEL}])
         self.assertEqual(fresh.expected, (TEXT, USAGE))
         self.assertIsNone(fresh.served_presentation)
+        self.assertFalse(fresh.served_reasoning_included)
         self.assertEqual(invoke(fresh), (403, ""))
         with_notice = new_server()
         self.assertEqual(invoke(with_notice, inline=True)[0], 200)
         self.assertEqual(with_notice.served_presentation, "inline")
+        for inline in (False, True):
+            server = new_server()
+            self.assertEqual(invoke(server, inline=inline, fields={"reasoning_included": True})[0], 200)
+            self.assertTrue(server.served_reasoning_included)
+            self.assertEqual(server.expected, (TEXT, USAGE))
+        for fields in ({"reasoning_included": value} for value in (False, None, 1, "true", {}, [])):
+            with self.subTest(fields=fields):
+                server = new_server()
+                self.assertEqual(invoke(server, fields=fields)[0], 400)
+                self.assertIsNone(server.expected)
+        self.assertEqual(invoke(new_server(), fields={"reasoning_included": True, "headers": {}})[0], 400)
         for fields in ({"method": "GET"}, {"path": "/elsewhere"}, {"extra_header": "Authorization: synthetic"},
                        {"extra_header": "Transfer-Encoding: chunked"}, {"extra_header": "Content-Length: 1"}):
             fresh = new_server()

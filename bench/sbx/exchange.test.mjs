@@ -170,6 +170,21 @@ test('host errors do not relay provider diagnostics to callers', async (t) => {
   );
 });
 
+test('the reply pipe transports only a true reasoning presence flag with the original body', async (t) => {
+  const expected = { ...response, reasoning_included: true };
+  const child = guest(t, `send(request); assert.deepEqual(await read(), ${JSON.stringify(expected)}); send(receipt);`);
+  assert.deepEqual(await exchangeFrames(child, initial, () => expected, 5000), receipt);
+  for (const invalid of [
+    ...[false, null, 'true', 1, undefined, {}, []].map((value) => ({ reasoning_included: value })),
+    { reasoning_included: true, headers: {} },
+  ]) {
+    await assert.rejects(
+      exchangeFrames(guest(t, 'send(request);'), initial, () => ({ ...response, ...invalid }), 5000),
+      { message: 'SBX_EXCHANGE_REPLY' },
+    );
+  }
+});
+
 test('extra fields in either host message are refused', async (t) => {
   await assert.rejects(
     exchangeFrames(guest(t, ''), { ...initial, metadata: 'private' }, () => response, 5000),

@@ -17,10 +17,11 @@ const envelope = new Set([
 const modelHeaders = new Set(['openai-model', 'x-openai-model']);
 const bufferingEnabled = 'x-codex-safety-buffering-enabled';
 const bufferingModel = 'x-codex-safety-buffering-faster-model';
+const catalogHeader = 'x-models-etag';
 const controlHeaders = new Map([
   [bufferingEnabled, 'safety_buffering'],
   [bufferingModel, 'safety_buffering'],
-  ['x-models-etag', 'catalog_refresh'],
+  [catalogHeader, 'catalog_refresh'],
   ['x-reasoning-included', 'reasoning_control'],
   ['x-codex-rate-limit-reached-type', 'rate_limit_control'],
 ]);
@@ -62,6 +63,16 @@ function unknownHttpControl(name) {
   );
 }
 
+// This name-only view shares the admission registry without granting the observer authority.
+export function subscriptionHttpControlFamily(name) {
+  if (modelHeaders.has(name)) return 'effective_model';
+  if (name === turnStateHeader) return 'turn_state';
+  if (name === proxyVersionHeader) return 'proxy_version';
+  if (controlHeaders.has(name)) return controlHeaders.get(name);
+  if (unknownHttpControl(name)) return 'unknown_provider_header';
+  return undefined;
+}
+
 /** Call only after a requires_native_handling HTTP verdict. Inspect names in the same
  * wire order as admission. An unsafe first name must never be attributed to a later one. */
 export function unknownHttpControlFingerprint(headers) {
@@ -94,6 +105,14 @@ function validBufferingParameter(name, wire) {
   const value = singleton(wire, true);
   if (name === bufferingEnabled) return value === 'true' || value === 'false';
   return value !== undefined && /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/u.test(value);
+}
+
+// RFC 9110 §8.8.3. Commas within an opaque tag are valid; a list of tags is not.
+// Never retain or return the account's catalogue validator.
+function oneEntityTag(values) {
+  if (!Array.isArray(values) || values.length !== 1 || typeof values[0] !== 'string') return false;
+  const tag = values[0];
+  return /^(?:W\/)?"[\x21\x23-\x7e\x80-\xff]*"$/u.exec(tag)?.[0] === tag;
 }
 
 function modelIdentity(groups, model, http) {
@@ -158,14 +177,18 @@ export function createSubscriptionControls(model) {
   let active = typeof model === 'string' && model.length > 0;
   let receivedHeaders = false;
   let receivedEvent = false;
+  let reasoningIncluded;
   let boundResponseId;
   let turnState;
   let moderationPresentation;
+  let requiresCatalogRefresh = false;
   function close() {
     active = false;
+    reasoningIncluded = undefined;
     turnState = undefined;
     boundResponseId = undefined;
     moderationPresentation = undefined;
+    requiresCatalogRefresh = false;
   }
   function verdict(disposition) {
     if (disposition !== informational) close();
@@ -181,6 +204,26 @@ export function createSubscriptionControls(model) {
       for (const key of Object.keys(headers)) {
         const name = key.toLowerCase();
         if (modelHeaders.has(name)) continue;
+        // Codex uses HTTP field presence, independently of its wire value or token counts.
+        // https://github.com/openai/codex/blob/29eb79e9866b3262a777fdf8195c1b9e63684c91/codex-rs/codex-api/src/sse/responses.rs#L55-L88
+        if (http && name === 'x-reasoning-included') {
+          const values = headers[key];
+          if (
+            reasoningIncluded ||
+            !Array.isArray(values) ||
+            values.length !== 1 ||
+            typeof values[0] !== 'string' ||
+            /[,\r\n]/u.test(values[0])
+          )
+            return 'ambiguous_reasoning_control';
+          reasoningIncluded = true;
+          continue;
+        }
+        if (http && name === catalogHeader) {
+          if (requiresCatalogRefresh || !oneEntityTag(headers[key])) return 'ambiguous_catalog_etag';
+          requiresCatalogRefresh = true;
+          continue;
+        }
         if (http && (name === bufferingEnabled || name === bufferingModel)) {
           if (receivedBufferingParameters.has(name) || !validBufferingParameter(name, headers[key]))
             return 'ambiguous_buffering_treatment';
@@ -254,6 +297,12 @@ export function createSubscriptionControls(model) {
     },
     get moderationPresentation() {
       return moderationPresentation;
+    },
+    get reasoningIncluded() {
+      return reasoningIncluded;
+    },
+    get requiresCatalogRefresh() {
+      return requiresCatalogRefresh;
     },
     close,
   };

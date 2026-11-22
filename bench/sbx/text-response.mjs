@@ -94,8 +94,10 @@ export function nativeTextStream(text, usage, presentation) {
   return events.map((e) => 'event: ' + e.type + '\ndata: ' + JSON.stringify(e) + '\n\n').join('');
 }
 
-export function textResponse(challenge, usage, presentation) {
+export function textResponse(challenge, usage, presentation, reasoningIncluded) {
   checkPresentation(presentation);
+  if (reasoningIncluded !== undefined && reasoningIncluded !== true)
+    throw Error('SBX_SUBSCRIPTION_BROKER_SHAPE');
   return {
     model,
     status: 'completed',
@@ -109,14 +111,20 @@ export function textResponse(challenge, usage, presentation) {
     ],
     usage: { ...usage, total_tokens: usage.input_tokens + usage.output_tokens },
     ...(presentation === 'inline' ? { moderation_presentation: 'inline' } : {}),
+    ...(reasoningIncluded === true ? { reasoning_included: true } : {}),
   };
 }
 
 // Both hosted and fixture routes consume the same, closed broker result.
-// A closed presentation value can accompany the response. All other controls stay with the host.
+// Only the fixed presentation and HTTP presence flag can accompany the verified text and usage.
 export function verifiedBrokerText(result, challenge, maxOutput) {
   const usage = verifiedText(result, challenge, maxOutput);
-  if (!isDeepStrictEqual(result, textResponse(challenge, usage, result.moderation_presentation)))
+  if (
+    !isDeepStrictEqual(
+      result,
+      textResponse(challenge, usage, result.moderation_presentation, result.reasoning_included),
+    )
+  )
     throw Error('SBX_SUBSCRIPTION_BROKER_SHAPE');
   return usage;
 }

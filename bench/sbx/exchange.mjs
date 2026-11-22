@@ -1,4 +1,5 @@
 import { frameByteLimit as pipeLimit, parseUniqueJson } from './json-frame.mjs';
+import { isDeepStrictEqual } from 'node:util';
 
 const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
@@ -57,15 +58,16 @@ export function exchangeFrames(child, initialObject, onRequest, limitMs, signal)
           if (failure) return;
           const reply = await onRequest(frame, controller.signal);
           if (failure) return;
+          const response = { kind: 'response', body: reply?.body };
+          if (reply?.reasoning_included === true) response.reasoning_included = true;
           if (
-            reply?.kind !== 'response' ||
-            Object.keys(reply).length !== 2 ||
-            typeof reply.body !== 'string' ||
-            reply.body.length > pipeLimit
+            typeof response.body !== 'string' ||
+            response.body.length > pipeLimit ||
+            !isDeepStrictEqual(reply, response)
           ) {
             throw Error();
           }
-          writeFrame({ kind: 'response', body: reply.body }, true);
+          writeFrame(response, true);
           phase = 'receipt';
         })
         .catch(() => fail('REPLY'));

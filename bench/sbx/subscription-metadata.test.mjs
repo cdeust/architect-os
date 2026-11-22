@@ -101,8 +101,8 @@ test('the fourth trial identified the gateway header by name; only the observed 
   assert.equal(classify({ headers: { [name]: 'v0.1' } }), 'requires_native_handling');
   assert.equal(inspect({ [name]: ['v0.1'], 'x-openai-proxy-new': ['v0.1'] }), 'requires_native_handling');
   assert.equal(
-    inspect({ [name]: ['v0.1'], 'x-reasoning-included': ['true'] }),
-    'reasoning_control',
+    inspect({ [name]: ['v0.1'], 'x-codex-rate-limit-reached-type': ['limit'] }),
+    'rate_limit_control',
   );
 });
 
@@ -255,16 +255,72 @@ test('HTTP buffering parameters are response scoped and remain controls inside e
   assert.equal(controls.http({}), 'unbound_metadata');
 });
 
+test('a single valid HTTP catalogue tag requests a fresh account read; event headers cannot request one', () => {
+  const key = 'x-models-etag';
+  for (const tag of ['""', '"a,b"', 'W/"private"', '"\u00ff"']) {
+    const controls = createSubscriptionControls(model);
+    assert.equal(controls.requiresCatalogRefresh, false);
+    assert.equal(controls.http({ [key]: [tag] }), 'informational');
+    assert.equal(controls.requiresCatalogRefresh, true);
+    assert.equal(classify({ headers: { [key]: tag } }), 'catalog_refresh');
+    controls.close();
+    assert.equal(controls.requiresCatalogRefresh, false);
+  }
+  for (const values of [
+    '"tag"',
+    [],
+    [null],
+    [''],
+    ['*'],
+    ['tag'],
+    ['w/"tag"'],
+    ['"a"', '"a"'],
+    ['"a","b"'],
+    ['"a b"'],
+    ['"tag"\n'],
+    ['"\u0100"'],
+  ]) {
+    const controls = createSubscriptionControls(model);
+    assert.equal(controls.http({ [key]: values }), 'ambiguous_catalog_etag');
+    assert.equal(controls.requiresCatalogRefresh, false);
+  }
+  const ambiguous = { [key]: ['"ok"'], [key.toUpperCase()]: ['"different"'] };
+  const controls = createSubscriptionControls(model);
+  assert.equal(controls.http(ambiguous), 'ambiguous_catalog_etag');
+  assert.equal(controls.requiresCatalogRefresh, false);
+});
+
 test('other provider control headers veto delivery in HTTP and event contexts', () => {
   for (const [name, value, disposition] of [
-    ['x-models-etag', 'private-catalog', 'catalog_refresh'],
-    ['x-reasoning-included', 'false', 'reasoning_control'],
     ['x-codex-rate-limit-reached-type', 'private-snapshot', 'rate_limit_control'],
     ['x-codex-future-control', 'private-control', 'requires_native_handling'],
     ['openai-future-control', 'private-control', 'requires_native_handling'],
   ]) {
     assert.equal(createSubscriptionControls(model).http({ [name]: [value] }), disposition);
     assert.equal(classify({ headers: { [name]: value } }), disposition);
+  }
+});
+
+test('reasoning inclusion means presence on one HTTP response, independent of the wire value', () => {
+  const field = 'x-reasoning-included';
+  for (const value of ['true', 'false', '', 'opaque']) {
+    const controls = createSubscriptionControls(model);
+    assert.equal(controls.http({ [field]: [value] }), 'informational');
+    assert.equal(controls.reasoningIncluded, true);
+    controls.close();
+    assert.equal(controls.reasoningIncluded, undefined);
+    assert.equal(classify({ headers: { [field]: value } }), 'reasoning_control');
+  }
+  for (const headers of [
+    { [field]: [null] },
+    { [field]: [] },
+    { [field]: ['a', 'b'] },
+    { [field]: ['a,b'] },
+    { [field]: ['a'], [field.toUpperCase()]: ['a'] },
+  ]) {
+    const controls = createSubscriptionControls(model);
+    assert.equal(controls.http(headers), 'ambiguous_reasoning_control');
+    assert.equal(controls.reasoningIncluded, undefined);
   }
 });
 

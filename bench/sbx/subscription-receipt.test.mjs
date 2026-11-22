@@ -26,20 +26,30 @@ const receipt = {
 
 test('the private operator parses exactly two bounded, unique-key worker frames', async () => {
   async function read(chunks, delivered) {
-    for await (const frame of readSubscriptionWorkerFrames(chunks.map((c) => Buffer.from(c)))) delivered.push(frame);
+    for await (const frame of readSubscriptionWorkerFrames(chunks.map((c) => Buffer.from(c))))
+      delivered.push(frame);
   }
   const delivered = [];
   await read(['{"k', 'ind":"request"}\n', '{"kind":"result"}\n'], delivered);
-  assert.deepEqual(delivered, [{kind: 'request'}, {kind: 'result'}]);
+  assert.deepEqual(delivered, [{ kind: 'request' }, { kind: 'result' }]);
   for (const bad of [
-    ['{"kind":0,"k\\u0069nd":1}\n'], ['{}\n{}\n'], ['{}\nx'],
-    [Buffer.from([255,10])], [Buffer.alloc(frameByteLimit + 1)],
+    ['{"kind":0,"k\\u0069nd":1}\n'],
+    ['{}\n{}\n'],
+    ['{}\nx'],
+    [Buffer.from([255, 10])],
+    [Buffer.alloc(frameByteLimit + 1)],
   ]) {
     const seen = [];
     await assert.rejects(read(bad, seen));
     assert.deepEqual(seen, []);
   }
-  for (const bad of [['{}\n'], ['{}\n', '{}'], ['{}\n', '{}\nextra'], ['{}\n', '{}\n{}\n'], ['{}\n', '{"nested":{"x":0,"x":1}}\n']]) {
+  for (const bad of [
+    ['{}\n'],
+    ['{}\n', '{}'],
+    ['{}\n', '{}\nextra'],
+    ['{}\n', '{}\n{}\n'],
+    ['{}\n', '{"nested":{"x":0,"x":1}}\n'],
+  ]) {
     await assert.rejects(read(bad, []));
   }
 });
@@ -51,6 +61,27 @@ test('the account operator binds the whole native receipt to its own accepted re
   const served = { kind: 'result', result: { ...receipt, served_moderation_presentation: 'inline' } };
   assert.deepEqual(verifyNativeSubscriptionResult(frame, prompt, plain), usage);
   assert.deepEqual(verifyNativeSubscriptionResult(served, prompt, inline), usage);
+  for (const [accepted, proof] of [
+    [plain, frame],
+    [inline, served],
+  ]) {
+    const marked = { ...accepted, reasoning_included: true };
+    const servedHeader = { kind: 'result', result: { ...proof.result, served_reasoning_included: true } };
+    assert.deepEqual(verifyNativeSubscriptionResult(servedHeader, prompt, marked), usage);
+    assert.throws(() => verifyNativeSubscriptionResult(proof, prompt, marked), /RECEIPT_MISMATCH/);
+    assert.throws(() => verifyNativeSubscriptionResult(servedHeader, prompt, accepted), /RECEIPT_MISMATCH/);
+    for (const value of [false, 'true', null, 1]) {
+      assert.throws(
+        () =>
+          verifyNativeSubscriptionResult(
+            { kind: 'result', result: { ...proof.result, served_reasoning_included: value } },
+            prompt,
+            marked,
+          ),
+        /RECEIPT_MISMATCH/,
+      );
+    }
+  }
   for (const [input, accepted] of [
     [frame, inline],
     [served, plain],

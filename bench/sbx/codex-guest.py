@@ -312,17 +312,22 @@ class TextResponses(BaseHTTPRequestHandler):
             server.requested = True
             print(json.dumps({"kind": "request", "model": server.model}), flush=True)
             reply = read_frame(sys.stdin.buffer)
-            if set(reply) != {"kind", "body"} or reply["kind"] != "response" or not isinstance(reply["body"], str):
+            reasoning_included = "reasoning_included" in reply
+            if (set(reply) - {"kind", "body", "reasoning_included"} or reply["kind"] != "response"
+                    or not isinstance(reply["body"], str) or (reasoning_included and reply["reasoning_included"] is not True)):
                 raise ValueError("unexpected host response")
             text, counts, presentation = text_response(reply["body"], server.model, server.challenge)
             payload = reply["body"].encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Content-Length", str(len(payload)))
+            if reasoning_included:
+                self.send_header("X-Reasoning-Included", "true")
             self.end_headers()
             self.wfile.write(payload)
             server.expected = (text, counts)
             server.served_presentation = presentation
+            server.served_reasoning_included = reasoning_included
         except (AttributeError, IndexError, KeyError, OSError, TypeError, ValueError, RecursionError):
             self.send_error(400)
 
@@ -406,6 +411,8 @@ def text_probe():
                "client_sha256": BINARY_SHA256, "client_version": EXPECTED_VERSION, "exit_code": 0}
     if server.served_presentation is not None:
         receipt["served_moderation_presentation"] = server.served_presentation
+    if server.served_reasoning_included:
+        receipt["served_reasoning_included"] = True
     print(json.dumps(receipt), flush=True)
 
 

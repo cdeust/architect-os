@@ -19,7 +19,8 @@ export async function* readSubscriptionWorkerFrames(stream) {
     chunk.copy(bytes, previous);
     for (let at = chunk.indexOf(10); at !== -1; at = chunk.indexOf(10, at + 1)) {
       count++;
-      if (count > 2 || (count === 1 && at + 1 !== chunk.length)) throw Error('SBX_SUBSCRIPTION_WORKER_FRAMING');
+      if (count > 2 || (count === 1 && at + 1 !== chunk.length))
+        throw Error('SBX_SUBSCRIPTION_WORKER_FRAMING');
       const frame = parseUniqueJson(decoder.decode(bytes.subarray(start, previous + at)));
       start = previous + at + 1;
       yield frame;
@@ -48,6 +49,7 @@ export function verifyNativeSubscriptionResult(frame, prompt, acceptedResponse) 
     workspace_empty_after_shutdown: true,
   };
   if (acceptedResponse.moderation_presentation === 'inline') result.served_moderation_presentation = 'inline';
+  if (acceptedResponse.reasoning_included === true) result.served_reasoning_included = true;
   if (!isDeepStrictEqual(frame, { kind: 'result', result })) throw Error('SBX_NATIVE_TEXT_RECEIPT_MISMATCH');
   return usage;
 }

@@ -73,6 +73,20 @@ test('the closed inline presentation reaches Codex before its answer, bound to i
   );
 });
 
+test('the HTTP reasoning flag is a closed projection independent of text, presentation and usage', () => {
+  for (const presentation of [undefined, 'inline']) {
+    const unmarked = textResponse(challenge, counts, presentation);
+    const marked = textResponse(challenge, counts, presentation, true);
+    assert.deepEqual(marked, { ...unmarked, reasoning_included: true });
+    assert.deepEqual(verifiedBrokerText(marked, challenge, 4), counts);
+    for (const value of [false, null, 'true', 1, {}, []]) {
+      assert.throws(() => textResponse(challenge, counts, presentation, value), /BROKER_SHAPE/);
+      assert.throws(() => verifiedBrokerText({ ...marked, reasoning_included: value }, challenge, 4), /BROKER_SHAPE/);
+    }
+    assert.throws(() => verifiedBrokerText({ ...unmarked, reasoning_included: undefined }, challenge, 4), /BROKER_SHAPE/);
+  }
+});
+
 for (const [name, change] of Object.entries({
   'continuation required': (r) => {
     r.end_turn = false;
