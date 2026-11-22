@@ -26,3 +26,18 @@ Feature: Host the Spec planning profile before implementation
 
   Scenario: Allow a producer to correct a rejected section under the same identifier
     Then Spec planning allows a new prompt on the same batch identifier
+
+  Scenario: Require an independent panel reviewer for the approved routes
+    Then Spec planning distinguishes an independent panel from a conflicting route
+
+  Scenario Outline: Write producer artifacts only inside this run
+    Then Spec planning processes artifact path "<path>" as "<outcome>"
+
+    Examples:
+      | path                                | outcome |
+      | prd-output/run_test/Part-2.v1_md    | written |
+      | outside/run_test/Part-2.v1_md       | refused |
+      | prd-output/run_othe/Part-2.v1_md    | refused |
+      | prd-output/run_test/nested/file     | refused |
+      | prd-output/run_test/.hidden         | refused |
+      | prd-output/run_test/a?b             | refused |

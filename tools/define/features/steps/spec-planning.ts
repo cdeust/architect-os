@@ -226,3 +226,66 @@ Then('Spec planning allows a new prompt on the same batch identifier', async fun
   assert.equal((await driveSpec(host, config, false)).status, 'needs_attention');
   assert.equal(calls(), 4);
 });
+
+Then('Spec planning distinguishes an independent panel from a conflicting route', function () {
+  const { config } = harness('panel');
+  const panel = { provider: 'anthropic', model: 'panel-reviewer' };
+  const accepts = (route: typeof panel) =>
+    specPlanningConfig.safeParse({
+      ...config,
+      panel_reviewer: account(route, 2),
+    }).success;
+  for (const route of [
+    { ...review, provider: author.provider },
+    { ...review, model: author.model },
+  ]) {
+    assert.equal(specPlanningConfig.safeParse({ ...config, reviewer: account(route, 2) }).success, false);
+  }
+  assert.equal(accepts(panel), true);
+  assert.equal(accepts({ ...panel, provider: author.provider }), false);
+  assert.equal(accepts({ ...panel, model: author.model }), false);
+  assert.equal(accepts({ ...panel, model: review.model }), false);
+  assert.equal(accepts({ ...panel, provider: review.provider }), true);
+});
+
+Then(
+  'Spec planning processes artifact path {string} as {string}',
+  async function (path: string, outcome: string) {
+    const { host, config } = harness('artifact');
+    const content = 'Plan révisé';
+    const writes: Array<[string, string]> = [];
+    let submitted: unknown;
+    host.writeArtifact = (name, text) => {
+      writes.push([name, text]);
+    };
+    host.call = async (tool, args) => {
+      if (tool === 'start_pipeline') return JSON.stringify({ run_id });
+      if (tool === 'submit_action_result') {
+        submitted = args['result'];
+        return JSON.stringify({ run_id });
+      }
+      const action = submitted
+        ? { kind: 'failed', step: 'delivery', reason: 'stop after write' }
+        : { kind: 'write_file', path, content };
+      return JSON.stringify({
+        run_id,
+        action,
+        __page: { offset: 0, count: 1, total: 1, next_offset: null },
+      });
+    };
+    if (outcome === 'written') {
+      const result = await driveSpec(host, config, false);
+      assert.equal(result.status, 'failed');
+      assert.deepEqual(writes, [['Part-2.v1_md', content]]);
+      assert.deepEqual(submitted, {
+        kind: 'file_written',
+        path,
+        bytes: Buffer.byteLength(content),
+      });
+    } else {
+      await assert.rejects(driveSpec(host, config, false), /SPEC_ARTIFACT_PATH_REFUSED/);
+      assert.deepEqual(writes, []);
+      assert.equal(submitted, undefined);
+    }
+  },
+);
