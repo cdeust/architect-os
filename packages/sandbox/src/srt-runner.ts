@@ -44,6 +44,7 @@ import { resolveWorktree, type Worktree } from './worktree.js';
  */
 export interface SrtRunnerOptions {
   readonly profilesDir: string;
+  readonly frozenLauncher?: string;
   /** `dist/cli.js` du paquet `@anthropic-ai/sandbox-runtime` épinglé. */
   readonly srtCli: string;
   /** Binaire node qui exécute srt et le canari (`process.execPath`). */
@@ -250,6 +251,18 @@ export class SrtSandboxRunner implements SandboxRunner {
       };
       const profile = resolveProfile(template, vars);
       bindSessionWorkspace(profile.settings, wt, o.runtimeRoot, o.runDir, dirname(dir));
+      if (o.frozenLauncher !== undefined) {
+        const frozen = realpathSync(o.frozenLauncher);
+        if (
+          frozen !== o.frozenLauncher ||
+          dirname(frozen) !== join(o.runDir, 'tmp') ||
+          !/^aos-launcher-[a-zA-Z0-9]{6}$/.test(basename(frozen))
+        )
+          throw unavailable('invalid frozen launcher location');
+        assertTrusted(profile.settings, [frozen]);
+        const fs = profile.settings.filesystem;
+        fs.allowRead = [...(fs.allowRead ?? []), frozen];
+      }
       for (const [file, content] of Object.entries(profile.files)) {
         mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
         writeFileSync(file, `${JSON.stringify(content, null, 2)}\n`, { mode: 0o600 });

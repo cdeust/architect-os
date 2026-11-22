@@ -23,12 +23,12 @@ import {
   type CodeToolDependencies,
 } from '../../src/code-tool.js';
 import { SandboxError } from '../../src/port.js';
-import { freezeStepLauncher, readStepAdmission, requireStepAdmission } from '../../src/step-admission.js';
+import { freezeStepLauncher, requireStepAdmission } from '../../src/step-admission.js';
 import { admittedFixture } from './admission-fixture.js';
 import { factsJsonSchema } from '../../src/scout-facts.js';
 import { stepRecordSchema } from '../../src/step-record.js';
 import { stepsFolder } from '../../src/steps-folder.js';
-import { fingerprintTree, type TreeFingerprint } from '../../src/tree-fingerprint.js';
+import type { TreeFingerprint } from '../../src/tree-fingerprint.js';
 import {
   codeToolSession,
   runStep,
@@ -87,7 +87,6 @@ const newPhase = (): Phase => ({
 });
 interface Step {
   refusedAdmission?: string;
-  planAdmission?: { path: string; target: string; authority: string };
   acceptedAdmission?: string;
   folder: string;
   outputs: { retained: string; streams: string };
@@ -404,7 +403,6 @@ const launcherFile =
   (s: Step) =>
   (file: string): string => {
     if (s.missing.has(file)) throw new Error(`missing launcher file ${file}`);
-    if (s.planAdmission) return readFileSync(join(PKG, file), 'utf8');
     return /^(code|review|scout)\.json$/.test(file) ? readFileSync(join(PKG, file), 'utf8') : `fixed:${file}`;
   };
 
@@ -447,7 +445,7 @@ const start = (s: Step, args: string): Promise<void> => {
     date: () => s.date,
     root: () => {
       if (s.rootRefusal !== undefined) throw s.rootRefusal;
-      return s.planAdmission?.target ?? '/the/worktree';
+      return '/the/worktree';
     },
     fingerprint: () => {
       s.fingerprints++;
@@ -456,11 +454,6 @@ const start = (s: Step, args: string): Promise<void> => {
     },
     readLauncher: launcherFile(s),
     admit: (subject) => {
-      if (s.planAdmission) {
-        const { path, target, authority } = s.planAdmission;
-        s.acceptedAdmission = requireStepAdmission(readStepAdmission(path, target, authority), subject);
-        return s.acceptedAdmission;
-      }
       const evidence = admittedFixture(subject);
       if (s.refusedAdmission === 'missing') return requireStepAdmission(undefined, subject);
       if (s.refusedAdmission === 'missing approval') {
@@ -1059,19 +1052,15 @@ Then('the step dependencies read the source {string} as undefined', function (pa
 Given('the step uses the materialized Plan folder', function () {
   const s = step(this);
   s.folder = stored<string>(this, 'planFolder');
-  s.planAdmission = stored<{ path: string; target: string; authority: string }>(this, 'planAdmission');
-  s.fingerprint = fingerprintTree(s.planAdmission.target);
 });
 
-Then('the Step record binds the approved inputs and the original admission receipt', function () {
+Then('the Step record binds the two approved input files', function () {
   const expected = stored<{ step: string; files_sha256: Record<string, string> }>(this, 'planManifest');
   const archive = step(this).published.get(expected.step);
   assert.ok(archive);
   const record = stepRecordSchema().parse(JSON.parse(archive['record.json']!));
   assert.deepEqual(record.inputs, expected.files_sha256);
-  const { path } = stored<{ path: string }>(this, 'planAdmission');
-  const approved = JSON.parse(readFileSync(path, 'utf8')) as { approved_sha256: string };
-  assert.equal(record.admission_sha256, approved.approved_sha256);
+  assert.equal(record.admission_sha256, step(this).acceptedAdmission);
 });
 
 Then('native launch reads the frozen launcher even after the original changes', function () {
@@ -1090,6 +1079,8 @@ Then('native launch reads the frozen launcher even after the original changes', 
     const options = srtOptions(process, {}, frozen.dir);
     assert.equal(readFileSync(join(options.profilesDir, 'builder.json'), 'utf8'), 'Reviewed profile bytes');
     assert.ok(options.trusted.includes(frozen.dir));
+    assert.equal(options.frozenLauncher, frozen.dir);
+    assert.equal(srtOptions(process, {}).frozenLauncher, undefined);
   } finally {
     frozen.dispose();
     rmSync(target, { recursive: true });

@@ -123,6 +123,7 @@ export function srtOptions(
   launcherRoot = PKG,
 ): SrtRunnerOptions {
   return {
+    ...(launcherRoot === PKG ? {} : { frozenLauncher: launcherRoot }),
     profilesDir: join(launcherRoot, 'profiles'),
     srtCli: createRequire(import.meta.url).resolve('@anthropic-ai/sandbox-runtime/dist/cli.js'),
     node: proc.execPath,
