@@ -67,3 +67,30 @@ Feature: A private journal resumes a Spec planning run across admissions
 
   Scenario: A platform without a numeric owning account refuses before creating state
     Then the planning journal refuses a platform without getuid
+
+  Scenario: Durable publication syncs data and directory entries and releases descriptors
+    Then a planning journal persists and closes files and directories across publication
+
+  Scenario Outline: Inspection and creation failures keep their operating-system error
+    Then the planning journal propagates a "<operation>" failure before taking a lease
+
+    Examples:
+      | operation                    |
+      | inspection denied            |
+      | non-system inspection error  |
+      | creation denied              |
+
+  Scenario Outline: A private journal requires an owned target and trustworthy ancestors
+    Then the planning journal rejects a "<metadata>" metadata change during acquisition
+
+    Examples:
+      | metadata          |
+      | foreign target    |
+      | foreign ancestor  |
+      | replaced ancestor |
+
+  Scenario: The requested directory mode is private even with a permissive umask
+    Then the planning journal requests a private directory from the operating system
+
+  Scenario: A competing artifact publisher keeps its bytes
+    Then an artifact appearing during publication is preserved

@@ -83,6 +83,7 @@ Then(
         fs.writeFileSync(join(parent, '.git'), 'gitdir: example');
       } else if (location === 'symlinked parent') {
         fs.mkdirSync(join(parent, 'physical'));
+        fs.writeFileSync(join(parent, 'physical', '.git'), 'gitdir: example');
         fs.symlinkSync(join(parent, 'physical'), directory);
         target = join(directory, 'child');
       } else if (location === 'group writable parent') {
@@ -218,6 +219,137 @@ Then('the planning journal refuses a platform without getuid', function () {
       assert.equal(fs.existsSync(directory), false);
     } finally {
       Object.defineProperty(process, 'getuid', descriptor);
+    }
+  });
+});
+
+Then('a planning journal persists and closes files and directories across publication', function () {
+  inDirectory((_parent, directory) => {
+    const events: string[] = [];
+    const fsync = fs.fsyncSync;
+    const close = fs.closeSync;
+    const kind = (fd: number) => (fs.fstatSync(fd).isDirectory() ? 'directory' : 'file');
+    const synced = mock.method(fs, 'fsyncSync', (fd: number) => {
+      events.push('sync ' + kind(fd));
+      fsync(fd);
+    });
+    const closed = mock.method(fs, 'closeSync', (fd: number) => {
+      events.push('close ' + kind(fd));
+      close(fd);
+    });
+    syncBuiltinESMExports();
+    try {
+      const writer = openPlanningJournal(directory);
+      const publish = ['sync file', 'close file', 'sync directory', 'close directory'];
+      assert.deepEqual(events, ['sync directory', 'close directory', ...publish]);
+      events.length = 0;
+      writer.writeArtifact('proof', 'complete');
+      assert.deepEqual(events, publish);
+      events.length = 0;
+      assert.deepEqual(writer.readArtifact('proof'), Buffer.from('complete'));
+      assert.deepEqual(events, ['close file']);
+      writer.release();
+      assert.throws(() => writer.release(), { code: 'EEXIST' });
+    } finally {
+      closed.mock.restore();
+      synced.mock.restore();
+      syncBuiltinESMExports();
+    }
+  });
+});
+
+Then(
+  'the planning journal propagates a {string} failure before taking a lease',
+  function (operation: string) {
+    inDirectory((_parent, directory) => {
+      const sentinel =
+        operation === 'non-system inspection error'
+          ? { code: 'ENOENT' }
+          : Object.assign(new Error('access denied'), { code: 'EACCES' });
+      const lstat = fs.lstatSync;
+      const fault =
+        operation === 'creation denied'
+          ? mock.method(fs, 'mkdirSync', () => {
+              throw sentinel;
+            })
+          : mock.method(fs, 'lstatSync', (path: fs.PathLike) => {
+              if (path === join(directory, '.git')) throw sentinel;
+              return lstat(path);
+            });
+      syncBuiltinESMExports();
+      try {
+        assert.throws(
+          () => openPlanningJournal(directory),
+          (caught) => caught === sentinel,
+        );
+        assert.equal(fs.existsSync(directory), false);
+      } finally {
+        fault.mock.restore();
+        syncBuiltinESMExports();
+      }
+    });
+  },
+);
+
+Then(
+  'the planning journal rejects a {string} metadata change during acquisition',
+  function (metadata: string) {
+    inDirectory((parent, directory) => {
+      fs.mkdirSync(directory, { mode: 0o700 });
+      const changed = metadata === 'foreign target' ? directory : parent;
+      const lstat = fs.lstatSync;
+      const probe = mock.method(fs, 'lstatSync', (path: fs.PathLike) => {
+        const actual = lstat(path);
+        if (path === changed) {
+          if (metadata === 'replaced ancestor') actual.isDirectory = () => false;
+          else actual.uid = process.getuid!() + 1;
+        }
+        return actual;
+      });
+      syncBuiltinESMExports();
+      try {
+        assert.throws(() => openPlanningJournal(directory), { message: 'SPEC_JOURNAL_DIRECTORY_UNSAFE' });
+        assert.deepEqual(fs.readdirSync(directory), []);
+      } finally {
+        probe.mock.restore();
+        syncBuiltinESMExports();
+      }
+    });
+  },
+);
+
+Then('the planning journal requests a private directory from the operating system', function () {
+  inDirectory((_parent, directory) => {
+    const mask = process.umask(0o000);
+    try {
+      const writer = openPlanningJournal(directory);
+      assert.equal(fs.statSync(directory).mode & 0o777, 0o700);
+      writer.release();
+    } finally {
+      process.umask(mask);
+    }
+  });
+});
+
+Then('an artifact appearing during publication is preserved', function () {
+  withWriter((writer) => {
+    const artifact = join(writer.home, 'review.json');
+    const lstat = fs.lstatSync;
+    const inspection = mock.method(fs, 'lstatSync', (path: fs.PathLike) => {
+      try {
+        return lstat(path);
+      } catch (error) {
+        if (path === artifact) fs.writeFileSync(artifact, 'other publisher', { mode: 0o600, flag: 'wx' });
+        throw error;
+      }
+    });
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => writer.writeArtifact('review.json', 'new publisher'), { code: 'EEXIST' });
+      assert.deepEqual(writer.readArtifact('review.json'), Buffer.from('other publisher'));
+    } finally {
+      inspection.mock.restore();
+      syncBuiltinESMExports();
     }
   });
 });
