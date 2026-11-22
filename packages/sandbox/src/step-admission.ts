@@ -131,6 +131,58 @@ function successfulReplays(proof: z.infer<typeof promptProof>) {
   );
 }
 
+type AdmissionPayload = z.infer<typeof payload>;
+
+function fileDigestsMatch(
+  recorded: Readonly<Record<string, string>>,
+  actual: Readonly<Record<string, string>>,
+) {
+  return JSON.stringify(digestEntryOrder(recorded)) === JSON.stringify(actual);
+}
+
+function manifestApprovesStep(
+  proof: AdmissionPayload,
+  subject: StepAdmissionSubject,
+  inputHashes: Readonly<Record<string, string>>,
+) {
+  const { manifest, approval, define, plan } = proof;
+  return (
+    manifest.step === subject.name &&
+    approval.approval_sha256 === admissionDigest(JSON.stringify(manifest)) &&
+    (!subject.approval_sha256 || subject.approval_sha256 === approval.approval_sha256) &&
+    fileDigestsMatch(manifest.files_sha256, inputHashes) &&
+    manifest.source_sha256.define === define.sha256 &&
+    manifest.source_sha256.proposal === plan.sha256 &&
+    manifest.source_sha256.reviewed_plan === plan.raw_receipt_sha256
+  );
+}
+
+function executionMatchesReceipt(
+  proof: AdmissionPayload,
+  subject: StepAdmissionSubject,
+  inputHashes: Readonly<Record<string, string>>,
+) {
+  return (
+    subject.tree.clean === proof.worktree.clean &&
+    subject.tree.commit === proof.worktree.commit &&
+    subject.tree.tree === proof.worktree.tree &&
+    fileDigestsMatch(proof.inputs_sha256, inputHashes) &&
+    proof.launcher_sha256 === admissionDigest(JSON.stringify(digestFiles(subject.launcher)))
+  );
+}
+
+function planningMatchesReceipt(proof: AdmissionPayload, subject: StepAdmissionSubject) {
+  const { define, plan } = proof;
+  return (
+    plan.define_sha256 === define.sha256 &&
+    (!subject.define_sha256 || subject.define_sha256 === define.sha256) &&
+    (!subject.proposal_sha256 || subject.proposal_sha256 === plan.sha256) &&
+    (!subject.reviewed_plan_sha256 || subject.reviewed_plan_sha256 === plan.raw_receipt_sha256) &&
+    (!subject.define_review || JSON.stringify(subject.define_review) === JSON.stringify(define.review)) &&
+    (!subject.plan_review || JSON.stringify(subject.plan_review) === JSON.stringify(plan.review))
+  );
+}
+
 /** Revalidates exact planning, approval and specimen evidence before an implementation side effect. */
 export function requireStepAdmission(value: unknown, subject: StepAdmissionSubject): string {
   const { approved_sha256, payload: proof } = authority.parse(value);
@@ -140,25 +192,9 @@ export function requireStepAdmission(value: unknown, subject: StepAdmissionSubje
     approved_sha256 !== admissionDigest(JSON.stringify(proof)) ||
     proof.step !== subject.name ||
     proof.worktree.root !== subject.worktree ||
-    proof.manifest.step !== subject.name ||
-    proof.approval.approval_sha256 !== admissionDigest(JSON.stringify(proof.manifest)) ||
-    (subject.approval_sha256 && subject.approval_sha256 !== proof.approval.approval_sha256) ||
-    JSON.stringify(digestEntryOrder(proof.manifest.files_sha256)) !== JSON.stringify(hashes) ||
-    proof.manifest.source_sha256.define !== proof.define.sha256 ||
-    proof.manifest.source_sha256.proposal !== proof.plan.sha256 ||
-    proof.manifest.source_sha256.reviewed_plan !== proof.plan.raw_receipt_sha256 ||
-    subject.tree.clean !== proof.worktree.clean ||
-    subject.tree.commit !== proof.worktree.commit ||
-    subject.tree.tree !== proof.worktree.tree ||
-    JSON.stringify(digestEntryOrder(proof.inputs_sha256)) !== JSON.stringify(hashes) ||
-    proof.launcher_sha256 !== admissionDigest(JSON.stringify(digestFiles(subject.launcher))) ||
-    proof.plan.define_sha256 !== proof.define.sha256 ||
-    (subject.define_sha256 && subject.define_sha256 !== proof.define.sha256) ||
-    (subject.proposal_sha256 && subject.proposal_sha256 !== proof.plan.sha256) ||
-    (subject.reviewed_plan_sha256 && subject.reviewed_plan_sha256 !== proof.plan.raw_receipt_sha256) ||
-    (subject.define_review &&
-      JSON.stringify(subject.define_review) !== JSON.stringify(proof.define.review)) ||
-    (subject.plan_review && JSON.stringify(subject.plan_review) !== JSON.stringify(proof.plan.review)) ||
+    !manifestApprovesStep(proof, subject, hashes) ||
+    !executionMatchesReceipt(proof, subject, hashes) ||
+    !planningMatchesReceipt(proof, subject) ||
     proof.specimens.length !== required.length
   )
     throw new Error('STEP_ADMISSION_EVIDENCE_MISMATCH');
