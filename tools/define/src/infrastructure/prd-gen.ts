@@ -92,8 +92,8 @@ export async function withPlanningSpec<T>(
         },
         CallToolResultSchema,
       );
-      const [part] = response.content;
-      if (response.isError || response.content.length !== 1 || part?.type !== 'text') {
+      const part = response.content[0]!;
+      if (response.isError || response.content.length !== 1 || part.type !== 'text') {
         throw Error(`SPEC_TOOL_REFUSED: ${name}`);
       }
       return part.text;

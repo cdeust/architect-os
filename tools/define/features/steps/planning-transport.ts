@@ -77,6 +77,7 @@ Then('the pinned planning server sees the intended request {string}', async (pan
         });
       }
     });
+    assert.equal(readFileSync(join(p.home, 'transport-closed'), 'utf8'), 'closed\n');
   } finally {
     p.dispose();
   }
@@ -89,6 +90,7 @@ Then('the planning transport refuses the {string} response', async (reply: strin
       withPlanningSpec(process.execPath, p.root, p.home, p.temporary, p.config, (call) => call(reply, {})),
       { message: 'SPEC_TOOL_REFUSED: ' + reply },
     );
+    assert.equal(readFileSync(join(p.home, 'transport-closed'), 'utf8'), 'closed\n');
   } finally {
     p.dispose();
   }
@@ -150,8 +152,17 @@ Then(
       await assert.rejects(run(session, false, null), { name: 'ZodError' });
       const directory = join(ctx.root, 'state/spec-planning', session);
       assert.equal(existsSync(directory), false);
-      const outcome = await run(session);
-      assert.equal(outcome.status, 'needs_attention');
+      await assert.doesNotReject(async () => {
+        assert.deepEqual(await run(session), {
+          status: 'needs_attention',
+          run_id: 'run_fixture_native',
+          action: {
+            kind: 'done',
+            summary: '',
+            outcome: { status: 'needs_attention', reasons: ['fixture complete'] },
+          },
+        });
+      });
       assert.deepEqual(calls, ['authorize', 'invoke']);
       const result = JSON.parse(readFileSync(join(directory, 'submitted.ndjson'), 'utf8'));
       assert.deepEqual(result.responses, [
