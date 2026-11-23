@@ -8,6 +8,7 @@ import { clientSha256, clientVersion, codexGuest, installCodex, verifyArchive } 
 import { decodeUpstream } from './subscription-stream.mjs';
 import { withOfflineSbx } from './runtime.mjs';
 import {
+  challengeDigest,
   fixtureResponse,
   fixtureUsage,
   model,
@@ -20,6 +21,8 @@ async function turn(archive, route, respond) {
   const prompt = 'Reply with exactly this value: ' + challenge;
   let calls = 0;
   let usage;
+  let presentation;
+  let reasoningIncluded;
   return withOfflineSbx(
     {
       limitMs: 180_000,
@@ -36,14 +39,23 @@ async function turn(archive, route, respond) {
         async (request, signal) => {
           if (++calls !== 1 || !isDeepStrictEqual(request, { kind: 'request', model }))
             throw Error('SBX_TEXT_REQUEST_REFUSED');
-          usage = verifiedBrokerText(
-            await respond({ prompt, challenge, signal }),
-            challenge,
-            Buffer.byteLength(prompt),
-          );
-          return { kind: 'response', body: nativeTextStream(challenge, usage) };
+          const result = await respond({ prompt, challenge, signal });
+          usage = verifiedBrokerText(result, challenge, Buffer.byteLength(prompt));
+          presentation = result.moderation_presentation;
+          reasoningIncluded = result.reasoning_included;
+          return {
+            kind: 'response',
+            body: nativeTextStream(challenge, usage, presentation),
+            ...(reasoningIncluded === true ? { reasoning_included: true } : {}),
+          };
         },
       );
+      // The guest relay confirms which notice it served to Codex. The exec JSONL interface
+      // independently reports the completed text and metering.
+      const served = {
+        ...(presentation === 'inline' ? { served_moderation_presentation: 'inline' } : {}),
+        ...(reasoningIncluded === true ? { served_reasoning_included: true } : {}),
+      };
       if (
         !usage ||
         !isDeepStrictEqual(receipt, {
@@ -54,6 +66,7 @@ async function turn(archive, route, respond) {
           client_sha256: clientSha256,
           client_version: clientVersion,
           exit_code: 0,
+          ...served,
         })
       ) {
         throw Error('SBX_NATIVE_TEXT_RECEIPT_MISMATCH');
@@ -67,8 +80,10 @@ async function turn(archive, route, respond) {
         terminal: 'completed',
         requests: calls,
         provider_requests: route === 'fixture' ? 0 : null,
+        ...(route === 'host_broker' ? { challenge_sha256: challengeDigest(receipt.text) } : {}),
         usage,
         cost_usd: route === 'fixture' ? 0 : null,
+        ...served,
       };
     },
   );
@@ -87,7 +102,7 @@ function fixtureReply(challenge, metadata) {
   const id = 'resp_fixture';
   const routing = 'opaque-single-turn-fixture';
   const events = [
-    { type: 'response.created', response: { id, model, status: 'in_progress' } },
+    { type: 'response.created', response: { id, model, status: 'in_progress' }, safety_buffering: false },
     {
       type: 'response.metadata',
       response_id: id,
@@ -103,6 +118,10 @@ function fixtureReply(challenge, metadata) {
       'content-type': ['text/event-stream'],
       'openai-model': [model],
       'x-codex-turn-state': [routing],
+      'x-openai-proxy-wasm': ['v0.1'],
+      'x-codex-safety-buffering-enabled': ['true'],
+      'x-reasoning-included': ['fixture-private-value'],
+      'x-models-etag': ['W/"fixture-catalog"'],
     },
     async *[Symbol.asyncIterator]() {
       yield Buffer.from(wire);
@@ -117,20 +136,38 @@ export async function runFixtureTurn(archive, mode = 'complete') {
   if (mode !== 'complete' && mode !== 'moderation') throw Error('SBX_FIXTURE_MODE');
   const metadata =
     mode === 'moderation'
-      ? { openai_chatgpt_moderation_metadata: { presentation: 'inline' } }
-      : { openai_verification_recommendation: [] };
+      ? {
+          openai_chatgpt_moderation_metadata: {
+            safety_block: { schema_version: 1, domain: 'cyber', status: 'loading' },
+          },
+        }
+      : {
+          openai_verification_recommendation: [],
+          openai_chatgpt_moderation_metadata: { presentation: 'inline' },
+        };
   const receipt = { route: 'fixture', provider_requests: 0, cost_usd: 0 };
+  const refreshCatalog = async () => ({ status: 200, outcome: 'visible', model });
   try {
     const result = await turn(archive, 'fixture', ({ prompt, challenge }) =>
-      decodeUpstream(fixtureReply(challenge, metadata), challenge, Buffer.byteLength(prompt), receipt),
+      decodeUpstream(
+        fixtureReply(challenge, metadata),
+        challenge,
+        Buffer.byteLength(prompt),
+        receipt,
+        refreshCatalog,
+      ),
     );
     if (mode === 'moderation') throw Error('SBX_FIXTURE_UNEXPECTED_NATIVE_COMPLETION');
+    if (result.served_moderation_presentation !== 'inline') throw Error('SBX_FIXTURE_MISSING_PRESENTATION');
+    if (result.served_reasoning_included !== true) throw Error('SBX_FIXTURE_MISSING_REASONING_HEADER');
+    if (receipt.catalog_refresh !== 'confirmed') throw Error('SBX_FIXTURE_CATALOG_UNCONFIRMED');
     return result;
   } catch (error) {
     if (
       mode !== 'moderation' ||
       error.message !== 'SBX_EXCHANGE_REPLY' ||
       receipt.stream_refusal?.disposition !== 'turn_moderation' ||
+      Object.hasOwn(receipt, 'catalog_refresh') ||
       receipt.provider_observation?.terminal !== 'completed' ||
       !isDeepStrictEqual(receipt.provider_observation.usage, fixtureUsage)
     )

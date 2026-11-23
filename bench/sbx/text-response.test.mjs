@@ -4,6 +4,7 @@ import {
   fixtureResponse,
   model,
   nativeTextStream,
+  textResponse,
   verifiedBrokerText,
   verifiedText,
 } from './text-response.mjs';
@@ -39,6 +40,51 @@ test('only the exact text and measured terminal usage reach the native client', 
   assert.deepEqual(done.response.output, [item.item]);
   assert.equal(done.response.model, model);
   assert.deepEqual(done.response.usage, { ...counts, total_tokens: 12 });
+});
+
+test('the closed inline presentation reaches Codex before its answer, bound to its local response', () => {
+  const projected = textResponse(challenge, counts, 'inline');
+  const usage = verifiedBrokerText(projected, challenge, 4);
+  const events = nativeTextStream(challenge, usage, projected.moderation_presentation)
+    .trimEnd()
+    .split('\n\n')
+    .map((block) => JSON.parse(block.split('\ndata: ')[1]));
+  assert.deepEqual(
+    events.map((event) => event.type),
+    ['response.created', 'response.metadata', 'response.output_item.done', 'response.completed'],
+  );
+  assert.deepEqual(events[1], {
+    type: 'response.metadata',
+    response_id: events[0].response.id,
+    metadata: { openai_chatgpt_moderation_metadata: { presentation: 'inline' } },
+  });
+  assert.equal(events.at(-1).response.id, events[1].response_id);
+  for (const value of [null, 'block', '', true, ['inline'], { presentation: 'inline' }]) {
+    assert.throws(() => textResponse(challenge, counts, value), /SBX_SUBSCRIPTION_BROKER_SHAPE/);
+    assert.throws(() => nativeTextStream(challenge, usage, value), /SBX_SUBSCRIPTION_BROKER_SHAPE/);
+    assert.throws(
+      () => verifiedBrokerText({ ...projected, moderation_presentation: value }, challenge, 4),
+      /SBX_SUBSCRIPTION_BROKER_SHAPE/,
+    );
+  }
+  assert.throws(
+    () => verifiedBrokerText({ ...projected, moderation_presentation: undefined }, challenge, 4),
+    /SBX_SUBSCRIPTION_BROKER_SHAPE/,
+  );
+});
+
+test('the HTTP reasoning flag is a closed projection independent of text, presentation and usage', () => {
+  for (const presentation of [undefined, 'inline']) {
+    const unmarked = textResponse(challenge, counts, presentation);
+    const marked = textResponse(challenge, counts, presentation, true);
+    assert.deepEqual(marked, { ...unmarked, reasoning_included: true });
+    assert.deepEqual(verifiedBrokerText(marked, challenge, 4), counts);
+    for (const value of [false, null, 'true', 1, {}, []]) {
+      assert.throws(() => textResponse(challenge, counts, presentation, value), /BROKER_SHAPE/);
+      assert.throws(() => verifiedBrokerText({ ...marked, reasoning_included: value }, challenge, 4), /BROKER_SHAPE/);
+    }
+    assert.throws(() => verifiedBrokerText({ ...unmarked, reasoning_included: undefined }, challenge, 4), /BROKER_SHAPE/);
+  }
 });
 
 for (const [name, change] of Object.entries({

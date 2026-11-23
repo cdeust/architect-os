@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { frameByteLimit as maxBytes } from './json-frame.mjs';
 import { subscriptionFrames, streamDone } from './subscription-frames.mjs';
-import { createSubscriptionControls } from './subscription-metadata.mjs';
+import { createSubscriptionControls, unknownHttpControlFingerprint } from './subscription-metadata.mjs';
+import { observeSubscriptionHttpControls } from './subscription-http-observation.mjs';
 import { observeSubscription } from './subscription-observation.mjs';
 import { model, textResponse, verifiedText } from './text-response.mjs';
 
@@ -177,7 +178,12 @@ function admitResponse(wire, challenge, maxOutput, controls) {
     }
   }
   if (!terminal) throw Error('MISSING_TERMINAL');
-  return textResponse(challenge, verifiedText(terminal, challenge, maxOutput));
+  return textResponse(
+    challenge,
+    verifiedText(terminal, challenge, maxOutput),
+    controls.moderationPresentation,
+    controls.reasoningIncluded,
+  );
 }
 
 export function parseResponse(wire, challenge, maxOutput) {
@@ -189,9 +195,36 @@ export function parseResponse(wire, challenge, maxOutput) {
   }
 }
 
+// An X-Models-Etag notifies the host to refresh the authenticated account's catalogue.
+// Confirm the exact model only after the entire text stream has passed admission.
+// https://github.com/openai/codex/blob/29eb79e9866b3262a777fdf8195c1b9e63684c91/codex-rs/models-manager/src/manager.rs#L739-L765
+async function reconcileCatalog(refreshCatalog, receipt) {
+  let outcome = 'unavailable';
+  if (typeof refreshCatalog === 'function') {
+    try {
+      const evidence = await refreshCatalog();
+      const fields =
+        evidence && Object.getPrototypeOf(evidence) === Object.prototype
+          ? Object.getOwnPropertyDescriptors(evidence)
+          : {};
+      const confirmed =
+        Reflect.ownKeys(fields).length === 3 &&
+        fields.status?.value === 200 &&
+        fields.outcome?.value === 'visible' &&
+        fields.model?.value === model;
+      outcome = confirmed ? 'confirmed' : 'unconfirmed';
+    } catch {
+      outcome = 'failed';
+    }
+  }
+  if (receipt) receipt.catalog_refresh = outcome;
+  if (outcome !== 'confirmed')
+    throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'http_controls', disposition: 'catalog_refresh' });
+}
+
 // Historical SIWC HTTP 200 responses sometimes omit Content-Type. The bytes must
 // still form the same complete, model-bound, metered SSE transcript before release.
-export async function decodeUpstream(reply, challenge, maxOutput, receipt) {
+export async function decodeUpstream(reply, challenge, maxOutput, receipt, refreshCatalog) {
   const encodings = reply.headersDistinct['content-encoding'] ?? [];
   const types = reply.headersDistinct['content-type'] ?? [];
   if (
@@ -206,14 +239,29 @@ export async function decodeUpstream(reply, challenge, maxOutput, receipt) {
   const controls = createSubscriptionControls(model);
   try {
     const http = controls.http(reply.headersDistinct);
-    const wire = await collect(reply);
     if (receipt) {
-      receipt.provider_observation = observeSubscription(wire, model, http);
+      // Headers have already arrived even if the bounded body read fails.
+      receipt.provider_observation = {
+        evidence: 'stream_unavailable',
+        terminal: null,
+        usage: null,
+        usage_status: 'unobserved',
+        http_controls: observeSubscriptionHttpControls(reply.headersDistinct),
+      };
     }
+    const wire = await collect(reply);
+    if (receipt) Object.assign(receipt.provider_observation, observeSubscription(wire, model, http));
     if (http !== 'informational') {
-      throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'http_controls', disposition: http });
+      const diagnostic = { kind: 'http_controls', disposition: http };
+      if (http === 'requires_native_handling') {
+        const hash = unknownHttpControlFingerprint(reply.headersDistinct);
+        if (hash) diagnostic.header_name_sha256 = hash;
+      }
+      throw new StreamRefusal('UPSTREAM_REFUSED', diagnostic);
     }
-    return admitResponse(wire, challenge, maxOutput, controls);
+    const response = admitResponse(wire, challenge, maxOutput, controls);
+    if (controls.requiresCatalogRefresh) await reconcileCatalog(refreshCatalog, receipt);
+    return response;
   } catch (error) {
     if (receipt && error instanceof StreamRefusal) receipt.stream_refusal = error.diagnostic;
     throw error;

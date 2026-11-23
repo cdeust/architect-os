@@ -1,7 +1,13 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
 export const model = 'gpt-6.2-astra';
+
+// The challenge is a fresh host-generated nonce. Its digest binds the private worker
+// result to the same turn without retaining the text in the subscription receipt.
+export function challengeDigest(challenge) {
+  return createHash('sha256').update(challenge, 'utf8').digest('hex');
+}
 
 // The host accepts only the challenge it generated. Provider IDs, metadata, reasoning
 // and native tool declarations never cross the host/guest stream.
@@ -49,7 +55,12 @@ export function verifiedText(response, challenge, maxOutput) {
   return { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens };
 }
 
-export function nativeTextStream(text, usage) {
+function checkPresentation(presentation) {
+  if (presentation !== undefined && presentation !== 'inline') throw Error('SBX_SUBSCRIPTION_BROKER_SHAPE');
+}
+
+export function nativeTextStream(text, usage, presentation) {
+  checkPresentation(presentation);
   const response = { id: 'resp_' + randomUUID(), model, object: 'response' };
   const item = {
     id: 'msg_' + randomUUID(),
@@ -58,8 +69,17 @@ export function nativeTextStream(text, usage) {
     role: 'assistant',
     content: [{ type: 'output_text', text, annotations: [] }],
   };
-  const events = [
-    { type: 'response.created', response: { ...response, status: 'in_progress' } },
+  const events = [{ type: 'response.created', response: { ...response, status: 'in_progress' } }];
+  if (presentation === 'inline') {
+    // Codex emits this presentation-only notification for the current turn.
+    // https://github.com/openai/codex/blob/29eb79e9866b3262a777fdf8195c1b9e63684c91/codex-rs/app-server/tests/suite/v2/safety_check_downgrade.rs#L278-L339
+    events.push({
+      type: 'response.metadata',
+      response_id: response.id,
+      metadata: { openai_chatgpt_moderation_metadata: { presentation: 'inline' } },
+    });
+  }
+  events.push(
     { type: 'response.output_item.done', output_index: 0, item },
     {
       type: 'response.completed',
@@ -70,11 +90,14 @@ export function nativeTextStream(text, usage) {
         usage: { ...usage, total_tokens: usage.input_tokens + usage.output_tokens },
       },
     },
-  ];
+  );
   return events.map((e) => 'event: ' + e.type + '\ndata: ' + JSON.stringify(e) + '\n\n').join('');
 }
 
-export function textResponse(challenge, usage) {
+export function textResponse(challenge, usage, presentation, reasoningIncluded) {
+  checkPresentation(presentation);
+  if (reasoningIncluded !== undefined && reasoningIncluded !== true)
+    throw Error('SBX_SUBSCRIPTION_BROKER_SHAPE');
   return {
     model,
     status: 'completed',
@@ -87,14 +110,21 @@ export function textResponse(challenge, usage) {
       },
     ],
     usage: { ...usage, total_tokens: usage.input_tokens + usage.output_tokens },
+    ...(presentation === 'inline' ? { moderation_presentation: 'inline' } : {}),
+    ...(reasoningIncluded === true ? { reasoning_included: true } : {}),
   };
 }
 
 // Both hosted and fixture routes consume the same, closed broker result.
-// Native controls and provider-private fields must be resolved by the upstream host.
+// Only the fixed presentation and HTTP presence flag can accompany the verified text and usage.
 export function verifiedBrokerText(result, challenge, maxOutput) {
   const usage = verifiedText(result, challenge, maxOutput);
-  if (!isDeepStrictEqual(result, textResponse(challenge, usage)))
+  if (
+    !isDeepStrictEqual(
+      result,
+      textResponse(challenge, usage, result.moderation_presentation, result.reasoning_included),
+    )
+  )
     throw Error('SBX_SUBSCRIPTION_BROKER_SHAPE');
   return usage;
 }
