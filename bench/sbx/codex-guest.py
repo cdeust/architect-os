@@ -30,6 +30,7 @@ CALL_ID = "fixture_write"
 FRAME_BYTES = 1024 * 1024
 PROBE_SECONDS = 90  # Same native turn deadline as the offline write probe.
 EXPECTED_VERSION = "codex-cli 0.170.0"
+WITHHELD = object()
 
 
 def install():
@@ -285,7 +286,10 @@ class TextResponses(BaseHTTPRequestHandler):
 
     def send_error(self, code, *args):
         self.server.refused = True
-        self.send_response(code)
+        self.send_empty_response(code)
+
+    def send_empty_response(self, code):
+        self.send_response_only(code)
         self.send_header("Content-Length", "0")
         self.end_headers()
         self.close_connection = True
@@ -312,6 +316,12 @@ class TextResponses(BaseHTTPRequestHandler):
             server.requested = True
             print(json.dumps({"kind": "request", "model": server.model}), flush=True)
             reply = read_frame(sys.stdin.buffer)
+            if sys.stdin.buffer.read(1):
+                raise ValueError("unexpected second host reply")
+            if reply == {"kind": "withheld"}:
+                self.send_empty_response(403)
+                server.expected = WITHHELD
+                return
             reasoning_included = "reasoning_included" in reply
             if (set(reply) - {"kind", "body", "reasoning_included"} or reply["kind"] != "response"
                     or not isinstance(reply["body"], str) or (reasoning_included and reply["reasoning_included"] is not True)):
@@ -342,6 +352,42 @@ def observed_turn(raw):
     return message["text"], usage_counts(events[3]["usage"])
 
 
+def native_text_receipt(server, exit_code, output):
+    if server.refused or not server.requested or server.expected is None:
+        raise ValueError("client or relay refused")
+    receipt = {"kind": "receipt", "model": server.model, "client_sha256": BINARY_SHA256,
+               "client_version": EXPECTED_VERSION, "exit_code": exit_code}
+    if server.expected is WITHHELD:
+        # Measured with the pinned Linux client against this relay's empty 403. Its
+        # exec JSONL schema is codex-rs/exec/src/exec_events.rs at rust-v0.170.0.
+        events = [json_frame(line) for line in output.splitlines()]
+        if exit_code != 1 or len(events) != 4:
+            raise ValueError("unexpected native refusal")
+        thread = events[0]
+        thread_id = thread.get("thread_id")
+        if (thread != {"type": "thread.started", "thread_id": thread_id}
+                or not isinstance(thread_id, str)
+                or not re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", thread_id)):
+            raise ValueError("unexpected native thread")
+        message = f"unexpected status 403 Forbidden: Unknown error, url: http://127.0.0.1:{server.server_port}/v1/responses"
+        if events[1:] != [{"type": "turn.started"}, {"type": "error", "message": message},
+                          {"type": "turn.failed", "error": {"message": message}}]:
+            raise ValueError("unexpected native refusal")
+        return {**receipt, "terminal": "withheld",
+                "challenge_sha256": hashlib.sha256(server.challenge.encode("utf-8")).hexdigest()}
+    if exit_code != 0:
+        raise ValueError("native text client failed")
+    text, counts = observed_turn(output)
+    if (text, counts) != server.expected:
+        raise ValueError("unmatched native receipt")
+    receipt.update(text=text, usage=counts)
+    if server.served_presentation is not None:
+        receipt["served_moderation_presentation"] = server.served_presentation
+    if server.served_reasoning_included:
+        receipt["served_reasoning_included"] = True
+    return receipt
+
+
 def run_text_client(server, command, cwd, env):
     # Serve the sole HTTP peer and drain native events under one deadline with bounded storage.
     with subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
@@ -357,12 +403,7 @@ def run_text_client(server, command, cwd, env):
                     else:
                         chunk = os.read(client.stdout.fileno(), FRAME_BYTES + 1 - len(output))
                         if not chunk:
-                            if client.wait() or server.refused or not server.requested or server.expected is None:
-                                raise ValueError("client or relay refused")
-                            result = observed_turn(output)
-                            if result != server.expected:
-                                raise ValueError("unmatched native receipt")
-                            return result
+                            return native_text_receipt(server, client.wait(), output)
                         output.extend(chunk)
                         if len(output) > FRAME_BYTES:
                             raise ValueError("oversized native event stream")
@@ -406,13 +447,7 @@ def text_probe():
                             'model_providers.probe.stream_max_retries=0', 'approval_policy="never"', 'mcp_servers={}',
                             'web_search="disabled"', 'project_doc_max_bytes=0', 'check_for_update_on_startup=false'):
                 command += ["-c", setting]
-            text, counts = run_text_client(server, [*command, "--", server.prompt], work, env)
-    receipt = {"kind": "receipt", "model": spec["model"], "text": text, "usage": counts,
-               "client_sha256": BINARY_SHA256, "client_version": EXPECTED_VERSION, "exit_code": 0}
-    if server.served_presentation is not None:
-        receipt["served_moderation_presentation"] = server.served_presentation
-    if server.served_reasoning_included:
-        receipt["served_reasoning_included"] = True
+            receipt = run_text_client(server, [*command, "--", server.prompt], work, env)
     print(json.dumps(receipt), flush=True)
 
 

@@ -2,6 +2,7 @@
 
 import copy
 from contextlib import redirect_stdout
+import hashlib
 from http.client import parse_headers
 import importlib.util
 import io
@@ -57,10 +58,11 @@ class TextContract(unittest.TestCase):
             return SimpleNamespace(server_port=80, model=MODEL, prompt=PROMPT, challenge=TEXT,
                                    requested=False, refused=False, expected=None)
 
-        def invoke(server, method="POST", path="/v1/responses", extra_header=None, inline=False, fields=None):
+        def invoke(server, method="POST", path="/v1/responses", extra_header=None, inline=False, fields=None,
+                   host_frames=None):
             expected_body = sse(response_events(inline=inline))
             fields = {} if fields is None else fields
-            reply = ndjson([{"kind": "response", "body": expected_body, **fields}])
+            reply = ndjson([{"kind": "response", "body": expected_body, **fields}]) if host_frames is None else host_frames
             headers = [f"{method} {path} HTTP/1.0", "Host: 127.0.0.1:80", "Content-Type: application/json",
                        f"Content-Length: {len(body)}"]
             if extra_header:
@@ -80,6 +82,9 @@ class TextContract(unittest.TestCase):
                     self.assertEqual(reasoning, ["true"] if status == 200 and fields.get("reasoning_included") is True else None)
                     if status == 200:
                         self.assertEqual(response.read().decode(), expected_body)
+                    else:
+                        self.assertEqual(list(response_headers.items()), [("Content-Length", "0")])
+                        self.assertEqual(response.read(), b"")
                 return status, output.getvalue()
 
         fresh = new_server()
@@ -104,6 +109,23 @@ class TextContract(unittest.TestCase):
                 self.assertEqual(invoke(server, fields=fields)[0], 400)
                 self.assertIsNone(server.expected)
         self.assertEqual(invoke(new_server(), fields={"reasoning_included": True, "headers": {}})[0], 400)
+        withheld = {"kind": "withheld"}
+        fresh = new_server()
+        status, emitted = invoke(fresh, host_frames=ndjson([withheld]))
+        self.assertEqual(status, 403)
+        self.assertIs(fresh.expected, guest.WITHHELD)
+        self.assertFalse(fresh.refused)
+        self.assertEqual(json.loads(emitted), {"kind": "request", "model": MODEL})
+        self.assertEqual(invoke(fresh, host_frames=ndjson([withheld])), (403, ""))
+        self.assertTrue(fresh.refused)
+        for bad in (ndjson([{**withheld, "body": "private"}]), ndjson([withheld, withheld]),
+                    ndjson([{"kind": "response", "body": sse(response_events())}, withheld]),
+                    ndjson([{**withheld, "reasoning_included": True}]), b'{"kind":"withheld","kind":"withheld"}\n'):
+            server = new_server()
+            with self.subTest(host_frames=bad):
+                self.assertEqual(invoke(server, host_frames=bad)[0], 400)
+                self.assertTrue(server.refused)
+                self.assertIsNone(server.expected)
         for fields in ({"method": "GET"}, {"path": "/elsewhere"}, {"extra_header": "Authorization: synthetic"},
                        {"extra_header": "Transfer-Encoding: chunked"}, {"extra_header": "Content-Length: 1"}):
             fresh = new_server()
@@ -202,6 +224,41 @@ class TextContract(unittest.TestCase):
                     native[:2] + [{"type": "approval.requested"}] + native[2:]):
             with self.subTest(events=len(bad)), self.assertRaises(ValueError):
                 guest.observed_turn(ndjson(bad))
+
+    def test_withheld_receipt_requires_the_served_403_the_exact_native_failure_and_no_answer(self):
+        server = SimpleNamespace(refused=False, requested=True, expected=guest.WITHHELD,
+                                 server_port=43129, model=MODEL, challenge=TEXT)
+        message = "unexpected status 403 Forbidden: Unknown error, url: http://127.0.0.1:43129/v1/responses"
+        opened = {"type": "thread.started", "thread_id": "00000000-0000-4000-8000-000000000001"}
+        started = {"type": "turn.started"}
+        error = {"type": "error", "message": message}
+        failed = {"type": "turn.failed", "error": {"message": message}}
+        report = [opened, started, error, failed]
+        expected = {"kind": "receipt", "model": MODEL, "terminal": "withheld", "exit_code": 1,
+                    "client_sha256": guest.BINARY_SHA256, "client_version": guest.EXPECTED_VERSION,
+                    "challenge_sha256": hashlib.sha256(TEXT.encode()).hexdigest()}
+        self.assertEqual(guest.native_text_receipt(server, 1, ndjson(report)), expected)
+        other = {**vars(server), "challenge": TEXT[:-1] + "1"}
+        self.assertNotEqual(guest.native_text_receipt(SimpleNamespace(**other), 1, ndjson(report)), expected)
+        for exit_code in (0, 2, -9):
+            with self.subTest(code=exit_code), self.assertRaises(ValueError):
+                guest.native_text_receipt(server, exit_code, ndjson(report))
+        for state in ({"requested": False}, {"refused": True}, {"expected": None}, {"expected": (TEXT, USAGE)}):
+            with self.subTest(state=state), self.assertRaises(ValueError):
+                guest.native_text_receipt(SimpleNamespace(**{**vars(server), **state}), 1, ndjson(report))
+        for bad in ([opened, started, failed], [opened, error, started, failed], report + [failed],
+                    [{**opened, "thread_id": "not-a-thread"}, *report[1:]],
+                    [opened, started, {**error, "message": "unexpected status 401"}, failed],
+                    [opened, started, error, {"type": "turn.failed", "error": {"message": "other"}}],
+                    [opened, started, error, {"type": "turn.completed", "usage": USAGE}],
+                    [opened, started, {"type": "item.completed", "item": {"type": "agent_message", "text": TEXT}}, failed],
+                    [opened, started, {"type": "response.output_text.delta", "delta": TEXT}, error, failed],
+                    [opened, started, {**error, "delta": TEXT}, failed]):
+            with self.subTest(events=bad), self.assertRaises(ValueError):
+                guest.native_text_receipt(server, 1, ndjson(bad))
+        server.server_port += 1
+        with self.assertRaises(ValueError):
+            guest.native_text_receipt(server, 1, ndjson(report))
 
 
 if __name__ == "__main__":

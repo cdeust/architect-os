@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseResponse, decodeUpstream } from './subscription-stream.mjs';
+import { parseResponse, decodeUpstream, decodeNativeUpstream } from './subscription-stream.mjs';
 import { model } from './text-response.mjs';
 const text = 'AOS-31911239-ce54-48b4-8b78-a130f8e6ed3d';
 const prompt = 'Reply with exactly this value: ' + text;
@@ -35,6 +35,233 @@ test('bounded terminal and safe output only', () => {
   assert.equal(final.output.length, 1);
   assert.deepEqual(final.usage, { input_tokens: 20, output_tokens: 12, total_tokens: 32 });
   assert.equal(final.output[0].content[0].text, text);
+});
+
+test('only the trusted decoder can turn a withheld answer into a content-free native denial', async () => {
+  const parse = (change) => decodeNativeUpstream(upstream({}, events(change)), text, prompt.length);
+  assert.equal((await parse()).output[0].content[0].text, text);
+  const replace = (frame) => (frames) => {
+    frames[1] = frame;
+  };
+  const moderation = {
+    type: 'response.metadata',
+    response_id: 'r',
+    metadata: { openai_chatgpt_moderation_metadata: { private: 'withheld' } },
+  };
+  assert.deepEqual(await parse(replace(moderation)), { kind: 'withheld' });
+  const modelRefusal = { type: 'response.refusal.done', response_id: 'r' };
+  const refusedMessage = { ...message, content: [{ type: 'refusal', refusal: 'private' }] };
+  assert.deepEqual(
+    await parse((frames) => {
+      frames[1] = modelRefusal;
+      frames[2].response.output = [{ type: 'reasoning' }, refusedMessage];
+    }),
+    { kind: 'withheld' },
+  );
+  await assert.rejects(parse(replace(modelRefusal)), /UPSTREAM_REFUSED/);
+  for (const mixed of [
+    { type: 'response.output_text.delta', delta: 'private text' },
+    { type: 'response.content_part.done', part: message.content[0] },
+    { type: 'response.output_item.done', item: message },
+  ]) {
+    for (const events of [
+      [modelRefusal, mixed],
+      [mixed, modelRefusal],
+    ]) {
+      await assert.rejects(
+        parse((frames) => {
+          frames[2].response.output = [refusedMessage];
+          frames.splice(1, 1, ...events);
+        }),
+        /UPSTREAM_REFUSED/,
+      );
+    }
+  }
+  for (const output of [
+    [refusedMessage, message],
+    [{ ...refusedMessage, content: [...refusedMessage.content, ...message.content] }],
+    [{ ...refusedMessage, phase: 'commentary' }],
+    [{ ...refusedMessage, content: [{ type: 'refusal', refusal: '' }] }],
+  ])
+    await assert.rejects(
+      parse((frames) => {
+        frames[1] = modelRefusal;
+        frames[2].response.output = output;
+      }),
+      /UPSTREAM_REFUSED/,
+    );
+  assert.throws(() => parseResponse(events(replace(moderation)), text, prompt.length), /UPSTREAM_REFUSED/);
+  await assert.rejects(
+    decodeUpstream(upstream({}, events(replace(moderation))), text, prompt.length),
+    /UPSTREAM_REFUSED/,
+  );
+  const incomplete = (reason) => (frames) => {
+    frames[2] = {
+      type: 'response.incomplete',
+      response: { id: 'r', model, status: 'incomplete', incomplete_details: { reason } },
+    };
+  };
+  assert.deepEqual(await parse(incomplete('content_filter')), { kind: 'withheld' });
+  await assert.rejects(parse(incomplete('max_output_tokens')), /UPSTREAM_REFUSED/);
+  await assert.rejects(parse(replace({ type: 'response.metadata', response_id: 'some-other-turn' })));
+  for (const substitute of [
+    { type: 'response.refusal.done', response_id: 'another response' },
+    { type: 'response.content_part.done', part: { type: 'refusal' }, response: { model: 'another model' } },
+    {
+      type: 'response.output_item.done',
+      item: { type: 'message', content: [{ type: 'refusal' }] },
+      response_id: 'another response',
+    },
+    {
+      type: 'response.incomplete',
+      response_id: 'another response',
+      response: { id: 'r', model, status: 'incomplete', incomplete_details: { reason: 'content_filter' } },
+    },
+  ])
+    await assert.rejects(parse(replace(substitute)));
+});
+
+test('a policy signal cannot qualify a missing, invalid or contradictory provider terminal', async () => {
+  const notice = {
+    type: 'response.metadata',
+    response_id: 'r',
+    metadata: { openai_chatgpt_moderation_metadata: {} },
+  };
+  const end = {
+    type: 'response.completed',
+    response: { id: 'r', model, status: 'completed', output: [message] },
+  };
+  for (const [suffix, evidence] of [
+    [[], 'missing_terminal'],
+    [[{ ...end, response: { ...end.response, id: 'another' } }], 'unbound'],
+    [
+      [
+        { type: 'response.in_progress', response: { headers: { 'openai-model': 'private-other-model' } } },
+        end,
+      ],
+      'unbound',
+    ],
+    [[end, end], 'invalid_stream'],
+    [[{ type: 'error', code: 'server_error' }], 'stream_error'],
+    [[{ type: 'response.failed', response: { id: 'r', model, status: 'failed' } }], 'bound'],
+    [
+      [
+        {
+          type: 'response.incomplete',
+          response: {
+            id: 'r',
+            model,
+            status: 'incomplete',
+            incomplete_details: { reason: 'max_output_tokens' },
+          },
+        },
+      ],
+      'bound',
+    ],
+    [[{ ...end, response: { ...end.response, output: null } }], 'bound'],
+    [[{ type: 'response.future_control' }, end], 'bound'],
+    [[{ type: 'response.output_item.added', item: { type: 'function_call' } }, end], 'bound'],
+    [
+      [{ type: 'response.in_progress', response: { headers: { 'x-models-etag': '"private-etag"' } } }, end],
+      'bound',
+    ],
+    [[{ type: 'response.metadata', safety_buffering: true }, end], 'bound'],
+    [[{ ...end, response: { ...end.response, output: [{ type: 'function_call' }] } }], 'bound'],
+  ]) {
+    const receipt = {};
+    let lookups = 0;
+    await assert.rejects(
+      decodeNativeUpstream(
+        upstream({ 'x-models-etag': ['"private-etag"'] }, eventStream([created, notice, ...suffix])),
+        text,
+        70,
+        receipt,
+        () => {
+          lookups++;
+        },
+      ),
+    );
+    assert.equal(receipt.provider_observation.evidence, evidence);
+    assert.ok(!JSON.stringify(receipt).includes('private-other-model'));
+    assert.ok(!JSON.stringify(receipt).includes('private-etag'));
+    assert.equal(lookups, 0);
+  }
+  for (const headers of [
+    { 'x-models-etag': ['invalid'] },
+    { 'openai-model': ['different'] },
+    { 'x-codex-future-control': ['private'] },
+  ])
+    await assert.rejects(
+      decodeNativeUpstream(upstream(headers, eventStream([created, notice, end])), text, 70),
+      /UPSTREAM_REFUSED/,
+    );
+});
+
+test('only the response being decoded determines its native result', async () => {
+  const notice = {
+    type: 'response.metadata',
+    response_id: 'r',
+    metadata: { openai_chatgpt_moderation_metadata: {} },
+  };
+  const body = events((frames) => frames.splice(1, 0, notice));
+  const receipt = {};
+  assert.deepEqual(await decodeNativeUpstream(upstream({}, body), text, 70, receipt), { kind: 'withheld' });
+  assert.equal(receipt.stream_refusal.disposition, 'turn_moderation');
+  await assert.rejects(decodeNativeUpstream(upstream({}, eventStream([created, notice])), text, 70));
+  const plain = await decodeNativeUpstream(upstream({}, events()), text, 70);
+  assert.equal(plain.output[0].content[0].text, text);
+});
+
+test('a complete terminal alone can attest a native model refusal and the raw decoder still rejects it', async () => {
+  const refusal = { ...message, content: [{ type: 'refusal', refusal: 'private-refusal' }] };
+  const body = events((frames) => {
+    frames.splice(1, 1);
+    frames[1].response.output = [refusal];
+  });
+  const receipt = {};
+  assert.deepEqual(await decodeNativeUpstream(upstream({}, body), text, 70, receipt), { kind: 'withheld' });
+  assert.deepEqual(receipt.stream_refusal, { kind: 'model_refusal' });
+  assert.equal(receipt.provider_observation.terminal, 'completed');
+  assert.ok(!JSON.stringify(receipt).includes('private-refusal'));
+  await assert.rejects(decodeUpstream(upstream({}, body), text, 70), /TEXT_MISMATCH/);
+});
+
+test('a content-filter terminal confirms a prior moderation hold only on a bound, compatible response', async () => {
+  const notice = {
+    type: 'response.metadata',
+    response_id: 'r',
+    metadata: { openai_chatgpt_moderation_metadata: {} },
+  };
+  const incomplete = {
+    id: 'r',
+    model,
+    status: 'incomplete',
+    incomplete_details: { reason: 'content_filter' },
+  };
+  const body = (fields) =>
+    eventStream([created, notice, { type: 'response.incomplete', response: { ...incomplete, ...fields } }]);
+  for (const fields of [{}, { output: [] }, { output: [{ ...message, status: 'incomplete' }] }]) {
+    const receipt = {};
+    assert.deepEqual(await decodeNativeUpstream(upstream({}, body(fields)), text, 70, receipt), {
+      kind: 'withheld',
+    });
+    assert.deepEqual(receipt.stream_refusal, { kind: 'response_incomplete', reason: 'content_filter' });
+    assert.equal(receipt.provider_observation.terminal, 'incomplete');
+    assert.ok(receipt.provider_observation.metadata.categories.includes('turn_moderation'));
+  }
+  for (const fields of [
+    { model: 'different' },
+    { id: 'private-other-id' },
+    { error: { code: 'server_error' } },
+    { output: null },
+    { output: 'invalid' },
+    { output: [{ type: 'function_call' }] },
+    { output: [message, message] },
+    { output: [{ ...message, content: [...message.content, { type: 'refusal', refusal: 'private' }] }] },
+    { output: [{ ...message, content: [{ ...message.content[0], refusal: 'conflicting content' }] }] },
+  ])
+    await assert.rejects(decodeNativeUpstream(upstream({}, body(fields)), text, 70));
+  await assert.rejects(decodeUpstream(upstream({}, body({})), text, 70), /UPSTREAM_REFUSED/);
 });
 for (const [name, mutate] of [
   [

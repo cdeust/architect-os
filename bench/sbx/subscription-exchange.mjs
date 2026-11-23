@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { prepareSubscriptionRequest } from './subscription-request.mjs';
-import { decodeUpstream } from './subscription-stream.mjs';
+import { decodeNativeUpstream, decodeUpstream } from './subscription-stream.mjs';
 import { model } from './text-response.mjs';
 
 // The host consumes the bounded JSON from the fixed account catalogue. No other
@@ -34,7 +34,7 @@ async function refreshWithinGrant(refreshCatalog, signal) {
 
 // Only the host transport owns the account credential and the fixed HTTPS destination.
 // Reserve before calling it, even if the transport fails or a second caller races.
-export async function requestSubscriptionText(prompt, signal, receipt, dispatch, refreshCatalog) {
+async function exchangeSubscriptionText(prompt, signal, receipt, dispatch, refreshCatalog, decode) {
   if (receipt.provider_requests !== 0) throw Error('TURN_NOT_ADMITTED');
   const { challenge, body } = prepareSubscriptionRequest(prompt);
   signal.throwIfAborted();
@@ -48,10 +48,20 @@ export async function requestSubscriptionText(prompt, signal, receipt, dispatch,
     // This is the host's output acceptance limit. SIWC has no max_output_tokens parameter.
     const refresh =
       typeof refreshCatalog === 'function' ? () => refreshWithinGrant(refreshCatalog, signal) : undefined;
-    const response = await decodeUpstream(reply, challenge, Buffer.byteLength(prompt), receipt, refresh);
+    const response = await decode(reply, challenge, Buffer.byteLength(prompt), receipt, refresh);
     signal.throwIfAborted();
     return response;
   } finally {
     reply.destroy();
   }
+}
+
+export function requestSubscriptionText(prompt, signal, receipt, dispatch, refreshCatalog) {
+  return exchangeSubscriptionText(prompt, signal, receipt, dispatch, refreshCatalog, decodeUpstream);
+}
+
+// This port additionally returns a content-free denial for the native client,
+// verified against the same complete provider response as its host receipt.
+export function requestNativeSubscriptionText(prompt, signal, receipt, dispatch, refreshCatalog) {
+  return exchangeSubscriptionText(prompt, signal, receipt, dispatch, refreshCatalog, decodeNativeUpstream);
 }

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { confirmSubscriptionCatalog, requestSubscriptionText } from './subscription-exchange.mjs';
+import {
+  confirmSubscriptionCatalog,
+  requestNativeSubscriptionText,
+  requestSubscriptionText,
+} from './subscription-exchange.mjs';
 import { fixtureResponse, model } from './text-response.mjs';
 
 const challenge = 'AOS-8ec061f1-6e29-4968-a070-21c072110c57';
@@ -125,6 +129,38 @@ test('one account-bound fresh catalogue read reconciles one otherwise valid resp
   );
   assert.equal(dispatches, 1);
   assert.equal(reads, 1);
+});
+
+test('the native port consumes its only grant on a bound denial and keeps the private report on the host', async () => {
+  const receipt = { provider_requests: 0 };
+  let reads = 0;
+  let dispatches = 0;
+  const dispatch = () => {
+    dispatches++;
+    return catalogueReply(catalogHeaders, [
+      {
+        type: 'response.metadata',
+        response_id: 'r',
+        metadata: { openai_chatgpt_moderation_metadata: { private: 'fixture-private-report' } },
+      },
+    ]);
+  };
+  const refresh = () => {
+    reads++;
+    return visible;
+  };
+  assert.deepEqual(await requestNativeSubscriptionText(prompt, signal, receipt, dispatch, refresh), {
+    kind: 'withheld',
+  });
+  assert.deepEqual(receipt.stream_refusal, { kind: 'provider_metadata', disposition: 'turn_moderation' });
+  assert.equal(receipt.provider_observation.terminal, 'completed');
+  assert.equal(JSON.stringify(receipt).includes('fixture-private-report'), false);
+  await assert.rejects(
+    requestNativeSubscriptionText(prompt, signal, receipt, dispatch, refresh),
+    /TURN_NOT_ADMITTED/,
+  );
+  assert.equal(dispatches, 1);
+  assert.equal(reads, 0);
 });
 
 test('missing, failed, stale or differently scoped catalogue evidence vetoes native release', async () => {

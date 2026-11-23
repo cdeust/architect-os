@@ -83,7 +83,7 @@ The [milestone 2 integration](https://github.com/cdeust/architect-os/pull/124) e
 
 The admitted workstation reproduced the write witness, one read-only host fixture turn with matching synthetic usage (8 input and 4 output tokens), and the Google ACP refusal (`-32000`, process exit 1). These fixtures made zero upstream calls.
 
-Four subscription responses completed at the provider with measured usage. Trial 7 reached the stream admission decision and withheld the text on turn moderation. Usage for trials 1–3 and monetary cost for all seven remain unknown. [Qualification evidence](../bench/sbx/README.md#astra-subscription-trials-on-22-november-2026)
+Five subscription responses completed at the provider with measured usage. Trial 8 returned a native refusal through the VM after the host withheld the text on turn moderation. Usage for trials 1–3 and monetary cost for all eight remain unknown. [Qualification evidence](../bench/sbx/README.md#astra-subscription-trials-on-22-november-2026)
 
 ## Astra subscription request
 
@@ -92,4 +92,6 @@ Four subscription responses completed at the provider with measured usage. Trial
 - [x] Bind the private worker receipt to the host's challenge, observed counts, served controls and workspace cleanup.
 - [x] Record the seven subscription trials and the last refusal at the stream boundary.
 - [ ] Resolve opaque turn-moderation reports against an authoritative OpenAI contract.
-- [ ] Confirm a native subscription turn with the exact model, matching receipt and verified shutdown, then update the SRT/SBX Builder diagram.
+- [x] Draw the separate SRT process and Docker SBX VM, the host broker and their process pipes. Verify the diagram at the README width.
+- [x] Propagate a withheld answer to the native client and verify its exit and the empty workspace after shutdown in the offline fixture and on subscription trial 8.
+- [ ] Confirm a successful native subscription turn with the exact model, matching receipt and verified shutdown.

@@ -132,8 +132,12 @@ function modelIdentity(groups, model, http) {
   return reported !== undefined && reported !== model ? 'model_mismatch' : informational;
 }
 
-function notifications(source) {
-  for (const [field, veto] of notificationFields) if (Object.hasOwn(source, field)) return veto;
+function notifications(source, holdModeration) {
+  for (const [field, veto] of notificationFields) {
+    if (!Object.hasOwn(source, field)) continue;
+    if (veto === 'turn_moderation' && holdModeration) holdModeration();
+    else return veto;
+  }
   if (Object.hasOwn(source, 'safety_buffering') && source.safety_buffering !== false)
     return 'safety_buffering';
   if (!Object.hasOwn(source, 'metadata')) return informational;
@@ -164,6 +168,10 @@ function notifications(source) {
         presentation = true;
         continue;
       }
+      if (holdModeration) {
+        holdModeration();
+        continue;
+      }
     }
     return veto;
   }
@@ -173,7 +181,7 @@ function notifications(source) {
 }
 
 /** Owns routing state for exactly one HTTP response. The capability exposes only fixed dispositions. */
-export function createSubscriptionControls(model) {
+export function createSubscriptionControls(model, { auditTurnModeration = false } = {}) {
   let active = typeof model === 'string' && model.length > 0;
   let receivedHeaders = false;
   let receivedEvent = false;
@@ -181,6 +189,13 @@ export function createSubscriptionControls(model) {
   let boundResponseId;
   let turnState;
   let moderationPresentation;
+  let held = false;
+  // Audit may continue validating a denied transcript, but can never return to informational.
+  const holdModeration = auditTurnModeration
+    ? () => {
+        held = true;
+      }
+    : undefined;
   let requiresCatalogRefresh = false;
   function close() {
     active = false;
@@ -192,7 +207,7 @@ export function createSubscriptionControls(model) {
   }
   function verdict(disposition) {
     if (disposition !== informational) close();
-    return disposition;
+    return disposition === informational && held ? 'turn_moderation' : disposition;
   }
   function inspectHeaders(groups, http) {
     const identity = modelIdentity(groups, model, http);
@@ -269,10 +284,12 @@ export function createSubscriptionControls(model) {
     const disposition = inspectHeaders(groups, false);
     if (disposition !== informational) return disposition;
     for (const source of sources) {
-      const veto = notifications(source);
+      const veto = notifications(source, holdModeration);
       if (veto === 'inline_presentation') {
-        if (!explicit || source !== event || moderationPresentation !== undefined) return 'turn_moderation';
-        moderationPresentation = 'inline';
+        if (!explicit || source !== event || moderationPresentation !== undefined) {
+          if (!holdModeration) return 'turn_moderation';
+          holdModeration();
+        } else moderationPresentation = 'inline';
       } else if (veto !== informational) return veto;
     }
     if (explicit) {

@@ -1,7 +1,21 @@
 import { frameByteLimit as pipeLimit, parseUniqueJson } from './json-frame.mjs';
-import { isDeepStrictEqual } from 'node:util';
 
 const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
+function hostReplyFrame(reply) {
+  if (!reply || Object.getPrototypeOf(reply) !== Object.prototype) throw Error();
+  const fields = Object.getOwnPropertyDescriptors(reply);
+  const keys = Reflect.ownKeys(fields);
+  if (keys.some((key) => !fields[key].enumerable || !Object.hasOwn(fields[key], 'value'))) throw Error();
+  const kind = fields.kind?.value;
+  if (kind === 'withheld' && keys.length === 1) return { kind: 'withheld' };
+  const body = fields.body?.value;
+  if (kind !== 'response' || typeof body !== 'string' || body.length > pipeLimit) throw Error();
+  if (keys.length === 2) return { kind, body };
+  if (keys.length === 3 && fields.reasoning_included?.value === true)
+    return { kind, body, reasoning_included: true };
+  throw Error();
+}
 
 /** A single guest request and a final receipt on a pre-scoped SBX child. */
 export function exchangeFrames(child, initialObject, onRequest, limitMs, signal) {
@@ -58,16 +72,7 @@ export function exchangeFrames(child, initialObject, onRequest, limitMs, signal)
           if (failure) return;
           const reply = await onRequest(frame, controller.signal);
           if (failure) return;
-          const response = { kind: 'response', body: reply?.body };
-          if (reply?.reasoning_included === true) response.reasoning_included = true;
-          if (
-            typeof response.body !== 'string' ||
-            response.body.length > pipeLimit ||
-            !isDeepStrictEqual(reply, response)
-          ) {
-            throw Error();
-          }
-          writeFrame(response, true);
+          writeFrame(hostReplyFrame(reply), true);
           phase = 'receipt';
         })
         .catch(() => fail('REPLY'));

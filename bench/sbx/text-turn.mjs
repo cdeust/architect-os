@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { requireAdmittedRun } from '../../packages/sandbox/src/runtime-context.ts';
 import { clientSha256, clientVersion, codexGuest, installCodex, verifyArchive } from './codex-client.mjs';
-import { decodeUpstream } from './subscription-stream.mjs';
+import { decodeNativeUpstream } from './subscription-stream.mjs';
 import { withOfflineSbx } from './runtime.mjs';
 import {
   challengeDigest,
@@ -23,6 +23,7 @@ async function turn(archive, route, respond) {
   let usage;
   let presentation;
   let reasoningIncluded;
+  let withheld = false;
   return withOfflineSbx(
     {
       limitMs: 180_000,
@@ -40,6 +41,10 @@ async function turn(archive, route, respond) {
           if (++calls !== 1 || !isDeepStrictEqual(request, { kind: 'request', model }))
             throw Error('SBX_TEXT_REQUEST_REFUSED');
           const result = await respond({ prompt, challenge, signal });
+          if (isDeepStrictEqual(result, { kind: 'withheld' })) {
+            withheld = true;
+            return { kind: 'withheld' };
+          }
           usage = verifiedBrokerText(result, challenge, Buffer.byteLength(prompt));
           presentation = result.moderation_presentation;
           reasoningIncluded = result.reasoning_included;
@@ -50,6 +55,25 @@ async function turn(archive, route, respond) {
           };
         },
       );
+      if (withheld) {
+        const expected = {
+          model,
+          client_sha256: clientSha256,
+          client_version: clientVersion,
+          terminal: 'withheld',
+          challenge_sha256: challengeDigest(challenge),
+        };
+        if (!isDeepStrictEqual(receipt, { ...expected, kind: 'receipt', exit_code: 1 }))
+          throw Error('SBX_NATIVE_TEXT_RECEIPT_MISMATCH');
+        return {
+          ...expected,
+          route,
+          native_exit: 1,
+          requests: calls,
+          provider_requests: route === 'fixture' ? 0 : null,
+          cost_usd: route === 'fixture' ? 0 : null,
+        };
+      }
       // The guest relay confirms which notice it served to Codex. The exec JSONL interface
       // independently reports the completed text and metering.
       const served = {
@@ -147,33 +171,32 @@ export async function runFixtureTurn(archive, mode = 'complete') {
         };
   const receipt = { route: 'fixture', provider_requests: 0, cost_usd: 0 };
   const refreshCatalog = async () => ({ status: 200, outcome: 'visible', model });
-  try {
-    const result = await turn(archive, 'fixture', ({ prompt, challenge }) =>
-      decodeUpstream(
-        fixtureReply(challenge, metadata),
-        challenge,
-        Buffer.byteLength(prompt),
-        receipt,
-        refreshCatalog,
-      ),
-    );
-    if (mode === 'moderation') throw Error('SBX_FIXTURE_UNEXPECTED_NATIVE_COMPLETION');
-    if (result.served_moderation_presentation !== 'inline') throw Error('SBX_FIXTURE_MISSING_PRESENTATION');
-    if (result.served_reasoning_included !== true) throw Error('SBX_FIXTURE_MISSING_REASONING_HEADER');
-    if (receipt.catalog_refresh !== 'confirmed') throw Error('SBX_FIXTURE_CATALOG_UNCONFIRMED');
-    return result;
-  } catch (error) {
+  const result = await turn(archive, 'fixture', ({ prompt, challenge }) =>
+    decodeNativeUpstream(
+      fixtureReply(challenge, metadata),
+      challenge,
+      Buffer.byteLength(prompt),
+      receipt,
+      refreshCatalog,
+    ),
+  );
+  if (mode === 'moderation') {
     if (
-      mode !== 'moderation' ||
-      error.message !== 'SBX_EXCHANGE_REPLY' ||
+      result.terminal !== 'withheld' ||
+      result.native_exit !== 1 ||
+      result.workspace_empty_after_shutdown !== true ||
       receipt.stream_refusal?.disposition !== 'turn_moderation' ||
       Object.hasOwn(receipt, 'catalog_refresh') ||
       receipt.provider_observation?.terminal !== 'completed' ||
       !isDeepStrictEqual(receipt.provider_observation.usage, fixtureUsage)
     )
-      throw error;
-    return { ...receipt, native_completed: false };
+      throw Error('SBX_FIXTURE_REFUSAL_MISMATCH');
+    return { ...result, ...receipt, native_completed: false };
   }
+  if (result.served_moderation_presentation !== 'inline') throw Error('SBX_FIXTURE_MISSING_PRESENTATION');
+  if (result.served_reasoning_included !== true) throw Error('SBX_FIXTURE_MISSING_REASONING_HEADER');
+  if (receipt.catalog_refresh !== 'confirmed') throw Error('SBX_FIXTURE_CATALOG_UNCONFIRMED');
+  return result;
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

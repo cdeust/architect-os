@@ -203,6 +203,14 @@ Feature: the image of the profiles is produced from the profile files, the hand-
   Scenario: The README loop groups each capability with its phase and follows the numbered path
     Then each orchestration phase owns its cards and connects to the next phase
 
+  Scenario: the hand-drawn diagram accepts only static illustrations
+    Then the architecture diagram validator rejects each inserted fragment
+      | <image/>                                 |
+      | <g style="display:none"/>                |
+      | <path fill="url(https://example.org/)"/> |
+      | <path marker-end="url(#missing)"/>       |
+      | <?xml-stylesheet href="other.css"?>      |
+
   Rule: the tripwire on the hand-drawn picture stops the plain forms only
 
     Scenario: the committed hand-drawn picture passes its tripwire

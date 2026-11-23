@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 4800.5" width="1400" height="4800.5" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="t">architect-os: what is ready, and where what comes next will join</title>
-  <desc id="d">The architecture of architect-os in one image, in five parts. Ready marks bricks available on main. Next marks planned work or pending integration beside the brick it will join. 1. Serving a call: a client calls the gateway over HTTP on the loopback with a bearer token; the gateway starts two native children on stdio, data, only child given the PostgreSQL URL, and the broker, sole holder of the API key, which alone reaches api.anthropic.com; it starts modules and workers in srt sandboxes; a module calls back the gateway with its call identifier; a worker reaches only the broker, with the token of its task. 2. Define reads a validated prd-gen handoff over MCP. The admitted planning host can drive a pinned Spec bundle through drafting and independent review and resume from its private journal. Plan accepts the verified Spec proposal or a draft from Claude Code, Codex or Antigravity. It can also import a completed Antigravity exchange. Plan previews one Step. A plain proposal can be materialized with local approval. The independently reviewed Spec projection stops at preview. Step verifies a separate host receipt for its inputs, target tree, launcher, independent reviews and prompt specimens. The host verifies scout citations against repository lines before including them in the Builder brief. The orchestration loop takes a brief, those verified facts, a build session, checks without a model, the replay of the host, reviews that cannot write the worktree, the gate, and the delivery of the same commit to the branch and then to main; after a refusal, the orchestrator writes a new brief; the host writes steps/&lt;name&gt;/ into the worktree. Production uses Claude Code under SRT. In the separate native SBX offline bench, Codex writes the witness and completes a read-only text turn with a host fixture over stdin and stdout. Gemini (agy) exits 1 at session creation. Three separately authorized Astra subscription trials each sent one request. The account owner confirmed quota exhaustion for the first. The second stopped on response.metadata. The third recorded provider metadata requiring native handling. All three ended before native completion, with provider usage and cost unknown. The host now observes a bound provider terminal and validates its token counts separately from native admission. The production adapter remains planned. 3. Every Step session runs inside an srt sandbox, from one of five profiles. The Builder writes the worktree while the host controls Git metadata. The authentication proxy on the host alone holds the credential of the owner. The required ./aos entry checks the marked runtime root and the available space on the root and home filesystems before npm, then records admission in the new run directory. Repository automation uses this entry. All five profiles use private session directories. The host retains Step results and journals under the root and writes raw streams to the run temporary directory. Gate locks each physical checkout, writes to its run reports directory, and retains the checked Linux receipt for Deliver. A canary under the same profile must fail before each command. What each profile opens is the generated image isolation-profiles.svg, held equal to the five profile files by the gate. 4. Five checks before the gate, then the host gate and npm run deliver. In CI, Linux splits the full scenario suite into two shards and checks mutants in sixteen lanes with independent replay. macOS runs the sandbox scenarios. 5. The evidence desk verifies each DOI at doi.org and matches normalized passages in the supplied full text; the watch of Anthropic compares the public sources the platform relies on with a committed register.</desc>
+  <desc id="d">The architecture of architect-os in one image, in five parts. Ready marks bricks available on main. Next marks planned work or pending integration beside the brick it will join. 1. Serving a call: a client calls the gateway over HTTP on the loopback with a bearer token; the gateway starts two native children on stdio, data, only child given the PostgreSQL URL, and the broker, sole holder of the API key, which alone reaches api.anthropic.com; it starts modules and workers in srt sandboxes; a module calls back the gateway with its call identifier; a worker reaches only the broker, with the token of its task. 2. Define reads a validated prd-gen handoff over MCP. The admitted planning host can drive a pinned Spec bundle through drafting and independent review and resume from its private journal. Plan accepts the verified Spec proposal or a draft from Claude Code, Codex or Antigravity. It can also import a completed Antigravity exchange. Plan previews one Step. A plain proposal can be materialized with local approval. The independently reviewed Spec projection stops at preview. Step verifies a separate host receipt for its inputs, target tree, launcher, independent reviews and prompt specimens. The host verifies scout citations against repository lines before including them in the Builder brief. The orchestration loop takes a brief, those verified facts, a build session, checks without a model, the replay of the host, reviews that cannot write the worktree, the gate, and the delivery of the same commit to the branch and then to main; after a refusal, the orchestrator writes a new brief; the host writes steps/&lt;name&gt;/ into the worktree. The production Step runs Claude Code under SRT. In a separate Docker SBX Linux VM, the offline bench verifies both a Codex file write and a read-only text turn. The Gemini client (Antigravity) exits 1 at session creation. Eight single-request Astra subscription trials reached the provider. The host measured five completed responses. Trial 8 used 36 input and 28 output tokens. The host withheld the answer because it could not interpret the moderation report. The pinned Codex client in the SBX VM received an empty HTTP 403 and exited 1. The host verified the refusal and found the workspace empty after VM removal. Monetary cost is unknown. A subscription turn that delivers text and a production Builder in SBX remain pending. 3. SRT isolates each production Step process using an OS sandbox profile. Docker SBX creates a Linux VM for the qualification bench. Its unprivileged native client exchanges requests and responses with the host over standard input and output. The host keeps the subscription credential, checks provider controls and verifies both the native receipt and VM removal. The Builder writes the worktree while the host controls Git metadata. The authentication proxy on the host alone holds the credential of the owner. The required ./aos entry checks the marked runtime root and the available space on the root and home filesystems before npm, then records admission in the new run directory. Repository automation uses this entry. All five profiles use private session directories. The host retains Step results and journals under the root and writes raw streams to the run temporary directory. Gate locks each physical checkout, writes to its run reports directory, and retains the checked Linux receipt for Deliver. A canary under the same profile must fail before each command. What each profile opens is the generated image isolation-profiles.svg, held equal to the five profile files by the gate. 4. Five checks before the gate, then the host gate and npm run deliver. In CI, Linux splits the full scenario suite into two shards and checks mutants in sixteen lanes with independent replay. macOS runs the sandbox scenarios. 5. The evidence desk verifies each DOI at doi.org and matches normalized passages in the supplied full text; the watch of Anthropic compares the public sources the platform relies on with a committed register.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
     <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#cf222e"/></marker>
@@ -17,7 +17,7 @@
   <rect x="700.0" y="52.0" width="14.0" height="14.0" rx="3" fill="#f6f8fa" stroke="#8c959f"/>
   <text x="720.0" y="64.0" font-size="12" fill="#57606a">on the host</text>
   <rect x="810.0" y="52.0" width="14.0" height="14.0" rx="3" fill="#fff8e1" stroke="#bf8700"/>
-  <text x="830.0" y="64.0" font-size="12" fill="#57606a">inside an srt sandbox</text>
+  <text x="830.0" y="64.0" font-size="12" fill="#57606a">inside an isolation boundary (SRT process or Docker SBX VM)</text>
   <line x1="24" y1="78" x2="1376" y2="78" stroke="#d0d7de"/>
   <text x="24.0" y="105.0" font-size="15" fill="#1f2328" font-weight="600">1 · Serving a call: the native gateway</text>
   <text x="24.0" y="125.0" font-size="12" fill="#57606a">one process tree, each process given only what it needs · gateway/src/main.ts (composeNative), packages/sandbox (NativeLauncher, srt adapter)</text>
@@ -218,11 +218,11 @@
   <text x="283" y="1538" font-size="18.5" fill="#57606a">Git metadata and the commit belong to the host.</text>
   <text x="283" y="1579" font-size="18.5" fill="#57606a">The Builder owns the design, implementation and</text>
   <text x="283" y="1603" font-size="18.5" fill="#57606a">maintenance of the code it changes.</text>
-<g role="group" aria-label="SBX offline qualification bench · ready">
-  <text x="283" y="1637" font-size="19" fill="#1f2328" font-weight="600">SBX offline qualification bench</text>
+<g id="build-sbx-bench" role="group" aria-label="Docker SBX offline qualification bench · ready">
+  <text x="283" y="1637" font-size="19" fill="#1f2328" font-weight="600">Docker SBX · offline bench</text>
   <rect x="689" y="1617" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
   <text x="724" y="1636" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1664" font-size="18.5" fill="#57606a">Codex write + host text fixture · Gemini exits 1.</text>
+  <text x="283" y="1664" font-size="18.5" fill="#57606a">Codex wrote a file and completed a fixture turn.</text>
 </g>
 <g role="group" aria-label="Independent scenarios · next">
   <rect x="854" y="1491" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
@@ -232,13 +232,13 @@
   <text x="868" y="1547" font-size="18.5" fill="#57606a">A separate session writes scenarios the Builder</text>
   <text x="868" y="1571" font-size="18.5" fill="#57606a">can only read.</text>
 </g>
-<g role="group" aria-label="Second build provider · three Astra subscription trials · next">
+<g id="build-sbx-integration" role="group" aria-label="Production Builder in Docker SBX · next">
   <rect x="854" y="1589" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1617" font-size="19" fill="#1f2328" font-weight="600">Second build provider</text>
+  <text x="868" y="1617" font-size="19" fill="#1f2328" font-weight="600">Production Builder in Docker SBX</text>
   <rect x="1277" y="1597" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
   <text x="1312" y="1616" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1645" font-size="18.5" fill="#57606a">Three Astra trials. The third stopped on metadata.</text>
-  <text x="868" y="1669" font-size="18.5" fill="#57606a">Native completion pending. Usage and cost unknown.</text>
+  <text x="868" y="1645" font-size="18.5" fill="#57606a">Astra trial 8 used 36 input and 28 output tokens.</text>
+  <text x="868" y="1669" font-size="18.5" fill="#57606a">Host withheld text. Codex received HTTP 403 (exit 1).</text>
 </g>
 </g>
 <g id="loop-checks" role="group" aria-labelledby="phase-checks">
@@ -430,11 +430,13 @@
   <path data-from="loop-gate" data-to="loop-delivery" d="M144 2840 V2863" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
 </g>
   <g transform="translate(0 1582.5)">
+  <g id="runtime-isolation" role="group" aria-labelledby="isolation-title">
   <line x1="24" y1="1626.5" x2="1376" y2="1626.5" stroke="#d0d7de"/>
-  <text x="24.0" y="1653.5" font-size="15" fill="#1f2328" font-weight="600">3 · Every session in its own sandbox: what a session can touch</text>
-  <text x="24.0" y="1673.5" font-size="12" fill="#57606a">packages/sandbox, on srt (@anthropic-ai/sandbox-runtime): Seatbelt on macOS, bubblewrap on Linux, Windows through WSL2</text>
+  <text x="24.0" y="1653.5" id="isolation-title" font-size="19" fill="#1f2328" font-weight="600">3 · Runtime isolation</text>
+  <text x="24.0" y="1673.5" font-size="17" fill="#57606a">SRT uses Seatbelt on macOS or bubblewrap on Linux (WSL2 on Windows). Docker SBX runs the qualification client in a Linux VM.</text>
+  <g id="isolation-host" role="group" aria-labelledby="isolation-host-title">
   <rect x="24.0" y="1690.5" width="648.0" height="513.5" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="38.0" y="1712.5" font-size="13" fill="#1f2328" font-weight="600">Host</text>
+  <text x="38.0" y="1715.5" id="isolation-host-title" font-size="18.5" fill="#1f2328" font-weight="600">Host</text>
   <rect x="40.0" y="1730.5" width="300.0" height="83.5" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
   <text x="51.0" y="1752.5" font-size="12.5" fill="#1f2328" font-weight="600">Launcher (1a.0, O.1)</text>
   <text x="51.0" y="1770.5" font-size="11.5" fill="#57606a">npm run review · step from a linked worktree;</text>
@@ -491,14 +493,22 @@
   <text x="367.0" y="2089.5" font-size="11.5" fill="#57606a">measure peak usage before setting limits</text>
   <rect x="606.0" y="1979.0" width="40.0" height="17.0" rx="8.5" fill="#ddf4ff" stroke="#0969da"/>
   <text x="626.0" y="1991.5" font-size="10.5" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <rect x="356.0" y="2116.0" width="300.0" height="68.0" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="367.0" y="2138.0" font-size="12.5" fill="#1f2328" font-weight="600">One copy of the dependencies</text>
-  <text x="367.0" y="2156.0" font-size="11.5" fill="#57606a">one store under the root, written by the</text>
-  <text x="367.0" y="2171.5" font-size="11.5" fill="#57606a">host alone, that no sandbox can write</text>
-  <rect x="606.0" y="2107.5" width="40.0" height="17.0" rx="8.5" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="626.0" y="2120.0" font-size="10.5" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <rect x="692.0" y="1690.5" width="684.0" height="519.5" rx="8" fill="#fff8e1" stroke="#bf8700"/>
-  <text x="706.0" y="1712.5" font-size="13" fill="#1f2328" font-weight="600">srt sandbox · one per session or command, destroyed at the end</text>
+  <rect x="40.0" y="2131.0" width="300.0" height="68.0" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="51.0" y="2153.0" font-size="12.5" fill="#1f2328" font-weight="600">One copy of the dependencies</text>
+  <text x="51.0" y="2171.0" font-size="11.5" fill="#57606a">one store under the root, written by the</text>
+  <text x="51.0" y="2186.5" font-size="11.5" fill="#57606a">host alone, that no sandbox can write</text>
+  <rect x="290.0" y="2122.5" width="40.0" height="17.0" rx="8.5" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="310.0" y="2135.0" font-size="10.5" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <g id="sbx-account-broker" role="group" aria-labelledby="sbx-broker-title">
+    <rect x="356" y="2126" width="300" height="72" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+    <text x="367" y="2148" id="sbx-broker-title" font-size="18" fill="#1f2328" font-weight="600">SBX account broker</text>
+    <text x="367" y="2170" font-size="17" fill="#57606a">Holds the ChatGPT credential.</text>
+    <text x="367" y="2191" font-size="17" fill="#57606a">Checks controls before delivery.</text>
+  </g>
+  </g>
+  <g id="runtime-srt" role="group" aria-labelledby="srt-title">
+  <rect x="692.0" y="1690.5" width="684.0" height="354" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+  <text x="706.0" y="1715.5" id="srt-title" font-size="18.5" fill="#1f2328" font-weight="600">SRT · OS process isolation for production Step</text>
   <rect x="708.0" y="1730.5" width="652.0" height="68.0" rx="6" fill="#ffffff" stroke="#bf8700"/>
   <text x="719.0" y="1752.5" font-size="12.5" fill="#1f2328" font-weight="600">Claude Code --bare · builder, reviewer</text>
   <text x="719.0" y="1770.5" font-size="11.5" fill="#57606a">a random session token, revoked at the end; its own folders, new at each launch; five profiles, each</text>
@@ -530,6 +540,19 @@
   <rect x="1310.0" y="1956.0" width="40.0" height="17.0" rx="8.5" fill="#ddf4ff" stroke="#0969da"/>
   <text x="1330.0" y="1968.5" font-size="10.5" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
   <polyline points="1024.0,1990.5 1044.0,1990.5" fill="none" stroke="#0969da" stroke-width="1.2" stroke-dasharray="4 3"/>
+  </g>
+  <g id="runtime-sbx" role="group" aria-labelledby="sbx-title">
+    <rect x="692" y="2056.5" width="684" height="153.5" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+    <text x="706" y="2084" id="sbx-title" font-size="18.5" fill="#1f2328" font-weight="600">Docker SBX · isolated Linux VM for qualification</text>
+    <g id="sbx-native-client" role="group" aria-labelledby="sbx-client-title">
+      <rect x="708" y="2099" width="652" height="95" rx="6" fill="#ffffff" stroke="#bf8700"/>
+      <text x="720" y="2123" id="sbx-client-title" font-size="18" fill="#1f2328" font-weight="600">Native client · unprivileged Linux user</text>
+      <text x="720" y="2145" font-size="17" fill="#57606a">Host and guest exchange frames over stdin/stdout.</text>
+      <text x="720" y="2166" font-size="17" fill="#57606a">The guest has no network egress. The host verifies VM removal.</text>
+      <text x="720" y="2187" font-size="17" fill="#57606a">Gemini (Antigravity) exits 1 during offline session creation.</text>
+    </g>
+  </g>
+  <path id="sbx-process-pipes" data-from="sbx-account-broker" data-to="sbx-native-client" d="M656 2161 H708" fill="none" stroke="#57606a" stroke-width="1.5" marker-start="url(#a)" marker-end="url(#a)"/>
   <polyline points="708.0,1766.5 658.0,1766.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
   <rect x="200.0" y="2226.0" width="300.0" height="52.5" rx="6" fill="#ddf4ff" stroke="#0969da"/>
   <text x="211.0" y="2248.0" font-size="12.5" fill="#1f2328" font-weight="600">api.anthropic.com</text>
@@ -541,6 +564,7 @@
   <text x="719.0" y="2266.0" font-size="11.5" fill="#57606a">the same ports, another adapter; credentials by federation</text>
   <rect x="1310.0" y="2217.5" width="40.0" height="17.0" rx="8.5" fill="#ddf4ff" stroke="#0969da"/>
   <text x="1330.0" y="2230.0" font-size="10.5" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  </g>
   <line x1="24" y1="2306.0" x2="1376" y2="2306.0" stroke="#d0d7de"/>
   <text x="24.0" y="2333.0" font-size="15" fill="#1f2328" font-weight="600">4 · What checks a step before it is delivered</text>
   <text x="24.0" y="2353.0" font-size="12" fill="#57606a">five checks before the gate; under each, what it gave on one piece of work: the delivery command, 18 November 2026 (journal, §89 to §95)</text>
