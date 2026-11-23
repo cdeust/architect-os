@@ -1002,6 +1002,8 @@ Après une interruption, reprendre depuis le checkout concerné avec le même `A
 
 ### Un constructeur d'un autre fournisseur, derrière un proxy de l'hôte : conception (19 novembre 2026, avant le code)
 
+**Mise à jour du 23 novembre.** Le choix de runtime décrit dans la conception initiale ci-dessous a évolué. Claude Code utilise SRT. Pour Astra et Gemini, le runtime retenu est Docker SBX. Dans le banc Astra, le broker de l’hôte renouvelle le consentement en mémoire et communique avec le client par des tubes. La VM refuse le trafic sortant. Les critères de qualification de B.0 continuent de s’appliquer avant B.1. [Résultats des essais natifs](../../bench/sbx/README.md)
+
 **Le fait.** La boucle ne connaît qu'un constructeur : une session Claude, câblée dans `step-tool.ts` (les drapeaux de la session, le fichier `code.json`, l'ajout du prompt système). Le 19 novembre, le propriétaire a demandé qu'un modèle d'un autre fournisseur aide à la conception et à l'implémentation. Le faire écrire hors de la boucle, sans dossier d'étape, hors de srt et avec son propre bac à sable, aurait contourné l'isolation, la preuve commitée et le compte des coûts : le mainteneur l'avait d'abord prévu, le propriétaire l'a refusé comme un pansement.
 
 **Décision du propriétaire** (19 novembre 2026) : un proxy de l'hôte pour l'autre fournisseur, symétrique de celui de Claude. La session sous srt ne tient jamais l'identifiant du propriétaire.
