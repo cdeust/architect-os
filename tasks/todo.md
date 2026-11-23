@@ -1,5 +1,15 @@
 # Orchestration delivery queue
 
+## Reuse of the subscription grant across SBX runs
+
+- [x] Compare the production SRT credential lifetime, the SBX operator and the documented SIWC refresh flow.
+- [x] Keep the verified grant in the host broker between runs and serialize token rotation. Give each VM a separate, revocable capability.
+- [x] Run the pinned client in two fresh VMs with one real consent, verify native execution before and after renewal, then check the provider and native outcomes of a separately budgeted text request.
+- [x] Record the account, runtime and inference results separately.
+- [ ] Qualify a positive native response before admitting Astra to the production Builder.
+
+On 23 November, one live sign-in covered two native commands and one budgeted Astra text request across three fresh Docker VMs. The host renewed the subscription once. Both commands exited 0. The provider completed the text request using 39 input and 31 output tokens. The host withheld the text on an opaque moderation report and Codex exited 1. All three workspaces were empty after shutdown. [Trial 9](../bench/sbx/README.md#astra-subscription-trials-on-22-november-2026)
+
 ## One place to write — runtime admission
 
 - [x] Inventory the existing admission, independent delivery identity, direct executables, npm lifecycle scripts and hosted jobs at a3b92e1d.

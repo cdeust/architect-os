@@ -1,5 +1,7 @@
 # Engineering lessons
 
+Test the lifetime of the host credential independently of a sandbox process. Use one consent and two fresh sandbox runs, including a real token rotation. Record whether each native command executed and whether a separately requested model turn delivered an answer.
+
 Draw each runtime where its isolation is enforced. Claude runs as a process under SRT. The native client in Docker SBX runs inside a VM, with the subscription broker on the host. Update the diagram when either boundary changes and qualify the actual client outcome through shutdown.
 
 When a subscription stream ends before the native receipt, record the host error separately from the account owner’s diagnosis. An HTTP 200 alone establishes neither completed inference nor token usage. Keep the monetary cost unknown until a provider receipt or account statement establishes it.
