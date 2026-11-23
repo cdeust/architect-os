@@ -1,5 +1,15 @@
 # Orchestration delivery queue
 
+## Native outcome of an orchestration round
+
+- [x] Reproduce a false passing Step on a failed native build and review.
+- [x] Require the process exit, timeout status and terminal event to agree before accepting a session result. Keep old records readable.
+- [x] Verify failed build, scout and review handling on the Step path and run the local suite (4,582 scenarios, 21,697 steps).
+- [x] Render the gateway call flow and both runtime boundaries at README width. Keep the isolation drawing in section 3.
+- [ ] Obtain a documented release decision for the subscription stream before admitting a production Astra build.
+
+On macOS, an admitted Step with native subprocesses passed with exit 0. When the builder process exited 1 after emitting a success event, Step refused the run before checks or review. When the reviewer emitted `accept` and exited 1, Step recorded an invalid review and refused the run. These checks exercised the host launcher and did not call a model.
+
 ## Reuse of the subscription grant across SBX runs
 
 - [x] Compare the production SRT credential lifetime, the SBX operator and the documented SIWC refresh flow.

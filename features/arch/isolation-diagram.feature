@@ -211,6 +211,13 @@ Feature: the image of the profiles is produced from the profile files, the hand-
       | <path marker-end="url(#missing)"/>       |
       | <?xml-stylesheet href="other.css"?>      |
 
+  Scenario: the README cannot duplicate its gateway or runtime drawing
+    Then the architecture diagram validator rejects each inserted fragment
+      | <g id="gateway-call"/>      |
+      | <g id="runtime-isolation"/> |
+      | <g id="runtime-srt"/>       |
+      | <g id="runtime-sbx"/>       |
+
   Rule: the tripwire on the hand-drawn picture stops the plain forms only
 
     Scenario: the committed hand-drawn picture passes its tripwire

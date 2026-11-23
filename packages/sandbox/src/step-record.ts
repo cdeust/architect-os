@@ -54,6 +54,8 @@ export function stepRecordSchema() {
         model: z.string().min(1),
         effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']),
         completed: z.boolean(),
+        // Les enregistrements publiés avant la conservation du code de sortie ne portent pas ce champ.
+        exitCode: z.number().int().nonnegative().optional(),
         stopped: z.boolean(),
         durationSeconds: seconds(),
         costUsd: z.number().min(0),
@@ -101,6 +103,7 @@ export interface RecordedSession {
   name?: string | undefined;
   config: Pick<StepFile['build'], 'model' | 'effort'>;
   completed: boolean;
+  exitCode: number;
   stopped: boolean;
   durationSeconds: number;
   costUsd: number;
@@ -140,6 +143,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
       model: session.config.model,
       effort: session.config.effort,
       completed: session.completed,
+      exitCode: session.exitCode,
       stopped: session.stopped,
       durationSeconds: session.durationSeconds,
       costUsd: session.costUsd,

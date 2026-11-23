@@ -140,7 +140,14 @@ function readStep(deps: StepDependencies): {
   return { folder, step, raw, brief, questions };
 }
 
-/** Joue une session, garde son flux, ses mesures et son rapport ; rend les mesures et le flux. */
+type PlayedSession = Awaited<ReturnType<StepSession>> & { measure: SessionMeasure };
+
+/** Le résultat structuré ne peut servir qu'après la réussite du processus et du flux. */
+function sessionSucceeded(session: PlayedSession): boolean {
+  return passed(session) && session.measure.completed;
+}
+
+/** Joue une session et conserve ses mesures avec l'issue observée par le lanceur. */
 async function play(
   deps: StepDependencies,
   outputs: StepOutputs,
@@ -149,12 +156,12 @@ async function play(
   config: StepSessionConfig,
   extra: readonly string[],
   brief: string,
-): Promise<{ measure: SessionMeasure; stopped: boolean }> {
+): Promise<PlayedSession> {
   const streamFile = join(outputs.streams, `${prefix}.stream.jsonl`);
   deps.writeFile(streamFile, '');
   const chunks: Buffer[] = [];
   const argv = [...SESSION_ARGUMENTS, '--model', config.model, '--effort', config.effort, ...extra];
-  const { stopped } = await deps.session(tool, argv, brief, config.limitSeconds, (chunk) => {
+  const { exitCode, stopped } = await deps.session(tool, argv, brief, config.limitSeconds, (chunk) => {
     chunks.push(Buffer.from(chunk));
     deps.appendFile(streamFile, chunk);
   });
@@ -163,9 +170,9 @@ async function play(
     structuredOutput: _structured,
     ...measure
   } = measureSession(Buffer.concat(chunks).toString());
-  deps.writeFile(join(outputs.retained, `${prefix}.measure.json`), json({ ...measure, stopped }));
+  deps.writeFile(join(outputs.retained, `${prefix}.measure.json`), json({ ...measure, exitCode, stopped }));
   if (tool === 'code.json') deps.writeFile(join(outputs.retained, 'build.report.md'), report);
-  return { measure: { ...measure, report, structuredOutput: _structured }, stopped };
+  return { measure: { ...measure, report, structuredOutput: _structured }, exitCode, stopped };
 }
 
 /** La borne, en octets, de la sortie gardée d'un contrôle ; celle de `outputTail` et celle que le bloc des revues annonce. */
@@ -194,11 +201,9 @@ type StepSessionConfig = StepFile['build'];
 type ReviewConfig = StepFile['reviews'][number];
 type ScoutConfig = StepFile['scouts'][number];
 
-interface ReviewOutcome {
+interface ReviewOutcome extends PlayedSession {
   config: ReviewConfig;
   verdict: ReturnType<typeof verdictOf>;
-  measure: SessionMeasure;
-  stopped: boolean;
 }
 
 /** Une revue : sa session, puis son verdict écrit dans son fichier. */
@@ -209,7 +214,7 @@ async function review(
   brief: string,
 ): Promise<ReviewOutcome> {
   const prefix = `review.${config.name}`;
-  const { measure, stopped } = await play(
+  const session = await play(
     deps,
     outputs,
     prefix,
@@ -218,9 +223,11 @@ async function review(
     ['--json-schema', verdictSchema()],
     brief,
   );
-  const verdict = verdictOf(measure.structuredOutput);
+  const verdict = sessionSucceeded(session)
+    ? verdictOf(session.measure.structuredOutput)
+    : invalid('la session n’a pas abouti');
   deps.writeFile(join(outputs.retained, `${prefix}.verdict.json`), json(verdict.file));
-  return { config, verdict, measure, stopped };
+  return { config, verdict, ...session };
 }
 
 /**
@@ -251,12 +258,10 @@ async function playBounded<Config, Outcome>(
   });
 }
 
-interface ScoutOutcome {
+interface ScoutOutcome extends PlayedSession {
   config: ScoutConfig;
-  measure: SessionMeasure;
-  /** La session a abouti sans être arrêtée à sa limite. */
+  /** Le flux a abouti et le processus s'est terminé normalement avec le code 0. */
   completed: boolean;
-  stopped: boolean;
   verified: Fact[];
   rejected: number;
   open: number;
@@ -273,7 +278,7 @@ async function scout(
   question: string,
 ): Promise<ScoutOutcome> {
   const prefix = `scout.${config.name}`;
-  const { measure, stopped } = await play(
+  const session = await play(
     deps,
     outputs,
     prefix,
@@ -282,17 +287,17 @@ async function scout(
     ['--json-schema', factsJsonSchema()],
     question,
   );
-  const completed = measure.completed && !stopped;
-  const none = { config, measure, completed, stopped, verified: [], rejected: 0, open: 0 };
+  const completed = sessionSucceeded(session);
+  const none = { config, ...session, completed, verified: [], rejected: 0, open: 0 };
   const writeInvalid = (why: string): ScoutOutcome => {
     deps.writeFile(join(outputs.retained, `${prefix}.facts.json`), json({ invalid: why }));
     return none;
   };
   if (!completed) return writeInvalid('la session n’a pas abouti');
-  if (measure.structuredOutput === undefined) {
+  if (session.measure.structuredOutput === undefined) {
     return writeInvalid('la session n’a donné aucune sortie structurée');
   }
-  const parsed = factsSchemaResult(measure.structuredOutput);
+  const parsed = factsSchemaResult(session.measure.structuredOutput);
   if (typeof parsed === 'string') return writeInvalid(parsed);
   const { verified, rejected } = verifyFacts(parsed.facts, deps.readSource);
   deps.writeFile(
@@ -301,9 +306,8 @@ async function scout(
   );
   return {
     config,
-    measure,
+    ...session,
     completed,
-    stopped,
     verified,
     rejected: rejected.length,
     open: parsed.open.length,
@@ -365,11 +369,10 @@ const buildBrief = (brief: string, verified: readonly Fact[]): string =>
 function recorded(
   role: RecordedSession['role'],
   config: RecordedSession['config'],
-  { completed, durationSeconds, costUsd, costByModel }: SessionMeasure,
-  stopped: boolean,
+  { measure: { completed, durationSeconds, costUsd, costByModel }, exitCode, stopped }: PlayedSession,
   name?: string,
 ): RecordedSession {
-  return { role, name, config, completed, stopped, durationSeconds, costUsd, costByModel };
+  return { role, name, config, completed, exitCode, stopped, durationSeconds, costUsd, costByModel };
 }
 
 /**
@@ -434,11 +437,12 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       scout(deps, outputs, config, questions[index] as string),
     );
     const scouts = Object.fromEntries(
-      scoutOutcomes.map(({ config, measure, completed, verified, rejected, open }) => [
+      scoutOutcomes.map(({ config, measure, completed, exitCode, verified, rejected, open }) => [
         config.name,
         {
           model: config.model,
           completed,
+          exitCode,
           verified: verified.length,
           rejected,
           open,
@@ -453,7 +457,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     );
     deps.writeFile(join(outputs.retained, 'build.brief.md'), forBuild);
     const build = await play(deps, outputs, 'build', 'code.json', step.build, [], forBuild);
-    const built = build.measure.completed && !build.stopped;
+    const built = sessionSucceeded(build);
     // Les contrôles, l'un après l'autre ; le premier qui ne passe pas met fin à la phase.
     const played: CheckReport[] = [];
     if (built) {
@@ -485,11 +489,12 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       ]),
     );
     const reviews = Object.fromEntries(
-      outcomes.map(({ config, verdict, measure }) => [
+      outcomes.map(({ config, verdict, exitCode, measure }) => [
         config.name,
         {
           model: config.model,
           verdict: verdict.verdict,
+          exitCode,
           blocks: verdict.blocks,
           findings: verdict.findings,
           costUsd: measure.costUsd,
@@ -502,7 +507,6 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       build.measure,
       ...outcomes.map(({ measure }) => measure),
     ];
-    const code = built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 0 : 1;
     const record = buildRecord({
       step: name,
       admission_sha256,
@@ -511,13 +515,9 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       inputs,
       launcher,
       sessions: [
-        ...scoutOutcomes.map(({ config, measure, stopped }) =>
-          recorded('scout', config, measure, stopped, config.name),
-        ),
-        recorded('build', step.build, build.measure, build.stopped),
-        ...outcomes.map(({ config, measure, stopped }) =>
-          recorded('review', config, measure, stopped, config.name),
-        ),
+        ...scoutOutcomes.map((scout) => recorded('scout', scout.config, scout, scout.config.name)),
+        recorded('build', step.build, build),
+        ...outcomes.map((review) => recorded('review', review.config, review, review.config.name)),
       ],
       checks: played.map((report) => ({
         name: report.name,
@@ -530,14 +530,16 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         verdict: verdict.verdict,
         findings: verdict.findings,
       })),
-      outcome: code === 0 ? 'passed' : 'refused',
+      outcome: built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 'passed' : 'refused',
     });
     // Relu par son propre schéma : ce que la porte refuserait n'entre pas dans le worktree.
     deps.steps.publish(name, { ...inputs, 'record.json': json(stepRecordSchema().parse(record)) });
     const summary = {
+      outcome: record.outcome,
       scouts,
       build: {
         completed: build.measure.completed,
+        exitCode: build.exitCode,
         stopped: build.stopped,
         answers: build.measure.answers,
         turns: build.measure.turns,
@@ -553,7 +555,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       record: `steps/${name}/record.json`,
     };
     deps.stdout.write(`${JSON.stringify(summary)}\n`);
-    return code;
+    return record.outcome === 'passed' ? 0 : 1;
   } catch (error) {
     if (error instanceof Refusal) {
       deps.stderr.write(`architect-os step: ${error.message}\n`);
