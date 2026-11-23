@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { join, relative } from 'node:path';
 import type { ProfileTemplate } from '@architect-os/sandbox';
 import { Given, ROOT, Then, When, stored } from './helpers.js';
@@ -448,3 +448,20 @@ Then('each orchestration phase owns its cards and connects to the next phase', f
     cwd: ROOT,
   });
 });
+
+Then(
+  'the architecture diagram validator rejects each inserted fragment',
+  function (table: { raw(): string[][] }) {
+    const original = readFileSync(join(ROOT, 'docs/diagrams/architecture.svg'), 'utf8');
+    const dir = mkdtempSync(join(tmpdir(), 'architecture-diagram-'));
+    this.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+    const specimen = join(dir, 'diagram.svg');
+    for (const [fragment] of table.raw()) {
+      assert.ok(fragment, 'expected an SVG fragment');
+      writeFileSync(specimen, original.replace('</svg>', fragment + '</svg>'));
+      const run = spawnSync('python3', ['features/scripts/architecture-loop.py', specimen], { cwd: ROOT });
+      assert.ifError(run.error);
+      assert.equal(run.status, 1, fragment);
+    }
+  },
+);

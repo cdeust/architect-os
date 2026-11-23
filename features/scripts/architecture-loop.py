@@ -2,9 +2,44 @@
 import re
 import sys
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 ns = {"s": "http://www.w3.org/2000/svg"}
-root = ET.parse(sys.argv[1]).getroot()
+
+class StaticDiagram(ET.TreeBuilder):
+    def pi(self, target, text):
+        raise ValueError("processing instructions are not part of the diagram")
+
+    def doctype(self, name, pubid, system):
+        raise ValueError("document types are not part of the diagram")
+
+
+path = Path(sys.argv[1])
+assert path.is_file() and not path.is_symlink(), "expected a regular diagram file"
+root = ET.parse(path, parser=ET.XMLParser(target=StaticDiagram())).getroot()
+# This illustration can name the runtime it depicts. Only static SVG drawing
+# primitives and same-document marker references belong in the README image.
+elements = {
+    f"{{{ns['s']}}}{name}"
+    for name in ("svg", "g", "title", "desc", "defs", "marker", "path", "rect", "text", "line", "polyline")
+}
+markers = {f"url(#{marker.attrib['id']})" for marker in root.findall("s:defs/s:marker", ns)}
+attributes = set(
+    "aria-label aria-labelledby data-from data-to id role viewBox width height x x1 x2 y y1 y2 rx "
+    "font-family font-size font-weight text-anchor transform d points fill stroke stroke-width "
+    "stroke-dasharray marker-end marker-start markerHeight markerWidth orient refX refY".split()
+)
+for node in root.iter():
+    assert node.tag in elements, node.tag
+    assert node.attrib.keys() <= attributes, (node.tag, node.attrib.keys() - attributes)
+    for key in ("fill", "stroke"):
+        if key in node.attrib:
+            assert re.fullmatch(r"none|#[0-9a-fA-F]{6}", node.attrib[key]), (key, node.attrib[key])
+    for key in ("marker-start", "marker-end"):
+        if key in node.attrib:
+            reference = node.attrib[key]
+            assert re.fullmatch(r"url\(#[A-Za-z_][\w.-]*\)", reference) and reference in markers, (key, reference)
+
 loop = root.find(".//s:g[@id='orchestration-loop']", ns)
 assert loop is not None, "missing orchestration loop"
 names = ["brief", "scouts", "build", "checks", "replay", "reviews", "gate", "delivery"]
