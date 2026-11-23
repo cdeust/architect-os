@@ -77,14 +77,19 @@ The [milestone 2 integration](https://github.com/cdeust/architect-os/pull/124) e
 - [x] Add a single text challenge over the verified offline VM's process pipes, with bounded messages, model binding and independent host/guest receipt comparison.
 - [x] Run the pinned Codex native fixture, the existing write witness and the Google refusal through the admitted workstation launcher.
 - [x] Observe a model-bound provider terminal and validate its usage independently when native stream admission refuses an earlier event.
-- [ ] Verify one tool-free Astra subscription inference and its billing on a separately consented host route.
+- [x] Verify that the host can attribute one completed, tool-free inference and its token usage to Astra on the subscription route.
+- [ ] Reconcile the cost with provider billing evidence.
 - [ ] Qualify a production Builder and independent review through the admitted Step.
 
 The admitted workstation reproduced the write witness, one read-only host fixture turn with matching synthetic usage (8 input and 4 output tokens), and the Google ACP refusal (`-32000`, process exit 1). These fixtures made zero upstream calls.
 
-Each of the three authorized Astra trials sent one request. The account owner confirmed quota exhaustion for the first. The second receipt fingerprinted `response.metadata` after creation. The third recorded `UPSTREAM_REFUSED` with `provider_metadata / requires_native_handling`. The historical receipts contain no native completion, measured usage or monetary cost. The host now observes a response terminal and validates its token counts separately from native admission. [Qualification evidence](../bench/sbx/README.md#astra-subscription-trials-on-22-november-2026)
+Four subscription responses completed at the provider with measured usage. Trial 7 reached the stream admission decision and withheld the text on turn moderation. Usage for trials 1–3 and monetary cost for all seven remain unknown. [Qualification evidence](../bench/sbx/README.md#astra-subscription-trials-on-22-november-2026)
 
 ## Astra subscription request
 
-- [x] Exercise the exact SIWC request body at the host dispatch boundary with an offline transport.
-- [ ] Verify a single, explicitly authorized request through the pinned SBX guest and record provider usage, native completion and billing evidence separately.
+- [x] Exercise the SIWC request body, one-shot dispatch and same-account model catalogue refresh with an offline transport.
+- [x] Confirm the positive and negative paths in native SBX, including the inline notice, reasoning header and a mandatory safety block.
+- [x] Bind the private worker receipt to the host's challenge, observed counts, served controls and workspace cleanup.
+- [x] Record the seven subscription trials and the last refusal at the stream boundary.
+- [ ] Resolve opaque turn-moderation reports against an authoritative OpenAI contract.
+- [ ] Confirm a native subscription turn with the exact model, matching receipt and verified shutdown, then update the SRT/SBX Builder diagram.

@@ -28,7 +28,7 @@ Read the loop from phase 1 through phase 8 in the diagram. Each row names its ow
 
 **Builder qualification.** Step uses Claude Code under SRT. In the offline SBX bench, Codex wrote a witness file and completed a separate read-only text turn. The host and client agreed on the synthetic token counts. Gemini (agy) initialized and exited 1 when session creation was refused.
 
-Three separately authorized Astra subscription trials each sent one request. The third received HTTP 200, then the host refused stream metadata that required native handling. All three ended before native completion. Their provider token counts and monetary costs remain unknown. The host can now record validated usage from a provider terminal independently of the native verdict. The production Builder and independent review still require qualification. [Trial results and receipt semantics](bench/sbx/README.md#astra-subscription-trials-on-22-november-2026)
+The host has measured four completed Astra subscription requests. On the latest, OpenAI reported 40 input and 32 output tokens. The host withheld the response from SBX when it received a moderation report it could not safely interpret. Subscription-backed native completion, production Builder integration and independent review are pending. The monetary cost is unknown. [Trial results and receipt semantics](bench/sbx/README.md#astra-subscription-trials-on-22-november-2026)
 
 ### One sandbox per session
 
