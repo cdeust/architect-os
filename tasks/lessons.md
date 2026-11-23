@@ -1,5 +1,9 @@
 # Engineering lessons
 
+Keep the gateway call flow and the runtime isolation view distinct in the README diagram. Trace each connector to the code, then render both sections together at README width to catch repeated boundaries.
+
+Verify the outcome on the Step path that can publish a change. A structured acceptance or provider completion can precede a native exit failure. Use the process exit, terminal event and timeout status together for build, scout and review.
+
 Test the lifetime of the host credential independently of a sandbox process. Use one consent and two fresh sandbox runs, including a real token rotation. Record whether each native command executed and whether a separately requested model turn delivered an answer.
 
 Draw each runtime where its isolation is enforced. Claude runs as a process under SRT. The native client in Docker SBX runs inside a VM, with the subscription broker on the host. Update the diagram when either boundary changes and qualify the actual client outcome through shutdown.

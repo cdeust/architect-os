@@ -40,6 +40,18 @@ for node in root.iter():
             reference = node.attrib[key]
             assert re.fullmatch(r"url\(#[A-Za-z_][\w.-]*\)", reference) and reference in markers, (key, reference)
 
+ids_in_image = [node.attrib['id'] for node in root.iter() if 'id' in node.attrib]
+assert len(ids_in_image) == len(set(ids_in_image)), "duplicate SVG id"
+
+# The first view traces calls. Only the isolation view draws the host and its two runtimes.
+gateway = root.find("s:g[@id='gateway-call']", ns)
+assert gateway is not None, "missing gateway call flow"
+nodes = {node.get('id') for node in gateway.findall('s:g', ns)}
+routes = {(edge.get('data-from'), edge.get('data-to')) for edge in gateway.findall('s:path', ns)}
+assert ('gateway-client', 'gateway-service') in routes, "missing client to gateway call"
+assert ('gateway-worker', 'gateway-broker') in routes, "missing worker to broker call"
+assert all(start in nodes and end in nodes for start, end in routes), "gateway route has no endpoint"
+
 loop = root.find(".//s:g[@id='orchestration-loop']", ns)
 assert loop is not None, "missing orchestration loop"
 names = ["brief", "scouts", "build", "checks", "replay", "reviews", "gate", "delivery"]
