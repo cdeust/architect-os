@@ -41,6 +41,25 @@ class StreamRefusal extends Error {
   }
 }
 
+// Give the native client a fixed denial only for decisions made by the trusted
+// decoder. Transport failures, interrupted turns and unbound streams still fail.
+export async function nativeSubscriptionReply(operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof StreamRefusal) {
+      const { kind, disposition, reason } = error.diagnostic;
+      if (
+        (kind === 'provider_metadata' && disposition === 'turn_moderation') ||
+        kind === 'model_refusal' ||
+        (kind === 'response_incomplete' && reason === 'content_filter')
+      )
+        return { kind: 'withheld' };
+    }
+    throw error;
+  }
+}
+
 function known(values, value) {
   return values.has(value) ? value : 'unclassified';
 }
@@ -52,6 +71,19 @@ function unknownEvent(name, started) {
     detail.event_name_sha256 = createHash('sha256').update(name, 'utf8').digest('hex');
   }
   return new StreamRefusal(started ? 'UNEXPECTED_EVENT' : 'SSE_START', detail);
+}
+
+function requireBoundEvent(e, started) {
+  if (
+    (Object.hasOwn(e, 'response_id') && e.response_id !== started) ||
+    (e.response && Object.hasOwn(e.response, 'id') && e.response.id !== started) ||
+    (e.response && Object.hasOwn(e.response, 'model') && e.response.model !== model)
+  ) {
+    throw new StreamRefusal('UPSTREAM_REFUSED', {
+      kind: 'provider_metadata',
+      disposition: 'unbound_metadata',
+    });
+  }
 }
 
 function admitResponse(wire, challenge, maxOutput, controls) {
@@ -91,6 +123,7 @@ function admitResponse(wire, challenge, maxOutput, controls) {
       const expected = e.type === 'response.failed' ? 'failed' : 'incomplete';
       if (
         !started ||
+        (Object.hasOwn(e, 'response_id') && e.response_id !== started) ||
         e.response?.id !== started ||
         e.response?.model !== model ||
         e.response.status !== expected
@@ -138,6 +171,7 @@ function admitResponse(wire, challenge, maxOutput, controls) {
         Array.isArray(e.item.content) &&
         e.item.content.some((p) => p?.type === 'refusal')
       ) {
+        requireBoundEvent(e, started);
         throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'model_refusal' });
       }
     } else if (e.type === 'response.completed') {
@@ -158,20 +192,12 @@ function admitResponse(wire, challenge, maxOutput, controls) {
       (['response.content_part.added', 'response.content_part.done'].includes(e.type) &&
         e.part?.type === 'refusal')
     ) {
+      requireBoundEvent(e, started);
       throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'model_refusal' });
     } else if (e.type !== 'response.metadata' && !simple.has(e.type)) {
       throw unknownEvent(e.type, true);
     }
-    if (
-      (Object.hasOwn(e, 'response_id') && e.response_id !== started) ||
-      (e.response && Object.hasOwn(e.response, 'id') && e.response.id !== started) ||
-      (e.response && Object.hasOwn(e.response, 'model') && e.response.model !== model)
-    ) {
-      throw new StreamRefusal('UPSTREAM_REFUSED', {
-        kind: 'provider_metadata',
-        disposition: 'unbound_metadata',
-      });
-    }
+    requireBoundEvent(e, started);
     const disposition = controls.event(e, started);
     if (disposition !== 'informational') {
       throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'provider_metadata', disposition });

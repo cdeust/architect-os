@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseResponse, decodeUpstream } from './subscription-stream.mjs';
+import { parseResponse, decodeUpstream, nativeSubscriptionReply } from './subscription-stream.mjs';
 import { model } from './text-response.mjs';
 const text = 'AOS-31911239-ce54-48b4-8b78-a130f8e6ed3d';
 const prompt = 'Reply with exactly this value: ' + text;
@@ -35,6 +35,38 @@ test('bounded terminal and safe output only', () => {
   assert.equal(final.output.length, 1);
   assert.deepEqual(final.usage, { input_tokens: 20, output_tokens: 12, total_tokens: 32 });
   assert.equal(final.output[0].content[0].text, text);
+});
+
+test('only the trusted decoder can turn a withheld answer into a content-free native denial', async () => {
+  const parse = (change) => nativeSubscriptionReply(() => parseResponse(events(change), text, prompt.length));
+  assert.equal((await parse()).output[0].content[0].text, text);
+  const replace = (frame) => (frames) => { frames[1] = frame; };
+  for (const event of [
+    {
+      type: 'response.metadata', response_id: 'r',
+      metadata: { openai_chatgpt_moderation_metadata: { private: 'withheld' } },
+    },
+    { type: 'response.refusal.done' },
+  ]) assert.deepEqual(await parse(replace(event)), { kind: 'withheld' });
+  const incomplete = (reason) => (frames) => {
+    frames[2] = {
+      type: 'response.incomplete',
+      response: { id: 'r', model, status: 'incomplete', incomplete_details: { reason } },
+    };
+  };
+  assert.deepEqual(await parse(incomplete('content_filter')), { kind: 'withheld' });
+  await assert.rejects(parse(incomplete('max_output_tokens')), /UPSTREAM_REFUSED/);
+  await assert.rejects(parse(replace({ type: 'response.metadata', response_id: 'some-other-turn' })));
+  for (const substitute of [
+    { type: 'response.refusal.done', response_id: 'another response' },
+    { type: 'response.content_part.done', part: { type: 'refusal' }, response: { model: 'another model' } },
+    { type: 'response.output_item.done', item: { type: 'message', content: [{ type: 'refusal' }] }, response_id: 'another response' },
+    { type: 'response.incomplete', response_id: 'another response', response: { id: 'r', model, status: 'incomplete', incomplete_details: { reason: 'content_filter' } } },
+  ]) await assert.rejects(parse(replace(substitute)));
+  const fake = Object.assign(Error('UPSTREAM_REFUSED'), {
+    diagnostic: { kind: 'provider_metadata', disposition: 'turn_moderation' },
+  });
+  await assert.rejects(nativeSubscriptionReply(() => Promise.reject(fake)), (error) => error === fake);
 });
 for (const [name, mutate] of [
   [

@@ -117,3 +117,21 @@ test('the account operator binds the whole native receipt to its own accepted re
     /RECEIPT_MISMATCH/,
   );
 });
+
+test('withheld is a distinct, nonce-bound native failure after confirmed shutdown', () => {
+  const { usage: _usage, ...common } = receipt;
+  const denied = { ...common, terminal: 'withheld', native_exit: 1 };
+  const frame = { kind: 'result', result: denied };
+  const answer = { kind: 'withheld' };
+  assert.equal(verifyNativeSubscriptionResult(frame, prompt, answer), null);
+  for (const mutation of [
+    { terminal: 'completed' }, { native_exit: 0 }, { usage },
+    { challenge_sha256: 'another turn' }, { workspace_empty_after_shutdown: false }, { requests: 2 },
+    { text: challenge }, { served_moderation_presentation: 'inline' },
+  ]) {
+    assert.throws(() => verifyNativeSubscriptionResult({ ...frame, result: { ...denied, ...mutation } }, prompt, answer));
+  }
+  assert.throws(() => verifyNativeSubscriptionResult(frame, prompt, fixtureResponse(challenge)));
+  assert.throws(() => verifyNativeSubscriptionResult({ kind: 'result', result: receipt }, prompt, answer));
+  assert.throws(() => verifyNativeSubscriptionResult(frame, prompt, { ...answer, reason: 'private' }));
+});

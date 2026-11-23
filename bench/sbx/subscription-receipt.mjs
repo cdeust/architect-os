@@ -33,6 +33,24 @@ export async function* readSubscriptionWorkerFrames(stream) {
 // Derive expectations from the host's accepted response, independently of the worker frame.
 export function verifyNativeSubscriptionResult(frame, prompt, acceptedResponse) {
   const challenge = subscriptionChallenge(prompt);
+  if (isDeepStrictEqual(acceptedResponse, { kind: 'withheld' })) {
+    const withheld = {
+      route: 'host_broker',
+      model,
+      client_version: clientVersion,
+      client_sha256: clientSha256,
+      native_exit: 1,
+      terminal: 'withheld',
+      requests: 1,
+      provider_requests: null,
+      cost_usd: null,
+      challenge_sha256: challengeDigest(challenge),
+      workspace_empty_after_shutdown: true,
+    };
+    if (!isDeepStrictEqual(frame, { kind: 'result', result: withheld }))
+      throw Error('SBX_NATIVE_TEXT_RECEIPT_MISMATCH');
+    return null;
+  }
   const usage = verifiedBrokerText(acceptedResponse, challenge, Buffer.byteLength(prompt));
   const result = {
     route: 'host_broker',

@@ -55,10 +55,62 @@ test('one model-bound guest request receives one reply and returns its UTF-8 rec
   assert.equal(child.exitCode, 0);
 });
 
+test('a withheld response sends only its fixed discriminator and closes the reply pipe', async (t) => {
+  const child = guest(
+    t,
+    `send(request);
+    assert.deepEqual(await read(), { kind: 'withheld' });
+    assert.equal((await input.next()).done, true);
+    send({ kind: 'receipt', status: 'withheld' });`,
+  );
+  let calls = 0;
+  const result = await exchangeFrames(
+    child,
+    initial,
+    () => {
+      calls++;
+      return { kind: 'withheld' };
+    },
+    5000,
+  );
+  assert.deepEqual(result, { kind: 'receipt', status: 'withheld' });
+  assert.equal(calls, 1);
+  assert.equal(child.exitCode, 0);
+});
+
+test('the withheld frame rejects body, flags, hidden fields and fabricated discriminators', async (t) => {
+  let getterCalled = false;
+  for (const invalid of [
+    null,
+    [],
+    'withheld',
+    { kind: 'WITHHELD' },
+    { kind: 'withheld', body: '' },
+    { kind: 'withheld', reason: 'private' },
+    { kind: 'withheld', reasoning_included: true },
+    { kind: 'withheld', [Symbol('private')]: true },
+    Object.defineProperty({ kind: 'withheld' }, 'hidden', { value: 'private' }),
+    Object.create({ kind: 'withheld' }),
+    {
+      get kind() {
+        getterCalled = true;
+        return 'withheld';
+      },
+    },
+  ]) {
+    await assert.rejects(
+      exchangeFrames(guest(t, 'send(request);'), initial, () => invalid, 5000),
+      { message: 'SBX_EXCHANGE_REPLY' },
+    );
+  }
+  assert.equal(getterCalled, false);
+});
+
 for (const [title, first] of [
   ['another model', "send({...request, model: 'other'});"],
   ['an unexpected guest parameter', "send({...request, url: 'untrusted'});"],
   ['a receipt before any request', 'send(receipt);'],
+  ['a guest-supplied withheld reply', "send({kind: 'withheld'});"],
   ['two request frames in one write', "process.stdout.write((JSON.stringify(request) + '\\n').repeat(2));"],
   [
     'a duplicate model field',
@@ -172,7 +224,10 @@ test('host errors do not relay provider diagnostics to callers', async (t) => {
 
 test('the reply pipe transports only a true reasoning presence flag with the original body', async (t) => {
   const expected = { ...response, reasoning_included: true };
-  const child = guest(t, `send(request); assert.deepEqual(await read(), ${JSON.stringify(expected)}); send(receipt);`);
+  const child = guest(
+    t,
+    `send(request); assert.deepEqual(await read(), ${JSON.stringify(expected)}); send(receipt);`,
+  );
   assert.deepEqual(await exchangeFrames(child, initial, () => expected, 5000), receipt);
   for (const invalid of [
     ...[false, null, 'true', 1, undefined, {}, []].map((value) => ({ reasoning_included: value })),
