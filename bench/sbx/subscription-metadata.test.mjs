@@ -86,6 +86,28 @@ test('the documented empty verification list never masks a sibling control', () 
   assert.equal(classify({ metadata: empty, headers: { 'openai-model': 'other' } }), 'model_mismatch');
 });
 
+test('denial audit preserves the veto and keeps validating sibling fields, affinity and later controls', () => {
+  const metadata = { openai_chatgpt_moderation_metadata: { prompt: {} } };
+  const audit = () => createSubscriptionControls(model, { auditTurnModeration: true });
+  const controls = audit();
+  assert.equal(controls.http({ 'x-codex-turn-state': ['first'] }), 'informational');
+  assert.equal(controls.event({ type, metadata }, id), 'turn_moderation');
+  assert.equal(controls.event({ type, headers: { 'x-codex-turn-state': 'first' } }, id), 'turn_moderation');
+  assert.equal(
+    controls.event({ type, headers: { 'x-codex-turn-state': 'changed' } }, id),
+    'ambiguous_turn_state',
+  );
+  assert.equal(controls.event({ type }, id), 'unbound_metadata');
+  for (const [sibling, disposition] of [
+    [{ metadata: { ...metadata, future: true } }, 'requires_native_handling'],
+    [{ metadata: { ...metadata, guardian: {} } }, 'guardian_assessment'],
+    [{ metadata, safety_buffering: true }, 'safety_buffering'],
+    [{ metadata, sequence_number: -1 }, 'invalid_metadata'],
+    [{ metadata, response: { headers: { 'openai-model': 'another' } } }, 'model_mismatch'],
+  ])
+    assert.equal(audit().event({ type, ...sibling }, id), disposition);
+});
+
 test('the fourth trial identified the gateway header by name; only the observed public wire version is understood', () => {
   const name = 'x-openai-proxy-wasm';
   assert.equal(

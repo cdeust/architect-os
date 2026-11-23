@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { requireAdmittedRun } from '../../packages/sandbox/src/runtime-context.ts';
 import { clientSha256, clientVersion, codexGuest, installCodex, verifyArchive } from './codex-client.mjs';
-import { decodeUpstream, nativeSubscriptionReply } from './subscription-stream.mjs';
+import { decodeNativeUpstream } from './subscription-stream.mjs';
 import { withOfflineSbx } from './runtime.mjs';
 import {
   challengeDigest,
@@ -172,14 +172,12 @@ export async function runFixtureTurn(archive, mode = 'complete') {
   const receipt = { route: 'fixture', provider_requests: 0, cost_usd: 0 };
   const refreshCatalog = async () => ({ status: 200, outcome: 'visible', model });
   const result = await turn(archive, 'fixture', ({ prompt, challenge }) =>
-    nativeSubscriptionReply(() =>
-      decodeUpstream(
-        fixtureReply(challenge, metadata),
-        challenge,
-        Buffer.byteLength(prompt),
-        receipt,
-        refreshCatalog,
-      ),
+    decodeNativeUpstream(
+      fixtureReply(challenge, metadata),
+      challenge,
+      Buffer.byteLength(prompt),
+      receipt,
+      refreshCatalog,
     ),
   );
   if (mode === 'moderation') {

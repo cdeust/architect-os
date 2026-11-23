@@ -41,23 +41,33 @@ class StreamRefusal extends Error {
   }
 }
 
-// Give the native client a fixed denial only for decisions made by the trusted
-// decoder. Transport failures, interrupted turns and unbound streams still fail.
-export async function nativeSubscriptionReply(operation) {
-  try {
-    return await operation();
-  } catch (error) {
-    if (error instanceof StreamRefusal) {
-      const { kind, disposition, reason } = error.diagnostic;
-      if (
-        (kind === 'provider_metadata' && disposition === 'turn_moderation') ||
-        kind === 'model_refusal' ||
-        (kind === 'response_incomplete' && reason === 'content_filter')
-      )
-        return { kind: 'withheld' };
-    }
-    throw error;
-  }
+// Inspect only the content kind and structural fields. A denial never retains its text.
+function terminalContent(terminal) {
+  const output = terminal.output;
+  if (!Array.isArray(output)) return undefined;
+  if (output.length === 0) return 'empty';
+  if (output.length !== 1 && !(output.length === 2 && output[0]?.type === 'reasoning')) return undefined;
+  const item = output.at(-1);
+  const part = item?.content?.[0];
+  if (
+    item?.type !== 'message' ||
+    item.role !== 'assistant' ||
+    (item.status !== 'completed' && !(terminal.status === 'incomplete' && item.status === 'incomplete')) ||
+    (Object.hasOwn(item, 'phase') && item.phase !== 'final_answer') ||
+    !Array.isArray(item.content) ||
+    item.content.length !== 1
+  )
+    return undefined;
+  if (
+    part?.type === 'refusal' &&
+    typeof part.refusal === 'string' &&
+    part.refusal.length > 0 &&
+    !Object.hasOwn(part, 'text')
+  )
+    return 'refusal';
+  if (part?.type === 'output_text' && typeof part.text === 'string' && !Object.hasOwn(part, 'refusal'))
+    return 'text';
+  return undefined;
 }
 
 function known(values, value) {
@@ -86,11 +96,39 @@ function requireBoundEvent(e, started) {
   }
 }
 
-function admitResponse(wire, challenge, maxOutput, controls) {
+function carriesOutputText(frame) {
+  switch (frame.type) {
+    case 'response.output_text.delta':
+    case 'response.output_text.done':
+      return true;
+    case 'response.content_part.added':
+    case 'response.content_part.done':
+      return frame.part?.type === 'output_text';
+    case 'response.output_item.added':
+    case 'response.output_item.done':
+      return (
+        frame.item?.type === 'message' &&
+        Array.isArray(frame.item.content) &&
+        frame.item.content.some((part) => part?.type === 'output_text')
+      );
+    default:
+      return false;
+  }
+}
+
+function admitResponse(wire, challenge, maxOutput, controls, nativeObservation) {
   if (!Number.isSafeInteger(maxOutput) || maxOutput < 1) throw Error('USAGE_REFUSED');
   let terminal;
   let started;
   let done = false;
+  let withheld;
+  let modelRefused = false;
+  let sawOutputText = false;
+  function hold(detail, terminalDecision = false) {
+    if (nativeObservation?.evidence !== 'bound') throw new StreamRefusal('UPSTREAM_REFUSED', detail);
+    if (!withheld || terminalDecision) withheld = new StreamRefusal('UPSTREAM_REFUSED', detail);
+    if (detail.kind === 'model_refusal') modelRefused = true;
+  }
   const simple = new Set([
     'response.in_progress',
     'response.content_part.added',
@@ -112,6 +150,7 @@ function admitResponse(wire, challenge, maxOutput, controls) {
       continue;
     }
     if (terminal) throw Error('SSE_ORDER');
+    if (nativeObservation && carriesOutputText(e)) sawOutputText = true;
     if (e.type === 'error') {
       throw new StreamRefusal('UPSTREAM_REFUSED', {
         kind: 'stream_error',
@@ -137,9 +176,11 @@ function admitResponse(wire, challenge, maxOutput, controls) {
               kind: 'response_incomplete',
               reason: known(incompleteReasons, e.response.incomplete_details?.reason),
             };
-      throw new StreamRefusal('UPSTREAM_REFUSED', detail);
-    }
-    if (!started && e.type !== 'response.created') {
+      if (detail.kind !== 'response_incomplete' || detail.reason !== 'content_filter')
+        throw new StreamRefusal('UPSTREAM_REFUSED', detail);
+      hold(detail, true);
+      terminal = e.response;
+    } else if (!started && e.type !== 'response.created') {
       if (
         simple.has(e.type) ||
         [
@@ -153,8 +194,7 @@ function admitResponse(wire, challenge, maxOutput, controls) {
         throw new StreamRefusal('SSE_START', { kind: 'event_out_of_order' });
       }
       throw unknownEvent(e.type, false);
-    }
-    if (e.type === 'response.created') {
+    } else if (e.type === 'response.created') {
       if (
         started ||
         typeof e.response?.id !== 'string' ||
@@ -172,7 +212,7 @@ function admitResponse(wire, challenge, maxOutput, controls) {
         e.item.content.some((p) => p?.type === 'refusal')
       ) {
         requireBoundEvent(e, started);
-        throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'model_refusal' });
+        hold({ kind: 'model_refusal' });
       }
     } else if (e.type === 'response.completed') {
       terminal = e.response;
@@ -193,17 +233,33 @@ function admitResponse(wire, challenge, maxOutput, controls) {
         e.part?.type === 'refusal')
     ) {
       requireBoundEvent(e, started);
-      throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'model_refusal' });
+      hold({ kind: 'model_refusal' });
     } else if (e.type !== 'response.metadata' && !simple.has(e.type)) {
       throw unknownEvent(e.type, true);
     }
     requireBoundEvent(e, started);
     const disposition = controls.event(e, started);
-    if (disposition !== 'informational') {
+    if (disposition === 'turn_moderation') {
+      hold({ kind: 'provider_metadata', disposition });
+    } else if (disposition !== 'informational') {
       throw new StreamRefusal('UPSTREAM_REFUSED', { kind: 'provider_metadata', disposition });
     }
   }
   if (!terminal) throw Error('MISSING_TERMINAL');
+  const content = nativeObservation && terminalContent(terminal);
+  if (terminal.status === 'completed' && content === 'refusal') hold({ kind: 'model_refusal' }, true);
+  if (withheld) {
+    const consistent =
+      terminal.status === 'incomplete'
+        ? terminal.error == null &&
+          terminal.incomplete_details?.reason === 'content_filter' &&
+          (!Object.hasOwn(terminal, 'output') || content !== undefined)
+        : content !== undefined &&
+          (!Object.hasOwn(terminal, 'end_turn') || terminal.end_turn === true) &&
+          (!modelRefused || (!sawOutputText && content === 'refusal'));
+    if (!consistent || nativeObservation.terminal !== terminal.status) throw withheld;
+    return withheld;
+  }
   return textResponse(
     challenge,
     verifiedText(terminal, challenge, maxOutput),
@@ -250,7 +306,7 @@ async function reconcileCatalog(refreshCatalog, receipt) {
 
 // Historical SIWC HTTP 200 responses sometimes omit Content-Type. The bytes must
 // still form the same complete, model-bound, metered SSE transcript before release.
-export async function decodeUpstream(reply, challenge, maxOutput, receipt, refreshCatalog) {
+async function decodeReply(reply, challenge, maxOutput, receipt, refreshCatalog, native) {
   const encodings = reply.headersDistinct['content-encoding'] ?? [];
   const types = reply.headersDistinct['content-type'] ?? [];
   if (
@@ -262,7 +318,7 @@ export async function decodeUpstream(reply, challenge, maxOutput, receipt, refre
   ) {
     throw Error('UPSTREAM_REFUSED');
   }
-  const controls = createSubscriptionControls(model);
+  const controls = createSubscriptionControls(model, { auditTurnModeration: native });
   try {
     const http = controls.http(reply.headersDistinct);
     if (receipt) {
@@ -276,7 +332,8 @@ export async function decodeUpstream(reply, challenge, maxOutput, receipt, refre
       };
     }
     const wire = await collect(reply);
-    if (receipt) Object.assign(receipt.provider_observation, observeSubscription(wire, model, http));
+    const observation = receipt || native ? observeSubscription(wire, model, http) : undefined;
+    if (receipt) Object.assign(receipt.provider_observation, observation);
     if (http !== 'informational') {
       const diagnostic = { kind: 'http_controls', disposition: http };
       if (http === 'requires_native_handling') {
@@ -285,7 +342,11 @@ export async function decodeUpstream(reply, challenge, maxOutput, receipt, refre
       }
       throw new StreamRefusal('UPSTREAM_REFUSED', diagnostic);
     }
-    const response = admitResponse(wire, challenge, maxOutput, controls);
+    const response = admitResponse(wire, challenge, maxOutput, controls, native ? observation : undefined);
+    if (response instanceof StreamRefusal) {
+      if (receipt) receipt.stream_refusal = response.diagnostic;
+      return { kind: 'withheld' };
+    }
     if (controls.requiresCatalogRefresh) await reconcileCatalog(refreshCatalog, receipt);
     return response;
   } catch (error) {
@@ -294,4 +355,13 @@ export async function decodeUpstream(reply, challenge, maxOutput, receipt, refre
   } finally {
     controls.close();
   }
+}
+
+export function decodeUpstream(reply, challenge, maxOutput, receipt, refreshCatalog) {
+  return decodeReply(reply, challenge, maxOutput, receipt, refreshCatalog, false);
+}
+
+// Only a complete admission of this response can attest a content-free native denial.
+export function decodeNativeUpstream(reply, challenge, maxOutput, receipt, refreshCatalog) {
+  return decodeReply(reply, challenge, maxOutput, receipt, refreshCatalog, true);
 }
