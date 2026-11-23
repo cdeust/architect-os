@@ -92,4 +92,6 @@ Four subscription responses completed at the provider with measured usage. Trial
 - [x] Bind the private worker receipt to the host's challenge, observed counts, served controls and workspace cleanup.
 - [x] Record the seven subscription trials and the last refusal at the stream boundary.
 - [ ] Resolve opaque turn-moderation reports against an authoritative OpenAI contract.
-- [ ] Confirm a native subscription turn with the exact model, matching receipt and verified shutdown, then update the SRT/SBX Builder diagram.
+- [x] Draw the separate SRT process and Docker SBX VM, the host broker and their process pipes. Verify the diagram at the README width.
+- [ ] Propagate a withheld answer to the native client and verify its exit and the empty workspace after shutdown.
+- [ ] Confirm a successful native subscription turn with the exact model, matching receipt and verified shutdown.

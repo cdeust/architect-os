@@ -310,6 +310,8 @@ Le §1 annonçait : « Le premier levier est donc le découpage des étapes ; la
 
 Le propriétaire, le 17 novembre 2026 : « Pour moi les bornes de temps ou les bornes par le modèle sont un pansement. Tu es propriétaire et mainteneur, je doute que tu accepterais des solutions quick fix comme ça. La boucle d'orchestration pourrait évoluer pour utiliser les 4 modèles au lieu de gérer les coûts par une borne de temps. Pareil pour la boucle de vérification. Elle pourrait évoluer pour paralléliser et utiliser les 4 modèles. » C'est la décision 11 de la plateforme, que le mainteneur avait mal tenue en présentant un délai et un modèle fixé comme une gestion du coût : le coût se mesure et se traite à sa cause, il ne se plafonne pas. Les bornes de la décision 12 restent ce qu'elles sont, des fusibles contre une session qui s'emballe.
 
+**Choix du runtime pour le second constructeur (22 novembre 2026).** Claude garde SRT pour les sessions de Step. Pour Astra et Gemini, le propriétaire a choisi Docker SBX. Dans le banc B.0, le client épinglé s’exécute sous une identité Linux sans privilèges dans une VM. L’hôte vérifie le refus des sorties réseau et communique avec elle par l’entrée et la sortie standard du processus SBX. Le consentement et les appels au fournisseur restent côté hôte. Le banc conserve les critères des deux essais, puis vérifie le retrait de la VM avant d’examiner le workspace. B.3 et B.4 désignent la future intégration de ce runtime au port Builder. [Banc et résultats](../../bench/sbx/README.md)
+
 ### Trois piliers
 
 - **Recherche.** Fait : les mesures et les faits de documentation ci-dessous, chacun avec sa source. Prévu avant toute construction : le protocole pré-enregistré plus bas, contre une étape déjà mesurée.

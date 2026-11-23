@@ -47,3 +47,38 @@ for edge in edges:
     assert max(src[0], dst[0]) < x < min(src[2], dst[2]), edge.attrib
     assert start == src[3] and start < end <= dst[1] and dst[1] - end <= 3, edge.attrib
 assert not loop.findall("s:rect", ns), "unowned cards in the loop"
+
+# A host broker drawn inside a guest, or an SBX VM nested inside SRT, would
+# misstate which process can hold the subscription credential.
+isolation = root.find(".//s:g[@id='runtime-isolation']", ns)
+assert isolation is not None, "missing runtime isolation diagram"
+
+
+def labeled_group(parent, group_id):
+    group = parent.find(f"s:g[@id='{group_id}']", ns)
+    assert group is not None, group_id
+    label = group.get("aria-labelledby")
+    assert label and group.find(f"s:text[@id='{label}']", ns) is not None, group_id
+    return group
+
+
+host, srt, sbx = (labeled_group(isolation, name) for name in ("isolation-host", "runtime-srt", "runtime-sbx"))
+broker = labeled_group(host, "sbx-account-broker")
+client = labeled_group(sbx, "sbx-native-client")
+host_box, srt_box, sbx_box, broker_box, client_box = (
+    bounds(group.find("s:rect", ns)) for group in (host, srt, sbx, broker, client)
+)
+for index, box in enumerate((host_box, srt_box, sbx_box)):
+    for other in (host_box, srt_box, sbx_box)[:index]:
+        assert box[2] <= other[0] or other[2] <= box[0] or box[3] <= other[1] or other[3] <= box[1], "overlapping isolation boundaries"
+for owner, child in ((host_box, broker_box), (sbx_box, client_box)):
+    assert owner[0] < child[0] < child[2] < owner[2] and owner[1] < child[1] < child[3] < owner[3]
+
+pipes = isolation.find("s:path[@id='sbx-process-pipes']", ns)
+assert pipes is not None and pipes.get("data-from") == broker.get("id") and pipes.get("data-to") == client.get("id")
+assert pipes.get("marker-start") and pipes.get("marker-end"), "bidirectional SBX process pipes"
+segment = re.fullmatch(r"M([\d.]+) ([\d.]+) H([\d.]+)", pipes.attrib["d"])
+assert segment, pipes.attrib["d"]
+start, y, end = map(float, segment.groups())
+assert start == broker_box[2] and end == client_box[0]
+assert max(broker_box[1], client_box[1]) < y < min(broker_box[3], client_box[3])
