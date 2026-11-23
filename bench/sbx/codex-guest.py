@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 VENDOR = Path("/tmp/aos-b0-kit")
@@ -411,18 +412,17 @@ def run_text_client(server, command, cwd, env):
             client.kill()
 
 
-def text_probe():
+def require_probe_user():
     if os.getuid() != 65534 or os.getgid() != 65534 or os.getgroups():
         raise ValueError("unprivileged identity required")
-    spec = read_frame(sys.stdin.buffer)
-    if (set(spec) != {"model", "prompt"} or not isinstance(spec["model"], str)
-            or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]*", spec["model"])):
-        raise ValueError("invalid host challenge")
-    challenge = challenge_from(spec["prompt"])
+
+
+@contextmanager
+def private_verified_client(prefix):
     with CLIENT.open("rb") as binary:
         if hashlib.file_digest(binary, "sha256").hexdigest() != BINARY_SHA256:
             raise ValueError("unexpected client")
-    with tempfile.TemporaryDirectory(prefix="aos-codex-text-", dir="/tmp") as home:
+    with tempfile.TemporaryDirectory(prefix=prefix, dir="/tmp") as home:
         config, work = Path(home) / "codex", Path(home) / "workspace"
         config.mkdir(mode=0o700)
         work.mkdir(mode=0o500)
@@ -432,6 +432,17 @@ def text_probe():
                                  stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         if version.stdout.decode().strip() != EXPECTED_VERSION:
             raise ValueError("unexpected client version")
+        yield work, env
+
+
+def text_probe():
+    require_probe_user()
+    spec = read_frame(sys.stdin.buffer)
+    if (set(spec) != {"model", "prompt"} or not isinstance(spec["model"], str)
+            or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]*", spec["model"])):
+        raise ValueError("invalid host challenge")
+    challenge = challenge_from(spec["prompt"])
+    with private_verified_client("aos-codex-text-") as (work, env):
         with TextServer(("127.0.0.1", 0), TextResponses) as server:
             server.refused, server.requested, server.expected = False, False, None
             server.model, server.prompt, server.challenge = spec["model"], spec["prompt"], challenge
@@ -451,6 +462,83 @@ def text_probe():
     print(json.dumps(receipt), flush=True)
 
 
+def rpc_send(client, message):
+    client.stdin.write(json.dumps(message).encode("utf-8") + b"\n")
+    client.stdin.flush()
+
+
+def rpc_result(client, request_id):
+    frame = read_frame(client.stdout)
+    if (not isinstance(frame, dict) or set(frame) != {"id", "result"}
+            or type(frame["id"]) is not int or frame["id"] != request_id
+            or not isinstance(frame["result"], dict)):
+        raise ValueError("unexpected native RPC")
+    return frame["result"]
+
+
+def require_disabled_remote(frame):
+    # v0.170.0 emits this status after initialization. Refuse an active connection or environment.
+    # codex-rs/app-server-protocol/schema/typescript/v2/RemoteControlStatusChangedNotification.ts
+    # The app-server adds a signed Unix millisecond timestamp in its notification envelope.
+    # codex-rs/app-server/src/outgoing_message.rs#L1022-L1026
+    if (not isinstance(frame, dict) or set(frame) != {"method", "params", "emittedAtMs"}
+            or frame["method"] != "remoteControl/status/changed" or type(frame["emittedAtMs"]) is not int
+            or not 0 < frame["emittedAtMs"] <= 2**63 - 1):
+        raise ValueError("unexpected native startup notification")
+    params = frame["params"]
+    if (not isinstance(params, dict) or set(params) != {"status", "serverName", "installationId", "environmentId"}
+            or params["status"] != "disabled" or params["environmentId"] is not None
+            or not isinstance(params["serverName"], str) or not isinstance(params["installationId"], str)):
+        raise ValueError("remote control must be disabled")
+
+
+def account_exec():
+    require_probe_user()
+    spec = read_frame(sys.stdin.buffer)
+    if (not isinstance(spec, dict) or set(spec) != {"challenge"} or not isinstance(spec["challenge"], str)
+            or not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", spec["challenge"])
+            or sys.stdin.buffer.read(1)):
+        raise ValueError("invalid host challenge")
+    with private_verified_client("aos-codex-account-") as (work, env):
+        work.chmod(0o700)
+        challenge = work / "challenge"
+        challenge.write_bytes(("architect-os account execution\n" + spec["challenge"] + "\n").encode("ascii"))
+        challenge.chmod(0o400)
+        work.chmod(0o500)
+        args = [str(CLIENT), "-c", 'approval_policy="never"', "-c", 'sandbox_mode="read-only"',
+                "-c", "mcp_servers={}", "-c", "check_for_update_on_startup=false",
+                "app-server", "--listen", "stdio://"]
+        with subprocess.Popen(args, env=env, cwd=work, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                              stderr=subprocess.DEVNULL) as client:
+            try:
+                rpc_send(client, {"method": "initialize", "id": 1, "params": {
+                    "clientInfo": {"name": "architect_os", "title": "Architect OS", "version": "1"}}})
+                rpc_result(client, 1)
+                rpc_send(client, {"method": "initialized", "params": {}})
+                require_disabled_remote(read_frame(client.stdout))
+                # Both argv elements are constant; the opaque challenge is only read as file data.
+                rpc_send(client, {"method": "command/exec", "id": 2, "params": {
+                    "command": ["/usr/bin/sha256sum", "challenge"], "cwd": str(work),
+                    "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
+                    "timeoutMs": PROBE_SECONDS * 1000}})
+                result = rpc_result(client, 2)
+                if (set(result) != {"exitCode", "stdout", "stderr"} or type(result["exitCode"]) is not int
+                        or result["exitCode"] != 0 or result["stderr"] != "" or not isinstance(result["stdout"], str)
+                        or not re.fullmatch(r"[0-9a-f]{64}  challenge\n", result["stdout"])):
+                    raise ValueError("unexpected native result")
+                client.stdin.close()
+                if client.stdout.read(1):
+                    raise ValueError("unexpected trailing native event")
+                client_exit = client.wait()
+            finally:
+                client.kill()
+                # Permit removal of the private challenge when leaving the temporary directory.
+                work.chmod(0o700)
+    print(json.dumps({"client_version": EXPECTED_VERSION, "client_sha256": BINARY_SHA256,
+                      "client_exit": client_exit, "command_exit": result["exitCode"],
+                      "stdout": result["stdout"], "stderr": result["stderr"]}), flush=True)
+
+
 class ProbeDeadline(BaseException):
     """Leave blocking HTTP, host-input and native-process operations through their cleanup scopes."""
 
@@ -464,14 +552,17 @@ if __name__ == "__main__":
         install()
     elif sys.argv[1:] == ["probe"]:
         sys.exit(main())
-    elif sys.argv[1:] == ["text-probe"]:
+    elif sys.argv[1:] in (["text-probe"], ["account-exec"]):
         signal.signal(signal.SIGALRM, expire_probe)
         signal.alarm(PROBE_SECONDS)
         try:
-            text_probe()
+            if sys.argv[1] == "text-probe":
+                text_probe()
+            else:
+                account_exec()
         except (Exception, ProbeDeadline):
-            sys.exit("SBX_CODEX_TEXT_PROBE_REFUSED")
+            sys.exit("SBX_CODEX_TEXT_PROBE_REFUSED" if sys.argv[1] == "text-probe" else "SBX_CODEX_ACCOUNT_EXEC_REFUSED")
         finally:
             signal.alarm(0)
     else:
-        sys.exit("expected install, probe, or text-probe")
+        sys.exit("expected install, probe, text-probe, or account-exec")
