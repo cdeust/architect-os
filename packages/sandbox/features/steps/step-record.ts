@@ -476,6 +476,12 @@ Then('the schema of the record accepts it', function () {
   assert.equal(stepRecordSchema().safeParse(stored(this, 'schemaRecord')).success, true);
 });
 
+Then('the decoded historical session still has no exit code', function () {
+  const [session] = stepRecordSchema().parse(stored(this, 'schemaRecord')).sessions;
+  assert.ok(session);
+  assert.equal(Object.hasOwn(session, 'exitCode'), false);
+});
+
 Given('a directory outside the worktree', function () {
   assert.deepEqual(readdirSync(tree(this).outside), []);
 });

@@ -57,6 +57,7 @@ interface Call {
 interface Behaviour {
   fixture?: string;
   stopped?: boolean;
+  nativeExit?: number;
   failure?: Error;
   /** The session does not return until the scenario ends it. */
   held?: boolean;
@@ -407,6 +408,22 @@ Given('the build session fails with the plain error {string}', function (message
   step(this).behaviours['code.json'].failure = new Error(message);
 });
 
+Given('the build session exits with {int}', function (code: number) {
+  step(this).behaviours['code.json'].nativeExit = code;
+});
+
+Given('the scout session {int} exits with {int}', function (n: number, code: number) {
+  behaviour(step(this), 'scout.json', n).nativeExit = code;
+});
+
+Given('the review session {int} exits with {int}', function (n: number, code: number) {
+  behaviour(step(this), 'review.json', n).nativeExit = code;
+});
+
+Given('the review session {int} is stopped by its limit', function (n: number) {
+  behaviour(step(this), 'review.json', n).stopped = true;
+});
+
 /** The files of the launcher as the scenarios see them: the three tool files as committed, the others fixed. */
 const launcherFile =
   (s: Step) =>
@@ -508,7 +525,7 @@ const start = (s: Step, args: string): Promise<void> => {
         // In two chunks, as a stream arrives.
         onOutput(Buffer.from(text.slice(0, 10)));
         onOutput(Buffer.from(text.slice(10)));
-        return { exitCode: 0, stopped: own.stopped ?? false };
+        return { exitCode: own.nativeExit ?? 0, stopped: own.stopped ?? false };
       } finally {
         if (phase !== undefined) phase.running--;
       }
@@ -750,6 +767,25 @@ Then('the step file {string} is:', function (name: string, content: string) {
 Then('the step file {string} is exactly {string}', function (name: string, content: string) {
   assert.equal(readFileSync(stepFile(step(this), name), 'utf8'), content);
 });
+
+Then('the retained measure {string} includes:', function (name: string, fields: string) {
+  const measure = JSON.parse(readFileSync(stepFile(step(this), name), 'utf8')) as Record<string, unknown>;
+  for (const [key, expected] of Object.entries(JSON.parse(fields) as Record<string, unknown>)) {
+    assert.deepEqual(measure[key], expected, key);
+  }
+});
+
+Then(
+  'the step summary lists outcome {string} and the session {string} includes:',
+  function (outcome: string, path: string, fields: string) {
+    const summary = JSON.parse(step(this).stdout);
+    assert.equal(summary.outcome, outcome);
+    const session = path.split('.').reduce((entry, key) => entry[key], summary);
+    for (const [key, expected] of Object.entries(JSON.parse(fields))) {
+      assert.deepEqual(session[key], expected, key);
+    }
+  },
+);
 
 Given(
   'the step folder holds the file {string} with the escaped content {string}',

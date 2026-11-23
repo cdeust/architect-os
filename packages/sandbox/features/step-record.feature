@@ -32,9 +32,9 @@ Feature: the step leaves its brief and its record in the worktree
           "tree": { "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "tree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "clean": true },
           "inputs": "the hashes",
           "sessions": [
-            { "role": "scout", "name": "files", "model": "claude-haiku-5-5", "effort": "low", "completed": true, "stopped": false, "durationSeconds": 4, "costUsd": 0.0625, "costByModel": { "claude-haiku-5-5": 0.0625 } },
-            { "role": "build", "model": "claude-sonnet-5-5", "effort": "medium", "completed": true, "stopped": false, "durationSeconds": 12, "costUsd": 0.5625, "costByModel": { "claude-haiku-4-5": 0.0625, "claude-sonnet-5-5": 0.5 } },
-            { "role": "review", "name": "correctness", "model": "claude-opus-5-5", "effort": "high", "completed": true, "stopped": false, "durationSeconds": 12, "costUsd": 0.25, "costByModel": { "claude-opus-5-5": 0.25 } }
+            { "role": "scout", "name": "files", "model": "claude-haiku-5-5", "effort": "low", "completed": true, "exitCode": 0, "stopped": false, "durationSeconds": 4, "costUsd": 0.0625, "costByModel": { "claude-haiku-5-5": 0.0625 } },
+            { "role": "build", "model": "claude-sonnet-5-5", "effort": "medium", "completed": true, "exitCode": 0, "stopped": false, "durationSeconds": 12, "costUsd": 0.5625, "costByModel": { "claude-haiku-4-5": 0.0625, "claude-sonnet-5-5": 0.5 } },
+            { "role": "review", "name": "correctness", "model": "claude-opus-5-5", "effort": "high", "completed": true, "exitCode": 0, "stopped": false, "durationSeconds": 12, "costUsd": 0.25, "costByModel": { "claude-opus-5-5": 0.25 } }
           ],
           "checks": [ { "name": "types", "passed": true, "stopped": false, "durationSeconds": 3 } ],
           "reviews": [ { "name": "correctness", "verdict": "accept", "findings": 1 } ],
@@ -43,7 +43,7 @@ Feature: the step leaves its brief and its record in the worktree
         """
       And the step stdout is the line:
         """
-        {"scouts":{"files":{"model":"claude-haiku-5-5","completed":true,"verified":0,"rejected":2,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}}},"build":{"completed":true,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{"types":{"exitCode":0,"stopped":false,"durationSeconds":3,"passed":true}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","blocks":false,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.875,"costByModel":{"claude-haiku-4-5":0.0625,"claude-haiku-5-5":0.0625,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.5},"record":"steps/demo/record.json"}
+        {"outcome":"passed","scouts":{"files":{"model":"claude-haiku-5-5","completed":true,"exitCode":0,"verified":0,"rejected":2,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}}},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{"types":{"exitCode":0,"stopped":false,"durationSeconds":3,"passed":true}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.875,"costByModel":{"claude-haiku-4-5":0.0625,"claude-haiku-5-5":0.0625,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.5},"record":"steps/demo/record.json"}
         """
 
     Scenario: the launcher files of a step with a build, a scout and a review: each tool file, its prompt and its profile, as read
@@ -437,6 +437,10 @@ Feature: the step leaves its brief and its record in the worktree
 
   Rule: the schema of the record refuses whatever is not a hash, a name of the step file, a number or a value of a closed list
 
+    Scenario: a historical session without a native exit code remains readable
+      Given a record of a step that the schema accepts
+      Then the decoded historical session still has no exit code
+
     Scenario Outline: refused: <field> becomes <value>
       Given a record of a step that the schema accepts
       When its field "<field>" becomes <value>
@@ -477,6 +481,10 @@ Feature: the step leaves its brief and its record in the worktree
         | sessions.0.durationSeconds   | -1                                                                    |
         | sessions.0.durationSeconds   | 1.5                                                                   |
         | sessions.0.costUsd           | -0.01                                                                 |
+        | sessions.0.exitCode          | -1                                                                    |
+        | sessions.0.exitCode          | 0.5                                                                   |
+        | sessions.0.exitCode          | null                                                                  |
+        | sessions.0.exitCode          | "0"                                                                   |
         | sessions.0.costByModel       | {"Evil Model":1}                                                      |
         | sessions.0.costByModel       | {"-dash":1}                                                           |
         | sessions.0.costByModel       | {"claude sonnet":1}                                                   |
@@ -508,6 +516,8 @@ Feature: the step leaves its brief and its record in the worktree
         | sessions.0.effort          | "max"                                |
         | sessions.0.role            | "scout"                              |
         | sessions.0.costUsd         | 0                                    |
+        | sessions.0.exitCode        | 0                                    |
+        | sessions.0.exitCode        | 17                                   |
         | sessions.0.durationSeconds | 0                                    |
         | sessions.0.costByModel     | {"other":0,"claude-fable-5.2":1}     |
         | reviews.0.verdict          | "request_changes"                    |

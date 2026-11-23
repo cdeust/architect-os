@@ -164,6 +164,7 @@ function writeValid(steps: string, name: string): void {
       {
         role: 'build',
         config: STEP_FILE.build,
+        exitCode: 0,
         completed: true,
         stopped: false,
         durationSeconds: 1,
