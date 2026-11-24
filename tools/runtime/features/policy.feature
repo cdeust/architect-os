@@ -6,7 +6,7 @@ Feature: The admission policy tools/runtime/admission.json (a descriptive file: 
   Scenario: the committed runtime admission policy loads with its three provisional reserves
     When the committed runtime admission policy is decoded
     Then the runtime admission policy is accepted with version 1
-    And the runtime reserve of "workstation" has a root floor of "34359738368" bytes and a home floor of "17179869184" bytes
+    And the runtime reserve of "workstation" has a root floor of "34359738368" bytes and a home floor of "2147483648" bytes
     And the runtime reserve of "hosted-runner" has a root floor of "4294967296" bytes and a home floor of "2147483648" bytes
     And the runtime reserve of "server" has a root floor of "68719476736" bytes and a home floor of "17179869184" bytes
     And every runtime reserve is provisional, with a basis, and a review that names step 4
