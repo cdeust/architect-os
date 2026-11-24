@@ -444,22 +444,46 @@ Then(
 );
 
 Then('each orchestration phase owns its cards and connects to the next phase', function () {
-  execFileSync('python3', ['features/scripts/architecture-loop.py', 'docs/diagrams/architecture.svg'], {
+  execFileSync('python3', ['-B', 'features/scripts/architecture-loop.py', 'docs/diagrams/architecture.svg'], {
     cwd: ROOT,
   });
 });
 
 Then(
+  'the typography check refuses each inserted fragment with its reason',
+  function (table: { hashes(): { fragment: string; reason: string }[] }) {
+    const path = join(ROOT, 'docs/diagrams/architecture.svg');
+    const typography = 'features/scripts/architecture_typography.py';
+    execFileSync('python3', ['-B', typography, path], { cwd: ROOT });
+    const original = readFileSync(path, 'utf8');
+    const dir = mkdtempSync(join(tmpdir(), 'architecture-typography-'));
+    this.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+    const specimen = join(dir, 'diagram.svg');
+    for (const { fragment, reason } of table.hashes()) {
+      writeFileSync(specimen, original.replace('</svg>', fragment + '</svg>'));
+      const run = spawnSync('python3', ['-B', typography, specimen], { cwd: ROOT, encoding: 'utf8' });
+      assert.ifError(run.error);
+      assert.equal(run.status, 1, fragment);
+      assert.ok(run.stderr.includes(reason), `${fragment}: expected "${reason}" in ${run.stderr}`);
+    }
+  },
+);
+
+Then(
   'the architecture diagram validator rejects each inserted fragment',
   function (table: { raw(): string[][] }) {
-    const original = readFileSync(join(ROOT, 'docs/diagrams/architecture.svg'), 'utf8');
+    const path = join(ROOT, 'docs/diagrams/architecture.svg');
+    execFileSync('python3', ['-B', 'features/scripts/architecture-loop.py', path], { cwd: ROOT });
+    const original = readFileSync(path, 'utf8');
     const dir = mkdtempSync(join(tmpdir(), 'architecture-diagram-'));
     this.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
     const specimen = join(dir, 'diagram.svg');
     for (const [fragment] of table.raw()) {
       assert.ok(fragment, 'expected an SVG fragment');
       writeFileSync(specimen, original.replace('</svg>', fragment + '</svg>'));
-      const run = spawnSync('python3', ['features/scripts/architecture-loop.py', specimen], { cwd: ROOT });
+      const run = spawnSync('python3', ['-B', 'features/scripts/architecture-loop.py', specimen], {
+        cwd: ROOT,
+      });
       assert.ifError(run.error);
       assert.equal(run.status, 1, fragment);
     }

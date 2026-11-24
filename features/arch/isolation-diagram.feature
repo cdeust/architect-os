@@ -203,6 +203,30 @@ Feature: the image of the profiles is produced from the profile files, the hand-
   Scenario: The README loop groups each capability with its phase and follows the numbered path
     Then each orchestration phase owns its cards and connects to the next phase
 
+  Scenario: Text in the hand-drawn diagram uses its declared family and one size per role
+    At the README width of 920 px the 1400-unit drawing uses Arial throughout.
+    Diagram and section titles use 32 and 25 units, brick names 20, and body lines,
+    badges and legends 17 (11.17 px at that width, the floor the loop already holds).
+    Then the architecture diagram validator rejects each inserted fragment
+      | <g font-family="serif"/>                                                         |
+      | <text data-type-role="brick-text" font-size="10.5">Body</text>                   |
+      | <text data-type-role="brick-text" font-size="32">Body</text>                     |
+      | <text data-type-role="brick-text" font-size="17">next</text>                     |
+      | <text font-size="17">No role</text>                                              |
+      | <text data-type-role="legend" font-size="17" transform="scale(0.5)">Small</text> |
+
+  Scenario: The typography check names the rule a drifted diagram breaks
+    The check runs on its own, before the loop checks, so a diagram that drifted
+    fails on its real attributes: a second family, a sixth size, a style that
+    overrides either.
+    Then the typography check refuses each inserted fragment with its reason
+      | fragment                                                                                                                              | reason                  |
+      | <g font-family="serif"/>                                                                                                               | belongs on the SVG root |
+      | <text data-type-role="legend" font-size="11">a</text><text data-type-role="legend" font-size="12">b</text>                            | sizes drawn             |
+      | <g style="font-size:30px"/>                                                                                                            | style attribute         |
+      | <style>text{font-family:serif}</style>                                                                                                 | style sheet             |
+      | <text data-type-role="brick-text" font-size="17">next</text>                                                                          | badge role              |
+
   Scenario: the hand-drawn diagram accepts only static illustrations
     Then the architecture diagram validator rejects each inserted fragment
       | <image/>                                 |

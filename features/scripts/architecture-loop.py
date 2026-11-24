@@ -3,6 +3,7 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from architecture_typography import check_typography
 
 ns = {"s": "http://www.w3.org/2000/svg"}
 
@@ -16,7 +17,8 @@ class StaticDiagram(ET.TreeBuilder):
 
 path = Path(sys.argv[1])
 assert path.is_file() and not path.is_symlink(), "expected a regular diagram file"
-root = ET.parse(path, parser=ET.XMLParser(target=StaticDiagram())).getroot()
+root = ET.parse(path, parser=ET.XMLParser(target=StaticDiagram(insert_comments=True))).getroot()
+check_typography(root)
 # This illustration can name the runtime it depicts. Only static SVG drawing
 # primitives and same-document marker references belong in the README image.
 elements = {
@@ -25,11 +27,13 @@ elements = {
 }
 markers = {f"url(#{marker.attrib['id']})" for marker in root.findall("s:defs/s:marker", ns)}
 attributes = set(
-    "aria-label aria-labelledby data-from data-to id role viewBox width height x x1 x2 y y1 y2 rx "
+    "aria-label aria-labelledby data-from data-to data-type-role id role viewBox width height x x1 x2 y y1 y2 rx "
     "font-family font-size font-weight text-anchor transform d points fill stroke stroke-width "
     "stroke-dasharray marker-end marker-start markerHeight markerWidth orient refX refY".split()
 )
 for node in root.iter():
+    if node.tag is ET.Comment:
+        continue
     assert node.tag in elements, node.tag
     assert node.attrib.keys() <= attributes, (node.tag, node.attrib.keys() - attributes)
     for key in ("fill", "stroke"):
