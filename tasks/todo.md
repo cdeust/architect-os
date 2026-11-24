@@ -119,7 +119,9 @@ Five subscription responses completed at the provider with measured usage. Trial
 ## Builder de Step sous Docker SBX (24 novembre 2026)
 
 - [x] B.1 Introduire le port Builder et vérifier ensemble Claude et le double en mémoire.
-- [ ] B.2 Relayer les octets natifs vers une route SIWC fermée et vérifier les budgets et les terminaux sur un faux amont.
+- [x] B.2 Relayer les octets natifs vers une route SIWC fermée et vérifier les budgets et les terminaux sur un faux amont.
 - [ ] B.3 Monter le worktree du Step, protéger ses entrées réservées et vérifier une écriture native hors ligne.
 - [ ] B.4 Intégrer la session de compte, les contrôles de provenance et le reçu du constructeur.
 - [ ] Essai par le Step de production après le signal du mainteneur pour le consentement.
+
+- [ ] B.6 Qualifier chaque mode de l’agent Antigravity après B.4.
