@@ -1,3 +1,4 @@
+import { ClaudeBuilder } from '../../src/builder.js';
 import assert from 'node:assert/strict';
 import {
   chmodSync,
@@ -504,6 +505,7 @@ const start = (s: Step, args: string): Promise<void> => {
         s.published.set(name, { ...files });
       },
     },
+    builder: new ClaudeBuilder((...args) => deps.session(...args)),
     session: async (tool, argv, brief, limitSeconds, onOutput) => {
       s.calls.push({ tool, argv, brief, limitSeconds });
       const phase = tool === 'code.json' ? undefined : s.phases[tool];

@@ -30,6 +30,7 @@ import {
   type CodeProcess,
   type CodeToolDependencies,
 } from './code-tool.js';
+import { ClaudeBuilder, type Builder, type StepSession, type ToolFile } from './builder.js';
 import { measureSession, type SessionMeasure } from './measure.js';
 import { blocks, parseReviewVerdict, ReviewVerdictSchema } from './review-verdict.js';
 import { factsJsonSchema, parseFacts, renderFacts, verifyFacts, type Fact } from './scout-facts.js';
@@ -50,16 +51,7 @@ import {
 import { fingerprintTree, type TreeFingerprint } from './tree-fingerprint.js';
 import { resolveWorktree } from './worktree.js';
 
-export type ToolFile = 'code.json' | 'review.json' | 'scout.json';
-
-/** Une session de l'outil : son code de sortie, et si la limite l'a arrêtée. `onOutput` reçoit sa sortie au fil de l'eau. */
-export type StepSession = (
-  tool: ToolFile,
-  argv: readonly string[],
-  brief: string,
-  limitSeconds: number,
-  onOutput: (chunk: Uint8Array) => void,
-) => Promise<{ exitCode: number; stopped: boolean }>;
+export type { StepSession, ToolFile } from './builder.js';
 
 /** Un contrôle : la commande jouée sous srt (profil `checker`), sa limite en secondes ; ce qu'elle a rendu. */
 export type StepCheck = (command: readonly string[], limitSeconds: number) => Promise<CheckOutcome>;
@@ -75,6 +67,7 @@ export interface StepDependencies {
   readonly reserveOutputs: (name: string, intake: string, worktree: string) => StepOutputs;
   readonly appendFile: (path: string, content: Uint8Array) => void;
   readonly session: StepSession;
+  readonly builder: Builder;
   readonly check: StepCheck;
   /** L'heure, en millisecondes : la durée d'un contrôle est mesurée par l'étape. */
   readonly now: () => number;
@@ -171,7 +164,6 @@ async function play(
     ...measure
   } = measureSession(Buffer.concat(chunks).toString());
   deps.writeFile(join(outputs.retained, `${prefix}.measure.json`), json({ ...measure, exitCode, stopped }));
-  if (tool === 'code.json') deps.writeFile(join(outputs.retained, 'build.report.md'), report);
   return { measure: { ...measure, report, structuredOutput: _structured }, exitCode, stopped };
 }
 
@@ -456,7 +448,23 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       scoutOutcomes.flatMap(({ verified }) => verified),
     );
     deps.writeFile(join(outputs.retained, 'build.brief.md'), forBuild);
-    const build = await play(deps, outputs, 'build', 'code.json', step.build, [], forBuild);
+    const definition = parseTool(JSON.parse(launcher['code.json']!));
+    const stream = join(outputs.streams, 'build.stream.jsonl');
+    deps.writeFile(stream, '');
+    const build = await deps.builder.build({
+      config: step.build,
+      systemPrompt: launcher[definition.launcherPromptFile]!,
+      worktree,
+      brief: forBuild,
+      maxBytes: definition.authProxy.policy.maxBodyBytes,
+      onOutput: (chunk) => deps.appendFile(stream, chunk),
+    });
+    const { report, structuredOutput: _structured, ...metrics } = build.measure;
+    deps.writeFile(
+      join(outputs.retained, 'build.measure.json'),
+      json({ ...metrics, exitCode: build.exitCode, stopped: build.stopped }),
+    );
+    deps.writeFile(join(outputs.retained, 'build.report.md'), report);
     const built = sessionSucceeded(build);
     // Les contrôles, l'un après l'autre ; le premier qui ne passe pas met fin à la phase.
     const played: CheckReport[] = [];
@@ -707,6 +715,7 @@ export function stepDependencies(proc: CodeProcess): StepDependencies {
       }
     },
     session: launch,
+    builder: new ClaudeBuilder(launch),
     check: (...args) =>
       sandboxCheck(new SrtSandboxRunner(srtOptions(proc, {}, admittedRoot())), cwd)(...args),
     now: () => Date.now(),
