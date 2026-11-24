@@ -1,7 +1,14 @@
 import { parseArguments } from '../domain/arguments.js';
 import type { BaseInput } from '../domain/count.js';
-import { changedLines, parseRawDiff, wholeFile, type ChangedFile } from '../domain/diff.js';
-import { isJobFeature, isProduction, matchesAny, type Job } from '../domain/layout.js';
+import {
+  changedLines,
+  parseRawDiff,
+  requireSharedLineCoordinates,
+  wholeFile,
+  type ChangedFile,
+} from '../domain/diff.js';
+import { isJobFeature, isProduction, matchesAny, type Job, type Layout } from '../domain/layout.js';
+import { requireLiteralMutationPath } from '../domain/mutate-pattern.js';
 import { retiredFiles } from '../domain/debt.js';
 import { canaryViolations } from '../domain/canary.js';
 import { inPerimeter, mutatePatterns, perimeterOf, type MutantRecord } from '../domain/mutation.js';
@@ -47,23 +54,49 @@ export function changedFiles(
   workspace: Workspace,
   firstParent: string | null,
   include: (path: string) => boolean = () => true,
+  layout?: Layout,
 ): ChangedFile[] {
   const nested = repository.nested();
   if (nested !== undefined) throw new Error(`dépôt imbriqué dans l'arbre : ${nested}`);
-  const whole = (path: string) => wholeFile(path, workspace.read(path) as string);
-  const present = (path: string) => workspace.read(path) !== null;
+  const isSource = (path: string) => layout !== undefined && isProduction(layout, path);
+  const whole = (path: string) => {
+    const source = workspace.read(path);
+    if (source === null) return [];
+    if (isSource(path)) validateMutationSource(path, source);
+    return [wholeFile(path, source)];
+  };
   return [
     ...(firstParent === null
-      ? repository.tracked().filter(include).filter(present).map(whole)
+      ? repository.tracked().filter(include).flatMap(whole)
       : parseRawDiff(repository.changedPaths(firstParent))
           .filter(({ path }) => include(path))
-          .map(({ path, deleted }) => ({
-            path,
-            deleted,
-            lines: deleted ? [] : changedLines(path, repository.patch(firstParent, path)),
-          }))),
-    ...repository.untracked().filter(include).map(whole),
+          .map(({ path, deleted, link }) => {
+            if (link) throw new Error('GATE_SOURCE_LINK : ' + path);
+            if (!deleted && isSource(path)) {
+              const source = workspace.read(path);
+              if (source === null) throw new Error('GATE_SOURCE_MISSING : ' + path);
+              validateMutationSource(path, source);
+            }
+            return {
+              path,
+              deleted,
+              lines: deleted ? [] : changedLines(path, repository.patch(firstParent, path)),
+            };
+          })),
+    ...repository
+      .untracked()
+      .filter(include)
+      .flatMap((path) => {
+        const added = whole(path);
+        if (added.length === 0) throw new Error('GATE_SOURCE_MISSING : ' + path);
+        return added;
+      }),
   ];
+}
+
+function validateMutationSource(path: string, source: string): void {
+  requireLiteralMutationPath(path);
+  requireSharedLineCoordinates(path, source);
 }
 
 /** The mutation debt registry and the perimeter Stryker must mutate: rule 5's, plus the files of retired entries. */
@@ -136,7 +169,7 @@ async function replayCommand(
   if (mode !== 'all') {
     const repository = new GitRepository(root);
     const { firstParent } = repository.commits();
-    const changes = changedFiles(repository, workspace, firstParent);
+    const changes = changedFiles(repository, workspace, firstParent, undefined, config);
     const { perimeter, debt } = mutationScope(config, changes, workspace, repository, firstParent);
     selected = (file, mutant) => file === canary?.file || inPerimeter(perimeter, file, mutant);
     if (sharded) {
@@ -203,7 +236,7 @@ export interface GateReceiptAuthority {
   publish(config: GateConfig, workspace: Workspace): void;
 }
 
-function gate(
+async function gate(
   config: GateConfig,
   job: Job,
   command: 'plan' | 'check',
@@ -215,7 +248,7 @@ function gate(
 ) {
   const repository = new GitRepository(root);
   const { head, firstParent } = repository.commits();
-  const changes = changedFiles(repository, workspace, firstParent);
+  const changes = changedFiles(repository, workspace, firstParent, undefined, config);
   // A job without mutation does not read the mutation debt registry.
   const scope = job.mutation ? mutationScope(config, changes, workspace, repository, firstParent) : null;
   const reports = config.reports;
@@ -257,6 +290,14 @@ function gate(
   const baseText = workspace.read(reports.base);
   const base: BaseInput = baseText === null ? null : parseGateBase(baseText);
   const mutationText = workspace.read(reports.mutation);
+  const parsed =
+    mutationText === null ? { failure: `${reports.mutation} absent` } : parseMutationReport(mutationText);
+  const mutationReport =
+    scope === null || 'failure' in parsed
+      ? parsed
+      : await (
+          await import('./mutation-inventory.js')
+        ).verifyEmptyMutationFiles(root, scope.perimeter, parsed, (file) => workspace.read(file));
   const verdict = evaluate({
     job: job.name,
     head,
@@ -270,10 +311,7 @@ function gate(
         ? null
         : {
             ...scope,
-            report:
-              mutationText === null
-                ? { failure: `${reports.mutation} absent` }
-                : parseMutationReport(mutationText),
+            report: mutationReport,
             control: controlOf(config, workspace, mutationText),
           },
   });
@@ -309,7 +347,12 @@ export async function runGate(
   if ('failure' in command) return refuse(command.failure);
   if (command.name === 'check' && command.job === 'linux') receipt?.discard();
   if (command.name === 'inventory') workspace.remove(INVENTORY_PATH);
-  const text = workspace.read(CONFIG_PATH);
+  let text;
+  try {
+    text = workspace.read(CONFIG_PATH);
+  } catch (error) {
+    return refuse((error as Error).message);
+  }
   if (text === null) return refuse(`${CONFIG_PATH} absent`);
   const config = parseGateConfig(text);
   if ('failure' in config) return refuse(`${CONFIG_PATH} : ${config.failure}`);
@@ -358,7 +401,13 @@ export async function runGate(
     try {
       const repository = new GitRepository(root);
       const { head, firstParent } = repository.commits();
-      const changes = changedFiles(repository, workspace, firstParent, (file) => isProduction(config, file));
+      const changes = changedFiles(
+        repository,
+        workspace,
+        firstParent,
+        (file) => isProduction(config, file),
+        config,
+      );
       const { debt, perimeter } = mutationScope(config, changes, workspace, repository, firstParent);
       if ('failure' in debt.current) throw new Error('registre de dette illisible : ' + debt.current.failure);
       if (debt.parent !== null && 'failure' in debt.parent)
@@ -432,5 +481,9 @@ export async function runGate(
       return refuse((error as Error).message);
     }
   }
-  return gate(config, job, command.name, root, env, out, workspace, receipt);
+  try {
+    return await gate(config, job, command.name, root, env, out, workspace, receipt);
+  } catch (error) {
+    return refuse((error as Error).message);
+  }
 }

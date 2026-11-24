@@ -21,6 +21,7 @@ FILE = os.O_NOFOLLOW | os.O_NONBLOCK
 GIT_ENV = {
     "PATH": "/usr/bin:/bin",
     "GIT_OPTIONAL_LOCKS": "0",
+    "GIT_ATTR_NOSYSTEM": "1",
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "LC_ALL": "C",

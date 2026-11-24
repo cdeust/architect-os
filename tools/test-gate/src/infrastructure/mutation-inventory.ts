@@ -3,7 +3,9 @@ import { noopLogger } from '@stryker-mutator/util';
 import { Instrumenter } from '@stryker-mutator/instrumenter';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
-import type { Perimeter } from '../domain/mutation.js';
+import { requireSharedLineCoordinates } from '../domain/diff.js';
+import { mentioned, requireLiteralMutationPath } from '../domain/mutate-pattern.js';
+import type { MutationReport, Perimeter } from '../domain/mutation.js';
 
 const instrumenter = new Instrumenter(noopLogger);
 
@@ -31,6 +33,46 @@ function sourceDigest(source: string): string {
   return createHash('sha256').update(source).digest('hex');
 }
 
+async function instrumentSource(root: string, file: string, source: string) {
+  requireLiteralMutationPath(file);
+  requireSharedLineCoordinates(file, source);
+  return instrumenter.instrument(
+    [{ name: resolve(root, file), content: source, mutate: true }],
+    inventoryOptions,
+  );
+}
+
+/** Git lines and the gate's report use one-based positions. */
+function overlaps(lines: readonly number[], start: number, end: number): boolean {
+  return lines.some((line) => line >= start && line <= end);
+}
+
+/**
+ * Stryker's mutation-test-report-helper.js `toFileResults` groups mutant results by file.
+ * Selection with zero mutants has no JSON entry. Instrument that exact checkout source directly so
+ * rule 5 has positive evidence about its changed lines and can still read all of its directives.
+ */
+export async function verifyEmptyMutationFiles(
+  root: string,
+  perimeter: Perimeter,
+  report: MutationReport,
+  read: (file: string) => string | null,
+): Promise<MutationReport> {
+  const files = new Map(report.files);
+  for (const [file, changed] of perimeter.changedLines) {
+    if (files.get(file)?.mutants.length) continue;
+    files.delete(file);
+    if (!mentioned(report.mutate, file)) continue;
+    const source = read(file);
+    if (source === null) throw new Error('GATE_SOURCE_MISSING : ' + file);
+    const { mutants } = await instrumentSource(root, file, source);
+    const lines = [...changed];
+    if (!mutants.some(({ location }) => overlaps(lines, location.start.line + 1, location.end.line + 1)))
+      files.set(file, { source, mutants: [] });
+  }
+  return { ...report, files };
+}
+
 /** Discover before projecting: Stryker range containment would omit enclosing, multiline AST nodes. */
 export async function mutationLots(
   root: string,
@@ -48,10 +90,7 @@ export async function mutationLots(
     // The perimeter keeps the changed line order from Git.
     const lines = [...(perimeter.changedLines.get(file) ?? [])];
     const whole = wholeFiles.has(file);
-    const { mutants } = await instrumenter.instrument(
-      [{ name: resolve(root, file), content: source, mutate: true }],
-      inventoryOptions,
-    );
+    const { mutants } = await instrumentSource(root, file, source);
     lots.push({
       file,
       sourceSha256: sourceDigest(source),
@@ -62,7 +101,7 @@ export async function mutationLots(
         // Instrumenter API uses zero-based positions. The gate consumes one-based reporter positions.
         const start = { line: location.start.line + 1, column: location.start.column + 1 };
         const end = { line: location.end.line + 1, column: location.end.column + 1 };
-        if (!whole && !lines.some((line) => line >= start.line && line <= end.line)) return [];
+        if (!whole && !overlaps(lines, start.line, end.line)) return [];
         return [
           {
             start,

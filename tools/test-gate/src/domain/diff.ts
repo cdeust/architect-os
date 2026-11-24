@@ -11,6 +11,11 @@ export function wholeFile(path: string, text: string): ChangedFile {
   return { path, deleted: false, lines: text.split('\n').map((_, index) => index + 1) };
 }
 
+/** Git counts LF. Babel also counts lone CR, LS and PS; CRLF is one line break for both. */
+export function requireSharedLineCoordinates(path: string, source: string): void {
+  if (/\r(?!\n)|[\u2028\u2029]/.test(source)) throw new Error('GATE_SOURCE_LINE_SEPARATOR : ' + path);
+}
+
 /**
  * The text of what git printed, when it is UTF-8 and nothing else: a name that is not would be read under another
  * spelling than the one git knows.
@@ -27,6 +32,7 @@ export function decodeExactly(bytes: Uint8Array): string {
 export interface ChangedPath {
   readonly path: string;
   readonly deleted: boolean;
+  readonly link: boolean;
 }
 
 /**
@@ -48,7 +54,7 @@ export function parseRawDiff(text: string): ChangedPath[] {
     if (record === null || path === '') throw new Error('liste des chemins changés illisible');
     if (record[1] === '160000' || record[2] === '160000')
       throw new Error(`dépôt imbriqué dans l'arbre : ${path}`);
-    paths.push({ path, deleted: record[3] === 'D' });
+    paths.push({ path, deleted: record[3] === 'D', link: record[2] === '120000' });
   }
   return paths;
 }

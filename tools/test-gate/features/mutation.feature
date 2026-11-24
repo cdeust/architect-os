@@ -257,14 +257,75 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
       5: src/math.mjs : fichier du périmètre absent du rapport de mutation
       """
 
-  Scenario: a file Stryker was asked to mutate and found no mutant in is not missing
+  Scenario: naming a production file in config.mutate cannot excuse a missing mutant result
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 7 changed
     And the gate first parent is committed
     And the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
     And the gate head is committed
     And the gate mutation report is the fixture "no-mutant"
     When the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate violations are:
+      """
+      5: src/math.mjs : fichier du périmètre absent du rapport de mutation
+      """
+
+  Scenario: an empty file entry cannot excuse a missing mutant result
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 7 changed
+    And the gate first parent is committed
+    And the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate head is committed
+    And the gate mutation report reads:
+      """
+      {"files":{"src/math.mjs":{"source":"","mutants":[]}},"config":{"mutate":["src/math.mjs"]}}
+      """
+    When the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate violations are:
+      """
+      5: src/math.mjs : fichier du périmètre absent du rapport de mutation
+      """
+
+  Scenario: direct Stryker instrumentation proves a changed production source has no mutants
+    Given the gate first parent is committed
+    And the gate repository file "src/math.mjs" reads:
+      """
+      // A comment is a valid source with no mutants.
+      """
+    And the gate head is committed
+    And the gate mutation report is the fixture "no-mutant"
+    When the gate checks the "linux" job
     Then the gate verdict is green
+
+  Scenario: a zero-mutant source still needs to be named in the mutation run
+    Given the gate first parent is committed
+    And the gate repository file "src/math.mjs" reads:
+      """
+      // A comment is a valid source with no mutants.
+      """
+    And the gate head is committed
+    And the gate mutation report is the fixture "missing-file"
+    When the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate violations are:
+      """
+      5: src/math.mjs : fichier du périmètre absent du rapport de mutation
+      """
+
+  Scenario: a directive in a source omitted by Stryker is still checked
+    Given the gate first parent is committed
+    And the gate repository file "src/math.mjs" reads:
+      """
+      // Stryker disable all
+      """
+    And the gate head is committed
+    And the gate mutation report is the fixture "no-mutant"
+    When the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate violations are:
+      """
+      5: src/math.mjs:1 : directive Stryker refusée : // Stryker disable all
+      """
 
   Scenario: an absent mutation report is red when the perimeter is not empty
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 7 changed

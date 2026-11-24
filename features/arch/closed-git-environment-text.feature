@@ -1,7 +1,6 @@
 Feature: no production file that starts git gives process.env to a launch (docs/design/orchestration-fable-5-2.md §14)
-  This file holds a literal check: it reads the text of the three production files that start git (the fingerprint of
-  the tree, the reading of the gate, the host process of the delivery) and refuses one that gives process.env, whole or
-  spread, to a process launch. The scenarios on the suite itself are in features/descriptive/closed-git-environment.feature.
+  This file checks the closed launch environments as text. It covers the fingerprint, the gate, the lease and delivery.
+  The scenarios on the suite itself are in features/descriptive/closed-git-environment.feature.
 
   It is under features/arch, which the mutation profile leaves out; why is written in cucumber.mjs.
 
@@ -58,3 +57,15 @@ Feature: no production file that starts git gives process.env to a launch (docs/
         | a name removed    | 'LANG', 'LC_ALL'   | 'LC_ALL'              |
         | a name added      | 'TMPDIR']          | 'TMPDIR', 'USER']     |
         | two names swapped | 'PATH', 'LANG'     | 'LANG', 'PATH'        |
+
+  Rule: verdicts and fingerprints disable the system attributes file
+
+    Scenario Outline: <file> gives its git the fixed system attributes setting
+      Given the text of the committed file "<file>"
+      Then the closed Git environment in the text sets GIT_ATTR_NOSYSTEM to 1
+
+      Examples:
+        | file                                      |
+        | packages/sandbox/src/tree-fingerprint.ts  |
+        | tools/test-gate/src/infrastructure/git.ts |
+        | tools/test-gate/with-tree-lock.py          |

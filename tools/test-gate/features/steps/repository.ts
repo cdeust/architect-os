@@ -2,6 +2,7 @@ import { Workspace } from '../../src/infrastructure/workspace.js';
 import assert from 'node:assert/strict';
 import {
   chmodSync,
+  constants,
   cpSync,
   existsSync,
   mkdirSync,
@@ -9,6 +10,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -372,7 +374,7 @@ const FAKE_GIT = `#!${process.execPath}
 const { appendFileSync } = require('node:fs');
 const names = Object.keys(process.env).filter((name) => name !== '__CF_USER_TEXT_ENCODING');
 appendFileSync(__filename + '.names', names.sort().join(', ') + '\\n');
-appendFileSync(__filename + '.configuration', [process.env.GIT_CONFIG_GLOBAL, process.env.GIT_CONFIG_SYSTEM].join(' ') + '\\n');
+appendFileSync(__filename + '.configuration', [process.env.GIT_CONFIG_GLOBAL, process.env.GIT_CONFIG_SYSTEM, process.env.GIT_ATTR_NOSYSTEM].join(' ') + '\\n');
 appendFileSync(__filename + '.argv', process.argv.slice(2).join(' ') + '\\n');
 process.stdout.write('1111111111111111111111111111111111111111 2222222222222222222222222222222222222222\\n');
 `;
@@ -515,7 +517,7 @@ Then('every call of the fake git of the gate received exactly the names {string}
 });
 
 Then(
-  'every call of the fake git of the gate received the two configuration variables set to the empty file',
+  'every call of the fake git of the gate received the two configuration variables set to the empty file and system attributes disabled',
   function () {
     const script = this.state['gateFakeGit'];
     assert.equal(typeof script, 'string', 'a fake git must be put first on the PATH');
@@ -523,9 +525,114 @@ Then(
       .trimEnd()
       .split('\n');
     assert.ok(calls.length > 0);
-    for (const call of calls) assert.equal(call, '/dev/null /dev/null');
+    for (const call of calls) assert.equal(call, '/dev/null /dev/null 1');
   },
 );
+
+Given(
+  'the gate repository has a source with a {word} separator at {string}',
+  function (kind: string, path: string) {
+    const separators = new Map([
+      ['CR', '\r'],
+      ['LS', '\u2028'],
+      ['PS', '\u2029'],
+      ['CRLF', '\r\n'],
+      ['LF', '\n'],
+    ]);
+    const separator = separators.get(kind);
+    assert.notEqual(separator, undefined);
+    repository(this).write(path, '// heading' + separator + 'export const changed = 1 + 2;\n');
+  },
+);
+
+Given(
+  'the gate repository replaces {string} with a {word} link to a disposable sibling',
+  function (path: string, kind: string) {
+    const repo = repository(this);
+    const outside = mkdtempSync(join(tmpdir(), 'aos-gate-outside-'));
+    this.cleanups.push(() => rmSync(outside, { recursive: true, force: true }));
+    const target = join(outside, 'leaf.mjs');
+    writeFileSync(target, 'export const witness = 1 + 2;\n');
+    repo.remove(path);
+    mkdirSync(dirname(repo.path(path)), { recursive: true });
+    symlinkSync(kind === 'directory' ? outside : target, repo.path(path));
+  },
+);
+
+Given('the gate workspace has a directory where the source {string} is expected', function (path: string) {
+  mkdirSync(repository(this).path(path), { recursive: true });
+});
+
+Then(
+  'the gate workspace refuses to read source {string} with {string}',
+  function (path: string, message: string) {
+    const workspace = repository(this).workspace();
+    assert.throws(() => workspace.read(path), { message });
+    assert.throws(() => workspace.readBytes(path), { message });
+  },
+);
+
+Then('the gate writes exactly the literal mutation pattern {string}', function (pattern: string) {
+  assert.deepEqual(JSON.parse(repository(this).read('reports/gate-plan.json')).mutate, [pattern]);
+});
+
+Then(
+  'the gate refuses a {word} in the mutation path before building a pattern',
+  async function (kind: string) {
+    const characters = new Map([
+      ['backslash', '\\'],
+      ['LF', '\n'],
+      ['CR', '\r'],
+      ['LS', '\u2028'],
+      ['PS', '\u2029'],
+    ]);
+    const character = characters.get(kind);
+    assert.notEqual(character, undefined);
+    const file = 'src/leaf' + character + 'name.mjs';
+    const repo = repository(this);
+    repo.write(file, 'export const witness = true;\n');
+    repo.commit('path under test');
+    await repo.run(['plan']);
+    assert.equal(repo.exitCode, 1);
+    assert.ok(repo.output.includes('GATE_MUTATION_PATH_PATTERN : ' + file), repo.output);
+  },
+);
+
+Then('the gate detects the raw link at {string} without opening the path', function (path: string) {
+  const repo = repository(this);
+  const read = new GitRepository(repo.dir);
+  const workspace = repo.workspace();
+  const { firstParent } = read.commits();
+  assert.ok(firstParent !== null);
+  read.patch = () => assert.fail('must refuse before asking for a patch');
+  workspace.read = () => assert.fail('must refuse before opening the source');
+  assert.throws(() => changedFiles(read, workspace, firstParent, (file) => file === path), {
+    message: 'GATE_SOURCE_LINK : ' + path,
+  });
+});
+
+Then('the gate uses the Darwin flag that forbids links in every component', async function () {
+  const { openWorkspaceFile } = await import('../../src/infrastructure/workspace.js');
+  const witness = 'the fd belongs to the caller';
+  assert.equal(
+    openWorkspaceFile(witness, 'darwin', (file, flags) => {
+      assert.equal(file, witness);
+      assert.equal(flags, constants.O_NONBLOCK | 0x20000000);
+      return 4;
+    }),
+    4,
+  );
+});
+
+Then('the gate workspace closes its descriptors after source reads', function () {
+  const repo = repository(this);
+  const workspace = repo.workspace();
+  const count = () => readdirSync('/dev/fd').length;
+  const before = count();
+  assert.equal(workspace.read('src/leaf.mjs'), 'export const witness = 1;\n');
+  assert.equal(workspace.read('src/missing.mjs'), null);
+  assert.equal(count(), before);
+});
 
 Given('the HOME of the process holds a .gitconfig that sets core.autocrlf', function () {
   const home = mkdtempSync(join(tmpdir(), 'aos-gate-home-'));

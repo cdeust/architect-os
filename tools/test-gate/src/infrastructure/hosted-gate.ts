@@ -70,7 +70,13 @@ export async function runHostedGate(
       throw new Error('configuration Linux sans canari, mutation ou rejeu');
     const repository = new GitRepository(root);
     const { head, firstParent } = repository.commits();
-    const changes = changedFiles(repository, workspace, firstParent, (file) => isProduction(config, file));
+    const changes = changedFiles(
+      repository,
+      workspace,
+      firstParent,
+      (file) => isProduction(config, file),
+      config,
+    );
     const { debt, perimeter } = mutationScope(config, changes, workspace, repository, firstParent);
     if ('failure' in debt.current || (debt.parent !== null && 'failure' in debt.parent))
       throw new Error('registre de dette illisible');

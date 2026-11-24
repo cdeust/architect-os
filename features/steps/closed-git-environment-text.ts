@@ -30,6 +30,10 @@ Then('the text gives process.env to a process launch', function () {
   assert.equal(givesWholeEnvironment(stored<string>(this, 'sourceText')), true);
 });
 
+Then('the closed Git environment in the text sets GIT_ATTR_NOSYSTEM to 1', function () {
+  assert.match(stored<string>(this, 'sourceText'), /\bGIT_ATTR_NOSYSTEM"?\s*:\s*['"]1['"]/);
+});
+
 /** The names of `const names = [...]`, the list of the variables of the host that a closed environment takes. */
 function closedNames(text: string): string[] {
   const list = /const names = \[([^\]]*)\]/.exec(text);

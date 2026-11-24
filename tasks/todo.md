@@ -115,3 +115,11 @@ Five subscription responses completed at the provider with measured usage. Trial
 - [x] Draw the separate SRT process and Docker SBX VM, the host broker and their process pipes. Verify the diagram at the README width.
 - [x] Propagate a withheld answer to the native client and verify its exit and the empty workspace after shutdown in the offline fixture and on subscription trial 8.
 - [ ] Confirm a successful native subscription turn with the exact model, matching receipt and verified shutdown.
+
+## Gate mutation perimeter
+
+- [x] Trace each reported bypass and the native report format.
+- [x] Close the source, path and report checks and fix the Git environments.
+- [x] Add regression scenarios, verify locally where allowed, and append the journal.
+
+The baseline run confirmed 31 targeted regressions and preserved five controls. Typecheck, formatting and architecture passed. The admitted gate and mutation campaign remain with the independent reviewer.

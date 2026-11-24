@@ -354,7 +354,7 @@ const read = (name) => (fs.existsSync(path.join(__dirname, name)) ? fs.readFileS
 const args = process.argv.slice(2);
 // macOS adds __CF_USER_TEXT_ENCODING to every process it starts: it is not a variable the fingerprint gave.
 const names = Object.keys(process.env).filter((name) => name !== '__CF_USER_TEXT_ENCODING').sort();
-const configuration = [process.env.GIT_CONFIG_GLOBAL, process.env.GIT_CONFIG_SYSTEM];
+const configuration = [process.env.GIT_CONFIG_GLOBAL, process.env.GIT_CONFIG_SYSTEM, process.env.GIT_ATTR_NOSYSTEM];
 const line = [args.join(' '), process.env.GIT_INDEX_FILE ?? '', fs.realpathSync(process.cwd()), names, configuration];
 fs.appendFileSync(path.join(__dirname, 'calls.log'), JSON.stringify(line) + '\\n');
 // The seven arguments before the subcommand are the options the fingerprint gives every call.
@@ -476,10 +476,10 @@ Then('the temporary index was in the temporary directory', function () {
   assert.equal(basename(indexes[0] as string), 'index');
 });
 
-const CONFIGURATION = ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM'];
+const CONFIGURATION = ['GIT_ATTR_NOSYSTEM', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM'];
 
 Then(
-  'each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, and GIT_INDEX_FILE where it is due',
+  'each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due',
   function () {
     const list = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
     const had = list.filter((name) => process.env[name] !== undefined);
@@ -490,13 +490,13 @@ Then(
     assert.equal(recorded.length, 7);
     for (const [, index, , names, configuration] of recorded) {
       assert.deepEqual(names, [...had, ...CONFIGURATION, ...(index === '' ? [] : ['GIT_INDEX_FILE'])].sort());
-      assert.deepEqual(configuration, ['/dev/null', '/dev/null']);
+      assert.deepEqual(configuration, ['/dev/null', '/dev/null', '1']);
     }
   },
 );
 
 Then(
-  'each call of the fake git received exactly the five names of the list, the two configuration variables set to the empty file, and GIT_INDEX_FILE where it is due',
+  'each call of the fake git received exactly the five names of the list, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due',
   function () {
     const list = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
     assert.ok(list.every((name) => process.env[name] !== undefined));
@@ -507,7 +507,7 @@ Then(
         names,
         [...list, ...CONFIGURATION, ...(index === '' ? [] : ['GIT_INDEX_FILE'])].sort(),
       );
-      assert.deepEqual(configuration, ['/dev/null', '/dev/null']);
+      assert.deepEqual(configuration, ['/dev/null', '/dev/null', '1']);
     }
   },
 );

@@ -205,7 +205,7 @@ Feature: the fingerprint of the tree of a worktree
       And the process has the variable "GIT_CONFIG_COUNT" set to "0"
       And the process has the variable "GH_TOKEN" set to "secret"
       When I take the fingerprint of the directory
-      Then each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, and GIT_INDEX_FILE where it is due
+      Then each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due
 
     Scenario: each call receives the five names of the list when the process has set all five
       Three names are set below. The two others are set by the steps that come first: PATH by the fake git, which puts
@@ -218,4 +218,4 @@ Feature: the fingerprint of the tree of a worktree
       And the process has the variable "LC_ALL" set to "C"
       And the process has the variable "LC_CTYPE" set to "C"
       When I take the fingerprint of the directory
-      Then each call of the fake git received exactly the five names of the list, the two configuration variables set to the empty file, and GIT_INDEX_FILE where it is due
+      Then each call of the fake git received exactly the five names of the list, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due

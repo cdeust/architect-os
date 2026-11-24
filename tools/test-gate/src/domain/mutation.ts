@@ -9,7 +9,7 @@ import {
 } from './debt.js';
 import type { ChangedFile } from './diff.js';
 import { isProduction, type Layout } from './layout.js';
-import { mentioned, rangePatterns } from './mutate-pattern.js';
+import { rangePatterns, requireLiteralMutationPath } from './mutate-pattern.js';
 import type { ReadFailure, Violation } from './violation.js';
 
 export interface Perimeter {
@@ -32,6 +32,7 @@ export interface Perimeter {
  */
 export function mutatePatterns(perimeter: Perimeter, whole: readonly string[]): string[] {
   const entire = new Set([...perimeter.retired, ...whole]);
+  for (const path of entire) requireLiteralMutationPath(path);
   const ranges = [...perimeter.changedLines]
     .filter(([file]) => !entire.has(file))
     .flatMap(([file, lines]) => rangePatterns(file, lines));
@@ -81,7 +82,7 @@ export interface MutantRecord {
 
 export interface MutationReport {
   readonly files: ReadonlyMap<string, { readonly source: string; readonly mutants: readonly MutantRecord[] }>;
-  /** config.mutate of the run: a file listed there but absent from `files` was mutated and had no mutant. */
+  /** config.mutate of the run, used to verify range and whole-file scope. */
   readonly mutate: readonly string[];
   /** Every test of the run, by id: `<feature>:<line>`. */
   readonly tests: ReadonlyMap<string, string>;
@@ -163,8 +164,7 @@ export function judgeMutation(
   for (const file of perimeter.judged) {
     const result = report.files.get(file);
     if (result === undefined) {
-      if (!mentioned(report.mutate, file))
-        add(`${file} : fichier du périmètre absent du rapport de mutation`);
+      add(`${file} : fichier du périmètre absent du rapport de mutation`);
       continue;
     }
     const lines = result.source.split('\n');

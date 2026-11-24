@@ -29,7 +29,11 @@ export interface TreeFingerprint {
  */
 function closedEnvironment(): NodeJS.ProcessEnv {
   const names = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
-  const given: NodeJS.ProcessEnv = { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
+  const given: NodeJS.ProcessEnv = {
+    GIT_ATTR_NOSYSTEM: '1',
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_SYSTEM: '/dev/null',
+  };
   for (const name of names) given[name] = process.env[name];
   return given;
 }

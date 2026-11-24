@@ -1,6 +1,6 @@
 Feature: the fingerprint of the tree, under an environment of the process that it must not obey (fresh inputs)
   The host starts git with a closed list of variables: PATH, LANG, LC_ALL, LC_CTYPE and TMPDIR, each taken when the
-  process sets it, GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM set to /dev/null, and GIT_INDEX_FILE for the temporary index;
+  process sets it, GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM set to /dev/null, GIT_ATTR_NOSYSTEM set to 1, and GIT_INDEX_FILE for the temporary index;
   nothing else passes, and HOME in particular does not (docs/design/orchestration-fable-5-2.md
   §14, « Un environnement fermé pour git »). Each scenario sets in the process a variable that would change the tree, or
   the run of git, if it reached git, and checks that it did not.
@@ -100,7 +100,7 @@ Feature: the fingerprint of the tree, under an environment of the process that i
       And the process has no variable "LC_ALL"
       And the process has the variable "<name>" set to "<value>"
       When I take the fingerprint of the directory
-      Then each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, and GIT_INDEX_FILE where it is due
+      Then each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due
 
       Examples:
         | name                              | value                |
@@ -125,7 +125,7 @@ Feature: the fingerprint of the tree, under an environment of the process that i
       And the process has no variable "LC_ALL"
       And the process has the variable "<name>" set to "<value>"
       When I take the fingerprint of the directory
-      Then each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, and GIT_INDEX_FILE where it is due
+      Then each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due
 
       Examples:
         | name                  | value                  |
@@ -149,7 +149,7 @@ Feature: the fingerprint of the tree, under an environment of the process that i
       And the process has no variable "LC_ALL"
       And the process has the variable "<name>" set to "<value>"
       When I take the fingerprint of the directory
-      Then each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, and GIT_INDEX_FILE where it is due
+      Then each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due
 
       Examples:
         | name          | value               |
@@ -170,4 +170,4 @@ Feature: the fingerprint of the tree, under an environment of the process that i
       And the process has no variable "LC_ALL"
       And the process has the variable "LANG" set to ""
       When I take the fingerprint of the directory
-      Then each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, and GIT_INDEX_FILE where it is due
+      Then each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due
