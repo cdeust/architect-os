@@ -108,14 +108,14 @@ Then(
         'guest ' + JSON.stringify(evidence.map((b) => b.toString())) + ' calls ' + requests,
       );
       assert.ok(toolDiagnostic.includes('writes refused'), toolDiagnostic);
-      assert.equal(result.measure.report,'Finished.');
+      assert.equal(result.measure.report, 'Finished.');
       assert.equal(readFileSync(join(work, 'patch.txt'), 'utf8'), 'built by client');
       assert.equal(readFileSync(join(work, 'steps/protected'), 'utf8'), 'unchanged');
       assert.equal(readFileSync(join(root, 'outside'), 'utf8'), 'unchanged');
       const attestation = JSON.parse(Buffer.concat(evidence).toString());
       assert.equal(attestation.removed, true);
       assert.equal(attestation.guest.uid, 65534);
-      assert.equal(Object.hasOwn(attestation.guest,'report'),false);
+      assert.equal(Object.hasOwn(attestation.guest, 'report'), false);
       assert.equal(attestation.guest.exitCode, 0);
       assert.deepEqual(
         [requests, log.length, result.measure.inputTokens, result.measure.outputTokens],
@@ -136,10 +136,11 @@ const committed = () => JSON.parse(readFileSync(join(PKG, 'sbx/isolation.json'),
 Then('the committed SBX builder pins pass their schema and a broken digest is rejected', function () {
   const p = committed();
   assert.deepEqual(sbxPolicySchema.parse(p), p);
-  for(const field of ['shellKit','shellTemplate','archive','clientSha256']) for (const value of ['!'+p[field],p[field]+'!','invalid']) {
-    assert.equal(sbxPolicySchema.safeParse({...p,[field]:value}).success,false);
-  }
-  assert.equal(sbxPolicySchema.safeParse({...p,archiveSha512:'wrong length'}).success,false);
+  for (const field of ['shellKit', 'shellTemplate', 'archive', 'clientSha256'])
+    for (const value of ['!' + p[field], p[field] + '!', 'invalid']) {
+      assert.equal(sbxPolicySchema.safeParse({ ...p, [field]: value }).success, false);
+    }
+  assert.equal(sbxPolicySchema.safeParse({ ...p, archiveSha512: 'wrong length' }).success, false);
 });
 // Exercise the actual host subprocess adapter with an injected OS boundary.
 async function cliFixture(kind: string, command: SbxCommand, scenario: () => Promise<void>) {
@@ -171,8 +172,11 @@ async function cliFixture(kind: string, command: SbxCommand, scenario: () => Pro
   const fixture = async (path: string, args: string[], opts: Record<string, unknown>) => {
     verify(path, args, opts);
     assert.equal(opts['maxBuffer'], 1048576);
-    if(kind==='invalid CLI code')throw {code:'ENOENT',stdout:''};
-    if(kind==='cancelled CLI') {process.emit('SIGHUP');throw {code:1,stdout:''};}
+    if (kind === 'invalid CLI code') throw { code: 'ENOENT', stdout: '' };
+    if (kind === 'cancelled CLI') {
+      process.emit('SIGHUP');
+      throw { code: 1, stdout: '' };
+    }
     if (kind === 'invalid CLI failure') throw { code: 1, stdout: null };
     const r = await command(args.slice(1), opts['signal'] as AbortSignal);
     if (r.code !== 0) throw r;
@@ -219,8 +223,10 @@ async function cliFixture(kind: string, command: SbxCommand, scenario: () => Pro
 Then(
   'the SBX host receives {string} and stages the client {int} times',
   async function (kind: string, times: number) {
-    const signals=['SIGTERM','SIGINT','SIGHUP'] as const;
-    const before=signals.map(sig=>process.listenerCount(sig)); let useSignal:AbortSignal|undefined;let setups=0;
+    const signals = ['SIGTERM', 'SIGINT', 'SIGHUP'] as const;
+    const before = signals.map((sig) => process.listenerCount(sig));
+    let useSignal: AbortSignal | undefined;
+    let setups = 0;
     const p = sbxPolicySchema.parse(committed()),
       workspace = '/fixture';
     const [repository, digest] = p.shellTemplate.split('@');
@@ -250,8 +256,9 @@ Then(
         case 'ls':
           assert.deepEqual(args, ['ls', '--json']);
           value = name ? [{ name }] : [];
-          if(kind==='name in use' && !name) value=[{name:'aos-build-00000000-0000-4000-8000-000000000001'}];
-          if(kind==='unconfirmed create'||kind==='already removed')value=[];
+          if (kind === 'name in use' && !name)
+            value = [{ name: 'aos-build-00000000-0000-4000-8000-000000000001' }];
+          if (kind === 'unconfirmed create' || kind === 'already removed') value = [];
           break;
         case 'create':
           vmName = name = args[args.indexOf('--name') + 1]!;
@@ -273,7 +280,7 @@ Then(
             p.shellKit,
             workspace,
           ]);
-          if (kind === 'ambiguous creation'||kind==='unconfirmed create') code = 1;
+          if (kind === 'ambiguous creation' || kind === 'unconfirmed create') code = 1;
           break;
         case 'inspect':
           assert.deepEqual(args, ['inspect', '--json', name]);
@@ -342,7 +349,8 @@ Then(
           }
           break;
         case 'exec':
-          if (args[2] === '0:0') {setups++;
+          if (args[2] === '0:0') {
+            setups++;
             assert.deepEqual(args, ['exec', '--user', '0:0', '-w', '/', '--', name, '/host/setup']);
           } else
             assert.deepEqual(args, [
@@ -374,9 +382,15 @@ Then(
       }
       return { code, stdout: JSON.stringify(value ?? null) };
     };
-    const throughCli = ['verified', 'local CLI', 'system CLI', 'missing CLI','invalid CLI code','cancelled CLI', 'invalid CLI failure'].includes(
-      kind,
-    );
+    const throughCli = [
+      'verified',
+      'local CLI',
+      'system CLI',
+      'missing CLI',
+      'invalid CLI code',
+      'cancelled CLI',
+      'invalid CLI failure',
+    ].includes(kind);
     const execute = async () => {
       const work = withSbxVm(
         workspace,
@@ -384,7 +398,12 @@ Then(
         10,
         async (vm) => {
           assert.equal(vm.name, name);
-          assert.equal(vm.signal.aborted, false); useSignal=vm.signal;assert.deepEqual(signals.map(sig=>process.listenerCount(sig)),before.map(n=>n+1));
+          assert.equal(vm.signal.aborted, false);
+          useSignal = vm.signal;
+          assert.deepEqual(
+            signals.map((sig) => process.listenerCount(sig)),
+            before.map((n) => n + 1),
+          );
           await vm.copy('source', 'target');
           await vm.setup(['/host/setup']);
           if (throughCli) assert.equal(vm.pipes(['/fixture/guest']).pid, 123);
@@ -393,52 +412,91 @@ Then(
         },
         throughCli ? undefined : command,
       );
-      if (['verified', 'local CLI', 'system CLI','already removed'].includes(kind))
+      if (['verified', 'local CLI', 'system CLI', 'already removed'].includes(kind))
         assert.deepEqual(await work, { name: vmName, result: 'executed' });
       else if (kind === 'interrupted') await assert.rejects(work, { message: 'SBX_INTERRUPTED' });
-      else if (['invalid CLI failure','invalid CLI code','cancelled CLI'].includes(kind))
+      else if (['invalid CLI failure', 'invalid CLI code', 'cancelled CLI'].includes(kind))
         await assert.rejects(work, { message: 'SBX_COMMAND_FAILED' });
-      else if(kind==='missing CLI')await assert.rejects(work,{message:'SBX_CLI_REQUIRED'});
+      else if (kind === 'missing CLI') await assert.rejects(work, { message: 'SBX_CLI_REQUIRED' });
       else if (kind === 'wrong CLI version') await assert.rejects(work, { message: 'SBX_VERSION' });
       else if (kind.startsWith('template ')) await assert.rejects(work, { message: 'SBX_TEMPLATE' });
       else if (kind.startsWith('live ')) await assert.rejects(work, { message: 'SBX_NETWORK_ROUTE' });
       else if (kind.startsWith('rule ') || kind.startsWith('missing UDP') || kind.startsWith('missing TCP'))
         await assert.rejects(work, { message: 'SBX_NETWORK_POLICY' });
-      else if(kind==='name in use') await assert.rejects(work,{message:'SBX_NAME_IN_USE'});
-      else if(kind==='unconfirmed create') await assert.rejects(work,(e:Error)=>e.message==='SBX_CREATE_UNCONFIRMED '+vmName);
+      else if (kind === 'name in use') await assert.rejects(work, { message: 'SBX_NAME_IN_USE' });
+      else if (kind === 'unconfirmed create')
+        await assert.rejects(work, (e: Error) => e.message === 'SBX_CREATE_UNCONFIRMED ' + vmName);
       else if (kind === 'ambiguous creation') await assert.rejects(work, { message: 'SBX_CREATE_FAILED' });
       else if (kind === 'incomplete removal')
         await assert.rejects(work, (e: Error) => e.message === 'SBX_CLEANUP_INCOMPLETE ' + vmName);
       else await assert.rejects(work);
     };
     if (throughCli) await cliFixture(kind, command, execute);
-    else if(kind==='name in use') {
-      const id=mock.method(crypto,'randomUUID',()=> '00000000-0000-4000-8000-000000000001');
-      syncBuiltinESMExports();try{await execute();}finally{id.mock.restore();syncBuiltinESMExports();}
+    else if (kind === 'name in use') {
+      const id = mock.method(crypto, 'randomUUID', () => '00000000-0000-4000-8000-000000000001');
+      syncBuiltinESMExports();
+      try {
+        await execute();
+      } finally {
+        id.mock.restore();
+        syncBuiltinESMExports();
+      }
     } else await execute();
-    assert.equal(staged, times);assert.equal(setups,times);
-    assert.deepEqual(signals.map(sig=>process.listenerCount(sig)),before);if(useSignal)assert.equal(useSignal.aborted,true);
+    assert.equal(staged, times);
+    assert.equal(setups, times);
+    assert.deepEqual(
+      signals.map((sig) => process.listenerCount(sig)),
+      before,
+    );
+    if (useSignal) assert.equal(useSignal.aborted, true);
     assert.equal(
       removed,
       kind.startsWith('template ') ||
-        ['wrong CLI version', 'missing CLI', 'invalid CLI failure','invalid CLI code','cancelled CLI','name in use','unconfirmed create','already removed'].includes(kind)
+        [
+          'wrong CLI version',
+          'missing CLI',
+          'invalid CLI failure',
+          'invalid CLI code',
+          'cancelled CLI',
+          'name in use',
+          'unconfirmed create',
+          'already removed',
+        ].includes(kind)
         ? 0
         : 1,
     );
   },
 );
 
-Then('SBX checks the workspace tree and path before any CLI call',async function(){
-  for(const bad of ['relative','/a:b'])await assert.rejects(withSbxVm(bad,committed(),1,async()=>assert.fail(),async()=>assert.fail()),{message:'SBX_WORKTREE'});
-  const dir=realpathSync(mkdtempSync(join(tmpdir(),'sbx-tree-')));
+Then('SBX checks the workspace tree and path before any CLI call', async function () {
+  for (const bad of ['relative', '/a:b'])
+    await assert.rejects(
+      withSbxVm(
+        bad,
+        committed(),
+        1,
+        async () => assert.fail(),
+        async () => assert.fail(),
+      ),
+      { message: 'SBX_WORKTREE' },
+    );
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'sbx-tree-')));
   try {
-    const tree=join(dir,'work');mkdirSync(tree);
-    fs.symlinkSync(tree,join(dir,'alias'));assert.throws(()=>checkSbxWorktree(join(dir,'alias')),{message:'SBX_WORKTREE'});
-    fs.symlinkSync(join(dir,'outside'),join(tree,'link'));checkSbxWorktree(tree);
-    const sub=join(tree,'directory');mkdirSync(sub);writeFileSync(join(sub,'ordinary'),'safe');checkSbxWorktree(tree);
-    assert.equal(childProcess.spawnSync('mkfifo',[join(sub,'special')]).status,0);
-    assert.throws(()=>checkSbxWorktree(tree),{message:'SBX_WORKTREE_ENTRY'});
-  }finally{rmSync(dir,{recursive:true,force:true});}
+    const tree = join(dir, 'work');
+    mkdirSync(tree);
+    fs.symlinkSync(tree, join(dir, 'alias'));
+    assert.throws(() => checkSbxWorktree(join(dir, 'alias')), { message: 'SBX_WORKTREE' });
+    fs.symlinkSync(join(dir, 'outside'), join(tree, 'link'));
+    checkSbxWorktree(tree);
+    const sub = join(tree, 'directory');
+    mkdirSync(sub);
+    writeFileSync(join(sub, 'ordinary'), 'safe');
+    checkSbxWorktree(tree);
+    assert.equal(childProcess.spawnSync('mkfifo', [join(sub, 'special')]).status, 0);
+    assert.throws(() => checkSbxWorktree(tree), { message: 'SBX_WORKTREE_ENTRY' });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 Then('SBX refuses a worktree with a hard link to an outside witness', function () {
   const root = mkdtempSync(join(tmpdir(), 'sbx-links-'));
@@ -463,6 +521,8 @@ import { resolve } from 'node:path';
 import { git } from './tree-fingerprint.js';
 import { fingerprintTree } from '../../src/tree-fingerprint.js';
 import { launcherFiles } from '../../src/step-tool.js';
+import { randomUUID } from 'node:crypto';
+import { keychainEntry } from '../../src/sbx-keychain.js';
 import { parseStepFile } from '../../src/step-file.js';
 import { admittedFixture } from './admission-fixture.js';
 Then(
@@ -504,9 +564,20 @@ Then(
         join(process.env.ARCHITECT_OS_RUNTIME_ROOT!, 'cache', 'sbx', archive),
       join(runtime, 'cache/sbx', archive),
     );
+    const hostId = 'urn:uuid:' + randomUUID();
+    // An exclusively named synthetic item is the only keychain item this test owns.
+    const item = keychainEntry(hostId);
+    assert.equal(item.getPassword(), null);
+    writeFileSync(join(runtime, 'state/sbx/host-id'), hostId, { mode: 0o600 });
+    const keychainCheck = `const {Entry}=require(${JSON.stringify(join(launcher, 'node_modules/@napi-rs/keyring'))}); let found;try{found=new Entry('architect-os.siwc',${JSON.stringify(hostId)},{linux:{store:'secret-service'}}).getPassword()}catch{} if(found)process.exit(1)`;
+    const checkScript = join(fixture, 'check-private-account.cjs');
+    writeFileSync(checkScript, keychainCheck);
     const raw = JSON.stringify({
       build: { provider: 'openai', model, effort: 'medium', limitSeconds: 180 },
-      checks: [{ name: 'patch', command: ['test', '-f', 'result.txt'], limitSeconds: 30 }],
+      checks: [
+        { name: 'patch', command: ['test', '-f', 'result.txt'], limitSeconds: 30 },
+        { name: 'private-account', command: [process.execPath, checkScript], limitSeconds: 30 },
+      ],
       reviews: [
         {
           name: 'correctness',
@@ -565,6 +636,23 @@ Then(
       ARCHITECT_OS_STEP_EVIDENCE: receipt,
     };
     try {
+      const setup = await promisify(execFile)(
+        join(launcher, 'aos'),
+        [
+          '--',
+          'npm',
+          '--prefix',
+          launcher,
+          '--node-options=--import=' + join(launcher, 'bench/sbx/step-fixture-preload.mjs'),
+          'run',
+          'sbx:sign-in',
+          '--',
+          model,
+        ],
+        { cwd: work, env, timeout: 30000 },
+      );
+      assert.match(setup.stdout, /SBX account ready/);
+      assert.ok(item.getPassword());
       const { stdout } = await promisify(execFile)(
         join(launcher, 'aos'),
         [
@@ -584,6 +672,7 @@ Then(
       assert.equal(readFileSync(join(work, 'result.txt'), 'utf8'), 'native step patch');
       const record = JSON.parse(readFileSync(join(work, 'steps/native/record.json'), 'utf8'));
       assert.equal(record.checks[0].passed, true);
+      assert.equal(record.checks[1].passed, true);
       assert.equal(record.sessions[0].provider, 'openai');
       assert.equal(record.sessions[0].model, model);
       assert.equal(record.sessions[0].effort, 'medium');
@@ -595,20 +684,44 @@ Then(
       assert.deepEqual(record.sessions[0].usage, { inputTokens: 10, outputTokens: 6 });
       assert.equal(record.sessions[0].responses.length, 2);
     } finally {
+      item.deletePassword();
       rmSync(runtime, { recursive: true, force: true });
       rmSync(fixture, { recursive: true, force: true });
     }
   },
 );
 
-Then('a direct SBX host without a run binding refuses before CLI access',async function(){
-  const saved=process.env.ARCHITECT_OS_RUN_DIR, lines:string[]=[];
-  let calls=0;
-  const exit=mock.method(process,'exit',(code:number)=>{throw Error('exit '+code)});
-  const stderr=mock.method(process.stderr,'write',(chunk:string)=>{lines.push(chunk);return true});
-  try{
+Then('a direct SBX host without a run binding refuses before CLI access', async function () {
+  const saved = process.env.ARCHITECT_OS_RUN_DIR,
+    lines: string[] = [];
+  let calls = 0;
+  const exit = mock.method(process, 'exit', (code: number) => {
+    throw Error('exit ' + code);
+  });
+  const stderr = mock.method(process.stderr, 'write', (chunk: string) => {
+    lines.push(chunk);
+    return true;
+  });
+  try {
     delete process.env.ARCHITECT_OS_RUN_DIR;
-    await assert.rejects(withSbxVm('/fixture',committed(),1,async()=>assert.fail(), async()=>{calls++;throw Error('cli');}),{message:'exit 2'});
-    assert.deepEqual(lines,['aos: RUNTIME_ENTRY_REQUIRED\n']);assert.equal(calls,0);
-  }finally{process.env.ARCHITECT_OS_RUN_DIR=saved;exit.mock.restore();stderr.mock.restore();}
+    await assert.rejects(
+      withSbxVm(
+        '/fixture',
+        committed(),
+        1,
+        async () => assert.fail(),
+        async () => {
+          calls++;
+          throw Error('cli');
+        },
+      ),
+      { message: 'exit 2' },
+    );
+    assert.deepEqual(lines, ['aos: RUNTIME_ENTRY_REQUIRED\n']);
+    assert.equal(calls, 0);
+  } finally {
+    process.env.ARCHITECT_OS_RUN_DIR = saved;
+    exit.mock.restore();
+    stderr.mock.restore();
+  }
 });

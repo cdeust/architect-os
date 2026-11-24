@@ -30,12 +30,16 @@ Le contrôle suivant a passé 663 scénarios et 2 595 pas, dont les deux command
 
 Le dernier rejeu natif des trois scénarios a réussi en 54,878 secondes. Le faux amont a reçu le modèle et l’effort demandés par chacun des deux Steps. Le test direct a aussi vérifié le dernier message du client et son absence du journal de métadonnées. Le lecteur des petits fichiers privés du compte et des paramètres du Step partage désormais les contrôles de descripteur à l’ouverture et après la lecture. Les nouveaux témoins couvrent la fermeture des tubes, les interruptions, les durées, les erreurs de consentement et les incohérences entre le résultat du constructeur et son reçu.
 
-| Périmètre de mutation | Tués | Délais | Erreurs d’exécution | Survivants | Sans couverture |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Port Builder | 38 | 0 | 0 | 0 | 0 |
-| Proxy Responses | 236 | 1 | 2 | 0 | 0 |
-| Adaptateur et cycle de vie de la VM | 462 | 15 | 17 | 26 | 1 |
-| Compte et assemblage du Step SBX | 370 | 2 | 14 | 42 | 3 |
-| Fichier privé, admission, déclaration, orchestration et reçu du Step (lignes modifiées) | 252 | 2 | 0 | 14 | 8 |
+| Périmètre de mutation                                                                   | Tués | Délais | Erreurs d’exécution | Survivants | Sans couverture |
+| --------------------------------------------------------------------------------------- | ---: | -----: | ------------------: | ---------: | --------------: |
+| Port Builder                                                                            |   38 |      0 |                   0 |          0 |               0 |
+| Proxy Responses                                                                         |  236 |      1 |                   2 |          0 |               0 |
+| Adaptateur et cycle de vie de la VM                                                     |  462 |     15 |                  17 |         26 |               1 |
+| Compte et assemblage du Step SBX                                                        |  370 |      2 |                  14 |         42 |               3 |
+| Fichier privé, admission, déclaration, orchestration et reçu du Step (lignes modifiées) |  252 |      2 |                   0 |         14 |               8 |
 
 Chaque ligne provient de la dernière campagne achevée pour son périmètre. Les témoins ajoutés ensuite au cycle de vie et au Step attendent une nouvelle mesure. La dernière compilation a signalé un accès mal typé à l’environnement dans le scénario de routage. Le scénario utilise désormais l’environnement du processus de test. La relance de TypeScript et du rejeu s’est arrêtée avant leur démarrage sur `RUNTIME_HOME_SPACE_LOW`. Le profil de production exige plus de 17 179 869 184 octets libres sur le volume du compte. Les vérifications du dernier état, la mesure de mutation et l’essai avec consentement restent ouverts.
+
+## Reprise et compte installé une fois
+
+Le propriétaire a fourni le changement d’admission `f5dc5152`, repris localement en `269241d1`. Le rejeu de reprise a passé 770 scénarios et 2 740 pas. La première forme de B.4 exigeait un consentement à chaque démarrage. La commande séparée `sbx:sign-in` effectue désormais le consentement. Le Step lit la session dans le coffre du système. Avec le vrai trousseau macOS, des identifiants synthétiques et les fournisseurs de test, les trois scénarios natifs ont passé en 69,567 secondes. Pour Astra et Sol, l’installation et le Step ont utilisé des processus distincts ; un contrôle SRT a cherché la même entrée synthétique que l’hôte et n’a pas pu en obtenir la valeur. Les deux correctifs et reçus ont été produits. Le rejeu isolé du compte a passé 77 scénarios et 77 pas ; TypeScript a compilé.

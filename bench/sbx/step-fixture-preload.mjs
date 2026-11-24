@@ -7,7 +7,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { SignJWT } from 'jose';
 
-if (process.argv[1]?.endsWith('/step.ts')) {
+if (['step.ts','sbx-sign-in.ts'].includes(process.argv[1]?.split('/').at(-1))) {
   const root = process.env.ARCHITECT_OS_RUNTIME_ROOT;
   const nativeUser = os.userInfo();
   os.userInfo = () => ({ ...nativeUser, homedir: join(root, 'fixture-home') });
@@ -27,13 +27,14 @@ if (process.argv[1]?.endsWith('/step.ts')) {
     api = 'https://api.openai.com/v1',
     id = 'oaiapp_offline';
   const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-  const bearer = randomBytes(32).toString('hex');
+  const bearer = 'fixture-access-' + randomBytes(32).toString('hex');
   let nonce = '',
     calls = 0;
   const write = process.stderr.write.bind(process.stderr);
   process.stderr.write = (bytes, ...args) => {
     const text = String(bytes);
     if (!text.startsWith('Continue with ChatGPT: ')) return write(bytes, ...args);
+    if(!process.argv[1].endsWith('/sbx-sign-in.ts')) throw Error('FIXTURE_UNEXPECTED_CONSENT');
     const page = text.trim().split(' ').at(-1);
     if (new URL(page).hostname !== '127.0.0.1') throw Error('FIXTURE_CALLBACK');
     void (async () => {
@@ -77,7 +78,7 @@ if (process.argv[1]?.endsWith('/step.ts')) {
         scope: 'offline_access resource.invoke chatgpt.tokens.use.direct',
       });
     }
-    if (init?.headers?.authorization !== 'Bearer ' + bearer) throw Error('FIXTURE_AUTHORITY');
+    if (!/^Bearer fixture-access-[a-f0-9]{64}$/.test(init?.headers?.authorization)) throw Error('FIXTURE_AUTHORITY');
     const model = process.env.AOS_FIXTURE_MODEL;
     if (url === api + '/models') return Response.json({ models: [{ visibility: 'list', slug: model }] });
     if (url !== api + '/responses') throw Error('FIXTURE_ORIGIN');
@@ -94,7 +95,7 @@ if (process.argv[1]?.endsWith('/step.ts')) {
             name: 'exec_command',
             call_id: 'step-write',
             id: 'fc_1',
-            arguments: JSON.stringify({ cmd: "printf 'native step patch' > result.txt" }),
+            arguments: JSON.stringify({ cmd: "test -z \"\$DBUS_SESSION_BUS_ADDRESS\" && test ! -e /run/user/65534/bus && test ! -d \"\$HOME/Library/Keychains\" && printf 'native step patch' > result.txt" }),
           }
         : {
             type: 'message',

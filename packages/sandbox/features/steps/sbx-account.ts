@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { request as httpRequest } from 'node:http';
+import http, { request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http';
+import events, { getEventListeners } from 'node:events';
+import { mock } from 'node:test';
+import { syncBuiltinESMExports } from 'node:module';
 import { createHash, generateKeyPairSync } from 'node:crypto';
 import { createLocalJWKSet, SignJWT } from 'jose';
 import { Then } from '@cucumber/cucumber';
@@ -22,11 +25,12 @@ Then(
       callback: Promise<void> | undefined,
       callbackFailure: unknown;
     const saved: Registration[] = [];
+    const keyRequests: AbortSignal[] = [];
+    const isNew = ['new registration', 'missing callback client', 'cancelled catalogue'].includes(kind);
     const session = hostAccountSession(
       {
         hostId: 'urn:uuid:00000000-0000-4000-8000-000000000000',
-        previous:
-          kind === 'new registration' ? undefined : { issuer, client_id: client, accountHash: sha('person') },
+        previous: isNew ? undefined : { issuer, client_id: client, accountHash: sha('person') },
         registered: (r) => saved.push(r),
         consentPage: (origin) => {
           callback = (async () => {
@@ -35,10 +39,10 @@ Then(
             const auth = new URL(page.headers.get('location')!);
             assert.equal(auth.origin, issuer);
             const p = auth.searchParams;
-            assert.equal(p.get('client_id'), kind === 'new registration' ? 'dynamic_agent_client' : client);
+            assert.equal(p.get('client_id'), isNew ? 'dynamic_agent_client' : client);
             assert.equal(auth.pathname, '/api/accounts/authorize');
             assert.equal(p.get('ext_agent_host_id'), 'urn:uuid:00000000-0000-4000-8000-000000000000');
-            assert.equal(p.get('agent_name_hint'), kind === 'new registration' ? 'Architect OS' : null);
+            assert.equal(p.get('agent_name_hint'), isNew ? 'Architect OS' : null);
             assert.equal(p.get('response_type'), 'code');
             assert.equal(p.get('resource'), 'https://api.openai.com/v1');
             assert.deepEqual(p.get('scope')?.split(' '), [
@@ -67,7 +71,15 @@ Then(
               state: p.get('state')!,
               client_id: client,
             }).toString();
-            if (kind === 'refused callback' || kind === 'substituted client' || kind === 'duplicate code') {
+            if (
+              [
+                'refused callback',
+                'substituted client',
+                'duplicate code',
+                'missing callback client',
+              ].includes(kind)
+            ) {
+              if (kind === 'missing callback client') url.searchParams.delete('client_id');
               if (kind === 'refused callback') url.searchParams.set('error', 'access_denied');
               if (kind === 'substituted client') url.searchParams.set('client_id', 'oaiapp_different');
               if (kind === 'duplicate code') url.searchParams.append('code', 'another');
@@ -96,8 +108,9 @@ Then(
               assert.equal((await fetch(url, { method: 'POST' })).status, 400);
               url.searchParams.delete('client_id');
             }
-            if (kind === 'foreign state') {
+            if (kind === 'foreign state' || kind === 'missing state') {
               url.searchParams.set('state', 'other');
+              if (kind === 'missing state') url.searchParams.delete('state');
               assert.equal((await fetch(url)).status, 400);
               session.close();
               return;
@@ -117,6 +130,7 @@ Then(
           assert.equal(init?.method, 'GET');
           assert.equal(init?.redirect, 'manual');
           assert.ok(init?.signal);
+          keyRequests.push(init.signal);
           return Response.json({ keys: [{ ...publicKey.export({ format: 'jwk' }), kid: 'fixture' }] });
         }
         if (url === issuer + '/api/accounts/oauth/token') {
@@ -143,11 +157,22 @@ Then(
             assert.equal(form.get('grant_type'), 'refresh_token');
             assert.equal(form.has('scope'), false);
           }
-          const jwt = await new SignJWT({
-            nonce: kind === 'wrong nonce' || (posts === 2 && kind === 'rotated nonce') ? 'foreign' : nonce,
+          const signature = new SignJWT({
+            nonce:
+              posts === 2 && kind === 'renewal with omitted claims'
+                ? undefined
+                : kind === 'wrong nonce' || (posts === 2 && kind === 'rotated nonce')
+                  ? 'foreign'
+                  : nonce,
             azp: kind === 'foreign azp' ? 'foreign' : client,
             auth_time:
-              kind === 'invalid auth time' ? 'invalid' : kind === 'changed auth time' && posts === 2 ? 2 : 1,
+              posts === 2 && kind === 'renewal with omitted claims'
+                ? undefined
+                : kind === 'invalid auth time'
+                  ? 'invalid'
+                  : kind === 'changed auth time' && posts === 2
+                    ? 2
+                    : 1,
           })
             .setIssuer(kind === 'wrong issuer' ? 'foreign' : issuer)
             .setAudience(
@@ -162,10 +187,13 @@ Then(
             .setSubject(
               kind === 'wrong subject' || (posts === 2 && kind === 'rotated subject') ? 'other' : 'person',
             )
-            .setIssuedAt(Math.floor(clock / 1000) - (kind === 'old identity' && posts === 2 ? 10 : 0))
-            .setExpirationTime(Math.floor(clock / 1000) + 30)
-            .setProtectedHeader({ alg: 'RS256', kid: 'fixture' })
-            .sign(privateKey);
+            .setIssuedAt(
+              Math.floor(clock / 1000) -
+                (posts === 2 ? (kind === 'old identity' ? 10 : kind === 'same issue time' ? 1 : 0) : 0),
+            )
+            .setProtectedHeader({ alg: 'RS256', kid: 'fixture' });
+          if (kind !== 'missing expiry') signature.setExpirationTime(Math.floor(clock / 1000) + 30);
+          const jwt = await signature.sign(privateKey);
           const segments = jwt.split('.');
           if (kind === 'invalid signature')
             segments[2] = (segments[2]![0] === 'a' ? 'b' : 'a') + segments[2]!.slice(1);
@@ -187,13 +215,15 @@ Then(
             ...(posts === 1
               ? {
                   scope:
-                    kind === 'absent scope'
-                      ? 'openid'
-                      : kind === 'partial grant'
-                        ? 'offline_access'
-                        : kind === 'lost scope'
-                          ? 'profile offline_access resource.invoke chatgpt.tokens.use.direct'
-                          : 'offline_access resource.invoke chatgpt.tokens.use.direct',
+                    kind === 'no initial scope'
+                      ? undefined
+                      : kind === 'absent scope'
+                        ? 'openid'
+                        : kind === 'partial grant'
+                          ? 'offline_access'
+                          : kind === 'lost scope'
+                            ? 'profile offline_access resource.invoke chatgpt.tokens.use.direct'
+                            : 'offline_access resource.invoke chatgpt.tokens.use.direct',
                 }
               : kind === 'lost scope'
                 ? { scope: 'email offline_access resource.invoke chatgpt.tokens.use.direct' }
@@ -225,6 +255,7 @@ Then(
         assert.equal(init?.redirect, 'error');
         assert.equal(init?.cache, 'no-store');
         assert.deepEqual(init?.headers, { authorization: 'Bearer access-' + posts });
+        if (kind === 'cancelled catalogue') session.close();
         return Response.json({
           models: [
             null,
@@ -242,9 +273,20 @@ Then(
     const signal = AbortSignal.timeout(5000);
     try {
       const work = async () => {
+        await session.signIn(signal);
         assert.equal(await session.access(signal), 'access-1');
         assert.equal(await session.access(signal), 'access-1');
+        await assert.rejects(session.access(AbortSignal.abort()), { name: 'AbortError' });
         clock += 1000;
+        if (kind === 'cancelled waiter') {
+          const controller = new AbortController();
+          const renewal = session.access(signal);
+          const waiter = session.access(controller.signal);
+          controller.abort();
+          await assert.rejects(waiter, { name: 'AbortError' });
+          assert.equal(await renewal, 'access-2');
+          return;
+        }
         assert.deepEqual(await Promise.all([session.access(signal), session.access(signal)]), [
           'access-2',
           'access-2',
@@ -261,6 +303,9 @@ Then(
       } else {
         const errors: Record<string, string> = {
           'foreign state': 'SBX_CONSENT_CANCELLED',
+          'missing state': 'SBX_CONSENT_CANCELLED',
+          'no initial scope': 'SBX_ACCOUNT_GRANT',
+          'missing callback client': 'SBX_CONSENT_REFUSED',
           'refused callback': 'SBX_CONSENT_REFUSED',
           'substituted client': 'SBX_CONSENT_REFUSED',
           'duplicate code': 'SBX_CONSENT_REFUSED',
@@ -291,13 +336,16 @@ Then(
         };
         await assert.rejects(work(), { message: errors[kind] ?? 'SBX_ACCOUNT_UNAVAILABLE' });
         assert.equal(saved.length, 0);
+        if (kind === 'wrong nonce') assert.equal(catalogues, 0);
+        await assert.rejects(session.access(signal), { name: 'AbortError' });
       }
       await callback;
       if (callbackFailure) throw callbackFailure;
     } finally {
       session.close();
     }
-    await assert.rejects(session.access(signal));
+    if (kind === 'returning') assert.ok(keyRequests.length > 0 && keyRequests.every((s) => s.aborted));
+    await assert.rejects(session.access(signal), { name: 'AbortError' });
   },
 );
 
@@ -313,6 +361,7 @@ import {
   writeFileSync,
   statSync,
 } from 'node:fs';
+import fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSbxStep } from '../../src/sbx-step.js';
@@ -339,7 +388,15 @@ Then(
       launched = 0,
       notice = '';
     const receipt = { model, request: 1, terminal: 'completed' as const, inputTokens: 4, outputTokens: 3 };
-    const result = { provider: 'openai' as const, client:{version:'fixture',sha256:'c'.repeat(64)},receipts:[receipt],exitCode: 0, stopped: false, measure: measureSession('') };
+    const result = {
+      provider: 'openai' as const,
+      client: { version: 'fixture', sha256: 'c'.repeat(64) },
+      receipts: [receipt],
+      exitCode: 0,
+      stopped: false,
+      measure: measureSession(''),
+    };
+    const spies: { mock: { restore(): void } }[] = [];
     try {
       for (const path of [state, join(snapshot, 'sbx'), work])
         mkdirSync(path, { recursive: true, mode: 0o700 });
@@ -348,15 +405,37 @@ Then(
         mode: 0o400,
       });
       if (kind !== 'new installation')
-        writeFileSync(join(state, 'host-id'), kind === 'invalid host id' ? 'invalid' : preset, {
-          mode: 0o600,
-        });
+        writeFileSync(
+          join(state, 'host-id'),
+          kind === 'invalid host prefix'
+            ? '!' + preset
+            : kind === 'invalid host suffix'
+              ? preset + '!'
+              : kind === 'padded host'
+                ? preset + '\n'
+                : kind === 'invalid host id'
+                  ? 'invalid'
+                  : preset,
+          {
+            mode: 0o600,
+          },
+        );
       if (kind === 'existing registration' || kind === 'invalid registration')
         writeFileSync(
           join(state, 'registration.json'),
           kind === 'invalid registration' ? '' : JSON.stringify(reg),
           { mode: 0o600 },
         );
+      if (kind === 'public registration')
+        writeFileSync(join(state, 'registration.json'), JSON.stringify(reg), { mode: 0o644 });
+      if (kind === 'public registration') chmodSync(join(state, 'registration.json'), 0o644);
+      if (kind.startsWith('invalid stored ')) {
+        const r = { ...reg };
+        if (kind.includes('client'))
+          r.client_id = kind.endsWith('prefix') ? '!' + r.client_id : r.client_id + '!';
+        else r.accountHash = kind.endsWith('prefix') ? '!' + r.accountHash : r.accountHash + '!';
+        writeFileSync(join(state, 'registration.json'), JSON.stringify(r), { mode: 0o600 });
+      }
       if (kind === 'linked limits') symlinkSync(join(state, 'host-id'), limits);
       else if (kind !== 'missing limits')
         writeFileSync(
@@ -378,21 +457,28 @@ Then(
         maxBytes: 65536,
         onOutput: () => {},
       };
+      const published: string[] = [];
+      const write = mock.method(fs, 'writeFileSync');
+      spies.push(write);
+      if (kind === 'failed publication') {
+        const link = mock.method(fs, 'linkSync', () => {
+          throw Object.assign(Error('publication refused'), { code: 'EACCES' });
+        });
+        spies.push(link);
+      }
+      syncBuiltinESMExports();
       const run = () =>
         buildSbxStep(
           request,
           snapshot,
-          kind === 'writable launcher' ? work : root,
+          kind === 'writable launcher' ? work : kind === 'sibling launcher' ? snapshot : root,
           root,
-          (line) => {
-            notice += line;
-          },
           (host, which) => {
             sessions++;
             assert.equal(which, model);
             if (kind === 'new installation') assert.match(host.hostId, /^urn:uuid:[0-9a-f-]{36}$/);
             else assert.equal(host.hostId, preset);
-            assert.equal(host.hostId, readFileSync(join(state, 'host-id'), 'utf8'));
+            assert.equal(host.hostId, readFileSync(join(state, 'host-id'), 'utf8').trim());
             assert.equal(statSync(join(state, 'host-id')).mode & 0o777, 0o600);
             assert.deepEqual(host.previous, kind === 'existing registration' ? reg : undefined);
             return {
@@ -408,7 +494,7 @@ Then(
                     }),
                     { mode: 0o600 },
                   );
-                host.consentPage('http://127.0.0.1:1234/');
+                assert.equal(host.consentPage, undefined);
                 if (!host.previous) host.registered(reg);
                 return 'test';
               },
@@ -417,35 +503,298 @@ Then(
               },
             };
           },
-          (settings) => ({
-            build: async (received) => {
-              launched++;
-              assert.equal(received, request);
-              assert.deepEqual(settings.policy, pin);
-              assert.deepEqual(settings.budget, { requests: 2, tokens: 7, bytes: 4096 });
-              assert.equal(settings.archive, join(root, 'cache/sbx', pin.archive));
-              assert.equal(settings.guestSource, join(snapshot, 'sbx/codex-guest.py'));
-              assert.equal(await settings.access(new AbortController().signal), 'test');
-              if (kind === 'refused builder') throw Error('FIXTURE_BUILD');
-              settings.record(receipt);
-              return result;
-            },
-          }),
+          kind === 'default builder'
+            ? undefined
+            : (settings) => ({
+                build: async (received) => {
+                  launched++;
+                  assert.equal(received, request);
+                  assert.deepEqual(settings.policy, pin);
+                  assert.deepEqual(settings.budget, { requests: 2, tokens: 7, bytes: 4096 });
+                  assert.equal(settings.archive, join(root, 'cache/sbx', pin.archive));
+                  assert.equal(settings.guestSource, join(snapshot, 'sbx/codex-guest.py'));
+                  assert.equal(await settings.access(new AbortController().signal), 'test');
+                  if (kind === 'refused builder') throw Error('FIXTURE_BUILD');
+                  settings.record(receipt);
+                  return result;
+                },
+              }),
         );
-      if (kind === 'new installation' || kind === 'existing registration') {
+      if (['new installation', 'existing registration', 'sibling launcher', 'padded host'].includes(kind)) {
         assert.equal(await run(), result);
         assert.deepEqual(JSON.parse(readFileSync(join(state, 'registration.json'), 'utf8')), reg);
         assert.equal(readFileSync(join(state, 'usage.jsonl'), 'utf8'), JSON.stringify(receipt) + '\n');
-        assert.equal(notice, 'Continue with ChatGPT: http://127.0.0.1:1234/\n');
       } else if (kind.startsWith('concurrent'))
         await assert.rejects(run(), { message: 'SBX_ACCOUNT_CHANGED' });
       else if (kind === 'refused builder') await assert.rejects(run(), { message: 'FIXTURE_BUILD' });
+      else if (kind === 'default builder') await assert.rejects(run(), { code: 'ENOENT' });
+      else if (kind === 'failed publication') await assert.rejects(run(), { code: 'EACCES' });
+      else if (kind === 'public registration' || kind === 'public limits')
+        await assert.rejects(run(), { message: 'SBX_HOST_SETTING' });
+      else if (kind === 'writable launcher')
+        await assert.rejects(run(), { message: 'SBX_SEPARATE_LAUNCHER_REQUIRED' });
       else if (kind === 'invalid limits' || kind === 'invalid registration')
         await assert.rejects(run(), { message: 'SBX_INVALID_SETTING' });
       else await assert.rejects(run());
-      assert.deepEqual([sessions, closed, launched], [expected, expected, expected]);
+      for (const call of write.mock.calls) {
+        const [file, , options] = call.arguments;
+        if (
+          typeof file !== 'string' ||
+          !file.startsWith(state + '/') ||
+          file === join(state, 'registration.json')
+        )
+          continue;
+        assert.match(file, /\/(host-id|registration\.json)\.[a-f0-9-]{36}$/);
+        assert.deepEqual(options, { mode: 0o600, flag: 'wx' });
+        assert.ok(!fs.existsSync(file));
+        published.push(file);
+      }
+      if (kind === 'new installation') assert.equal(published.length, 2);
+      if (kind === 'existing registration') assert.equal(published.length, 0);
+      assert.deepEqual(
+        [sessions, closed, launched],
+        [expected, expected, kind === 'default builder' ? 0 : expected],
+      );
     } finally {
+      for (const spy of spies) spy.mock.restore();
+      syncBuiltinESMExports();
       rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+Then(
+  'the consent listener releases its bind, callbacks and connections after {string}',
+  async function (kind: string) {
+    const server = new http.Server();
+    const create = mock.method(
+      http,
+      'createServer',
+      (listener: (req: IncomingMessage, res: ServerResponse) => void) => server.on('request', listener),
+    );
+    const wait = mock.method(events, 'once');
+    syncBuiltinESMExports();
+    const listen = mock.method(server, 'listen', (port: number, host: string) => {
+      assert.deepEqual([port, host], [0, '127.0.0.1']);
+      queueMicrotask(() => server.emit('listening'));
+      return server;
+    });
+    const address = mock.method(server, 'address', () => ({
+      port: 1234,
+      family: 'IPv4',
+      address: kind === 'foreign bind' ? '0.0.0.0' : '127.0.0.1',
+    }));
+    const close = mock.method(server, 'close', () => server);
+    const connections = mock.method(server, 'closeAllConnections', () => {});
+    let notices = 0;
+    function request(path: string) {
+      let status = 200,
+        location = '';
+      const response = {
+        setHeader() {},
+        writeHead(code: number, headers?: { location?: string }) {
+          status = code;
+          location = headers?.location ?? '';
+          return this;
+        },
+        end() {},
+      };
+      server.emit('request', { method: 'GET', url: path, headers: { host: '127.0.0.1:1234' } }, response);
+      return { status, location };
+    }
+    const session = hostAccountSession(
+      {
+        hostId: 'fixture',
+        registered: () => assert.fail(),
+        consentPage: () => {
+          notices++;
+          const auth = new URL(request('/').location);
+          const params = new URLSearchParams({
+            state: auth.searchParams.get('state')!,
+            code: 'code',
+            client_id: 'oaiapp_fixture',
+          });
+          const path = '/auth/callback?' + params;
+          assert.equal(request(path).status, 200);
+          assert.equal(request(path).status, 400);
+        },
+      },
+      'gpt-6.2-astra',
+      async () => {
+        const signal = wait.mock.calls.find((c) => Object.is(c.arguments[0], server))?.arguments[2]?.signal;
+        assert.ok(signal);
+        assert.equal(getEventListeners(signal, 'abort').length, 0);
+        return new Response(null, { status: 503 });
+      },
+    );
+    try {
+      await assert.rejects(session.signIn(new AbortController().signal), {
+        message: kind === 'foreign bind' ? 'SBX_CALLBACK' : 'SBX_ACCOUNT_TRANSPORT',
+      });
+      assert.equal(notices, kind === 'foreign bind' ? 0 : 1);
+      assert.deepEqual(
+        [listen, address, close, connections].map((f) => f.mock.callCount()),
+        [1, 1, 1, 1],
+      );
+      const bindSignal = wait.mock.calls.find((c) => Object.is(c.arguments[0], server))?.arguments[2]?.signal;
+      assert.ok(bindSignal);
+      assert.equal(getEventListeners(bindSignal, 'abort').length, 0);
+    } finally {
+      session.close();
+      for (const spy of [create, wait, listen, address, close, connections]) spy.mock.restore();
+      syncBuiltinESMExports();
+    }
+  },
+);
+
+import { storedAccount } from '../../src/sbx-keychain.js';
+import type { SavedGrant } from '../../src/sbx-account.js';
+
+Then(
+  'the host credential store handles {string} without a consent or token disclosure',
+  async function (kind: string) {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'rotation-')));
+    const reg = {
+      issuer: 'https://auth.openai.com' as const,
+      client_id: 'oaiapp_fixture',
+      accountHash: sha('fixture'),
+    };
+    const host = {
+      hostId: 'fixture',
+      previous: reg,
+      registered: () => assert.fail(),
+      consentPage: () => assert.fail('interactive Step'),
+    };
+    const initial: SavedGrant = {
+      binding: { id: reg.client_id, subject: reg.accountHash, iat: 1, nonce: 'n' },
+      access: 'fixture-access',
+      refresh: 'fixture-refresh',
+      idToken: 'fixture-id',
+      expires: 1,
+      scope: 'offline_access resource.invoke chatgpt.tokens.use.direct',
+      verifiedModel: 'gpt-6.2-astra',
+    };
+    if (kind === 'other identity') initial.binding.subject = sha('different');
+    if (kind === 'other client') initial.binding.id = 'oaiapp_other';
+    if (kind === 'next model') {
+      initial.expires = Date.now() + 60000;
+      initial.verifiedModel = 'gpt-6.2-sol';
+    }
+    let secret: string | null =
+      kind === 'missing grant'
+        ? null
+        : kind === 'corrupt secret'
+          ? 'private-marker'
+          : JSON.stringify(initial);
+    let reads = 0,
+      posts = 0,
+      models = 0,
+      deleted = 0;
+    const storage = () => ({
+      getPassword: () => {
+        reads++;
+        if (kind === 'locked store') throw Error('private-marker');
+        return secret;
+      },
+      setPassword: (value: string) => {
+        secret = value;
+      },
+      deletePassword: () => {
+        deleted++;
+        secret = null;
+        return true;
+      },
+    });
+    let signalStarted!: () => void, signalReleased!: () => void;
+    const started = new Promise<void>((r) => {
+      signalStarted = r;
+    });
+    const released = new Promise<void>((r) => {
+      signalReleased = r;
+    });
+    const io: typeof fetch = async (url, init) => {
+      if (String(url).endsWith('/oauth/token')) {
+        posts++;
+        assert.equal((init!.body as URLSearchParams).get('refresh_token'), 'fixture-refresh');
+        signalStarted();
+        if (['concurrent refresh', 'closed waiter'].includes(kind)) await released;
+        if (kind === 'revoked session') return Response.json({ error: 'invalid_grant' }, { status: 400 });
+        if (kind === 'temporary failure') return new Response(null, { status: 503 });
+        return Response.json({
+          token_type: 'bearer',
+          access_token: 'rotated',
+          refresh_token: 'replacement',
+          expires_in: 3600,
+        });
+      }
+      models++;
+      assert.equal(url, 'https://api.openai.com/v1/models');
+      if (kind === 'catalogue interruption' && models === 1) return new Response(null, { status: 503 });
+      return Response.json({ models: [{ slug: 'gpt-6.2-astra', visibility: 'list' }] });
+    };
+    const open = () => storedAccount(host, 'gpt-6.2-astra', dir, storage, io);
+    const first = open(),
+      second = open(),
+      signal = new AbortController().signal;
+    try {
+      if (kind === 'unsafe lock') symlinkSync(join(dir, 'missing'), join(dir, 'rotation.lock'));
+      const work = first.access(signal);
+      if (kind === 'concurrent refresh' || kind === 'closed waiter') {
+        await started;
+        const waiter = second.access(signal);
+        if (kind === 'closed waiter') {
+          second.close();
+          await assert.rejects(waiter, { name: 'AbortError' });
+        }
+        signalReleased();
+        assert.equal(await work, 'rotated');
+        if (kind === 'concurrent refresh') assert.equal(await waiter, 'rotated');
+        assert.equal(posts, 1);
+        assert.equal(models, 1);
+      } else if (kind === 'next model') {
+        assert.equal(await work, 'fixture-access');
+        assert.equal(models, 1);
+        assert.equal(posts, 0);
+      } else {
+        const errors: Record<string, string> = {
+          'unsafe lock': 'SBX_ACCOUNT_LOCK',
+          'missing grant': 'SBX_SIGN_IN_REQUIRED',
+          'corrupt secret': 'SBX_KEYCHAIN_UNAVAILABLE',
+          'locked store': 'SBX_KEYCHAIN_UNAVAILABLE',
+          'revoked session': 'SBX_SIGN_IN_REQUIRED',
+          'temporary failure': 'SBX_ACCOUNT_TRANSPORT',
+          'catalogue interruption': 'SBX_ACCOUNT_TRANSPORT',
+          'other client': 'SBX_ACCOUNT_IDENTITY',
+          'other identity': 'SBX_ACCOUNT_IDENTITY',
+        };
+        await assert.rejects(work, { message: errors[kind] });
+        if (kind === 'revoked session') {
+          assert.equal(deleted, 1);
+          await assert.rejects(second.access(signal), { message: 'SBX_SIGN_IN_REQUIRED' });
+          assert.equal(posts, 1);
+        }
+        if (kind === 'catalogue interruption') {
+          assert.equal(await second.access(signal), 'rotated');
+          assert.equal(posts, 1);
+          assert.equal(models, 2);
+        }
+        if (kind === 'temporary failure') assert.deepEqual(JSON.parse(secret!), initial);
+        if (kind === 'unsafe lock') assert.equal(reads, 0);
+      }
+      if (kind === 'concurrent refresh' || kind === 'catalogue interruption') {
+        const saved = JSON.parse(secret!);
+        assert.equal(saved.refresh, 'replacement');
+        assert.equal(saved.verifiedModel, 'gpt-6.2-astra');
+      }
+      if (kind !== 'unsafe lock') {
+        assert.deepEqual(fs.readdirSync(dir), ['rotation.lock']);
+        assert.ok(!readFileSync(join(dir, 'rotation.lock')).includes(Buffer.from('fixture')));
+      }
+    } finally {
+      signalReleased();
+      first.close();
+      second.close();
+      rmSync(dir, { recursive: true, force: true });
     }
   },
 );

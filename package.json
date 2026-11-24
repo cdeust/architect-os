@@ -26,6 +26,7 @@
   "scripts": {
     "code": "node scripts/require-run.mjs && node --import tsx packages/sandbox/src/code.ts",
     "review": "node scripts/require-run.mjs && node --import tsx packages/sandbox/src/review.ts",
+    "sbx:sign-in": "node scripts/require-run.mjs && node --import tsx packages/sandbox/src/sbx-sign-in.ts",
     "step": "node scripts/require-run.mjs && node --import tsx packages/sandbox/src/step.ts",
     "evidence": "node scripts/require-run.mjs && node --import tsx tools/evidence/src/cli.ts",
     "diagram:isolation": "node scripts/require-run.mjs && node --import tsx features/scripts/isolation-diagram.ts",

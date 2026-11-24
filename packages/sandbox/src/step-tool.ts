@@ -755,9 +755,7 @@ export function stepDependencies(proc: CodeProcess, buildSubscription = buildSbx
     builder: {
       build: (request) =>
         request.config.provider === 'openai'
-          ? buildSubscription(request, admittedRoot(), PKG, proc.env.ARCHITECT_OS_RUNTIME_ROOT!, (line) =>
-              proc.stderr.write(line),
-            )
+          ? buildSubscription(request, admittedRoot(), PKG, proc.env.ARCHITECT_OS_RUNTIME_ROOT!)
           : new ClaudeBuilder(launch).build(request),
     },
     check: (...args) =>

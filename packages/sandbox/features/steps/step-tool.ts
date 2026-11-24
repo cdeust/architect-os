@@ -1176,17 +1176,40 @@ Then('an isolated Step host binds its fixture receipt and releases the snapshot'
       stdout: new PassThrough(),
       stdin: new PassThrough(),
     };
-    let notified = '',called=0, receiptSnapshot='';
-    proc.stderr.on('data',chunk=>{notified+=chunk.toString();});
-    const deps=stepDependencies(proc,async(build,snapshot,launcher,runtime,notice)=>{
-      called++;
-      assert.equal(build.brief,'fixture task');
-      assert.equal(launcher,PKG);
-      assert.equal(runtime,process.env.ARCHITECT_OS_RUNTIME_ROOT);
-      receiptSnapshot=snapshot;notice('fixture notice');
-      return {provider:'openai',exitCode:1,stopped:true,client:{version:'fixture',sha256:'d'.repeat(64)},measure:measureSession(''),receipts:[]};
+    let notified = '',
+      called = 0,
+      receiptSnapshot = '';
+    proc.stderr.on('data', (chunk) => {
+      notified += chunk.toString();
     });
-    const input={config:{provider:'openai' as const,model:'gpt-6.2-sol' as const,effort:'medium' as const,limitSeconds:1},worktree,brief:'fixture task',systemPrompt:'fixture',maxBytes:255,onOutput:()=>{}};
+    const deps = stepDependencies(proc, async (build, snapshot, launcher, runtime) => {
+      called++;
+      assert.equal(build.brief, 'fixture task');
+      assert.equal(launcher, PKG);
+      assert.equal(runtime, process.env.ARCHITECT_OS_RUNTIME_ROOT);
+      receiptSnapshot = snapshot;
+      return {
+        provider: 'openai',
+        exitCode: 1,
+        stopped: true,
+        client: { version: 'fixture', sha256: 'd'.repeat(64) },
+        measure: measureSession(''),
+        receipts: [],
+      };
+    });
+    const input = {
+      config: {
+        provider: 'openai' as const,
+        model: 'gpt-6.2-sol' as const,
+        effort: 'medium' as const,
+        limitSeconds: 1,
+      },
+      worktree,
+      brief: 'fixture task',
+      systemPrompt: 'fixture',
+      maxBytes: 255,
+      onOutput: () => {},
+    };
 
     const request = () => deps.session('never-launch.json' as ToolFile, [], '', 1, () => {});
     await assert.rejects(request, { message: 'STEP_ADMISSION_REQUIRED' });
@@ -1214,13 +1237,18 @@ Then('an isolated Step host binds its fixture receipt and releases the snapshot'
         assert.equal(readFileSync(join(frozen, 'code.json'), 'utf8'), subject.launcher['code.json']);
         return true;
       });
-      assert.equal((await deps.builder.build(input)).provider,'openai');
-      assert.equal(called,1);assert.equal(receiptSnapshot,frozen);assert.equal(notified,'fixture notice');
+      assert.equal((await deps.builder.build(input)).provider, 'openai');
+      assert.equal(called, 1);
+      assert.equal(receiptSnapshot, frozen);
+      assert.equal(notified, '');
       // This session has a checked launcher with a deliberately absent Claude tool file.
-      const code=join(frozen!,'code.json');
+      const code = join(frozen!, 'code.json');
       fs.unlinkSync(code);
-      await assert.rejects(deps.builder.build({...input,config:{model:'fixture',effort:'low',limitSeconds:1}}),(e:NodeJS.ErrnoException)=>e.code==='ENOENT' && e.path===code);
-      assert.equal(called,1);
+      await assert.rejects(
+        deps.builder.build({ ...input, config: { model: 'fixture', effort: 'low', limitSeconds: 1 } }),
+        (e: NodeJS.ErrnoException) => e.code === 'ENOENT' && e.path === code,
+      );
+      assert.equal(called, 1);
     } finally {
       deps.dispose!();
     }

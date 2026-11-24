@@ -42,7 +42,8 @@ function fixtureVm(
     const name = 'fixture-vm',
       controller = new AbortController();
     const actions: unknown[] = [];
-    let closedInput:PassThrough|undefined;let killed=false;
+    let closedInput: PassThrough | undefined;
+    let killed = false;
     const result = await use({
       name,
       signal: controller.signal,
@@ -83,8 +84,8 @@ function fixtureVm(
           stdout = new PassThrough(),
           stderr = new PassThrough(),
           emitter = new EventEmitter();
-        closedInput=stdin;
-        if(kind==='broken pipe')stdin.destroy();
+        closedInput = stdin;
+        if (kind === 'broken pipe') stdin.destroy();
         let closed = false;
         const close = (code = 0) => {
           if (!closed) {
@@ -97,7 +98,12 @@ function fixtureVm(
         const guest = {
           kind: 'result',
           guest: {
-            report:kind==='long report'?'é'.repeat(600):'fixture report',
+            report:
+              kind === 'long report'
+                ? 'é'.repeat(600)
+                : kind === 'boundary report'
+                  ? 'é'.repeat(512)
+                  : 'fixture report',
             exitCode: kind === 'nonzero' ? 9 : 0,
             completed: kind !== 'no completion',
             version: kind === 'version' ? 'unexpected' : policy.clientVersion,
@@ -106,10 +112,11 @@ function fixtureVm(
         };
         let token = '',
           phase = 0;
-        let repeat:unknown;
+        let repeat: unknown;
         stdin.on('data', (buf: Buffer) => {
-          assert.equal(buf.at(-1),10);assert.ok(stderr.readableFlowing);
-          assert.ok(stdin.listenerCount('error')>0);
+          assert.equal(buf.at(-1), 10);
+          assert.ok(stderr.readableFlowing);
+          assert.ok(stdin.listenerCount('error') > 0);
           const f = JSON.parse(buf.toString());
           if (!token) {
             token = f.token;
@@ -181,7 +188,7 @@ function fixtureVm(
             }
             if (kind === 'bad token') frame.token = 'bad';
             if (kind === 'abort during run') controller.abort();
-            if(kind==='mixed terminals')repeat=frame;
+            if (kind === 'mixed terminals') repeat = frame;
             const msg = JSON.stringify(frame) + '\n';
             stdout.write(msg.slice(0, 5));
             stdout.write(msg.slice(5));
@@ -203,7 +210,12 @@ function fixtureVm(
           }
           assert.equal(phase, 2);
           assert.deepEqual(f, { kind: 'end' });
-          if(repeat){phase=0;send(repeat);repeat=undefined;return;}
+          if (repeat) {
+            phase = 0;
+            send(repeat);
+            repeat = undefined;
+            return;
+          }
           send(guest);
           if (kind === 'extra frame') send(guest);
           close(kind === 'bad child exit' ? 1 : 0);
@@ -213,15 +225,18 @@ function fixtureVm(
           stdout,
           stderr,
           kill: (sig: string) => {
-            assert.equal(sig, 'SIGKILL');killed=true;
+            assert.equal(sig, 'SIGKILL');
+            killed = true;
             close();
             return true;
           },
         }) as unknown as ChildProcessWithoutNullStreams;
       },
     });
-    assert.ok(killed); assert.ok(closedInput?.destroyed); assert.equal(getEventListeners(controller.signal,'abort').length,0);
-    if(kind==='completed'||kind==='stopped')assert.ok(closedInput.writableEnded);
+    assert.ok(killed);
+    assert.ok(closedInput?.destroyed);
+    assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+    if (kind === 'completed' || kind === 'stopped') assert.ok(closedInput.writableEnded);
     if (kind === 'stopped' || controller.signal.aborted) throw new SbxInterrupted(name);
     return { name, result };
   };
@@ -231,6 +246,7 @@ Given('the {string} builder receives a {string} native session', function (adapt
   if (adapter === 'Codex') {
     const root = mkdtempSync(join(tmpdir(), 'builder-contract-'));
     this.state['builderFixture'] = root;
+    this.state['fixtureKind'] = session;
     const worktree = join(root, 'work'),
       archive = join(root, 'client');
     mkdirSync(worktree);
@@ -281,7 +297,7 @@ Given('the {string} builder receives a {string} native session', function (adapt
       receipts: [receipt],
       measure: {
         ...measureSession(''),
-        report:stopped?'':'fixture report',
+        report: stopped ? '' : 'fixture report',
         completed: !stopped,
         durationSeconds: 0,
         answers: 1,
@@ -295,8 +311,10 @@ Given('the {string} builder receives a {string} native session', function (adapt
     if (session === 'wrong digest') policy.archiveSha512 = '0'.repeat(88);
     if (session === 'archive symlink') symlinkSync(archive, join(root, 'alias'));
     if (session === 'archive inside') writeFileSync(join(worktree, 'archive'), 'fixture');
-    const observed:AbortSignal[]=[];let journalCount=0,now=Date.now();
-    if(session==='elapsed')this.state['fixtureClock']=()=>now;
+    const observed: AbortSignal[] = [];
+    let journalCount = 0,
+      now = Date.now();
+    if (session === 'elapsed') this.state['fixtureClock'] = () => now;
     const builder = new SbxBuilder(
       {
         policy,
@@ -308,20 +326,41 @@ Given('the {string} builder receives a {string} native session', function (adapt
               : archive,
         guestSource: join(PKG, 'sbx/codex-guest.py'),
         budget: { requests: 2, bytes: 4096, tokens: 14 },
-        access: async signal => {observed.push(signal);return 'fixture';},
-        record: r=>{journalCount++; assert.deepEqual(r,{...receipt,request:r.request,terminal:session==='mixed terminals'&&r.request===2?'failed':terminalStatus});},
-        upstream: async () =>{
-          now+=550;
-          const failed=session==='mixed terminals' && observed.length===2;
-          return new Response('data: '+JSON.stringify(failed?{type:'response.failed',response:{...terminal.response,status:'failed'}}:terminal)+'\n\n',{headers:{'content-type':'text/event-stream'}});
+        access: async (signal) => {
+          observed.push(signal);
+          return 'fixture';
+        },
+        record: (r) => {
+          journalCount++;
+          assert.deepEqual(r, {
+            ...receipt,
+            request: r.request,
+            terminal: session === 'mixed terminals' && r.request === 2 ? 'failed' : terminalStatus,
+          });
+        },
+        upstream: async () => {
+          now += 550;
+          const failed = session === 'mixed terminals' && observed.length === 2;
+          return new Response(
+            'data: ' +
+              JSON.stringify(
+                failed
+                  ? { type: 'response.failed', response: { ...terminal.response, status: 'failed' } }
+                  : terminal,
+              ) +
+              '\n\n',
+            { headers: { 'content-type': 'text/event-stream' } },
+          );
         },
       },
       fixtureVm(request, policy, archive, session),
     );
     this.state['builderContract'] = { builder, request, output, stream, expected } satisfies Contract;
-    this.state['verifyRun']=()=>{assert.equal(journalCount,observed.length);assert.ok(observed.every(s=>s.aborted));
-      if(session==='abort during run')assert.equal(observed.length,0);
-      if(session==='mixed terminals')assert.equal(journalCount,2);
+    this.state['verifyRun'] = () => {
+      assert.equal(journalCount, observed.length);
+      assert.ok(observed.every((s) => s.aborted));
+      if (session === 'abort during run') assert.equal(observed.length, 0);
+      if (session === 'mixed terminals') assert.equal(journalCount, 2);
     };
     return;
   }
@@ -370,7 +409,7 @@ Then('the Builder port returns the native outcome and usage', async function () 
   const { builder, request, expected, output, stream } = this.state['builderContract'] as Contract;
   assert.deepEqual(await builder.build(request), expected);
   assert.deepEqual(Buffer.concat(output), stream);
-  (this.state['verifyRun'] as (()=>void)|undefined)?.();
+  (this.state['verifyRun'] as (() => void) | undefined)?.();
 });
 Then('the Builder port refuses a stream one byte over its limit', async function () {
   const { builder, request, output, stream } = this.state['builderContract'] as Contract;
@@ -402,24 +441,27 @@ Then('a Claude Builder rejects a Codex session before launch', async function ()
 
 Then('the native pipe run finishes with {string}', async function (outcome: string) {
   const { builder, request } = this.state['builderContract'] as Contract;
-  const clock=this.state['fixtureClock'] as (()=>number)|undefined;
-  const patch=clock?mock.method(Date,'now',clock):undefined;
-  try{
-  const attempt = builder.build({
-    ...request,
-    ...(outcome === 'BUILDER_PROVIDER'
-      ? { config: { model: 'claude-opus-5-5', effort: 'high' as const, limitSeconds: 10 } }
-      : {}),
-    maxBytes: outcome==='BUILDER_OUTPUT_LIMIT'?1024:8192,
-  });
-  if (outcome.startsWith('SBX_') || outcome.startsWith('BUILDER_'))
-    await assert.rejects(attempt, { message: outcome });
-  else {
-    const result = await attempt;
-    assert.equal(result.measure.completed, ['accepted','elapsed'].includes(outcome));
-    assert.equal(result.stopped, outcome === 'stopped');
-    if(outcome==='elapsed')assert.equal(result.measure.durationSeconds,1);
+  const clock = this.state['fixtureClock'] as (() => number) | undefined;
+  const patch = clock ? mock.method(Date, 'now', clock) : undefined;
+  try {
+    const attempt = builder.build({
+      ...request,
+      ...(outcome === 'BUILDER_PROVIDER'
+        ? { config: { model: 'claude-opus-5-5', effort: 'high' as const, limitSeconds: 10 } }
+        : {}),
+      maxBytes:
+        outcome === 'BUILDER_OUTPUT_LIMIT' || this.state['fixtureKind'] === 'boundary report' ? 1024 : 8192,
+    });
+    if (outcome.startsWith('SBX_') || outcome.startsWith('BUILDER_'))
+      await assert.rejects(attempt, { message: outcome });
+    else {
+      const result = await attempt;
+      assert.equal(result.measure.completed, ['accepted', 'elapsed'].includes(outcome));
+      assert.equal(result.stopped, outcome === 'stopped');
+      if (outcome === 'elapsed') assert.equal(result.measure.durationSeconds, 1);
+    }
+    (this.state['verifyRun'] as () => void)();
+  } finally {
+    patch?.mock.restore();
   }
-  (this.state['verifyRun'] as ()=>void)();
-  }finally{patch?.mock.restore();}
 });

@@ -8,6 +8,14 @@ Feature: Host-only subscription account for a Step
       | new registration | renewed |
       | returning        | renewed |
       | foreign state    | refused |
+      | missing state | refused |
+      | missing callback client | refused |
+      | no initial scope | refused |
+      | missing expiry | refused |
+      | renewal with omitted claims | renewed |
+      | same issue time | renewed |
+      | cancelled waiter | renewed |
+      | cancelled catalogue | refused |
       | wrong issuer     | refused |
       | wrong audience   | refused |
       | wrong nonce      | refused |
@@ -67,3 +75,40 @@ Feature: Host-only subscription account for a Step
       | invalid host id | 0 |
       | invalid registration | 0 |
       | broken pin | 0 |
+      | sibling launcher | 1 |
+      | padded host | 1 |
+      | failed publication | 1 |
+      | default builder | 1 |
+      | public registration | 0 |
+      | invalid host prefix | 0 |
+      | invalid host suffix | 0 |
+      | invalid stored client prefix | 0 |
+      | invalid stored client suffix | 0 |
+      | invalid stored subject prefix | 0 |
+      | invalid stored subject suffix | 0 |
+
+  Scenario Outline: The callback listener is private, single-use and revoked on exit
+    Then the consent listener releases its bind, callbacks and connections after "<case>"
+
+    Examples:
+      | case |
+      | duplicate callback |
+      | foreign bind |
+
+  Scenario Outline: Independent consumers use the installed grant under a lock
+    Then the host credential store handles "<case>" without a consent or token disclosure
+
+    Examples:
+      | case |
+      | concurrent refresh |
+      | closed waiter |
+      | missing grant |
+      | locked store |
+      | corrupt secret |
+      | revoked session |
+      | temporary failure |
+      | catalogue interruption |
+      | other identity |
+      | other client |
+      | next model |
+      | unsafe lock |

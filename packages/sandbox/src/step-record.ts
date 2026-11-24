@@ -199,7 +199,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
         ? {
             client: session.client,
             usage: session.usage,
-            responses: session.responses && [...session.responses],
+            responses: session.responses?.slice(),
           }
         : {}),
       name: session.name,

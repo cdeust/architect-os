@@ -6,11 +6,7 @@ import { relative, sep } from 'node:path';
 import { z } from 'zod';
 import type { Builder, BuildRequest, BuildOutcome } from './builder.js';
 import { measureSession } from './measure.js';
-import {
-  ResponsesProxy,
-  type ProxyBudget,
-  type ResponseReceipt,
-} from './responses-proxy.js';
+import { ResponsesProxy, type ProxyBudget, type ResponseReceipt } from './responses-proxy.js';
 import { withSbxVm, SbxInterrupted, checkSbxWorktree, type SbxPolicy, type SbxVm } from './sbx-vm.js';
 
 const resultSchema = z.strictObject({
@@ -20,7 +16,7 @@ const resultSchema = z.strictObject({
     completed: z.boolean(),
     version: z.string(),
     uid: z.literal(65534),
-    report:z.string(),
+    report: z.string(),
   }),
 });
 const requestSchema = z.strictObject({
@@ -231,11 +227,17 @@ export class SbxBuilder implements Builder {
         requests: receipts.length,
         inputTokens,
         outputTokens,
-        guest:guest && {exitCode:guest.exitCode,completed:guest.completed,version:guest.version,uid:guest.uid},
+        guest: guest && {
+          exitCode: guest.exitCode,
+          completed: guest.completed,
+          version: guest.version,
+          uid: guest.uid,
+        },
       };
       const output = Buffer.from(JSON.stringify(evidence) + '\n');
-      const report=guest?.report ?? '';
-      if (output.length > request.maxBytes || Buffer.byteLength(report) > request.maxBytes) throw Error('BUILDER_OUTPUT_LIMIT');
+      const report = guest?.report ?? '';
+      if (output.length > request.maxBytes || Buffer.byteLength(report) > request.maxBytes)
+        throw Error('BUILDER_OUTPUT_LIMIT');
       request.onOutput(output);
       return {
         provider: 'openai',

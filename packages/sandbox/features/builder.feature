@@ -48,6 +48,7 @@ Feature: The Step builder
       | archive symlink | SBX_ARCHIVE_REQUIRED |
       | other provider | BUILDER_PROVIDER |
       | long report | BUILDER_OUTPUT_LIMIT |
+      | boundary report | accepted |
       | mixed terminals | refused |
       | broken pipe | SBX_PIPE_WRITE |
       | elapsed | elapsed |

@@ -4,7 +4,7 @@ import { addAbortListener, once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { createRemoteJWKSet, customFetch, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { z } from 'zod';
-import type { CodexModel } from './step-file.js';
+import { codexModelSchema, type CodexModel } from './step-file.js';
 
 class AccountFailure extends Error {}
 
@@ -31,7 +31,7 @@ export interface HostAccount {
   hostId: string;
   previous?: Registration;
   registered: (reg: Registration) => void;
-  consentPage: (url: string) => void;
+  consentPage?: (url: string) => void;
 }
 interface Exchange {
   code: string;
@@ -40,7 +40,8 @@ interface Exchange {
   redirect: string;
   nonce: string;
 }
-async function consent(host: HostAccount, signal: AbortSignal): Promise<Exchange> {
+async function consent(host: HostAccount, signal: AbortSignal, hint?: string): Promise<Exchange> {
+  if (!host.consentPage) throw new AccountFailure('SBX_SIGN_IN_REQUIRED');
   const state = fresh(),
     nonce = fresh(),
     verifier = fresh();
@@ -82,7 +83,8 @@ async function consent(host: HostAccount, signal: AbortSignal): Promise<Exchange
     }
     const one = (key: string) =>
       url.searchParams.getAll(key).length === 1 ? url.searchParams.get(key) : null;
-    if (!timingSafeEqual(digest(one('state') ?? ''), digest(state))) {
+    const supplied = one('state');
+    if (!supplied || !timingSafeEqual(digest(supplied), digest(state))) {
       res.writeHead(400).end();
       return;
     }
@@ -118,6 +120,7 @@ async function consent(host: HostAccount, signal: AbortSignal): Promise<Exchange
     url.search = new URLSearchParams({
       client_id: host.previous?.client_id ?? 'dynamic_agent_client',
       ...(!host.previous ? { agent_name_hint: 'Architect OS' } : {}),
+      ...(hint ? { id_token_hint: hint } : {}),
       ext_agent_host_id: host.hostId,
       response_type: 'code',
       redirect_uri: redirect,
@@ -163,13 +166,35 @@ const tokenSchema = z.object({
   scope: z.string().optional(),
   id_token: z.string().min(1).optional(),
 });
-/** This closure lives in one host Step. Rotation and authorization share a single in-flight promise. */
+export const savedGrantSchema = z.strictObject({
+  binding: z.strictObject({
+    id: clientId,
+    subject: registrationSchema.shape.accountHash,
+    nonce: z.string().min(1),
+    iat: z.int().nonnegative(),
+    authTime: z.int().nonnegative().optional(),
+  }),
+  access: tokenSchema.shape.access_token,
+  refresh: tokenSchema.shape.refresh_token,
+  idToken: z.string().min(1),
+  expires: z.int().positive(),
+  scope: z.string().min(1),
+  verifiedModel: codexModelSchema.optional(),
+});
+export type SavedGrant = z.infer<typeof savedGrantSchema>;
+export interface GrantChanges {
+  saved(grant: SavedGrant): void;
+  revoked(): void;
+}
+/** Protocol state is scoped to a host transaction. Only signIn can start the callback. */
 export function hostAccountSession(
   host: HostAccount,
   model: CodexModel,
   io: typeof fetch = fetch,
   suppliedKeys?: JWTVerifyGetKey,
   now = Date.now,
+  initial?: SavedGrant,
+  changes?: GrantChanges,
 ) {
   const life = new AbortController();
   const keys =
@@ -178,11 +203,37 @@ export function hostAccountSession(
       [customFetch]: (url, options) =>
         io(url, { ...options, signal: AbortSignal.any([options.signal, life.signal]) }),
     });
-  let current: { access: string; refresh: string; expires: number; scope: string } | undefined;
-  let binding: { id: string; subject: string; nonce: string; iat: number; authTime: unknown } | undefined;
+  let current = initial;
+  if (
+    initial &&
+    (initial.binding.id !== host.previous?.client_id || initial.binding.subject !== host.previous.accountHash)
+  )
+    throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
   let pending: Promise<void> | undefined;
-  async function acquire(signal: AbortSignal) {
-    const exchange = current ? undefined : await consent(host, signal);
+  async function catalogue(access: string, signal: AbortSignal) {
+    const data = await replyJson(
+      await io(resource + '/models', {
+        method: 'GET',
+        redirect: 'error',
+        cache: 'no-store',
+        signal,
+        headers: { authorization: 'Bearer ' + access },
+      }),
+    );
+    if (
+      !Array.isArray(data.models) ||
+      !data.models.some(
+        (m: { slug?: string; visibility?: string }) => m?.slug === model && m.visibility === 'list',
+      )
+    )
+      throw new AccountFailure('SBX_ACCOUNT_MODEL');
+    signal.throwIfAborted();
+  }
+  async function acquire(signal: AbortSignal, signIn = false) {
+    if (!signIn && !current) throw new AccountFailure('SBX_SIGN_IN_REQUIRED');
+    const exchange = signIn ? await consent(host, signal, current?.idToken) : undefined;
+    const prior = exchange ? undefined : current;
+    let binding = prior?.binding;
     const id = exchange?.client ?? binding!.id;
     const fields: Record<string, string> = exchange
       ? {
@@ -192,27 +243,32 @@ export function hostAccountSession(
           redirect_uri: exchange.redirect,
         }
       : { grant_type: 'refresh_token', refresh_token: current!.refresh };
-    const t = tokenSchema.parse(
-      await replyJson(
-        await io(issuer + '/api/accounts/oauth/token', {
-          method: 'POST',
-          redirect: 'error',
-          cache: 'no-store',
-          signal,
-          body: new URLSearchParams({ ...fields, client_id: id, resource }),
-        }),
-      ),
-    );
+    const response = await io(issuer + '/api/accounts/oauth/token', {
+      method: 'POST',
+      redirect: 'error',
+      cache: 'no-store',
+      signal,
+      body: new URLSearchParams({ ...fields, client_id: id, resource }),
+    });
+    if (!exchange && (response.status === 400 || response.status === 401)) {
+      const problem = await replyJson(new Response(response.body));
+      if (problem.error === 'invalid_grant') {
+        changes?.revoked();
+        throw new AccountFailure('SBX_SIGN_IN_REQUIRED');
+      }
+      throw new AccountFailure('SBX_ACCOUNT_TRANSPORT');
+    }
+    const t = tokenSchema.parse(await replyJson(response));
     const received = now(),
-      scope = t.scope ?? current?.scope;
-    const granted = new Set(scope?.split(' '));
+      scope = t.scope ?? prior?.scope;
+    if (!scope) throw new AccountFailure('SBX_ACCOUNT_GRANT');
+    const granted = new Set(scope.split(' '));
     if (
-      !scope ||
       !scopes.slice(3).every((s) => granted.has(s)) ||
-      (current &&
-        ([...current.scope.split(' ')].some((s) => !granted.has(s)) ||
-          granted.size !== new Set(current.scope.split(' ')).size ||
-          t.refresh_token === current.refresh))
+      (prior &&
+        ([...prior.scope.split(' ')].some((s) => !granted.has(s)) ||
+          granted.size !== new Set(prior.scope.split(' ')).size ||
+          t.refresh_token === prior.refresh))
     )
       throw new AccountFailure('SBX_ACCOUNT_GRANT');
     if (exchange || t.id_token) {
@@ -237,7 +293,7 @@ export function hostAccountSession(
       if (exchange) {
         if (p.nonce !== exchange.nonce || (host.previous && subject !== host.previous.accountHash))
           throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
-        binding = { id, subject, nonce: exchange.nonce, iat: p.iat!, authTime: p.auth_time };
+        binding = { id, subject, nonce: exchange.nonce, iat: p.iat!, authTime: verified.data.auth_time };
       } else if (
         !binding ||
         binding.subject !== subject ||
@@ -249,33 +305,40 @@ export function hostAccountSession(
     }
     const expires = received + t.expires_in * 1000;
     if (!Number.isSafeInteger(expires)) throw new AccountFailure('SBX_ACCOUNT_GRANT');
-    const catalogue = await replyJson(
-      await io(resource + '/models', {
-        method: 'GET',
-        redirect: 'error',
-        cache: 'no-store',
-        signal,
-        headers: { authorization: 'Bearer ' + t.access_token },
-      }),
-    );
-    if (
-      !Array.isArray(catalogue.models) ||
-      !catalogue.models.some(
-        (m: { slug?: string; visibility?: string }) => m?.slug === model && m.visibility === 'list',
-      )
-    )
-      throw new AccountFailure('SBX_ACCOUNT_MODEL');
-    signal.throwIfAborted();
-    if (exchange && !host.previous) host.registered({ issuer, client_id: id, accountHash: binding!.subject });
-    current = { access: t.access_token, refresh: t.refresh_token, expires, scope };
+    const grant: SavedGrant = {
+      binding: binding!,
+      access: t.access_token,
+      refresh: t.refresh_token,
+      idToken: t.id_token ?? prior!.idToken,
+      expires,
+      scope,
+    };
+    // Rotation consumes the previous refresh token even if the following catalogue request fails.
+    if (prior) changes?.saved(grant);
+    await catalogue(grant.access, signal);
+    if (exchange && !host.previous)
+      host.registered({ issuer, client_id: id, accountHash: grant.binding.subject });
+    grant.verifiedModel = model;
+    changes?.saved(grant);
+    current = grant;
   }
   const close = () => {
     life.abort();
     current = undefined;
-    binding = undefined;
   };
   return {
     close,
+    async signIn(signal: AbortSignal) {
+      const active = AbortSignal.any([life.signal, signal]);
+      active.throwIfAborted();
+      try {
+        await acquire(active, true);
+      } catch (e) {
+        close();
+        if (e instanceof AccountFailure) throw e;
+        throw new AccountFailure('SBX_ACCOUNT_UNAVAILABLE');
+      }
+    },
     async access(signal: AbortSignal) {
       const active = AbortSignal.any([life.signal, signal]);
       active.throwIfAborted();
@@ -290,6 +353,10 @@ export function hostAccountSession(
             pending = undefined;
           });
         await pending;
+      } else if (current.verifiedModel !== model) {
+        await catalogue(current.access, active);
+        current.verifiedModel = model;
+        changes?.saved(current);
       }
       active.throwIfAborted();
       return current!.access;

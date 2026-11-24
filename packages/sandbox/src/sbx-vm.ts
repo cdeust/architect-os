@@ -29,7 +29,7 @@ function environment() {
   return { HOME, TMPDIR, PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' };
 }
 const nativeCommand: SbxCommand = async (args, signal) => {
-  const binary=executable();
+  const binary = executable();
   try {
     const { stdout } = await promisify(execFile)(binary, ['--no-input', ...args], {
       cwd: '/',
