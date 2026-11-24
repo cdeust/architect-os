@@ -63,7 +63,7 @@ export function checkSbxWorktree(root: string) {
 }
 export const guestEndpoints = { host: 'host.docker.internal', gateway: 'gateway.docker.internal' } as const;
 // A 401 comes from our live proxy on the permitted route. The other requests must be refused by the VM policy.
-const networkCanary = `import os, shutil, sys, urllib.error, urllib.request
+const networkCanary = `import http.client, os, shutil, sys, urllib.error, urllib.request
 if shutil.which("sbx") or os.access("/var/run/docker.sock", os.W_OK): sys.exit(1)
 for method, url, expected in [
  ("POST", "http://${guestEndpoints.host}:"+sys.argv[1]+"/v1/responses", 401),
@@ -75,6 +75,13 @@ for method, url, expected in [
   with urllib.request.urlopen(urllib.request.Request(url, method=method)) as r: status=r.status
  except urllib.error.HTTPError as e: status=e.code
  if status!=expected: sys.exit(1)
+direct = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+for method, url in [("POST","http://${guestEndpoints.host}:"+sys.argv[2]+"/v1/responses"),("GET","http://example.com/")]:
+ try:
+  with direct.open(urllib.request.Request(url, method=method), timeout=3): sys.exit(1)
+ except urllib.error.HTTPError as e:
+  if e.code!=403: sys.exit(1)
+ except (urllib.error.URLError, http.client.RemoteDisconnected, TimeoutError, ConnectionResetError): pass
 `;
 export interface SbxVm {
   name: string;

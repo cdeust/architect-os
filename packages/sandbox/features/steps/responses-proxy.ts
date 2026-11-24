@@ -481,6 +481,10 @@ Then('the HTTP Responses listener observes {string} at the host boundary', async
     };
     if (kind === 'cut response' || kind === 'token limit') await assert.rejects(run(), TypeError);
     else await run();
+    if (['bad JSON', 'request too large'].includes(kind))
+      assert.throws(() => f.proxy.authorize('POST', '/v1/responses', f.proxy.token), {
+        message: 'RESPONSES_TOKEN',
+      });
     return 'verified';
   });
   assert.equal(response.result, 'verified');

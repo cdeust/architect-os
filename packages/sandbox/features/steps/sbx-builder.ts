@@ -443,6 +443,7 @@ Then(
             for (const required of [
               'shutil.which("sbx")',
               'urllib.request.urlopen',
+              'ProxyHandler({})',
               'status!=expected',
               '/unlisted',
               'example.com',

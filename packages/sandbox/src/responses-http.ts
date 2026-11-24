@@ -35,6 +35,7 @@ export async function withResponsesHttp<T>(
           length += chunk.length;
           if (length > bytes) {
             refused = true;
+            proxy.revoke();
             res.writeHead(413, { connection: 'close' }).end();
             return;
           }
@@ -61,6 +62,7 @@ export async function withResponsesHttp<T>(
         res.end();
       } catch (error) {
         refused = true;
+        proxy.revoke();
         throw error;
       } finally {
         reading = false;
