@@ -904,12 +904,12 @@ Then(
   },
 );
 
-Then('the guest bootstrap fixtures detect every forced branch condition', async function () {
+Then('the guest bootstrap fixtures detect altered guard conditions and native options', async function () {
   const { stdout } = await promisify(execFile)('python3', [
     '-I',
     '-B',
     join(PKG, '../../bench/sbx/guest-contract.py'),
     '--mutate-guards',
   ]);
-  assert.match(stdout, /^[1-9]\d* guest condition mutations detected\n$/);
+  assert.match(stdout, /^[1-9]\d* guest guard and option mutations detected\n$/);
 });

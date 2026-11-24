@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 import tarfile
 import tempfile
+import tomllib
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -81,6 +82,80 @@ def installation(guest):
                             target.read_text() == member
                             and target.stat().st_mode & 0o777 == 0o555
                         )
+
+
+def native_options(guest, command, work, home):
+    """Read the actual native CLI arguments and TOML configuration."""
+    cwd = command.index("--chdir")
+    assert command[:2] == [
+        str(guest.KIT / "codex-resources/bwrap"),
+        "--die-with-parent",
+    ]
+    assert command[cwd : cwd + 5] == [
+        "--chdir",
+        str(work),
+        "--",
+        str(guest.CLIENT),
+        "exec",
+    ]
+    flags = command[cwd + 5 : command.index("--disable")]
+    assert flags == [
+        "--sandbox",
+        "workspace-write",
+        "--skip-git-repo-check",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--ephemeral",
+        "--json",
+        "-m",
+        "fixture-model",
+    ]
+    pairs = command[command.index("--disable") : -2]
+    assert len(pairs) % 2 == 0 and command[-2:] == ["--", "-"]
+    disabled, entries = [], []
+    for flag, value in zip(pairs[::2], pairs[1::2], strict=True):
+        assert flag in {"--disable", "-c"}
+        (disabled if flag == "--disable" else entries).append(value)
+    assert sorted(disabled) == [
+        "apps",
+        "hooks",
+        "memories",
+        "multi_agent",
+        "multi_agent_v2",
+        "plugins",
+    ]
+    assert tomllib.loads("\n".join(entries)) == {
+        "model_provider": "step",
+        "model_providers": {
+            "step": {
+                "name": "step",
+                "base_url": "http://host.fixture:21345/v1",
+                "auth": {
+                    "command": "/usr/bin/head",
+                    "args": ["-n", "1", str(home / "run.fifo")],
+                    "refresh_interval_ms": 0,
+                },
+                "wire_api": "responses",
+                "requires_openai_auth": False,
+                "supports_websockets": False,
+                "request_max_retries": 0,
+                "stream_max_retries": 0,
+            }
+        },
+        "approval_policy": "never",
+        "mcp_servers": {},
+        "sandbox_workspace_write": {
+            "exclude_tmpdir_env_var": True,
+            "exclude_slash_tmp": True,
+            "network_access": True,
+        },
+        "analytics": {"enabled": False},
+        "feedback": {"enabled": False},
+        "web_search": "disabled",
+        "check_for_update_on_startup": False,
+        "model_instructions_file": str(home / "instructions.md"),
+        "model_reasoning_effort": "high",
+    }
 
 
 def construction(guest):
@@ -220,13 +295,7 @@ def construction(guest):
                     str(home / "instructions.md"),
                     str(home / "instructions.md"),
                 ) in mounts
-                assert (
-                    'model_providers.step.base_url="http://host.fixture:21345/v1"'
-                    in command
-                )
-                assert 'model_providers.step.auth.command="/usr/bin/head"' in command
-                assert "mcp_servers={}" in command and "workspace-write" in command
-                assert "sandbox_workspace_write.network_access=true" in command
+                native_options(guest, command, work, home)
                 assert (stdin, stdout, stderr) == (
                     guest.subprocess.PIPE,
                     guest.subprocess.PIPE,
@@ -303,7 +372,35 @@ def main():
                         finally:
                             operands[index] = operand
                             condition.test = test
-        print(f"{killed} guest condition mutations detected")
+        # These loops control plugin execution, account access, and where Codex sends its requests.
+        build = next(
+            n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "build"
+        )
+        for loop in ast.walk(build):
+            if not (
+                isinstance(loop, ast.For)
+                and isinstance(loop.target, ast.Name)
+                and loop.target.id in ("feature", "setting")
+            ):
+                continue
+            for literal in ast.walk(loop):
+                if not isinstance(literal, ast.Constant) or not isinstance(
+                    literal.value, str
+                ):
+                    continue
+                original = literal.value
+                literal.value += "_mutated"
+                try:
+                    construction(module(tree))
+                except Exception:
+                    killed += 1
+                else:
+                    raise AssertionError(
+                        f"survived native option at line {literal.lineno}"
+                    )
+                finally:
+                    literal.value = original
+        print(f"{killed} guest guard and option mutations detected")
 
 
 if __name__ == "__main__":

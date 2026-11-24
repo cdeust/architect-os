@@ -16,5 +16,5 @@ Feature: The production SBX builder uses the pinned client offline
   Scenario: Two host processes silently rotate the installed fixture account once
     Then two native credential consumers share one rotation and release the test item
 
-  Scenario: The trusted bootstrap has independent witnesses for each guest guard
-    Then the guest bootstrap fixtures detect every forced branch condition
+  Scenario: The trusted bootstrap has independent witnesses for guest guards and client settings
+    Then the guest bootstrap fixtures detect altered guard conditions and native options
