@@ -26,6 +26,8 @@ export interface BuildOutcome {
   readonly exitCode: number;
   readonly stopped: boolean;
   readonly measure: SessionMeasure;
+  readonly client?: { version: string; sha256: string };
+  readonly receipts?: readonly import('./responses-proxy.js').ResponseReceipt[];
 }
 
 export interface Builder {

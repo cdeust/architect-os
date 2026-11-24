@@ -26,7 +26,7 @@ Run repository commands through `./aos -- PROGRAM [ARG ...]`. Admission checks t
 
 Read the loop from phase 1 through phase 8 in the diagram. Each row names its owner and groups its available capabilities and planned extensions. [Open the full-size diagram](docs/diagrams/architecture.svg).
 
-**Builder qualification.** Step uses Claude Code under SRT. In the offline SBX bench, Codex wrote a witness file and completed a separate read-only text turn. The host and client agreed on the synthetic token counts. Gemini (agy) initialized and exited 1 when session creation was refused.
+**Builder qualification.** Step uses Claude Code under SRT. In the offline SBX bench, Codex wrote a witness file and completed a separate read-only text turn. The host and client agreed on the synthetic token counts. Gemini is used for review through Google’s native agent outside SBX. Its historical offline Antigravity probe initialized and exited 1 at session creation.
 
 In trial 9, one browser consent served three SBX VMs. The host renewed the ChatGPT session in memory. In the first two VMs, Codex ran a host-selected command and returned the expected SHA-256 digest. For the third VM, the host sent one text request to Astra. The provider completed it. Its moderation report gave the host no decision permitting release, so Codex received a refusal and exited 1. Six provider completions account for 402 measured tokens. Monetary cost remains unknown. [Trial results and receipt semantics](bench/sbx/README.md#astra-subscription-trials-on-22-november-2026)
 

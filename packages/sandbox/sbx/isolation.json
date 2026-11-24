@@ -1,0 +1,10 @@
+{
+  "shellKit": "docker.io/sbx/shell@sha256:036c56158d78d741238079a4db9e36f072e6d047eb89debffab700b8cb0c3a96",
+  "shellTemplate": "docker.io/library/sandbox-kit-assembled@sha256:036c56158d78d741238079a4db9e36f072e6d047eb89debffab700b8cb0c3a96",
+  "forbiddenHostSocket": "/var/run/docker.sock",
+  "cliVersion": "sbx version v0.54.0 4bec4a5ce093466e54b034146965b143d065dc09",
+  "archive": "codex-0.170.0-linux-arm64.tgz",
+  "archiveSha512": "mJLm5eia/GcukCrRfVEnYVD5dOXGE7cmpd9dJ/ixkSiKifzDAPaGq83ZEmwVhk3PxbdTPUSLRpnXZQKbNS5HoA==",
+  "clientVersion": "codex-cli 0.170.0",
+  "clientSha256": "6a95492ca9d85ee76bd9fc5a4d8f72dd98a6130d1bb409bcfc50e61573106616"
+}
