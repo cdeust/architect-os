@@ -7,11 +7,26 @@ import { syncBuiltinESMExports } from 'node:module';
 import { linkSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Then } from '@cucumber/cucumber';
+import { Before, Then } from '@cucumber/cucumber';
 import { SbxBuilder } from '../../src/sbx-builder.js';
 import { sbxPolicySchema } from '../../src/sbx-vm.js';
 import { PKG } from '../../src/code-tool.js';
 import type { ResponseReceipt } from '../../src/responses-proxy.js';
+
+// The native client can reach its fixture relay. A broken host fixture must never contact an external provider.
+Before({ tags: '@sbx-offline' }, function () {
+  const local = globalThis.fetch;
+  const guard = mock.method(
+    globalThis,
+    'fetch',
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1') throw Error('SBX_OFFLINE_FIXTURE');
+      return local(input, init);
+    },
+  );
+  this.cleanups.push(() => guard.mock.restore());
+});
 
 Then(
   'the isolated production client writes its file and leaves the protected witnesses intact',
@@ -636,9 +651,9 @@ import { keychainEntry } from '../../src/sbx-keychain.js';
 import { parseStepFile } from '../../src/step-file.js';
 import { admittedFixture } from './admission-fixture.js';
 Then(
-  'the production Step command publishes a native {string} patch against an offline provider',
+  'the production Step command runs {string} with the fixture account {string}',
   { timeout: 240000 },
-  async function (model: string) {
+  async function (model: string, session: string) {
     const launcher = resolve(PKG, '../..');
     const fixture = realpathSync(mkdtempSync(join(tmpdir(), 'sbx-step-cli-')));
     // Keep the synthetic admitted root short enough for SRT's macOS Unix socket; reserve it exclusively.
@@ -746,38 +761,39 @@ Then(
       ARCHITECT_OS_STEP_EVIDENCE: receipt,
     };
     try {
-      const setup = await promisify(execFile)(
-        join(launcher, 'aos'),
-        [
-          '--',
-          'npm',
-          '--prefix',
-          launcher,
-          '--node-options=--import=' + join(launcher, 'bench/sbx/step-fixture-preload.mjs'),
-          'run',
-          'sbx:sign-in',
-          '--',
-          model,
-        ],
-        { cwd: work, env, timeout: 30000 },
-      );
+      const run = (command: string, arg: string, timeout: number) =>
+        promisify(execFile)(
+          join(launcher, 'aos'),
+          [
+            '--',
+            'npm',
+            '--prefix',
+            launcher,
+            '--node-options=--import=' + join(launcher, 'bench/sbx/step-fixture-preload.mjs'),
+            'run',
+            command,
+            '--',
+            arg,
+          ],
+          { cwd: work, env, timeout },
+        );
+      if (session === 'absent') {
+        await assert.rejects(
+          run('step', intake, 225000),
+          (err: Error & { code?: number; stderr?: string }) =>
+            err.code === 2 &&
+            (err.stderr ?? '').includes('SBX_SIGN_IN_REQUIRED') &&
+            !err.stderr?.includes('Continue with ChatGPT'),
+        );
+        assert.equal(item.getPassword(), null);
+        assert.equal(fs.existsSync(join(work, 'result.txt')), false);
+        assert.equal(fs.existsSync(join(work, 'steps/native/record.json')), false);
+        return;
+      }
+      const setup = await run('sbx:sign-in', model, 30000);
       assert.match(setup.stdout, /SBX account ready/);
       assert.ok(item.getPassword());
-      const { stdout } = await promisify(execFile)(
-        join(launcher, 'aos'),
-        [
-          '--',
-          'npm',
-          '--prefix',
-          launcher,
-          '--node-options=--import=' + join(launcher, 'bench/sbx/step-fixture-preload.mjs'),
-          'run',
-          'step',
-          '--',
-          intake,
-        ],
-        { cwd: work, env, timeout: 225000 },
-      );
+      const { stdout } = await run('step', intake, 225000);
       assert.equal(JSON.parse(stdout.trim().split('\n').at(-1)!).outcome, 'passed');
       assert.equal(readFileSync(join(work, 'result.txt'), 'utf8'), 'native step patch');
       const record = JSON.parse(readFileSync(join(work, 'steps/native/record.json'), 'utf8'));
@@ -794,7 +810,7 @@ Then(
       assert.deepEqual(record.sessions[0].usage, { inputTokens: 10, outputTokens: 6 });
       assert.equal(record.sessions[0].responses.length, 2);
     } finally {
-      item.deletePassword();
+      if (item.getPassword() !== null) item.deletePassword();
       rmSync(runtime, { recursive: true, force: true });
       rmSync(fixture, { recursive: true, force: true });
     }
@@ -835,4 +851,65 @@ Then('a direct SBX host without a run binding refuses before CLI access', async 
     exit.mock.restore();
     stderr.mock.restore();
   }
+});
+
+Then(
+  'two native credential consumers share one rotation and release the test item',
+  { timeout: 30000 },
+  async function () {
+    const dir = mkdtempSync(join(tmpdir(), 'sbx-rotation-'));
+    const hostId = 'urn:uuid:' + randomUUID();
+    const entry = keychainEntry(hostId);
+    assert.equal(entry.getPassword(), null);
+    try {
+      writeFileSync(join(dir, 'host-id'), hostId, { mode: 0o600 });
+      const subject = 'f'.repeat(64),
+        id = 'oaiapp_offline';
+      writeFileSync(
+        join(dir, 'registration.json'),
+        JSON.stringify({ issuer: 'https://auth.openai.com', client_id: id, accountHash: subject }),
+        { mode: 0o600 },
+      );
+      entry.setPassword(
+        JSON.stringify({
+          binding: { id, subject, iat: 1, nonce: 'fixture' },
+          access: 'fixture-expired',
+          refresh: 'fixture-refresh',
+          idToken: 'fixture-id',
+          expires: 1,
+          scope: 'offline_access resource.invoke chatgpt.tokens.use.direct',
+        }),
+      );
+      const consume = () =>
+        promisify(execFile)(
+          process.execPath,
+          ['--import', 'tsx', join(PKG, '../../bench/sbx/keychain-refresh-fixture.mjs'), dir],
+          { cwd: join(PKG, '../..'), timeout: 15000 },
+        );
+      const consumers = await Promise.allSettled([consume(), consume()]);
+      for (const consumer of consumers) if (consumer.status === 'rejected') throw consumer.reason;
+      assert.equal(readFileSync(join(dir, 'refresh-observed'), 'utf8'), '');
+      const fresh = JSON.parse(entry.getPassword()!);
+      assert.equal(fresh.refresh, 'fixture-replacement');
+      assert.deepEqual(fs.readdirSync(dir).sort(), [
+        'host-id',
+        'refresh-observed',
+        'registration.json',
+        'rotation.lock',
+      ]);
+    } finally {
+      entry.deletePassword();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+Then('the guest bootstrap fixtures detect every forced branch condition', async function () {
+  const { stdout } = await promisify(execFile)('python3', [
+    '-I',
+    '-B',
+    join(PKG, '../../bench/sbx/guest-contract.py'),
+    '--mutate-guards',
+  ]);
+  assert.match(stdout, /^[1-9]\d* guest condition mutations detected\n$/);
 });

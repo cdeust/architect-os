@@ -7,7 +7,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { SignJWT } from 'jose';
 
-if (['step.ts','sbx-sign-in.ts'].includes(process.argv[1]?.split('/').at(-1))) {
+if (['step.ts', 'sbx-sign-in.ts'].includes(process.argv[1]?.split('/').at(-1))) {
   const root = process.env.ARCHITECT_OS_RUNTIME_ROOT;
   const nativeUser = os.userInfo();
   os.userInfo = () => ({ ...nativeUser, homedir: join(root, 'fixture-home') });
@@ -19,7 +19,14 @@ if (['step.ts','sbx-sign-in.ts'].includes(process.argv[1]?.split('/').at(-1))) {
     }
     return realExec.call(childProcess, program, ...args);
   };
-  offlineExec[promisify.custom] = realExec[promisify.custom];
+  const nativeAsync = promisify(realExec);
+  offlineExec[promisify.custom] = (program, ...args) =>
+    program === '/usr/bin/security'
+      ? Promise.resolve({
+          stdout: JSON.stringify({ claudeAiOauth: { accessToken: randomBytes(32).toString('hex') } }),
+          stderr: '',
+        })
+      : nativeAsync(program, ...args);
   childProcess.execFile = offlineExec;
   syncBuiltinESMExports();
   const localFetch = globalThis.fetch;
@@ -34,7 +41,7 @@ if (['step.ts','sbx-sign-in.ts'].includes(process.argv[1]?.split('/').at(-1))) {
   process.stderr.write = (bytes, ...args) => {
     const text = String(bytes);
     if (!text.startsWith('Continue with ChatGPT: ')) return write(bytes, ...args);
-    if(!process.argv[1].endsWith('/sbx-sign-in.ts')) throw Error('FIXTURE_UNEXPECTED_CONSENT');
+    if (!process.argv[1].endsWith('/sbx-sign-in.ts')) throw Error('FIXTURE_UNEXPECTED_CONSENT');
     const page = text.trim().split(' ').at(-1);
     if (new URL(page).hostname !== '127.0.0.1') throw Error('FIXTURE_CALLBACK');
     void (async () => {
@@ -78,12 +85,18 @@ if (['step.ts','sbx-sign-in.ts'].includes(process.argv[1]?.split('/').at(-1))) {
         scope: 'offline_access resource.invoke chatgpt.tokens.use.direct',
       });
     }
-    if (!/^Bearer fixture-access-[a-f0-9]{64}$/.test(init?.headers?.authorization)) throw Error('FIXTURE_AUTHORITY');
+    if (!/^Bearer fixture-access-[a-f0-9]{64}$/.test(init?.headers?.authorization))
+      throw Error('FIXTURE_AUTHORITY');
     const model = process.env.AOS_FIXTURE_MODEL;
     if (url === api + '/models') return Response.json({ models: [{ visibility: 'list', slug: model }] });
     if (url !== api + '/responses') throw Error('FIXTURE_ORIGIN');
     const request = JSON.parse(Buffer.from(init.body).toString());
-    if (request.model !== model || request.reasoning?.effort !== 'medium' || request.store !== false || request.stream !== true)
+    if (
+      request.model !== model ||
+      request.reasoning?.effort !== 'medium' ||
+      request.store !== false ||
+      request.stream !== true
+    )
       throw Error('FIXTURE_MODEL');
     calls++;
     const reply = request.input.find((i) => i.type === 'function_call_output' && i.call_id === 'step-write');
@@ -95,7 +108,9 @@ if (['step.ts','sbx-sign-in.ts'].includes(process.argv[1]?.split('/').at(-1))) {
             name: 'exec_command',
             call_id: 'step-write',
             id: 'fc_1',
-            arguments: JSON.stringify({ cmd: "test -z \"\$DBUS_SESSION_BUS_ADDRESS\" && test ! -e /run/user/65534/bus && test ! -d \"\$HOME/Library/Keychains\" && printf 'native step patch' > result.txt" }),
+            arguments: JSON.stringify({
+              cmd: 'test -z "\$DBUS_SESSION_BUS_ADDRESS" && test ! -e /run/user/65534/bus && test ! -d "\$HOME/Library/Keychains" && printf \'native step patch\' > result.txt',
+            }),
           }
         : {
             type: 'message',

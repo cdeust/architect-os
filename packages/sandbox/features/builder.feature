@@ -1,3 +1,4 @@
+@sbx-offline
 Feature: The Step builder
 
   Scenario Outline: A builder reports the native outcome and bounds its event sink

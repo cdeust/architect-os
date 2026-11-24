@@ -25,6 +25,7 @@ Then(
       callback: Promise<void> | undefined,
       callbackFailure: unknown;
     const saved: Registration[] = [];
+    const savedGrants: SavedGrant[] = [];
     const keyRequests: AbortSignal[] = [];
     const isNew = ['new registration', 'missing callback client', 'cancelled catalogue'].includes(kind);
     const session = hostAccountSession(
@@ -44,6 +45,7 @@ Then(
             assert.equal(p.get('ext_agent_host_id'), 'urn:uuid:00000000-0000-4000-8000-000000000000');
             assert.equal(p.get('agent_name_hint'), isNew ? 'Architect OS' : null);
             assert.equal(p.get('response_type'), 'code');
+            assert.equal(p.get('id_token_hint'), kind === 'reauthorization' ? 'fixture-prior-id' : null);
             assert.equal(p.get('resource'), 'https://api.openai.com/v1');
             assert.deepEqual(p.get('scope')?.split(' '), [
               'openid',
@@ -153,7 +155,7 @@ Then(
               challenge,
             );
           } else {
-            assert.equal(form.get('refresh_token'), 'fixture-1');
+            assert.equal(form.get('refresh_token'), 'fixture-' + (posts - 1));
             assert.equal(form.get('grant_type'), 'refresh_token');
             assert.equal(form.has('scope'), false);
           }
@@ -269,6 +271,17 @@ Then(
       },
       kind === 'returning' ? undefined : keys,
       () => clock,
+      kind === 'reauthorization'
+        ? {
+            binding: { id: client, subject: sha('person'), iat: 1, nonce: 'prior' },
+            access: 'fixture-prior',
+            refresh: 'fixture-prior-refresh',
+            idToken: 'fixture-prior-id',
+            expires: 1,
+            scope: 'offline_access resource.invoke chatgpt.tokens.use.direct',
+          }
+        : undefined,
+      { saved: (g) => savedGrants.push(structuredClone(g)), revoked: () => assert.fail() },
     );
     const signal = AbortSignal.timeout(5000);
     try {
@@ -296,6 +309,18 @@ Then(
         await work();
         assert.equal(posts, 2);
         assert.equal(catalogues, 2);
+        assert.deepEqual(
+          savedGrants.map((g) => [g.access, g.verifiedModel]),
+          [
+            ['access-1', model],
+            ['access-2', undefined],
+            ['access-2', model],
+          ],
+        );
+        if (kind === 'returning') {
+          clock += 1000;
+          assert.equal(await session.access(signal), 'access-3');
+        }
         assert.deepEqual(
           saved,
           kind === 'new registration' ? [{ issuer, client_id: client, accountHash: sha('person') }] : [],
@@ -364,7 +389,7 @@ import {
 import fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildSbxStep } from '../../src/sbx-step.js';
+import { buildSbxStep, signInCommand } from '../../src/sbx-step.js';
 import { PKG } from '../../src/code-tool.js';
 import { measureSession } from '../../src/measure.js';
 Then(
@@ -400,6 +425,13 @@ Then(
     try {
       for (const path of [state, join(snapshot, 'sbx'), join(snapshot, 'profiles'), work])
         mkdirSync(path, { recursive: true, mode: 0o700 });
+      const builderProfile = JSON.parse(readFileSync(join(PKG, 'profiles/builder.json'), 'utf8'));
+      if (kind === 'no registry') builderProfile.srt.network.allowedDomains.pop();
+      if (kind === 'reordered registry') builderProfile.srt.network.allowedDomains.reverse();
+      if (kind === 'missing proxy') builderProfile.srt.network.allowedDomains.shift();
+      if (kind === 'conflicting deny') builderProfile.srt.network.deniedDomains.push('registry.npmjs.org');
+      if (kind === 'unrecognized route') builderProfile.srt.network.allowedDomains.push('example.com');
+      writeFileSync(join(snapshot, 'profiles/builder.json'), JSON.stringify(builderProfile), { mode: 0o400 });
       const pin = JSON.parse(readFileSync(join(PKG, 'sbx/isolation.json'), 'utf8'));
       writeFileSync(join(snapshot, 'sbx/isolation.json'), JSON.stringify(kind === 'broken pin' ? {} : pin), {
         mode: 0o400,
@@ -425,10 +457,6 @@ Then(
           join(state, 'registration.json'),
           kind === 'invalid registration' ? '' : JSON.stringify(reg),
           { mode: 0o600 },
-      const builderProfile = JSON.parse(readFileSync(join(PKG, 'profiles/builder.json'), 'utf8'));
-      if (kind === 'no registry') builderProfile.srt.network.allowedDomains.pop();
-      if (kind === 'unrecognized route') builderProfile.srt.network.allowedDomains.push('example.com');
-      writeFileSync(join(snapshot, 'profiles/builder.json'), JSON.stringify(builderProfile), { mode: 0o400 });
         );
       if (kind === 'public registration')
         writeFileSync(join(state, 'registration.json'), JSON.stringify(reg), { mode: 0o644 });
@@ -487,6 +515,9 @@ Then(
             assert.deepEqual(host.previous, kind === 'existing registration' ? reg : undefined);
             return {
               access: async () => {
+                if (kind === 'temporary account transport') throw Error('SBX_ACCOUNT_TRANSPORT');
+                if (kind === 'non-error refusal') throw { message: 'SBX_SIGN_IN_REQUIRED' };
+                if (kind === 'sign-in required') throw Error('SBX_SIGN_IN_REQUIRED');
                 if (kind.startsWith('concurrent'))
                   writeFileSync(
                     join(state, 'registration.json'),
@@ -514,10 +545,19 @@ Then(
                   launched++;
                   assert.equal(received, request);
                   assert.deepEqual(settings.policy, pin);
+                  assert.equal(settings.allowRegistry, kind !== 'no registry');
                   assert.deepEqual(settings.budget, { requests: 2, tokens: 7, bytes: 4096 });
                   assert.equal(settings.archive, join(root, 'cache/sbx', pin.archive));
                   assert.equal(settings.guestSource, join(snapshot, 'sbx/codex-guest.py'));
-                  assert.equal(await settings.access(new AbortController().signal), 'test');
+                  if (['temporary account transport', 'non-error refusal'].includes(kind)) {
+                    await assert.rejects(settings.access(new AbortController().signal));
+                    return result;
+                  }
+                  if (kind === 'sign-in required')
+                    await assert.rejects(settings.access(new AbortController().signal), {
+                      message: 'SBX_SIGN_IN_REQUIRED',
+                    });
+                  else assert.equal(await settings.access(new AbortController().signal), 'test');
                   if (kind === 'refused builder') throw Error('FIXTURE_BUILD');
                   settings.record(receipt);
                   return result;
@@ -531,6 +571,7 @@ Then(
           'sibling launcher',
           'padded host',
           'no registry',
+          'reordered registry',
         ].includes(kind)
       ) {
         assert.equal(await run(), result);
@@ -538,6 +579,9 @@ Then(
         assert.equal(readFileSync(join(state, 'usage.jsonl'), 'utf8'), JSON.stringify(receipt) + '\n');
       } else if (kind.startsWith('concurrent'))
         await assert.rejects(run(), { message: 'SBX_ACCOUNT_CHANGED' });
+      else if (['temporary account transport', 'non-error refusal'].includes(kind))
+        assert.equal(await run(), result);
+      else if (kind === 'sign-in required') await assert.rejects(run(), { message: 'SBX_SIGN_IN_REQUIRED' });
       else if (kind === 'refused builder') await assert.rejects(run(), { message: 'FIXTURE_BUILD' });
       else if (kind === 'default builder') await assert.rejects(run(), { code: 'ENOENT' });
       else if (kind === 'failed publication') await assert.rejects(run(), { code: 'EACCES' });
@@ -548,7 +592,6 @@ Then(
       else if (kind === 'invalid limits' || kind === 'invalid registration')
         await assert.rejects(run(), { message: 'SBX_INVALID_SETTING' });
       else await assert.rejects(run());
-                  assert.equal(settings.allowRegistry, kind !== 'no registry');
       for (const call of write.mock.calls) {
         const [file, , options] = call.arguments;
         if (
@@ -660,8 +703,8 @@ Then(
   },
 );
 
-import { storedAccount } from '../../src/sbx-keychain.js';
-import type { SavedGrant } from '../../src/sbx-account.js';
+import { keychainEntry, storedAccount } from '../../src/sbx-keychain.js';
+import { savedGrantSchema, type SavedGrant } from '../../src/sbx-account.js';
 
 Then(
   'the host credential store handles {string} without a consent or token disclosure',
@@ -687,9 +730,11 @@ Then(
       scope: 'offline_access resource.invoke chatgpt.tokens.use.direct',
       verifiedModel: 'gpt-6.2-astra',
     };
+    initial.binding.nonce = 'fixture-nonce';
+    if (kind === 'unregistered identity') delete (host as Partial<typeof host>).previous;
     if (kind === 'other identity') initial.binding.subject = sha('different');
     if (kind === 'other client') initial.binding.id = 'oaiapp_other';
-    if (kind === 'next model') {
+    if (kind === 'next model' || kind === 'no persistence hook') {
       initial.expires = Date.now() + 60000;
       initial.verifiedModel = 'gpt-6.2-sol';
     }
@@ -725,12 +770,23 @@ Then(
     const released = new Promise<void>((r) => {
       signalReleased = r;
     });
+    const seenSignals: AbortSignal[] = [];
     const io: typeof fetch = async (url, init) => {
+      seenSignals.push(init!.signal!);
       if (String(url).endsWith('/oauth/token')) {
         posts++;
         assert.equal((init!.body as URLSearchParams).get('refresh_token'), 'fixture-refresh');
         signalStarted();
         if (['concurrent refresh', 'closed waiter'].includes(kind)) await released;
+        if (kind === 'unreachable provider') throw Error('private-marker');
+        if (kind === 'revoked 401') return Response.json({ error: 'invalid_grant' }, { status: 401 });
+        if (kind === 'revoked without store')
+          return Response.json({ error: 'invalid_grant' }, { status: 400 });
+        if (kind === 'unrelated nested error')
+          return Response.json({ error: { code: 'retry' } }, { status: 401 });
+        if (kind === 'unrelated grant error') return Response.json({ error: 'other' }, { status: 400 });
+        if (kind.startsWith('revocation '))
+          return Response.json({ error: { code: kind.slice(11) } }, { status: 401 });
         if (kind === 'revoked session') return Response.json({ error: 'invalid_grant' }, { status: 400 });
         if (kind === 'temporary failure') return new Response(null, { status: 503 });
         return Response.json({
@@ -751,6 +807,17 @@ Then(
       signal = new AbortController().signal;
     try {
       if (kind === 'unsafe lock') symlinkSync(join(dir, 'missing'), join(dir, 'rotation.lock'));
+      if (['revoked without store', 'no persistence hook', 'unpersisted renewal'].includes(kind)) {
+        const account = hostAccountSession(host, 'gpt-6.2-astra', io, undefined, Date.now, initial);
+        try {
+          if (kind === 'no persistence hook') assert.equal(await account.access(signal), 'fixture-access');
+          else if (kind === 'unpersisted renewal') assert.equal(await account.access(signal), 'rotated');
+          else await assert.rejects(account.access(signal), { message: 'SBX_SIGN_IN_REQUIRED' });
+        } finally {
+          account.close();
+        }
+        return;
+      }
       const work = first.access(signal);
       if (kind === 'concurrent refresh' || kind === 'closed waiter') {
         await started;
@@ -774,14 +841,21 @@ Then(
           'missing grant': 'SBX_SIGN_IN_REQUIRED',
           'corrupt secret': 'SBX_KEYCHAIN_UNAVAILABLE',
           'locked store': 'SBX_KEYCHAIN_UNAVAILABLE',
+          'unregistered identity': 'SBX_ACCOUNT_IDENTITY',
+          'unreachable provider': 'SBX_ACCOUNT_UNAVAILABLE',
+          'revoked 401': 'SBX_SIGN_IN_REQUIRED',
+          'unrelated grant error': 'SBX_ACCOUNT_TRANSPORT',
+          'unrelated nested error': 'SBX_ACCOUNT_TRANSPORT',
           'revoked session': 'SBX_SIGN_IN_REQUIRED',
           'temporary failure': 'SBX_ACCOUNT_TRANSPORT',
           'catalogue interruption': 'SBX_ACCOUNT_TRANSPORT',
           'other client': 'SBX_ACCOUNT_IDENTITY',
           'other identity': 'SBX_ACCOUNT_IDENTITY',
         };
-        await assert.rejects(work, { message: errors[kind] });
-        if (kind === 'revoked session') {
+        await assert.rejects(work, {
+          message: kind.startsWith('revocation ') ? 'SBX_SIGN_IN_REQUIRED' : errors[kind],
+        });
+        if (kind === 'revoked session' || kind.startsWith('revocation ')) {
           assert.equal(deleted, 1);
           await assert.rejects(second.access(signal), { message: 'SBX_SIGN_IN_REQUIRED' });
           assert.equal(posts, 1);
@@ -799,6 +873,7 @@ Then(
         assert.equal(saved.refresh, 'replacement');
         assert.equal(saved.verifiedModel, 'gpt-6.2-astra');
       }
+      assert.ok(seenSignals.every((signal) => signal.aborted));
       if (kind !== 'unsafe lock') {
         assert.deepEqual(fs.readdirSync(dir), ['rotation.lock']);
         assert.ok(!readFileSync(join(dir, 'rotation.lock')).includes(Buffer.from('fixture')));
@@ -807,6 +882,331 @@ Then(
       signalReleased();
       first.close();
       second.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+import { createRequire } from 'node:module';
+import { DatabaseSync } from 'node:sqlite';
+import timers from 'node:timers/promises';
+Then('the OS credential entry uses the installation identity and the required Linux service', function () {
+  const binding = createRequire(import.meta.url)('@napi-rs/keyring');
+  const calls: unknown[][] = [];
+  const original = binding.Entry;
+  class FakeEntry {
+    constructor(...args: unknown[]) {
+      calls.push(args);
+    }
+  }
+  binding.Entry = FakeEntry;
+  try {
+    assert.ok(keychainEntry('fixture-installation') instanceof FakeEntry);
+    assert.deepEqual(calls, [
+      ['architect-os.siwc', 'fixture-installation', { linux: { store: 'secret-service' } }],
+    ]);
+  } finally {
+    binding.Entry = original;
+  }
+});
+Then('only a complete bearer and a nonempty nonce enter the stored grant', function () {
+  const binding = { id: 'oaiapp_fixture', subject: sha('fixture'), nonce: 'long-nonce', iat: 1 };
+  const grant = { binding, access: 'abc~1==', refresh: 'refresh', idToken: 'id', expires: 1, scope: 'scope' };
+  assert.deepEqual(savedGrantSchema.parse(grant), grant);
+  const pending = { ...grant, pendingIdentity: { token: 'id-to-check', received: 0 } };
+  assert.deepEqual(savedGrantSchema.parse(pending), pending);
+  assert.equal(savedGrantSchema.safeParse({ ...pending, verifiedModel: 'gpt-6.2-astra' }).success, false);
+  assert.equal(
+    savedGrantSchema.safeParse({ ...grant, pendingIdentity: { token: '', received: 0 } }).success,
+    false,
+  );
+  assert.equal(
+    savedGrantSchema.safeParse({ ...grant, pendingIdentity: { token: 'fixture', received: -1 } }).success,
+    false,
+  );
+  for (const access of ['?abc', 'abc?', ''])
+    assert.equal(savedGrantSchema.safeParse({ ...grant, access }).success, false);
+  assert.equal(savedGrantSchema.safeParse({ ...grant, binding: { ...binding, nonce: '' } }).success, false);
+});
+Then(
+  'the account boundary refuses {string} before reading or sending a credential',
+  async function (kind: string) {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'account-lock-')));
+    const lock = join(dir, 'rotation.lock');
+    const spies: { mock: { restore(): void } }[] = [];
+    const controller = new AbortController();
+    const sentinel = Error('fixture I/O');
+    let opens = 0,
+      reads = 0,
+      application = 0;
+    const reg = {
+      issuer: 'https://auth.openai.com' as const,
+      client_id: 'oaiapp_fixture',
+      accountHash: sha('fixture'),
+    };
+    const bareHost = { hostId: 'fixture', previous: reg, registered: () => assert.fail() };
+    const account = storedAccount(
+      bareHost,
+      'gpt-6.2-sol',
+      dir,
+      () => {
+        opens++;
+        return {
+          getPassword: () => {
+            reads++;
+            return JSON.stringify({
+              binding: { id: reg.client_id, subject: reg.accountHash, nonce: 'fixture-nonce', iat: 1 },
+              access: 'fixture',
+              refresh: 'fixture-refresh',
+              idToken: 'fixture-id',
+              expires: Date.now() + 60000,
+              scope: 'offline_access resource.invoke chatgpt.tokens.use.direct',
+              verifiedModel: 'gpt-6.2-sol',
+            });
+          },
+          setPassword: () => assert.fail(),
+          deletePassword: () => assert.fail(),
+        };
+      },
+      async () => {
+        application++;
+        throw sentinel;
+      },
+    );
+    try {
+      if (kind === 'installation without consent handler') {
+        await assert.rejects(account.signIn(controller.signal), { message: 'SBX_SIGN_IN_REQUIRED' });
+        assert.equal(opens, 1);
+        assert.equal(reads, 1);
+      } else if (kind === 'cancelled installation') {
+        const session = hostAccountSession({ ...bareHost, consentPage: () => assert.fail() }, 'gpt-6.2-sol');
+        const server = mock.method(http, 'createServer');
+        spies.push(server);
+        syncBuiltinESMExports();
+        try {
+          await assert.rejects(session.signIn(AbortSignal.abort()), { name: 'AbortError' });
+          assert.equal(server.mock.callCount(), 0);
+        } finally {
+          session.close();
+        }
+      } else {
+        if (kind === 'lock creation failure')
+          spies.push(
+            mock.method(fs, 'openSync', () => {
+              throw sentinel;
+            }),
+          );
+        if (kind === 'multiply linked lock') {
+          writeFileSync(lock, '', { mode: 0o600 });
+          linkSync(lock, join(dir, 'alias'));
+        }
+        if (kind === 'exposed lock') {
+          writeFileSync(lock, '', { mode: 0o600 });
+          chmodSync(lock, 0o640);
+        }
+        if (kind === 'lock of another uid')
+          spies.push(mock.method(process as NodeJS.Process & { getuid(): number }, 'getuid', () => -1));
+        if (kind === 'non-file lock') {
+          writeFileSync(lock, '', { mode: 0o600 });
+          const stat = statSync(lock);
+          spies.push(mock.method(fs, 'lstatSync', () => Object.assign(stat, { isFile: () => false })));
+        }
+        if (kind === 'database IO failure')
+          spies.push(
+            mock.method(DatabaseSync.prototype, 'exec', () => {
+              throw sentinel;
+            }),
+          );
+        if (kind === 'already cancelled') controller.abort();
+        if (kind === 'blocked lock cancellation') {
+          spies.push(
+            mock.method(DatabaseSync.prototype, 'exec', () => {
+              throw Object.assign(Error(), { errcode: 5 });
+            }),
+          );
+          spies.push(
+            mock.method(
+              timers,
+              'setTimeout',
+              async (ms: number, _value: unknown, opts: { signal: AbortSignal }) => {
+                assert.equal(ms, 100);
+                controller.abort();
+                assert.ok(opts.signal.aborted);
+                opts.signal.throwIfAborted();
+              },
+            ),
+          );
+        }
+        syncBuiltinESMExports();
+        const run = account.access(controller.signal);
+        if (['database IO failure', 'lock creation failure'].includes(kind))
+          await assert.rejects(run, (e) => e === sentinel);
+        else if (['already cancelled', 'blocked lock cancellation'].includes(kind))
+          await assert.rejects(run, { name: 'AbortError' });
+        else await assert.rejects(run, { message: 'SBX_ACCOUNT_LOCK' });
+        assert.equal(opens, 0);
+        assert.equal(reads, 0);
+      }
+      assert.equal(application, 0);
+    } finally {
+      account.close();
+      for (const s of spies) s.mock.restore();
+      syncBuiltinESMExports();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+Then('account installation handles {string} and releases the host session', async function (kind: string) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'account-install-')));
+  mkdirSync(join(root, 'state'), { mode: 0o700 });
+  let closes = 0,
+    signIns = 0;
+  const logs: string[] = [],
+    outputs: string[] = [];
+  const model = 'gpt-6.2-sol';
+  const args =
+    kind === 'missing model'
+      ? []
+      : kind === 'extra argument'
+        ? [model, 'extra']
+        : [kind === 'another model' ? 'invalid' : model];
+  try {
+    const proc = {
+      argv: ['node', 'sbx-sign-in.ts', ...args],
+      env: { ARCHITECT_OS_RUNTIME_ROOT: root },
+      stdout: { write: (s: string) => outputs.push(s) },
+      stderr: { write: (s: string) => logs.push(s) },
+    } as unknown as NodeJS.Process;
+    const run = signInCommand(proc, (host, chosen, dir) => {
+      assert.equal(chosen, model);
+      assert.equal(dir, join(root, 'state/sbx'));
+      return {
+        access: () => assert.fail(),
+        close: () => {
+          closes++;
+        },
+        signIn: async (signal) => {
+          assert.ok(signal instanceof AbortSignal && !signal.aborted);
+          signIns++;
+          host.consentPage!('http://127.0.0.1:12345/');
+          if (kind === 'refused consent') throw Error('fixture refusal');
+        },
+      };
+    });
+    assert.equal(await run, kind === 'initial setup' ? 0 : 1);
+    const called = kind === 'initial setup' || kind === 'refused consent';
+    assert.equal(signIns, Number(called));
+    assert.equal(closes, Number(called));
+    assert.deepEqual(logs, [
+      ...(called ? ['Continue with ChatGPT: http://127.0.0.1:12345/\n'] : []),
+      ...(kind === 'initial setup' ? [] : ['SBX sign-in failed.\n']),
+    ]);
+    assert.deepEqual(outputs, kind === 'initial setup' ? ['SBX account ready.\n'] : []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+Then(
+  'a fresh host consumer verifies the {string} replacement before accessing the catalogue',
+  async function (identity: string) {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'key-verification-')));
+    const client = 'oaiapp_fixture',
+      model = 'gpt-6.2-astra',
+      issuer = 'https://auth.openai.com';
+    const initial = {
+      binding: { id: client, subject: sha('person'), nonce: 'original-nonce', iat: 1 },
+      access: 'old',
+      refresh: 'old-refresh',
+      idToken: 'old-id',
+      expires: 1,
+      scope: 'offline_access resource.invoke chatgpt.tokens.use.direct',
+      verifiedModel: model,
+    };
+    let saved = JSON.stringify(initial),
+      exchanges = 0,
+      verifiers = 0,
+      catalogues = 0;
+    const now = Math.floor(Date.now() / 1000);
+    const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const jwt = await new SignJWT({ nonce: initial.binding.nonce })
+      .setProtectedHeader({ alg: 'RS256', kid: 'fixture' })
+      .setIssuer(issuer)
+      .setAudience(client)
+      .setSubject(identity === 'same account' ? 'person' : 'another')
+      .setIssuedAt(now)
+      .setExpirationTime(now + 60)
+      .sign(privateKey);
+    const host = {
+      hostId: 'fixture',
+      previous: { issuer: 'https://auth.openai.com' as const, client_id: client, accountHash: sha('person') },
+      registered: () => assert.fail(),
+    };
+    const store = () => ({
+      getPassword: () => saved,
+      setPassword: (s: string) => {
+        saved = s;
+      },
+      deletePassword: () => assert.fail(),
+    });
+    const transport: typeof fetch = async (url, options) => {
+      if (url === issuer + '/api/accounts/oauth/token') {
+        assert.equal(++exchanges, 1);
+        assert.equal((options!.body as URLSearchParams).get('refresh_token'), 'old-refresh');
+        return Response.json({
+          token_type: 'bearer',
+          access_token: 'new',
+          refresh_token: 'new-refresh',
+          expires_in: 3600,
+          id_token: jwt,
+        });
+      }
+      if (String(url) === issuer + '/.well-known/jwks.json') {
+        verifiers++;
+        const item = JSON.parse(saved);
+        assert.equal(item.refresh, 'new-refresh');
+        assert.equal(item.idToken, 'old-id');
+        assert.equal(item.pendingIdentity.token, jwt);
+        assert.ok(Number.isSafeInteger(item.pendingIdentity.received));
+        assert.equal(item.verifiedModel, undefined);
+        if (verifiers === 1) return new Response(null, { status: 503 });
+        return Response.json({
+          keys: [{ ...publicKey.export({ format: 'jwk' }), kid: 'fixture', alg: 'RS256' }],
+        });
+      }
+      assert.equal(url, 'https://api.openai.com/v1/models');
+      assert.equal(options!.headers && new Headers(options!.headers).get('authorization'), 'Bearer new');
+      catalogues++;
+      return Response.json({ models: [{ slug: model, visibility: 'list' }] });
+    };
+    const consume = async () => {
+      const session = storedAccount(host, model, dir, store, transport);
+      try {
+        return await session.access(AbortSignal.timeout(5000));
+      } finally {
+        session.close();
+      }
+    };
+    try {
+      await assert.rejects(consume(), { message: 'SBX_ACCOUNT_UNAVAILABLE' });
+      assert.equal(catalogues, 0);
+      if (identity === 'same account') {
+        assert.equal(await consume(), 'new');
+        const item = JSON.parse(saved);
+        assert.equal(item.binding.iat, now);
+        assert.equal(item.pendingIdentity, undefined);
+        assert.equal(item.verifiedModel, model);
+        assert.equal(item.idToken, jwt);
+        assert.equal(await consume(), 'new');
+        assert.equal(catalogues, 1);
+      } else {
+        await assert.rejects(consume(), { message: 'SBX_ACCOUNT_IDENTITY' });
+        assert.equal(catalogues, 0);
+      }
+      assert.equal(exchanges, 1);
+      assert.equal(verifiers, 2);
+    } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   },

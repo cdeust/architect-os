@@ -166,21 +166,34 @@ const tokenSchema = z.object({
   scope: z.string().optional(),
   id_token: z.string().min(1).optional(),
 });
-export const savedGrantSchema = z.strictObject({
-  binding: z.strictObject({
-    id: clientId,
-    subject: registrationSchema.shape.accountHash,
-    nonce: z.string().min(1),
-    iat: z.int().nonnegative(),
-    authTime: z.int().nonnegative().optional(),
-  }),
-  access: tokenSchema.shape.access_token,
-  refresh: tokenSchema.shape.refresh_token,
-  idToken: z.string().min(1),
-  expires: z.int().positive(),
-  scope: z.string().min(1),
-  verifiedModel: codexModelSchema.optional(),
-});
+// Confirmed session-ending codes returned by the SIWC operator (bench/sbx/subscription-account.mjs).
+const expiredCode = z.enum([
+  'invalid_grant',
+  'invalid_refresh_token',
+  'token_expired',
+  'refresh_token_expired',
+  'refresh_token_invalidated',
+  'refresh_token_reused',
+]);
+const expiredGrant = z.union([expiredCode, z.object({ code: expiredCode })]);
+export const savedGrantSchema = z
+  .strictObject({
+    binding: z.strictObject({
+      id: clientId,
+      subject: registrationSchema.shape.accountHash,
+      nonce: z.string().min(1),
+      iat: z.int().nonnegative(),
+      authTime: z.int().nonnegative().optional(),
+    }),
+    access: tokenSchema.shape.access_token,
+    refresh: tokenSchema.shape.refresh_token,
+    idToken: z.string().min(1),
+    expires: z.int().positive(),
+    scope: z.string().min(1),
+    verifiedModel: codexModelSchema.optional(),
+    pendingIdentity: z.strictObject({ token: z.string().min(1), received: z.int().nonnegative() }).optional(),
+  })
+  .refine((grant) => !grant.pendingIdentity || grant.verifiedModel === undefined);
 export type SavedGrant = z.infer<typeof savedGrantSchema>;
 export interface GrantChanges {
   saved(grant: SavedGrant): void;
@@ -229,6 +242,51 @@ export function hostAccountSession(
       throw new AccountFailure('SBX_ACCOUNT_MODEL');
     signal.throwIfAborted();
   }
+  async function verifyIdentity(
+    token: string,
+    id: string,
+    received: number,
+    prior: SavedGrant['binding'] | undefined,
+    nonce?: string,
+  ): Promise<SavedGrant['binding']> {
+    const { payload: p } = await jwtVerify(token, keys, {
+      issuer,
+      audience: id,
+      requiredClaims: ['exp'],
+      currentDate: new Date(received),
+    });
+    const verified = z
+      .object({
+        sub: z.string().min(1),
+        iat: z.int().nonnegative(),
+        aud: z.union([z.literal(id), z.tuple([z.literal(id)])]),
+        azp: z.literal(id).optional(),
+        auth_time: z.int().nonnegative().optional(),
+      })
+      .safeParse(p);
+    if (!verified.success) throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
+    const subject = digest(verified.data.sub).toString('hex');
+    if (prior) {
+      if (
+        prior.subject !== subject ||
+        verified.data.iat < prior.iat ||
+        (p.nonce !== undefined && p.nonce !== prior.nonce) ||
+        (p.auth_time !== undefined && p.auth_time !== prior.authTime)
+      )
+        throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
+      return { ...prior, iat: verified.data.iat };
+    }
+    if (p.nonce !== nonce || (host.previous && subject !== host.previous.accountHash))
+      throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
+    return { id, subject, nonce: nonce!, iat: verified.data.iat, authTime: verified.data.auth_time };
+  }
+  async function verifyReplacement(grant: SavedGrant) {
+    const pending = grant.pendingIdentity;
+    if (!pending) return;
+    grant.binding = await verifyIdentity(pending.token, grant.binding.id, pending.received, grant.binding);
+    grant.idToken = pending.token;
+    delete grant.pendingIdentity;
+  }
   async function acquire(signal: AbortSignal, signIn = false) {
     if (!signIn && !current) throw new AccountFailure('SBX_SIGN_IN_REQUIRED');
     const exchange = signIn ? await consent(host, signal, current?.idToken) : undefined;
@@ -252,7 +310,7 @@ export function hostAccountSession(
     });
     if (!exchange && (response.status === 400 || response.status === 401)) {
       const problem = await replyJson(new Response(response.body));
-      if (problem.error === 'invalid_grant') {
+      if (expiredGrant.safeParse(problem.error).success) {
         changes?.revoked();
         throw new AccountFailure('SBX_SIGN_IN_REQUIRED');
       }
@@ -271,37 +329,9 @@ export function hostAccountSession(
           t.refresh_token === prior.refresh))
     )
       throw new AccountFailure('SBX_ACCOUNT_GRANT');
-    if (exchange || t.id_token) {
+    if (exchange) {
       if (!t.id_token) throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
-      const { payload: p } = await jwtVerify(t.id_token, keys, {
-        issuer,
-        audience: id,
-        requiredClaims: ['exp'],
-        currentDate: new Date(received),
-      });
-      const verified = z
-        .object({
-          sub: z.string().min(1),
-          iat: z.int().nonnegative(),
-          aud: z.union([z.literal(id), z.tuple([z.literal(id)])]),
-          azp: z.literal(id).optional(),
-          auth_time: z.int().nonnegative().optional(),
-        })
-        .safeParse(p);
-      if (!verified.success) throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
-      const subject = digest(verified.data.sub).toString('hex');
-      if (exchange) {
-        if (p.nonce !== exchange.nonce || (host.previous && subject !== host.previous.accountHash))
-          throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
-        binding = { id, subject, nonce: exchange.nonce, iat: p.iat!, authTime: verified.data.auth_time };
-      } else if (
-        !binding ||
-        binding.subject !== subject ||
-        p.iat! < binding.iat ||
-        (p.nonce !== undefined && p.nonce !== binding.nonce) ||
-        (p.auth_time !== undefined && p.auth_time !== binding.authTime)
-      )
-        throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
+      binding = await verifyIdentity(t.id_token, id, received, undefined, exchange.nonce);
     }
     const expires = received + t.expires_in * 1000;
     if (!Number.isSafeInteger(expires)) throw new AccountFailure('SBX_ACCOUNT_GRANT');
@@ -309,12 +339,17 @@ export function hostAccountSession(
       binding: binding!,
       access: t.access_token,
       refresh: t.refresh_token,
-      idToken: t.id_token ?? prior!.idToken,
+      idToken: prior?.idToken ?? t.id_token!,
+      ...(prior && t.id_token ? { pendingIdentity: { token: t.id_token, received } } : {}),
       expires,
       scope,
     };
-    // Rotation consumes the previous refresh token even if the following catalogue request fails.
-    if (prior) changes?.saved(grant);
+    // The provider has consumed the previous refresh token. Persist its replacement
+    // before either JWKS or catalogue IO, but never use it before identity verification.
+    if (prior) {
+      changes?.saved(grant);
+      await verifyReplacement(grant);
+    }
     await catalogue(grant.access, signal);
     if (exchange && !host.previous)
       host.registered({ issuer, client_id: id, accountHash: grant.binding.subject });
@@ -342,22 +377,25 @@ export function hostAccountSession(
     async access(signal: AbortSignal) {
       const active = AbortSignal.any([life.signal, signal]);
       active.throwIfAborted();
-      if (!current || now() >= current.expires) {
-        pending ??= acquire(active)
-          .catch((e: unknown) => {
-            close();
-            if (e instanceof AccountFailure) throw e;
-            throw Error('SBX_ACCOUNT_UNAVAILABLE');
-          })
-          .finally(() => {
-            pending = undefined;
-          });
-        await pending;
-      } else if (current.verifiedModel !== model) {
-        await catalogue(current.access, active);
-        current.verifiedModel = model;
-        changes?.saved(current);
+      async function ensureAccess() {
+        if (current?.pendingIdentity) await verifyReplacement(current);
+        if (!current || now() >= current.expires) return acquire(active);
+        if (current.verifiedModel !== model) {
+          await catalogue(current.access, active);
+          current.verifiedModel = model;
+          changes?.saved(current);
+        }
       }
+      pending ??= ensureAccess()
+        .catch((e: unknown) => {
+          close();
+          if (e instanceof AccountFailure) throw e;
+          throw Error('SBX_ACCOUNT_UNAVAILABLE');
+        })
+        .finally(() => {
+          pending = undefined;
+        });
+      await pending;
       active.throwIfAborted();
       return current!.access;
     },

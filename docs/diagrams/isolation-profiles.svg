@@ -69,7 +69,7 @@
     </g>
     <rect x="20" y="574" width="940" height="28" fill="#ffffff" stroke="#d0d7de"/>
     <g id="denied-read">
-      <text x="32" y="592" font-size="12" fill="#cf222e">denied reads</text><text x="132" y="592" font-size="11" fill="#1f2328">14 paths, the same list in the five profiles; read in srt.filesystem.denyRead</text>
+      <text x="32" y="592" font-size="12" fill="#cf222e">denied reads</text><text x="132" y="592" font-size="11" fill="#1f2328">16 paths, the same list in the five profiles; read in srt.filesystem.denyRead</text>
     </g>
   </g>
 </svg>

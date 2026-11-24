@@ -556,3 +556,6 @@ Feature: the step leaves its brief and its record in the worktree
       | legacy usage | refused |
       | mixed terminals | refused |
       | mixed models | refused |
+
+  Scenario: The published response list is independent of the builder collector
+    Then building the Step record snapshots the response list and preserves missing evidence

@@ -1,3 +1,4 @@
+@sbx-offline
 Feature: The host relays the native Responses protocol
 
   Scenario: Native tool calls, results and a new notification retain their wire bytes

@@ -64,11 +64,34 @@ export function accountHost(dir: string, notice?: (url: string) => void): HostAc
     },
   };
 }
-const hostProxy = z.literal('127.0.0.1:${authProxyPort}');
+/** Only the explicit installation entry can offer a consent link. */
+export async function signInCommand(
+  proc: Pick<NodeJS.Process, 'argv' | 'env' | 'stdout' | 'stderr'>,
+  open: typeof storedAccount = storedAccount,
+) {
+  try {
+    const [model] = z.tuple([codexModelSchema]).parse(proc.argv.slice(2));
+    const dir = privateStateDirectory(proc.env.ARCHITECT_OS_RUNTIME_ROOT!, ['sbx']);
+    const host = accountHost(dir, (url) => proc.stderr.write('Continue with ChatGPT: ' + url + '\n'));
+    const session = open(host, model, dir);
+    try {
+      await session.signIn(new AbortController().signal);
+    } finally {
+      session.close();
+    }
+    proc.stdout.write('SBX account ready.\n');
+    return 0;
+  } catch {
+    proc.stderr.write('SBX sign-in failed.\n');
+    return 1;
+  }
+}
+const hostProxy = '127.0.0.1:${authProxyPort}';
+const registry = 'registry.npmjs.org';
 const builderNetwork = z.object({
   srt: z.object({
     network: z.strictObject({
-      allowedDomains: z.union([z.tuple([hostProxy]), z.tuple([hostProxy, z.literal('registry.npmjs.org')])]),
+      allowedDomains: z.array(z.enum([hostProxy, registry])).refine((domains) => domains.includes(hostProxy)),
       deniedDomains: z.tuple([]),
     }),
   }),
@@ -101,15 +124,25 @@ export async function buildSbxStep(
   const host = accountHost(dir);
   const session = account(host, model, dir);
   try {
-    return await builder({
-      allowRegistry: profile.srt.network.allowedDomains[1] === 'registry.npmjs.org',
+    let signInRequired = false;
+    const outcome = await builder({
+      allowRegistry: profile.srt.network.allowedDomains.includes(registry),
       policy,
       archive: join(runtime, 'cache', 'sbx', policy.archive),
       guestSource: join(snapshot, 'sbx/codex-guest.py'),
       budget,
-      access: session.access,
+      access: async (signal) => {
+        try {
+          return await session.access(signal);
+        } catch (error) {
+          if (error instanceof Error && error.message === 'SBX_SIGN_IN_REQUIRED') signInRequired = true;
+          throw error;
+        }
+      },
       record: (r) => journal.append(JSON.stringify(r) + '\n'),
     }).build(request);
+    if (signInRequired) throw Error('SBX_SIGN_IN_REQUIRED');
+    return outcome;
   } finally {
     session.close();
   }

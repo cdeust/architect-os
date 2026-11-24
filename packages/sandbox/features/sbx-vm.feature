@@ -1,3 +1,4 @@
+@sbx-offline
 Feature: Admission of an SBX VM before staging the native client
 
   Scenario Outline: Inspect the named VM before exposing the staging operation

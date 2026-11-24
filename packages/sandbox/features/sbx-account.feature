@@ -1,3 +1,4 @@
+@sbx-offline
 Feature: Host-only subscription account for a Step
 
   Scenario Outline: Register and renew with the same verified identity
@@ -7,6 +8,7 @@ Feature: Host-only subscription account for a Step
       | case             | outcome |
       | new registration | renewed |
       | returning        | renewed |
+      | reauthorization | renewed |
       | foreign state    | refused |
       | missing state | refused |
       | missing callback client | refused |
@@ -63,8 +65,14 @@ Feature: Host-only subscription account for a Step
       | existing registration | 1 |
       | concurrent different client | 1 |
       | concurrent different subject | 1 |
+      | temporary account transport | 1 |
+      | non-error refusal | 1 |
+      | sign-in required | 1 |
       | refused builder | 1 |
       | writable launcher | 0 |
+      | reordered registry | 1 |
+      | missing proxy | 0 |
+      | conflicting deny | 0 |
       | no registry | 1 |
       | unrecognized route | 0 |
       | missing limits | 0 |
@@ -114,3 +122,58 @@ Feature: Host-only subscription account for a Step
       | other client |
       | next model |
       | unsafe lock |
+      | unregistered identity |
+      | unreachable provider |
+      | revoked 401 |
+      | unrelated grant error |
+      | unrelated nested error |
+      | revoked without store |
+      | no persistence hook |
+      | unpersisted renewal |
+      | revocation invalid_grant |
+      | revocation invalid_refresh_token |
+      | revocation token_expired |
+      | revocation refresh_token_expired |
+      | revocation refresh_token_invalidated |
+      | revocation refresh_token_reused |
+
+  Scenario: Host storage selects the account and the OS secrets service
+    Then the OS credential entry uses the installation identity and the required Linux service
+
+  Scenario Outline: Explicit account setup and silent access have separate lifetimes
+    Then the account boundary refuses "<condition>" before reading or sending a credential
+
+    Examples:
+      | condition |
+      | installation without consent handler |
+      | cancelled installation |
+      | lock creation failure |
+      | non-file lock |
+      | multiply linked lock |
+      | lock of another uid |
+      | exposed lock |
+      | already cancelled |
+      | database IO failure |
+      | blocked lock cancellation |
+
+  Scenario: Stored bearer and nonce fields are validated before use
+    Then only a complete bearer and a nonempty nonce enter the stored grant
+
+  Scenario Outline: Installation is a separate host command
+    Then account installation handles "<case>" and releases the host session
+
+    Examples:
+      | case |
+      | initial setup |
+      | refused consent |
+      | missing model |
+      | extra argument |
+      | another model |
+
+  Scenario Outline: The OS item preserves a rotated grant through a verifier interruption
+    Then a fresh host consumer verifies the "<identity>" replacement before accessing the catalogue
+
+    Examples:
+      | identity |
+      | same account |
+      | foreign account |

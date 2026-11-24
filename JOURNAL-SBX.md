@@ -16,7 +16,7 @@ Le rejeu suivant, avec le lien physique et la VM native, a passé 14 scénarios 
 
 ## B.4 — Compte, admission et résultat du Step
 
-Le processus Step conserve les jetons en mémoire pendant la construction. Il redemande un consentement quand un nouveau processus démarre. Le dossier privé de l’hôte conserve l’identifiant de l’installation et l’association du client au sujet vérifié. Le test du compte exerce un callback PKCE sur la boucle locale, la signature, le catalogue et la rotation. L’admission compare le fournisseur du constructeur aux pièces de provenance du prompt et refuse une relecture de justesse du même fournisseur. Le coût monétaire de l’abonnement reste inconnu.
+Dans la première version de B.4, le processus Step conservait les jetons en mémoire pendant la construction et redemandait le consentement au démarrage. La version livrée utilise le coffre du système décrit plus bas. Le dossier privé de l’hôte conserve l’identifiant de l’installation et l’association du client au sujet vérifié. Le test du compte exerce un callback PKCE sur la boucle locale, la signature, le catalogue et la rotation. L’admission compare le fournisseur du constructeur aux pièces de provenance du prompt et refuse une relecture de justesse du même fournisseur. Le coût monétaire de l’abonnement reste inconnu.
 
 Les deux Steps ont utilisé le vrai binaire Codex 0.170.0, à travers l’entrée de production. Les services d’identité et de modèle ont fourni les données de test en mémoire. Dans chaque worktree, le processus natif a écrit `result.txt`. Le contrôle SRT a constaté son existence, une session de revue Claude rejouée a rendu `accept`, puis l’hôte a publié `record.json` avec le modèle choisi et deux terminaux totalisant 10 jetons en entrée et 6 en sortie. Le certificat d’acceptation hors ligne provient de ces fichiers, distincts des instructions du faux amont. La preuve par un correctif décidé par le modèle reste ouverte.
 
@@ -27,6 +27,8 @@ La sonde historique Antigravity reste dans le banc. La relecture Gemini utilise 
 Le contrôle suivant a passé 663 scénarios et 2 595 pas, dont les deux commandes Step natives et le contrôle d’architecture interdisant les lancements de conteneurs. Après ajout des scénarios de droits et d’identité des paramètres de l’hôte, le rejeu du compte a passé 44 scénarios et 44 pas. Le contrat commun du port exerce Claude, Codex et l’adaptateur mémoire, avec une construction achevée, une interruption et une limite de sortie. Le reçu refuse les agrégats incompatibles avec les terminaux et conserve une valeur inconnue pour un usage manquant.
 
 ## Vérification complémentaire
+
+Mesures intermédiaires prises avant la reprise de l’admission et le changement de réseau.
 
 Le dernier rejeu natif des trois scénarios a réussi en 54,878 secondes. Le faux amont a reçu le modèle et l’effort demandés par chacun des deux Steps. Le test direct a aussi vérifié le dernier message du client et son absence du journal de métadonnées. Le lecteur des petits fichiers privés du compte et des paramètres du Step partage désormais les contrôles de descripteur à l’ouverture et après la lecture. Les nouveaux témoins couvrent la fermeture des tubes, les interruptions, les durées, les erreurs de consentement et les incohérences entre le résultat du constructeur et son reçu.
 
@@ -51,3 +53,7 @@ Le profil SRT autorise le proxy de l’hôte et le registre npm. Sur cette stati
 Le client Codex utilise désormais son transport HTTP natif. Le bootstrap fournit le jeton éphémère du Step par FIFO. Le processus hôte garde le jeton du compte. Trois scénarios natifs ont passé en 77,406 secondes, dont les Steps Astra et Sol avec écriture et relecture. Leur amont et leur identité étaient synthétiques.
 
 Après la régénération du schéma des cinq profils et l’ajout du cas de rotation entre processus, le rejeu ciblé a passé 973 scénarios et 3 180 pas. Les deux consommateurs du même compte synthétique ont observé une seule rotation et la nouvelle session dans le trousseau. La compilation TypeScript, le format et la garde d’architecture ont passé (431 modules, 1 878 dépendances). Ces mesures incluent le réseau HTTP et le magasin du compte sur macOS.
+
+Le rejeu natif a ensuite passé cinq scénarios en 87,001 secondes. Avec l’entrée du trousseau absente, le Step admis a rendu `SBX_SIGN_IN_REQUIRED`, sans demande de consentement, correctif ni `record.json`. Les deux Steps disposant d’une session installée ont écrit leur fichier. Les profils refusent aussi la lecture des dossiers du trousseau Linux ; l’accès natif au Secret Service reste à exercer sur un hôte Linux.
+
+Le banc du compte a aussi exercé une panne des clés de signature entre la rotation et la vérification du nouveau jeton d’identité. Le processus suivant a repris la réponse de rotation dans le trousseau. Pour le même sujet, il a vérifié la signature avant d’interroger le catalogue, sans second échange de renouvellement. Un sujet différent a été refusé avant tout accès au catalogue. Le magasin conserve le jeton d’identité déjà vérifié pendant cette vérification.

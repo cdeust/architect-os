@@ -1,4 +1,5 @@
-import { Entry } from '@napi-rs/keyring';
+import type { Entry } from '@napi-rs/keyring';
+import { createRequire } from 'node:module';
 import { closeSync, constants, lstatSync, openSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -7,6 +8,7 @@ import { hostAccountSession, savedGrantSchema, type HostAccount } from './sbx-ac
 import type { CodexModel } from './step-file.js';
 
 export function keychainEntry(id: string): Pick<Entry, 'getPassword' | 'setPassword' | 'deletePassword'> {
+  const { Entry } = createRequire(import.meta.url)('@napi-rs/keyring') as typeof import('@napi-rs/keyring');
   return new Entry('architect-os.siwc', id, { linux: { store: 'secret-service' } });
 }
 
