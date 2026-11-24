@@ -85,6 +85,7 @@ Then(
       );
     };
     const builder = new SbxBuilder({
+      allowRegistry: true,
       policy,
       archive,
       guestSource: join(PKG, 'sbx/codex-guest.py'),
@@ -226,7 +227,10 @@ Then(
     const signals = ['SIGTERM', 'SIGINT', 'SIGHUP'] as const;
     const before = signals.map((sig) => process.listenerCount(sig));
     let useSignal: AbortSignal | undefined;
-    let setups = 0;
+    let setups = 0,
+      abortedCalls = 0,
+      allowedRegistry = 0,
+      allowedHost = 0;
     const p = sbxPolicySchema.parse(committed()),
       workspace = '/fixture';
     const [repository, digest] = p.shellTemplate.split('@');
@@ -235,6 +239,7 @@ Then(
       removed = 0,
       staged = 0;
     const command: SbxCommand = async (args, signal) => {
+      if (signal.aborted) abortedCalls++;
       assert.equal(signal.aborted, false);
       let code = 0,
         value: unknown;
@@ -273,8 +278,6 @@ Then(
             'none',
             '--pull',
             'never',
-            '--deny-network',
-            '**',
             '--template',
             p.shellTemplate,
             p.shellKit,
@@ -304,30 +307,100 @@ Then(
             ],
           };
           break;
-        case 'policy':
-          if (args[1] === 'ls') {
-            assert.deepEqual(args, ['policy', 'ls', name, '--json', '--type', 'network']);
+        case 'policy': {
+          const scope = 'sandbox:' + name,
+            host = 'localhost:33451',
+            registry = 'registry.npmjs.org:443';
+          if (args[1] === 'allow') {
+            if (args.includes('--method')) allowedHost++;
+            else allowedRegistry++;
+            if (!args.includes('--method'))
+              assert.ok(!['registry disabled', 'unexpected registry'].includes(kind));
+            assert.deepEqual(
+              args,
+              args.includes('--method')
+                ? [
+                    'policy',
+                    'allow',
+                    'network',
+                    '--sandbox',
+                    name,
+                    host,
+                    '--method',
+                    'POST',
+                    '--path',
+                    '/v1/responses',
+                  ]
+                : ['policy', 'allow', 'network', '--sandbox', name, registry],
+            );
+          } else if (args[1] === 'ls') {
+            assert.deepEqual(args.slice(0, -1), ['policy', 'ls', name, '--json', '--type']);
+            assert.ok(['network', 'http'].includes(args.at(-1)!));
+            const npm = {
+              decision: 'allow',
+              scope,
+              status: 'active',
+              resource_type: 'network',
+              resources: [registry],
+              actions: ['net:connect:tcp'],
+              id: 'npm',
+            };
+            const post = {
+              decision: 'allow',
+              scope,
+              status: 'active',
+              resource_type: 'http',
+              resources: [host],
+              actions: ['http:request:post'],
+              id: 'post',
+              methods: ['POST'],
+              http_targets: [{ host, path: '/v1/responses' }],
+            };
+            const fallback = {
+              decision: 'deny',
+              scope: 'global',
+              status: 'active',
+              resource_type: 'network',
+              resources: ['**'],
+              actions: ['net:connect:tcp', 'net:connect:udp'],
+              id: 'default-deny-all',
+            };
+            if (kind === 'rule scope') npm.scope = 'global';
+            if (kind === 'rule inactive') npm.status = 'disabled';
+            if (kind === 'rule resource') fallback.resource_type = 'volume';
+            if (kind === 'rule destination') post.resources = ['localhost'];
+            if (kind === 'missing UDP') fallback.actions = ['net:connect:tcp'];
+            if (kind === 'missing TCP') fallback.actions = ['net:connect:udp'];
+            if (kind === 'wrong method') post.methods = ['GET', 'POST'];
+            if (kind === 'wider path') post.http_targets = [{ host, path: '/**' }];
+            if (kind === 'global HTTP') post.scope = 'global';
+            if (kind === 'registry wildcard' || (kind === 'changed policy' && staged)) npm.resources = ['**'];
+            if (kind === 'fallback id') fallback.id = 'custom';
+            if (kind === 'fallback disposition') fallback.decision = 'allow';
+            if (kind === 'fallback scope') fallback.scope = scope;
+            if (kind === 'fallback inactive') fallback.status = 'disabled';
+            if (kind === 'fallback destination') fallback.resources = ['example.com'];
+            if (kind === 'registry UDP') npm.actions.push('net:connect:udp');
+            if (kind === 'registry type') npm.resource_type = 'http';
+            if (kind === 'inactive HTTP') post.status = 'disabled';
+            if (kind === 'other HTTP type') post.resource_type = 'network';
+            if (kind === 'any HTTP action') post.actions = ['http:request:*'];
+            if (kind === 'other HTTP authority') post.http_targets[0]!.host = 'elsewhere';
+            if (kind === 'extra HTTP target') post.http_targets.push({ host, path: '/other' });
+            if (kind === 'unknown decision') post.decision = 'unknown';
+            const netRules = ['missing registry', 'registry disabled'].includes(kind)
+              ? [fallback]
+              : [fallback, npm, ...(kind === 'extra allow' ? [npm] : [])];
+            const httpRules =
+              kind === 'missing HTTP' ? [] : [post, ...(kind === 'extra HTTP allow' ? [post] : [])];
             value = {
-              rules: [
-                {
-                  decision: kind === 'extra allow' ? 'allow' : 'deny',
-                  scope: kind === 'rule scope' ? 'global' : 'sandbox:' + name,
-                  status: kind === 'rule inactive' ? 'disabled' : 'active',
-                  resource_type: kind === 'rule resource' ? 'volume' : 'network',
-                  resources: kind === 'rule destination' ? ['example.com'] : ['**'],
-                  actions:
-                    kind === 'missing UDP'
-                      ? ['net:connect:tcp']
-                      : kind === 'missing TCP'
-                        ? ['net:connect:udp']
-                        : ['net:connect:tcp', 'net:connect:udp'],
-                  id: 'deny',
-                },
-              ],
+              rules:
+                args.at(-1) === 'network'
+                  ? netRules
+                  : [...httpRules, { decision: kind === 'unexpected HTTP decision' ? 'surprise' : 'deny' }],
             };
           } else {
-            const proto = args.at(-2)!;
-            assert.deepEqual(args, [
+            assert.deepEqual(args.slice(0, -2), [
               'policy',
               'check',
               'network',
@@ -335,23 +408,50 @@ Then(
               name,
               '--json',
               '--protocol',
-              proto,
-              'example.com:443',
             ]);
+            const proto = args.at(-2)!;
+            assert.ok(['example.com:443', 'localhost:33452'].includes(args.at(-1)!));
             code = kind === 'live ' + proto.toUpperCase() + ' route' ? 0 : 1;
             value = {
               allowed: code === 0 || kind === 'check allowed',
-              context: kind === 'check scope' ? 'global' : 'sandbox:' + name,
-              deny_kind: kind === 'check implicit' ? 'default' : 'explicit',
-              rule: kind === 'check rule' ? 'unrelated' : 'local:deny',
-              action: kind === 'check action' ? 'unrelated' : 'net:connect:' + proto,
+              context: kind === 'check scope' ? 'global' : scope,
+              deny_kind: kind === 'check implicit' ? 'unknown' : proto === 'udp' ? 'explicit' : 'implicit',
+              action: kind === 'check action' ? 'other' : 'net:connect:' + proto,
             };
           }
           break;
+        }
         case 'exec':
           if (args[2] === '0:0') {
             setups++;
             assert.deepEqual(args, ['exec', '--user', '0:0', '-w', '/', '--', name, '/host/setup']);
+          } else if (args.includes('-c')) {
+            assert.deepEqual(args.slice(-2), ['33451', '33452']);
+            assert.deepEqual(args.slice(0, -3), [
+              'exec',
+              '--user',
+              '65534:65534',
+              '-w',
+              workspace,
+              '--',
+              name,
+              '/usr/bin/python3',
+              '-I',
+              '-c',
+            ]);
+            const source = args.at(-3)!;
+            for (const required of [
+              'shutil.which("sbx")',
+              'urllib.request.urlopen',
+              'status!=expected',
+              '/unlisted',
+              'example.com',
+            ])
+              assert.ok(source.includes(required));
+            if (kind === 'canary accepts') {
+              code = 1;
+              break;
+            }
           } else
             assert.deepEqual(args, [
               'exec',
@@ -396,6 +496,11 @@ Then(
         workspace,
         p,
         10,
+        {
+          port: 33451,
+          deniedPort: 33452,
+          allowRegistry: !['registry disabled', 'unexpected registry'].includes(kind),
+        },
         async (vm) => {
           assert.equal(vm.name, name);
           assert.equal(vm.signal.aborted, false);
@@ -404,6 +509,8 @@ Then(
             signals.map((sig) => process.listenerCount(sig)),
             before.map((n) => n + 1),
           );
+          assert.equal(allowedHost, 1);
+          assert.equal(allowedRegistry, kind === 'registry disabled' ? 0 : 1);
           await vm.copy('source', 'target');
           await vm.setup(['/host/setup']);
           if (throughCli) assert.equal(vm.pipes(['/fixture/guest']).pid, 123);
@@ -412,7 +519,7 @@ Then(
         },
         throughCli ? undefined : command,
       );
-      if (['verified', 'local CLI', 'system CLI', 'already removed'].includes(kind))
+      if (['verified', 'local CLI', 'system CLI', 'already removed', 'registry disabled'].includes(kind))
         assert.deepEqual(await work, { name: vmName, result: 'executed' });
       else if (kind === 'interrupted') await assert.rejects(work, { message: 'SBX_INTERRUPTED' });
       else if (['invalid CLI failure', 'invalid CLI code', 'cancelled CLI'].includes(kind))
@@ -442,6 +549,7 @@ Then(
         syncBuiltinESMExports();
       }
     } else await execute();
+    assert.equal(abortedCalls, 0);
     assert.equal(staged, times);
     assert.equal(setups, times);
     assert.deepEqual(
@@ -475,6 +583,7 @@ Then('SBX checks the workspace tree and path before any CLI call', async functio
         bad,
         committed(),
         1,
+        { port: 33451, deniedPort: 33452, allowRegistry: true },
         async () => assert.fail(),
         async () => assert.fail(),
       ),
@@ -709,6 +818,7 @@ Then('a direct SBX host without a run binding refuses before CLI access', async 
         '/fixture',
         committed(),
         1,
+        { port: 33451, deniedPort: 33452, allowRegistry: true },
         async () => assert.fail(),
         async () => {
           calls++;

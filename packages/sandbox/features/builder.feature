@@ -17,9 +17,9 @@ Feature: The Step builder
   Scenario: A request for the other provider never enters SRT
     Then a Claude Builder rejects a Codex session before launch
 
-  Scenario Outline: The pipe protocol and native completion have independent witnesses
+  Scenario Outline: The bootstrap receipt and native completion have independent witnesses
     Given the "Codex" builder receives a "<fixture>" native session
-    Then the native pipe run finishes with "<result>"
+    Then the native builder run finishes with "<result>"
 
     Examples:
       | fixture | result |
@@ -28,7 +28,7 @@ Feature: The Step builder
       | no requests | refused |
       | bad token | refused |
       | abort during run | stopped |
-      | bad request | SBX_FRAME_INVALID |
+      | bad request | SBX_RESULT_INVALID |
       | invalid JSON | SBX_FRAME_INVALID |
       | oversize | SBX_FRAME_LIMIT |
       | cut frame | SBX_FRAME_INCOMPLETE |
@@ -41,7 +41,7 @@ Feature: The Step builder
       | failed terminal | refused |
       | frame boundary | accepted |
       | invalid UTF8 | SBX_FRAME_INVALID |
-      | null frame | SBX_FRAME_INVALID |
+      | null frame | SBX_RESULT_INVALID |
       | hardlink | SBX_WORKTREE_ENTRY |
       | wrong digest | SBX_ARCHIVE_DIGEST |
       | archive inside | SBX_HOST_ASSET_IN_WORKTREE |
@@ -49,6 +49,7 @@ Feature: The Step builder
       | other provider | BUILDER_PROVIDER |
       | long report | BUILDER_OUTPUT_LIMIT |
       | boundary report | accepted |
+      | over budget | refused |
       | mixed terminals | refused |
       | broken pipe | SBX_PIPE_WRITE |
       | elapsed | elapsed |

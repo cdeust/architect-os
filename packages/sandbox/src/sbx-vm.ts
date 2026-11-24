@@ -4,6 +4,7 @@ import { existsSync, lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
+import type { SbxNetwork } from './responses-http.js';
 import { requireAdmittedRun } from './runtime-context.js';
 
 export const sbxPolicySchema = z.strictObject({
@@ -60,6 +61,21 @@ export function checkSbxWorktree(root: string) {
   }
   visit(root);
 }
+export const guestEndpoints = { host: 'host.docker.internal', gateway: 'gateway.docker.internal' } as const;
+// A 401 comes from our live proxy on the permitted route. The other requests must be refused by the VM policy.
+const networkCanary = `import os, shutil, sys, urllib.error, urllib.request
+if shutil.which("sbx") or os.access("/var/run/docker.sock", os.W_OK): sys.exit(1)
+for method, url, expected in [
+ ("POST", "http://${guestEndpoints.host}:"+sys.argv[1]+"/v1/responses", 401),
+ ("GET", "http://${guestEndpoints.host}:"+sys.argv[1]+"/v1/responses", 403),
+ ("POST", "http://${guestEndpoints.host}:"+sys.argv[1]+"/unlisted", 403),
+ ("POST", "http://${guestEndpoints.host}:"+sys.argv[2]+"/v1/responses", 403),
+ ("GET", "http://example.com/", 403)]:
+ try:
+  with urllib.request.urlopen(urllib.request.Request(url, method=method)) as r: status=r.status
+ except urllib.error.HTTPError as e: status=e.code
+ if status!=expected: sys.exit(1)
+`;
 export interface SbxVm {
   name: string;
   signal: AbortSignal;
@@ -76,6 +92,7 @@ export async function withSbxVm<T>(
   workspace: string,
   policy: SbxPolicy,
   seconds: number,
+  network: SbxNetwork & { allowRegistry: boolean },
   use: (vm: SbxVm) => Promise<T>,
   command: SbxCommand = nativeCommand,
 ) {
@@ -127,8 +144,6 @@ export async function withSbxVm<T>(
         'none',
         '--pull',
         'never',
-        '--deny-network',
-        '**',
         '--template',
         template.repository + '@' + image,
         policy.shellKit,
@@ -156,46 +171,95 @@ export async function withSbxVm<T>(
       host_mounts: z.tuple([mount]),
     }).parse(spec);
     const scope = 'sandbox:' + name;
-    const { rules } = z
-      .object({
-        rules: z.array(
-          z.object({
-            decision: z.literal('deny'),
-            scope: z.string(),
-            status: z.string(),
-            resource_type: z.string(),
-            resources: z.array(z.string()),
-            actions: z.array(z.string()),
-            id: z.string(),
-          }),
-        ),
-      })
-      .parse(JSON.parse(await checked(['policy', 'ls', name, '--json', '--type', 'network'])));
-    const deny = rules.find(
-      (r) =>
-        r.scope === scope &&
-        r.status === 'active' &&
-        r.resource_type === 'network' &&
-        r.resources.includes('**') &&
-        ['net:connect:tcp', 'net:connect:udp'].every((a) => r.actions.includes(a)),
-    );
-    if (!deny) throw Error('SBX_NETWORK_POLICY');
-    for (const proto of ['tcp', 'udp']) {
+    const host = 'localhost:' + network.port,
+      registry = 'registry.npmjs.org:443';
+    await checked([
+      'policy',
+      'allow',
+      'network',
+      '--sandbox',
+      name,
+      host,
+      '--method',
+      'POST',
+      '--path',
+      '/v1/responses',
+    ]);
+    if (network.allowRegistry) await checked(['policy', 'allow', 'network', '--sandbox', name, registry]);
+    async function rules(type: string) {
+      const raw = await checked(['policy', 'ls', name, '--json', '--type', type]);
+      return z
+        .object({ rules: z.array(z.looseObject({ decision: z.enum(['allow', 'deny']) })) })
+        .parse(JSON.parse(raw)).rules;
+    }
+    async function attestRules() {
+      const net = await rules('network');
+      const http = await rules('http');
+      const fallback = z.object({
+        id: z.literal('default-deny-all'),
+        scope: z.literal('global'),
+        decision: z.literal('deny'),
+        status: z.literal('active'),
+        resource_type: z.literal('network'),
+        resources: z.tuple([z.literal('**')]),
+        actions: z
+          .array(z.string())
+          .refine((actions) => actions.includes('net:connect:tcp') && actions.includes('net:connect:udp')),
+      });
+      const scoped = { scope: z.literal(scope), status: z.literal('active') };
+      const npm = z.object({
+        ...scoped,
+        resource_type: z.literal('network'),
+        resources: z.tuple([z.literal(registry)]),
+        actions: z.tuple([z.literal('net:connect:tcp')]),
+      });
+      const post = z.object({
+        ...scoped,
+        resource_type: z.literal('http'),
+        resources: z.tuple([z.literal(host)]),
+        methods: z.tuple([z.literal('POST')]),
+        actions: z.tuple([z.literal('http:request:post')]),
+        http_targets: z.tuple([z.strictObject({ host: z.literal(host), path: z.literal('/v1/responses') })]),
+      });
+      if (
+        !net.some((rule) => fallback.safeParse(rule).success) ||
+        !(network.allowRegistry ? z.tuple([npm]) : z.tuple([])).safeParse(
+          net.filter((r) => r.decision === 'allow'),
+        ).success ||
+        !z.tuple([post]).safeParse(http.filter((r) => r.decision === 'allow')).success
+      )
+        throw Error('SBX_NETWORK_POLICY');
+    }
+    await attestRules();
+    for (const [proto, target] of [
+      ['tcp', 'example.com:443'],
+      ['udp', 'example.com:443'],
+      ['tcp', 'localhost:' + network.deniedPort],
+    ] as const) {
       const r = await command(
-        ['policy', 'check', 'network', '--sandbox', name, '--json', '--protocol', proto, 'example.com:443'],
+        ['policy', 'check', 'network', '--sandbox', name, '--json', '--protocol', proto, target],
         signal,
       );
       if (r.code !== 1) throw Error('SBX_NETWORK_ROUTE');
       z.object({
         allowed: z.literal(false),
         context: z.literal(scope),
-        deny_kind: z.literal('explicit'),
-        rule: z.literal('local:' + deny.id),
+        deny_kind: z.enum(['implicit', 'explicit']),
         action: z.literal('net:connect:' + proto),
       }).parse(JSON.parse(r.stdout));
     }
     const guest = ['--user', '65534:65534', '-w', workspace, '--', name];
     await checked(['exec', ...guest, '/usr/bin/test', '!', '-w', policy.forbiddenHostSocket]);
+    await checked([
+      'exec',
+      ...guest,
+      '/usr/bin/python3',
+      '-I',
+      '-c',
+      networkCanary,
+      String(network.port),
+      String(network.deniedPort),
+    ]);
     const result = await use({
       name,
       signal,
@@ -215,6 +279,7 @@ export async function withSbxVm<T>(
         }),
     });
     signal.throwIfAborted();
+    await attestRules();
     return { name, result };
   } catch (error) {
     if (created && signal.aborted) throw new SbxInterrupted(name);

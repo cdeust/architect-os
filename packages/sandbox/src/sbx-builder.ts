@@ -6,8 +6,16 @@ import { relative, sep } from 'node:path';
 import { z } from 'zod';
 import type { Builder, BuildRequest, BuildOutcome } from './builder.js';
 import { measureSession } from './measure.js';
+import { withResponsesHttp, type SbxNetwork } from './responses-http.js';
 import { ResponsesProxy, type ProxyBudget, type ResponseReceipt } from './responses-proxy.js';
-import { withSbxVm, SbxInterrupted, checkSbxWorktree, type SbxPolicy, type SbxVm } from './sbx-vm.js';
+import {
+  guestEndpoints,
+  withSbxVm,
+  SbxInterrupted,
+  checkSbxWorktree,
+  type SbxPolicy,
+  type SbxVm,
+} from './sbx-vm.js';
 
 const resultSchema = z.strictObject({
   kind: z.literal('result'),
@@ -18,14 +26,6 @@ const resultSchema = z.strictObject({
     uid: z.literal(65534),
     report: z.string(),
   }),
-});
-const requestSchema = z.strictObject({
-  kind: z.literal('request'),
-  method: z.string(),
-  path: z.string(),
-  headers: z.record(z.string(), z.string()),
-  token: z.string(),
-  body: z.base64(),
 });
 async function* frames(stream: NodeJS.ReadableStream, limit: number) {
   let parts: Buffer[] = [];
@@ -54,20 +54,12 @@ async function* frames(stream: NodeJS.ReadableStream, limit: number) {
 }
 async function nativeTurn(
   vm: SbxVm,
-  proxy: ResponsesProxy,
+  endpoint: { port: number; token: string },
   request: BuildRequest,
   policy: SbxPolicy,
   wireLimit: number,
 ) {
-  const child = vm.pipes([
-    '/usr/bin/env',
-    '-i',
-    'PATH=/usr/bin:/bin',
-    '/usr/bin/python3',
-    '-I',
-    '/opt/aos-builder/guest.py',
-    'build',
-  ]);
+  const child = vm.pipes(['/usr/bin/python3', '-I', '/opt/aos-builder/guest.py', 'build']);
   const exit = once(child, 'close').then(([code]) => code);
   void exit.catch(() => {});
   child.stdin.on('error', () => {});
@@ -86,29 +78,17 @@ async function nativeTurn(
       systemPrompt: request.systemPrompt,
       version: policy.clientVersion,
       digest: policy.clientSha256,
-      token: proxy.token,
+      ...guestEndpoints,
+      port: endpoint.port,
+      token: endpoint.token,
     });
     let guest: z.infer<typeof resultSchema>['guest'] | undefined;
     for await (const frame of frames(child.stdout, wireLimit)) {
       if (guest) throw Error('SBX_EXTRA_FRAME');
-      if (frame?.kind === 'result') {
-        const parsed = resultSchema.safeParse(frame);
-        if (!parsed.success) throw Error('SBX_RESULT_INVALID');
-        guest = parsed.data.guest;
-        child.stdin.end();
-        continue;
-      }
-      const r = requestSchema.safeParse(frame);
-      if (!r.success) throw Error('SBX_FRAME_INVALID');
-      const body = Buffer.from(r.data.body, 'base64');
-      await proxy.relay(
-        { ...r.data, body },
-        {
-          start: (status, headers) => send({ kind: 'headers', status, headers }),
-          write: (chunk) => send({ kind: 'chunk', data: Buffer.from(chunk).toString('base64') }),
-        },
-      );
-      await send({ kind: 'end' });
+      const parsed = resultSchema.safeParse(frame);
+      if (!parsed.success) throw Error('SBX_RESULT_INVALID');
+      guest = parsed.data.guest;
+      child.stdin.end();
     }
     if ((await exit) !== 0 || !guest || guest.version !== policy.clientVersion)
       throw Error('SBX_CLIENT_FAILED');
@@ -120,6 +100,7 @@ async function nativeTurn(
   }
 }
 export interface SbxSettings {
+  allowRegistry: boolean;
   policy: SbxPolicy;
   archive: string;
   guestSource: string;
@@ -134,16 +115,18 @@ type NativeOutcome = {
   stopped: boolean;
 };
 async function runNative(
-  { policy, archive, guestSource, budget }: SbxSettings,
+  { policy, archive, guestSource, budget, allowRegistry }: SbxSettings,
   request: BuildRequest,
   proxy: ResponsesProxy,
   vmRunner: typeof withSbxVm,
+  network: SbxNetwork,
 ): Promise<NativeOutcome> {
   try {
     const { name, result: guest } = await vmRunner(
       request.worktree,
       policy,
       request.config.limitSeconds,
+      { ...network, allowRegistry },
       async (vm) => {
         await vm.copy(archive, '/tmp/aos-client.tgz');
         await vm.copy(guestSource, '/tmp/aos-guest.py');
@@ -163,10 +146,13 @@ async function runNative(
         const revoke = () => proxy.revoke();
         vm.signal.addEventListener('abort', revoke);
         try {
-          return await nativeTurn(vm, proxy, request, policy, Math.min(64 * 1024 * 1024, budget.bytes));
-        } catch (error) {
-          if (error instanceof Error && error.message.startsWith('RESPONSES_')) return undefined;
-          throw error;
+          return await nativeTurn(
+            vm,
+            { port: network.port, token: proxy.token },
+            request,
+            policy,
+            Math.min(64 * 1024 * 1024, budget.bytes),
+          );
         } finally {
           vm.signal.removeEventListener('abort', revoke);
         }
@@ -209,56 +195,58 @@ export class SbxBuilder implements Builder {
       upstream,
     );
     const start = Date.now();
-    try {
-      const { name, guest, stopped } = await runNative(this.settings, request, proxy, this.vm);
-      const accepted =
-        guest?.completed === true &&
-        guest.exitCode === 0 &&
-        receipts.length > 0 &&
-        receipts.every((r) => r.terminal === 'completed');
-      const inputTokens = receipts.reduce((n, r) => n + (r.inputTokens ?? 0), 0),
-        outputTokens = receipts.reduce((n, r) => n + (r.outputTokens ?? 0), 0);
-      const evidence = {
-        vm: name,
-        removed: true,
-        model,
-        clientVersion: policy.clientVersion,
-        clientSha256: policy.clientSha256,
-        requests: receipts.length,
+    const {
+      result: { name, guest, stopped },
+      refused,
+    } = await withResponsesHttp(proxy, budget.bytes, (port) =>
+      runNative(this.settings, request, proxy, this.vm, port),
+    );
+    const accepted =
+      !refused &&
+      guest?.completed === true &&
+      guest.exitCode === 0 &&
+      receipts.length > 0 &&
+      receipts.every((r) => r.terminal === 'completed');
+    const inputTokens = receipts.reduce((n, r) => n + (r.inputTokens ?? 0), 0),
+      outputTokens = receipts.reduce((n, r) => n + (r.outputTokens ?? 0), 0);
+    const evidence = {
+      vm: name,
+      removed: true,
+      model,
+      clientVersion: policy.clientVersion,
+      clientSha256: policy.clientSha256,
+      requests: receipts.length,
+      inputTokens,
+      outputTokens,
+      guest: guest && {
+        exitCode: guest.exitCode,
+        completed: guest.completed,
+        version: guest.version,
+        uid: guest.uid,
+      },
+    };
+    const output = Buffer.from(JSON.stringify(evidence) + '\n');
+    const report = guest?.report ?? '';
+    if (output.length > request.maxBytes || Buffer.byteLength(report) > request.maxBytes)
+      throw Error('BUILDER_OUTPUT_LIMIT');
+    request.onOutput(output);
+    return {
+      provider: 'openai',
+      exitCode: guest?.exitCode ?? 1,
+      stopped,
+      measure: {
+        ...measureSession(''),
+        report,
+        completed: accepted,
+        durationSeconds: Math.round((Date.now() - start) / 1000),
+        answers: receipts.length,
+        turns: receipts.length,
+        models: [model],
         inputTokens,
         outputTokens,
-        guest: guest && {
-          exitCode: guest.exitCode,
-          completed: guest.completed,
-          version: guest.version,
-          uid: guest.uid,
-        },
-      };
-      const output = Buffer.from(JSON.stringify(evidence) + '\n');
-      const report = guest?.report ?? '';
-      if (output.length > request.maxBytes || Buffer.byteLength(report) > request.maxBytes)
-        throw Error('BUILDER_OUTPUT_LIMIT');
-      request.onOutput(output);
-      return {
-        provider: 'openai',
-        exitCode: guest?.exitCode ?? 1,
-        stopped,
-        measure: {
-          ...measureSession(''),
-          report,
-          completed: accepted,
-          durationSeconds: Math.round((Date.now() - start) / 1000),
-          answers: receipts.length,
-          turns: receipts.length,
-          models: [model],
-          inputTokens,
-          outputTokens,
-        },
-        client: { version: policy.clientVersion, sha256: policy.clientSha256 },
-        receipts,
-      };
-    } finally {
-      proxy.revoke();
-    }
+      },
+      client: { version: policy.clientVersion, sha256: policy.clientSha256 },
+      receipts,
+    };
   }
 }

@@ -25,7 +25,7 @@ LAUNCHER='<absolute path to the trusted launcher checkout>'
 ./aos -- npm run deliver -- <name> [--until ci]                        # deliver the commit of this worktree (tools/deliver): trial branch, gate, CI for the hash, both branches; exit 0, 1 (stopped at a phase), 2 (refused), 3 (a program failed)
 ```
 
-For an OpenAI Step, configure the host runtime and archive as described in [the SBX builder guide](packages/sandbox/README.md#codex-in-docker-sbx). The offline native scenarios take a fake upstream and never require a subscription. The owner signs in once at installation using `sbx:sign-in`. Later Steps use the host OS credential store and silently renew the grant. The live acceptance trial requires the maintainer’s signal.
+For an OpenAI Step, configure the host runtime and archive as described in [the SBX builder guide](packages/sandbox/README.md#codex-in-docker-sbx). The offline native scenarios take a fake upstream and never require a subscription. The owner signs in once at installation using `sbx:sign-in`. Later Steps use the host OS credential store and silently renew the grant. Each VM has a scoped POST route to the Step’s loopback Responses proxy and access to the npm registry. The host verifies the rules before staging and again after the client exits. The live acceptance trial requires the maintainer’s signal.
 
 ## What This Is
 

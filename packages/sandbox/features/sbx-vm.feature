@@ -37,12 +37,36 @@ Feature: Admission of an SBX VM before staging the native client
       | rule inactive | 0 |
       | rule resource | 0 |
       | rule destination | 0 |
+      | fallback id | 0 |
+      | fallback disposition | 0 |
+      | fallback scope | 0 |
+      | fallback inactive | 0 |
+      | fallback destination | 0 |
+      | registry UDP | 0 |
+      | registry type | 0 |
+      | inactive HTTP | 0 |
+      | other HTTP type | 0 |
+      | any HTTP action | 0 |
+      | other HTTP authority | 0 |
+      | extra HTTP target | 0 |
+      | unexpected HTTP decision | 0 |
+      | unknown decision | 0 |
+      | registry disabled | 1 |
+      | unexpected registry | 0 |
+      | missing registry | 0 |
+      | missing HTTP | 0 |
+      | extra HTTP allow | 0 |
       | missing UDP | 0 |
       | missing TCP | 0 |
       | check allowed | 0 |
       | check scope | 0 |
       | check implicit | 0 |
-      | check rule | 0 |
+      | wrong method | 0 |
+      | wider path | 0 |
+      | global HTTP | 0 |
+      | registry wildcard | 0 |
+      | canary accepts | 0 |
+      | changed policy | 1 |
       | check action | 0 |
       | interrupted | 1 |
       | local CLI | 1 |

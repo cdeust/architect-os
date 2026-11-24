@@ -85,3 +85,33 @@ Feature: The host relays the native Responses protocol
       | envelope |
       | missing content type |
       | empty body |
+
+  Scenario Outline: The scoped host listener authenticates before admitting a body
+    Then the HTTP Responses listener observes "<case>" at the host boundary
+
+    Examples:
+      | case |
+      | native bytes |
+      | missing authorization |
+      | wrong scheme |
+      | wrong token |
+      | unknown route |
+      | other method |
+      | request too large |
+      | bad JSON |
+      | cut response |
+      | token limit |
+
+  Scenario Outline: Each HTTP listener admits one bounded exchange
+    Then the Responses listener handles "<operation>" while the first upload is incomplete
+
+    Examples:
+      | operation |
+      | concurrent request |
+      | builder exits |
+
+  Scenario: Both host listeners bind only to loopback and close outstanding connections
+    Then the host binds and tears down both Step listeners on loopback
+
+  Scenario: Native response headers can precede the first event
+    Then the HTTP relay delivers headers before the first provider chunk and omits an absent turn state

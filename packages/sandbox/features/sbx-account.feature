@@ -65,6 +65,8 @@ Feature: Host-only subscription account for a Step
       | concurrent different subject | 1 |
       | refused builder | 1 |
       | writable launcher | 0 |
+      | no registry | 1 |
+      | unrecognized route | 0 |
       | missing limits | 0 |
       | public limits | 0 |
       | hardlinked limits | 0 |

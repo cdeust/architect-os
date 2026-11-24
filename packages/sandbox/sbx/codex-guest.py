@@ -1,4 +1,4 @@
-"""Trusted guest bootstrap; all account traffic crosses the SBX process pipes."""
+"""Trusted guest bootstrap; the native client calls the scoped host Responses endpoint."""
 
 import base64
 import hashlib
@@ -10,8 +10,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlsplit
 
 KIT = Path("/opt/aos-builder")
 CLIENT = KIT / "bin/codex"
@@ -59,48 +58,6 @@ def install(archive_hash):
             dst.chmod(0o555)
 
 
-class Relay(BaseHTTPRequestHandler):
-    def log_message(self, *_):
-        pass
-
-    def do_POST(self):
-        count = int(self.headers["Content-Length"])
-        if count < 0 or count > WIRE_LIMIT:
-            self.send_error(413)
-            return
-        raw = self.rfile.read(count)
-        emit(
-            {
-                "kind": "request",
-                "method": "POST",
-                "path": self.path,
-                "token": self.server.token,
-                "headers": {
-                    k.lower(): v
-                    for k, v in self.headers.items()
-                    if k.lower() == "x-codex-turn-state"
-                },
-                "body": base64.b64encode(raw).decode(),
-            }
-        )
-        frame = read()
-        if frame["kind"] != "headers":
-            self.send_error(502)
-            return
-        self.send_response(frame["status"])
-        for key, value in frame["headers"].items():
-            self.send_header(key, value)
-        self.end_headers()
-        while True:
-            frame = read()
-            if frame["kind"] == "end":
-                break
-            if frame["kind"] != "chunk":
-                raise ValueError("pipe response")
-            self.wfile.write(base64.b64decode(frame["data"], validate=True))
-            self.wfile.flush()
-
-
 def build():
     if os.getuid() != 65534 or os.getgid() != 65534 or os.getgroups():
         raise ValueError("guest uid")
@@ -108,13 +65,23 @@ def build():
     with CLIENT.open("rb") as f:
         if hashlib.file_digest(f, "sha256").hexdigest() != spec["digest"]:
             raise ValueError("client digest")
-    with (
-        tempfile.TemporaryDirectory(dir="/tmp") as home,
-        HTTPServer(("127.0.0.1", 0), Relay) as server,
-    ):
-        server.token = spec["token"]
+    with tempfile.TemporaryDirectory(dir="/tmp") as home:
+        # Only the public SBX egress proxy crosses into the native client environment.
+        egress = os.environ["HTTP_PROXY"]
+        proxy = urlsplit(egress)
+        if (
+            proxy.scheme != "http"
+            or proxy.hostname != spec["gateway"]
+            or proxy.username
+            or proxy.password
+        ):
+            raise ValueError("guest proxy")
         env = {
             "HOME": home,
+            "HTTP_PROXY": egress,
+            "HTTPS_PROXY": egress,
+            "http_proxy": egress,
+            "https_proxy": egress,
             "TMPDIR": home,
             "CODEX_HOME": home,
             "LANG": "C.UTF-8",
@@ -195,11 +162,20 @@ def build():
             "memories",
         ):
             command += ["--disable", feature]
+        # A FIFO contains no on-disk data. Codex reads this one-run capability once,
+        # before it can execute any model-authored command. Only the host has the account grant.
+        capability = Path(home) / "run.fifo"
+        os.mkfifo(capability, mode=0o600)
         for setting in (
             'model_provider="step"',
             'model_providers.step.name="step"',
-            'model_providers.step.base_url="http://127.0.0.1:%s/v1"'
-            % server.server_port,
+            'model_providers.step.base_url="http://%s:%d/v1"'
+            % (spec["host"], spec["port"]),
+            'model_providers.step.auth.command="/usr/bin/head"',
+            "model_providers.step.auth.args="
+            + json.dumps(["-n", "1", str(capability)]),
+            "model_providers.step.auth.refresh_interval_ms=0",
+            "sandbox_workspace_write.network_access=true",
             'model_providers.step.wire_api="responses"',
             "model_providers.step.requires_openai_auth=false",
             "model_providers.step.supports_websockets=false",
@@ -217,11 +193,12 @@ def build():
             "model_reasoning_effort=" + json.dumps(spec["effort"]),
         ):
             command += ["-c", setting]
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
         completed = False
         report = ""
-        try:
+        with os.fdopen(
+            os.open(capability, os.O_RDWR | os.O_NONBLOCK), "wb", buffering=0
+        ) as writer:
+            writer.write(spec.pop("token").encode("ascii") + b"\n")
             with subprocess.Popen(
                 [*command, "--", "-"],
                 cwd=work,
@@ -243,9 +220,6 @@ def build():
                     if event.get("type") == "turn.failed":
                         completed = False
                 code = client.wait()
-        finally:
-            server.shutdown()
-            thread.join()
         emit(
             {
                 "kind": "result",

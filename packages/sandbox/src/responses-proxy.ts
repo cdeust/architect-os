@@ -9,14 +9,14 @@ export interface ProxyBudget {
   bytes: number;
   seconds: number;
 }
-export interface PipeRequest {
+export interface RelayRequest {
   method: string;
   path: string;
   token: string;
   headers: Record<string, string>;
   body: Buffer;
 }
-export interface PipeResponse {
+export interface RelayResponse {
   start(status: number, headers: Record<string, string>): Promise<void>;
   write(chunk: Uint8Array): Promise<void>;
 }
@@ -171,10 +171,13 @@ export class ResponsesProxy {
   revoke() {
     this.stop.abort();
   }
-  async relay(request: PipeRequest, downstream: PipeResponse): Promise<ResponseReceipt> {
-    if (this.signal.aborted || !timingSafeEqual(this.tokenHash, digest(request.token)))
+  authorize(method: string, path: string, token: string) {
+    if (this.signal.aborted || !timingSafeEqual(this.tokenHash, digest(token)))
       throw Error('RESPONSES_TOKEN');
-    if (request.method !== 'POST' || request.path !== '/v1/responses') throw Error('RESPONSES_ROUTE');
+    if (method !== 'POST' || path !== '/v1/responses') throw Error('RESPONSES_ROUTE');
+  }
+  async relay(request: RelayRequest, downstream: RelayResponse): Promise<ResponseReceipt> {
+    this.authorize(request.method, request.path, request.token);
     if (
       this.busy ||
       this.requests >= this.budget.requests ||

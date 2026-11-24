@@ -17,3 +17,5 @@ Keep provider accounting available when native admission refuses an event. Obser
 A provider terminal and its token counts establish inference. Before releasing its answer to SBX, handle each HTTP control in its own scope and preserve actionable stream notifications. A gateway header cannot authorize a moderation report. Bind the native receipt to the fresh challenge so a result with matching token counts from a different turn cannot qualify.
 
 - Pour un constructeur sous abonnement, distinguer l’installation interactive du Step sans intervention. Vérifier une installation suivie d’un Step dans deux processus et publier les preuves de renouvellement et d’isolation du trousseau.
+
+- Comparer la connectivité du constructeur SBX au profil SRT admis. Mesurer la destination depuis l’UID du client, avec un deuxième serveur effectivement en écoute comme témoin du refus, puis vérifier les règles avant le transfert et après la sortie.

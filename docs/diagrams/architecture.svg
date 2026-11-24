@@ -478,7 +478,7 @@
     <rect x="40" y="2084" width="616" height="132" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
     <text x="53" y="2109" id="sbx-broker-title" font-size="18.5" font-weight="600" fill="#1f2328">SBX account broker</text>
     <text x="53" y="2132" font-size="17" fill="#57606a">The proxy relays native requests to the fixed Responses endpoint.</text>
-    <text x="53" y="2153" font-size="17" fill="#57606a">The account session stays in host memory. Terminal events supply</text>
+    <text x="53" y="2153" font-size="17" fill="#57606a">The host reads the installed grant from the OS store. Terminals supply</text>
     <text x="53" y="2174" font-size="17" fill="#57606a">usage. The host bounds requests, bytes, time and observed tokens.</text>
     <text x="53" y="2195" font-size="17" fill="#57606a">Codex handles provider notifications inside the VM.</text>
   </g>
@@ -520,13 +520,13 @@
   <g id="sbx-native-client" role="group" aria-labelledby="sbx-client-title">
     <rect x="708" y="2121" width="652" height="95" rx="6" fill="#ffffff" stroke="#bf8700"/>
     <text x="721" y="2146" id="sbx-client-title" font-size="18.5" font-weight="600" fill="#1f2328">Native client · unprivileged Linux user</text>
-    <text x="721" y="2169" font-size="17" fill="#57606a">Codex reaches the host over stdin/stdout. Network egress is blocked.</text>
+    <text x="721" y="2169" font-size="17" fill="#57606a">Codex calls the Step proxy over HTTP. npm uses its registry on port 443.</text>
     <text x="721" y="2190" font-size="17" fill="#57606a">The native tool edits the worktree. The host verifies VM removal.</text>
     <text x="721" y="2211" font-size="17" fill="#57606a">Only the Step worktree is a writable host mount.</text>
   </g>
   </g>
     <path id="srt-proxy-pipe" data-from="srt-step-client" data-to="step-auth-proxy" d="M708 1788 H656" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-    <path id="sbx-process-pipes" data-from="sbx-account-broker" data-to="sbx-native-client" d="M656 2167 H708" fill="none" stroke="#57606a" stroke-width="1.5" marker-start="url(#a)" marker-end="url(#a)"/>
+    <path id="sbx-responses-http" data-from="sbx-account-broker" data-to="sbx-native-client" d="M656 2167 H708" fill="none" stroke="#57606a" stroke-width="1.5" marker-start="url(#a)" marker-end="url(#a)"/>
   <g id="step-provider" role="group" aria-labelledby="step-provider-title">
     <rect x="24" y="2249" width="648" height="68" rx="6" fill="#ddf4ff" stroke="#0969da"/>
     <text x="37" y="2274" id="step-provider-title" font-size="18.5" font-weight="600" fill="#1f2328">api.anthropic.com</text>

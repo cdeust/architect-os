@@ -35,8 +35,9 @@ function fixtureVm(
   archive: string,
   kind: string,
 ): typeof withSbxVm {
-  return async (work, pins, deadline, use) => {
+  return async (work, pins, deadline, network, use) => {
     assert.equal(work, request.worktree);
+    assert.equal(network.allowRegistry, true);
     assert.deepEqual(pins, policy);
     assert.equal(deadline, request.config.limitSeconds);
     const name = 'fixture-vm',
@@ -71,15 +72,7 @@ function fixtureVm(
             '/opt/aos-builder/guest.py',
           ],
         ]);
-        assert.deepEqual(args, [
-          '/usr/bin/env',
-          '-i',
-          'PATH=/usr/bin:/bin',
-          '/usr/bin/python3',
-          '-I',
-          '/opt/aos-builder/guest.py',
-          'build',
-        ]);
+        assert.deepEqual(args, ['/usr/bin/python3', '-I', '/opt/aos-builder/guest.py', 'build']);
         const stdin = new PassThrough(),
           stdout = new PassThrough(),
           stderr = new PassThrough(),
@@ -110,121 +103,106 @@ function fixtureVm(
             uid: kind === 'root' ? 0 : 65534,
           },
         };
-        let token = '',
-          phase = 0;
-        let repeat: unknown;
-        stdin.on('data', (buf: Buffer) => {
+        stdin.once('data', (buf: Buffer) => {
+          const f = JSON.parse(buf.toString());
           assert.equal(buf.at(-1), 10);
           assert.ok(stderr.readableFlowing);
           assert.ok(stdin.listenerCount('error') > 0);
-          const f = JSON.parse(buf.toString());
-          if (!token) {
-            token = f.token;
-            assert.match(token, /^[a-zA-Z0-9_-]{43}$/);
-            assert.deepEqual(f, {
+          assert.match(f.token, /^[a-zA-Z0-9_-]{43}$/);
+          assert.equal(f.port, network.port);
+          assert.equal(f.host.split('.')[0], 'host');
+          assert.equal(f.gateway.split('.')[0], 'gateway');
+          assert.deepEqual(f, {
+            host: f.host,
+            gateway: f.gateway,
+            model: request.config.model,
+            effort: request.config.effort,
+            brief: request.brief,
+            systemPrompt: request.systemPrompt,
+            version: policy.clientVersion,
+            digest: policy.clientSha256,
+            token: f.token,
+            port: network.port,
+          });
+          if (kind === 'empty') {
+            close();
+            return;
+          }
+          if (kind === 'oversize') {
+            stdout.write('x'.repeat(4097));
+            return;
+          }
+          if (kind === 'invalid UTF8') {
+            const wire = Buffer.from(JSON.stringify(guest) + '\n');
+            wire[wire.indexOf('fixture report')] = 255;
+            stdout.write(wire);
+            close();
+            return;
+          }
+          if (kind === 'null frame') {
+            send(null);
+            return;
+          }
+          if (kind === 'invalid JSON') {
+            stdout.write('bad\n');
+            return;
+          }
+          if (kind === 'cut frame') {
+            stdout.write('{');
+            close();
+            return;
+          }
+          if (kind === 'extra field') {
+            send({ ...guest, removed: true });
+            return;
+          }
+          if (kind === 'bad request') {
+            send({ kind: 'request' });
+            return;
+          }
+          if (kind === 'no requests') {
+            send(guest);
+            close();
+            return;
+          }
+          if (kind === 'abort during run') controller.abort();
+          void (async () => {
+            const body = JSON.stringify({
               model: request.config.model,
-              effort: request.config.effort,
-              brief: request.brief,
-              systemPrompt: request.systemPrompt,
-              version: policy.clientVersion,
-              digest: policy.clientSha256,
-              token,
+              stream: true,
+              store: false,
+              input: [],
             });
-            const frame = {
-              kind: 'request',
-              method: 'POST',
-              path: '/v1/responses',
-              headers: {},
-              token,
-              body: Buffer.from(
-                JSON.stringify({ model: request.config.model, stream: true, store: false, input: [] }),
-              ).toString('base64'),
-            };
-            if (kind === 'empty') {
-              close();
-              return;
+            const url = 'http://127.0.0.1:' + f.port + '/v1/responses';
+            for (let i = 0; i < (kind === 'mixed terminals' ? 2 : 1); i++) {
+              const res = await fetch(url, {
+                method: 'POST',
+                headers: { authorization: 'Bearer ' + (kind === 'bad token' ? 'wrong' : f.token) },
+                body,
+              });
+              if (kind === 'over budget') {
+                await assert.rejects(res.text(), TypeError);
+                continue;
+              }
+              const text = await res.text();
+              assert.equal(res.status, ['bad token', 'abort during run'].includes(kind) ? 401 : 200);
+              if (res.status === 200) assert.ok(text.includes('response.'));
             }
-            if (kind === 'oversize') {
-              stdout.write('x'.repeat(4097));
-              return;
-            }
-            if (kind === 'invalid UTF8') {
-              const raw = Buffer.from(
-                JSON.stringify({ ...frame, headers: { 'x-unused': 'placeholder' } }) + '\n',
-              );
-              raw[raw.indexOf('placeholder')] = 255;
-              stdout.write(raw);
-              return;
-            }
-            if (kind === 'null frame') {
-              send(null);
-              return;
-            }
-            if (kind === 'frame boundary') {
-              stdout.write(JSON.stringify(frame).padEnd(4096, ' ') + '\n');
-              return;
-            }
-            if (kind === 'invalid JSON') {
-              stdout.write('bad\n');
-              return;
-            }
-            if (kind === 'cut frame') {
-              stdout.write('{');
-              close();
-              return;
-            }
-            if (kind === 'extra field') {
-              send({ ...guest, removed: true });
-              return;
-            }
-            if (kind === 'bad request') {
-              send({ ...frame, body: '%%%' });
-              return;
-            }
-            if (kind === 'no requests') {
-              send(guest);
-              close();
-              return;
-            }
-            if (kind === 'bad token') frame.token = 'bad';
-            if (kind === 'abort during run') controller.abort();
-            if (kind === 'mixed terminals') repeat = frame;
-            const msg = JSON.stringify(frame) + '\n';
-            stdout.write(msg.slice(0, 5));
-            stdout.write(msg.slice(5));
-            return;
-          }
-          if (f.kind === 'headers') {
-            assert.equal(phase++, 0);
-            assert.deepEqual(f, {
-              kind: 'headers',
-              status: 200,
-              headers: { 'content-type': 'text/event-stream' },
-            });
-            return;
-          }
-          if (f.kind === 'chunk') {
-            assert.equal(phase++, 1);
-            assert.ok(Buffer.from(f.data, 'base64').toString().includes('response.'));
-            return;
-          }
-          assert.equal(phase, 2);
-          assert.deepEqual(f, { kind: 'end' });
-          if (repeat) {
-            phase = 0;
-            send(repeat);
-            repeat = undefined;
-            return;
-          }
-          send(guest);
-          if (kind === 'extra frame') send(guest);
-          close(kind === 'bad child exit' ? 1 : 0);
+            if (kind === 'frame boundary') stdout.write(JSON.stringify(guest).padEnd(4096, ' ') + '\n');
+            else send(guest);
+            if (kind === 'extra frame') send(guest);
+            close(kind === 'bad child exit' ? 1 : 0);
+          })().catch((error: Error) => {
+            stdout.destroy(error);
+            close(2);
+          });
         });
         return Object.assign(emitter, {
           stdin,
           stdout,
           stderr,
           kill: (sig: string) => {
+            assert.ok(stdin.destroyed);
             assert.equal(sig, 'SIGKILL');
             killed = true;
             close();
@@ -317,6 +295,7 @@ Given('the {string} builder receives a {string} native session', function (adapt
     if (session === 'elapsed') this.state['fixtureClock'] = () => now;
     const builder = new SbxBuilder(
       {
+        allowRegistry: true,
         policy,
         archive:
           session === 'archive symlink'
@@ -325,7 +304,7 @@ Given('the {string} builder receives a {string} native session', function (adapt
               ? join(worktree, 'archive')
               : archive,
         guestSource: join(PKG, 'sbx/codex-guest.py'),
-        budget: { requests: 2, bytes: 4096, tokens: 14 },
+        budget: { requests: 2, bytes: 4096, tokens: session === 'over budget' ? 6 : 14 },
         access: async (signal) => {
           observed.push(signal);
           return 'fixture';
@@ -439,7 +418,7 @@ Then('a Claude Builder rejects a Codex session before launch', async function ()
   );
 });
 
-Then('the native pipe run finishes with {string}', async function (outcome: string) {
+Then('the native builder run finishes with {string}', async function (outcome: string) {
   const { builder, request } = this.state['builderContract'] as Contract;
   const clock = this.state['fixtureClock'] as (() => number) | undefined;
   const patch = clock ? mock.method(Date, 'now', clock) : undefined;

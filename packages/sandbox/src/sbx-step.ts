@@ -64,6 +64,15 @@ export function accountHost(dir: string, notice?: (url: string) => void): HostAc
     },
   };
 }
+const hostProxy = z.literal('127.0.0.1:${authProxyPort}');
+const builderNetwork = z.object({
+  srt: z.object({
+    network: z.strictObject({
+      allowedDomains: z.union([z.tuple([hostProxy]), z.tuple([hostProxy, z.literal('registry.npmjs.org')])]),
+      deniedDomains: z.tuple([]),
+    }),
+  }),
+});
 const budgetSchema = z.strictObject({
   bytes: z.int().positive(),
   requests: z.int().positive(),
@@ -86,12 +95,14 @@ export async function buildSbxStep(
   const dir = privateStateDirectory(runtime, ['sbx']);
   const budget = budgetSchema.parse(settingJson(readSetting(join(dir, 'limits.json'))));
   const policy = sbxPolicySchema.parse(settingJson(readSetting(join(snapshot, 'sbx/isolation.json'))));
+  const profile = builderNetwork.parse(settingJson(readSetting(join(snapshot, 'profiles/builder.json'))));
   const journal = new StateJournal(runtime, '${state}/sbx/usage.jsonl');
   const model = codexModelSchema.parse(request.config.model);
   const host = accountHost(dir);
   const session = account(host, model, dir);
   try {
     return await builder({
+      allowRegistry: profile.srt.network.allowedDomains[1] === 'registry.npmjs.org',
       policy,
       archive: join(runtime, 'cache', 'sbx', policy.archive),
       guestSource: join(snapshot, 'sbx/codex-guest.py'),

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { Then } from '@cucumber/cucumber';
-import { ResponsesProxy, type PipeRequest, type ResponseReceipt } from '../../src/responses-proxy.js';
+import { ResponsesProxy, type RelayRequest, type ResponseReceipt } from '../../src/responses-proxy.js';
 
 const model = 'gpt-6.2-sol';
 const body = () => ({
@@ -86,7 +86,7 @@ function fixture(kind = 'completed') {
     (r) => log.push(r),
     upstream,
   );
-  const request: PipeRequest = {
+  const request: RelayRequest = {
     method: 'POST',
     path: '/v1/responses',
     token: proxy.token,
@@ -434,3 +434,181 @@ Then('a response with {string} is refused and its source is disposed', async fun
   assert.deepEqual(f.starts, []);
   assert.equal(cancelled, kind === 'empty body' ? 0 : 1);
 });
+
+import { withResponsesHttp } from '../../src/responses-http.js';
+Then('the HTTP Responses listener observes {string} at the host boundary', async function (kind: string) {
+  const f = fixture(kind === 'cut response' ? 'cut' : kind === 'token limit' ? 'token excess' : 'completed');
+  let url = '',
+    canary = '';
+  const response = await withResponsesHttp(f.proxy, f.request.body.length, async ({ port, deniedPort }) => {
+    url = 'http://127.0.0.1:' + port + '/v1/responses';
+    canary = 'http://127.0.0.1:' + deniedPort;
+    assert.equal((await fetch(canary)).status, 204);
+    const headers: Record<string, string> = { 'x-codex-turn-state': 'opaque', cookie: 'private-marker' };
+    if (kind !== 'missing authorization')
+      headers.authorization =
+        (kind === 'wrong scheme' ? 'Absent ' : 'Bearer ') +
+        (kind === 'wrong token' ? 'other' : f.proxy.token);
+    const run = async () => {
+      const response = await fetch(kind === 'unknown route' ? url + '/other' : url, {
+        method: kind === 'other method' ? 'PUT' : 'POST',
+        headers,
+        body:
+          kind === 'bad JSON'
+            ? '{'
+            : kind === 'request too large'
+              ? f.request.body.toString() + ' '
+              : f.request.body.toString(),
+      });
+      const text = await response.text();
+      if (kind === 'native bytes') {
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get('x-codex-safety-buffering-enabled'), 'true');
+        assert.equal(response.headers.get('set-cookie'), null);
+        assert.equal(text, f.responses[0]!.toString());
+        assert.deepEqual(Buffer.from(f.requests[0]!), f.request.body);
+      } else {
+        const expected =
+          kind === 'request too large'
+            ? 413
+            : ['wrong scheme', 'wrong token', 'missing authorization'].includes(kind)
+              ? 401
+              : 403;
+        assert.equal(response.headers.get('connection'), 'close');
+        assert.equal(response.status, expected);
+        assert.equal(text, '');
+      }
+    };
+    if (kind === 'cut response' || kind === 'token limit') await assert.rejects(run(), TypeError);
+    else await run();
+    return 'verified';
+  });
+  assert.equal(response.result, 'verified');
+  assert.equal(
+    response.refused,
+    ['request too large', 'bad JSON', 'cut response', 'token limit'].includes(kind),
+  );
+  assert.equal(f.sent(), ['native bytes', 'cut response', 'token limit'].includes(kind) ? 1 : 0);
+  await assert.rejects(fetch(canary));
+  await assert.rejects(fetch(url));
+  assert.throws(() => f.proxy.authorize('POST', '/v1/responses', f.proxy.token), {
+    message: 'RESPONSES_TOKEN',
+  });
+});
+
+import { request as upload } from 'node:http';
+import { mock } from 'node:test';
+Then(
+  'the Responses listener handles {string} while the first upload is incomplete',
+  async function (operation: string) {
+    const f = fixture();
+    let admit!: () => void;
+    const admitted = new Promise<void>((resolve) => {
+      admit = resolve;
+    });
+    const authorize = f.proxy.authorize.bind(f.proxy);
+    const spy = mock.method(f.proxy, 'authorize', (method: string, path: string, token: string) => {
+      authorize(method, path, token);
+      admit();
+    });
+    let first: ReturnType<typeof upload> | undefined;
+    try {
+      const { refused } = await withResponsesHttp(f.proxy, f.request.body.length, async ({ port }) => {
+        const url = 'http://127.0.0.1:' + port + '/v1/responses';
+        const headers = { authorization: 'Bearer ' + f.proxy.token, 'x-codex-turn-state': 'opaque' };
+        let finish!: (status: number) => void;
+        const finished = new Promise<number>((resolve) => {
+          finish = resolve;
+        });
+        first = upload(url, { method: 'POST', headers }, (res) => {
+          res.resume();
+          res.on('end', () => finish(res.statusCode!));
+        });
+        first.on('error', () => finish(0));
+        first.write(f.request.body);
+        await admitted;
+        if (operation === 'concurrent request') {
+          const busy = await fetch(url, { method: 'POST', headers, body: '{}' });
+          assert.equal(busy.status, 429);
+          assert.equal(await busy.text(), '');
+          first.end();
+          assert.equal(await finished, 200);
+        }
+      });
+      assert.equal(refused, operation === 'builder exits');
+      assert.equal(f.sent(), operation === 'concurrent request' ? 1 : 0);
+    } finally {
+      first?.destroy();
+      spy.mock.restore();
+    }
+  },
+);
+
+import { Server as TcpServer } from 'node:net';
+import { Server as HttpServer } from 'node:http';
+Then('the host binds and tears down both Step listeners on loopback', async function () {
+  const f = fixture();
+  const bind = mock.method(TcpServer.prototype, 'listen'),
+    close = mock.method(HttpServer.prototype, 'closeAllConnections');
+  try {
+    const servers = await withResponsesHttp(f.proxy, 4096, async (net) => net);
+    assert.notEqual(servers.result.port, servers.result.deniedPort);
+    assert.deepEqual(
+      bind.mock.calls.map((c) => c.arguments),
+      [
+        [0, '127.0.0.1'],
+        [0, '127.0.0.1'],
+      ],
+    );
+    assert.deepEqual(
+      new Set(close.mock.calls.map((c) => c.this)),
+      new Set(bind.mock.calls.map((c) => c.this)),
+    );
+  } finally {
+    bind.mock.restore();
+    close.mock.restore();
+  }
+});
+Then(
+  'the HTTP relay delivers headers before the first provider chunk and omits an absent turn state',
+  async function () {
+    const f = fixture();
+    f.proxy.revoke();
+    let stream!: ReadableStreamDefaultController<Uint8Array>;
+    const signal = AbortSignal.timeout(3000);
+    const proxy = new ResponsesProxy(
+      model,
+      { seconds: 5, bytes: 4096, requests: 1, tokens: 5 },
+      async () => 'fixture',
+      () => {},
+      async (_url, init) => {
+        assert.equal(new Headers(init!.headers).has('x-codex-turn-state'), false);
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              stream = controller;
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        );
+      },
+    );
+    await withResponsesHttp(proxy, 4096, async ({ port }) => {
+      try {
+        const reply = await fetch('http://127.0.0.1:' + port + '/v1/responses', {
+          method: 'POST',
+          headers: { authorization: 'Bearer ' + proxy.token },
+          body: f.request.body.toString(),
+          signal,
+        });
+        assert.equal(reply.status, 200);
+        const expected = terminal('completed');
+        stream.enqueue(Buffer.from(expected));
+        stream.close();
+        assert.equal(await reply.text(), expected);
+      } finally {
+        if (stream?.desiredSize !== 0) stream?.error();
+      }
+    });
+  },
+);

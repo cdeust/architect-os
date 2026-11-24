@@ -398,7 +398,7 @@ Then(
     };
     const spies: { mock: { restore(): void } }[] = [];
     try {
-      for (const path of [state, join(snapshot, 'sbx'), work])
+      for (const path of [state, join(snapshot, 'sbx'), join(snapshot, 'profiles'), work])
         mkdirSync(path, { recursive: true, mode: 0o700 });
       const pin = JSON.parse(readFileSync(join(PKG, 'sbx/isolation.json'), 'utf8'));
       writeFileSync(join(snapshot, 'sbx/isolation.json'), JSON.stringify(kind === 'broken pin' ? {} : pin), {
@@ -425,6 +425,10 @@ Then(
           join(state, 'registration.json'),
           kind === 'invalid registration' ? '' : JSON.stringify(reg),
           { mode: 0o600 },
+      const builderProfile = JSON.parse(readFileSync(join(PKG, 'profiles/builder.json'), 'utf8'));
+      if (kind === 'no registry') builderProfile.srt.network.allowedDomains.pop();
+      if (kind === 'unrecognized route') builderProfile.srt.network.allowedDomains.push('example.com');
+      writeFileSync(join(snapshot, 'profiles/builder.json'), JSON.stringify(builderProfile), { mode: 0o400 });
         );
       if (kind === 'public registration')
         writeFileSync(join(state, 'registration.json'), JSON.stringify(reg), { mode: 0o644 });
@@ -520,7 +524,15 @@ Then(
                 },
               }),
         );
-      if (['new installation', 'existing registration', 'sibling launcher', 'padded host'].includes(kind)) {
+      if (
+        [
+          'new installation',
+          'existing registration',
+          'sibling launcher',
+          'padded host',
+          'no registry',
+        ].includes(kind)
+      ) {
         assert.equal(await run(), result);
         assert.deepEqual(JSON.parse(readFileSync(join(state, 'registration.json'), 'utf8')), reg);
         assert.equal(readFileSync(join(state, 'usage.jsonl'), 'utf8'), JSON.stringify(receipt) + '\n');
@@ -536,6 +548,7 @@ Then(
       else if (kind === 'invalid limits' || kind === 'invalid registration')
         await assert.rejects(run(), { message: 'SBX_INVALID_SETTING' });
       else await assert.rejects(run());
+                  assert.equal(settings.allowRegistry, kind !== 'no registry');
       for (const call of write.mock.calls) {
         const [file, , options] = call.arguments;
         if (
