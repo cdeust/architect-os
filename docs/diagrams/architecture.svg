@@ -1,435 +1,446 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 5016.5" width="1400" height="5016.5" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 5860.5" width="1400" height="5860.5" role="img" aria-labelledby="t d" font-family="Arial">
+  <!--
+  Typography (SVG units)
+  family = Arial
+  diagram-title = 32
+  section-title = 25
+  brick-name = 20
+  brick-text = 17
+  badge = 17
+  legend = 17
+  -->
   <title id="t">architect-os: what is ready, and where what comes next will join</title>
-  <desc id="d">The architecture of architect-os in one image, in five parts. Ready marks components implemented in this version. Next marks planned work or pending integration beside the brick it will join. 1. The native gateway authenticates each client on loopback and routes its calls to modules and task workers. The gateway starts the data process and the model broker on standard input and output. Only data holds the database URL. Only the model broker holds the API key. A module calls back with its call ID. A worker can reach only the broker and uses a token scoped to its task. 2. Define reads a validated prd-gen handoff over MCP. The admitted planning host can drive a pinned Spec bundle through drafting and independent review and resume from its private journal. Plan accepts the verified Spec proposal or a draft from Claude Code, Codex or Antigravity. It can also import a completed Antigravity exchange. Plan previews one Step. A plain proposal can be materialized with local approval. The independently reviewed Spec projection stops at preview. Step verifies a separate host receipt for its inputs, target tree, launcher, independent reviews and prompt specimens. The host verifies scout citations against repository lines before including them in the Builder brief. The orchestration loop takes a brief, those verified facts, a build session, checks without a model, the replay of the host, reviews that cannot write the worktree, the gate, and the delivery of the same commit to the branch and then to main; after a refusal, the orchestrator writes a new brief; the host writes steps/&lt;name&gt;/ into the worktree. Production Step runs Claude Code under SRT or Codex in a separate Docker SBX Linux VM. Offline Astra and Sol Steps produced a file through a native tool, passed a checker and published a reviewed record. Gemini reviews through the native Google agent outside SBX. The historical Antigravity probe stopped at session creation. In trial 9, the account owner authorized the host once. The host renewed the account-bound grant once and checked the account catalog twice. The pinned Codex client calculated a different checksum in each of two fresh VMs. Both commands exited 0 and the host verified both results. For a third VM, the host sent one Astra subscription request. The provider completed the response and reported 39 input and 31 output tokens. The host withheld the text because it could not interpret the moderation report. Codex exited 1. The host found all three workspaces empty after shutdown. Six of the nine single-request trials yielded a provider completion with measured token usage. Monetary cost is unknown. The production adapter relays native requests and model notifications. An offline native tool wrote its target file. The live Step patch awaits owner consent. 3. The isolation diagram places the host beside two separate runtimes. SRT isolates production Step sessions and the gateway’s modules and workers in OS processes under five profiles. Docker SBX creates a Linux VM for the native Builder. Its unprivileged native client exchanges requests and responses with the host over standard input and output. The host holds the account-bound grant in memory and verifies the account on renewal. The native client handles provider notifications. The host meters terminal usage and verifies VM removal. The Builder writes the worktree while the host controls Git metadata. The authentication proxy on the host gives the Claude session a scoped token so the credential stays on the host throughout the session. The required ./aos entry checks the marked runtime root and the available space on the root and home filesystems before npm, then records admission in the new run directory. Repository automation uses this entry. All five profiles use private session directories. The host retains Step results and journals under the root and writes raw streams to the run temporary directory. Gate locks each physical checkout, writes to its run reports directory, and retains the checked Linux receipt for Deliver. A canary under the same profile must fail before each command. What each profile opens is the generated image isolation-profiles.svg, held equal to the five profile files by the gate. 4. Five checks before the gate, then the host gate and npm run deliver. In CI, Linux splits the full scenario suite into two shards and checks mutants in sixteen lanes with independent replay. macOS runs the sandbox scenarios. 5. The evidence desk verifies each DOI at doi.org and matches normalized passages in the supplied full text; the watch of Anthropic compares the public sources the platform relies on with a committed register.</desc>
+  <desc id="d">The architecture of architect-os in one image, in five parts. Ready marks components implemented in this version. Next marks planned work or pending integration beside the brick it will join. 1. The native gateway authenticates each client on loopback and routes its calls to modules and task workers. The gateway starts the data process and the model broker on standard input and output. Only data holds the database URL. Only the model broker holds the API key. A module calls back with its call ID. A worker can reach only the broker and uses a token scoped to its task. 2. Define reads a validated prd-gen handoff over MCP. The admitted planning host can drive a pinned Spec bundle through drafting and independent review and resume from its private journal. Plan accepts the verified Spec proposal or a draft from Claude Code, Codex or Antigravity. It can also import a completed Antigravity exchange. Plan previews one Step. A plain proposal can be materialized with local approval. The independently reviewed Spec projection stops at preview. Step verifies a separate host receipt for its inputs, target tree, launcher, independent reviews and prompt specimens. The host verifies scout citations against repository lines before including them in the Builder brief. The orchestration loop takes a brief, those verified facts, a build session, checks without a model, the replay of the host, reviews that cannot write the worktree, the gate, and the delivery of the same commit to the branch and then to main; after a refusal, the orchestrator writes a new brief; the host writes steps/&lt;name&gt;/ into the worktree. Step builds through one typed Builder port with two adapters: Claude Code under SRT, and the pinned Codex 0.170.0 client in a Docker SBX Linux VM for Astra and Sol. On macOS, the real production entry ran both Steps with the real client under an unprivileged user. The native tool wrote the file in the worktree, the SRT checker read it, and the host published a record with the model, effort, client digest and terminal usage. The test processes simulated the identity service and the model responses, and the Claude review was a recorded stream. The subscription is installed once and kept in the host credential store between Steps. The macOS Keychain was exercised by two processes, with one renewal for two concurrent consumers, and a Step without an account stopped with SBX_SIGN_IN_REQUIRED. The VM reaches the Step proxy on the host and the npm registry. A second listening port received nothing and a request outside the route was refused. The open trial is a production Step whose patch the real model chooses on the subscription. The Linux Secret Service store is not yet verified and the monetary cost is unknown. Gemini reviews through the native Google agent outside SBX. The historical Antigravity probe stopped at session creation. Nine earlier single-request trials ran the text-only bench protocol; six provider completions reported 402 tokens. 3. The isolation diagram places the host beside two separate runtimes. SRT isolates production Step sessions and the gateway’s modules and workers in OS processes under five profiles. Docker SBX creates a Linux VM for the native Builder. Its unprivileged native client posts to the Step proxy on the host over HTTP and reaches the npm registry; any other port or destination is refused. The host keeps the subscription in its OS credential store between Steps, renews it and verifies the account. The host meters terminal usage and verifies VM removal. The Builder writes the worktree while the host controls Git metadata. The authentication proxy on the host gives the Claude session a scoped token so the credential stays on the host throughout the session. The required ./aos entry checks the marked runtime root and the available space on the root and home filesystems before npm, then records admission in the new run directory. Repository automation uses this entry. All five profiles use private session directories. The host retains Step results and journals under the root and writes raw streams to the run temporary directory. Gate locks each physical checkout, writes to its run reports directory, and retains the checked Linux receipt for Deliver. A canary under the same profile must fail before each command. What each profile opens is the generated image isolation-profiles.svg, held equal to the five profile files by the gate. 4. Five checks before the gate, then the host gate and npm run deliver. In CI, Linux splits the full scenario suite into two shards and checks mutants in sixteen lanes with independent replay. macOS runs the sandbox scenarios. 5. The evidence desk verifies each DOI at doi.org and matches normalized passages in the supplied full text; the watch of Anthropic compares the public sources the platform relies on with a committed register.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
     <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#cf222e"/></marker>
     <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1a7f37"/></marker>
   </defs>
-  <rect x="0.5" y="0.5" width="1399" height="5015.5" rx="10" fill="#ffffff" stroke="#d0d7de"/>
-  <text x="24" y="38" font-size="20" font-weight="600" fill="#1f2328">architect-os: what is ready, and where what comes next will join</text>
-  <rect x="24.0" y="52.0" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="47.0" y="64.5" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="78.0" y="64.0" font-size="12" fill="#57606a">implemented</text>
-  <rect x="210.0" y="52.0" width="40.0" height="17.0" rx="8.5" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="230.0" y="64.5" font-size="10.5" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="258.0" y="64.0" font-size="12" fill="#57606a">planned or pending integration into main; beside the brick it will join</text>
-  <rect x="700.0" y="52.0" width="14.0" height="14.0" rx="3" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="720.0" y="64.0" font-size="12" fill="#57606a">on the host</text>
-  <rect x="810.0" y="52.0" width="14.0" height="14.0" rx="3" fill="#fff8e1" stroke="#bf8700"/>
-  <text x="830.0" y="64.0" font-size="12" fill="#57606a">inside an isolation boundary (SRT process or Docker SBX VM)</text>
+  <rect x="0.5" y="0.5" width="1399" height="5859.5" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="24" y="40" data-type-role="diagram-title" font-size="32" font-weight="600" fill="#1f2328">architect-os: what is ready, and where what comes next will join</text>
+  <rect x="24" y="49" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="56" y="67" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="98" y="66" data-type-role="legend" font-size="17" fill="#57606a">implemented</text>
+  <rect x="231.327" y="49" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="258.327" y="67" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="295.327" y="66" data-type-role="legend" font-size="17" fill="#57606a">planned, or pending integration into main</text>
+  <rect x="643.435" y="51" width="18" height="18" rx="3" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="669.435" y="66" data-type-role="legend" font-size="17" fill="#57606a">on the host</text>
+  <rect x="793.555" y="51" width="18" height="18" rx="3" fill="#fff8e1" stroke="#bf8700"/>
+  <text x="819.555" y="66" data-type-role="legend" font-size="17" fill="#57606a">inside an isolation boundary (SRT process or Docker SBX VM)</text>
   <line x1="24" y1="78" x2="1376" y2="78" stroke="#d0d7de"/>
   <g id="gateway-call" role="group" aria-labelledby="gateway-title">
-    <text x="24" y="113" font-size="25" id="gateway-title" font-weight="600" fill="#1f2328">1 · Serving a call through the native gateway</text>
-    <text x="24" y="146" font-size="18.5" fill="#57606a">Modules, data and the broker speak MCP over stdio. Section 3 shows where each process runs.</text>
+    <text x="24" y="113" data-type-role="section-title" font-size="25" id="gateway-title" font-weight="600" fill="#1f2328">1 · Serving a call through the native gateway</text>
+    <text x="24" y="146" data-type-role="brick-text" font-size="17" fill="#57606a">Modules, data and the broker speak MCP over stdio. Section 3 shows where each process runs.</text>
     <g id="gateway-client" role="group" aria-labelledby="gateway-client-title">
       <rect x="24" y="190" width="196" height="128" rx="6" fill="#ffffff" stroke="#8c959f"/>
-      <text id="gateway-client-title" x="37" y="219" font-size="19" font-weight="600" fill="#1f2328">Client</text>
-      <text x="37" y="248" font-size="17" fill="#57606a">MCP over HTTP</text>
-      <text x="37" y="271" font-size="17" fill="#57606a">Bearer token</text>
-      <text x="37" y="294" font-size="17" fill="#57606a">Recall and remember</text>
+      <text id="gateway-client-title" x="37" y="219" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Client</text>
+      <text x="37" y="248" data-type-role="brick-text" font-size="17" fill="#57606a">MCP over HTTP</text>
+      <text x="37" y="271" data-type-role="brick-text" font-size="17" fill="#57606a">Bearer token</text>
+      <text x="37" y="294" data-type-role="brick-text" font-size="17" fill="#57606a">Recall and remember</text>
     </g>
     <g id="gateway-service" role="group" aria-labelledby="gateway-service-title">
       <rect x="314" y="190" width="407" height="197" rx="6" fill="#f6f8fa" stroke="#0969da"/>
-      <text id="gateway-service-title" x="327" y="219" font-size="19" font-weight="600" fill="#0969da">Gateway</text>
-      <text x="327" y="248" font-size="17" fill="#57606a">Authenticates callers, applies quotas and</text>
-      <text x="327" y="271" font-size="17" fill="#57606a">audits each call. Opens one task per call.</text>
-      <text x="327" y="294" font-size="17" fill="#57606a">Routes tools. Runs no agent and reads no data.</text>
-      <text x="327" y="317" font-size="17" fill="#57606a">Starts its children before listening on loopback.</text>
-      <text x="327" y="340" font-size="17" fill="#57606a">On shutdown, closes tasks, drains their audit</text>
-      <text x="327" y="363" font-size="17" fill="#57606a">entries and stops modules.</text>
+      <text id="gateway-service-title" x="327" y="219" data-type-role="brick-name" font-size="20" font-weight="600" fill="#0969da">Gateway</text>
+      <text x="327" y="248" data-type-role="brick-text" font-size="17" fill="#57606a">Authenticates callers, applies quotas and</text>
+      <text x="327" y="271" data-type-role="brick-text" font-size="17" fill="#57606a">audits each call. Opens one task per call.</text>
+      <text x="327" y="294" data-type-role="brick-text" font-size="17" fill="#57606a">Routes tools. Runs no agent and reads no data.</text>
+      <text x="327" y="317" data-type-role="brick-text" font-size="17" fill="#57606a">Starts its children before listening on loopback.</text>
+      <text x="327" y="340" data-type-role="brick-text" font-size="17" fill="#57606a">On shutdown, closes tasks, drains their audit</text>
+      <text x="327" y="363" data-type-role="brick-text" font-size="17" fill="#57606a">entries and stops modules.</text>
       <rect x="642" y="198" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-      <text x="676" y="215" font-size="16" text-anchor="middle" font-weight="600" fill="#1a7f37">ready</text>
+      <text x="676" y="215" data-type-role="badge" font-size="17" text-anchor="middle" font-weight="600" fill="#1a7f37">ready</text>
     </g>
     <g id="gateway-module" role="group" aria-labelledby="gateway-module-title">
       <rect x="854" y="190" width="522" height="155" rx="6" fill="#ffffff" stroke="#bf8700"/>
-      <text id="gateway-module-title" x="867" y="219" font-size="19" font-weight="600" fill="#1f2328">Module</text>
-      <text x="867" y="248" font-size="17" fill="#57606a">Starts on its first call. A tool or agent front end calls</text>
-      <text x="867" y="271" font-size="17" fill="#57606a">back with the call ID. The gateway supplies its task and</text>
-      <text x="867" y="294" font-size="17" fill="#57606a">subject. The manifest limits tables and module calls.</text>
-      <text x="867" y="317" font-size="17" fill="#57606a">The memory module uses this path.</text>
+      <text id="gateway-module-title" x="867" y="219" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Module</text>
+      <text x="867" y="248" data-type-role="brick-text" font-size="17" fill="#57606a">Starts on its first call. A tool or agent front end calls</text>
+      <text x="867" y="271" data-type-role="brick-text" font-size="17" fill="#57606a">back with the call ID. The gateway supplies its task and</text>
+      <text x="867" y="294" data-type-role="brick-text" font-size="17" fill="#57606a">subject. The manifest limits tables and module calls.</text>
+      <text x="867" y="317" data-type-role="brick-text" font-size="17" fill="#57606a">The memory module uses this path.</text>
       <rect x="1297" y="198" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-      <text x="1331" y="215" font-size="16" text-anchor="middle" font-weight="600" fill="#1a7f37">ready</text>
+      <text x="1331" y="215" data-type-role="badge" font-size="17" text-anchor="middle" font-weight="600" fill="#1a7f37">ready</text>
     </g>
     <g id="gateway-worker" role="group" aria-labelledby="gateway-worker-title">
       <rect x="854" y="387" width="522" height="166" rx="6" fill="#ffffff" stroke="#bf8700"/>
-      <text id="gateway-worker-title" x="867" y="416" font-size="19" font-weight="600" fill="#1f2328">Worker</text>
-      <text x="867" y="445" font-size="17" fill="#57606a">Runs agents/&lt;name&gt;.md once per run and stops with</text>
-      <text x="867" y="468" font-size="17" fill="#57606a">its task. The gateway relays its tools and enforces the</text>
-      <text x="867" y="491" font-size="17" fill="#57606a">module allowlist, deadline, call depth and turn limits.</text>
-      <text x="867" y="514" font-size="17" fill="#57606a">One task token reaches the broker. The worker has</text>
-      <text x="867" y="537" font-size="17" fill="#57606a">no database route or API key.</text>
+      <text id="gateway-worker-title" x="867" y="416" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Worker</text>
+      <text x="867" y="445" data-type-role="brick-text" font-size="17" fill="#57606a">Runs agents/&lt;name&gt;.md once per run and stops with</text>
+      <text x="867" y="468" data-type-role="brick-text" font-size="17" fill="#57606a">its task. The gateway relays its tools and enforces the</text>
+      <text x="867" y="491" data-type-role="brick-text" font-size="17" fill="#57606a">module allowlist, deadline, call depth and turn limits.</text>
+      <text x="867" y="514" data-type-role="brick-text" font-size="17" fill="#57606a">One task token reaches the broker. The worker has</text>
+      <text x="867" y="537" data-type-role="brick-text" font-size="17" fill="#57606a">no database route or API key.</text>
       <rect x="1297" y="395" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-      <text x="1331" y="412" font-size="16" text-anchor="middle" font-weight="600" fill="#1a7f37">ready</text>
+      <text x="1331" y="412" data-type-role="badge" font-size="17" text-anchor="middle" font-weight="600" fill="#1a7f37">ready</text>
     </g>
     <g id="gateway-data" role="group" aria-labelledby="gateway-data-title">
       <rect x="24" y="448" width="342" height="166" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-      <text id="gateway-data-title" x="37" y="477" font-size="19" font-weight="600" fill="#1f2328">Data</text>
-      <text x="37" y="506" font-size="17" fill="#57606a">Stores memories, usage and task records.</text>
-      <text x="37" y="529" font-size="17" fill="#57606a">Its PostgreSQL URL stays in this process.</text>
-      <text x="37" y="552" font-size="17" fill="#57606a">It also supports an in-memory store.</text>
-      <text x="37" y="575" font-size="17" fill="#57606a">Accepts typed operations and closes</text>
-      <text x="37" y="598" font-size="17" fill="#57606a">when the gateway closes its stdin.</text>
+      <text id="gateway-data-title" x="37" y="477" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Data</text>
+      <text x="37" y="506" data-type-role="brick-text" font-size="17" fill="#57606a">Stores memories, usage and task records.</text>
+      <text x="37" y="529" data-type-role="brick-text" font-size="17" fill="#57606a">Its PostgreSQL URL stays in this process.</text>
+      <text x="37" y="552" data-type-role="brick-text" font-size="17" fill="#57606a">It also supports an in-memory store.</text>
+      <text x="37" y="575" data-type-role="brick-text" font-size="17" fill="#57606a">Accepts typed operations and closes</text>
+      <text x="37" y="598" data-type-role="brick-text" font-size="17" fill="#57606a">when the gateway closes its stdin.</text>
       <rect x="287" y="456" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-      <text x="321" y="473" font-size="16" text-anchor="middle" font-weight="600" fill="#1a7f37">ready</text>
+      <text x="321" y="473" data-type-role="badge" font-size="17" text-anchor="middle" font-weight="600" fill="#1a7f37">ready</text>
     </g>
     <g id="gateway-broker" role="group" aria-labelledby="gateway-broker-title">
       <rect x="416" y="448" width="326" height="166" rx="6" fill="#f6f8fa" stroke="#cf222e"/>
-      <text id="gateway-broker-title" x="429" y="477" font-size="19" font-weight="600" fill="#cf222e">Model broker</text>
-      <text x="429" y="506" font-size="17" fill="#57606a">Reads its config and optional CA.</text>
-      <text x="429" y="529" font-size="17" fill="#57606a">Only this broker holds the API key.</text>
-      <text x="429" y="552" font-size="17" fill="#57606a">The gateway grants and revokes task</text>
-      <text x="429" y="575" font-size="17" fill="#57606a">tokens. The broker logs usage for each</text>
-      <text x="429" y="598" font-size="17" fill="#57606a">answer without logging its content.</text>
+      <text id="gateway-broker-title" x="429" y="477" data-type-role="brick-name" font-size="20" font-weight="600" fill="#cf222e">Model broker</text>
+      <text x="429" y="506" data-type-role="brick-text" font-size="17" fill="#57606a">Reads its config and optional CA.</text>
+      <text x="429" y="529" data-type-role="brick-text" font-size="17" fill="#57606a">Only this broker holds the API key.</text>
+      <text x="429" y="552" data-type-role="brick-text" font-size="17" fill="#57606a">The gateway grants and revokes task</text>
+      <text x="429" y="575" data-type-role="brick-text" font-size="17" fill="#57606a">tokens. The broker logs usage for each</text>
+      <text x="429" y="598" data-type-role="brick-text" font-size="17" fill="#57606a">answer without logging its content.</text>
       <rect x="663" y="456" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-      <text x="697" y="473" font-size="16" text-anchor="middle" font-weight="600" fill="#1a7f37">ready</text>
+      <text x="697" y="473" data-type-role="badge" font-size="17" text-anchor="middle" font-weight="600" fill="#1a7f37">ready</text>
     </g>
     <g id="gateway-api" role="group" aria-labelledby="gateway-api-title">
       <rect x="824" y="582" width="552" height="78" rx="6" fill="#ddf4ff" stroke="#0969da"/>
-      <text id="gateway-api-title" x="837" y="611" font-size="19" font-weight="600" fill="#1f2328">api.anthropic.com</text>
-      <text x="837" y="640" font-size="17" fill="#57606a">POST /v1/messages and /v1/messages/count_tokens</text>
+      <text id="gateway-api-title" x="837" y="611" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">api.anthropic.com</text>
+      <text x="837" y="640" data-type-role="brick-text" font-size="17" fill="#57606a">POST /v1/messages and /v1/messages/count_tokens</text>
     </g>
     <path id="call-http" data-from="gateway-client" data-to="gateway-service" d="M220 251 H314" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-    <text x="267" y="239" font-size="17" text-anchor="middle" fill="#57606a">HTTP</text>
+    <text x="267" y="239" data-type-role="brick-text" font-size="17" text-anchor="middle" fill="#57606a">HTTP</text>
     <path id="call-module-stdio" data-from="gateway-service" data-to="gateway-module" d="M721 236 H854" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-    <text x="788" y="224" font-size="17" text-anchor="middle" fill="#57606a">stdio</text>
+    <text x="788" y="224" data-type-role="brick-text" font-size="17" text-anchor="middle" fill="#57606a">stdio</text>
     <path id="call-module-callback" data-from="gateway-module" data-to="gateway-service" d="M854 301 H721" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-    <text x="788" y="289" font-size="17" text-anchor="middle" fill="#57606a">callback</text>
+    <text x="788" y="289" data-type-role="brick-text" font-size="17" text-anchor="middle" fill="#57606a">callback</text>
     <path id="call-worker-stdio" data-from="gateway-service" data-to="gateway-worker" d="M721 364 H790 V415 H854" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-    <text x="823" y="403" font-size="17" text-anchor="middle" fill="#57606a">stdio</text>
+    <text x="823" y="403" data-type-role="brick-text" font-size="17" text-anchor="middle" fill="#57606a">stdio</text>
     <path id="call-data-stdio" data-from="gateway-service" data-to="gateway-data" d="M340 387 V448" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-    <text x="301" y="422" font-size="17" text-anchor="middle" fill="#57606a">stdio</text>
+    <text x="301" y="422" data-type-role="brick-text" font-size="17" text-anchor="middle" fill="#57606a">stdio</text>
     <path id="call-broker-stdio" data-from="gateway-service" data-to="gateway-broker" d="M558 387 V448" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-    <text x="595" y="422" font-size="17" text-anchor="middle" fill="#57606a">stdio</text>
+    <text x="595" y="422" data-type-role="brick-text" font-size="17" text-anchor="middle" fill="#57606a">stdio</text>
     <path id="worker-token" data-from="gateway-worker" data-to="gateway-broker" d="M854 516 H742" fill="none" stroke="#cf222e" stroke-width="1.5" marker-end="url(#r)"/>
-    <text x="798" y="503" font-size="17" text-anchor="middle" fill="#cf222e">task token</text>
+    <text x="798" y="503" data-type-role="brick-text" font-size="17" text-anchor="middle" fill="#cf222e">task token</text>
     <path id="broker-upstream" data-from="gateway-broker" data-to="gateway-api" d="M579 614 V636 H824" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-    <text x="702" y="657" font-size="17" text-anchor="middle" fill="#57606a">HTTPS</text>
-    <text x="24" y="694" font-size="19" font-weight="600" fill="#1f2328">Extensions and qualification</text>
+    <text x="702" y="657" data-type-role="brick-text" font-size="17" text-anchor="middle" fill="#57606a">HTTPS</text>
+    <text x="24" y="694" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Extensions and qualification</text>
     <g id="gateway-governance" role="group" aria-labelledby="gateway-governance-title">
       <rect x="24" y="713" width="324" height="160" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-      <text id="gateway-governance-title" x="37" y="742" font-size="19" font-weight="600" fill="#1f2328">Client governance</text>
-      <text x="37" y="771" font-size="17" fill="#57606a">Managed settings and a validated</text>
-      <text x="37" y="794" font-size="17" fill="#57606a">catalogue. Rights follow each client.</text>
-      <text x="37" y="817" font-size="17" fill="#57606a">Promote packages on evidence and</text>
-      <text x="37" y="840" font-size="17" fill="#57606a">prune unused entries.</text>
+      <text id="gateway-governance-title" x="37" y="742" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Client governance</text>
+      <text x="37" y="771" data-type-role="brick-text" font-size="17" fill="#57606a">Managed settings and a validated</text>
+      <text x="37" y="794" data-type-role="brick-text" font-size="17" fill="#57606a">catalogue. Rights follow each client.</text>
+      <text x="37" y="817" data-type-role="brick-text" font-size="17" fill="#57606a">Promote packages on evidence and</text>
+      <text x="37" y="840" data-type-role="brick-text" font-size="17" fill="#57606a">prune unused entries.</text>
       <rect x="278" y="721" width="59" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-      <text x="307.5" y="738" font-size="16" text-anchor="middle" font-weight="600" fill="#0969da">next</text>
+      <text x="307.5" y="738" data-type-role="badge" font-size="17" text-anchor="middle" font-weight="600" fill="#0969da">next</text>
     </g>
     <g id="gateway-budget" role="group" aria-labelledby="gateway-budget-title">
       <rect x="363" y="713" width="324" height="160" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-      <text id="gateway-budget-title" x="376" y="742" font-size="19" font-weight="600" fill="#1f2328">Per-client spending</text>
-      <text x="376" y="771" font-size="17" fill="#57606a">Limit models, spend and request</text>
-      <text x="376" y="794" font-size="17" fill="#57606a">count per task token. Measure usage,</text>
-      <text x="376" y="817" font-size="17" fill="#57606a">cost by model and cost per accepted</text>
-      <text x="376" y="840" font-size="17" fill="#57606a">task for each client.</text>
+      <text id="gateway-budget-title" x="376" y="742" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Per-client spending</text>
+      <text x="376" y="771" data-type-role="brick-text" font-size="17" fill="#57606a">Limit models, spend and request</text>
+      <text x="376" y="794" data-type-role="brick-text" font-size="17" fill="#57606a">count per task token. Measure usage,</text>
+      <text x="376" y="817" data-type-role="brick-text" font-size="17" fill="#57606a">cost by model and cost per accepted</text>
+      <text x="376" y="840" data-type-role="brick-text" font-size="17" fill="#57606a">task for each client.</text>
       <rect x="617" y="721" width="59" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-      <text x="646.5" y="738" font-size="16" text-anchor="middle" font-weight="600" fill="#0969da">next</text>
+      <text x="646.5" y="738" data-type-role="badge" font-size="17" text-anchor="middle" font-weight="600" fill="#0969da">next</text>
     </g>
     <g id="gateway-orchestration" role="group" aria-labelledby="gateway-orchestration-title">
       <rect x="702" y="713" width="324" height="160" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-      <text id="gateway-orchestration-title" x="715" y="742" font-size="19" font-weight="600" fill="#1f2328">Step orchestration</text>
-      <text x="715" y="771" font-size="17" fill="#57606a">Run the orchestrator as a gateway</text>
-      <text x="715" y="794" font-size="17" fill="#57606a">service. Move Step state from the</text>
-      <text x="715" y="817" font-size="17" fill="#57606a">host folder into the data module.</text>
+      <text id="gateway-orchestration-title" x="715" y="742" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Step orchestration</text>
+      <text x="715" y="771" data-type-role="brick-text" font-size="17" fill="#57606a">Run the orchestrator as a gateway</text>
+      <text x="715" y="794" data-type-role="brick-text" font-size="17" fill="#57606a">service. Move Step state from the</text>
+      <text x="715" y="817" data-type-role="brick-text" font-size="17" fill="#57606a">host folder into the data module.</text>
       <rect x="956" y="721" width="59" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-      <text x="985.5" y="738" font-size="16" text-anchor="middle" font-weight="600" fill="#0969da">next</text>
+      <text x="985.5" y="738" data-type-role="badge" font-size="17" text-anchor="middle" font-weight="600" fill="#0969da">next</text>
     </g>
     <g id="gateway-distribution" role="group" aria-labelledby="gateway-distribution-title">
       <rect x="1041" y="713" width="335" height="160" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-      <text id="gateway-distribution-title" x="1054" y="742" font-size="19" font-weight="600" fill="#1f2328">Module distribution</text>
-      <text x="1054" y="771" font-size="17" fill="#57606a">Marketplace, catalogue, code front,</text>
-      <text x="1054" y="794" font-size="17" fill="#57606a">memory split and server deployment.</text>
-      <text x="1054" y="817" font-size="17" fill="#57606a">Pin packages in the topology. Git</text>
-      <text x="1054" y="840" font-size="17" fill="#57606a">submodules remain an open option.</text>
+      <text id="gateway-distribution-title" x="1054" y="742" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Module distribution</text>
+      <text x="1054" y="771" data-type-role="brick-text" font-size="17" fill="#57606a">Marketplace, catalogue, code front,</text>
+      <text x="1054" y="794" data-type-role="brick-text" font-size="17" fill="#57606a">memory split and server deployment.</text>
+      <text x="1054" y="817" data-type-role="brick-text" font-size="17" fill="#57606a">Pin packages in the topology. Git</text>
+      <text x="1054" y="840" data-type-role="brick-text" font-size="17" fill="#57606a">submodules remain an open option.</text>
       <rect x="1306" y="721" width="59" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-      <text x="1335.5" y="738" font-size="16" text-anchor="middle" font-weight="600" fill="#0969da">next</text>
+      <text x="1335.5" y="738" data-type-role="badge" font-size="17" text-anchor="middle" font-weight="600" fill="#0969da">next</text>
     </g>
   </g>
   <line x1="24" y1="899.5" x2="1376" y2="899.5" stroke="#d0d7de"/>
 <g id="orchestration-loop" role="group" aria-label="Orchestration loop">
-  <text x="24" y="940" font-size="25" fill="#1f2328" font-weight="600">2 · Building the platform: one Step of the orchestration loop</text>
-  <text x="24" y="976" font-size="19" fill="#1f2328">Step runs phases 2, 3, 4 and 6. The host owns replay, commit and delivery. After a refusal, the orchestrator revises the brief.</text>
-  <text x="45" y="1028" font-size="20" fill="#1f2328" font-weight="600">Phase and owner</text>
-  <text x="281" y="1028" font-size="20" fill="#1a7f37" font-weight="600">Implemented</text>
-  <text x="863" y="1028" font-size="20" fill="#0969da" font-weight="600">Extensions and qualification</text>
+  <text x="24" y="940" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600">2 · Building the platform: one Step of the orchestration loop</text>
+  <text x="24" y="976" data-type-role="brick-text" font-size="17" fill="#1f2328">Step runs phases 2, 3, 4 and 6. The host owns replay, commit and delivery. After a refusal, the orchestrator revises the brief.</text>
+  <text x="45" y="1028" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Phase and owner</text>
+  <text x="281" y="1028" data-type-role="brick-name" font-size="20" fill="#1a7f37" font-weight="600">Implemented</text>
+  <text x="863" y="1028" data-type-role="brick-name" font-size="20" fill="#0969da" font-weight="600">Extensions and qualification</text>
 <g id="loop-brief" role="group" aria-labelledby="phase-brief">
   <rect x="24" y="1052" width="1352" height="215" rx="6" fill="#ffffff" stroke="#d0d7de"/>
   <rect x="36" y="1066" width="216" height="187" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="50" y="1101" font-size="25" fill="#1f2328" font-weight="600" id="phase-brief">1 · Brief</text>
-  <text x="50" y="1132" font-size="18" fill="#57606a">Host · orchestrator</text>
+  <text x="50" y="1101" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-brief">1 · Brief</text>
+  <text x="50" y="1132" data-type-role="brick-text" font-size="17" fill="#57606a">Host · orchestrator</text>
   <rect x="50" y="1148" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="1167" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="85" y="1167" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
 <g role="group" aria-label="Define v1 · ready">
   <rect x="269" y="1066" width="570" height="65" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="1094" font-size="19" fill="#1f2328" font-weight="600">Define v1</text>
+  <text x="283" y="1094" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Define v1</text>
   <rect x="757" y="1074" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="1093" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1122" font-size="18.5" fill="#57606a">Drive Spec or read its validated Define handoff.</text>
+  <text x="792" y="1093" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1122" data-type-role="brick-text" font-size="17" fill="#57606a">Drive Spec or read its validated Define handoff.</text>
 </g>
 <g role="group" aria-label="Plan v1 · ready">
   <rect x="269" y="1140" width="570" height="65" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="1168" font-size="19" fill="#1f2328" font-weight="600">Plan v1</text>
+  <text x="283" y="1168" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Plan v1</text>
   <rect x="757" y="1148" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="1167" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1196" font-size="18.5" fill="#57606a">Preview the independently reviewed Spec Plan.</text>
+  <text x="792" y="1167" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1196" data-type-role="brick-text" font-size="17" fill="#57606a">Preview the independently reviewed Spec Plan.</text>
 </g>
-  <text x="283" y="1237" font-size="18.5" fill="#57606a">The orchestrator gives each session its scoped brief.</text>
+  <text x="283" y="1237" data-type-role="brick-text" font-size="17" fill="#57606a">The orchestrator gives each session its scoped brief.</text>
 <g role="group" aria-label="Optional spec-only judge · next">
   <rect x="854" y="1066" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1094" font-size="19" fill="#1f2328" font-weight="600">Optional spec-only judge</text>
+  <text x="868" y="1094" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Optional spec-only judge</text>
   <rect x="1277" y="1074" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="1093" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1122" font-size="18.5" fill="#57606a">Request an extra opinion on the specification;</text>
-  <text x="868" y="1146" font-size="18.5" fill="#57606a">off by default.</text>
+  <text x="1312" y="1093" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="1122" data-type-role="brick-text" font-size="17" fill="#57606a">Request an extra opinion on the specification;</text>
+  <text x="868" y="1146" data-type-role="brick-text" font-size="17" fill="#57606a">off by default.</text>
 </g>
 <g role="group" aria-label="Reflection · next">
   <rect x="854" y="1164" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1192" font-size="19" fill="#1f2328" font-weight="600">Reflection</text>
+  <text x="868" y="1192" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Reflection</text>
   <rect x="1277" y="1172" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="1191" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1220" font-size="18.5" fill="#57606a">Record recurring errors in a bounded, versioned</text>
-  <text x="868" y="1244" font-size="18.5" fill="#57606a">history. Turn repeat defects into checks.</text>
+  <text x="1312" y="1191" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="1220" data-type-role="brick-text" font-size="17" fill="#57606a">Record recurring errors in a bounded, versioned</text>
+  <text x="868" y="1244" data-type-role="brick-text" font-size="17" fill="#57606a">history. Turn repeat defects into checks.</text>
 </g>
 </g>
 <g id="loop-scouts" role="group" aria-labelledby="phase-scouts">
   <rect x="24" y="1293" width="1352" height="158" rx="6" fill="#ffffff" stroke="#d0d7de"/>
   <rect x="36" y="1307" width="216" height="130" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="50" y="1342" font-size="25" fill="#1f2328" font-weight="600" id="phase-scouts">2 · Scouts</text>
-  <text x="50" y="1373" font-size="18" fill="#57606a">Step · read-only srt</text>
+  <text x="50" y="1342" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-scouts">2 · Scouts</text>
+  <text x="50" y="1373" data-type-role="brick-text" font-size="17" fill="#57606a">Step · read-only srt</text>
   <rect x="50" y="1389" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="1408" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1330" font-size="18.5" fill="#57606a">One question per scout. Each cites file paths and lines.</text>
+  <text x="85" y="1408" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1330" data-type-role="brick-text" font-size="17" fill="#57606a">One question per scout. Each cites file paths and lines.</text>
 <g role="group" aria-label="Verified citations · ready">
   <rect x="269" y="1348" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="1376" font-size="19" fill="#1f2328" font-weight="600">Verified citations</text>
+  <text x="283" y="1376" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Verified citations</text>
   <rect x="757" y="1356" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="1375" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1404" font-size="18.5" fill="#57606a">The host rereads the source. Only verified facts enter</text>
-  <text x="283" y="1428" font-size="18.5" fill="#57606a">the Builder brief.</text>
+  <text x="792" y="1375" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1404" data-type-role="brick-text" font-size="17" fill="#57606a">The host rereads the source. Only verified facts enter</text>
+  <text x="283" y="1428" data-type-role="brick-text" font-size="17" fill="#57606a">the Builder brief.</text>
 </g>
 <g role="group" aria-label="Prompt specimens · next">
   <rect x="854" y="1307" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1335" font-size="19" fill="#1f2328" font-weight="600">Prompt specimens</text>
+  <text x="868" y="1335" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Prompt specimens</text>
   <rect x="1277" y="1315" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="1334" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1363" font-size="18.5" fill="#57606a">Replay the launcher prompts on examples when a</text>
-  <text x="868" y="1387" font-size="18.5" fill="#57606a">prompt or its model changes.</text>
+  <text x="1312" y="1334" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="1363" data-type-role="brick-text" font-size="17" fill="#57606a">Replay the launcher prompts on examples when a</text>
+  <text x="868" y="1387" data-type-role="brick-text" font-size="17" fill="#57606a">prompt or its model changes.</text>
 </g>
 </g>
 <g id="loop-build" role="group" aria-labelledby="phase-build">
   <rect x="24" y="1477" width="1352" height="215" rx="6" fill="#ffffff" stroke="#d0d7de"/>
   <rect x="36" y="1491" width="216" height="187" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="50" y="1526" font-size="25" fill="#1f2328" font-weight="600" id="phase-build">3 · Build</text>
-  <text x="50" y="1557" font-size="18" fill="#57606a">Claude Code · SRT</text>
-  <text x="50" y="1582" font-size="18" fill="#57606a">Codex · Docker SBX</text>
+  <text x="50" y="1526" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-build">3 · Build</text>
+  <text x="50" y="1557" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Code · SRT</text>
+  <text x="50" y="1582" data-type-role="brick-text" font-size="17" fill="#57606a">Codex · Docker SBX</text>
   <rect x="50" y="1598" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="1617" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1514" font-size="18.5" fill="#57606a">Step checks host evidence before Builder writes.</text>
-  <text x="283" y="1538" font-size="18.5" fill="#57606a">Git metadata and the commit belong to the host.</text>
-  <text x="283" y="1579" font-size="18.5" fill="#57606a">The Builder owns the design, implementation and</text>
-  <text x="283" y="1603" font-size="18.5" fill="#57606a">maintenance of the code it changes.</text>
-<g id="build-sbx-bench" role="group" aria-label="Docker SBX native qualification bench · ready">
-  <text x="283" y="1637" font-size="19" fill="#1f2328" font-weight="600">Docker SBX · qualification bench</text>
-  <rect x="689" y="1617" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="724" y="1636" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1664" font-size="18.5" fill="#57606a">Codex computed two hashes in two fresh VMs (exit 0).</text>
+  <text x="85" y="1617" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1514" data-type-role="brick-text" font-size="17" fill="#57606a">Step checks host evidence before Builder writes.</text>
+  <text x="283" y="1538" data-type-role="brick-text" font-size="17" fill="#57606a">Git metadata and the commit belong to the host.</text>
+  <text x="283" y="1566" data-type-role="brick-text" font-size="17" fill="#57606a">The Builder owns the design, implementation and</text>
+  <text x="283" y="1590" data-type-role="brick-text" font-size="17" fill="#57606a">maintenance of the code it changes.</text>
+<g id="build-sbx-integration" role="group" aria-label="Docker SBX production Builder · ready">
+  <text x="283" y="1626" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Docker SBX · production Builder</text>
+  <rect x="689" y="1606" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="724" y="1625" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1652" data-type-role="brick-text" font-size="17" fill="#57606a">Astra and Sol run the pinned native Codex client in a VM.</text>
+  <text x="283" y="1676" data-type-role="brick-text" font-size="17" fill="#57606a">The Step proxy meters it; record.json holds the receipt.</text>
 </g>
 <g role="group" aria-label="Independent scenarios · next">
   <rect x="854" y="1491" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1519" font-size="19" fill="#1f2328" font-weight="600">Independent scenarios</text>
+  <text x="868" y="1519" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Independent scenarios</text>
   <rect x="1277" y="1499" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="1518" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1547" font-size="18.5" fill="#57606a">A separate session writes scenarios the Builder</text>
-  <text x="868" y="1571" font-size="18.5" fill="#57606a">can only read.</text>
+  <text x="1312" y="1518" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="1547" data-type-role="brick-text" font-size="17" fill="#57606a">A separate session writes scenarios the Builder</text>
+  <text x="868" y="1571" data-type-role="brick-text" font-size="17" fill="#57606a">can only read.</text>
 </g>
-<g id="build-sbx-integration" role="group" aria-label="Production Builder in Docker SBX · offline">
-  <rect x="854" y="1589" width="505" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="868" y="1617" font-size="19" fill="#1f2328" font-weight="600">Production Builder in Docker SBX</text>
-  <rect x="1277" y="1597" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1312" y="1616" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">offline</text>
-  <text x="868" y="1645" font-size="18.5" fill="#57606a">Astra and Sol run the pinned native Codex client.</text>
-  <text x="868" y="1669" font-size="18.5" fill="#57606a">Live patch trial awaits the owner. Sign-in is at setup.</text>
+<g id="build-sbx-trial" role="group" aria-label="Subscription patch trial · next">
+  <rect x="854" y="1589" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="1617" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Subscription patch trial</text>
+  <rect x="1277" y="1597" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="1616" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="1645" data-type-role="brick-text" font-size="17" fill="#57606a">A patch chosen by the real model, on the subscription.</text>
+  <text x="868" y="1669" data-type-role="brick-text" font-size="17" fill="#57606a">Linux Secret Service unverified; cost unknown.</text>
 </g>
 </g>
 <g id="loop-checks" role="group" aria-labelledby="phase-checks">
   <rect x="24" y="1718" width="1352" height="182" rx="6" fill="#ffffff" stroke="#d0d7de"/>
   <rect x="36" y="1732" width="216" height="154" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="50" y="1767" font-size="25" fill="#1f2328" font-weight="600" id="phase-checks">4 · Checks</text>
-  <text x="50" y="1798" font-size="18" fill="#57606a">Step · checker srt</text>
+  <text x="50" y="1767" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-checks">4 · Checks</text>
+  <text x="50" y="1798" data-type-role="brick-text" font-size="17" fill="#57606a">Step · checker srt</text>
   <rect x="50" y="1814" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="1833" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="50" y="1879" font-size="18" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
-  <text x="283" y="1755" font-size="18.5" fill="#57606a">Run the configured commands in order, without a model,</text>
-  <text x="283" y="1779" font-size="18.5" fill="#57606a">network or worktree writes.</text>
+  <text x="85" y="1833" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="50" y="1879" data-type-role="brick-text" font-size="17" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
+  <text x="283" y="1755" data-type-role="brick-text" font-size="17" fill="#57606a">Run the configured commands in order, without a model,</text>
+  <text x="283" y="1779" data-type-role="brick-text" font-size="17" fill="#57606a">network or worktree writes.</text>
 <g role="group" aria-label="Check reports · ready">
   <rect x="269" y="1797" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="1825" font-size="19" fill="#1f2328" font-weight="600">Check reports</text>
+  <text x="283" y="1825" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Check reports</text>
   <rect x="757" y="1805" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="1824" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1853" font-size="18.5" fill="#57606a">Exit status, duration and output tail reach each review</text>
-  <text x="283" y="1877" font-size="18.5" fill="#57606a">brief. The first failed check stops Step.</text>
+  <text x="792" y="1824" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1853" data-type-role="brick-text" font-size="17" fill="#57606a">Exit status, duration and output tail reach each review</text>
+  <text x="283" y="1877" data-type-role="brick-text" font-size="17" fill="#57606a">brief. The first failed check stops Step.</text>
 </g>
 <g role="group" aria-label="Cost of review · next">
   <rect x="854" y="1732" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1760" font-size="19" fill="#1f2328" font-weight="600">Cost of review</text>
+  <text x="868" y="1760" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Cost of review</text>
   <rect x="1277" y="1740" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="1759" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1788" font-size="18.5" fill="#57606a">Measure how much the checks save in review cost</text>
-  <text x="868" y="1812" font-size="18.5" fill="#57606a">(pilot HR2).</text>
+  <text x="1312" y="1759" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="1788" data-type-role="brick-text" font-size="17" fill="#57606a">Measure how much the checks save in review cost</text>
+  <text x="868" y="1812" data-type-role="brick-text" font-size="17" fill="#57606a">(pilot HR2).</text>
 </g>
 </g>
 <g id="loop-replay" role="group" aria-labelledby="phase-replay">
   <rect x="24" y="1926" width="1352" height="215" rx="6" fill="#ffffff" stroke="#d0d7de"/>
   <rect x="36" y="1940" width="216" height="187" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="50" y="1975" font-size="25" fill="#1f2328" font-weight="600" id="phase-replay">5 · Replay</text>
-  <text x="50" y="2006" font-size="18" fill="#57606a">Host · maintainer</text>
+  <text x="50" y="1975" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-replay">5 · Replay</text>
+  <text x="50" y="2006" data-type-role="brick-text" font-size="17" fill="#57606a">Host · maintainer</text>
   <rect x="50" y="2022" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="2041" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1963" font-size="18.5" fill="#57606a">Inspect the diff. Replay the changes with real srt,</text>
-  <text x="283" y="1987" font-size="18.5" fill="#57606a">PostgreSQL and mutation tools as needed.</text>
+  <text x="85" y="2041" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1963" data-type-role="brick-text" font-size="17" fill="#57606a">Inspect the diff. Replay the changes with real srt,</text>
+  <text x="283" y="1987" data-type-role="brick-text" font-size="17" fill="#57606a">PostgreSQL and mutation tools as needed.</text>
 <g role="group" aria-label="Mutation as a Step phase · next">
   <rect x="854" y="1940" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1968" font-size="19" fill="#1f2328" font-weight="600">Mutation as a Step phase</text>
+  <text x="868" y="1968" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Mutation as a Step phase</text>
   <rect x="1277" y="1948" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="1967" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1996" font-size="18.5" fill="#57606a">Feed survivors from the manual replay into the</text>
-  <text x="868" y="2020" font-size="18.5" fill="#57606a">next brief.</text>
+  <text x="1312" y="1967" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="1996" data-type-role="brick-text" font-size="17" fill="#57606a">Feed survivors from the manual replay into the</text>
+  <text x="868" y="2020" data-type-role="brick-text" font-size="17" fill="#57606a">next brief.</text>
 </g>
 <g role="group" aria-label="Fresh test inputs · next">
   <rect x="854" y="2038" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2066" font-size="19" fill="#1f2328" font-weight="600">Fresh test inputs</text>
+  <text x="868" y="2066" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Fresh test inputs</text>
   <rect x="1277" y="2046" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2065" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2094" font-size="18.5" fill="#57606a">Automate the independent session that invents and</text>
-  <text x="868" y="2118" font-size="18.5" fill="#57606a">checks new inputs.</text>
+  <text x="1312" y="2065" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2094" data-type-role="brick-text" font-size="17" fill="#57606a">Automate the independent session that invents and</text>
+  <text x="868" y="2118" data-type-role="brick-text" font-size="17" fill="#57606a">checks new inputs.</text>
 </g>
 </g>
 <g id="loop-reviews" role="group" aria-labelledby="phase-reviews">
   <rect x="24" y="2167" width="1352" height="441" rx="6" fill="#ffffff" stroke="#d0d7de"/>
   <rect x="36" y="2181" width="216" height="413" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="50" y="2216" font-size="25" fill="#1f2328" font-weight="600" id="phase-reviews">6 · Reviews</text>
-  <text x="50" y="2247" font-size="18" fill="#57606a">Step · read-only srt</text>
+  <text x="50" y="2216" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-reviews">6 · Reviews</text>
+  <text x="50" y="2247" data-type-role="brick-text" font-size="17" fill="#57606a">Step · read-only srt</text>
   <rect x="50" y="2263" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="2282" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="50" y="2328" font-size="18" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
-  <text x="283" y="2204" font-size="18.5" fill="#57606a">Start independent reviews up to the Step parallel limit.</text>
-  <text x="283" y="2228" font-size="18.5" fill="#57606a">Separate Gemini reviews call Google’s native agent directly.</text>
+  <text x="85" y="2282" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="50" y="2328" data-type-role="brick-text" font-size="17" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
+  <text x="283" y="2204" data-type-role="brick-text" font-size="17" fill="#57606a">Start independent reviews up to the Step parallel limit.</text>
+  <text x="283" y="2228" data-type-role="brick-text" font-size="17" fill="#57606a">Separate Gemini reviews call Google’s native agent directly.</text>
 <g role="group" aria-label="Step verdict · ready">
   <rect x="269" y="2246" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="2274" font-size="19" fill="#1f2328" font-weight="600">Step verdict</text>
+  <text x="283" y="2274" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Step verdict</text>
   <rect x="757" y="2254" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="2273" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="2302" font-size="18.5" fill="#57606a">Each review returns one verdict. A blocking finding or</text>
-  <text x="283" y="2326" font-size="18.5" fill="#57606a">change request stops the Step.</text>
+  <text x="792" y="2273" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="2302" data-type-role="brick-text" font-size="17" fill="#57606a">Each review returns one verdict. A blocking finding or</text>
+  <text x="283" y="2326" data-type-role="brick-text" font-size="17" fill="#57606a">change request stops the Step.</text>
 </g>
 <g role="group" aria-label="Host archive · ready">
   <rect x="269" y="2344" width="570" height="137" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="2372" font-size="19" fill="#1f2328" font-weight="600">Host archive</text>
+  <text x="283" y="2372" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Host archive</text>
   <rect x="757" y="2352" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="2371" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="2400" font-size="18.5" fill="#57606a">The host writes the original briefs, scout questions and</text>
-  <text x="283" y="2424" font-size="18.5" fill="#57606a">Step manifest to steps/&lt;name&gt;/ with record.json. It</text>
-  <text x="283" y="2448" font-size="18.5" fill="#57606a">records the tree, input and launcher hashes, costs and</text>
-  <text x="283" y="2472" font-size="18.5" fill="#57606a">verdicts; the Builder cannot edit this archive.</text>
+  <text x="792" y="2371" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="2400" data-type-role="brick-text" font-size="17" fill="#57606a">The host writes the original briefs, scout questions and</text>
+  <text x="283" y="2424" data-type-role="brick-text" font-size="17" fill="#57606a">Step manifest to steps/&lt;name&gt;/ with record.json. It</text>
+  <text x="283" y="2448" data-type-role="brick-text" font-size="17" fill="#57606a">records the tree, input and launcher hashes, costs and</text>
+  <text x="283" y="2472" data-type-role="brick-text" font-size="17" fill="#57606a">verdicts; the Builder cannot edit this archive.</text>
 </g>
-  <text x="283" y="2513" font-size="18.5" fill="#57606a">The host reads the intake once. Reports, measures,</text>
-  <text x="283" y="2537" font-size="18.5" fill="#57606a">briefs and verdicts stay in</text>
-  <text x="283" y="2561" font-size="18.5" fill="#57606a">state/steps/&lt;run-id&gt;/&lt;name&gt;/. Raw streams go to</text>
-  <text x="283" y="2585" font-size="18.5" fill="#57606a">run/&lt;run-id&gt;/tmp/steps/&lt;name&gt;/.</text>
+  <text x="283" y="2513" data-type-role="brick-text" font-size="17" fill="#57606a">The host reads the intake once. Reports, measures,</text>
+  <text x="283" y="2537" data-type-role="brick-text" font-size="17" fill="#57606a">briefs and verdicts stay in</text>
+  <text x="283" y="2561" data-type-role="brick-text" font-size="17" fill="#57606a">state/steps/&lt;run-id&gt;/&lt;name&gt;/. Raw streams go to</text>
+  <text x="283" y="2585" data-type-role="brick-text" font-size="17" fill="#57606a">run/&lt;run-id&gt;/tmp/steps/&lt;name&gt;/.</text>
 <g role="group" aria-label="Review by dimension · next">
   <rect x="854" y="2181" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2209" font-size="19" fill="#1f2328" font-weight="600">Review by dimension</text>
+  <text x="868" y="2209" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Review by dimension</text>
   <rect x="1277" y="2189" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2208" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2237" font-size="18.5" fill="#57606a">Use one rubric per dimension and link each</text>
-  <text x="868" y="2261" font-size="18.5" fill="#57606a">finding to its failing scenario.</text>
+  <text x="1312" y="2208" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2237" data-type-role="brick-text" font-size="17" fill="#57606a">Use one rubric per dimension and link each</text>
+  <text x="868" y="2261" data-type-role="brick-text" font-size="17" fill="#57606a">finding to its failing scenario.</text>
 </g>
 <g role="group" aria-label="Builder claims · next">
   <rect x="854" y="2279" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2307" font-size="19" fill="#1f2328" font-weight="600">Builder claims</text>
+  <text x="868" y="2307" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Builder claims</text>
   <rect x="1277" y="2287" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2306" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2335" font-size="18.5" fill="#57606a">Give the Builder’s declared claims to the</text>
-  <text x="868" y="2359" font-size="18.5" fill="#57606a">reviewers for verification.</text>
+  <text x="1312" y="2306" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2335" data-type-role="brick-text" font-size="17" fill="#57606a">Give the Builder’s declared claims to the</text>
+  <text x="868" y="2359" data-type-role="brick-text" font-size="17" fill="#57606a">reviewers for verification.</text>
 </g>
 <g role="group" aria-label="Automatic refusal brief · next">
   <rect x="854" y="2377" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2405" font-size="19" fill="#1f2328" font-weight="600">Automatic refusal brief</text>
+  <text x="868" y="2405" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Automatic refusal brief</text>
   <rect x="1277" y="2385" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2404" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2433" font-size="18.5" fill="#57606a">Generate the next brief from a request for</text>
-  <text x="868" y="2457" font-size="18.5" fill="#57606a">changes; today the orchestrator writes it.</text>
+  <text x="1312" y="2404" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2433" data-type-role="brick-text" font-size="17" fill="#57606a">Generate the next brief from a request for</text>
+  <text x="868" y="2457" data-type-role="brick-text" font-size="17" fill="#57606a">changes; today the orchestrator writes it.</text>
 </g>
 </g>
 <g id="loop-gate" role="group" aria-labelledby="phase-gate">
   <rect x="24" y="2634" width="1352" height="206" rx="6" fill="#ffffff" stroke="#d0d7de"/>
   <rect x="36" y="2648" width="216" height="178" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="50" y="2683" font-size="25" fill="#1f2328" font-weight="600" id="phase-gate">7 · Gate</text>
-  <text x="50" y="2714" font-size="18" fill="#57606a">Host · Linux / macOS</text>
+  <text x="50" y="2683" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-gate">7 · Gate</text>
+  <text x="50" y="2714" data-type-role="brick-text" font-size="17" fill="#57606a">Host · Linux / macOS</text>
   <rect x="50" y="2730" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="2749" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="50" y="2795" font-size="18" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
-  <text x="283" y="2671" font-size="18.5" fill="#57606a">Linux checks scenario identities and mutants on changed</text>
-  <text x="283" y="2695" font-size="18.5" fill="#57606a">lines. macOS runs sandbox scenarios. Gate reads the Step</text>
-  <text x="283" y="2719" font-size="18.5" fill="#57606a">archive.</text>
+  <text x="85" y="2749" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="50" y="2795" data-type-role="brick-text" font-size="17" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
+  <text x="283" y="2671" data-type-role="brick-text" font-size="17" fill="#57606a">Linux checks scenario identities and mutants on changed</text>
+  <text x="283" y="2695" data-type-role="brick-text" font-size="17" fill="#57606a">lines. macOS runs sandbox scenarios. Gate reads the Step</text>
+  <text x="283" y="2719" data-type-role="brick-text" font-size="17" fill="#57606a">archive.</text>
 <g role="group" aria-label="Sharded Linux CI · ready">
   <rect x="269" y="2737" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="2765" font-size="19" fill="#1f2328" font-weight="600">Sharded Linux CI</text>
+  <text x="283" y="2765" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Sharded Linux CI</text>
   <rect x="757" y="2745" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="2764" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="2793" font-size="18.5" fill="#57606a">Two scenario shards and sixteen mutation lanes run with</text>
-  <text x="283" y="2817" font-size="18.5" fill="#57606a">independent replay.</text>
+  <text x="792" y="2764" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="2793" data-type-role="brick-text" font-size="17" fill="#57606a">Two scenario shards and sixteen mutation lanes run with</text>
+  <text x="283" y="2817" data-type-role="brick-text" font-size="17" fill="#57606a">independent replay.</text>
 </g>
 <g role="group" aria-label="End-to-end verification · next">
   <rect x="854" y="2648" width="505" height="65" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2676" font-size="19" fill="#1f2328" font-weight="600">End-to-end verification</text>
+  <text x="868" y="2676" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">End-to-end verification</text>
   <rect x="1277" y="2656" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2675" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2704" font-size="18.5" fill="#57606a">Replay the full loop three times on two subjects.</text>
+  <text x="1312" y="2675" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2704" data-type-role="brick-text" font-size="17" fill="#57606a">Replay the full loop three times on two subjects.</text>
 </g>
 </g>
 <g id="loop-delivery" role="group" aria-labelledby="phase-delivery">
   <rect x="24" y="2866" width="1352" height="313" rx="6" fill="#ffffff" stroke="#d0d7de"/>
   <rect x="36" y="2880" width="216" height="285" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="50" y="2915" font-size="25" fill="#1f2328" font-weight="600" id="phase-delivery">8 · Delivery</text>
-  <text x="50" y="2946" font-size="18" fill="#57606a">Host · Deliver</text>
+  <text x="50" y="2915" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-delivery">8 · Delivery</text>
+  <text x="50" y="2946" data-type-role="brick-text" font-size="17" fill="#57606a">Host · Deliver</text>
   <rect x="50" y="2962" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="2981" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="2903" font-size="18.5" fill="#57606a">The host commits the accepted work and its archive.</text>
-  <text x="283" y="2927" font-size="18.5" fill="#57606a">Deliver publishes the same commit to the work branch and</text>
-  <text x="283" y="2951" font-size="18.5" fill="#57606a">then main, checking each ruleset.</text>
+  <text x="85" y="2981" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="2903" data-type-role="brick-text" font-size="17" fill="#57606a">The host commits the accepted work and its archive.</text>
+  <text x="283" y="2927" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver publishes the same commit to the work branch and</text>
+  <text x="283" y="2951" data-type-role="brick-text" font-size="17" fill="#57606a">then main, checking each ruleset.</text>
 <g role="group" aria-label="Same-commit CI · ready">
   <rect x="269" y="2969" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="2997" font-size="19" fill="#1f2328" font-weight="600">Same-commit CI</text>
+  <text x="283" y="2997" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Same-commit CI</text>
   <rect x="757" y="2977" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="2996" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="3025" font-size="18.5" fill="#57606a">Deliver requires the Linux and macOS jobs for the</text>
-  <text x="283" y="3049" font-size="18.5" fill="#57606a">candidate SHA.</text>
+  <text x="792" y="2996" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="3025" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver requires the Linux and macOS jobs for the</text>
+  <text x="283" y="3049" data-type-role="brick-text" font-size="17" fill="#57606a">candidate SHA.</text>
 </g>
 <g role="group" aria-label="Human gate · next">
   <rect x="854" y="2880" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2908" font-size="19" fill="#1f2328" font-weight="600">Human gate</text>
+  <text x="868" y="2908" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Human gate</text>
   <rect x="1277" y="2888" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2907" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2936" font-size="18.5" fill="#57606a">Bind the orchestrator to an identity with no</text>
-  <text x="868" y="2960" font-size="18.5" fill="#57606a">bypass and require human approval for main.</text>
+  <text x="1312" y="2907" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2936" data-type-role="brick-text" font-size="17" fill="#57606a">Bind the orchestrator to an identity with no</text>
+  <text x="868" y="2960" data-type-role="brick-text" font-size="17" fill="#57606a">bypass and require human approval for main.</text>
 </g>
 <g role="group" aria-label="Commit each pass · next">
   <rect x="854" y="2978" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="3006" font-size="19" fill="#1f2328" font-weight="600">Commit each pass</text>
+  <text x="868" y="3006" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Commit each pass</text>
   <rect x="1277" y="2986" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="3005" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="3034" font-size="18.5" fill="#57606a">Make each pass reproducible from its own</text>
-  <text x="868" y="3058" font-size="18.5" fill="#57606a">work-branch commit.</text>
+  <text x="1312" y="3005" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="3034" data-type-role="brick-text" font-size="17" fill="#57606a">Make each pass reproducible from its own</text>
+  <text x="868" y="3058" data-type-role="brick-text" font-size="17" fill="#57606a">work-branch commit.</text>
 </g>
 <g role="group" aria-label="Accepted Step cost · next">
   <rect x="854" y="3076" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="3104" font-size="19" fill="#1f2328" font-weight="600">Accepted Step cost</text>
+  <text x="868" y="3104" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Accepted Step cost</text>
   <rect x="1277" y="3084" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="3103" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="3132" font-size="18.5" fill="#57606a">Measure the share of cached prompt input and the</text>
-  <text x="868" y="3156" font-size="18.5" fill="#57606a">total cost per accepted Step.</text>
+  <text x="1312" y="3103" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="3132" data-type-role="brick-text" font-size="17" fill="#57606a">Measure the share of cached prompt input and the</text>
+  <text x="868" y="3156" data-type-role="brick-text" font-size="17" fill="#57606a">total cost per accepted Step.</text>
 </g>
 </g>
   <path data-from="loop-brief" data-to="loop-scouts" d="M144 1267 V1290" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
@@ -443,355 +454,338 @@
   <g transform="translate(0 1582.5)">
   <g id="runtime-isolation" role="group" aria-labelledby="isolation-title">
     <line x1="24" y1="1626.5" x2="1376" y2="1626.5" stroke="#d0d7de"/>
-    <text x="24" y="1658" id="isolation-title" font-size="25" font-weight="600" fill="#1f2328">3 · Runtime isolation</text>
-    <text x="24" y="1685" font-size="18.5" fill="#57606a">SRT uses Seatbelt on macOS and bubblewrap on Linux, including WSL2. Docker SBX runs the native Codex Builder in a Linux VM.</text>
+    <text x="24" y="1658" id="isolation-title" data-type-role="section-title" font-size="25" font-weight="600" fill="#1f2328">3 · Runtime isolation</text>
+    <text x="24" y="1685" data-type-role="brick-text" font-size="17" fill="#57606a">SRT uses Seatbelt on macOS and bubblewrap on Linux, including WSL2. Docker SBX runs the native Codex Builder in a Linux VM.</text>
   <g id="isolation-host" role="group" aria-labelledby="isolation-host-title">
     <rect x="24" y="1703" width="648" height="528" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
-    <text x="37" y="1728" id="isolation-host-title" font-size="20" font-weight="600" fill="#1f2328">Host</text>
+    <text x="37" y="1728" id="isolation-host-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Host</text>
   <g id="step-auth-proxy" role="group" aria-labelledby="step-auth-proxy-title">
     <rect x="40" y="1742" width="616" height="94" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-    <text x="53" y="1767" id="step-auth-proxy-title" font-size="18.5" font-weight="600" fill="#1f2328">Claude authentication proxy</text>
+    <text x="53" y="1767" id="step-auth-proxy-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Claude authentication proxy</text>
     <rect x="577" y="1749" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-    <text x="611" y="1766" font-size="16" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
-    <text x="53" y="1790" font-size="17" fill="#57606a">Only the host reads the Claude credential from its keychain.</text>
-    <text x="53" y="1811" font-size="17" fill="#57606a">The proxy permits POST /v1/messages and its count_tokens route.</text>
-    <text x="53" y="1832" font-size="17" fill="#57606a">It records usage per answer and keeps the text out of its logs.</text>
+    <text x="611" y="1766" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
+    <text x="53" y="1790" data-type-role="brick-text" font-size="17" fill="#57606a">Only the host reads the Claude credential from its keychain.</text>
+    <text x="53" y="1811" data-type-role="brick-text" font-size="17" fill="#57606a">The proxy permits POST /v1/messages and its count_tokens route.</text>
+    <text x="53" y="1832" data-type-role="brick-text" font-size="17" fill="#57606a">It records usage per answer and keeps the text out of its logs.</text>
   </g>
   <g id="host-admission" role="group" aria-labelledby="host-admission-title">
     <rect x="40" y="1850" width="616" height="103" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-    <text x="53" y="1875" id="host-admission-title" font-size="18.5" font-weight="600" fill="#1f2328">./aos · admission and launcher</text>
+    <text x="53" y="1875" id="host-admission-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">./aos · admission and launcher</text>
     <rect x="577" y="1857" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-    <text x="611" y="1874" font-size="16" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
-    <text x="53" y="1898" font-size="17" fill="#57606a">Checks the marked runtime root and free space on root and home.</text>
-    <text x="53" y="1919" font-size="17" fill="#57606a">Creates a private run directory and records admission there.</text>
-    <text x="53" y="1940" font-size="17" fill="#57606a">Step uses frozen launcher prompts in a linked worktree.</text>
+    <text x="611" y="1874" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
+    <text x="53" y="1898" data-type-role="brick-text" font-size="17" fill="#57606a">Checks the marked runtime root and free space on root and home.</text>
+    <text x="53" y="1919" data-type-role="brick-text" font-size="17" fill="#57606a">Creates a private run directory and records admission there.</text>
+    <text x="53" y="1940" data-type-role="brick-text" font-size="17" fill="#57606a">Step uses frozen launcher prompts in a linked worktree.</text>
   </g>
   <g id="host-git" role="group" aria-labelledby="host-git-title">
     <rect x="40" y="1967" width="616" height="103" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-    <text x="53" y="1992" id="host-git-title" font-size="18.5" font-weight="600" fill="#1f2328">Git and the worktree</text>
+    <text x="53" y="1992" id="host-git-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Git and the worktree</text>
     <rect x="577" y="1974" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-    <text x="611" y="1991" font-size="16" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
-    <text x="53" y="2015" font-size="17" fill="#57606a">The fingerprint, Gate and Deliver use an allowlisted Git environment.</text>
-    <text x="53" y="2036" font-size="17" fill="#57606a">The fingerprint and Gate ignore machine Git configuration.</text>
-    <text x="53" y="2057" font-size="17" fill="#57606a">The host owns Git metadata and publishes the Step archive.</text>
+    <text x="611" y="1991" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
+    <text x="53" y="2015" data-type-role="brick-text" font-size="17" fill="#57606a">The fingerprint, Gate and Deliver use an allowlisted Git environment.</text>
+    <text x="53" y="2036" data-type-role="brick-text" font-size="17" fill="#57606a">The fingerprint and Gate ignore machine Git configuration.</text>
+    <text x="53" y="2057" data-type-role="brick-text" font-size="17" fill="#57606a">The host owns Git metadata and publishes the Step archive.</text>
   </g>
   <g id="sbx-account-broker" role="group" aria-labelledby="sbx-broker-title">
     <rect x="40" y="2084" width="616" height="132" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-    <text x="53" y="2109" id="sbx-broker-title" font-size="18.5" font-weight="600" fill="#1f2328">SBX account broker</text>
-    <text x="53" y="2132" font-size="17" fill="#57606a">The proxy relays native requests to the fixed Responses endpoint.</text>
-    <text x="53" y="2153" font-size="17" fill="#57606a">The host reads the installed grant from the OS store. Terminals supply</text>
-    <text x="53" y="2174" font-size="17" fill="#57606a">usage. The host bounds requests, bytes, time and observed tokens.</text>
-    <text x="53" y="2195" font-size="17" fill="#57606a">Codex handles provider notifications inside the VM.</text>
+    <text x="53" y="2109" id="sbx-broker-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">SBX account broker</text>
+    <text x="53" y="2132" data-type-role="brick-text" font-size="17" fill="#57606a">The proxy relays native requests to the fixed Responses endpoint,</text>
+    <text x="53" y="2153" data-type-role="brick-text" font-size="17" fill="#57606a">bounding requests, bytes, time and tokens, and metering each terminal.</text>
+    <text x="53" y="2174" data-type-role="brick-text" font-size="17" fill="#57606a">The subscription stays in the host OS credential store between</text>
+    <text x="53" y="2195" data-type-role="brick-text" font-size="17" fill="#57606a">Steps (macOS Keychain verified, Linux Secret Service not yet).</text>
   </g>
   </g>
   <g id="runtime-srt" role="group" aria-labelledby="srt-title">
     <rect x="692" y="1703" width="684" height="373" rx="8" fill="#fff8e1" stroke="#bf8700"/>
-    <text x="705" y="1728" id="srt-title" font-size="20" font-weight="600" fill="#1f2328">SRT · production Step and gateway processes</text>
+    <text x="705" y="1728" id="srt-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">SRT · production Step and gateway processes</text>
   <g id="srt-step-client" role="group" aria-labelledby="srt-step-client-title">
     <rect x="708" y="1742" width="652" height="96" rx="6" fill="#ffffff" stroke="#bf8700"/>
-    <text x="721" y="1767" id="srt-step-client-title" font-size="18.5" font-weight="600" fill="#1f2328">Claude Code --bare</text>
+    <text x="721" y="1767" id="srt-step-client-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Claude Code --bare</text>
     <rect x="1281" y="1749" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-    <text x="1315" y="1766" font-size="16" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
-    <text x="721" y="1790" font-size="17" fill="#57606a">The host proxy revokes the random session token when the session ends.</text>
-    <text x="721" y="1811" font-size="17" fill="#57606a">The Builder writes its worktree. Reviewer and scout sessions are read-only.</text>
-    <text x="721" y="1832" font-size="17" fill="#57606a">Checks run commands under the checker profile.</text>
+    <text x="1315" y="1766" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
+    <text x="721" y="1790" data-type-role="brick-text" font-size="17" fill="#57606a">The host proxy revokes the random session token when the session ends.</text>
+    <text x="721" y="1811" data-type-role="brick-text" font-size="17" fill="#57606a">The Builder writes its worktree. Reviewer and scout sessions are read-only.</text>
+    <text x="721" y="1832" data-type-role="brick-text" font-size="17" fill="#57606a">Checks run commands under the checker profile.</text>
   </g>
   <g id="srt-profile-boundaries" role="group" aria-labelledby="srt-profile-title">
     <rect x="708" y="1850" width="652" height="99" rx="6" fill="#ffffff" stroke="#bf8700"/>
-    <text x="721" y="1875" id="srt-profile-title" font-size="18.5" font-weight="600" fill="#1f2328">Five profiles · builder, reviewer, checker, module and worker</text>
+    <text x="721" y="1875" id="srt-profile-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Five profiles · builder, reviewer, checker, module, worker</text>
     <rect x="1281" y="1857" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-    <text x="1315" y="1874" font-size="16" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
-    <text x="721" y="1898" font-size="17" fill="#57606a">Each profile has private session folders and the same denied read paths.</text>
-    <text x="721" y="1919" font-size="17" fill="#57606a">Its file defines writes, network destinations and credentials. The gateway</text>
-    <text x="721" y="1940" font-size="17" fill="#57606a">starts one process per module and a fresh worker for each task run.</text>
+    <text x="1315" y="1874" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
+    <text x="721" y="1898" data-type-role="brick-text" font-size="17" fill="#57606a">Each profile has private session folders and the same denied read paths.</text>
+    <text x="721" y="1919" data-type-role="brick-text" font-size="17" fill="#57606a">Its file defines writes, network destinations and credentials. The gateway</text>
+    <text x="721" y="1940" data-type-role="brick-text" font-size="17" fill="#57606a">starts one process per module and a fresh worker for each task run.</text>
   </g>
   <g id="srt-isolation-checks" role="group" aria-labelledby="srt-isolation-title">
     <rect x="708" y="1962" width="652" height="99" rx="6" fill="#ffffff" stroke="#bf8700"/>
-    <text x="721" y="1987" id="srt-isolation-title" font-size="18.5" font-weight="600" fill="#1f2328">Canary and escape checks</text>
+    <text x="721" y="1987" id="srt-isolation-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Canary and escape checks</text>
     <rect x="1281" y="1969" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-    <text x="1315" y="1986" font-size="16" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
-    <text x="721" y="2010" font-size="17" fill="#57606a">Before each command, the same profile must deny a sibling secret and</text>
-    <text x="721" y="2031" font-size="17" fill="#57606a">an unlisted loopback port. A failed canary stops the command. The suite</text>
-    <text x="721" y="2052" font-size="17" fill="#57606a">tests eight attacks per profile and three Builder writes to steps/.</text>
+    <text x="1315" y="1986" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
+    <text x="721" y="2010" data-type-role="brick-text" font-size="17" fill="#57606a">Before each command, the same profile must deny a sibling secret and</text>
+    <text x="721" y="2031" data-type-role="brick-text" font-size="17" fill="#57606a">an unlisted loopback port. A failed canary stops the command. The suite</text>
+    <text x="721" y="2052" data-type-role="brick-text" font-size="17" fill="#57606a">tests eight attacks per profile and three Builder writes to steps/.</text>
   </g>
   </g>
   <g id="runtime-sbx" role="group" aria-labelledby="sbx-title">
     <rect x="692" y="2084" width="684" height="147" rx="8" fill="#fff8e1" stroke="#bf8700"/>
-    <text x="705" y="2109" id="sbx-title" font-size="20" font-weight="600" fill="#1f2328">Docker SBX · isolated Linux VM for the Builder</text>
+    <text x="705" y="2109" id="sbx-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Docker SBX · isolated Linux VM for the Builder</text>
   <g id="sbx-native-client" role="group" aria-labelledby="sbx-client-title">
     <rect x="708" y="2121" width="652" height="95" rx="6" fill="#ffffff" stroke="#bf8700"/>
-    <text x="721" y="2146" id="sbx-client-title" font-size="18.5" font-weight="600" fill="#1f2328">Native client · unprivileged Linux user</text>
-    <text x="721" y="2169" font-size="17" fill="#57606a">Codex calls the Step proxy over HTTP. npm uses its registry on port 443.</text>
-    <text x="721" y="2190" font-size="17" fill="#57606a">The native tool edits the worktree. The host verifies VM removal.</text>
-    <text x="721" y="2211" font-size="17" fill="#57606a">Only the Step worktree is a writable host mount.</text>
+    <text x="721" y="2146" id="sbx-client-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Native client · unprivileged Linux user</text>
+    <text x="721" y="2169" data-type-role="brick-text" font-size="17" fill="#57606a">Codex posts to the Step proxy on the host; npm uses its registry on 443.</text>
+    <text x="721" y="2190" data-type-role="brick-text" font-size="17" fill="#57606a">Any other port or destination is refused, as under SRT.</text>
+    <text x="721" y="2211" data-type-role="brick-text" font-size="17" fill="#57606a">The Step worktree is the only writable mount; the host checks VM removal.</text>
   </g>
   </g>
     <path id="srt-proxy-pipe" data-from="srt-step-client" data-to="step-auth-proxy" d="M708 1788 H656" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
     <path id="sbx-responses-http" data-from="sbx-account-broker" data-to="sbx-native-client" d="M656 2167 H708" fill="none" stroke="#57606a" stroke-width="1.5" marker-start="url(#a)" marker-end="url(#a)"/>
   <g id="step-provider" role="group" aria-labelledby="step-provider-title">
     <rect x="24" y="2249" width="648" height="68" rx="6" fill="#ddf4ff" stroke="#0969da"/>
-    <text x="37" y="2274" id="step-provider-title" font-size="18.5" font-weight="600" fill="#1f2328">api.anthropic.com</text>
-    <text x="37" y="2297" font-size="17" fill="#57606a">The authentication proxy alone sends the production Step requests.</text>
+    <text x="37" y="2274" id="step-provider-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">api.anthropic.com</text>
+    <text x="37" y="2297" data-type-role="brick-text" font-size="17" fill="#57606a">The authentication proxy alone sends the production Step requests.</text>
   </g>
     <path id="step-proxy-upstream" data-from="step-auth-proxy" data-to="step-provider" d="M40 1805 H12 V2280 H24" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
   <g id="runtime-server" role="group" aria-labelledby="runtime-server-title">
     <rect x="692" y="2249" width="684" height="68" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-    <text x="705" y="2274" id="runtime-server-title" font-size="18.5" font-weight="600" fill="#1f2328">Server deployment</text>
+    <text x="705" y="2274" id="runtime-server-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Server deployment</text>
     <rect x="1306" y="2256" width="59" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-    <text x="1335.5" y="2273" font-size="16" font-weight="600" text-anchor="middle" fill="#0969da">next</text>
-    <text x="705" y="2297" font-size="17" fill="#57606a">Keep the same ports. Use a server adapter and federated credentials.</text>
+    <text x="1335.5" y="2273" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#0969da">next</text>
+    <text x="705" y="2297" data-type-role="brick-text" font-size="17" fill="#57606a">Keep the same ports. Use a server adapter and federated credentials.</text>
   </g>
-    <text x="24" y="2350" font-size="19" font-weight="600" fill="#1f2328">Extensions and qualification</text>
+    <text x="24" y="2350" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Extensions and qualification</text>
   <g id="sandbox-gate" role="group" aria-labelledby="sandbox-gate-title">
     <rect x="24" y="2365" width="324" height="132" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-    <text x="37" y="2390" id="sandbox-gate-title" font-size="18.5" font-weight="600" fill="#1f2328">Sandbox the Gate</text>
+    <text x="37" y="2390" id="sandbox-gate-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Sandbox the Gate</text>
     <rect x="278" y="2372" width="59" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-    <text x="307.5" y="2389" font-size="16" font-weight="600" text-anchor="middle" fill="#0969da">next</text>
-    <text x="37" y="2413" font-size="17" fill="#57606a">Run the candidate scenarios and</text>
-    <text x="37" y="2434" font-size="17" fill="#57606a">mutation tests in isolation. Today</text>
-    <text x="37" y="2455" font-size="17" fill="#57606a">they run on the host.</text>
+    <text x="307.5" y="2389" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#0969da">next</text>
+    <text x="37" y="2413" data-type-role="brick-text" font-size="17" fill="#57606a">Run the candidate scenarios and</text>
+    <text x="37" y="2434" data-type-role="brick-text" font-size="17" fill="#57606a">mutation tests in isolation. Today</text>
+    <text x="37" y="2455" data-type-role="brick-text" font-size="17" fill="#57606a">they run on the host.</text>
   </g>
   <g id="runtime-retention" role="group" aria-labelledby="runtime-retention-title">
     <rect x="363" y="2365" width="324" height="132" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-    <text x="376" y="2390" id="runtime-retention-title" font-size="18.5" font-weight="600" fill="#1f2328">Run storage</text>
+    <text x="376" y="2390" id="runtime-retention-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Run storage</text>
     <rect x="617" y="2372" width="59" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-    <text x="646.5" y="2389" font-size="16" font-weight="600" text-anchor="middle" fill="#0969da">next</text>
-    <text x="376" y="2413" font-size="17" fill="#57606a">Recover abandoned sessions, cap</text>
-    <text x="376" y="2434" font-size="17" fill="#57606a">and redact streams. Publish each</text>
-    <text x="376" y="2455" font-size="17" fill="#57606a">archive by rename. Measure peak</text>
-    <text x="376" y="2476" font-size="17" fill="#57606a">use before setting retention limits.</text>
+    <text x="646.5" y="2389" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#0969da">next</text>
+    <text x="376" y="2413" data-type-role="brick-text" font-size="17" fill="#57606a">Recover abandoned sessions, cap</text>
+    <text x="376" y="2434" data-type-role="brick-text" font-size="17" fill="#57606a">and redact streams. Publish each</text>
+    <text x="376" y="2455" data-type-role="brick-text" font-size="17" fill="#57606a">archive by rename. Measure peak</text>
+    <text x="376" y="2476" data-type-role="brick-text" font-size="17" fill="#57606a">use before setting retention limits.</text>
   </g>
   <g id="dependency-store" role="group" aria-labelledby="dependency-store-title">
     <rect x="702" y="2365" width="324" height="132" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-    <text x="715" y="2390" id="dependency-store-title" font-size="18.5" font-weight="600" fill="#1f2328">Dependency store</text>
+    <text x="715" y="2390" id="dependency-store-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Dependency store</text>
     <rect x="956" y="2372" width="59" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-    <text x="985.5" y="2389" font-size="16" font-weight="600" text-anchor="middle" fill="#0969da">next</text>
-    <text x="715" y="2413" font-size="17" fill="#57606a">One store under the runtime root.</text>
-    <text x="715" y="2434" font-size="17" fill="#57606a">Only the host may write it.</text>
+    <text x="985.5" y="2389" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#0969da">next</text>
+    <text x="715" y="2413" data-type-role="brick-text" font-size="17" fill="#57606a">One store under the runtime root.</text>
+    <text x="715" y="2434" data-type-role="brick-text" font-size="17" fill="#57606a">Only the host may write it.</text>
   </g>
   <g id="runtime-worktrees" role="group" aria-labelledby="runtime-worktrees-title">
     <rect x="1041" y="2365" width="335" height="132" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-    <text x="1054" y="2390" id="runtime-worktrees-title" font-size="18.5" font-weight="600" fill="#1f2328">Disposable worktrees</text>
+    <text x="1054" y="2390" id="runtime-worktrees-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Disposable worktrees</text>
     <rect x="1306" y="2372" width="59" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-    <text x="1335.5" y="2389" font-size="16" font-weight="600" text-anchor="middle" fill="#0969da">next</text>
-    <text x="1054" y="2413" font-size="17" fill="#57606a">Create a worktree at the current</text>
-    <text x="1054" y="2434" font-size="17" fill="#57606a">head for each Step. Remove it</text>
-    <text x="1054" y="2455" font-size="17" fill="#57606a">when the Step ends.</text>
+    <text x="1335.5" y="2389" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#0969da">next</text>
+    <text x="1054" y="2413" data-type-role="brick-text" font-size="17" fill="#57606a">Create a worktree at the current</text>
+    <text x="1054" y="2434" data-type-role="brick-text" font-size="17" fill="#57606a">head for each Step. Remove it</text>
+    <text x="1054" y="2455" data-type-role="brick-text" font-size="17" fill="#57606a">when the Step ends.</text>
   </g>
-  </g>
-  <g transform="translate(0 216)">
-  <line x1="24" y1="2306.0" x2="1376" y2="2306.0" stroke="#d0d7de"/>
-  <text x="24.0" y="2333.0" font-size="15" fill="#1f2328" font-weight="600">4 · What checks a step before it is delivered</text>
-  <text x="24.0" y="2353.0" font-size="12" fill="#57606a">five checks before the gate; under each, what it gave on one piece of work: the delivery command, 18 November 2026 (journal, §89 to §95)</text>
-  <rect x="24.0" y="2370.0" width="260.0" height="118.0" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="35.0" y="2392.0" font-size="12.5" fill="#1f2328" font-weight="600">1 · Scenarios</text>
-  <text x="35.0" y="2410.0" font-size="11.5" fill="#57606a">every test is a Gherkin scenario,</text>
-  <text x="35.0" y="2425.5" font-size="11.5" fill="#57606a">written with the code; it must fail</text>
-  <text x="35.0" y="2441.0" font-size="11.5" fill="#57606a">without the behaviour it names</text>
-  <rect x="228.0" y="2361.5" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="251.0" y="2374.0" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <rect x="297.0" y="2370.0" width="260.0" height="118.0" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="308.0" y="2392.0" font-size="12.5" fill="#1f2328" font-weight="600">2 · Mutation</text>
-  <text x="308.0" y="2410.0" font-size="11.5" fill="#57606a">each changed line is broken on</text>
-  <text x="308.0" y="2425.5" font-size="11.5" fill="#57606a">purpose: a scenario must turn red; a</text>
-  <text x="308.0" y="2441.0" font-size="11.5" fill="#57606a">line nothing proves is removed</text>
-  <rect x="501.0" y="2361.5" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="524.0" y="2374.0" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <rect x="570.0" y="2370.0" width="260.0" height="118.0" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="581.0" y="2392.0" font-size="12.5" fill="#1f2328" font-weight="600">3 · Independent review</text>
-  <text x="581.0" y="2410.0" font-size="11.5" fill="#57606a">a fresh session reads the change</text>
-  <text x="581.0" y="2425.5" font-size="11.5" fill="#57606a">against the design and cannot write: a</text>
-  <text x="581.0" y="2441.0" font-size="11.5" fill="#57606a">verdict, and what it could not check</text>
-  <rect x="774.0" y="2361.5" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="797.0" y="2374.0" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <rect x="843.0" y="2370.0" width="260.0" height="118.0" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="854.0" y="2392.0" font-size="12.5" fill="#1f2328" font-weight="600">4 · Fresh inputs</text>
-  <text x="854.0" y="2410.0" font-size="11.5" fill="#57606a">a fresh session invents inputs the</text>
-  <text x="854.0" y="2425.5" font-size="11.5" fill="#57606a">scenarios do not use; played by hand,</text>
-  <text x="854.0" y="2441.0" font-size="11.5" fill="#57606a">not yet a phase (section 2)</text>
-  <rect x="1047.0" y="2361.5" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1070.0" y="2374.0" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <rect x="1116.0" y="2370.0" width="260.0" height="118.0" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="1127.0" y="2392.0" font-size="12.5" fill="#1f2328" font-weight="600">5 · Measure</text>
-  <text x="1127.0" y="2410.0" font-size="11.5" fill="#57606a">what is claimed of an outside tool is</text>
-  <text x="1127.0" y="2425.5" font-size="11.5" fill="#57606a">measured before the real thing, and</text>
-  <text x="1127.0" y="2441.0" font-size="11.5" fill="#57606a">what was read is recorded</text>
-  <rect x="1320.0" y="2361.5" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1343.0" y="2374.0" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <rect x="24.0" y="2492.0" width="260.0" height="26.0" rx="4" fill="#ffffff" stroke="#d0d7de"/>
-  <text x="154.0" y="2509.0" font-size="11.5" fill="#1f2328" font-weight="600" text-anchor="middle">436 scenarios, none on the network</text>
-  <rect x="297.0" y="2492.0" width="260.0" height="26.0" rx="4" fill="#ffffff" stroke="#d0d7de"/>
-  <text x="427.0" y="2509.0" font-size="11.5" fill="#1f2328" font-weight="600" text-anchor="middle">none of 891 mutants survived at the gate</text>
-  <rect x="570.0" y="2492.0" width="260.0" height="26.0" rx="4" fill="#ffffff" stroke="#d0d7de"/>
-  <text x="700.0" y="2509.0" font-size="11.5" fill="#1f2328" font-weight="600" text-anchor="middle">5 reviews; 2 defects in a resume</text>
-  <rect x="843.0" y="2492.0" width="260.0" height="26.0" rx="4" fill="#ffffff" stroke="#d0d7de"/>
-  <text x="973.0" y="2509.0" font-size="11.5" fill="#cf222e" font-weight="600" text-anchor="middle">not applied; on the next, 3 defects (§99)</text>
-  <rect x="1116.0" y="2492.0" width="260.0" height="26.0" rx="4" fill="#ffffff" stroke="#d0d7de"/>
-  <text x="1246.0" y="2509.0" font-size="11.5" fill="#1f2328" font-weight="600" text-anchor="middle">2 answers of the forge, before delivery</text>
-  <line x1="427.0" y1="2518.0" x2="427.0" y2="2534.0" stroke="#cf222e" stroke-width="1.5"/>
-  <line x1="700.0" y1="2518.0" x2="700.0" y2="2534.0" stroke="#cf222e" stroke-width="1.5"/>
-  <line x1="973.0" y1="2518.0" x2="973.0" y2="2534.0" stroke="#cf222e" stroke-width="1.5"/>
-  <line x1="1246.0" y1="2518.0" x2="1246.0" y2="2534.0" stroke="#cf222e" stroke-width="1.5"/>
-  <line x1="1246.0" y1="2534.0" x2="184.0" y2="2534.0" stroke="#cf222e" stroke-width="1.5"/>
-  <polyline points="184.0,2534.0 184.0,2520.0" fill="none" stroke="#cf222e" stroke-width="1.5" marker-end="url(#r)"/>
-  <rect x="529.8" y="2523.0" width="460.4" height="20.0" rx="10" fill="#ffffff" stroke="#cf222e"/>
-  <text x="760.0" y="2537.0" font-size="11" fill="#cf222e" text-anchor="middle">a finding goes back to the code, and the checks run again from the first</text>
-  <rect x="24.0" y="2554.0" width="1000.0" height="68.0" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="35.0" y="2576.0" font-size="12.5" fill="#1f2328" font-weight="600">The gate (1a): npm run gate on the host, then CI on Linux and macOS</text>
-  <text x="35.0" y="2594.0" font-size="11.5" fill="#57606a">Linux splits the full suite into two shards and checks changed-line mutants in sixteen lanes. Survived or uncovered mutants require recorded debt.</text>
-  <text x="35.0" y="2609.5" font-size="11.5" fill="#57606a">Linux independently replays Killed, Timeout, RuntimeError, Survived and Ignored; macOS runs the sandbox scenarios.</text>
-  <rect x="968.0" y="2545.5" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="991.0" y="2558.0" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <rect x="1044.0" y="2554.0" width="332.0" height="83.5" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="1055.0" y="2576.0" font-size="12.5" fill="#1f2328" font-weight="600">Commit and delivery</text>
-  <text x="1055.0" y="2594.0" font-size="11.5" fill="#57606a">Deliver checks the saved Linux receipt and CI</text>
-  <text x="1055.0" y="2609.5" font-size="11.5" fill="#57606a">for the same commit, then pushes each branch</text>
-  <text x="1055.0" y="2625.0" font-size="11.5" fill="#57606a">and reads its ruleset result</text>
-  <rect x="1320.0" y="2545.5" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1343.0" y="2558.0" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <polyline points="1024.0,2588.0 1042.0,2588.0" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <line x1="24" y1="2657.5" x2="1376" y2="2657.5" stroke="#d0d7de"/>
-  <text x="24.0" y="2684.5" font-size="15" fill="#1f2328" font-weight="600">5 · Facts from the literature, and what the platform holds of Anthropic</text>
-  <text x="24.0" y="2704.5" font-size="12" fill="#57606a">tools/evidence (npm run evidence -- ask | verify) · tools/watch (npm run watch -- check | read; every Monday in CI)</text>
-  <text x="24.0" y="2723.5" font-size="13" fill="#1f2328" font-weight="600">The evidence desk (S.1): a fact enters the loop only once verified</text>
-  <rect x="24.0" y="2735.5" width="254.0" height="311.0" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="38.0" y="2757.5" font-size="13" fill="#1f2328" font-weight="600">Host</text>
-  <rect x="36.0" y="2775.5" width="230.0" height="68.0" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="47.0" y="2797.5" font-size="12.5" fill="#1f2328" font-weight="600">Orchestrator</text>
-  <text x="47.0" y="2815.5" font-size="11.5" fill="#57606a">asks a question, no code and no</text>
-  <text x="47.0" y="2831.0" font-size="11.5" fill="#57606a">secret</text>
-  <rect x="210.0" y="2767.0" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="233.0" y="2779.5" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <rect x="36.0" y="2853.5" width="230.0" height="68.0" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="47.0" y="2875.5" font-size="12.5" fill="#1f2328" font-weight="600">Ledger</text>
-  <text x="47.0" y="2893.5" font-size="11.5" fill="#57606a">the verified records, written by</text>
-  <text x="47.0" y="2909.0" font-size="11.5" fill="#57606a">the host alone</text>
-  <rect x="210.0" y="2845.0" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="233.0" y="2857.5" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <rect x="36.0" y="2931.5" width="230.0" height="99.0" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="47.0" y="2953.5" font-size="12.5" fill="#1f2328" font-weight="600">Verifier · code, not a model</text>
-  <text x="47.0" y="2971.5" font-size="11.5" fill="#57606a">Registry title matches; no</text>
-  <text x="47.0" y="2987.0" font-size="11.5" fill="#57606a">retraction listed. Passage</text>
-  <text x="47.0" y="3002.5" font-size="11.5" fill="#57606a">matches supplied text after</text>
-  <text x="47.0" y="3018.0" font-size="11.5" fill="#57606a">normalizing Unicode and spaces.</text>
-  <rect x="210.0" y="2923.0" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="233.0" y="2935.5" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <rect x="278.0" y="2735.5" width="204.0" height="311.0" rx="8" fill="#ffffff" stroke="#8c959f" stroke-dasharray="5 4"/>
-  <text x="292.0" y="2757.5" font-size="13" fill="#1f2328" font-weight="600">Desk · nothing trusted</text>
-  <rect x="290.0" y="2775.5" width="180.0" height="83.5" rx="6" fill="#ffffff" stroke="#8c959f"/>
-  <text x="301.0" y="2797.5" font-size="12.5" fill="#1f2328" font-weight="600">out/ · the host writes</text>
-  <text x="301.0" y="2815.5" font-size="11.5" fill="#57606a">the question; the</text>
-  <text x="301.0" y="2831.0" font-size="11.5" fill="#57606a">refusals with their</text>
-  <text x="301.0" y="2846.5" font-size="11.5" fill="#57606a">reasons</text>
-  <rect x="290.0" y="2869.0" width="180.0" height="68.0" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="301.0" y="2891.0" font-size="12.5" fill="#1f2328" font-weight="600">in/ · the librarian</text>
-  <text x="301.0" y="2909.0" font-size="11.5" fill="#57606a">the answer: claims, DOIs,</text>
-  <text x="301.0" y="2924.5" font-size="11.5" fill="#57606a">passages, the full texts</text>
-  <rect x="290.0" y="2947.0" width="180.0" height="68.0" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="301.0" y="2969.0" font-size="12.5" fill="#1f2328" font-weight="600">S.3</text>
-  <text x="301.0" y="2987.0" font-size="11.5" fill="#57606a">full texts fetched by the</text>
-  <text x="301.0" y="3002.5" font-size="11.5" fill="#57606a">host, not by a session</text>
-  <rect x="420.0" y="2938.5" width="40.0" height="17.0" rx="8.5" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="440.0" y="2951.0" font-size="10.5" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <rect x="482.0" y="2735.5" width="210.0" height="311.0" rx="8" fill="#fff8e1" stroke="#bf8700"/>
-  <text x="496.0" y="2757.5" font-size="13" fill="#1f2328" font-weight="600">Librarian's sandbox</text>
-  <rect x="494.0" y="2775.5" width="186.0" height="161.0" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="505.0" y="2797.5" font-size="12.5" fill="#1f2328" font-weight="600">Librarian (S, trial)</text>
-  <text x="505.0" y="2815.5" font-size="11.5" fill="#57606a">Claude Science in its own</text>
-  <text x="505.0" y="2831.0" font-size="11.5" fill="#57606a">sandbox, through a Remote</text>
-  <text x="505.0" y="2846.5" font-size="11.5" fill="#57606a">connector; sees the desk</text>
-  <text x="505.0" y="2862.0" font-size="11.5" fill="#57606a">only, never the repository</text>
-  <text x="505.0" y="2877.5" font-size="11.5" fill="#57606a">nor the ledger; answers</text>
-  <text x="505.0" y="2893.0" font-size="11.5" fill="#57606a">from the literature with a</text>
-  <text x="505.0" y="2908.5" font-size="11.5" fill="#57606a">DOI and a passage word for</text>
-  <text x="505.0" y="2924.0" font-size="11.5" fill="#57606a">word per claim</text>
-  <rect x="624.0" y="2767.0" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="647.0" y="2779.5" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <rect x="494.0" y="2946.5" width="186.0" height="83.5" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="505.0" y="2968.5" font-size="12.5" fill="#1f2328" font-weight="600">S.4</text>
-  <text x="505.0" y="2986.5" font-size="11.5" fill="#57606a">the desk as a module of</text>
-  <text x="505.0" y="3002.0" font-size="11.5" fill="#57606a">the platform, started by</text>
-  <text x="505.0" y="3017.5" font-size="11.5" fill="#57606a">the gateway</text>
-  <rect x="630.0" y="2938.0" width="40.0" height="17.0" rx="8.5" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="650.0" y="2950.5" font-size="10.5" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <polyline points="266.0,2795.5 288.0,2795.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <polyline points="470.0,2795.5 492.0,2805.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <polyline points="492.0,2885.5 472.0,2885.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <polyline points="290.0,2905.5 268.0,2935.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <polyline points="150.0,2921.5 150.0,2903.5" fill="none" stroke="#1a7f37" stroke-width="1.5" marker-end="url(#g)"/>
-  <rect x="36.0" y="3060.5" width="300.0" height="52.5" rx="6" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="47.0" y="3082.5" font-size="12.5" fill="#1f2328" font-weight="600">doi.org · the DOI registry</text>
-  <text x="47.0" y="3100.5" font-size="11.5" fill="#57606a">checked by the verifier, every agency</text>
-  <polyline points="150.0,3040.5 150.0,3058.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <text x="712.0" y="2723.5" font-size="13" fill="#1f2328" font-weight="600">The watch of Anthropic (1b.9): a source that moved is seen, read and decided</text>
-  <rect x="712.0" y="2735.5" width="224.0" height="359.5" rx="8" fill="#fff8e1" stroke="#bf8700"/>
-  <text x="726.0" y="2757.5" font-size="13" fill="#1f2328" font-weight="600">Anthropic · public, untrusted</text>
-  <rect x="724.0" y="2775.5" width="200.0" height="68.0" rx="6" fill="#ffffff" stroke="#8c959f"/>
-  <text x="735.0" y="2797.5" font-size="12.5" fill="#1f2328" font-weight="600">2 pinned packages</text>
-  <text x="735.0" y="2815.5" font-size="11.5" fill="#57606a">Claude Agent SDK, sandbox</text>
-  <text x="735.0" y="2831.0" font-size="11.5" fill="#57606a">runtime</text>
-  <rect x="724.0" y="2851.5" width="200.0" height="68.0" rx="6" fill="#ffffff" stroke="#8c959f"/>
-  <text x="735.0" y="2873.5" font-size="12.5" fill="#1f2328" font-weight="600">2 changelogs</text>
-  <text x="735.0" y="2891.5" font-size="11.5" fill="#57606a">Claude Code, Claude Agent</text>
-  <text x="735.0" y="2907.0" font-size="11.5" fill="#57606a">SDK</text>
-  <rect x="724.0" y="2927.5" width="200.0" height="68.0" rx="6" fill="#ffffff" stroke="#8c959f"/>
-  <text x="735.0" y="2949.5" font-size="12.5" fill="#1f2328" font-weight="600">2 documentation indexes</text>
-  <text x="735.0" y="2967.5" font-size="11.5" fill="#57606a">Claude Code documentation</text>
-  <text x="735.0" y="2983.0" font-size="11.5" fill="#57606a">Claude platform documentation</text>
-  <rect x="724.0" y="3003.5" width="200.0" height="83.5" rx="6" fill="#ffffff" stroke="#8c959f"/>
-  <text x="735.0" y="3025.5" font-size="12.5" fill="#1f2328" font-weight="600">22 pages</text>
-  <text x="735.0" y="3043.5" font-size="11.5" fill="#57606a">headless, CLI, settings,</text>
-  <text x="735.0" y="3059.0" font-size="11.5" fill="#57606a">Agent SDK, Messages API,</text>
-  <text x="735.0" y="3074.5" font-size="11.5" fill="#57606a">errors, streaming, models</text>
-  <rect x="952.0" y="2735.5" width="200.0" height="176.5" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="963.0" y="2757.5" font-size="12.5" fill="#1f2328" font-weight="600">Check · code, not a model</text>
-  <text x="963.0" y="2775.5" font-size="11.5" fill="#57606a">reads HTTPS, four hosts in a</text>
-  <text x="963.0" y="2791.0" font-size="11.5" fill="#57606a">closed list, a time and a</text>
-  <text x="963.0" y="2806.5" font-size="11.5" fill="#57606a">size limit per source;</text>
-  <text x="963.0" y="2822.0" font-size="11.5" fill="#57606a">compares the pins, the</text>
-  <text x="963.0" y="2837.5" font-size="11.5" fill="#57606a">versions, the hash of a</text>
-  <text x="963.0" y="2853.0" font-size="11.5" fill="#57606a">page, the list of an index;</text>
-  <text x="963.0" y="2868.5" font-size="11.5" fill="#57606a">says up to date, behind or</text>
-  <text x="963.0" y="2884.0" font-size="11.5" fill="#57606a">unreadable, never the text</text>
-  <text x="963.0" y="2899.5" font-size="11.5" fill="#57606a">it read</text>
-  <rect x="1096.0" y="2727.0" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1119.0" y="2739.5" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <rect x="952.0" y="2920.0" width="200.0" height="100.5" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="963.0" y="2942.0" font-size="12.5" fill="#1f2328" font-weight="600">Readers in parallel</text>
-  <text x="963.0" y="2959.0" font-size="12.5" fill="#1f2328" font-weight="600">(O.3e)</text>
-  <text x="963.0" y="2977.0" font-size="11.5" fill="#57606a">a small model extracts what</text>
-  <text x="963.0" y="2992.5" font-size="11.5" fill="#57606a">changed, as quotations the</text>
-  <text x="963.0" y="3008.0" font-size="11.5" fill="#57606a">host checks</text>
-  <rect x="1102.0" y="2911.5" width="40.0" height="17.0" rx="8.5" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1122.0" y="2924.0" font-size="10.5" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <rect x="1172.0" y="2735.5" width="204.0" height="114.5" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="1183.0" y="2757.5" font-size="12.5" fill="#1f2328" font-weight="600">Register and record</text>
-  <text x="1183.0" y="2775.5" font-size="11.5" fill="#57606a">each source, the files that</text>
-  <text x="1183.0" y="2791.0" font-size="11.5" fill="#57606a">rely on it and what was read</text>
-  <text x="1183.0" y="2806.5" font-size="11.5" fill="#57606a">of it; the decision taken for</text>
-  <text x="1183.0" y="2822.0" font-size="11.5" fill="#57606a">each change; the two pins</text>
-  <text x="1183.0" y="2837.5" font-size="11.5" fill="#57606a">moved one at a time (1b.8)</text>
-  <rect x="1320.0" y="2727.0" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1343.0" y="2739.5" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <rect x="1172.0" y="2858.0" width="204.0" height="130.0" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="1183.0" y="2880.0" font-size="12.5" fill="#1f2328" font-weight="600">First reading, inventory</text>
-  <text x="1183.0" y="2898.0" font-size="11.5" fill="#57606a">the 22 pages and the two</text>
-  <text x="1183.0" y="2913.5" font-size="11.5" fill="#57606a">indexes, never read yet; what</text>
-  <text x="1183.0" y="2929.0" font-size="11.5" fill="#57606a">Anthropic offers and the</text>
-  <text x="1183.0" y="2944.5" font-size="11.5" fill="#57606a">platform does not use; the</text>
-  <text x="1183.0" y="2960.0" font-size="11.5" fill="#57606a">SDLC playbook enters the</text>
-  <text x="1183.0" y="2975.5" font-size="11.5" fill="#57606a">register</text>
-  <rect x="1326.0" y="2849.5" width="40.0" height="17.0" rx="8.5" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1346.0" y="2862.0" font-size="10.5" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <polyline points="952.0,2795.5 938.0,2795.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <polyline points="1172.0,2795.5 1154.0,2795.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <rect x="712.0" y="3109.0" width="664.0" height="83.5" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="723.0" y="3131.0" font-size="12.5" fill="#1f2328" font-weight="600">When a source moved · the maintainer, never the command</text>
-  <text x="723.0" y="3149.0" font-size="11.5" fill="#57606a">1 · red: the weekly workflow, or the command by hand · 2 · read the difference, not the page · 3 ·</text>
-  <text x="723.0" y="3164.5" font-size="11.5" fill="#57606a">classify: mandatory, pertinent or does not apply, with its reason · 4 · decide; a pin moves alone, with</text>
-  <text x="723.0" y="3180.0" font-size="11.5" fill="#57606a">the gate as its proof · 5 · record the decision and the reading</text>
-  <rect x="1320.0" y="3100.5" width="46.0" height="17.0" rx="8.5" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1343.0" y="3113.0" font-size="10.5" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  </g>
-  </g>
+  </g>  </g>
+  <line x1="24" y1="4104.5" x2="1376" y2="4104.5" stroke="#d0d7de"/>
+  <text x="24" y="4138.5" data-type-role="section-title" font-size="25" font-weight="600" fill="#1f2328">4 · What checks a step before it is delivered</text>
+  <text x="24" y="4166.5" data-type-role="brick-text" font-size="17" fill="#57606a">five checks before the gate; under each, what it gave on one piece of work: the delivery command, 18 November 2026 (journal, §89 to §95)</text>
+  <rect x="24" y="4196.5" width="245" height="136" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="36" y="4226.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">1 · Scenarios</text>
+  <text x="36" y="4252.5" data-type-role="brick-text" font-size="17" fill="#57606a">every test is a Gherkin</text>
+  <text x="36" y="4274.5" data-type-role="brick-text" font-size="17" fill="#57606a">scenario, written with the</text>
+  <text x="36" y="4296.5" data-type-role="brick-text" font-size="17" fill="#57606a">code; it must fail without the</text>
+  <text x="36" y="4318.5" data-type-role="brick-text" font-size="17" fill="#57606a">behaviour it names</text>
+  <rect x="195" y="4184.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="227" y="4202.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="282" y="4196.5" width="245" height="136" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="294" y="4226.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">2 · Mutation</text>
+  <text x="294" y="4252.5" data-type-role="brick-text" font-size="17" fill="#57606a">each changed line is broken</text>
+  <text x="294" y="4274.5" data-type-role="brick-text" font-size="17" fill="#57606a">on purpose: a scenario</text>
+  <text x="294" y="4296.5" data-type-role="brick-text" font-size="17" fill="#57606a">must turn red; a line nothing</text>
+  <text x="294" y="4318.5" data-type-role="brick-text" font-size="17" fill="#57606a">proves is removed</text>
+  <rect x="453" y="4184.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="485" y="4202.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="540" y="4196.5" width="300" height="136" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <text x="552" y="4226.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">3 · Independent review</text>
+  <text x="552" y="4252.5" data-type-role="brick-text" font-size="17" fill="#57606a">a fresh session reads the change</text>
+  <text x="552" y="4274.5" data-type-role="brick-text" font-size="17" fill="#57606a">against the design and cannot</text>
+  <text x="552" y="4296.5" data-type-role="brick-text" font-size="17" fill="#57606a">write: a verdict, and what it could</text>
+  <text x="552" y="4318.5" data-type-role="brick-text" font-size="17" fill="#57606a">not check</text>
+  <rect x="766" y="4184.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="798" y="4202.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="853" y="4196.5" width="265" height="136" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <text x="865" y="4226.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">4 · Fresh inputs</text>
+  <text x="865" y="4252.5" data-type-role="brick-text" font-size="17" fill="#57606a">a fresh session invents inputs</text>
+  <text x="865" y="4274.5" data-type-role="brick-text" font-size="17" fill="#57606a">the scenarios do not use;</text>
+  <text x="865" y="4296.5" data-type-role="brick-text" font-size="17" fill="#57606a">played by hand, not yet a</text>
+  <text x="865" y="4318.5" data-type-role="brick-text" font-size="17" fill="#57606a">phase (section 2)</text>
+  <rect x="1044" y="4184.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1076" y="4202.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="1131" y="4196.5" width="245" height="136" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="1143" y="4226.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">5 · Measure</text>
+  <text x="1143" y="4252.5" data-type-role="brick-text" font-size="17" fill="#57606a">what is claimed of an</text>
+  <text x="1143" y="4274.5" data-type-role="brick-text" font-size="17" fill="#57606a">outside tool is measured</text>
+  <text x="1143" y="4296.5" data-type-role="brick-text" font-size="17" fill="#57606a">before the real thing, and</text>
+  <text x="1143" y="4318.5" data-type-role="brick-text" font-size="17" fill="#57606a">what was read is recorded</text>
+  <rect x="1302" y="4184.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1334" y="4202.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="24" y="4340.5" width="245" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="146.5" y="4361.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">436 scenarios, none on the</text>
+  <text x="146.5" y="4383.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">network</text>
+  <rect x="282" y="4340.5" width="245" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="404.5" y="4361.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">none of 891 mutants</text>
+  <text x="404.5" y="4383.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">survived at the gate</text>
+  <rect x="540" y="4340.5" width="300" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="690" y="4361.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">5 reviews; 2 defects in a resume</text>
+  <rect x="853" y="4340.5" width="265" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="985.5" y="4361.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#cf222e" text-anchor="middle">not applied; on the next, 3</text>
+  <text x="985.5" y="4383.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#cf222e" text-anchor="middle">defects (§99)</text>
+  <rect x="1131" y="4340.5" width="245" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="1253.5" y="4361.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">2 answers of the forge,</text>
+  <text x="1253.5" y="4383.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">before delivery</text>
+  <line x1="404.5" y1="4398.5" x2="404.5" y2="4420.5" stroke="#cf222e" stroke-width="1.5"/>
+  <line x1="690" y1="4398.5" x2="690" y2="4420.5" stroke="#cf222e" stroke-width="1.5"/>
+  <line x1="985.5" y1="4398.5" x2="985.5" y2="4420.5" stroke="#cf222e" stroke-width="1.5"/>
+  <line x1="1253.5" y1="4398.5" x2="1253.5" y2="4420.5" stroke="#cf222e" stroke-width="1.5"/>
+  <line x1="1253.5" y1="4420.5" x2="146.5" y2="4420.5" stroke="#cf222e" stroke-width="1.5"/>
+  <polyline points="146.5,4420.5 146.5,4400.5" fill="none" stroke="#cf222e" stroke-width="1.5" marker-end="url(#r)"/>
+  <rect x="419.034" y="4407.5" width="561.931" height="26" rx="13" fill="#ffffff" stroke="#cf222e"/>
+  <text x="700" y="4425.5" data-type-role="legend" font-size="17" fill="#cf222e" text-anchor="middle">a finding goes back to the code, and the checks run again from the first</text>
+  <rect x="24" y="4464.5" width="940" height="114" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="36" y="4494.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">The gate (1a): npm run gate on the host, then CI on Linux and macOS</text>
+  <text x="36" y="4520.5" data-type-role="brick-text" font-size="17" fill="#57606a">Linux splits the full suite into two shards and checks changed-line mutants in sixteen lanes. Survived or uncovered</text>
+  <text x="36" y="4542.5" data-type-role="brick-text" font-size="17" fill="#57606a">mutants require recorded debt. Linux independently replays Killed, Timeout, RuntimeError, Survived and Ignored;</text>
+  <text x="36" y="4564.5" data-type-role="brick-text" font-size="17" fill="#57606a">macOS runs the sandbox scenarios.</text>
+  <rect x="890" y="4452.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="922" y="4470.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="994" y="4464.5" width="382" height="114" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="1006" y="4494.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Commit and delivery</text>
+  <text x="1006" y="4520.5" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver checks the saved Linux receipt and CI</text>
+  <text x="1006" y="4542.5" data-type-role="brick-text" font-size="17" fill="#57606a">for the same commit, then pushes each</text>
+  <text x="1006" y="4564.5" data-type-role="brick-text" font-size="17" fill="#57606a">branch and reads its ruleset result</text>
+  <rect x="1302" y="4452.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1334" y="4470.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <polyline points="964,4521.5 992,4521.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="24" y1="4614.5" x2="1376" y2="4614.5" stroke="#d0d7de"/>
+  <text x="24" y="4648.5" data-type-role="section-title" font-size="25" font-weight="600" fill="#1f2328">5 · Facts from the literature, and what the platform holds of Anthropic</text>
+  <text x="24" y="4676.5" data-type-role="brick-text" font-size="17" fill="#57606a">tools/evidence (npm run evidence -- ask | verify) · tools/watch (npm run watch -- check | read; every Monday in CI)</text>
+  <text x="24" y="4714.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">The evidence desk (S.1): a fact enters the loop only once verified</text>
+  <rect x="24" y="4730.5" width="400" height="370" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="38" y="4758.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Host</text>
+  <rect x="500" y="4730.5" width="400" height="370" rx="8" fill="#ffffff" stroke="#8c959f" stroke-dasharray="5 4"/>
+  <text x="514" y="4758.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Desk · nothing trusted</text>
+  <rect x="976" y="4730.5" width="400" height="370" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+  <text x="990" y="4758.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Librarian's sandbox</text>
+  <rect x="36" y="4776.5" width="376" height="70" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="48" y="4806.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Orchestrator</text>
+  <text x="48" y="4832.5" data-type-role="brick-text" font-size="17" fill="#57606a">asks a question, no code and no secret</text>
+  <rect x="338" y="4764.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="370" y="4782.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="36" y="4874.5" width="376" height="70" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="48" y="4904.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Ledger</text>
+  <text x="48" y="4930.5" data-type-role="brick-text" font-size="17" fill="#57606a">the verified records, written by the host alone</text>
+  <rect x="338" y="4862.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="370" y="4880.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="36" y="4972.5" width="376" height="114" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="48" y="5002.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Verifier · code, not a model</text>
+  <text x="48" y="5028.5" data-type-role="brick-text" font-size="17" fill="#57606a">Registry title matches; no retraction listed.</text>
+  <text x="48" y="5050.5" data-type-role="brick-text" font-size="17" fill="#57606a">Passage matches supplied text after</text>
+  <text x="48" y="5072.5" data-type-role="brick-text" font-size="17" fill="#57606a">normalizing Unicode and spaces.</text>
+  <rect x="338" y="4960.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="370" y="4978.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="512" y="4776.5" width="376" height="70" rx="6" fill="#ffffff" stroke="#8c959f"/>
+  <text x="524" y="4806.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">out/ · the host writes</text>
+  <text x="524" y="4832.5" data-type-role="brick-text" font-size="17" fill="#57606a">the question; the refusals with their reasons</text>
+  <rect x="512" y="4860.5" width="376" height="92" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <text x="524" y="4890.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">in/ · the librarian</text>
+  <text x="524" y="4916.5" data-type-role="brick-text" font-size="17" fill="#57606a">the answer: claims, DOIs, passages, the full</text>
+  <text x="524" y="4938.5" data-type-role="brick-text" font-size="17" fill="#57606a">texts</text>
+  <rect x="512" y="4966.5" width="376" height="70" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="524" y="4996.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">S.3</text>
+  <text x="524" y="5022.5" data-type-role="brick-text" font-size="17" fill="#57606a">full texts fetched by the host, not by a session</text>
+  <rect x="824" y="4954.5" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="851" y="4972.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
+  <rect x="988" y="4776.5" width="376" height="158" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <text x="1000" y="4806.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Librarian (S, trial)</text>
+  <text x="1000" y="4832.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Science in its own sandbox, through</text>
+  <text x="1000" y="4854.5" data-type-role="brick-text" font-size="17" fill="#57606a">a Remote connector; sees the desk only,</text>
+  <text x="1000" y="4876.5" data-type-role="brick-text" font-size="17" fill="#57606a">never the repository nor the ledger; answers</text>
+  <text x="1000" y="4898.5" data-type-role="brick-text" font-size="17" fill="#57606a">from the literature with a DOI and a passage</text>
+  <text x="1000" y="4920.5" data-type-role="brick-text" font-size="17" fill="#57606a">word for word per claim</text>
+  <rect x="1290" y="4764.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1322" y="4782.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="988" y="4948.5" width="376" height="92" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="1000" y="4978.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">S.4</text>
+  <text x="1000" y="5004.5" data-type-role="brick-text" font-size="17" fill="#57606a">the desk as a module of the platform, started</text>
+  <text x="1000" y="5026.5" data-type-role="brick-text" font-size="17" fill="#57606a">by the gateway</text>
+  <rect x="1300" y="4936.5" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1327" y="4954.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
+  <polyline points="412,4804.5 511,4804.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <polyline points="888,4804.5 987,4804.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <polyline points="988,4888.5 889,4888.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <polyline points="512,4888.5 462,4888.5 462,5000.5 413,5000.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <polyline points="224,4972.5 224,4946.5" fill="none" stroke="#1a7f37" stroke-width="1.5" marker-end="url(#g)"/>
+  <rect x="24" y="5130.5" width="400" height="70" rx="6" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="36" y="5160.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">doi.org · the DOI registry</text>
+  <text x="36" y="5186.5" data-type-role="brick-text" font-size="17" fill="#57606a">checked by the verifier, every agency</text>
+  <polyline points="224,5100.5 224,5128.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="24" y1="5234.5" x2="1376" y2="5234.5" stroke="#d0d7de"/>
+  <text x="24" y="5268.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">The watch of Anthropic (1b.9): a source that moved is seen, read and decided</text>
+  <rect x="24" y="5286.5" width="440" height="420" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+  <text x="38" y="5314.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Anthropic · public, untrusted</text>
+  <rect x="36" y="5332.5" width="416" height="70" rx="6" fill="#ffffff" stroke="#8c959f"/>
+  <text x="48" y="5362.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">2 pinned packages</text>
+  <text x="48" y="5388.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Agent SDK, sandbox runtime</text>
+  <rect x="36" y="5414.5" width="416" height="70" rx="6" fill="#ffffff" stroke="#8c959f"/>
+  <text x="48" y="5444.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">2 changelogs</text>
+  <text x="48" y="5470.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Code, Claude Agent SDK</text>
+  <rect x="36" y="5496.5" width="416" height="92" rx="6" fill="#ffffff" stroke="#8c959f"/>
+  <text x="48" y="5526.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">2 documentation indexes</text>
+  <text x="48" y="5552.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Code documentation; Claude platform</text>
+  <text x="48" y="5574.5" data-type-role="brick-text" font-size="17" fill="#57606a">documentation</text>
+  <rect x="36" y="5600.5" width="416" height="92" rx="6" fill="#ffffff" stroke="#8c959f"/>
+  <text x="48" y="5630.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">22 pages</text>
+  <text x="48" y="5656.5" data-type-role="brick-text" font-size="17" fill="#57606a">headless, CLI, settings, Agent SDK, Messages</text>
+  <text x="48" y="5678.5" data-type-role="brick-text" font-size="17" fill="#57606a">API, errors, streaming, models</text>
+  <rect x="500" y="5286.5" width="420" height="158" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="512" y="5316.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Check · code, not a model</text>
+  <text x="512" y="5342.5" data-type-role="brick-text" font-size="17" fill="#57606a">reads HTTPS, four hosts in a closed list, a time and</text>
+  <text x="512" y="5364.5" data-type-role="brick-text" font-size="17" fill="#57606a">a size limit per source; compares the pins, the</text>
+  <text x="512" y="5386.5" data-type-role="brick-text" font-size="17" fill="#57606a">versions, the hash of a page, the list of an index;</text>
+  <text x="512" y="5408.5" data-type-role="brick-text" font-size="17" fill="#57606a">says up to date, behind or unreadable, never the</text>
+  <text x="512" y="5430.5" data-type-role="brick-text" font-size="17" fill="#57606a">text it read</text>
+  <rect x="846" y="5274.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="878" y="5292.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="500" y="5472.5" width="420" height="92" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="512" y="5502.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Readers in parallel (O.3e)</text>
+  <text x="512" y="5528.5" data-type-role="brick-text" font-size="17" fill="#57606a">a small model extracts what changed, as</text>
+  <text x="512" y="5550.5" data-type-role="brick-text" font-size="17" fill="#57606a">quotations the host checks</text>
+  <rect x="856" y="5460.5" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="883" y="5478.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
+  <rect x="956" y="5286.5" width="420" height="114" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="968" y="5316.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Register and record</text>
+  <text x="968" y="5342.5" data-type-role="brick-text" font-size="17" fill="#57606a">each source, the files that rely on it and what was</text>
+  <text x="968" y="5364.5" data-type-role="brick-text" font-size="17" fill="#57606a">read of it; the decision taken for each change; the</text>
+  <text x="968" y="5386.5" data-type-role="brick-text" font-size="17" fill="#57606a">two pins moved one at a time (1b.8)</text>
+  <rect x="1302" y="5274.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1334" y="5292.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="956" y="5428.5" width="420" height="114" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="968" y="5458.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">First reading, inventory</text>
+  <text x="968" y="5484.5" data-type-role="brick-text" font-size="17" fill="#57606a">the 22 pages and the two indexes, never read yet;</text>
+  <text x="968" y="5506.5" data-type-role="brick-text" font-size="17" fill="#57606a">what Anthropic offers and the platform does not</text>
+  <text x="968" y="5528.5" data-type-role="brick-text" font-size="17" fill="#57606a">use; the SDLC playbook enters the register</text>
+  <rect x="1312" y="5416.5" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1339" y="5434.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
+  <polyline points="500,5314.5 466,5314.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <polyline points="956,5314.5 922,5314.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="24" y="5738.5" width="1352" height="92" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="36" y="5768.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">When a source moved · the maintainer, never the command</text>
+  <text x="36" y="5794.5" data-type-role="brick-text" font-size="17" fill="#57606a">1 · red: the weekly workflow, or the command by hand · 2 · read the difference, not the page · 3 · classify: mandatory, pertinent or does not apply, with its reason · 4 · decide; a</text>
+  <text x="36" y="5816.5" data-type-role="brick-text" font-size="17" fill="#57606a">pin moves alone, with the gate as its proof · 5 · record the decision and the reading</text>
+  <rect x="1302" y="5726.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1334" y="5744.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
 </svg>
