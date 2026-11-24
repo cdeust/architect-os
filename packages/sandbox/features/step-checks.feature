@@ -277,7 +277,7 @@ Feature: the checks of a step, played by the host between the build and the revi
       And the step file "review.brief.md" is the same as the step file "brief.md"
       And the step stdout is the line:
       """
-      {"outcome":"passed","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
+      {"outcome":"passed","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"quality":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
       """
 
     Scenario: a brief with trailing blanks and no check reaches the reviews as it is

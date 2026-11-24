@@ -69,7 +69,10 @@ export function admittedFixture(
     },
     specimens: slots.map(({ role, model, prompt }) => ({
       role,
-      model: { provider: 'anthropic', model },
+      model: {
+        provider: String(role === 'build' ? (subject.step.build.provider ?? 'anthropic') : 'anthropic'),
+        model,
+      },
       prompt_sha256: hash(subject.launcher[prompt]!),
       oracle_sha256: hash('The receipt is named and correctly attributed'),
       cases_sha256: hash(JSON.stringify([caseInput])),

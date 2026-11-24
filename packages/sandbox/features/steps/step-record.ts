@@ -597,3 +597,152 @@ Then('the directory {string} of the worktree holds exactly {string}', function (
 Then('the directory outside the worktree is empty', function () {
   assert.deepEqual(readdirSync(tree(this).outside), []);
 });
+
+Then('the recorded subscription fixture {string} is {string}', function (kind: string, result: string) {
+  const record = validRecord(),
+    session = (record['sessions'] as Record<string, unknown>[])[0]!;
+  const model = 'gpt-6.2-sol',
+    response = {
+      model,
+      request: 1,
+      terminal: 'completed',
+      inputTokens: 2 as number | null,
+      outputTokens: 3 as number | null,
+    },
+    usage = { inputTokens: 2 as number | null, outputTokens: 3 as number | null };
+  Object.assign(session, {
+    provider: 'openai',
+    model,
+    effort: 'medium',
+    client: { version: 'codex-cli 0.170.0', sha256: DIGEST },
+    usage,
+    responses: [response],
+    costUsd: null,
+  });
+  switch (kind) {
+    case 'completed':
+      break;
+    case 'interrupted without usage':
+      session['completed'] = false;
+      response.terminal = 'interrupted';
+      response.inputTokens = usage.inputTokens = null;
+      response.outputTokens = usage.outputTokens = null;
+      break;
+    case 'mixed provider':
+      session['provider'] = 'anthropic';
+      break;
+    case 'incomplete observed':
+    case 'failed observed':
+      session['completed'] = false;
+      response.terminal = kind.split(' ')[0]!;
+      break;
+    case 'legacy unknown cost':
+    case 'legacy client':
+    case 'legacy responses':
+    case 'legacy usage':
+      session['provider'] = 'anthropic';
+      session['costUsd'] = kind === 'legacy unknown cost' ? null : 0;
+      if (kind !== 'legacy client') delete session['client'];
+      if (kind !== 'legacy usage') delete session['usage'];
+      if (kind !== 'legacy responses') delete session['responses'];
+      break;
+    case 'mixed terminals':
+    case 'mixed models':
+      session['responses'] = [
+        response,
+        {
+          ...response,
+          request: 2,
+          terminal: kind === 'mixed terminals' ? 'failed' : 'completed',
+          model: kind === 'mixed models' ? 'gpt-6.2-astra' : model,
+        },
+      ];
+      usage.inputTokens = 4;
+      usage.outputTokens = 6;
+      break;
+    case 'review role':
+      session['role'] = 'review';
+      break;
+    case 'missing client':
+      delete session['client'];
+      break;
+    case 'missing responses':
+      delete session['responses'];
+      break;
+    case 'missing usage':
+      delete session['usage'];
+      break;
+    case 'known price':
+      session['costUsd'] = 0;
+      break;
+    case 'foreign model':
+      session['model'] = response.model = 'other';
+      break;
+    case 'substituted response model':
+      response.model = 'gpt-6.2-astra';
+      break;
+    case 'skipped request':
+      response.request = 2;
+      break;
+    case 'input total':
+      usage.inputTokens = 0;
+      break;
+    case 'output total':
+      usage.outputTokens = 0;
+      break;
+    case 'empty completion':
+      session['responses'] = [];
+      usage.inputTokens = usage.outputTokens = 0;
+      break;
+    case 'failed completion':
+      response.terminal = 'failed';
+      break;
+    default:
+      assert.fail();
+  }
+  assert.equal(stepRecordSchema().safeParse(record).success, result === 'accepted');
+});
+
+import { buildRecord, type RecordedSession } from '../../src/step-record.js';
+import type { ResponseReceipt } from '../../src/responses-proxy.js';
+Then('building the Step record snapshots the response list and preserves missing evidence', function () {
+  const model = 'gpt-6.2-sol';
+  const receipt: ResponseReceipt = {
+    model,
+    request: 1,
+    terminal: 'completed',
+    inputTokens: 2,
+    outputTokens: 3,
+  };
+  const collected = [receipt];
+  const builder: RecordedSession = {
+    role: 'build',
+    provider: 'openai',
+    client: { sha256: DIGEST, version: 'fixture' },
+    config: { model, effort: 'high' },
+    responses: collected,
+    usage: { inputTokens: 2, outputTokens: 3 },
+    exitCode: 0,
+    completed: true,
+    stopped: false,
+    durationSeconds: 1,
+    costUsd: 0,
+    costByModel: {},
+  };
+  const parts = {
+    step: 'fixture',
+    startedAt: new Date(0),
+    tree: { commit: '1'.repeat(40), tree: '2'.repeat(40), clean: true },
+    inputs: {},
+    launcher: {},
+    sessions: [builder],
+    checks: [],
+    reviews: [],
+    outcome: 'passed' as const,
+  };
+  const record = buildRecord(parts);
+  collected.pop();
+  assert.deepEqual(record.sessions[0]!.responses, [receipt]);
+  delete builder.responses;
+  assert.equal(buildRecord(parts).sessions[0]!.responses, undefined);
+});

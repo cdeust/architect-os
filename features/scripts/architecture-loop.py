@@ -121,11 +121,11 @@ for index, box in enumerate((host_box, srt_box, sbx_box)):
 for owner, child in ((host_box, broker_box), (sbx_box, client_box)):
     assert owner[0] < child[0] < child[2] < owner[2] and owner[1] < child[1] < child[3] < owner[3]
 
-pipes = isolation.find("s:path[@id='sbx-process-pipes']", ns)
-assert pipes is not None and pipes.get("data-from") == broker.get("id") and pipes.get("data-to") == client.get("id")
-assert pipes.get("marker-start") and pipes.get("marker-end"), "bidirectional SBX process pipes"
-segment = re.fullmatch(r"M([\d.]+) ([\d.]+) H([\d.]+)", pipes.attrib["d"])
-assert segment, pipes.attrib["d"]
+connection = isolation.find("s:path[@id='sbx-responses-http']", ns)
+assert connection is not None and connection.get("data-from") == broker.get("id") and connection.get("data-to") == client.get("id")
+assert connection.get("marker-start") and connection.get("marker-end"), "bidirectional SBX Responses HTTP connection"
+segment = re.fullmatch(r"M([\d.]+) ([\d.]+) H([\d.]+)", connection.attrib["d"])
+assert segment, connection.attrib["d"]
 start, y, end = map(float, segment.groups())
 assert start == broker_box[2] and end == client_box[0]
 assert max(broker_box[1], client_box[1]) < y < min(broker_box[3], client_box[3])

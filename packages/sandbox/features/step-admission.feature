@@ -146,3 +146,6 @@ Feature: The Step admission receipt binds the approved work and its launcher
 
   Scenario: A host without an effective user identity cannot authorize a Step
     Then Step authority refuses a platform without a user identity
+
+  Scenario: A subscription Step binds the provider of each admitted prompt specimen
+    Then the host checks the subscription builder and each separate reader provider against the receipt

@@ -28,6 +28,8 @@ Feature: Checker profile template (docs/design/orchestration-fable-5-2.md, §13,
       | ${home}/.claude              |
       | ${home}/.claude.json         |
       | ${home}/Library/Keychains    |
+      | ${home}/.local/share/keyrings    |
+      | ${home}/.local/share/kwalletd    |
       | ${sandboxes}                 |
       | ${home}/.npm |
       | ${runtime}/run |

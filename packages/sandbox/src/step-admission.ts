@@ -1,26 +1,13 @@
-import {
-  closeSync,
-  constants,
-  fstatSync,
-  mkdirSync,
-  mkdtempSync,
-  openSync,
-  readSync,
-  realpathSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import { tmpdir, userInfo } from 'node:os';
+import { readPrivateText } from './private-text.js';
 import { parseTool } from './tool.js';
 import { sha256 as admissionDigest } from './step-record.js';
 import type { StepFile } from './step-file.js';
 import type { TreeFingerprint } from './tree-fingerprint.js';
 
-// Use the native provider output bound in tools/plan/src/infrastructure/plan-cli.ts.
-const MAX_ADMISSION_BYTES = 1024 * 1024;
 const sha = z.string().regex(/^[a-f0-9]{64}$/);
 const actor = z.strictObject({
   provider: z.enum(['anthropic', 'openai', 'google']),
@@ -201,10 +188,11 @@ export function requireStepAdmission(value: unknown, subject: StepAdmissionSubje
   const byRole = new Map(proof.specimens.map((item) => [item.role, item]));
   for (const route of required) {
     const evaluated = byRole.get(route.role);
-    // The shipped Step native adapter currently uses Claude Code.
+
     if (
       !evaluated ||
-      evaluated.model.provider !== 'anthropic' ||
+      evaluated.model.provider !==
+        (route.role === 'build' ? (subject.step.build.provider ?? 'anthropic') : 'anthropic') ||
       evaluated.model.model !== route.model ||
       evaluated.prompt_sha256 !== route.prompt_sha256 ||
       !successfulReplays(evaluated)
@@ -249,32 +237,7 @@ export function readStepAdmission(
   if (parent.uid !== uid || !parent.isDirectory() || (parent.mode & 0o077) !== 0) {
     throw new Error('STEP_ADMISSION_REQUIRED');
   }
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-  try {
-    const stat = fstatSync(fd);
-    if (
-      !stat.isFile() ||
-      stat.nlink !== 1 ||
-      stat.uid !== uid ||
-      (stat.mode & 0o077) !== 0 ||
-      stat.size > MAX_ADMISSION_BYTES
-    )
-      throw new Error('STEP_ADMISSION_REQUIRED');
-    const buffer = Buffer.alloc(stat.size + 1);
-    let offset = 0;
-    for (;;) {
-      const count = readSync(fd, buffer, offset, buffer.length - offset, null);
-      if (count === 0) break;
-      offset += count;
-      if (offset === buffer.length) throw new Error('STEP_ADMISSION_REQUIRED');
-    }
-    if (offset !== stat.size) throw new Error('STEP_ADMISSION_REQUIRED');
-    return JSON.parse(
-      new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, offset)),
-    ) as unknown;
-  } finally {
-    closeSync(fd);
-  }
+  return JSON.parse(readPrivateText(path, uid, 'STEP_ADMISSION_REQUIRED')) as unknown;
 }
 
 /** Copies exactly the admitted prompt, profile and tool bytes for use by all native ports. */

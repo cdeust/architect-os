@@ -34,6 +34,8 @@ Feature: Builder profile template
       | ${home}/.claude           |
       | ${home}/.claude.json      |
       | ${home}/Library/Keychains |
+      | ${home}/.local/share/keyrings |
+      | ${home}/.local/share/kwalletd |
       | ${sandboxes}               |
       | ${home}/.npm |
       | ${runtime}/run |

@@ -348,3 +348,33 @@ When(
     this.state['broken'] = broken;
   },
 );
+
+Then('the Step file binds the provider, model and effort of a subscription build', function () {
+  const review = {
+    provider: 'anthropic',
+    dimension: 'correctness',
+    name: 'reader',
+    model: 'claude-opus-5-5',
+    effort: 'high',
+    limitSeconds: 30,
+  };
+  for (const model of ['gpt-6.2-astra', 'gpt-6.2-sol'])
+    for (const effort of ['low', 'medium', 'high', 'xhigh']) {
+      const build = { provider: 'openai', model, effort, limitSeconds: 60 },
+        raw = { build, reviews: [review] };
+      assert.deepEqual(parseStepFile(raw).build, build);
+      assert.deepEqual(parseStepFile(raw).reviews, [review]);
+      for (const other of [
+        { ...build, provider: 'unknown' },
+        { ...build, model: 'other' },
+        { ...build, effort: 'max' },
+      ])
+        assert.throws(() => parseStepFile({ ...raw, build: other }));
+      for (const bad of [
+        { ...review, provider: 'openai' },
+        { ...review, dimension: 'unknown' },
+      ])
+        assert.throws(() => parseStepFile({ ...raw, reviews: [bad] }));
+      assert.throws(() => parseStepFile({ ...raw, scouts: [review] }));
+    }
+});

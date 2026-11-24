@@ -1,5 +1,5 @@
 Feature: no file the rule reads holds docker or colima outside a closed list (docs/design/platform-v3-srt.md, decisions 21 and 22)
-  Production Step uses srt. The offline SBX qualification bench runs separately. The program that measured the cost of containers was removed with
+  Claude uses SRT. The SBX adapter checks the pinned VM policy. The program that measured the cost of containers was removed with
   its script, because it started a virtual machine and pruned the whole daemon. The question is not which files can
   start a process (that has no closed answer in text), it is which files hold the words:
 
@@ -64,6 +64,8 @@ Feature: no file the rule reads holds docker or colima outside a closed list (do
     Background:
       Given the closed list of the files that may hold docker or colima
         | docs/diagrams/architecture.svg                  | passive README illustration: names Docker SBX in visible and accessible labels; the architecture diagram validator restricts it to static shapes and local marker references |
+        | packages/sandbox/sbx/isolation.json             | pinned SBX policy loaded by the host |
+        | packages/sandbox/src/sbx-vm.ts                  | validates the repository of the kit, template and the forbidden socket in the policy |
         | bench/sbx/isolation.json                         | offline SBX qualification data: only the immutable shell kit, base template and forbidden guest socket specified in the scenario below |
         | baseline/overhead-analyze.ts                     | labels the kept results of the measure of the overhead (docker configurations); it reads and writes files and starts nothing |
         | docs/design/platform-v3.html                     | the vision of 29 October 2026, before decisions 21 and 22, a dated record of the container design (Dockerfile trees, a Docker exposure), still cited by invariant A of platform-v3-srt.md (figure 1); it opens with a dated line (19 November 2026): since decisions 21 and 22 the platform has one means of isolation, srt, and no container, and what the page says of containers is history |
