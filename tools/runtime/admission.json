@@ -6,7 +6,7 @@
       "rootFloorBytes": "34359738368",
       "homeFloorBytes": "2147483648",
       "status": "provisional",
-      "basis": "32 GiB on the volume of the root, 2 GiB on the volume of the home. Decision of the owner on 24 November 2026: the workstation works on the volume of the root, and the disk of the account is not what limits a run. Brick 1b confines session writes under the runtime root; account-volume writes by host tools have yet to be measured. The 16 GiB reserve chosen on 19 November stopped every command of the workstation on 24 November while the root had more than a terabyte free. The small reserve that remains is the one of a hosted runner: what the tools that still keep their own state in the home need to start.",
+      "basis": "32 GiB on the volume of the root, 2 GiB on the volume of the home. Decision of the owner on 24 November 2026: the workstation works on the volume of the root, and the disk of the account is not what limits a run. Since the session writes were confined under the root (brick 1b), a run writes nothing on the account filesystem; the 16 GiB reserve chosen on 19 November stopped every command of the workstation on 24 November while the root had more than a terabyte free. The small reserve that remains is the one of a hosted runner: what the tools that still keep their own state in the home need to start.",
       "review": "step 4: the peaks measured by repeated samples of free space during a step, a gate and two overlapping runs replace this operating choice"
     },
     "hosted-runner": {
@@ -20,7 +20,7 @@
       "rootFloorBytes": "68719476736",
       "homeFloorBytes": "17179869184",
       "status": "provisional",
-      "basis": "64 GiB on the volume of the root, 16 GiB on the volume of the home. A provisioning assumption of a persistent host with several sessions: twice the workstation's working-volume reserve, and the account-volume reserve originally chosen for the workstation on 19 November. The multiplier is an operating choice; no server observation nor measured concurrency factor stands behind it.",
+      "basis": "64 GiB on the volume of the root, 16 GiB on the volume of the home. A provisioning assumption of a persistent host with several sessions: twice the working-volume reserve of the workstation, and its account-volume reserve. The multiplier is an operating choice; no server observation nor measured concurrency factor stands behind it.",
       "review": "step 4: the peaks measured by repeated samples of free space during a step, a gate and two overlapping runs replace this operating choice"
     }
   }
