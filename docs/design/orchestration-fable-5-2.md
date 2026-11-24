@@ -304,7 +304,32 @@ Elle ne rejoue rien sur l'hôte, ne lance pas la porte et ne commite pas : ces p
 Suite, O.2 : `builder` et `reviewer` comme modules agents derrière la gateway, jetons par le broker, usage au registre. Elle dépend du câblage natif de la gateway, donc du choix de l'hôte (journal §29).
 
 
-## 13. La table de routage : quatre modèles, par l'hôte (étape O.3, conçue le 17 novembre 2026, non construite)
+## 13. La table de routage : choix de l’hôte par rôle et par ticket (O.3, 17 et 24 novembre 2026)
+
+### Politique du propriétaire au 24 novembre 2026
+
+Cette décision remplace les affectations proposées le 17 novembre. Les hypothèses, leurs protocoles et les résultats HR1 et HR5 ci-dessous restent les observations d'origine. HR1 ne justifie pas d'ajouter un éclaireur à chaque étape. HR5 dépend du modèle et du spécimen. Aucun de ces pilotes ne calibre des seuils de story points.
+
+Une étape sert **un ticket identifié**. La politique locale peut le désigner. En son absence, une seule racine dans le graphe permet un choix sans ambiguïté. Un graphe avec plusieurs racines demande une sélection. Le brief distingue les critères du ticket de ceux du plan global. Les dépendances restent visibles à l'opérateur. La sélection d'un ticket ne certifie pas que ses prédécesseurs sont terminés.
+
+Le fichier du lanceur `packages/sandbox/routing.json` définit les rôles et les candidats ordonnés. Astra propose le plan, Fable le consolide en lisant la proposition, Gemini juge le résultat. L'agent Google reçoit directement les données à relire, sans outil et sans droit d'écriture. Pour le code, l'hôte lui donne le changement réellement produit, y compris les nouveaux fichiers. Un verdict absent ou invalide suspend la revue. Un refus argumenté exige une nouvelle passe. L'hôte ne consulte jamais le fournisseur de l'auteur comme juge de secours.
+
+Pour la construction, les bandes provisoires commencent à 1, 3 et 8 points, selon la politique du 24 novembre. Haiku est réservé aux tickets de 1 ou 2 points munis d'un contrôle exécutable. Sonnet et Terra prennent le travail courant, Opus et Sol les tâches complexes. L'exploration rapide revient à Haiku ou Luna, avec relecture des citations par l'hôte. Un nom de famille sans identifiant exécutable qualifié reste une capacité à qualifier. La liste ordonnée n'autorise aucun changement silencieux de fournisseur en cas d'indisponibilité.
+
+Plan affiche la bande, les points, le rôle, le candidat et l'effort avant approbation. Le lanceur lie sa table et toutes les routes autorisées aux preuves de l'étape. Un contrôle mécanique échoué, un verdict structuré demandant des changements ou une borne de tours observée par le lanceur autorise au plus la bande suivante. La dernière bande arrête la boucle. Ni le texte du constructeur ni une panne de fournisseur ne commande une promotion. Les observations par tentative (modèle, effort, issue, usage et motif) doivent permettre de comparer le coût par ticket accepté, reprises et revues incluses.
+
+| STRIDE | Actif, menace et décision |
+| --- | --- |
+| Usurpation | Le graphe ne nomme aucun modèle ni fournisseur. Le schéma ferme les identités par rôle. Le reçu du lanceur lie le fournisseur, le modèle et le prompt avant exécution. |
+| Altération | Seul le mainteneur du lanceur change la table. Plan lie son empreinte à la prévisualisation. Step la relit côté lanceur et refuse un choix différent, même dans un ticket valide. |
+| Répudiation | Le relevé de l'hôte lie le ticket, ses points, les modèles, les signaux et l'issue. Les journaux de session et le prix inconnu restent distingués des mesures publiées. |
+| Divulgation | L'agent Google reçoit le diff et les consignes approuvées. Le relevé public exclut le prompt, les sorties brutes et les informations du compte. |
+| Déni de service | Un ticket hostile peut gonfler son estimation jusqu'à la bande supérieure, sans créer de session par dépendance. Choix visible avant approbation, durées bornées et une passe par bande limitent le coût. Un quota Gemini épuisé produit une attente sans nouvelle tentative. |
+| Élévation de privilège | Une promotion change uniquement modèle et effort. L'isolation du constructeur, les commandes du checker, les spécimens admis et l'indépendance du juge s'appliquent à chaque passe. |
+
+Les anciens dossiers sans graphe restent rejouables. La mesure sur abonnement, la disponibilité des candidats et la calibration économique exigent des essais distincts autorisés par le propriétaire.
+
+
 
 Le §1 annonçait : « Le premier levier est donc le découpage des étapes ; la table de routage vient après. » Elle n'avait jamais été écrite : la boucle n'emploie que deux modèles, un par session entière, et le plus petit n'y a aucun rôle.
 
