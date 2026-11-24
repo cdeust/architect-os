@@ -39,6 +39,7 @@ export class ClaudeBuilder implements Builder {
   constructor(private readonly launch: StepSession) {}
 
   async build({ config, brief, maxBytes, onOutput }: BuildRequest): Promise<BuildOutcome> {
+    if (config.provider === 'openai') throw Error('BUILDER_PROVIDER');
     const chunks: Buffer[] = [];
     let bytes = 0;
     const { exitCode, stopped } = await this.launch(

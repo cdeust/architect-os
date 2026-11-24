@@ -252,7 +252,7 @@ Feature: fresh inputs for the record of a step, the folder steps/ and the finger
   # expected because: « puis par session son rôle, son modèle, son effort, sa durée et son coût par modèle » (§14): each session keeps its own cost; nothing is summed across sessions in the record
   Scenario: two sessions on the same model keep each its own cost by model
     Given a step folder
-    And the step folder holds a step.json with a build and the reviews "correctness=claude-sonnet-5-5"
+    And the step folder holds a step.json with a build and the reviews "quality=claude-sonnet-5-5"
     And the build session writes the fixture "build-exact.jsonl"
     And the review session writes the fixture "review-sonnet.jsonl"
     When I run the step with the arguments "<folder>"
@@ -277,7 +277,7 @@ Feature: fresh inputs for the record of a step, the folder steps/ and the finger
   # expected because: launcherFiles reads « le fichier de chaque outil qu'elle emploie, avec le prompt et le profil qu'il nomme. Lus ici, avant toute session », and readLauncher « lève s'il manque »
   Scenario Outline: a launcher file that a step with a scout, a check and a review needs is missing: <file>
     Given a step folder
-    And the step folder holds a step.json with a build, the scouts "files=claude-haiku-5-5", the checks "types" and the reviews "correctness=claude-opus-5-5"
+    And the step folder holds a step.json with a build, the scouts "files=claude-haiku-5-5", the checks "types" and the reviews "quality=claude-opus-5-5"
     And the step folder holds the questions of the scouts "files"
     And the launcher file "<file>" is missing
     When I run the step with the arguments "<folder>"
@@ -319,7 +319,7 @@ Feature: fresh inputs for the record of a step, the folder steps/ and the finger
   # expected because: the record holds « celle de chaque prompt et de chaque profil du lanceur » (§14): with a scout, a check and a review, all three tools, their prompts and the three profiles
   Scenario: a step with a scout, a check and a review relies on the whole launcher, each file hashed as read
     Given a step folder
-    And the step folder holds a step.json with a build, the scouts "files=claude-haiku-5-5", the checks "types" and the reviews "correctness=claude-opus-5-5"
+    And the step folder holds a step.json with a build, the scouts "files=claude-haiku-5-5", the checks "types" and the reviews "quality=claude-opus-5-5"
     And the step folder holds the questions of the scouts "files"
     When I run the step with the arguments "<folder>"
     Then the published record launcher lists exactly "code.json profiles/builder.json profiles/checker.json profiles/reviewer.json prompts/build.md prompts/review.md prompts/scout.md review.json scout.json"

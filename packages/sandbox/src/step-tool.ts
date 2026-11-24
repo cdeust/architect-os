@@ -30,6 +30,7 @@ import {
   type CodeProcess,
   type CodeToolDependencies,
 } from './code-tool.js';
+import { buildSbxStep } from './sbx-step.js';
 import { ClaudeBuilder, type Builder, type StepSession, type ToolFile } from './builder.js';
 import { measureSession, type SessionMeasure } from './measure.js';
 import { blocks, parseReviewVerdict, ReviewVerdictSchema } from './review-verdict.js';
@@ -38,7 +39,13 @@ import { SrtSandboxRunner } from './srt-runner.js';
 import type { SandboxRunner } from './port.js';
 import { outputTail, passed, renderChecks, type CheckOutcome, type CheckReport } from './step-checks.js';
 import { parseStepFile, type StepFile } from './step-file.js';
-import { buildRecord, isStepName, stepRecordSchema, type RecordedSession } from './step-record.js';
+import {
+  observedTokens,
+  buildRecord,
+  isStepName,
+  stepRecordSchema,
+  type RecordedSession,
+} from './step-record.js';
 import { reserveStepOutputs, type StepOutputs } from './step-outputs.js';
 import { stepsFolder, type StepsFolder } from './steps-folder.js';
 import { parseTool } from './tool.js';
@@ -121,6 +128,13 @@ function readStep(deps: StepDependencies): {
       error instanceof z.ZodError ? `step.json refusé : ${issues(error)}` : "step.json n'est pas du JSON",
     );
   }
+  if (
+    (step.build.provider ?? 'anthropic') === 'anthropic' &&
+    step.reviews.some(
+      (r) => r.name === 'correctness' || r.name === 'justesse' || r.dimension === 'correctness',
+    )
+  )
+    throw new Refusal('STEP_CORRECTNESS_PROVIDER');
   const brief = deps.readFile(join(folder, 'brief.md'));
   if (brief === undefined || brief.trim() === '') throw new Refusal('brief.md absent ou vide');
   // La question d'un éclaireur est son fichier ; il en faut un, non vide, avant toute session.
@@ -189,7 +203,7 @@ async function playCheck(
   return { name: config.name, command: config.command, exitCode, stopped, durationSeconds, cut, output };
 }
 
-type StepSessionConfig = StepFile['build'];
+type StepSessionConfig = Pick<StepFile['build'], 'model' | 'effort' | 'limitSeconds'>;
 type ReviewConfig = StepFile['reviews'][number];
 type ScoutConfig = StepFile['scouts'][number];
 
@@ -389,6 +403,9 @@ export function launcherFiles(
       files.set(file, readLauncher(file));
     }
   }
+  if (step.build.provider === 'openai') {
+    for (const asset of ['sbx/isolation.json', 'sbx/codex-guest.py']) files.set(asset, readLauncher(asset));
+  }
   // Les contrôles tournent sous le profil `checker`, qu'aucun fichier d'outil ne nomme.
   const checker = 'profiles/checker.json';
   if (step.checks.length > 0) files.set(checker, readLauncher(checker));
@@ -459,10 +476,16 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       maxBytes: definition.authProxy.policy.maxBodyBytes,
       onOutput: (chunk) => deps.appendFile(stream, chunk),
     });
+    if (build.provider !== (step.build.provider ?? 'anthropic')) throw Error('BUILDER_PROVIDER');
     const { report, structuredOutput: _structured, ...metrics } = build.measure;
     deps.writeFile(
       join(outputs.retained, 'build.measure.json'),
-      json({ ...metrics, exitCode: build.exitCode, stopped: build.stopped }),
+      json({
+        ...metrics,
+        costUsd: build.provider === 'openai' ? null : metrics.costUsd,
+        exitCode: build.exitCode,
+        stopped: build.stopped,
+      }),
     );
     deps.writeFile(join(outputs.retained, 'build.report.md'), report);
     const built = sessionSucceeded(build);
@@ -524,7 +547,20 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       launcher,
       sessions: [
         ...scoutOutcomes.map((scout) => recorded('scout', scout.config, scout, scout.config.name)),
-        recorded('build', step.build, build),
+        {
+          ...recorded('build', step.build, build),
+          provider: build.provider,
+          ...(build.client
+            ? {
+                client: build.client,
+                usage: {
+                  inputTokens: observedTokens(build.receipts ?? [], 'inputTokens'),
+                  outputTokens: observedTokens(build.receipts ?? [], 'outputTokens'),
+                },
+                responses: build.receipts,
+              }
+            : {}),
+        },
         ...outcomes.map((review) => recorded('review', review.config, review, review.config.name)),
       ],
       checks: played.map((report) => ({
@@ -552,13 +588,14 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         answers: build.measure.answers,
         turns: build.measure.turns,
         durationSeconds: build.measure.durationSeconds,
-        costUsd: build.measure.costUsd,
+        costUsd: build.provider === 'openai' ? null : build.measure.costUsd,
         cacheReadPerAnswer: build.measure.cacheReadPerAnswer,
         costByModel: build.measure.costByModel,
       },
       checks,
       reviews,
-      costUsd: measures.reduce((sum, measure) => sum + measure.costUsd, 0),
+      costUsd:
+        build.provider === 'openai' ? null : measures.reduce((sum, measure) => sum + measure.costUsd, 0),
       costByModel: sumByModel(measures.map((measure) => measure.costByModel)),
       record: `steps/${name}/record.json`,
     };
@@ -715,7 +752,14 @@ export function stepDependencies(proc: CodeProcess): StepDependencies {
       }
     },
     session: launch,
-    builder: new ClaudeBuilder(launch),
+    builder: {
+      build: (request) =>
+        request.config.provider === 'openai'
+          ? buildSbxStep(request, admittedRoot(), PKG, proc.env.ARCHITECT_OS_RUNTIME_ROOT!, (line) =>
+              proc.stderr.write(line),
+            )
+          : new ClaudeBuilder(launch).build(request),
+    },
     check: (...args) =>
       sandboxCheck(new SrtSandboxRunner(srtOptions(proc, {}, admittedRoot())), cwd)(...args),
     now: () => Date.now(),

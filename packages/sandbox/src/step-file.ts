@@ -26,7 +26,17 @@ const duplicated = (sessions: readonly { name: string }[]): string[] => [
 /** Une liste de sessions nommées (revues ou éclaireurs), au plus 8, chaque nom une seule fois dans la liste. */
 const namedSessions = (kind: string) =>
   z
-    .array(sessionSchema().extend({ name: nameSchema() }))
+    .array(
+      sessionSchema().extend({
+        name: nameSchema(),
+        ...(kind === 'review'
+          ? {
+              provider: z.literal('anthropic').optional(),
+              dimension: z.enum(['correctness', 'general']).optional(),
+            }
+          : {}),
+      }),
+    )
     .max(8)
     .refine((sessions) => duplicated(sessions).length === 0, {
       error: (issue) => `duplicate ${kind} name: ${duplicated(issue.input as { name: string }[]).join(', ')}`,
@@ -65,7 +75,14 @@ const checksSchema = () =>
  */
 export const stepFileSchema = () =>
   z.strictObject({
-    build: sessionSchema(),
+    build: z.union([
+      sessionSchema().extend({ provider: z.literal('anthropic').optional() }),
+      sessionSchema().extend({
+        provider: z.literal('openai'),
+        model: z.enum(['gpt-6.2-astra', 'gpt-6.2-sol']),
+        effort: z.enum(['low', 'medium', 'high', 'xhigh']),
+      }),
+    ]),
     scouts: namedSessions('scout'),
     checks: checksSchema(),
     reviews: namedSessions('review'),

@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
+import { createParser, type EventSourceMessage } from 'eventsource-parser';
 
 export type CodexModel = 'gpt-6.2-astra' | 'gpt-6.2-sol';
 export interface ProxyBudget {
@@ -23,8 +24,8 @@ export interface ResponseReceipt {
   model: CodexModel;
   request: number;
   terminal: 'completed' | 'incomplete' | 'failed' | 'interrupted';
-  inputTokens: number;
-  outputTokens: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
 }
 type AccountAccess = (signal: AbortSignal) => Promise<string>;
 const digest = (value: string) => createHash('sha256').update(value).digest();
@@ -42,6 +43,7 @@ const responseHeaders = [
   'x-codex-rate-limit-reached-type',
   'retry-after',
 ] as const;
+const tokenLimit = Symbol();
 const requestHeaders = ['x-codex-turn-state'] as const;
 function select(headers: Headers, names: readonly string[]) {
   const selected: Record<string, string> = {};
@@ -80,7 +82,7 @@ function admittedBody(bytes: Buffer, model: CodexModel) {
       })
       .parse(parseBody(new TextDecoder('utf8', { fatal: true }).decode(bytes)));
     for (const item of body.input) {
-      if (item && typeof item === 'object' && 'type' in item && item.type === 'additional_tools')
+      if (z.object({ type: z.literal('additional_tools') }).safeParse(item).success)
         z.object({ tools: toolsSchema }).parse(item);
     }
   } catch {
@@ -101,57 +103,47 @@ const terminalSchema = z.object({
   response: z.object({ model: z.string(), status: z.enum(statuses), usage: usageSchema.nullish() }),
 });
 
-// SSE dispatch is delimited by an empty line. Keep one event for observation while passing the original chunks on.
+// Only terminal events have host semantics. Codex interprets every other notification.
 class TerminalObserver {
-  private decoder = new TextDecoder('utf-8', { fatal: true });
-  private line = '';
-  private data: string[] = [];
-  private lastCR = false;
-  terminal?: Omit<ResponseReceipt, 'request' | 'model'>;
+  private readonly decoder = new TextDecoder('utf-8', { fatal: true });
+  private readonly parser = createParser({ onEvent: (message) => this.observe(message) });
+  private terminal?: Omit<ResponseReceipt, 'request' | 'model'>;
 
   constructor(private readonly model: CodexModel) {}
-  feed(chunk?: Uint8Array) {
-    const decoded = this.decoder.decode(chunk, { stream: chunk !== undefined });
-    for (const segment of decoded.split(/(\r|\n)/u)) {
-      if (!segment) continue;
-      if (segment === '\r' || segment === '\n') {
-        if (segment !== '\n' || !this.lastCR) this.readLine();
-        this.lastCR = segment === '\r';
-      } else {
-        this.lastCR = false;
-        this.line += segment;
-      }
-    }
+  feed(chunk: Uint8Array) {
+    this.parser.feed(this.decoder.decode(chunk, { stream: true }));
   }
-  private readLine() {
-    const line = this.line;
-    this.line = '';
-    if (line.startsWith('data:')) this.data.push(line.slice(5).replace(/^ /u, ''));
-    else if (!line && this.data.length) {
-      const data = this.data.join('\n');
-      this.data = [];
-      if (data === '[DONE]') return;
-      const event = JSON.parse(data);
-      if (event.type === 'error') throw Error('RESPONSES_STREAM');
-      if (!statuses.some((status) => event.type === 'response.' + status)) return;
-      const { type, response } = terminalSchema.parse(event);
-      if (
-        this.terminal ||
-        type !== 'response.' + response.status ||
-        response.model !== this.model ||
-        (!response.usage && response.status === 'completed')
-      )
-        throw Error('RESPONSES_STREAM');
-      this.terminal = {
-        terminal: response.status,
-        inputTokens: response.usage?.input_tokens ?? 0,
-        outputTokens: response.usage?.output_tokens ?? 0,
-      };
+  private observe({ event: label, data }: EventSourceMessage) {
+    const isTerminal = (value: unknown) => statuses.some((status) => value === 'response.' + status);
+    if (label && !isTerminal(label)) return;
+    let body;
+    if (label) body = JSON.parse(data);
+    else {
+      try {
+        body = JSON.parse(data);
+      } catch {
+        return;
+      }
+      if (!isTerminal(body?.type)) return;
     }
+    const { type, response } = terminalSchema.parse(body);
+    if (
+      this.terminal ||
+      (label && label !== type) ||
+      type !== 'response.' + response.status ||
+      response.model !== this.model ||
+      (!response.usage && response.status === 'completed')
+    )
+      throw Error();
+    this.terminal = {
+      terminal: response.status,
+      inputTokens: response.usage?.input_tokens ?? null,
+      outputTokens: response.usage?.output_tokens ?? null,
+    };
   }
   finish() {
-    this.feed();
-    if (this.line || this.data.length || !this.terminal) throw Error('RESPONSES_STREAM');
+    this.parser.feed(this.decoder.decode());
+    if (!this.terminal) throw Error();
     return this.terminal;
   }
 }
@@ -173,7 +165,7 @@ export class ResponsesProxy {
     private readonly record: (event: ResponseReceipt) => void,
     private readonly upstream: typeof fetch = fetch,
   ) {
-    for (const value of [budget.seconds, budget.bytes, budget.tokens, budget.requests])
+    for (const value of Object.values(budget))
       if (!Number.isSafeInteger(value) || value <= 0) throw Error('RESPONSES_BUDGET');
     this.signal = AbortSignal.any([this.stop.signal, AbortSignal.timeout(budget.seconds * 1000)]);
   }
@@ -199,8 +191,8 @@ export class ResponsesProxy {
       model: this.model,
       request: ++this.requests,
       terminal: 'interrupted',
-      inputTokens: 0,
-      outputTokens: 0,
+      inputTokens: null,
+      outputTokens: null,
     };
     try {
       const access = await this.access(this.signal);
@@ -220,12 +212,10 @@ export class ResponsesProxy {
         body: new Uint8Array(request.body),
       });
       this.signal.throwIfAborted();
-      if (
-        response.status !== 200 ||
-        response.headers.get('content-type')?.split(';')[0]?.trim() !== 'text/event-stream' ||
-        !response.body
-      ) {
-        await response.body?.cancel();
+      if (!response.body) throw Error();
+      const mediaType = response.headers.get('content-type')?.split(';')[0]?.trim();
+      if (response.status !== 200 || mediaType !== 'text/event-stream') {
+        await response.body.cancel();
         throw Error();
       }
       await downstream.start(response.status, select(response.headers, responseHeaders));
@@ -234,21 +224,18 @@ export class ResponsesProxy {
         this.signal.throwIfAborted();
         this.bytes += chunk.length;
         if (this.bytes > this.budget.bytes) throw Error();
-        observer.feed(chunk);
         await downstream.write(chunk);
+        observer.feed(chunk);
       }
       this.signal.throwIfAborted();
       Object.assign(receipt, observer.finish());
-      this.tokens += receipt.inputTokens + receipt.outputTokens;
-      if (this.tokens > this.budget.tokens) {
-        this.revoke();
-        throw Error('RESPONSES_BUDGET');
-      }
+      this.tokens += (receipt.inputTokens ?? 0) + (receipt.outputTokens ?? 0);
+      if (this.tokens > this.budget.tokens) throw tokenLimit;
       if (receipt.terminal !== 'completed') this.revoke();
       return receipt;
     } catch (error) {
       this.revoke();
-      throw Error(this.tokens > this.budget.tokens ? 'RESPONSES_BUDGET' : 'RESPONSES_STREAM');
+      throw Error(error === tokenLimit ? 'RESPONSES_BUDGET' : 'RESPONSES_STREAM');
     } finally {
       this.busy = false;
       this.record({ ...receipt });

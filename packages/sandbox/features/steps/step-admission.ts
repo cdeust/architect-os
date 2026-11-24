@@ -100,7 +100,12 @@ Then('Step admission refuses a changed {string}', function (field: string) {
     'renamed scout': {
       step: { ...original.step, scouts: [{ ...original.step.scouts[0]!, name: 'references' }] },
     },
-    'build model': { step: { ...original.step, build: { ...original.step.build, model: 'other-model' } } },
+    'build model': {
+      step: {
+        ...original.step,
+        build: { ...original.step.build, provider: 'anthropic', model: 'other-model' },
+      },
+    },
   };
   assert.ok(Object.hasOwn(stale, field));
   const specimenMismatch = field === 'renamed scout' || field === 'build model';

@@ -11,3 +11,8 @@ Feature: The Step builder
       | memory  | completed |
       | Claude  | stopped   |
       | memory  | stopped   |
+      | Codex   | completed |
+      | Codex   | stopped   |
+
+  Scenario: A request for the other provider never enters SRT
+    Then a Claude Builder rejects a Codex session before launch

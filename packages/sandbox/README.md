@@ -125,3 +125,23 @@ Ces deux risques sont copiés tels quels du document. Depuis le schéma du journ
 
 - **R-1** : le trousseau est introuvable depuis la sandbox, aucun identifiant n'y entre, et le réseau se limite au proxy et à npm. Il reste deux voies. Une sortie de données par le contenu envoyé au modèle ou par les URL de npm. Et un jeton de session, valable seulement pendant la session et seulement vers `/v1/messages`.
 - **R-2** : les dossiers de session ne sont plus partagés avec l'hôte. Le reste de R-2 (code lancé par l'hôte dans le worktree, refs locales autres que `main`) demeure.
+
+## Codex in Docker SBX
+
+An admitted Step chooses Codex with this construction specification. Its scouts, checks, reviews and publication keep their existing Step entry points.
+
+```json
+{ "build": { "provider": "openai", "model": "gpt-6.2-sol", "effort": "medium", "limitSeconds": 600 } }
+```
+
+The other supported model is `gpt-6.2-astra`. Build effort accepts `low`, `medium`, `high` and `xhigh`. An omitted builder provider selects Claude. Reviews in Step currently run Claude under SRT. Step refuses a Claude build with a correctness review before any session starts. It recognizes the explicit review dimension `correctness` and the legacy names `correctness` and `justesse`. A Gemini re-reading runs separately through Google’s native agent.
+
+The host requires the exact SBX CLI, shell kit and template digest in [the SBX policy](sbx/isolation.json). Put the pinned Linux ARM64 archive at `$ARCHITECT_OS_RUNTIME_ROOT/cache/sbx/codex-0.170.0-linux-arm64.tgz`. Use a trusted launcher outside the target worktree. The host and guest check the archive before extraction. The isolated guest also checks the native executable’s digest, version and UID before sending a request.
+
+Create `state/sbx` under the admitted runtime with mode 0700. In that directory, `limits.json` (mode 0600) takes three positive integer fields. `requests` counts all dispatched calls, `bytes` counts request and response bodies together, and `tokens` counts terminal input plus output tokens. Choose all three for the account and work assigned. A tool turn can require several requests. SIWC reports tokens after generation. An over-budget terminal stops the run, and a request already sent can consume more than the remaining token allowance. [SIWC limits](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations)
+
+The host prints a loopback URL for browser consent on its first model request. It uses PKCE, verifies the returned identity with the issuer’s keys, and verifies the visible model in the same account’s catalogue. A new Step process requests fresh consent. Within a Step, access-token renewal is serialized. Subsequent sign-ins reuse `host-id` and `registration.json`, which contain the host identifier, client identifier, issuer and a subject digest. Access, refresh and ID tokens live in process memory. Every VM receives only its run capability over its process pipes. Within the VM, the native client uses guest loopback. The host’s proxy opens no VM-facing network socket. [Registration](https://developers.openai.com/siwc/token-sharing-open-source/sign-in) · [Renewal](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions)
+
+`state/sbx/usage.jsonl` contains host metering metadata. The retained build stream nests native claims under `guest` and includes the host’s VM removal receipt. The Step record includes the selected provider, model, effort, client version, binary digest and observed response usage. The monetary cost of subscription inference is unknown.
+
+For offline verification, set `ARCHITECT_OS_TEST_CODEX_ARCHIVE` to the pinned archive and run `./aos -- npx cucumber-js --profile replay bench/sbx/native-builder.feature --format summary`. The CLI fixture supplies the provider and identity service in memory, performs the loopback callbacks and runs the installed native binary. Each run removes and checks its VM. The historical Antigravity probe is documented in [the bench](../../bench/sbx/antigravity.md).

@@ -42,7 +42,7 @@ async function preflight(archive, limitMs) {
     const receipt = JSON.parse(run.stdout);
     if (receipt.session?.created !== false || receipt.session.errorCode !== -32000)
       throw new Error('SBX_EXPECTED_OFFLINE_SESSION_REFUSAL');
-    return { release, ...receipt };
+    return { release, guest: receipt };
   });
 }
 

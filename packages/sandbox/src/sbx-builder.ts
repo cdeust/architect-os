@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { createReadStream, lstatSync, realpathSync } from 'node:fs';
 import { once } from 'node:events';
 import { relative, isAbsolute, sep } from 'node:path';
 import { z } from 'zod';
@@ -11,7 +11,7 @@ import {
   type ResponseReceipt,
   type CodexModel,
 } from './responses-proxy.js';
-import { withSbxVm, checkSbxWorktree, type SbxPolicy, type SbxVm } from './sbx-vm.js';
+import { withSbxVm, SbxInterrupted, checkSbxWorktree, type SbxPolicy, type SbxVm } from './sbx-vm.js';
 
 const resultSchema = z.strictObject({
   kind: z.literal('result'),
@@ -89,7 +89,9 @@ async function nativeTurn(vm: SbxVm, proxy: ResponsesProxy, request: BuildReques
     for await (const frame of frames(child.stdout, request.maxBytes)) {
       if (guest) throw Error('SBX_EXTRA_FRAME');
       if (frame?.kind === 'result') {
-        guest = resultSchema.parse(frame).guest;
+        const parsed = resultSchema.safeParse(frame);
+        if (!parsed.success) throw Error('SBX_RESULT_INVALID');
+        guest = parsed.data.guest;
         child.stdin.end();
         continue;
       }
@@ -124,17 +126,72 @@ export interface SbxSettings {
   record: (r: ResponseReceipt) => void;
   upstream?: typeof fetch;
 }
+type NativeOutcome = {
+  name: string;
+  guest?: z.infer<typeof resultSchema>['guest'];
+  stopped: boolean;
+};
+async function runNative(
+  { policy, archive, guestSource }: SbxSettings,
+  request: BuildRequest,
+  proxy: ResponsesProxy,
+): Promise<NativeOutcome> {
+  try {
+    const { name, result: guest } = await withSbxVm(
+      request.worktree,
+      policy,
+      request.config.limitSeconds,
+      async (vm) => {
+        await vm.copy(archive, '/tmp/aos-client.tgz');
+        await vm.copy(guestSource, '/tmp/aos-guest.py');
+        await vm.setup(['/usr/bin/python3', '-I', '/tmp/aos-guest.py', 'install', policy.archiveSha512]);
+        await vm.setup([
+          '/usr/bin/install',
+          '-o',
+          '0',
+          '-g',
+          '0',
+          '-m',
+          '0444',
+          '--',
+          '/tmp/aos-guest.py',
+          '/opt/aos-builder/guest.py',
+        ]);
+        const revoke = () => proxy.revoke();
+        vm.signal.addEventListener('abort', revoke, { once: true });
+        try {
+          return await nativeTurn(vm, proxy, request, policy);
+        } catch (error) {
+          if (error instanceof Error && error.message.startsWith('RESPONSES_')) return undefined;
+          throw error;
+        } finally {
+          vm.signal.removeEventListener('abort', revoke);
+        }
+      },
+    );
+
+    return { name, guest, stopped: false };
+  } catch (error) {
+    if (error instanceof SbxInterrupted) return { name: error.vm, stopped: true };
+    throw error;
+  }
+}
 export class SbxBuilder implements Builder {
-  constructor(private readonly settings: SbxSettings) {}
+  constructor(
+    private readonly settings: SbxSettings,
+    private readonly run = runNative,
+  ) {}
   async build(request: BuildRequest): Promise<BuildOutcome> {
     const { policy, archive, guestSource, budget, access, record, upstream } = this.settings;
+    if (request.config.provider !== 'openai') throw Error('BUILDER_PROVIDER');
     const model = z.enum(['gpt-6.2-astra', 'gpt-6.2-sol']).parse(request.config.model) as CodexModel;
     for (const outside of [archive, guestSource, process.env.ARCHITECT_OS_RUNTIME_ROOT!]) {
-      const path = relative(request.worktree, outside);
+      const path = relative(request.worktree, realpathSync(outside));
       if (path !== '..' && !path.startsWith('..' + sep) && !isAbsolute(path))
         throw Error('SBX_HOST_ASSET_IN_WORKTREE');
     }
     checkSbxWorktree(request.worktree);
+    if (!lstatSync(archive).isFile()) throw Error('SBX_ARCHIVE_REQUIRED');
     const hasher = createHash('sha512');
     for await (const chunk of createReadStream(archive)) hasher.update(chunk);
     if (hasher.digest('base64') !== policy.archiveSha512) throw Error('SBX_ARCHIVE_DIGEST');
@@ -151,36 +208,14 @@ export class SbxBuilder implements Builder {
     );
     const start = Date.now();
     try {
-      const { name, result: guest } = await withSbxVm(
-        request.worktree,
-        policy,
-        request.config.limitSeconds,
-        async (vm) => {
-          await vm.copy(archive, '/tmp/aos-client.tgz');
-          await vm.copy(guestSource, '/tmp/aos-guest.py');
-          await vm.setup(['/usr/bin/python3', '-I', '/tmp/aos-guest.py', 'install', policy.archiveSha512]);
-          await vm.setup([
-            '/usr/bin/install',
-            '-o',
-            '0',
-            '-g',
-            '0',
-            '-m',
-            '0444',
-            '--',
-            '/tmp/aos-guest.py',
-            '/opt/aos-builder/guest.py',
-          ]);
-          return nativeTurn(vm, proxy, request, policy);
-        },
-      );
+      const { name, guest, stopped } = await this.run(this.settings, request, proxy);
       const accepted =
-        guest.completed &&
+        guest?.completed === true &&
         guest.exitCode === 0 &&
         receipts.length > 0 &&
         receipts.every((r) => r.terminal === 'completed');
-      const inputTokens = receipts.reduce((n, r) => n + r.inputTokens, 0),
-        outputTokens = receipts.reduce((n, r) => n + r.outputTokens, 0);
+      const inputTokens = receipts.reduce((n, r) => n + (r.inputTokens ?? 0), 0),
+        outputTokens = receipts.reduce((n, r) => n + (r.outputTokens ?? 0), 0);
       const evidence = {
         vm: name,
         removed: true,
@@ -197,8 +232,8 @@ export class SbxBuilder implements Builder {
       request.onOutput(output);
       return {
         provider: 'openai',
-        exitCode: guest.exitCode,
-        stopped: false,
+        exitCode: guest?.exitCode ?? 1,
+        stopped,
         measure: {
           ...measureSession(''),
           completed: accepted,

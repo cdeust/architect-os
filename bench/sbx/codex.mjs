@@ -27,7 +27,7 @@ async function run(archive) {
       },
       async verify(workspace, receipt) {
         const after = await readWitness(workspace, witness, Buffer.from(expectedMarker));
-        return { ...receipt, external_witness_before: beforeHash, external_witness_after: sha256(after) };
+        return { guest: receipt, external_witness_before: beforeHash, external_witness_after: sha256(after) };
       },
     },
     async ({ workspace, copyIn, exec }) => {

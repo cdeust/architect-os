@@ -1,6 +1,6 @@
 # Builder qualification in Docker Sandboxes
 
-These operator-run probes exercise the pinned Linux ARM64 clients in Docker Sandboxes 0.54.0. They cover offline client behavior and the ChatGPT subscription path in the builder qualification design. Production Step uses its admitted Claude builder under SRT. [Builder qualification design](../../docs/design/orchestration-fable-5-2.md)
+These operator-run probes exercise the pinned Linux ARM64 clients in Docker Sandboxes 0.54.0. They cover offline client behavior and the ChatGPT subscription path in the builder qualification design. The first nine trials below used a text-only host implementation. Production Step now runs Claude under SRT and Codex under SBX. The [production scenarios](native-builder.feature) exercise native tool calls through the host proxy with an offline provider. [Builder qualification design](../../docs/design/orchestration-fable-5-2.md)
 
 Start the commands through the repository launcher, with the two release archives on the development volume. The Codex input is the npm tarball for `@openai/codex@0.170.0-linux-arm64`. The [Antigravity probe](antigravity.md) records Google's original release URL and checksum. The host selects the installed shell template and its agent kit by separate immutable references from `isolation.json`. Before staging the client it checks the actual VM image digest and installed kit against those references. Both probes verify the archive and Linux executable.
 

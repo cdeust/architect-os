@@ -37,7 +37,7 @@ Then(
       requests++;
       const response = { id: 'resp_fixture_' + requests, object: 'response', model };
       const cmd =
-        "printf 'built by client' > patch.txt && if printf 'changed' > steps/protected || printf 'changed' > ../outside; then exit 1; else printf 'writes refused'; fi";
+        "printf 'built by client' > patch.txt && if printf 'changed' > steps/protected || printf 'changed' > ../outside || printf 'changed' > /tmp/aos-tool-witness; then exit 1; else printf 'writes refused'; fi";
       const item =
         requests === 1
           ? {
@@ -89,7 +89,7 @@ Then(
     });
     try {
       const result = await builder.build({
-        config: { model, effort: 'medium', limitSeconds: 180 },
+        config: { provider: 'openai', model, effort: 'medium', limitSeconds: 180 },
         worktree: work,
         brief: 'Make the requested file.',
         systemPrompt: 'Work inside this project.',
@@ -243,3 +243,147 @@ Then('SBX refuses a worktree with a hard link to an outside witness', function (
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+import { copyFileSync, realpathSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { randomBytes } from 'node:crypto';
+import { resolve } from 'node:path';
+import { git } from './tree-fingerprint.js';
+import { fingerprintTree } from '../../src/tree-fingerprint.js';
+import { launcherFiles } from '../../src/step-tool.js';
+import { parseStepFile } from '../../src/step-file.js';
+import { admittedFixture } from './admission-fixture.js';
+Then(
+  'the production Step command publishes a native {string} patch against an offline provider',
+  { timeout: 240000 },
+  async function (model: string) {
+    const launcher = resolve(PKG, '../..');
+    const fixture = realpathSync(mkdtempSync(join(tmpdir(), 'sbx-step-cli-')));
+    // Keep the synthetic admitted root short enough for SRT's macOS Unix socket; reserve it exclusively.
+    let runtime: string;
+    for (;;) {
+      runtime = join(process.env.ARCHITECT_OS_RUNTIME_ROOT!, randomBytes(1).toString('hex'));
+      try {
+        mkdirSync(runtime, { mode: 0o700 });
+        break;
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      }
+    }
+    const repo = join(fixture, 'repo'),
+      work = join(repo, '.claude/worktrees/native');
+    const intake = join(fixture, 'intake', 'native'),
+      auth = join(runtime, 'fixture-home/.config/architect-os/step-admission');
+    const privateDir = (p: string) => mkdirSync(p, { mode: 0o700, recursive: true });
+    for (const p of [
+      runtime,
+      auth,
+      work,
+      intake,
+      join(runtime, 'cache/sbx'),
+      join(runtime, 'state/sbx'),
+      join(work, '.claude'),
+      join(work, '.codex'),
+    ])
+      privateDir(p);
+    const archive = committed().archive;
+    copyFileSync(
+      process.env.ARCHITECT_OS_TEST_CODEX_ARCHIVE ??
+        join(process.env.ARCHITECT_OS_RUNTIME_ROOT!, 'cache', 'sbx', archive),
+      join(runtime, 'cache/sbx', archive),
+    );
+    const raw = JSON.stringify({
+      build: { provider: 'openai', model, effort: 'medium', limitSeconds: 180 },
+      checks: [{ name: 'patch', command: ['test', '-f', 'result.txt'], limitSeconds: 30 }],
+      reviews: [
+        {
+          name: 'correctness',
+          provider: 'anthropic',
+          model: 'claude-opus-5-5',
+          effort: 'medium',
+          limitSeconds: 30,
+        },
+      ],
+    });
+    // A synthetic repository with linked-worktree metadata, all inside the disposable test directory.
+    git(repo, 'init', '-q');
+    git(repo, 'commit', '--allow-empty', '-qm', 'offline');
+    const metadata = join(repo, '.git/worktrees/native');
+    privateDir(metadata);
+    writeFileSync(join(work, '.git'), 'gitdir: ' + metadata + '\n');
+    writeFileSync(join(metadata, 'commondir'), '../..\n');
+    writeFileSync(join(metadata, 'gitdir'), join(work, '.git') + '\n');
+    writeFileSync(join(metadata, 'HEAD'), git(repo, 'rev-parse', 'HEAD') + '\n');
+    copyFileSync(
+      join(process.env.ARCHITECT_OS_RUNTIME_ROOT!, '.architect-os-runtime-root'),
+      join(runtime, '.architect-os-runtime-root'),
+    );
+    writeFileSync(
+      join(runtime, 'state/sbx/limits.json'),
+      JSON.stringify({ requests: 2, tokens: 16, bytes: 1048576 }),
+      { mode: 0o600 },
+    );
+    const inputs = { 'step.json': raw, 'brief.md': 'Write the requested file.\n' };
+    for (const [name, text] of Object.entries(inputs)) writeFileSync(join(intake, name), text);
+    const step = parseStepFile(JSON.parse(raw));
+    const subject = {
+      name: 'native',
+      worktree: work,
+      tree: fingerprintTree(work),
+      inputs,
+      step,
+      launcher: launcherFiles((f) => readFileSync(join(PKG, f), 'utf8'), step),
+    };
+    const receipt = join(auth, 'grant.json');
+    writeFileSync(receipt, JSON.stringify(admittedFixture(subject)), { mode: 0o600 });
+    const bin = join(fixture, 'bin');
+    privateDir(bin);
+    const reviewFixture = join(PKG, 'fixtures/review-accept-proposal.jsonl');
+    copyFileSync(reviewFixture, join(bin, 'review.jsonl'));
+    writeFileSync(
+      join(bin, 'claude'),
+      '#!/bin/sh\n/bin/cat >/dev/null\nexec /bin/cat "${0%/*}/review.jsonl"\n',
+      { mode: 0o700 },
+    );
+    const env = {
+      AOS_FIXTURE_MODEL: model,
+      PATH: bin + ':' + process.env.PATH,
+      HOME: process.env.HOME,
+      ARCHITECT_OS_RUNTIME_ROOT: runtime,
+      ARCHITECT_OS_STEP_EVIDENCE: receipt,
+    };
+    try {
+      const { stdout } = await promisify(execFile)(
+        join(launcher, 'aos'),
+        [
+          '--',
+          'npm',
+          '--prefix',
+          launcher,
+          '--node-options=--import=' + join(launcher, 'bench/sbx/step-fixture-preload.mjs'),
+          'run',
+          'step',
+          '--',
+          intake,
+        ],
+        { cwd: work, env, timeout: 225000 },
+      );
+      assert.equal(JSON.parse(stdout.trim().split('\n').at(-1)!).outcome, 'passed');
+      assert.equal(readFileSync(join(work, 'result.txt'), 'utf8'), 'native step patch');
+      const record = JSON.parse(readFileSync(join(work, 'steps/native/record.json'), 'utf8'));
+      assert.equal(record.checks[0].passed, true);
+      assert.equal(record.sessions[0].provider, 'openai');
+      assert.equal(record.sessions[0].model, model);
+      assert.equal(record.sessions[0].costUsd, null);
+      assert.equal(record.reviews[0].verdict, 'accept');
+      assert.equal(record.sessions[1].role, 'review');
+      assert.equal(record.sessions[0].client.version, committed().clientVersion);
+      assert.deepEqual(record.sessions[0].usage, { inputTokens: 10, outputTokens: 6 });
+      assert.equal(record.sessions[0].responses.length, 2);
+    } finally {
+      rmSync(runtime, { recursive: true, force: true });
+      rmSync(fixture, { recursive: true, force: true });
+    }
+  },
+);

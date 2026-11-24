@@ -30,6 +30,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "0.0.83",
+    "eventsource-parser": "3.1.1",
+    "jose": "6.2.14",
     "zod": "4.6.7"
   }
 }

@@ -9,7 +9,7 @@ Feature: the step leaves its brief and its record in the worktree
 
     Scenario: the files read at the start, and a record the schema accepts, whose hashes are those of the inputs
       Given a step folder
-      And the step folder holds a step.json with a build, the scouts "files=claude-haiku-5-5", the checks "types" and the reviews "correctness=claude-opus-5-5"
+      And the step folder holds a step.json with a build, the scouts "files=claude-haiku-5-5", the checks "types" and the reviews "quality=claude-opus-5-5"
       And the step folder holds the questions of the scouts "files"
       And the scout session writes the fixture "scout-facts-a.jsonl"
       And the build session writes the fixture "build-exact.jsonl"
@@ -33,22 +33,22 @@ Feature: the step leaves its brief and its record in the worktree
           "inputs": "the hashes",
           "sessions": [
             { "role": "scout", "name": "files", "model": "claude-haiku-5-5", "effort": "low", "completed": true, "exitCode": 0, "stopped": false, "durationSeconds": 4, "costUsd": 0.0625, "costByModel": { "claude-haiku-5-5": 0.0625 } },
-            { "role": "build", "model": "claude-sonnet-5-5", "effort": "medium", "completed": true, "exitCode": 0, "stopped": false, "durationSeconds": 12, "costUsd": 0.5625, "costByModel": { "claude-haiku-4-5": 0.0625, "claude-sonnet-5-5": 0.5 } },
-            { "role": "review", "name": "correctness", "model": "claude-opus-5-5", "effort": "high", "completed": true, "exitCode": 0, "stopped": false, "durationSeconds": 12, "costUsd": 0.25, "costByModel": { "claude-opus-5-5": 0.25 } }
+            { "role": "build", "provider": "anthropic", "model": "claude-sonnet-5-5", "effort": "medium", "completed": true, "exitCode": 0, "stopped": false, "durationSeconds": 12, "costUsd": 0.5625, "costByModel": { "claude-haiku-4-5": 0.0625, "claude-sonnet-5-5": 0.5 } },
+            { "role": "review", "name": "quality", "model": "claude-opus-5-5", "effort": "high", "completed": true, "exitCode": 0, "stopped": false, "durationSeconds": 12, "costUsd": 0.25, "costByModel": { "claude-opus-5-5": 0.25 } }
           ],
           "checks": [ { "name": "types", "passed": true, "stopped": false, "durationSeconds": 3 } ],
-          "reviews": [ { "name": "correctness", "verdict": "accept", "findings": 1 } ],
+          "reviews": [ { "name": "quality", "verdict": "accept", "findings": 1 } ],
           "outcome": "passed"
         }
         """
       And the step stdout is the line:
         """
-        {"outcome":"passed","scouts":{"files":{"model":"claude-haiku-5-5","completed":true,"exitCode":0,"verified":0,"rejected":2,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}}},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{"types":{"exitCode":0,"stopped":false,"durationSeconds":3,"passed":true}},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.875,"costByModel":{"claude-haiku-4-5":0.0625,"claude-haiku-5-5":0.0625,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.5},"record":"steps/demo/record.json"}
+        {"outcome":"passed","scouts":{"files":{"model":"claude-haiku-5-5","completed":true,"exitCode":0,"verified":0,"rejected":2,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}}},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{"types":{"exitCode":0,"stopped":false,"durationSeconds":3,"passed":true}},"reviews":{"quality":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.875,"costByModel":{"claude-haiku-4-5":0.0625,"claude-haiku-5-5":0.0625,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.5},"record":"steps/demo/record.json"}
         """
 
     Scenario: the launcher files of a step with a build, a scout and a review: each tool file, its prompt and its profile, as read
       Given a step folder
-      And the step folder holds a step.json with a build, the scouts "files=claude-haiku-5-5" and the reviews "correctness=claude-opus-5-5"
+      And the step folder holds a step.json with a build, the scouts "files=claude-haiku-5-5" and the reviews "quality=claude-opus-5-5"
       And the step folder holds the questions of the scouts "files"
       When I run the step with the arguments "<folder>"
       Then the published record launcher lists exactly "code.json prompts/build.md prompts/review.md prompts/scout.md profiles/builder.json profiles/reviewer.json review.json scout.json"
@@ -77,7 +77,7 @@ Feature: the step leaves its brief and its record in the worktree
 
     Scenario: a step with a check relies on the profile of the checks, which no tool file names
       Given a step folder
-      And the step folder holds a step.json with a build, the checks "types" and the reviews "correctness=claude-opus-5-5"
+      And the step folder holds a step.json with a build, the checks "types" and the reviews "quality=claude-opus-5-5"
       When I run the step with the arguments "<folder>"
       Then the published record launcher lists exactly "code.json profiles/builder.json profiles/checker.json profiles/reviewer.json prompts/build.md prompts/review.md review.json"
       And the published record launcher holds the hash of each launcher file as the step read it
@@ -93,7 +93,7 @@ Feature: the step leaves its brief and its record in the worktree
 
     Scenario: a review that blocks
       Given a step folder
-      And the step folder holds a step.json with a build, the checks "types" and the reviews "correctness=claude-opus-5-5"
+      And the step folder holds a step.json with a build, the checks "types" and the reviews "quality=claude-opus-5-5"
       And the build session writes the fixture "build-exact.jsonl"
       And the review session writes the fixture "review-request-changes.jsonl"
       When I run the step with the arguments "<folder>"
@@ -101,9 +101,9 @@ Feature: the step leaves its brief and its record in the worktree
       And the step published the folder "demo" and nothing else
       And the published record is accepted by the schema
       And the published record field "outcome" is "refused"
-      And the published record lists the sessions "build review.correctness"
+      And the published record lists the sessions "build review.quality"
       And the published record lists the checks "types=passed"
-      And the published record lists the reviews "correctness=request_changes:2"
+      And the published record lists the reviews "quality=request_changes:2"
 
     Scenario: a review whose verdict is invalid
       Given a step folder
@@ -113,11 +113,11 @@ Feature: the step leaves its brief and its record in the worktree
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
       And the published record field "outcome" is "refused"
-      And the published record lists the reviews "correctness=invalid:0"
+      And the published record lists the reviews "quality=invalid:0"
 
     Scenario: a check that fails: its review does not run
       Given a step folder
-      And the step folder holds a step.json with a build, the checks "types lint" and the reviews "correctness=claude-opus-5-5"
+      And the step folder holds a step.json with a build, the checks "types lint" and the reviews "quality=claude-opus-5-5"
       And the build session writes the fixture "build-exact.jsonl"
       And the check 1 ends with the exit code 1
       When I run the step with the arguments "<folder>"
@@ -139,7 +139,7 @@ Feature: the step leaves its brief and its record in the worktree
 
     Scenario: a build that did not complete: no check, no review
       Given a step folder
-      And the step folder holds a step.json with a build, the checks "types" and the reviews "correctness=claude-opus-5-5"
+      And the step folder holds a step.json with a build, the checks "types" and the reviews "quality=claude-opus-5-5"
       And the build session is stopped by its limit
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
@@ -312,14 +312,14 @@ Feature: the step leaves its brief and its record in the worktree
 
     Scenario: a finding, a report and the output of a check leave no trace in the published files
       Given a step folder
-      And the step folder holds a step.json with a build, the checks "types" and the reviews "correctness=claude-opus-5-5"
+      And the step folder holds a step.json with a build, the checks "types" and the reviews "quality=claude-opus-5-5"
       And the build session writes the fixture "build-odd-model.jsonl"
       And the check 1 prints "MARKER-7f3a on the output"
       And the review session writes the fixture "review-marker.jsonl"
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
       And the step published the folder "demo" and nothing else
-      And the published record lists the reviews "correctness=request_changes:1"
+      And the published record lists the reviews "quality=request_changes:1"
       And no published file contains "MARKER-7f3a"
       And the step stdout does not contain "MARKER-7f3a"
 
@@ -527,3 +527,24 @@ Feature: the step leaves its brief and its record in the worktree
         | tree.clean                 | false                                |
         | launcher.[profiles/checker.json] | "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |
         | inputs.[scout.a-1.md]      | "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |
+
+  Scenario Outline: A subscription receipt binds the client and observed usage to its builder
+    Then the recorded subscription fixture "<case>" is "<result>"
+
+    Examples:
+      | case | result |
+      | completed | accepted |
+      | interrupted without usage | accepted |
+      | review role | refused |
+      | mixed provider | refused |
+      | missing client | refused |
+      | missing usage | refused |
+      | missing responses | refused |
+      | known price | refused |
+      | foreign model | refused |
+      | substituted response model | refused |
+      | skipped request | refused |
+      | input total | refused |
+      | output total | refused |
+      | empty completion | refused |
+      | failed completion | refused |

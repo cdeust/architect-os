@@ -66,6 +66,11 @@ export interface SbxVm {
   setup(args: string[]): Promise<void>;
   pipes(args: string[]): ChildProcessWithoutNullStreams;
 }
+export class SbxInterrupted extends Error {
+  constructor(readonly vm: string) {
+    super('SBX_INTERRUPTED');
+  }
+}
 export async function withSbxVm<T>(
   workspace: string,
   policy: SbxPolicy,
@@ -210,6 +215,9 @@ export async function withSbxVm<T>(
     });
     signal.throwIfAborted();
     return { name, result };
+  } catch (error) {
+    if (created && signal.aborted) throw new SbxInterrupted(name);
+    throw error;
   } finally {
     try {
       stop.abort();

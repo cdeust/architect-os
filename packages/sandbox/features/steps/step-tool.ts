@@ -226,7 +226,7 @@ const writeStep = (
 };
 
 Given('the step folder holds a step.json with a build and {string}', function (review: string) {
-  writeStep(step(this), review === 'a review' ? [{ name: 'correctness', model: 'claude-opus-5-5' }] : []);
+  writeStep(step(this), review === 'a review' ? [{ name: 'quality', model: 'claude-opus-5-5' }] : []);
 });
 
 const rows = (text: string): ReviewRow[] =>

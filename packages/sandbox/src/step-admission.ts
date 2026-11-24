@@ -201,10 +201,11 @@ export function requireStepAdmission(value: unknown, subject: StepAdmissionSubje
   const byRole = new Map(proof.specimens.map((item) => [item.role, item]));
   for (const route of required) {
     const evaluated = byRole.get(route.role);
-    // The shipped Step native adapter currently uses Claude Code.
+
     if (
       !evaluated ||
-      evaluated.model.provider !== 'anthropic' ||
+      evaluated.model.provider !==
+        (route.role === 'build' ? (subject.step.build.provider ?? 'anthropic') : 'anthropic') ||
       evaluated.model.model !== route.model ||
       evaluated.prompt_sha256 !== route.prompt_sha256 ||
       !successfulReplays(evaluated)
