@@ -1,4 +1,9 @@
 import assert from 'node:assert/strict';
+import childProcess, { type ChildProcessWithoutNullStreams } from 'node:child_process';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+import { mock } from 'node:test';
+import { syncBuiltinESMExports } from 'node:module';
 import { linkSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -32,6 +37,7 @@ Then(
       assert.equal(url, 'https://api.openai.com/v1/responses');
       const body = JSON.parse(Buffer.from(init!.body as Uint8Array).toString());
       assert.equal(body.model, model);
+      assert.equal(body.reasoning?.effort, 'medium');
       assert.ok(body.stream);
       assert.equal(body.store, false);
       requests++;
@@ -102,12 +108,14 @@ Then(
         'guest ' + JSON.stringify(evidence.map((b) => b.toString())) + ' calls ' + requests,
       );
       assert.ok(toolDiagnostic.includes('writes refused'), toolDiagnostic);
+      assert.equal(result.measure.report,'Finished.');
       assert.equal(readFileSync(join(work, 'patch.txt'), 'utf8'), 'built by client');
       assert.equal(readFileSync(join(work, 'steps/protected'), 'utf8'), 'unchanged');
       assert.equal(readFileSync(join(root, 'outside'), 'utf8'), 'unchanged');
       const attestation = JSON.parse(Buffer.concat(evidence).toString());
       assert.equal(attestation.removed, true);
       assert.equal(attestation.guest.uid, 65534);
+      assert.equal(Object.hasOwn(attestation.guest,'report'),false);
       assert.equal(attestation.guest.exitCode, 0);
       assert.deepEqual(
         [requests, log.length, result.measure.inputTokens, result.measure.outputTokens],
@@ -128,83 +136,236 @@ const committed = () => JSON.parse(readFileSync(join(PKG, 'sbx/isolation.json'),
 Then('the committed SBX builder pins pass their schema and a broken digest is rejected', function () {
   const p = committed();
   assert.deepEqual(sbxPolicySchema.parse(p), p);
-  assert.equal(sbxPolicySchema.safeParse({ ...p, clientSha256: 'invalid' }).success, false);
+  for(const field of ['shellKit','shellTemplate','archive','clientSha256']) for (const value of ['!'+p[field],p[field]+'!','invalid']) {
+    assert.equal(sbxPolicySchema.safeParse({...p,[field]:value}).success,false);
+  }
+  assert.equal(sbxPolicySchema.safeParse({...p,archiveSha512:'wrong length'}).success,false);
 });
+// Exercise the actual host subprocess adapter with an injected OS boundary.
+async function cliFixture(kind: string, command: SbxCommand, scenario: () => Promise<void>) {
+  const choices = ['/opt/homebrew/bin/sbx', '/usr/local/bin/sbx', '/usr/bin/sbx'];
+  const expected = kind === 'local CLI' ? choices[1] : kind === 'system CLI' ? choices[2] : choices[0];
+  const exists = fs.existsSync,
+    exec = childProcess.execFile;
+  const probes: string[] = [];
+  const stat = mock.method(fs, 'existsSync', (path: fs.PathLike) => {
+    if (typeof path === 'string' && path.endsWith('/sbx')) {
+      probes.push(path);
+      return kind !== 'missing CLI' && path === expected;
+    }
+    return exists(path);
+  });
+  const env = {
+    HOME: process.env.HOME,
+    TMPDIR: process.env.TMPDIR,
+    PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin',
+  };
+  function verify(path: string, args: string[], opts: Record<string, unknown>) {
+    assert.equal(path, expected);
+    assert.equal(args[0], '--no-input');
+    assert.equal(opts['cwd'], '/');
+    assert.deepEqual(opts['env'], env);
+    assert.equal(opts['killSignal'], 'SIGKILL');
+    assert.ok(opts['signal'] instanceof AbortSignal);
+  }
+  const fixture = async (path: string, args: string[], opts: Record<string, unknown>) => {
+    verify(path, args, opts);
+    assert.equal(opts['maxBuffer'], 1048576);
+    if(kind==='invalid CLI code')throw {code:'ENOENT',stdout:''};
+    if(kind==='cancelled CLI') {process.emit('SIGHUP');throw {code:1,stdout:''};}
+    if (kind === 'invalid CLI failure') throw { code: 1, stdout: null };
+    const r = await command(args.slice(1), opts['signal'] as AbortSignal);
+    if (r.code !== 0) throw r;
+    return { stdout: r.stdout };
+  };
+  childProcess.execFile = Object.assign(() => assert.fail('fixture expected promise interface'), {
+    [promisify.custom]: fixture,
+  }) as unknown as typeof exec;
+  const spawn = mock.method(
+    childProcess,
+    'spawn',
+    (path: string, args: string[], opts: Record<string, unknown>) => {
+      verify(path, args, opts);
+      assert.equal(opts['stdio'], 'pipe');
+      assert.deepEqual(args.slice(1), [
+        'exec',
+        '-i',
+        '--user',
+        '65534:65534',
+        '-w',
+        '/fixture',
+        '--',
+        args[8],
+        '/fixture/guest',
+      ]);
+      assert.match(args[8]!, /^aos-build-/);
+      return { pid: 123 };
+    },
+  );
+  syncBuiltinESMExports();
+  try {
+    await scenario();
+    assert.deepEqual(
+      probes.slice(0, kind === 'missing CLI' ? 3 : choices.indexOf(expected!) + 1),
+      choices.slice(0, kind === 'missing CLI' ? 3 : choices.indexOf(expected!) + 1),
+    );
+  } finally {
+    stat.mock.restore();
+    spawn.mock.restore();
+    childProcess.execFile = exec;
+    syncBuiltinESMExports();
+  }
+}
 Then(
   'the SBX host receives {string} and stages the client {int} times',
   async function (kind: string, times: number) {
+    const signals=['SIGTERM','SIGINT','SIGHUP'] as const;
+    const before=signals.map(sig=>process.listenerCount(sig)); let useSignal:AbortSignal|undefined;let setups=0;
     const p = sbxPolicySchema.parse(committed()),
       workspace = '/fixture';
     const [repository, digest] = p.shellTemplate.split('@');
-    let name = '',
+    let vmName = '',
+      name = '',
       removed = 0,
       staged = 0;
-    const command: SbxCommand = async (args) => {
+    const command: SbxCommand = async (args, signal) => {
+      assert.equal(signal.aborted, false);
       let code = 0,
         value: unknown;
       switch (args[0]) {
         case '--version':
-          return { code, stdout: p.cliVersion };
+          assert.deepEqual(args, ['--version']);
+          return { code, stdout: kind === 'wrong CLI version' ? 'invalid' : ' ' + p.cliVersion + '\n' };
         case 'template':
-          value = [{ flavor: 'shell', repository, id: digest, digest }];
+          assert.deepEqual(args, ['template', 'ls', '--all', '--json']);
+          value = [
+            {
+              flavor: kind === 'template flavor' ? 'other' : 'shell',
+              repository: kind === 'template repo' ? 'elsewhere' : repository,
+              id: kind === 'template id' ? 'other' : digest,
+              digest: kind === 'template digest' ? 'other' : digest,
+            },
+          ];
           break;
         case 'ls':
+          assert.deepEqual(args, ['ls', '--json']);
           value = name ? [{ name }] : [];
+          if(kind==='name in use' && !name) value=[{name:'aos-build-00000000-0000-4000-8000-000000000001'}];
+          if(kind==='unconfirmed create'||kind==='already removed')value=[];
           break;
         case 'create':
-          name = args[args.indexOf('--name') + 1]!;
+          vmName = name = args[args.indexOf('--name') + 1]!;
+          assert.match(name, /^aos-build-[0-9a-f-]{36}$/);
+          assert.deepEqual(args, [
+            'create',
+            '--name',
+            name,
+            '--skills',
+            'off',
+            '--static-mcp',
+            'none',
+            '--pull',
+            'never',
+            '--deny-network',
+            '**',
+            '--template',
+            p.shellTemplate,
+            p.shellKit,
+            workspace,
+          ]);
+          if (kind === 'ambiguous creation'||kind==='unconfirmed create') code = 1;
           break;
         case 'inspect':
+          assert.deepEqual(args, ['inspect', '--json', name]);
           value = {
-            name,
-            workspace,
-            agent: 'shell',
+            name: kind === 'wrong name' ? 'other' : name,
+            workspace: kind === 'other workspace' ? 'other' : workspace,
+            agent: kind === 'other agent' ? 'other' : 'shell',
             image_digest: kind === 'wrong image' ? 'another' : digest,
-            mcp_mode: 'static',
+            mcp_mode: kind === 'MCP mode' ? 'dynamic' : 'static',
             mcp_servers: kind === 'MCP server' ? ['one'] : [],
             published_ports: kind === 'published port' ? ['123'] : [],
-            runtime_mounts: [],
+            runtime_mounts: kind === 'runtime mount' ? ['/x'] : [],
             kits: [kind === 'wrong kit' ? 'other' : p.shellKit],
             host_mounts: [
-              { host_path: workspace, container_target: workspace, read_only: false },
+              {
+                host_path: kind === 'mount source' ? '/other' : workspace,
+                container_target: kind === 'mount target' ? '/other' : workspace,
+                read_only: kind === 'readonly worktree',
+              },
               ...(kind === 'extra mount' ? [{}] : []),
             ],
           };
           break;
         case 'policy':
-          if (args[1] === 'ls')
+          if (args[1] === 'ls') {
+            assert.deepEqual(args, ['policy', 'ls', name, '--json', '--type', 'network']);
             value = {
               rules: [
                 {
                   decision: kind === 'extra allow' ? 'allow' : 'deny',
-                  scope: 'sandbox:' + name,
-                  status: 'active',
-                  resource_type: 'network',
-                  resources: ['**'],
-                  actions: ['net:connect:tcp', 'net:connect:udp'],
+                  scope: kind === 'rule scope' ? 'global' : 'sandbox:' + name,
+                  status: kind === 'rule inactive' ? 'disabled' : 'active',
+                  resource_type: kind === 'rule resource' ? 'volume' : 'network',
+                  resources: kind === 'rule destination' ? ['example.com'] : ['**'],
+                  actions:
+                    kind === 'missing UDP'
+                      ? ['net:connect:tcp']
+                      : kind === 'missing TCP'
+                        ? ['net:connect:udp']
+                        : ['net:connect:tcp', 'net:connect:udp'],
                   id: 'deny',
                 },
               ],
             };
-          else {
+          } else {
             const proto = args.at(-2)!;
+            assert.deepEqual(args, [
+              'policy',
+              'check',
+              'network',
+              '--sandbox',
+              name,
+              '--json',
+              '--protocol',
+              proto,
+              'example.com:443',
+            ]);
             code = kind === 'live ' + proto.toUpperCase() + ' route' ? 0 : 1;
             value = {
-              allowed: code === 0,
-              context: 'sandbox:' + name,
-              deny_kind: 'explicit',
-              rule: 'local:deny',
-              action: 'net:connect:' + proto,
+              allowed: code === 0 || kind === 'check allowed',
+              context: kind === 'check scope' ? 'global' : 'sandbox:' + name,
+              deny_kind: kind === 'check implicit' ? 'default' : 'explicit',
+              rule: kind === 'check rule' ? 'unrelated' : 'local:deny',
+              action: kind === 'check action' ? 'unrelated' : 'net:connect:' + proto,
             };
           }
           break;
         case 'exec':
+          if (args[2] === '0:0') {setups++;
+            assert.deepEqual(args, ['exec', '--user', '0:0', '-w', '/', '--', name, '/host/setup']);
+          } else
+            assert.deepEqual(args, [
+              'exec',
+              '--user',
+              '65534:65534',
+              '-w',
+              workspace,
+              '--',
+              name,
+              '/usr/bin/test',
+              '!',
+              '-w',
+              p.forbiddenHostSocket,
+            ]);
           code = kind === 'writable socket' ? 1 : 0;
           break;
         case 'cp':
+          assert.deepEqual(args, ['cp', '--', 'source', name + ':target']);
           staged++;
           break;
         case 'rm':
+          assert.deepEqual(args, ['rm', '--force', name]);
           removed++;
           if (kind !== 'incomplete removal') name = '';
           break;
@@ -213,22 +374,72 @@ Then(
       }
       return { code, stdout: JSON.stringify(value ?? null) };
     };
-    const work = withSbxVm(
-      workspace,
-      p,
-      10,
-      async (vm) => {
-        await vm.copy('source', 'target');
-      },
-      command,
+    const throughCli = ['verified', 'local CLI', 'system CLI', 'missing CLI','invalid CLI code','cancelled CLI', 'invalid CLI failure'].includes(
+      kind,
     );
-    if (kind === 'verified') await work;
-    else await assert.rejects(work);
-    assert.equal(staged, times);
-    assert.equal(removed, 1);
+    const execute = async () => {
+      const work = withSbxVm(
+        workspace,
+        p,
+        10,
+        async (vm) => {
+          assert.equal(vm.name, name);
+          assert.equal(vm.signal.aborted, false); useSignal=vm.signal;assert.deepEqual(signals.map(sig=>process.listenerCount(sig)),before.map(n=>n+1));
+          await vm.copy('source', 'target');
+          await vm.setup(['/host/setup']);
+          if (throughCli) assert.equal(vm.pipes(['/fixture/guest']).pid, 123);
+          if (kind === 'interrupted') process.emit('SIGHUP');
+          return 'executed';
+        },
+        throughCli ? undefined : command,
+      );
+      if (['verified', 'local CLI', 'system CLI','already removed'].includes(kind))
+        assert.deepEqual(await work, { name: vmName, result: 'executed' });
+      else if (kind === 'interrupted') await assert.rejects(work, { message: 'SBX_INTERRUPTED' });
+      else if (['invalid CLI failure','invalid CLI code','cancelled CLI'].includes(kind))
+        await assert.rejects(work, { message: 'SBX_COMMAND_FAILED' });
+      else if(kind==='missing CLI')await assert.rejects(work,{message:'SBX_CLI_REQUIRED'});
+      else if (kind === 'wrong CLI version') await assert.rejects(work, { message: 'SBX_VERSION' });
+      else if (kind.startsWith('template ')) await assert.rejects(work, { message: 'SBX_TEMPLATE' });
+      else if (kind.startsWith('live ')) await assert.rejects(work, { message: 'SBX_NETWORK_ROUTE' });
+      else if (kind.startsWith('rule ') || kind.startsWith('missing UDP') || kind.startsWith('missing TCP'))
+        await assert.rejects(work, { message: 'SBX_NETWORK_POLICY' });
+      else if(kind==='name in use') await assert.rejects(work,{message:'SBX_NAME_IN_USE'});
+      else if(kind==='unconfirmed create') await assert.rejects(work,(e:Error)=>e.message==='SBX_CREATE_UNCONFIRMED '+vmName);
+      else if (kind === 'ambiguous creation') await assert.rejects(work, { message: 'SBX_CREATE_FAILED' });
+      else if (kind === 'incomplete removal')
+        await assert.rejects(work, (e: Error) => e.message === 'SBX_CLEANUP_INCOMPLETE ' + vmName);
+      else await assert.rejects(work);
+    };
+    if (throughCli) await cliFixture(kind, command, execute);
+    else if(kind==='name in use') {
+      const id=mock.method(crypto,'randomUUID',()=> '00000000-0000-4000-8000-000000000001');
+      syncBuiltinESMExports();try{await execute();}finally{id.mock.restore();syncBuiltinESMExports();}
+    } else await execute();
+    assert.equal(staged, times);assert.equal(setups,times);
+    assert.deepEqual(signals.map(sig=>process.listenerCount(sig)),before);if(useSignal)assert.equal(useSignal.aborted,true);
+    assert.equal(
+      removed,
+      kind.startsWith('template ') ||
+        ['wrong CLI version', 'missing CLI', 'invalid CLI failure','invalid CLI code','cancelled CLI','name in use','unconfirmed create','already removed'].includes(kind)
+        ? 0
+        : 1,
+    );
   },
 );
 
+Then('SBX checks the workspace tree and path before any CLI call',async function(){
+  for(const bad of ['relative','/a:b'])await assert.rejects(withSbxVm(bad,committed(),1,async()=>assert.fail(),async()=>assert.fail()),{message:'SBX_WORKTREE'});
+  const dir=realpathSync(mkdtempSync(join(tmpdir(),'sbx-tree-')));
+  try {
+    const tree=join(dir,'work');mkdirSync(tree);
+    fs.symlinkSync(tree,join(dir,'alias'));assert.throws(()=>checkSbxWorktree(join(dir,'alias')),{message:'SBX_WORKTREE'});
+    fs.symlinkSync(join(dir,'outside'),join(tree,'link'));checkSbxWorktree(tree);
+    const sub=join(tree,'directory');mkdirSync(sub);writeFileSync(join(sub,'ordinary'),'safe');checkSbxWorktree(tree);
+    assert.equal(childProcess.spawnSync('mkfifo',[join(sub,'special')]).status,0);
+    assert.throws(()=>checkSbxWorktree(tree),{message:'SBX_WORKTREE_ENTRY'});
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
 Then('SBX refuses a worktree with a hard link to an outside witness', function () {
   const root = mkdtempSync(join(tmpdir(), 'sbx-links-'));
   try {
@@ -375,6 +586,8 @@ Then(
       assert.equal(record.checks[0].passed, true);
       assert.equal(record.sessions[0].provider, 'openai');
       assert.equal(record.sessions[0].model, model);
+      assert.equal(record.sessions[0].effort, 'medium');
+      assert.equal(record.sessions[0].client.sha256, committed().clientSha256);
       assert.equal(record.sessions[0].costUsd, null);
       assert.equal(record.reviews[0].verdict, 'accept');
       assert.equal(record.sessions[1].role, 'review');
@@ -387,3 +600,15 @@ Then(
     }
   },
 );
+
+Then('a direct SBX host without a run binding refuses before CLI access',async function(){
+  const saved=process.env.ARCHITECT_OS_RUN_DIR, lines:string[]=[];
+  let calls=0;
+  const exit=mock.method(process,'exit',(code:number)=>{throw Error('exit '+code)});
+  const stderr=mock.method(process.stderr,'write',(chunk:string)=>{lines.push(chunk);return true});
+  try{
+    delete process.env.ARCHITECT_OS_RUN_DIR;
+    await assert.rejects(withSbxVm('/fixture',committed(),1,async()=>assert.fail(), async()=>{calls++;throw Error('cli');}),{message:'exit 2'});
+    assert.deepEqual(lines,['aos: RUNTIME_ENTRY_REQUIRED\n']);assert.equal(calls,0);
+  }finally{process.env.ARCHITECT_OS_RUN_DIR=saved;exit.mock.restore();stderr.mock.restore();}
+});

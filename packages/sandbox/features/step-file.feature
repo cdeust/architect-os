@@ -240,3 +240,6 @@ Feature: step.json, the descriptive file of a step
       | a check limit of 7201 |
       | a non-integer check limit |
       | a check without a limit |
+
+  Scenario: A Step accepts only the supported model and effort for its builder
+    Then the Step file binds the provider, model and effort of a subscription build

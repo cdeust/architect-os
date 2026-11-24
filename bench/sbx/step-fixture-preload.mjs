@@ -82,7 +82,7 @@ if (process.argv[1]?.endsWith('/step.ts')) {
     if (url === api + '/models') return Response.json({ models: [{ visibility: 'list', slug: model }] });
     if (url !== api + '/responses') throw Error('FIXTURE_ORIGIN');
     const request = JSON.parse(Buffer.from(init.body).toString());
-    if (request.model !== model || request.store !== false || request.stream !== true)
+    if (request.model !== model || request.reasoning?.effort !== 'medium' || request.store !== false || request.stream !== true)
       throw Error('FIXTURE_MODEL');
     calls++;
     const reply = request.input.find((i) => i.type === 'function_call_output' && i.call_id === 'step-write');

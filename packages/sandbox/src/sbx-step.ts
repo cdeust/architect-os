@@ -1,14 +1,5 @@
-import {
-  closeSync,
-  constants,
-  fstatSync,
-  openSync,
-  readSync,
-  realpathSync,
-  writeFileSync,
-  linkSync,
-  unlinkSync,
-} from 'node:fs';
+import { codexModelSchema } from './step-file.js';
+import { realpathSync, writeFileSync, linkSync, unlinkSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -16,38 +7,18 @@ import { SbxBuilder, type SbxSettings } from './sbx-builder.js';
 import { sbxPolicySchema } from './sbx-vm.js';
 import { privateStateDirectory, StateJournal } from './state-journal.js';
 import { registrationSchema, hostAccountSession } from './sbx-account.js';
+import { readPrivateText } from './private-text.js';
 import type { Builder, BuildRequest } from './builder.js';
 
-function readPrivate(path: string, optional = false) {
-  let fd: number;
+function readSetting(path: string): string {
+  return readPrivateText(path, process.getuid!(), 'SBX_HOST_SETTING');
+}
+function optionalSetting(path: string) {
   try {
-    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    return readSetting(path);
   } catch (e) {
-    if (optional && (e as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-    throw Error('SBX_HOST_SETTING_REQUIRED');
-  }
-  try {
-    const s = fstatSync(fd);
-    if (
-      !s.isFile() ||
-      s.nlink !== 1 ||
-      s.uid !== process.getuid!() ||
-      (s.mode & 0o077) !== 0 ||
-      s.size > 1024 * 1024
-    )
-      throw Error('SBX_HOST_SETTING');
-    const bytes = Buffer.alloc(s.size + 1);
-    let offset = 0;
-    for (;;) {
-      const n = readSync(fd, bytes, offset, bytes.length - offset, null);
-      if (!n) break;
-      offset += n;
-      if (offset === bytes.length) throw Error('SBX_HOST_SETTING');
-    }
-    if (offset !== s.size) throw Error('SBX_HOST_SETTING');
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, offset));
-  } finally {
-    closeSync(fd);
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw e;
   }
 }
 function settingJson(text: string): unknown {
@@ -88,19 +59,19 @@ export async function buildSbxStep(
   if (launcherRelative !== '..' && !launcherRelative.startsWith('..' + sep))
     throw Error('SBX_SEPARATE_LAUNCHER_REQUIRED');
   const dir = privateStateDirectory(runtime, ['sbx']);
-  const budget = budgetSchema.parse(settingJson(readPrivate(join(dir, 'limits.json'))!));
+  const budget = budgetSchema.parse(settingJson(readSetting(join(dir, 'limits.json'))));
   const hostIdPath = join(dir, 'host-id');
-  if (readPrivate(hostIdPath, true) === undefined) publishOnce(hostIdPath, 'urn:uuid:' + randomUUID());
+  if (optionalSetting(hostIdPath) === undefined) publishOnce(hostIdPath, 'urn:uuid:' + randomUUID());
   const hostId = z
     .string()
     .regex(/^urn:uuid:[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/)
-    .parse(readPrivate(hostIdPath)?.trim());
+    .parse(readSetting(hostIdPath).trim());
   const reg = join(dir, 'registration.json'),
-    prior = readPrivate(reg, true);
+    prior = optionalSetting(reg);
   const previous = prior === undefined ? undefined : registrationSchema.parse(settingJson(prior));
-  const policy = sbxPolicySchema.parse(settingJson(readPrivate(join(snapshot, 'sbx/isolation.json'))!));
+  const policy = sbxPolicySchema.parse(settingJson(readSetting(join(snapshot, 'sbx/isolation.json'))));
   const journal = new StateJournal(runtime, '${state}/sbx/usage.jsonl');
-  const model = z.enum(['gpt-6.2-astra', 'gpt-6.2-sol']).parse(request.config.model);
+  const model = codexModelSchema.parse(request.config.model);
   const session = account(
     {
       hostId,
@@ -108,7 +79,7 @@ export async function buildSbxStep(
       consentPage: (url) => notice('Continue with ChatGPT: ' + url + '\n'),
       registered: (r) => {
         publishOnce(reg, JSON.stringify(r));
-        const saved = registrationSchema.parse(settingJson(readPrivate(reg)!));
+        const saved = registrationSchema.parse(settingJson(readSetting(reg)));
         if (saved.client_id !== r.client_id || saved.accountHash !== r.accountHash)
           throw Error('SBX_ACCOUNT_CHANGED');
       },

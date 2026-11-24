@@ -548,3 +548,11 @@ Feature: the step leaves its brief and its record in the worktree
       | output total | refused |
       | empty completion | refused |
       | failed completion | refused |
+      | incomplete observed | accepted |
+      | failed observed | accepted |
+      | legacy unknown cost | refused |
+      | legacy client | refused |
+      | legacy responses | refused |
+      | legacy usage | refused |
+      | mixed terminals | refused |
+      | mixed models | refused |

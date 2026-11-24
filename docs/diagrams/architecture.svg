@@ -313,7 +313,7 @@
   <text x="85" y="2282" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
   <text x="50" y="2328" font-size="18" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
   <text x="283" y="2204" font-size="18.5" fill="#57606a">Start independent reviews up to the Step parallel limit.</text>
-  <text x="283" y="2228" font-size="18.5" fill="#57606a">Each uses its configured model.</text>
+  <text x="283" y="2228" font-size="18.5" fill="#57606a">Separate Gemini reviews call Google’s native agent directly.</text>
 <g role="group" aria-label="Step verdict · ready">
   <rect x="269" y="2246" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
   <text x="283" y="2274" font-size="19" fill="#1f2328" font-weight="600">Step verdict</text>
@@ -522,7 +522,7 @@
     <text x="721" y="2146" id="sbx-client-title" font-size="18.5" font-weight="600" fill="#1f2328">Native client · unprivileged Linux user</text>
     <text x="721" y="2169" font-size="17" fill="#57606a">Codex reaches the host over stdin/stdout. Network egress is blocked.</text>
     <text x="721" y="2190" font-size="17" fill="#57606a">The native tool edits the worktree. The host verifies VM removal.</text>
-    <text x="721" y="2211" font-size="17" fill="#57606a">Gemini reviews run through Google’s native agent outside SBX.</text>
+    <text x="721" y="2211" font-size="17" fill="#57606a">Only the Step worktree is a writable host mount.</text>
   </g>
   </g>
     <path id="srt-proxy-pipe" data-from="srt-step-client" data-to="step-auth-proxy" d="M708 1788 H656" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>

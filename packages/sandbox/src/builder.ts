@@ -21,14 +21,20 @@ export interface BuildRequest {
   readonly onOutput: (chunk: Uint8Array) => void;
 }
 
-export interface BuildOutcome {
-  readonly provider: 'anthropic' | 'openai';
+export type BuildOutcome = {
   readonly exitCode: number;
   readonly stopped: boolean;
   readonly measure: SessionMeasure;
-  readonly client?: { version: string; sha256: string };
-  readonly receipts?: readonly import('./responses-proxy.js').ResponseReceipt[];
-}
+} & (
+  | {
+      readonly provider: 'anthropic';
+    }
+  | {
+      readonly provider: 'openai';
+      readonly client: { version: string; sha256: string };
+      readonly receipts: readonly import('./responses-proxy.js').ResponseReceipt[];
+    }
+);
 
 export interface Builder {
   build(request: BuildRequest): Promise<BuildOutcome>;

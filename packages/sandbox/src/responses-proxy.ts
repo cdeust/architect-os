@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
 
-export type CodexModel = 'gpt-6.2-astra' | 'gpt-6.2-sol';
+import type { CodexModel } from './step-file.js';
 export interface ProxyBudget {
   requests: number;
   tokens: number;
@@ -61,7 +61,9 @@ function parseBody(raw: string): unknown {
     if (item && typeof item === 'object' && !Array.isArray(item)) fields += Object.keys(item).length;
     return item;
   });
-  for (const token of raw.matchAll(/"(?:[^"\\]|\\.)*"\s*(:)?/gu)) if (token[1]) fields--;
+  for (const [token] of raw.matchAll(/"(?:[^"\\]|\\.)*"|:/gu)) {
+    if (token === ':') fields--;
+  }
   if (fields !== 0) throw Error();
   return value;
 }
@@ -117,15 +119,12 @@ class TerminalObserver {
     const isTerminal = (value: unknown) => statuses.some((status) => value === 'response.' + status);
     if (label && !isTerminal(label)) return;
     let body;
-    if (label) body = JSON.parse(data);
-    else {
-      try {
-        body = JSON.parse(data);
-      } catch {
-        return;
-      }
-      if (!isTerminal(body?.type)) return;
+    try {
+      body = JSON.parse(data);
+    } catch {
+      // An opaque extension has no host semantics. A labeled terminal still has to pass its schema below.
     }
+    if (!label && !isTerminal(body?.type)) return;
     const { type, response } = terminalSchema.parse(body);
     if (
       this.terminal ||
@@ -213,7 +212,7 @@ export class ResponsesProxy {
       });
       this.signal.throwIfAborted();
       if (!response.body) throw Error();
-      const mediaType = response.headers.get('content-type')?.split(';')[0]?.trim();
+      const mediaType = response.headers.get('content-type')?.split(';')[0]!.trim();
       if (response.status !== 200 || mediaType !== 'text/event-stream') {
         await response.body.cancel();
         throw Error();

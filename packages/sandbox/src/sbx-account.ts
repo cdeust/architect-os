@@ -1,9 +1,12 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
-import { once } from 'node:events';
-import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
+import { addAbortListener, once } from 'node:events';
+import type { AddressInfo } from 'node:net';
+import { createRemoteJWKSet, customFetch, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { z } from 'zod';
-import type { CodexModel } from './responses-proxy.js';
+import type { CodexModel } from './step-file.js';
+
+class AccountFailure extends Error {}
 
 const issuer = 'https://auth.openai.com';
 const resource = 'https://api.openai.com/v1';
@@ -38,7 +41,6 @@ interface Exchange {
   nonce: string;
 }
 async function consent(host: HostAccount, signal: AbortSignal): Promise<Exchange> {
-  signal.throwIfAborted();
   const state = fresh(),
     nonce = fresh(),
     verifier = fresh();
@@ -48,9 +50,9 @@ async function consent(host: HostAccount, signal: AbortSignal): Promise<Exchange
     refuse = reject;
   });
   let used = false,
-    origin = '',
-    redirect = '',
-    authorization = '';
+    origin: string,
+    redirect: string,
+    authorization: string;
   const server = createServer((req, res) => {
     res.setHeader('cache-control', 'no-store');
     res.setHeader('referrer-policy', 'no-referrer');
@@ -95,18 +97,21 @@ async function consent(host: HostAccount, signal: AbortSignal): Promise<Exchange
       (host.previous && host.previous.client_id !== id)
     ) {
       res.writeHead(403).end('Authorization refused');
-      refuse(Error('SBX_CONSENT_REFUSED'));
+      refuse(new AccountFailure('SBX_CONSENT_REFUSED'));
       return;
     }
     res.end('Callback received. You can close this tab.');
     accept({ code, client: id, verifier, redirect, nonce });
   });
-  const cancelled = () => refuse(Error('SBX_CONSENT_CANCELLED'));
+  const cancel = addAbortListener(signal, () => refuse(new AccountFailure('SBX_CONSENT_CANCELLED')));
+  // The listener may run during the asynchronous bind.
+  void result.catch(() => {});
   try {
     server.listen(0, '127.0.0.1');
     await once(server, 'listening', { signal });
-    const address = server.address();
-    if (typeof address !== 'object' || !address) throw Error('SBX_CALLBACK');
+    // This server listened on a TCP port and just emitted listening.
+    const address = server.address() as AddressInfo;
+    if (address.address !== '127.0.0.1') throw new AccountFailure('SBX_CALLBACK');
     origin = 'http://127.0.0.1:' + address.port;
     redirect = origin + '/auth/callback';
     const url = new URL(issuer + '/api/accounts/authorize');
@@ -124,12 +129,10 @@ async function consent(host: HostAccount, signal: AbortSignal): Promise<Exchange
       code_challenge: digest(verifier).toString('base64url'),
     }).toString();
     authorization = url.href;
-    signal.addEventListener('abort', cancelled, { once: true });
-    if (signal.aborted) cancelled();
     host.consentPage(origin + '/');
     return await result;
   } finally {
-    signal.removeEventListener('abort', cancelled);
+    cancel[Symbol.dispose]();
     server.close();
     server.closeAllConnections();
   }
@@ -137,19 +140,19 @@ async function consent(host: HostAccount, signal: AbortSignal): Promise<Exchange
 async function replyJson(response: Response) {
   if (!response.ok || !response.body) {
     await response.body?.cancel();
-    throw Error('SBX_ACCOUNT_TRANSPORT');
+    throw new AccountFailure('SBX_ACCOUNT_TRANSPORT');
   }
   const chunks: Uint8Array[] = [];
   let bytes = 0;
   for await (const chunk of response.body) {
     bytes += chunk.length;
-    if (bytes > 1024 * 1024) throw Error('SBX_ACCOUNT_BODY');
+    if (bytes > 1024 * 1024) throw new AccountFailure('SBX_ACCOUNT_BODY');
     chunks.push(chunk);
   }
   try {
     return JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(Buffer.concat(chunks)));
   } catch {
-    throw Error('SBX_ACCOUNT_BODY');
+    throw new AccountFailure('SBX_ACCOUNT_BODY');
   }
 }
 const tokenSchema = z.object({
@@ -165,10 +168,16 @@ export function hostAccountSession(
   host: HostAccount,
   model: CodexModel,
   io: typeof fetch = fetch,
-  keys: JWTVerifyGetKey = createRemoteJWKSet(new URL(issuer + '/.well-known/jwks.json')),
+  suppliedKeys?: JWTVerifyGetKey,
   now = Date.now,
 ) {
   const life = new AbortController();
+  const keys =
+    suppliedKeys ??
+    createRemoteJWKSet(new URL(issuer + '/.well-known/jwks.json'), {
+      [customFetch]: (url, options) =>
+        io(url, { ...options, signal: AbortSignal.any([options.signal, life.signal]) }),
+    });
   let current: { access: string; refresh: string; expires: number; scope: string } | undefined;
   let binding: { id: string; subject: string; nonce: string; iat: number; authTime: unknown } | undefined;
   let pending: Promise<void> | undefined;
@@ -205,27 +214,29 @@ export function hostAccountSession(
           granted.size !== new Set(current.scope.split(' ')).size ||
           t.refresh_token === current.refresh))
     )
-      throw Error('SBX_ACCOUNT_GRANT');
+      throw new AccountFailure('SBX_ACCOUNT_GRANT');
     if (exchange || t.id_token) {
-      if (!t.id_token) throw Error('SBX_ACCOUNT_IDENTITY');
+      if (!t.id_token) throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
       const { payload: p } = await jwtVerify(t.id_token, keys, {
         issuer,
         audience: id,
-        requiredClaims: ['iat', 'exp', 'sub'],
+        requiredClaims: ['exp'],
         currentDate: new Date(received),
       });
-      if (
-        !(p.aud === id || (Array.isArray(p.aud) && p.aud.length === 1 && p.aud[0] === id)) ||
-        (p.azp !== undefined && p.azp !== id) ||
-        !p.sub ||
-        !Number.isFinite(p.iat) ||
-        (p.auth_time !== undefined && !Number.isFinite(p.auth_time))
-      )
-        throw Error('SBX_ACCOUNT_IDENTITY');
-      const subject = digest(p.sub).toString('hex');
+      const verified = z
+        .object({
+          sub: z.string().min(1),
+          iat: z.int().nonnegative(),
+          aud: z.union([z.literal(id), z.tuple([z.literal(id)])]),
+          azp: z.literal(id).optional(),
+          auth_time: z.int().nonnegative().optional(),
+        })
+        .safeParse(p);
+      if (!verified.success) throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
+      const subject = digest(verified.data.sub).toString('hex');
       if (exchange) {
         if (p.nonce !== exchange.nonce || (host.previous && subject !== host.previous.accountHash))
-          throw Error('SBX_ACCOUNT_IDENTITY');
+          throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
         binding = { id, subject, nonce: exchange.nonce, iat: p.iat!, authTime: p.auth_time };
       } else if (
         !binding ||
@@ -234,10 +245,10 @@ export function hostAccountSession(
         (p.nonce !== undefined && p.nonce !== binding.nonce) ||
         (p.auth_time !== undefined && p.auth_time !== binding.authTime)
       )
-        throw Error('SBX_ACCOUNT_IDENTITY');
+        throw new AccountFailure('SBX_ACCOUNT_IDENTITY');
     }
     const expires = received + t.expires_in * 1000;
-    if (!Number.isSafeInteger(expires)) throw Error('SBX_ACCOUNT_GRANT');
+    if (!Number.isSafeInteger(expires)) throw new AccountFailure('SBX_ACCOUNT_GRANT');
     const catalogue = await replyJson(
       await io(resource + '/models', {
         method: 'GET',
@@ -253,7 +264,7 @@ export function hostAccountSession(
         (m: { slug?: string; visibility?: string }) => m?.slug === model && m.visibility === 'list',
       )
     )
-      throw Error('SBX_ACCOUNT_MODEL');
+      throw new AccountFailure('SBX_ACCOUNT_MODEL');
     signal.throwIfAborted();
     if (exchange && !host.previous) host.registered({ issuer, client_id: id, accountHash: binding!.subject });
     current = { access: t.access_token, refresh: t.refresh_token, expires, scope };
@@ -270,8 +281,9 @@ export function hostAccountSession(
       active.throwIfAborted();
       if (!current || now() >= current.expires) {
         pending ??= acquire(active)
-          .catch(() => {
+          .catch((e: unknown) => {
             close();
+            if (e instanceof AccountFailure) throw e;
             throw Error('SBX_ACCOUNT_UNAVAILABLE');
           })
           .finally(() => {

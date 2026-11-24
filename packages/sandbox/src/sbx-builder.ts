@@ -1,7 +1,8 @@
+import { codexModelSchema } from './step-file.js';
 import { createHash } from 'node:crypto';
 import { createReadStream, lstatSync, realpathSync } from 'node:fs';
 import { once } from 'node:events';
-import { relative, isAbsolute, sep } from 'node:path';
+import { relative, sep } from 'node:path';
 import { z } from 'zod';
 import type { Builder, BuildRequest, BuildOutcome } from './builder.js';
 import { measureSession } from './measure.js';
@@ -9,7 +10,6 @@ import {
   ResponsesProxy,
   type ProxyBudget,
   type ResponseReceipt,
-  type CodexModel,
 } from './responses-proxy.js';
 import { withSbxVm, SbxInterrupted, checkSbxWorktree, type SbxPolicy, type SbxVm } from './sbx-vm.js';
 
@@ -20,6 +20,7 @@ const resultSchema = z.strictObject({
     completed: z.boolean(),
     version: z.string(),
     uid: z.literal(65534),
+    report:z.string(),
   }),
 });
 const requestSchema = z.strictObject({
@@ -55,7 +56,13 @@ async function* frames(stream: NodeJS.ReadableStream, limit: number) {
   }
   if (bytes) throw Error('SBX_FRAME_INCOMPLETE');
 }
-async function nativeTurn(vm: SbxVm, proxy: ResponsesProxy, request: BuildRequest, policy: SbxPolicy) {
+async function nativeTurn(
+  vm: SbxVm,
+  proxy: ResponsesProxy,
+  request: BuildRequest,
+  policy: SbxPolicy,
+  wireLimit: number,
+) {
   const child = vm.pipes([
     '/usr/bin/env',
     '-i',
@@ -86,7 +93,7 @@ async function nativeTurn(vm: SbxVm, proxy: ResponsesProxy, request: BuildReques
       token: proxy.token,
     });
     let guest: z.infer<typeof resultSchema>['guest'] | undefined;
-    for await (const frame of frames(child.stdout, request.maxBytes)) {
+    for await (const frame of frames(child.stdout, wireLimit)) {
       if (guest) throw Error('SBX_EXTRA_FRAME');
       if (frame?.kind === 'result') {
         const parsed = resultSchema.safeParse(frame);
@@ -98,7 +105,7 @@ async function nativeTurn(vm: SbxVm, proxy: ResponsesProxy, request: BuildReques
       const r = requestSchema.safeParse(frame);
       if (!r.success) throw Error('SBX_FRAME_INVALID');
       const body = Buffer.from(r.data.body, 'base64');
-      const receipt = await proxy.relay(
+      await proxy.relay(
         { ...r.data, body },
         {
           start: (status, headers) => send({ kind: 'headers', status, headers }),
@@ -106,7 +113,6 @@ async function nativeTurn(vm: SbxVm, proxy: ResponsesProxy, request: BuildReques
         },
       );
       await send({ kind: 'end' });
-      if (receipt.terminal !== 'completed') proxy.revoke();
     }
     if ((await exit) !== 0 || !guest || guest.version !== policy.clientVersion)
       throw Error('SBX_CLIENT_FAILED');
@@ -132,12 +138,13 @@ type NativeOutcome = {
   stopped: boolean;
 };
 async function runNative(
-  { policy, archive, guestSource }: SbxSettings,
+  { policy, archive, guestSource, budget }: SbxSettings,
   request: BuildRequest,
   proxy: ResponsesProxy,
+  vmRunner: typeof withSbxVm,
 ): Promise<NativeOutcome> {
   try {
-    const { name, result: guest } = await withSbxVm(
+    const { name, result: guest } = await vmRunner(
       request.worktree,
       policy,
       request.config.limitSeconds,
@@ -158,9 +165,9 @@ async function runNative(
           '/opt/aos-builder/guest.py',
         ]);
         const revoke = () => proxy.revoke();
-        vm.signal.addEventListener('abort', revoke, { once: true });
+        vm.signal.addEventListener('abort', revoke);
         try {
-          return await nativeTurn(vm, proxy, request, policy);
+          return await nativeTurn(vm, proxy, request, policy, Math.min(64 * 1024 * 1024, budget.bytes));
         } catch (error) {
           if (error instanceof Error && error.message.startsWith('RESPONSES_')) return undefined;
           throw error;
@@ -179,16 +186,15 @@ async function runNative(
 export class SbxBuilder implements Builder {
   constructor(
     private readonly settings: SbxSettings,
-    private readonly run = runNative,
+    private readonly vm = withSbxVm,
   ) {}
   async build(request: BuildRequest): Promise<BuildOutcome> {
     const { policy, archive, guestSource, budget, access, record, upstream } = this.settings;
     if (request.config.provider !== 'openai') throw Error('BUILDER_PROVIDER');
-    const model = z.enum(['gpt-6.2-astra', 'gpt-6.2-sol']).parse(request.config.model) as CodexModel;
+    const model = codexModelSchema.parse(request.config.model);
     for (const outside of [archive, guestSource, process.env.ARCHITECT_OS_RUNTIME_ROOT!]) {
       const path = relative(request.worktree, realpathSync(outside));
-      if (path !== '..' && !path.startsWith('..' + sep) && !isAbsolute(path))
-        throw Error('SBX_HOST_ASSET_IN_WORKTREE');
+      if (path.split(sep)[0] !== '..') throw Error('SBX_HOST_ASSET_IN_WORKTREE');
     }
     checkSbxWorktree(request.worktree);
     if (!lstatSync(archive).isFile()) throw Error('SBX_ARCHIVE_REQUIRED');
@@ -208,7 +214,7 @@ export class SbxBuilder implements Builder {
     );
     const start = Date.now();
     try {
-      const { name, guest, stopped } = await this.run(this.settings, request, proxy);
+      const { name, guest, stopped } = await runNative(this.settings, request, proxy, this.vm);
       const accepted =
         guest?.completed === true &&
         guest.exitCode === 0 &&
@@ -225,10 +231,11 @@ export class SbxBuilder implements Builder {
         requests: receipts.length,
         inputTokens,
         outputTokens,
-        guest,
+        guest:guest && {exitCode:guest.exitCode,completed:guest.completed,version:guest.version,uid:guest.uid},
       };
       const output = Buffer.from(JSON.stringify(evidence) + '\n');
-      if (output.length > request.maxBytes) throw Error('BUILDER_OUTPUT_LIMIT');
+      const report=guest?.report ?? '';
+      if (output.length > request.maxBytes || Buffer.byteLength(report) > request.maxBytes) throw Error('BUILDER_OUTPUT_LIMIT');
       request.onOutput(output);
       return {
         provider: 'openai',
@@ -236,6 +243,7 @@ export class SbxBuilder implements Builder {
         stopped,
         measure: {
           ...measureSession(''),
+          report,
           completed: accepted,
           durationSeconds: Math.round((Date.now() - start) / 1000),
           answers: receipts.length,

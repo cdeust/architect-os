@@ -555,3 +555,20 @@ Then('Step authority refuses a platform without a user identity', function () {
     }
   });
 });
+
+Then(
+  'the host checks the subscription builder and each separate reader provider against the receipt',
+  function () {
+    const s = subject();
+    s.step.build = { provider: 'openai', model: 'gpt-6.2-sol', effort: 'high', limitSeconds: 90 };
+    const receipt = admittedFixture(s);
+    assert.equal(requireStepAdmission(receipt, s), receipt.approved_sha256);
+    for (const row of receipt.payload.specimens) {
+      const other = structuredClone(receipt);
+      other.payload.specimens.find((x) => x.role === row.role)!.model.provider =
+        row.role === 'build' ? 'anthropic' : 'openai';
+      other.approved_sha256 = sha(JSON.stringify(other.payload));
+      assert.throws(() => requireStepAdmission(other, s), { message: 'STEP_ADMISSION_SPECIMENS_REQUIRED' });
+    }
+  },
+);

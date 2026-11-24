@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { request as httpRequest } from 'node:http';
 import { createHash, generateKeyPairSync } from 'node:crypto';
 import { createLocalJWKSet, SignJWT } from 'jose';
 import { Then } from '@cucumber/cucumber';
@@ -70,11 +71,28 @@ Then(
               if (kind === 'refused callback') url.searchParams.set('error', 'access_denied');
               if (kind === 'substituted client') url.searchParams.set('client_id', 'oaiapp_different');
               if (kind === 'duplicate code') url.searchParams.append('code', 'another');
-              assert.equal((await fetch(url)).status, 403);
+              const denied = await fetch(url);
+              assert.equal(denied.status, 403);
+              assert.equal(await denied.text(), 'Authorization refused');
               return;
             }
             if (kind === 'returning') {
               assert.equal((await fetch(origin + 'unrelated')).status, 404);
+              const rawStatus = (path: string, host: string) =>
+                new Promise<number | undefined>((done, fail) => {
+                  const req = httpRequest(
+                    { hostname: '127.0.0.1', port: new URL(origin).port, path, headers: { host } },
+                    (r) => {
+                      r.resume();
+                      done(r.statusCode);
+                    },
+                  );
+                  req.on('error', fail);
+                  req.end();
+                });
+              assert.equal(await rawStatus('/', 'alternate'), 400);
+              assert.equal(await rawStatus('http://[', new URL(origin).host), 400);
+              assert.equal(await rawStatus('http://example.invalid/path', new URL(origin).host), 400);
               assert.equal((await fetch(url, { method: 'POST' })).status, 400);
               url.searchParams.delete('client_id');
             }
@@ -84,7 +102,9 @@ Then(
               session.close();
               return;
             }
-            assert.equal((await fetch(url)).status, 200);
+            const accepted = await fetch(url);
+            assert.equal(accepted.status, 200);
+            assert.equal(await accepted.text(), 'Callback received. You can close this tab.');
           })().catch((e) => {
             callbackFailure = e;
             session.close();
@@ -93,6 +113,12 @@ Then(
       },
       model,
       async (url, init) => {
+        if (url === issuer + '/.well-known/jwks.json') {
+          assert.equal(init?.method, 'GET');
+          assert.equal(init?.redirect, 'manual');
+          assert.ok(init?.signal);
+          return Response.json({ keys: [{ ...publicKey.export({ format: 'jwk' }), kid: 'fixture' }] });
+        }
         if (url === issuer + '/api/accounts/oauth/token') {
           posts++;
           const form = init!.body as URLSearchParams;
@@ -140,9 +166,22 @@ Then(
             .setExpirationTime(Math.floor(clock / 1000) + 30)
             .setProtectedHeader({ alg: 'RS256', kid: 'fixture' })
             .sign(privateKey);
-          return Response.json({
-            token_type: 'bearer',
-            access_token: 'access-' + posts,
+          const segments = jwt.split('.');
+          if (kind === 'invalid signature')
+            segments[2] = (segments[2]![0] === 'a' ? 'b' : 'a') + segments[2]!.slice(1);
+          const tokenReply = {
+            token_type:
+              kind === 'invalid token type prefix'
+                ? 'Bbearer'
+                : kind === 'invalid token type suffix'
+                  ? 'bearer1'
+                  : 'bearer',
+            access_token:
+              kind === 'invalid bearer prefix'
+                ? '!access'
+                : kind === 'invalid bearer suffix'
+                  ? 'access!'
+                  : 'access-' + posts,
             refresh_token: 'fixture-' + (kind === 'reused refresh' ? 1 : posts),
             expires_in: kind === 'unsafe expiry' ? Number.MAX_SAFE_INTEGER : 1,
             ...(posts === 1
@@ -150,16 +189,35 @@ Then(
                   scope:
                     kind === 'absent scope'
                       ? 'openid'
-                      : 'offline_access resource.invoke chatgpt.tokens.use.direct',
+                      : kind === 'partial grant'
+                        ? 'offline_access'
+                        : kind === 'lost scope'
+                          ? 'profile offline_access resource.invoke chatgpt.tokens.use.direct'
+                          : 'offline_access resource.invoke chatgpt.tokens.use.direct',
                 }
-              : kind === 'expanded scope'
-                ? { scope: 'offline_access resource.invoke chatgpt.tokens.use.direct profile' }
-                : {}),
+              : kind === 'lost scope'
+                ? { scope: 'email offline_access resource.invoke chatgpt.tokens.use.direct' }
+                : kind === 'expanded scope'
+                  ? { scope: 'offline_access resource.invoke chatgpt.tokens.use.direct profile' }
+                  : {}),
             id_token:
               kind === 'no identity' || (kind === 'renewal without ID token' && posts === 2)
                 ? undefined
-                : jwt,
-          });
+                : segments.join('.'),
+          };
+          const text = JSON.stringify(tokenReply);
+          if (kind === 'body boundary') return new Response(text.padEnd(1048576, ' '));
+          if (kind === 'oversized valid grant') return new Response(text.padEnd(1048577, ' '));
+          if (kind === 'invalid UTF8 grant')
+            return new Response(
+              Buffer.concat([
+                Buffer.from(text.slice(0, -1) + ',"extra":"'),
+                Buffer.from([255]),
+                Buffer.from('"}'),
+              ]),
+            );
+          if (kind === 'HTTP failure with grant') return Response.json(tokenReply, { status: 500 });
+          return Response.json(tokenReply);
         }
         assert.equal(url, 'https://api.openai.com/v1/models');
         catalogues++;
@@ -168,10 +226,17 @@ Then(
         assert.equal(init?.cache, 'no-store');
         assert.deepEqual(init?.headers, { authorization: 'Bearer access-' + posts });
         return Response.json({
-          models: [{ slug: model, visibility: kind === 'hidden model' ? 'hidden' : 'list' }],
+          models: [
+            null,
+            { slug: 'other', visibility: 'list' },
+            {
+              slug: kind === 'other model' ? 'other' : model,
+              visibility: kind === 'hidden model' ? 'hidden' : 'list',
+            },
+          ],
         });
       },
-      keys,
+      kind === 'returning' ? undefined : keys,
       () => clock,
     );
     const signal = AbortSignal.timeout(5000);
@@ -194,7 +259,37 @@ Then(
           kind === 'new registration' ? [{ issuer, client_id: client, accountHash: sha('person') }] : [],
         );
       } else {
-        await assert.rejects(work(), { message: 'SBX_ACCOUNT_UNAVAILABLE' });
+        const errors: Record<string, string> = {
+          'foreign state': 'SBX_CONSENT_CANCELLED',
+          'refused callback': 'SBX_CONSENT_REFUSED',
+          'substituted client': 'SBX_CONSENT_REFUSED',
+          'duplicate code': 'SBX_CONSENT_REFUSED',
+          'extra audience': 'SBX_ACCOUNT_IDENTITY',
+          'foreign azp': 'SBX_ACCOUNT_IDENTITY',
+          'invalid auth time': 'SBX_ACCOUNT_IDENTITY',
+          'changed auth time': 'SBX_ACCOUNT_IDENTITY',
+          'rotated nonce': 'SBX_ACCOUNT_IDENTITY',
+          'old identity': 'SBX_ACCOUNT_IDENTITY',
+          'no identity': 'SBX_ACCOUNT_IDENTITY',
+          'wrong nonce': 'SBX_ACCOUNT_IDENTITY',
+          'wrong subject': 'SBX_ACCOUNT_IDENTITY',
+          'rotated subject': 'SBX_ACCOUNT_IDENTITY',
+          'absent scope': 'SBX_ACCOUNT_GRANT',
+          'reused refresh': 'SBX_ACCOUNT_GRANT',
+          'expanded scope': 'SBX_ACCOUNT_GRANT',
+          'unsafe expiry': 'SBX_ACCOUNT_GRANT',
+          'other model': 'SBX_ACCOUNT_MODEL',
+          'partial grant': 'SBX_ACCOUNT_GRANT',
+          'lost scope': 'SBX_ACCOUNT_GRANT',
+          'invalid UTF8 grant': 'SBX_ACCOUNT_BODY',
+          'oversized valid grant': 'SBX_ACCOUNT_BODY',
+          'HTTP failure with grant': 'SBX_ACCOUNT_TRANSPORT',
+          'hidden model': 'SBX_ACCOUNT_MODEL',
+          'large response': 'SBX_ACCOUNT_BODY',
+          'invalid JSON': 'SBX_ACCOUNT_BODY',
+          'unavailable issuer': 'SBX_ACCOUNT_TRANSPORT',
+        };
+        await assert.rejects(work(), { message: errors[kind] ?? 'SBX_ACCOUNT_UNAVAILABLE' });
         assert.equal(saved.length, 0);
       }
       await callback;
@@ -244,7 +339,7 @@ Then(
       launched = 0,
       notice = '';
     const receipt = { model, request: 1, terminal: 'completed' as const, inputTokens: 4, outputTokens: 3 };
-    const result = { provider: 'openai' as const, exitCode: 0, stopped: false, measure: measureSession('') };
+    const result = { provider: 'openai' as const, client:{version:'fixture',sha256:'c'.repeat(64)},receipts:[receipt],exitCode: 0, stopped: false, measure: measureSession('') };
     try {
       for (const path of [state, join(snapshot, 'sbx'), work])
         mkdirSync(path, { recursive: true, mode: 0o700 });

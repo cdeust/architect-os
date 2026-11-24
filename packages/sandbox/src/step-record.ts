@@ -3,7 +3,7 @@
 // noms pris du fichier descriptif, des valeurs de listes fermées et des empreintes.
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import type { StepFile } from './step-file.js';
+import { codexModelSchema, type StepFile } from './step-file.js';
 import type { TreeFingerprint } from './tree-fingerprint.js';
 
 // Les schémas et les expressions sont construits dans des fonctions : un littéral au niveau du module ferait rejouer
@@ -73,7 +73,7 @@ export function stepRecordSchema() {
           responses: z
             .array(
               z.strictObject({
-                model: z.enum(['gpt-6.2-astra', 'gpt-6.2-sol']),
+                model: codexModelSchema,
                 request: z.int().positive(),
                 terminal: z.enum(['completed', 'failed', 'incomplete', 'interrupted']),
                 inputTokens: seconds().nullable(),
@@ -104,7 +104,7 @@ export function stepRecordSchema() {
           )
             return false;
           return (
-            ['gpt-6.2-astra', 'gpt-6.2-sol'].includes(session.model) &&
+            codexModelSchema.safeParse(session.model).success &&
             session.responses.every((r, i) => r.model === session.model && r.request === i + 1) &&
             session.usage.inputTokens === observedTokens(session.responses, 'inputTokens') &&
             session.usage.outputTokens === observedTokens(session.responses, 'outputTokens') &&
@@ -196,7 +196,11 @@ export function buildRecord(parts: RecordParts): StepRecord {
       role: session.role,
       ...(session.provider ? { provider: session.provider } : {}),
       ...(session.client
-        ? { client: session.client, usage: session.usage, responses: [...(session.responses ?? [])] }
+        ? {
+            client: session.client,
+            usage: session.usage,
+            responses: session.responses && [...session.responses],
+          }
         : {}),
       name: session.name,
       model: session.config.model,

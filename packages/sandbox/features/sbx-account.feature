@@ -33,6 +33,18 @@ Feature: Host-only subscription account for a Step
       | renewal without ID token | renewed |
       | unsafe expiry | refused |
       | expanded scope | refused |
+      | body boundary | renewed |
+      | oversized valid grant | refused |
+      | invalid UTF8 grant | refused |
+      | HTTP failure with grant | refused |
+      | invalid signature | refused |
+      | invalid token type prefix | refused |
+      | invalid token type suffix | refused |
+      | invalid bearer prefix | refused |
+      | invalid bearer suffix | refused |
+      | partial grant | refused |
+      | lost scope | refused |
+      | other model | refused |
 
   Scenario Outline: The host loads private settings before offering the account session
     Then the SBX Step host uses "<settings>" and opens the fixture account <sessions> times

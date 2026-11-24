@@ -631,6 +631,35 @@ Then('the recorded subscription fixture {string} is {string}', function (kind: s
     case 'mixed provider':
       session['provider'] = 'anthropic';
       break;
+    case 'incomplete observed':
+    case 'failed observed':
+      session['completed'] = false;
+      response.terminal = kind.split(' ')[0]!;
+      break;
+    case 'legacy unknown cost':
+    case 'legacy client':
+    case 'legacy responses':
+    case 'legacy usage':
+      session['provider'] = 'anthropic';
+      session['costUsd'] = kind === 'legacy unknown cost' ? null : 0;
+      if (kind !== 'legacy client') delete session['client'];
+      if (kind !== 'legacy usage') delete session['usage'];
+      if (kind !== 'legacy responses') delete session['responses'];
+      break;
+    case 'mixed terminals':
+    case 'mixed models':
+      session['responses'] = [
+        response,
+        {
+          ...response,
+          request: 2,
+          terminal: kind === 'mixed terminals' ? 'failed' : 'completed',
+          model: kind === 'mixed models' ? 'gpt-6.2-astra' : model,
+        },
+      ];
+      usage.inputTokens = 4;
+      usage.outputTokens = 6;
+      break;
     case 'review role':
       session['role'] = 'review';
       break;

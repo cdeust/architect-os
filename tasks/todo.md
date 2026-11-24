@@ -122,4 +122,5 @@ Five subscription responses completed at the provider with measured usage. Trial
 - [x] B.2 Relayer les octets natifs vers une route SIWC fermée et vérifier les budgets et les terminaux sur un faux amont.
 - [x] B.3 Monter le worktree du Step, protéger ses entrées réservées et vérifier une écriture native hors ligne.
 - [x] B.4 Intégrer la session de compte, les contrôles de provenance et le reçu du constructeur.
+- [ ] Recompiler, contrôler le format et l’architecture, rejouer les scénarios modifiés et éliminer les mutants survivants après rétablissement de la réserve du volume du compte. Voir [le relevé des campagnes](../JOURNAL-SBX.md#vérification-complémentaire).
 - [ ] Essai par le Step de production après le signal du mainteneur pour le consentement.

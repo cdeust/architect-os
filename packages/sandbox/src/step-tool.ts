@@ -550,12 +550,12 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         {
           ...recorded('build', step.build, build),
           provider: build.provider,
-          ...(build.client
+          ...(build.provider === 'openai'
             ? {
                 client: build.client,
                 usage: {
-                  inputTokens: observedTokens(build.receipts ?? [], 'inputTokens'),
-                  outputTokens: observedTokens(build.receipts ?? [], 'outputTokens'),
+                  inputTokens: observedTokens(build.receipts, 'inputTokens'),
+                  outputTokens: observedTokens(build.receipts, 'outputTokens'),
                 },
                 responses: build.receipts,
               }
@@ -727,7 +727,7 @@ function rootOf(cwd: string): string {
 }
 
 /** Les dépendances réelles : les fichiers du disque, les sessions sous srt, les flux du processus. */
-export function stepDependencies(proc: CodeProcess): StepDependencies {
+export function stepDependencies(proc: CodeProcess, buildSubscription = buildSbxStep): StepDependencies {
   const cwd = proc.env['INIT_CWD'] ?? proc.cwd();
   const root = (): string => rootOf(cwd);
   const readLauncher = (file: string) => readFileSync(join(PKG, file), 'utf8');
@@ -755,7 +755,7 @@ export function stepDependencies(proc: CodeProcess): StepDependencies {
     builder: {
       build: (request) =>
         request.config.provider === 'openai'
-          ? buildSbxStep(request, admittedRoot(), PKG, proc.env.ARCHITECT_OS_RUNTIME_ROOT!, (line) =>
+          ? buildSubscription(request, admittedRoot(), PKG, proc.env.ARCHITECT_OS_RUNTIME_ROOT!, (line) =>
               proc.stderr.write(line),
             )
           : new ClaudeBuilder(launch).build(request),

@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+export const codexModelSchema = z.enum(['gpt-6.2-astra', 'gpt-6.2-sol']);
+export type CodexModel = z.infer<typeof codexModelSchema>;
+
 // Les schémas sont construits dans des fonctions : un littéral au niveau du module ferait rejouer toute la suite
 // pour chacun de ses mutants (Stryker).
 const sessionSchema = () =>
@@ -79,7 +82,7 @@ export const stepFileSchema = () =>
       sessionSchema().extend({ provider: z.literal('anthropic').optional() }),
       sessionSchema().extend({
         provider: z.literal('openai'),
-        model: z.enum(['gpt-6.2-astra', 'gpt-6.2-sol']),
+        model: codexModelSchema,
         effort: z.enum(['low', 'medium', 'high', 'xhigh']),
       }),
     ]),

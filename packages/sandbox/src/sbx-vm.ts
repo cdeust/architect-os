@@ -29,8 +29,9 @@ function environment() {
   return { HOME, TMPDIR, PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' };
 }
 const nativeCommand: SbxCommand = async (args, signal) => {
+  const binary=executable();
   try {
-    const { stdout } = await promisify(execFile)(executable(), ['--no-input', ...args], {
+    const { stdout } = await promisify(execFile)(binary, ['--no-input', ...args], {
       cwd: '/',
       env: environment(),
       signal,
@@ -87,7 +88,7 @@ export async function withSbxVm<T>(
   const signals = ['SIGTERM', 'SIGINT', 'SIGHUP'] as const;
   const checked = async (args: string[], s = signal) => {
     const r = await command(args, s);
-    if (r.code !== 0) throw Error('SBX_' + args[0]?.toUpperCase() + '_FAILED');
+    if (r.code !== 0) throw Error('SBX_' + args[0]!.toUpperCase() + '_FAILED');
     return r.stdout;
   };
   const name = 'aos-build-' + randomUUID();
@@ -110,7 +111,7 @@ export async function withSbxVm<T>(
         t.flavor === 'shell' &&
         t.digest === image &&
         t.id === image &&
-        [policy.shellKit, policy.shellTemplate].includes(t.repository + '@' + t.digest),
+        [policy.shellKit, policy.shellTemplate].includes(t.repository + '@' + image),
     );
     if (!template) throw Error('SBX_TEMPLATE');
     if ((await names(signal)).includes(name)) throw Error('SBX_NAME_IN_USE');

@@ -1,4 +1,5 @@
-import { ClaudeBuilder } from '../../src/builder.js';
+import { measureSession } from '../../src/measure.js';
+import { ClaudeBuilder, type Builder } from '../../src/builder.js';
 import assert from 'node:assert/strict';
 import {
   chmodSync,
@@ -15,6 +16,7 @@ import {
 } from 'node:fs';
 import os, { tmpdir } from 'node:os';
 import { syncBuiltinESMExports } from 'node:module';
+import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { mock } from 'node:test';
 import { createHash } from 'node:crypto';
@@ -97,6 +99,7 @@ const newPhase = (): Phase => ({
   runningWhenStarted: [],
 });
 interface Step {
+  fixtureBuilder?: Builder;
   refusedAdmission?: string;
   acceptedAdmission?: string;
   folder: string;
@@ -505,7 +508,7 @@ const start = (s: Step, args: string): Promise<void> => {
         s.published.set(name, { ...files });
       },
     },
-    builder: new ClaudeBuilder((...args) => deps.session(...args)),
+    builder: s.fixtureBuilder ?? new ClaudeBuilder((...args) => deps.session(...args)),
     session: async (tool, argv, brief, limitSeconds, onOutput) => {
       s.calls.push({ tool, argv, brief, limitSeconds });
       const phase = tool === 'code.json' ? undefined : s.phases[tool];
@@ -1173,7 +1176,18 @@ Then('an isolated Step host binds its fixture receipt and releases the snapshot'
       stdout: new PassThrough(),
       stdin: new PassThrough(),
     };
-    const deps = stepDependencies(proc);
+    let notified = '',called=0, receiptSnapshot='';
+    proc.stderr.on('data',chunk=>{notified+=chunk.toString();});
+    const deps=stepDependencies(proc,async(build,snapshot,launcher,runtime,notice)=>{
+      called++;
+      assert.equal(build.brief,'fixture task');
+      assert.equal(launcher,PKG);
+      assert.equal(runtime,process.env.ARCHITECT_OS_RUNTIME_ROOT);
+      receiptSnapshot=snapshot;notice('fixture notice');
+      return {provider:'openai',exitCode:1,stopped:true,client:{version:'fixture',sha256:'d'.repeat(64)},measure:measureSession(''),receipts:[]};
+    });
+    const input={config:{provider:'openai' as const,model:'gpt-6.2-sol' as const,effort:'medium' as const,limitSeconds:1},worktree,brief:'fixture task',systemPrompt:'fixture',maxBytes:255,onOutput:()=>{}};
+
     const request = () => deps.session('never-launch.json' as ToolFile, [], '', 1, () => {});
     await assert.rejects(request, { message: 'STEP_ADMISSION_REQUIRED' });
     deps.dispose!();
@@ -1200,6 +1214,13 @@ Then('an isolated Step host binds its fixture receipt and releases the snapshot'
         assert.equal(readFileSync(join(frozen, 'code.json'), 'utf8'), subject.launcher['code.json']);
         return true;
       });
+      assert.equal((await deps.builder.build(input)).provider,'openai');
+      assert.equal(called,1);assert.equal(receiptSnapshot,frozen);assert.equal(notified,'fixture notice');
+      // This session has a checked launcher with a deliberately absent Claude tool file.
+      const code=join(frozen!,'code.json');
+      fs.unlinkSync(code);
+      await assert.rejects(deps.builder.build({...input,config:{model:'fixture',effort:'low',limitSeconds:1}}),(e:NodeJS.ErrnoException)=>e.code==='ENOENT' && e.path===code);
+      assert.equal(called,1);
     } finally {
       deps.dispose!();
     }
@@ -1218,4 +1239,80 @@ Then('an isolated Step host binds its fixture receipt and releases the snapshot'
     info.mock.restore();
     syncBuiltinESMExports();
   }
+});
+
+Then('the production Step orchestrates the subscription fixture {string}', async function (kind: string) {
+  newStepFolder(this, 'native');
+  const s = step(this),
+    model = 'gpt-6.2-astra',
+    sha256 = 'd'.repeat(64);
+  const config = { provider: 'openai', model, effort: 'high', limitSeconds: 90 };
+  writeFileSync(
+    join(s.folder, 'step.json'),
+    JSON.stringify({
+      build: config,
+      checks: [{ name: 'patch', command: ['test', '-f', 'patch'], limitSeconds: 17 }],
+      reviews: [{ name: 'correctness', model: 'claude-opus-5-5', effort: 'high', limitSeconds: 30 }],
+    }),
+  );
+  writeFileSync(join(s.folder, 'brief.md'), 'work');
+  s.behaviours['review.json'] = { fixture: 'review-accept-proposal.jsonl' };
+  const receipts = [{ model, request: 1, terminal: 'completed', inputTokens: 4, outputTokens: 3 }] as const;
+  s.fixtureBuilder = {
+    build: async (r) => {
+      assert.deepEqual(r.config, config);
+      assert.equal(r.worktree, '/the/worktree');
+      assert.equal(r.brief, 'work');
+      assert.equal(r.systemPrompt, 'fixed:prompts/build.md');
+      assert.equal(r.maxBytes, 67108864);
+      r.onOutput(Buffer.from('receipt'));
+      return {
+        provider: kind === 'mismatched provider' ? 'anthropic' : 'openai',
+        exitCode: 0,
+        stopped: false,
+        measure: { ...measureSession(''), completed: true, inputTokens: 4, outputTokens: 3 },
+        client: { version: 'codex-cli 0.170.0', sha256 },
+        receipts,
+      };
+    },
+  };
+  await start(s, '<folder>');
+  assert.equal(readFileSync(join(s.outputs.streams, 'build.stream.jsonl'), 'utf8'), 'receipt');
+  if (kind === 'mismatched provider') {
+    assert.notEqual(s.code, 0);
+    assert.match(s.stderr, /BUILDER_PROVIDER/);
+    assert.deepEqual(s.checkCalls, []);
+    assert.equal(s.published.size, 0);
+    return;
+  }
+  assert.equal(s.code, 0, s.stderr);
+  const record = JSON.parse(s.published.get('native')!['record.json']!);
+  assert.deepEqual(record.sessions[0], {
+    role: 'build',
+    provider: 'openai',
+    client: { version: 'codex-cli 0.170.0', sha256 },
+    usage: { inputTokens: 4, outputTokens: 3 },
+    responses: receipts,
+    model,
+    effort: 'high',
+    completed: true,
+    exitCode: 0,
+    stopped: false,
+    durationSeconds: 0,
+    costUsd: null,
+    costByModel: {},
+  });
+  assert.deepEqual(
+    Object.keys(record.launcher)
+      .filter((k) => k.startsWith('sbx/'))
+      .sort(),
+    ['sbx/codex-guest.py', 'sbx/isolation.json'],
+  );
+  assert.deepEqual(s.checkCalls, [{ command: ['test', '-f', 'patch'], limitSeconds: 17 }]);
+  assert.equal(JSON.parse(s.stdout).costUsd, null);
+  assert.equal(JSON.parse(s.stdout).build.costUsd, null);
+  assert.equal(
+    JSON.parse(readFileSync(join(s.outputs.retained, 'build.measure.json'), 'utf8')).costUsd,
+    null,
+  );
 });

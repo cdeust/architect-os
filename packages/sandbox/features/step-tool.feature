@@ -1455,3 +1455,27 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       Then the step exits with 2
       And the sessions started were ""
       And the step published nothing
+
+    Scenario Outline: Step binds the builder outcome and routes subscription accounting
+      Then the production Step orchestrates the subscription fixture "<case>"
+
+      Examples:
+        | case |
+        | completed |
+        | mismatched provider |
+
+    Scenario Outline: Host checks an explicit dimension and both legacy correctness labels
+      Given a step folder
+      And the step folder holds the file "step.json":
+        """
+        {"build":{"provider":"anthropic","model":"claude-sonnet-5-5","limitSeconds":30,"effort":"medium"},"reviews":[{"name":"<name>","provider":"anthropic","dimension":"<dimension>","model":"claude-opus-5-5","limitSeconds":20,"effort":"high"}]}
+        """
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: STEP_CORRECTNESS_PROVIDER"
+      And no session was started
+
+      Examples:
+        | name | dimension |
+        | independent | correctness |
+        | justesse | general |

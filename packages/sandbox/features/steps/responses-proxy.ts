@@ -425,6 +425,7 @@ Then('a response with {string} is refused and its source is disposed', async fun
                 cancelled++;
               },
             }),
+        kind === 'empty body' ? { headers: { 'content-type': 'text/event-stream' } } : undefined,
       ),
   );
   await assert.rejects(proxy.relay({ ...f.request, token: proxy.token }, f.downstream), {

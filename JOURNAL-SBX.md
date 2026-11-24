@@ -25,3 +25,17 @@ Avant le renforcement du contrat d’interruption et du lecteur de terminaux, le
 La sonde historique Antigravity reste dans le banc. La relecture Gemini utilise l’agent de Google hors SBX.
 
 Le contrôle suivant a passé 663 scénarios et 2 595 pas, dont les deux commandes Step natives et le contrôle d’architecture interdisant les lancements de conteneurs. Après ajout des scénarios de droits et d’identité des paramètres de l’hôte, le rejeu du compte a passé 44 scénarios et 44 pas. Le contrat commun du port exerce Claude, Codex et l’adaptateur mémoire, avec une construction achevée, une interruption et une limite de sortie. Le reçu refuse les agrégats incompatibles avec les terminaux et conserve une valeur inconnue pour un usage manquant.
+
+## Vérification complémentaire
+
+Le dernier rejeu natif des trois scénarios a réussi en 54,878 secondes. Le faux amont a reçu le modèle et l’effort demandés par chacun des deux Steps. Le test direct a aussi vérifié le dernier message du client et son absence du journal de métadonnées. Le lecteur des petits fichiers privés du compte et des paramètres du Step partage désormais les contrôles de descripteur à l’ouverture et après la lecture. Les nouveaux témoins couvrent la fermeture des tubes, les interruptions, les durées, les erreurs de consentement et les incohérences entre le résultat du constructeur et son reçu.
+
+| Périmètre de mutation | Tués | Délais | Erreurs d’exécution | Survivants | Sans couverture |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Port Builder | 38 | 0 | 0 | 0 | 0 |
+| Proxy Responses | 236 | 1 | 2 | 0 | 0 |
+| Adaptateur et cycle de vie de la VM | 462 | 15 | 17 | 26 | 1 |
+| Compte et assemblage du Step SBX | 370 | 2 | 14 | 42 | 3 |
+| Fichier privé, admission, déclaration, orchestration et reçu du Step (lignes modifiées) | 252 | 2 | 0 | 14 | 8 |
+
+Chaque ligne provient de la dernière campagne achevée pour son périmètre. Les témoins ajoutés ensuite au cycle de vie et au Step attendent une nouvelle mesure. La dernière compilation a signalé un accès mal typé à l’environnement dans le scénario de routage. Le scénario utilise désormais l’environnement du processus de test. La relance de TypeScript et du rejeu s’est arrêtée avant leur démarrage sur `RUNTIME_HOME_SPACE_LOW`. Le profil de production exige plus de 17 179 869 184 octets libres sur le volume du compte. Les vérifications du dernier état, la mesure de mutation et l’essai avec consentement restent ouverts.

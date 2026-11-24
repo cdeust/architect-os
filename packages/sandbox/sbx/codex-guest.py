@@ -220,6 +220,7 @@ def build():
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         completed = False
+        report = ""
         try:
             with subprocess.Popen(
                 [*command, "--", "-"],
@@ -233,6 +234,10 @@ def build():
                 client.stdin.close()
                 for line in client.stdout:
                     event = json.loads(line)
+                    if event.get("type") == "item.completed":
+                        item = event.get("item", {})
+                        if item.get("type") == "agent_message":
+                            report = item["text"]
                     if event.get("type") == "turn.completed":
                         completed = True
                     if event.get("type") == "turn.failed":
@@ -249,6 +254,7 @@ def build():
                     "completed": completed,
                     "version": version,
                     "uid": os.getuid(),
+                    "report": report,
                 },
             }
         )
