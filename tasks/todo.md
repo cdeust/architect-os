@@ -122,5 +122,5 @@ Five subscription responses completed at the provider with measured usage. Trial
 - [x] B.2 Relayer les octets natifs vers une route SIWC fermée et vérifier les budgets et les terminaux sur un faux amont.
 - [x] B.3 Monter le worktree du Step, protéger ses entrées réservées et vérifier une écriture native hors ligne.
 - [x] B.4 Intégrer la session de compte, les contrôles de provenance et le reçu du constructeur.
-- [ ] Recompiler, contrôler le format et l’architecture, rejouer les scénarios modifiés et éliminer les mutants survivants sur le réseau SBX et le compte installé. Voir [le relevé des campagnes](../JOURNAL-SBX.md#vérification-complémentaire).
+- [x] Recompiler, contrôler le format et l’architecture, rejouer les scénarios modifiés et mesurer la mutation. Les 1 000 scénarios passent. Les 1 811 mutants TypeScript des trois campagnes comptent zéro survivant et zéro sans couverture. [Résultats](../JOURNAL-SBX.md#résultat-du-step-hors-ligne)
 - [ ] Essai par le Step de production après le signal du mainteneur, avec la session établie à l’installation.

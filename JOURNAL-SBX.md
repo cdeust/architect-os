@@ -1,5 +1,28 @@
 # Constructeur SBX — 24 novembre 2026
 
+## Résultat du Step hors ligne
+
+Sur macOS, deux Steps admis ont lancé Codex 0.170.0 sous UID 65534 dans une VM Docker SBX, l’un pour Astra, l’autre pour Sol, avec l’effort `medium`. Dans chaque cas, le client a exécuté la commande d’édition, renvoyé son résultat au fournisseur simulé, et écrit `result.txt` dans le worktree. Le contrôle SRT a lu le fichier et vérifié que l’entrée de test du trousseau lui était inaccessible. Le Step a publié le verdict de justesse Claude rejoué et son `record.json`. Celui-ci porte le fournisseur, le modèle, l’effort, la version, le SHA-256 du client et les deux terminaux de test, soit 10 jetons d’entrée et 6 de sortie. [Scénarios natifs](bench/sbx/native-builder.feature) · [Empreintes épinglées](packages/sandbox/sbx/isolation.json)
+
+Le test lance le vrai `aos`, le script npm de production et le client Linux ARM64. Un module chargé dans les processus de test fournit le service d’identité, les réponses du modèle et le callback local. La relecture Claude utilise un flux enregistré et l’admission du Step un dossier de test. L’installation du compte synthétique et le Step s’exécutent dans deux processus distincts. Deux autres consommateurs concurrents du même compte expiré ont effectué un seul renouvellement dans le vrai trousseau macOS. Le Step sans compte a rendu `SBX_SIGN_IN_REQUIRED`. [Configuration du banc](bench/sbx/step-fixture-preload.mjs) · [Installation et limites du compte](packages/sandbox/README.md#codex-in-docker-sbx)
+
+La mesure réseau a compté une livraison sur le port admis de l’hôte et zéro sur un second port en écoute. Codex appelle directement le proxy HTTP du Step par `host.docker.internal`. La règle SBX autorise le POST sur `/v1/responses` et le profil SRT admis autorise le registre npm sur 443. Les essais ont aussi vérifié le refus en dehors de cette route, le refus d’écriture sur les témoins protégés, l’absence d’accès au trousseau dans la session et le retrait des VM. Après le rejeu, `sbx ls --json` a rendu `[]`.
+
+Le dernier rejeu combiné a passé **1 000 scénarios et 3 207 pas** en 1 min 26,792 s, dont les six scénarios du banc natif. Les témoins Python ont détecté les 75 mutations appliquées aux conditions du bootstrap et aux options de sécurité du client. La compilation TypeScript, Prettier et la garde d’architecture ont réussi (431 modules, 1 877 dépendances). Ce relevé porte sur les fonctionnalités modifiées et le diagramme des profils.
+
+Les trois campagnes Stryker ont tourné successivement avec un seul worker. Les sources inscrites dans leurs rapports correspondent octet pour octet aux fichiers du commit `6a33150d`. Le périmètre TypeScript couvre les nouveaux modules de production et les lignes modifiées des modules Step existants. L’entrée `sbx-sign-in.ts` délègue à la commande testée et n’a produit aucun mutant. Le bootstrap Python est vérifié séparément.
+
+| Campagne                                                          |   Mutants |      Tués | Délais | Erreurs d’exécution | Survivants | Sans couverture |
+| ----------------------------------------------------------------- | --------: | --------: | -----: | ------------------: | ---------: | --------------: |
+| Port, proxy HTTP et cycle de vie SBX                              |       915 |       815 |     27 |                  73 |          0 |               0 |
+| Compte, trousseau et assemblage du Step                           |       628 |       574 |     37 |                  17 |          0 |               0 |
+| Admission, déclaration, exécution et reçu du Step, lecture privée |       268 |       263 |      2 |                   3 |          0 |               0 |
+| **Total**                                                         | **1 811** | **1 652** | **66** |              **93** |      **0** |           **0** |
+
+**Essai encore ouvert.** Sur le signal du mainteneur, un Step de production doit obtenir un correctif choisi par le vrai modèle sur l’abonnement, faire passer ses contrôles et sa revue, puis publier le reçu et l’usage du fournisseur. La commande ordinaire est `"$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run step -- "$folder"`. Le consentement initial appartient à l’installation. Le coût monétaire de l’abonnement reste inconnu. Le magasin natif Secret Service demande encore une vérification sur un poste Linux. Gemini intervient uniquement en relecture directe avec son agent.
+
+## Historique des étapes
+
 ## B.1 — Le port de construction
 
 Step confie la consigne enrichie et le prompt admis à un Builder. L’adaptateur Claude conserve le lanceur SRT, les arguments, stdin, le délai, le code de sortie et les mesures du flux. La sortie de construction est bornée par la limite en octets du fichier admis. Une sortie trop longue refuse l’étape. Le contrat couvre les deux adaptateurs, la réussite, l’interruption et la limite à l’octet près. TypeScript a compilé. Le rejeu de `builder.feature` et `step-tool.feature` a réussi (69 scénarios, 729 pas).
