@@ -4,9 +4,9 @@
   "environments": {
     "workstation": {
       "rootFloorBytes": "34359738368",
-      "homeFloorBytes": "17179869184",
+      "homeFloorBytes": "2147483648",
       "status": "provisional",
-      "basis": "32 GiB on the volume of the root, 16 GiB on the volume of the home. The development volume has room for a substantial reserve before another build or gate starts; the separate home reserve answers the disk that filled on 18 November 2026 and leaves the owner room to keep using the machine. Both floors passed on the workstation when they were chosen.",
+      "basis": "32 GiB on the volume of the root, 2 GiB on the volume of the home. Decision of the owner on 24 November 2026: the workstation works on the volume of the root, and the disk of the account is not what limits a run. Since the session writes were confined under the root (brick 1b), a run writes nothing on the account filesystem; the 16 GiB reserve chosen on 19 November stopped every command of the workstation on 24 November while the root had more than a terabyte free. The small reserve that remains is the one of a hosted runner: what the tools that still keep their own state in the home need to start.",
       "review": "step 4: the peaks measured by repeated samples of free space during a step, a gate and two overlapping runs replace this operating choice"
     },
     "hosted-runner": {
