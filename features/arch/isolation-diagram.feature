@@ -203,6 +203,10 @@ Feature: the image of the profiles is produced from the profile files, the hand-
   Scenario: The README loop groups each capability with its phase and follows the numbered path
     Then each orchestration phase owns its cards and connects to the next phase
 
+  Scenario: The README puts the SBX builder with its proof and keeps only the open trial on the roadmap
+    Given the text of the committed file "README.md"
+    Then the README puts the SBX builder with its proof and keeps only its open trial on the roadmap
+
   Scenario: Text in the hand-drawn diagram uses its declared family and one size per role
     At the README width of 920 px the 1400-unit drawing uses Arial throughout.
     Diagram and section titles use 32 and 25 units, brick names 20, and body lines,

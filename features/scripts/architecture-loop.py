@@ -99,6 +99,15 @@ for edge in edges:
     assert start == src[3] and start < end <= dst[1] and dst[1] - end <= 3, edge.attrib
 assert not loop.findall("s:rect", ns), "unowned cards in the loop"
 
+# bench/sbx/native-builder.feature runs the production route for Astra and Sol; the trial on the subscription is open.
+# Each card says what it shows, in its accessible label and in its badge.
+for card, status in (("build-sbx-integration", "ready"), ("build-sbx-trial", "next")):
+    group = loop.find(f"s:g[@id='loop-build']/s:g[@id='{card}']", ns)
+    assert group is not None and group.get("aria-label", "").endswith(f" · {status}"), f"{card} status"
+    assert [node.text for node in group.findall("s:text[@data-type-role='badge']", ns)] == [status], (
+        f"{card} must display its accessible status"
+    )
+
 # A host broker drawn inside a guest, or an SBX VM nested inside SRT, would
 # misstate which process can hold the subscription credential.
 isolation = root.find(".//s:g[@id='runtime-isolation']", ns)
