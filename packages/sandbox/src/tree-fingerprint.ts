@@ -38,6 +38,9 @@ function hash(): RegExp {
   return /^[0-9a-f]{40}$/;
 }
 
+/** L'arbre sans entrée (SHA-1) : la source des attributs de chaque appel git de l'empreinte. */
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
 /**
  * Un appel git, borné dans le temps. Il échoue (message fixe, qui nomme l'appel et ne porte rien de ce que git a
  * imprimé) s'il sort autrement que par 0 (ne pas démarrer ou dépasser sa borne n'est pas sortir par 0) ; `hashed` demande en plus une empreinte.
@@ -49,12 +52,18 @@ function git(
   timeoutMs: number,
   hashed: boolean,
 ): string {
-  const options = ['core.fsmonitor=false', 'core.hooksPath=/dev/null'];
-  const result = spawnSync('git', [...options.flatMap((option) => ['-c', option]), ...call], {
+  // Ce qu'une session a écrit dans l'arbre ne décide de rien de ce que git fait pour l'hôte : ni moniteur ni hook,
+  // les attributs lus dans l'arbre vide (aucun `.gitattributes` ne fait entrer dans l'empreinte autre chose que les
+  // octets du fichier), aucune descente dans un dépôt imbriqué, dont la configuration nommerait des programmes.
+  const options = ['core.fsmonitor=false', 'core.hooksPath=/dev/null', 'diff.ignoreSubmodules=all'];
+  const before = [`--attr-source=${EMPTY_TREE}`, ...options.flatMap((option) => ['-c', option])];
+  const result = spawnSync('git', [...before, ...call], {
     cwd: worktree,
     env,
     encoding: 'utf8',
     timeout: timeoutMs,
+    // Les deux listes d'un arbre entier passent ici : la borne par défaut (1 Mio) arrêterait git avant sa fin.
+    maxBuffer: 1 << 30,
   });
   const failure = new Error(`l'empreinte de l'arbre a échoué : git ${call.join(' ')}`);
   // Un appel qui ne démarre pas ou dépasse sa borne n'a pas de code de sortie : `status` vaut `null`.
@@ -74,6 +83,15 @@ export function fingerprintTree(worktree: string, timeoutMs = 60_000): TreeFinge
     // L'index temporaire part de celui du commit : dans un index vide, `add -A` écarterait un fichier suivi qu'une
     // règle d'exclusion nomme, et un arbre propre ne serait pas celui de son commit.
     git(worktree, ['read-tree', 'HEAD'], env, timeoutMs, false);
+    // Avant `add`, le seul appel qu'aucune option ne retient d'entrer dans un dépôt imbriqué : l'empreinte se refuse
+    // à un arbre qui en tient un, enregistré (mode 160000) ou non suivi (git le liste comme un dossier).
+    const recorded = git(worktree, ['ls-files', '-s', '-z'], env, timeoutMs, false);
+    const others = git(worktree, ['ls-files', '--others', '--exclude-standard', '-z'], env, timeoutMs, false);
+    if (
+      recorded.split('\0').some((entry) => entry.startsWith('160000 ')) ||
+      others.split('\0').some((entry) => entry.endsWith('/'))
+    )
+      throw new Error("l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre");
     git(worktree, ['add', '-A'], env, timeoutMs, false);
     const tree = git(worktree, ['write-tree'], env, timeoutMs, true);
     const committed = git(worktree, ['rev-parse', 'HEAD^{tree}'], host, timeoutMs, true);

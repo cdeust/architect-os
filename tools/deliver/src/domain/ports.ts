@@ -9,6 +9,7 @@ export type Stage = Phase | 'rangement';
 
 /** Why a run stopped: a closed list of fixed strings, never a text read from a port. */
 export type Reason =
+  | "dépôt imbriqué dans l'arbre"
   | 'arbre non propre'
   | 'empreinte de commit invalide'
   | 'branche distante absente'
@@ -50,6 +51,12 @@ export interface CiRun {
 
 /** Git, in the delivery worktree. */
 export interface Repository {
+  /**
+   * The tree holds a repository of its own: recorded by the index or by the head (an entry of mode 160000), or not
+   * tracked (git lists it as a directory). Asked before anything else: git would enter it, read its configuration and
+   * start the programs it names, with the identity of the delivery.
+   */
+  holdsNestedRepository(): boolean;
   isClean(): boolean;
   /** The full hash of the commit to deliver (40 hexadecimal characters). */
   head(): string;

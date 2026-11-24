@@ -73,5 +73,89 @@ Feature: Test gate diff against the first parent
       src/new.mjs: 1,2,3
       """
 
+  Rule: what a session wrote in the tree hides none of the lines it changed
+
+    The gate reads the attributes of the empty tree, the paths as git lists them between NUL bytes, and the content of
+    each changed path as text. Each scenario below gave a changed file with no changed line, or no file at all, when the
+    gate read one porcelain diff of the whole tree.
+
+    Scenario: an attribute file that marks a changed file as without diff hides none of its lines
+      Given the gate repository file "src/.gitattributes" reads:
+        """
+        gone.mjs -diff
+        """
+      And the gate repository file "src/gone.mjs" reads:
+        """
+        a changed line
+        """
+      And the gate head is committed
+      Then the gate changes against the first parent are:
+        """
+        src/.gitattributes: 1
+        src/gone.mjs: 1
+        """
+
+    Scenario: the same attribute file, left out of the commit by an ignore rule, hides none of its lines either
+      Given the gate repository file ".gitignore" reads:
+        """
+        reports/
+        .gitattributes
+        """
+      And the gate repository file "src/.gitattributes" reads:
+        """
+        gone.mjs binary
+        """
+      And the gate repository file "src/gone.mjs" reads:
+        """
+        a changed line
+        """
+      And the gate head is committed
+      Then the gate changes against the first parent are:
+        """
+        .gitignore: 2
+        src/gone.mjs: 1
+        """
+
+    Scenario: a NUL byte in a changed file does not make it a file without changed lines
+      Given the gate repository file "src/gone.mjs" reads "a changed line" then a NUL byte
+      And the gate head is committed
+      Then the gate changes against the first parent are:
+        """
+        src/gone.mjs: 1
+        """
+
+    Scenario: a path that git would quote in a header keeps its name and its lines
+      Given the gate repository file 'src/we"ird\name.mjs' reads:
+        """
+        one
+        two
+        """
+      And the gate head is committed
+      Then the gate changes against the first parent are:
+        """
+        src/we"ird\name.mjs: 1,2
+        """
+
+    Scenario: an attribute that makes git call a rewritten file unchanged does not hide its line
+      Given the gate repository file "src/id.mjs" reads:
+        """
+        // $Id$
+        """
+      And the gate head is committed
+      And the gate repository file ".gitattributes" reads:
+        """
+        *.mjs ident
+        """
+      And the gate head is committed
+      And the gate repository file "src/id.mjs" reads:
+        """
+        // $Id: a line the first parent does not hold $
+        """
+      Then the gate changes against the first parent are:
+        """
+        .gitattributes: 1
+        src/id.mjs: 1
+        """
+
   Scenario: a production caller sees only its requested files
     Then the Gate path selector filters tracked, changed and untracked files

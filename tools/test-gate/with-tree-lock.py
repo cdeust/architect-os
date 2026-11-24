@@ -7,6 +7,7 @@ a different spelling of the checkout cannot create an independent lock.
 
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -24,7 +25,22 @@ GIT_ENV = {
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "LC_ALL": "C",
 }
-GIT = ["/usr/bin/git", "--no-replace-objects", "-c", "core.fsmonitor=false"]
+# What a session wrote in the checkout decides nothing of what git does here: attributes are
+# read from the empty tree (no `.gitattributes` makes git call clean a file whose bytes are
+# not the commit's), git starts no monitor and no hook, and it enters no nested repository,
+# whose own configuration would name programs to start.
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+GIT = [
+    "/usr/bin/git",
+    "--no-replace-objects",
+    "--attr-source=" + EMPTY_TREE,
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "diff.ignoreSubmodules=all",
+]
 PENDING = "pending.json"
 
 
@@ -63,6 +79,22 @@ def checkout():
     path = os.path.realpath(os.fsdecode(result.stdout.removesuffix(b"\n")))
     os.chdir(path)
     return path
+
+
+def refuse_nested_repository():
+    """The Gate judges files. A repository nested in the checkout is one git would enter,
+    reading its configuration: a recorded one has mode 160000, one that is not tracked is
+    listed as a directory."""
+    index = git("ls-files", "-s", "-z")
+    head = git("ls-tree", "-r", "-z", "HEAD")
+    other = git("ls-files", "--others", "--exclude-standard", "-z")
+    if index.returncode or head.returncode or other.returncode:
+        raise Refusal("GATE_CHECKOUT_UNREADABLE")
+    recorded = index.stdout.split(b"\0") + head.stdout.split(b"\0")
+    if any(entry.startswith(b"160000 ") for entry in recorded) or any(
+        entry.endswith(b"/") for entry in other.stdout.split(b"\0")
+    ):
+        raise Refusal("GATE_NESTED_REPOSITORY")
 
 
 def lease(tree, existing):
@@ -285,12 +317,49 @@ def verify_admission():
 
 
 def dirty():
-    return (
-        git(
-            "diff", "--quiet", "--no-ext-diff", "--no-textconv", "HEAD", "--"
-        ).returncode
-        != 0
-    )
+    """A file of the commit is not, in the checkout, the bytes and the mode the commit holds.
+
+    Read without the index and without git reading the files: a stat cached by the index, an
+    attribute or a conversion cannot make a rewritten file pass for the commit's. A receipt
+    names a commit; the Gate must have judged those bytes."""
+    listed = git("ls-tree", "-r", "-z", "HEAD")
+    if listed.returncode:
+        return True
+    links = {}
+    for entry in listed.stdout.split(b"\0"):
+        if not entry:
+            continue
+        meta, _, name = entry.partition(b"\t")
+        mode, _, oid = meta.split(b" ")
+        try:
+            # A directory of the path replaced by a link would read the file of another place.
+            parts = name.split(b"/")
+            for depth in range(1, len(parts)):
+                parent = b"/".join(parts[:depth])
+                if parent not in links:
+                    links[parent] = stat.S_ISLNK(os.lstat(parent).st_mode)
+                if links[parent]:
+                    return True
+            st = os.lstat(name)
+            if mode == b"120000" and stat.S_ISLNK(st.st_mode):
+                data = os.readlink(name)
+            elif mode in (b"100644", b"100755") and stat.S_ISREG(st.st_mode):
+                if bool(st.st_mode & 0o100) != (mode == b"100755"):
+                    return True
+                fd = os.open(name, os.O_RDONLY | FILE)
+                try:
+                    with os.fdopen(fd, "rb", closefd=False) as source:
+                        data = source.read()
+                finally:
+                    os.close(fd)
+            else:
+                return True
+        except OSError:
+            return True
+        blob = hashlib.sha1(b"blob %d\0" % len(data) + data, usedforsecurity=False)
+        if blob.hexdigest().encode() != oid:
+            return True
+    return False
 
 
 def clear_receipt(state):
@@ -311,6 +380,11 @@ def main(args):
     candidate = len(args) > 1 and args[0] == "candidate"
     verify_admission()
     tree = checkout()
+    # Running or certifying a candidate is closed to a tree that holds a nested repository.
+    # Restoring a recorded source and discarding a receipt stay open: they read no working file
+    # through git, and a tree must be recoverable whatever was left in it.
+    if candidate or args == ["begin"] or (len(args) == 2 and args[0] == "verify"):
+        refuse_nested_repository()
     fd, reused = lease(tree, editing or candidate)
     state = state_directory(fd)
     if candidate:
@@ -340,6 +414,7 @@ def main(args):
     elif len(args) > 1 and args[0] in ("exec", "full"):
         if not reused:
             recover(fd, state)
+        refuse_nested_repository()
         # Never run a gate over bytes left by a different runtime root, or overwrite an
         # operator's changes. A fresh clone or a clean linked worktree needs no pointer.
         if dirty():

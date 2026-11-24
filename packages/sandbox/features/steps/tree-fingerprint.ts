@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -83,6 +84,69 @@ const commitOne = (directory: string, tracked: string): void => {
 
 Given('a throwaway repository with one commit', function () {
   commitOne(throwaway(this), 'a.txt');
+});
+
+// A repository nested in the tree: what a session can leave in its worktree. Its own configuration names the witness as
+// the `clean` filter of one file, left racy (rewritten with the same size right after it entered the nested index), so
+// that a git that enters the nested repository must run the filter to know whether the file changed.
+Given(
+  'a repository nested in the repository at {string} names a witness program as a filter',
+  function (name: string) {
+    const witness = join(mkdtempSync(join(ROOT_TMP, 'aos-fp-witness-')), 'witness');
+    this.cleanups.push(() => rmSync(dirname(witness), { recursive: true, force: true }));
+    writeFileSync(witness, `#!/bin/sh\n: > '${witness}.ran'\ncat\n`);
+    chmodSync(witness, 0o755);
+    const nested = join(fp(this).directory, name);
+    mkdirSync(nested, { recursive: true });
+    git(nested, 'init', '-q');
+    writeFileSync(join(nested, '.gitattributes'), 'f.txt filter=witness\n');
+    writeFileSync(join(nested, 'f.txt'), 'inner\n');
+    git(nested, 'add', '-A');
+    git(nested, 'commit', '-q', '-m', 'inner');
+    const configuration = join(nested, '.git', 'config');
+    writeFileSync(
+      configuration,
+      `${readFileSync(configuration, 'utf8')}[filter "witness"]\n\tclean = ${witness}\n`,
+    );
+    git(nested, 'add', 'f.txt');
+    writeFileSync(join(nested, 'f.txt'), 'outer\n');
+    rmSync(`${witness}.ran`, { force: true });
+    this.state['fingerprintWitness'] = witness;
+  },
+);
+
+Given('everything in the repository is committed', function () {
+  const { directory } = fp(this);
+  git(directory, 'add', '-A');
+  git(directory, 'commit', '-q', '-m', 'everything');
+});
+
+When(
+  'a git with none of the options of the fingerprint is asked for the status of the repository',
+  function () {
+    git(fp(this).directory, 'status', '--porcelain');
+  },
+);
+
+const witnessRan = (world: { state: Record<string, unknown> }): boolean => {
+  const witness = world.state['fingerprintWitness'];
+  assert.equal(typeof witness, 'string', 'a nested repository with a witness program must be given first');
+  return existsSync(`${witness as string}.ran`);
+};
+
+Then('the witness program of the nested repository has not run', function () {
+  assert.equal(witnessRan(this), false);
+});
+
+Then('the witness program of the nested repository has run', function () {
+  assert.equal(witnessRan(this), true);
+});
+
+Then('the fingerprint tree holds the file {string} with the bytes it has on disk', function (file: string) {
+  const state = fp(this);
+  const raw = git(state.directory, 'hash-object', '--no-filters', '--', file);
+  const entry = git(state.directory, 'ls-tree', state.results[0]?.tree ?? '', '--', file);
+  assert.equal(entry.split(/\s+/)[2], raw);
 });
 
 Given('a second throwaway repository with one commit', function () {
@@ -293,7 +357,8 @@ const names = Object.keys(process.env).filter((name) => name !== '__CF_USER_TEXT
 const configuration = [process.env.GIT_CONFIG_GLOBAL, process.env.GIT_CONFIG_SYSTEM];
 const line = [args.join(' '), process.env.GIT_INDEX_FILE ?? '', fs.realpathSync(process.cwd()), names, configuration];
 fs.appendFileSync(path.join(__dirname, 'calls.log'), JSON.stringify(line) + '\\n');
-if (args.slice(4).join(' ') === read('on')) {
+// The seven arguments before the subcommand are the options the fingerprint gives every call.
+if (args.slice(7).join(' ') === read('on')) {
   if (read('sleep') !== '') setTimeout(() => {}, Number(read('sleep')) * 1000);
   else {
     process.stdout.write(read('text') + '\\n');
@@ -340,7 +405,7 @@ Given('a fake git with immediate responses before its deliberately silent call',
     [
       '#!/bin/sh',
       'set -eu',
-      'shift 4',
+      'shift 7',
       'IFS= read -r silent < "${0%/*}/on" || [ -n "$silent" ]',
       'printf "%s\\n" "$*" >> "${0%/*}/calls.log"',
       'if [ "$*" = "$silent" ]; then exec /bin/sleep 60; fi',
@@ -403,7 +468,7 @@ Then('the temporary index was in the temporary directory', function () {
   const indexes = calls(this)
     .map(([, index]) => index)
     .filter((index) => index !== '');
-  assert.equal(indexes.length, 3);
+  assert.equal(indexes.length, 5);
   assert.deepEqual(new Set(indexes).size, 1);
   const folder = dirname(indexes[0] as string);
   assert.equal(dirname(folder), tmp);
@@ -422,7 +487,7 @@ Then(
     assert.ok(had.includes('LANG') && had.includes('LC_CTYPE') && !had.includes('LC_ALL'));
     assert.ok(Object.keys(process.env).length > had.length);
     const recorded = calls(this);
-    assert.equal(recorded.length, 5);
+    assert.equal(recorded.length, 7);
     for (const [, index, , names, configuration] of recorded) {
       assert.deepEqual(names, [...had, ...CONFIGURATION, ...(index === '' ? [] : ['GIT_INDEX_FILE'])].sort());
       assert.deepEqual(configuration, ['/dev/null', '/dev/null']);
@@ -436,7 +501,7 @@ Then(
     const list = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
     assert.ok(list.every((name) => process.env[name] !== undefined));
     const recorded = calls(this);
-    assert.equal(recorded.length, 5);
+    assert.equal(recorded.length, 7);
     for (const [, index, , names, configuration] of recorded) {
       assert.deepEqual(
         names,

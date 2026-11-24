@@ -70,9 +70,9 @@ Feature: the gate reads its own repository, whatever the environment it was star
         | NODE_OPTIONS  | --no-warnings |
         | GIT_EXEC_PATH | /nowhere/exec |
 
-    Scenario: the call is started with no file monitor and no hook, before the subcommand
+    Scenario: the call is started with the attributes of the empty tree, no file monitor, no hook and no descent into a nested repository, before the subcommand
       When the gate asks its git for the head
-      Then the fake git of the gate was started once as "-c core.quotePath=false -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-list --parents -n 1 HEAD"
+      Then the fake git of the gate was started once as "--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.quotePath=false -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-list --parents -n 1 HEAD"
 
   Rule: the gate reads a repository that names a program as its file monitor without that program running
 
@@ -102,4 +102,44 @@ Feature: the gate reads its own repository, whatever the environment it was star
 
     Scenario: the same witness program, named only by the configuration of the repository, is run by a git started without the options of the gate, so that the scenario above can fail
       When git is asked for the diff with none of the options of the gate
+      Then the witness program of the gate has run
+
+  Rule: the gate enters no repository nested in its tree, and judges no tree that holds one
+
+    A session can leave a repository in its worktree, with a configuration of its own that names a program (here the
+    `clean` filter of one of its files). Once the host has committed the work, git records that repository as an entry of
+    mode 160000 and, asked for a status or a diff, enters it and starts the program: on the host, outside any sandbox.
+
+    Background:
+      Given a gate repository
+      And the gate repository file "notes.txt" reads:
+        """
+        first
+        """
+      And the gate first parent is committed
+      And a repository nested in the gate repository at "sub" names a witness program as a filter
+
+    Scenario: a nested repository that is not tracked is refused, and its program does not run
+      Then the gate refuses to read its changes with "dépôt imbriqué dans l'arbre : sub/"
+      And the witness program of the gate has not run
+
+    Scenario: a nested repository that the head records is refused, and its program does not run
+      Given the gate head is committed
+      Then the gate refuses to read its changes with "dépôt imbriqué dans l'arbre : sub"
+      And the witness program of the gate has not run
+
+    Scenario: a nested repository that the head records, gone from the index and from the tree, is refused
+      Given the gate head is committed
+      And the nested repository "sub" leaves the index and the tree of the gate repository
+      Then the gate refuses to read its changes with "dépôt imbriqué dans l'arbre : sub"
+
+    Scenario: the git of the gate, asked for the changed paths and for a patch of a tree whose head records the nested repository, does not start its program, though the `.gitmodules` of the tree asks git to look into it
+      Given the gate head is committed
+      When the gate asks its git for the changed paths and for the patch of "notes.txt"
+      Then the witness program of the gate has not run
+
+    Scenario: the same program is started by a git asked for the status without the options of the gate, so that the scenarios above can fail
+      Given the gate head is committed
+      Then the witness program of the gate has not run
+      When git is asked for the status with none of the options of the gate
       Then the witness program of the gate has run

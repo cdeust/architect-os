@@ -26,6 +26,8 @@ export interface RepositoryFixture {
   checkout(label: string): void;
   setRemote(branch: string, label: string): void;
   touchWorktree(): void;
+  /** Leaves in the tree a repository of its own, as a session can. */
+  nestRepository(): void;
   hashOf(label: string): string;
 }
 

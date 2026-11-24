@@ -73,20 +73,24 @@ Feature: the fingerprint of the tree of a worktree
       | call           |
       | rev-parse HEAD |
       | read-tree HEAD |
+      | ls-files -s -z |
+      | ls-files --others --exclude-standard -z |
       | add -A         |
       | write-tree     |
 
-  Scenario: the five git calls are argv with the options that switch off the monitor and the hooks, and the temporary index
+  Scenario: the seven git calls are argv with the options that switch off the monitor, the hooks, the attributes of the tree and the descent into a nested repository, and the temporary index
     Given a fake git that records its calls
     And a temporary directory that the fingerprint must leave empty
     And a throwaway directory
     When I take the fingerprint of the directory
     Then the fake git was called, in this order, with:
-      | -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD        | no index  |
-      | -c core.fsmonitor=false -c core.hooksPath=/dev/null read-tree HEAD        | the index |
-      | -c core.fsmonitor=false -c core.hooksPath=/dev/null add -A                | the index |
-      | -c core.fsmonitor=false -c core.hooksPath=/dev/null write-tree            | the index |
-      | -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD^{tree} | no index  |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse HEAD        | no index  |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all read-tree HEAD        | the index |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all ls-files -s -z        | the index |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all ls-files --others --exclude-standard -z | the index |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all add -A                | the index |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all write-tree            | the index |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse HEAD^{tree} | no index  |
     And the fake git ran in the directory
     And the temporary index was in the temporary directory
     And the temporary directory is empty
@@ -114,6 +118,8 @@ Feature: the fingerprint of the tree of a worktree
       | call                | answer                                                                |
       | rev-parse HEAD      | the exit code 3 and a marker                                          |
       | read-tree HEAD      | the exit code 3 and a marker                                          |
+      | ls-files -s -z      | the exit code 3 and a marker                                          |
+      | ls-files --others --exclude-standard -z | the exit code 3 and a marker                      |
       | add -A              | the exit code 3 and a marker                                          |
       | write-tree          | the exit code 3 and a marker                                          |
       | rev-parse HEAD^{tree} | the exit code 3 and a marker                                        |
@@ -123,6 +129,38 @@ Feature: the fingerprint of the tree of a worktree
       | rev-parse HEAD      | the text "ccccccccccccccccccccccccccccccccccccccc" and the exit code 0 |
       | rev-parse HEAD      | the text "ccccccccccccccccccccccccccccccccccccccccc" and the exit code 0 |
       | rev-parse HEAD      | the text "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC" and the exit code 0 |
+
+  Rule: what a session wrote in the tree decides nothing of what git does for the fingerprint
+
+    Scenario: an attribute file of the tree does not change the bytes that enter the fingerprint
+      Given a throwaway repository with one commit
+      And the file ".gitattributes" of the repository holds "*.txt ident\n"
+      And the file "a.txt" of the repository holds "$Id: a line git would shorten $\n"
+      When I take the fingerprint of the repository
+      Then the fingerprint tree holds the file "a.txt" with the bytes it has on disk
+
+    Scenario: a repository nested in the tree, not tracked, is refused, and the program its configuration names is not started
+      Given a throwaway repository with one commit
+      And a repository nested in the repository at "sub" names a witness program as a filter
+      When I try to take the fingerprint of it
+      Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+      And the witness program of the nested repository has not run
+
+    Scenario: a repository nested in the tree, recorded by the commit, is refused, and the program its configuration names is not started
+      Given a throwaway repository with one commit
+      And a repository nested in the repository at "sub" names a witness program as a filter
+      And everything in the repository is committed
+      When I try to take the fingerprint of it
+      Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+      And the witness program of the nested repository has not run
+
+    Scenario: the same program is started by a git asked for the status of that commit with none of the options of the fingerprint, so that the scenarios above can fail
+      Given a throwaway repository with one commit
+      And a repository nested in the repository at "sub" names a witness program as a filter
+      And everything in the repository is committed
+      Then the witness program of the nested repository has not run
+      When a git with none of the options of the fingerprint is asked for the status of the repository
+      Then the witness program of the nested repository has run
 
   Scenario: the configuration of the host is not read: a CRLF file is not converted, and a file the host excludes is in the tree
     Given a throwaway repository with one commit

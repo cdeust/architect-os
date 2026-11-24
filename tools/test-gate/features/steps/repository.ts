@@ -15,7 +15,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Given as CucumberGiven, Then as CucumberThen, When as CucumberWhen } from '@cucumber/cucumber';
-import { CONFIG_PATH, runGate } from '../../src/infrastructure/gate.js';
+import { parseRawDiff } from '../../src/domain/diff.js';
+import { changedFiles, CONFIG_PATH, runGate } from '../../src/infrastructure/gate.js';
 import { git, gitWithOptions, GitRepository } from '../../src/infrastructure/git.js';
 
 /** Structural view of the root World (features/support/world.ts); a component cannot import across projects. */
@@ -93,7 +94,8 @@ export class GateRepository {
   }
 
   commit(message: string): void {
-    git(this.dir, ['add', '-A']);
+    // A scenario may commit a nested repository on purpose: git's advice about it is not part of any outcome.
+    git(this.dir, ['-c', 'advice.addEmbeddedRepo=false', 'add', '-A']);
     git(this.dir, [
       '-c',
       'user.name=gate',
@@ -296,16 +298,23 @@ Given('the GIT_DIR of the process names the second gate repository', function ()
   });
 });
 
-Given('the expectation is taken from the gate repository, before the poison', function () {
-  const read = new GitRepository(repository(this).dir);
+/** What the gate reads of a repository: the head, the first parent, and the patch of every path that changed. */
+function reading(dir: string): Read {
+  const read = new GitRepository(dir);
   const { head, firstParent } = read.commits();
-  this.state['gateExpected'] = { head, firstParent, diff: read.diff(firstParent as string) };
+  const parent = firstParent as string;
+  const diff = parseRawDiff(read.changedPaths(parent))
+    .map(({ path }) => read.patch(parent, path))
+    .join('');
+  return { head, firstParent, diff };
+}
+
+Given('the expectation is taken from the gate repository, before the poison', function () {
+  this.state['gateExpected'] = reading(repository(this).dir);
 });
 
 When('the gate reads its repository', function () {
-  const read = new GitRepository(repository(this).dir);
-  const { head, firstParent } = read.commits();
-  this.state['gateRead'] = { head, firstParent, diff: read.diff(firstParent as string) };
+  this.state['gateRead'] = reading(repository(this).dir);
 });
 
 type Read = { head: string; firstParent: string | null; diff: string };
@@ -411,6 +420,75 @@ When('git is asked for the diff with none of the options of the gate', function 
     ['diff', '--unified=0', '--no-renames', '--no-color', '--no-ext-diff', firstParent ?? ''],
   );
 });
+
+// A repository nested in the tree of the gate (closed-environment.feature): what a session can leave in its worktree.
+// Its own configuration names the witness as the `clean` filter of one file, and that file is left racy (rewritten
+// with the same size right after it entered the nested index), so that a git that enters the nested repository must
+// run the filter to know whether the file changed.
+Given(
+  'a repository nested in the gate repository at {string} names a witness program as a filter',
+  function (name: string) {
+    const witness = join(mkdtempSync(join(tmpdir(), 'aos-gate-witness-')), 'witness');
+    this.cleanups.push(() => rmSync(dirname(witness), { recursive: true, force: true }));
+    writeFileSync(witness, `#!/bin/sh\n: > '${witness}.ran'\ncat\n`);
+    chmodSync(witness, 0o755);
+    const nested = repository(this).path(name);
+    mkdirSync(nested, { recursive: true });
+    const inner = (args: string[]) => gitWithOptions(nested, [], args);
+    inner(['init', '-q']);
+    writeFileSync(join(nested, '.gitattributes'), 'f.txt filter=witness\n');
+    writeFileSync(join(nested, 'f.txt'), 'inner\n');
+    inner(['add', '-A']);
+    inner(['-c', 'user.name=gate', '-c', 'user.email=gate@example.invalid', 'commit', '-q', '-m', 'inner']);
+    const configuration = join(nested, '.git', 'config');
+    writeFileSync(
+      configuration,
+      `${readFileSync(configuration, 'utf8')}[filter "witness"]\n\tclean = ${witness}\n`,
+    );
+    inner(['add', 'f.txt']);
+    writeFileSync(join(nested, 'f.txt'), 'outer\n');
+    // A `.gitmodules` of the tree asks git to look into the nested repository whatever the configuration says.
+    repository(this).write(
+      '.gitmodules',
+      `[submodule "${name}"]\n\tpath = ${name}\n\turl = ./${name}\n\tignore = none\n`,
+    );
+    rmSync(`${witness}.ran`, { force: true });
+    this.state['gateWitness'] = witness;
+  },
+);
+
+When('git is asked for the status with none of the options of the gate', function () {
+  gitWithOptions(repository(this).dir, [], ['status', '--porcelain']);
+});
+
+When('the gate asks its git for the changed paths and for the patch of {string}', function (path: string) {
+  const read = new GitRepository(repository(this).dir);
+  const parent = read.commits().firstParent as string;
+  read.changedPaths(parent);
+  read.patch(parent, path);
+});
+
+Given(
+  'the nested repository {string} leaves the index and the tree of the gate repository',
+  function (name: string) {
+    const repo = repository(this);
+    git(repo.dir, ['rm', '-q', '--cached', name]);
+    repo.remove(name);
+  },
+);
+
+Then('the gate refuses to read its changes with {string}', function (message: string) {
+  const repo = repository(this);
+  const read = new GitRepository(repo.dir);
+  assert.throws(() => changedFiles(read, new Workspace(repo.dir), read.commits().firstParent), { message });
+});
+
+Given(
+  'the gate repository file {string} reads {string} then a NUL byte',
+  function (path: string, text: string) {
+    repository(this).write(path, `${text}\0\n`);
+  },
+);
 
 function gateWitness(world: GateWorld): string {
   const found = world.state['gateWitness'];

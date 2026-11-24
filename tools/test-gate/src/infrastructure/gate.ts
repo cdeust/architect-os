@@ -1,6 +1,6 @@
 import { parseArguments } from '../domain/arguments.js';
 import type { BaseInput } from '../domain/count.js';
-import { parseUnifiedDiff, wholeFile, type ChangedFile } from '../domain/diff.js';
+import { changedLines, parseRawDiff, wholeFile, type ChangedFile } from '../domain/diff.js';
 import { isJobFeature, isProduction, matchesAny, type Job } from '../domain/layout.js';
 import { retiredFiles } from '../domain/debt.js';
 import { canaryViolations } from '../domain/canary.js';
@@ -48,12 +48,20 @@ export function changedFiles(
   firstParent: string | null,
   include: (path: string) => boolean = () => true,
 ): ChangedFile[] {
+  const nested = repository.nested();
+  if (nested !== undefined) throw new Error(`dépôt imbriqué dans l'arbre : ${nested}`);
   const whole = (path: string) => wholeFile(path, workspace.read(path) as string);
   const present = (path: string) => workspace.read(path) !== null;
   return [
     ...(firstParent === null
       ? repository.tracked().filter(include).filter(present).map(whole)
-      : parseUnifiedDiff(repository.diff(firstParent)).filter(({ path }) => include(path))),
+      : parseRawDiff(repository.changedPaths(firstParent))
+          .filter(({ path }) => include(path))
+          .map(({ path, deleted }) => ({
+            path,
+            deleted,
+            lines: deleted ? [] : changedLines(path, repository.patch(firstParent, path)),
+          }))),
     ...repository.untracked().filter(include).map(whole),
   ];
 }

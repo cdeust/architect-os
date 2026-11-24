@@ -46,6 +46,9 @@ function inMemoryRepository(): RepositoryFixture {
     touchWorktree() {
       repository.touch();
     },
+    nestRepository() {
+      repository.nested = true;
+    },
     hashOf,
   };
 }
@@ -144,6 +147,18 @@ Given(
     repo(this).setRemote(branch, label);
   },
 );
+
+When('a repository is left nested in the delivery worktree', function () {
+  repo(this).nestRepository();
+});
+
+Then('the delivery repository holds no nested repository', function () {
+  assert.equal(repo(this).repository.holdsNestedRepository(), false);
+});
+
+Then('the delivery repository holds a nested repository', function () {
+  assert.equal(repo(this).repository.holdsNestedRepository(), true);
+});
 
 When('a file of the delivery worktree changes', function () {
   repo(this).touchWorktree();

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { runToEnd } from '../../src/infrastructure/host-process.js';
 import { GitRepository } from '../../src/infrastructure/git-repository.js';
@@ -26,6 +26,10 @@ export interface GitFixture extends RepositoryFixture {
   git(cwd: string, ...args: string[]): string;
   /** Another clone of the remote, which deletes `branch` from it. */
   deleteFromAnotherClone(branch: string): void;
+  /** Commits everything the worktree holds, on top of the commit it is at. */
+  commitEverything(): void;
+  /** The witness program of the nested repository has run since it was left, or since the last commit of everything. */
+  witnessRan(): boolean;
 }
 
 const lines = (name: string, count: number): string =>
@@ -67,6 +71,7 @@ export function gitFixture(world: DeliverWorld): GitFixture {
   git(work, 'init', '--quiet');
   git(work, 'remote', 'add', 'origin', bare);
 
+  const witness = join(root, 'witness');
   const hashes = new Map<string, string>();
   const hashOf = (label: string): string => hashes.get(label) as string;
   const write = (path: string, content: string | Buffer): void => {
@@ -105,6 +110,42 @@ export function gitFixture(world: DeliverWorld): GitFixture {
     setRemote: (branch, label) =>
       void git(work, 'push', '--quiet', 'origin', `${hashOf(label)}:refs/heads/${branch}`),
     touchWorktree: () => write('a.md', lines('a', 11)),
+    // What a session can leave in its worktree: a repository whose own configuration names a witness program as the
+    // `clean` filter of a file left racy, and as the program of its fetches; and a `.gitmodules` that asks git to look
+    // into it whatever the configuration says, and to fetch inside it.
+    nestRepository() {
+      writeFileSync(witness, `#!/bin/sh\n: > '${witness}.ran'\nexec cat\n`);
+      chmodSync(witness, 0o755);
+      const nested = join(work, 'sub');
+      mkdirSync(nested);
+      git(nested, 'init', '--quiet');
+      writeFileSync(join(nested, '.gitattributes'), 'f.txt filter=witness\n');
+      writeFileSync(join(nested, 'f.txt'), 'inner\n');
+      git(nested, 'add', '--all');
+      git(nested, 'commit', '--quiet', '--message', 'inner');
+      git(nested, 'config', 'filter.witness.clean', witness);
+      git(nested, 'config', 'remote.origin.url', bare);
+      git(nested, 'config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*');
+      git(
+        nested,
+        'config',
+        'remote.origin.uploadpack',
+        `sh -c ': > "${witness}.ran"; exec git-upload-pack "$@"' --`,
+      );
+      git(nested, 'add', 'f.txt');
+      writeFileSync(join(nested, 'f.txt'), 'outer\n');
+      write(
+        '.gitmodules',
+        '[submodule "sub"]\n\tpath = sub\n\turl = ./sub\n\tignore = none\n\tfetchRecurseSubmodules = true\n',
+      );
+      rmSync(`${witness}.ran`, { force: true });
+    },
+    commitEverything() {
+      git(work, '-c', 'advice.addEmbeddedRepo=false', 'add', '--all');
+      git(work, 'commit', '--quiet', '--message', 'everything');
+      rmSync(`${witness}.ran`, { force: true });
+    },
+    witnessRan: () => existsSync(`${witness}.ran`),
     hashOf,
     deleteFromAnotherClone(branch) {
       const other = join(root, 'other');

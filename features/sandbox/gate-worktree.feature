@@ -18,3 +18,5 @@ Feature: A physical checkout has one live Gate and restores only its own interru
       | incomplete journal    |
       | admission lost        |
       | interrupted validator |
+      | nested repository     |
+      | rewritten bytes       |

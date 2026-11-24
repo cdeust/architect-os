@@ -160,6 +160,10 @@ Given('the delivery setting {string} is {int}', function (key: string, value: nu
   (scene(this).config as unknown as Record<string, unknown>)[key] = value;
 });
 
+Given('the delivery tree holds a nested repository', function () {
+  scene(this).repository.nested = true;
+});
+
 Given('the delivery tree is not clean', function () {
   scene(this).repository.clean = false;
 });

@@ -97,8 +97,30 @@ Then(
   },
 );
 
+Given('everything in the delivery worktree is committed', function () {
+  gitOf(this).commitEverything();
+});
+
+When(
+  'the fixture git, without the options of the delivery, is asked for the {word} of the delivery worktree',
+  function (command: string) {
+    const { git, work } = gitOf(this);
+    if (command === 'status') git(work, 'status', '--porcelain');
+    else git(work, 'fetch', '--quiet', '--prune', 'origin');
+  },
+);
+
+Then('the witness program of the nested delivery repository has not run', function () {
+  assert.equal(gitOf(this).witnessRan(), false);
+});
+
+Then('the witness program of the nested delivery repository has run', function () {
+  assert.equal(gitOf(this).witnessRan(), true);
+});
+
 /** The methods a scenario calls by name, with arguments that are the scenario's own. */
 const calls: Record<string, (repository: Repository) => unknown> = {
+  holdsNestedRepository: (repository) => repository.holdsNestedRepository(),
   isClean: (repository) => repository.isClean(),
   head: (repository) => repository.head(),
   fetch: (repository) => repository.fetch(),
