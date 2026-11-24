@@ -8,7 +8,9 @@ import { existsSync, lstatSync, mkdirSync, readFileSync } from 'node:fs';
 import { checkPrivateDirectory } from '@architect-os/sandbox/state-journal';
 import { gateReportPath } from './tools/test-gate/src/infrastructure/report-paths.ts';
 import { join } from 'node:path';
-import { literalStrykerPattern } from './tools/test-gate/src/infrastructure/stryker-pattern.ts';
+// From the build, as the plugin below: plain Node loads this file, and a source file that imports another by its
+// `.js` name resolves only once compiled. The gate builds before it starts the mutation tool (tools/test-gate/gate.sh).
+import { literalStrykerPattern } from './tools/test-gate/dist/src/infrastructure/stryker-pattern.js';
 import { mutationFeaturesFor } from './cucumber-paths.mjs';
 
 const report = (name) => gateReportPath(process.env, 'reports/' + name);
