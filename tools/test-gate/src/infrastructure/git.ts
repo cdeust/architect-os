@@ -1,3 +1,4 @@
+import { visibleNestedMarker } from '@architect-os/sandbox/git-worktree';
 import { execFileSync } from 'node:child_process';
 import { decodeExactly } from '../domain/diff.js';
 
@@ -134,22 +135,22 @@ export class GitRepository {
 
   /** Files of the working tree git does not track and does not ignore: they are additions too. */
   untracked(): string[] {
+    this.requireNoNested();
     return names(gitList(this.root, ['ls-files', '--others', '--exclude-standard', '-z']));
   }
 
-  /**
-   * A repository nested in the tree, if there is one: recorded in the index or in the head (an entry of mode
-   * 160000), or not tracked (git lists it as a directory, a name that ends with `/`). The gate judges files: git would
-   * enter that repository and read its configuration, and no option keeps every command out of it. No listing here
-   * enters it.
-   */
+  requireNoNested(): void {
+    const nested = this.nested();
+    if (nested !== undefined) throw new Error(`dépôt imbriqué dans l'arbre : ${nested}`);
+  }
+
+  /** Refuse recorded gitlinks and visible markers before any Git worktree traversal. */
   nested(): string | undefined {
-    const recorded = [
-      ...names(gitList(this.root, ['ls-files', '-s', '-z'])),
-      ...names(gitList(this.root, ['ls-tree', '-r', '-z', 'HEAD'])),
-    ].find((entry) => entry.startsWith('160000 '));
+    const index = gitList(this.root, ['ls-files', '-s', '-z']);
+    const head = gitList(this.root, ['ls-tree', '-r', '-z', 'HEAD']);
+    const recorded = [...names(index), ...names(head)].find((entry) => entry.startsWith('160000 '));
     if (recorded !== undefined) return recorded.slice(recorded.indexOf('\t') + 1);
-    return this.untracked().find((name) => name.endsWith('/'));
+    return visibleNestedMarker(this.root, head);
   }
 
   /** `git ls-tree -r --name-only <rev>`. */

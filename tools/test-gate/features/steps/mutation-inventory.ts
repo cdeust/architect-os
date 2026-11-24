@@ -683,3 +683,28 @@ Then('the complete native union refuses missing identities and extra bookkeeping
     /mutant ignoré hors projection finale : 1\/1/,
   );
 });
+
+When('the local multiline mutation report marks its enclosing and contained mutants killed', function () {
+  const repo = repository(this);
+  const path = 'reports/mutation/mutation.json';
+  const report = JSON.parse(repo.read(path));
+  const { mutants } = report.files['src/scoped.mjs'];
+  assert.ok(mutants.some((m: { location: { start: { line: number } } }) => m.location.start.line < 3));
+  for (const mutant of mutants) mutant.status = 'Killed';
+  repo.write(path, JSON.stringify(report));
+});
+
+When(
+  'the local multiline mutation report drops its enclosing mutant and retains {int} contained mutants',
+  function (contained: number) {
+    const repo = repository(this);
+    const path = 'reports/mutation/mutation.json';
+    const report = JSON.parse(repo.read(path));
+    const file = report.files['src/scoped.mjs'];
+    file.mutants = file.mutants.filter(
+      (m: { location: { start: { line: number } } }) => m.location.start.line === 3,
+    );
+    assert.equal(file.mutants.length, contained);
+    repo.write(path, JSON.stringify(report));
+  },
+);

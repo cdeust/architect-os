@@ -74,11 +74,10 @@ Feature: the fingerprint of the tree of a worktree
       | rev-parse HEAD |
       | read-tree HEAD |
       | ls-files -s -z |
-      | ls-files --others --exclude-standard -z |
       | add -A         |
       | write-tree     |
 
-  Scenario: the seven git calls are argv with the options that switch off the monitor, the hooks, the attributes of the tree and the descent into a nested repository, and the temporary index
+  Scenario: the six git calls are argv with the options that switch off the monitor, the hooks, the attributes of the tree and the descent into a nested repository, and the temporary index
     Given a fake git that records its calls
     And a temporary directory that the fingerprint must leave empty
     And a throwaway directory
@@ -87,7 +86,6 @@ Feature: the fingerprint of the tree of a worktree
       | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse HEAD        | no index  |
       | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all read-tree HEAD        | the index |
       | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all ls-files -s -z        | the index |
-      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all ls-files --others --exclude-standard -z | the index |
       | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all add -A                | the index |
       | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all write-tree            | the index |
       | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse HEAD^{tree} | no index  |
@@ -119,7 +117,6 @@ Feature: the fingerprint of the tree of a worktree
       | rev-parse HEAD      | the exit code 3 and a marker                                          |
       | read-tree HEAD      | the exit code 3 and a marker                                          |
       | ls-files -s -z      | the exit code 3 and a marker                                          |
-      | ls-files --others --exclude-standard -z | the exit code 3 and a marker                      |
       | add -A              | the exit code 3 and a marker                                          |
       | write-tree          | the exit code 3 and a marker                                          |
       | rev-parse HEAD^{tree} | the exit code 3 and a marker                                        |
@@ -219,3 +216,21 @@ Feature: the fingerprint of the tree of a worktree
       And the process has the variable "LC_CTYPE" set to "C"
       When I take the fingerprint of the directory
       Then each call of the fake git received exactly the five names of the list, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due
+
+  Scenario: a nested linked worktree is refused by its marker even when its gitdir is unavailable
+    Given a throwaway repository with one commit
+    And a second throwaway repository with one commit
+    And a linked worktree from the second repository is nested at "linked"
+    When I try to take the fingerprint of it
+    Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+    Given the file "linked/.git" of the repository holds "gitdir: /missing-gitdir\\n"
+    When I try to take the fingerprint of it
+    Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+
+  Scenario: a tracked ignore rule prunes a directory before the nested-marker walk enters it
+    Given a throwaway repository with one commit
+    And the file ".gitignore" of the repository holds "ignored/\n"
+    And everything in the repository is committed
+    And the file "ignored/.git" of the repository holds "gitdir: /missing-gitdir\n"
+    When I take the fingerprint of the repository
+    Then the fingerprint is clean

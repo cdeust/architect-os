@@ -198,7 +198,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
       Examples:
         | method             | message                          |
-        | isClean            | git status exited with code 128  |
+        | isClean            | GATE_CHECKOUT_UNREADABLE  |
         | head               | git rev-parse exited with code 128 |
         | fetch              | git fetch exited with code 128   |
         | remoteHead         | git rev-parse exited with code 128 |
@@ -214,7 +214,6 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
       Examples:
         | method             | argv                                                           |
-        | isClean            | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all status --porcelain --ignore-submodules=all |
         | head               | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse --verify HEAD^{commit} |
         | fetch              | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all fetch --quiet --prune --recurse-submodules=no origin |
         | remoteHead         | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse --verify --quiet refs/remotes/origin/main^{commit} |
@@ -226,6 +225,22 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
     Scenario: a git executable that does not exist throws a fixed message
       Given a delivery repository over the git executable "/nonexistent/git"
       Then calling "head" on the delivery repository throws "git could not be run to its end"
+
+    Scenario: delivery refuses the raw bytes of an untouched converted checkout
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository is at the commit "c1"
+      And the delivery checkout was converted by Git and has been left untouched
+      Then the delivery repository is not clean
+
+    Scenario: delivery refuses a linked worktree by its marker without requiring its gitdir
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository is at the commit "c1"
+      And a linked worktree with an external gitdir is inside the delivery repository
+      Then the delivery repository holds a nested repository
+      Given the nested delivery marker points to a missing gitdir
+      Then the delivery repository holds a nested repository
 
   Rule: git enters no repository nested in the tree, whatever the tree says of it
 

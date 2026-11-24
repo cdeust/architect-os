@@ -536,3 +536,41 @@ Feature: The inventory projects native mutants onto changed production lines
     When the gate runs with the arguments "inventory --job macos"
     Then the gate exits with 1
     And the gate output includes "le job ne prévoit pas de mutation"
+
+  Scenario Outline: the local verdict requires an enclosing mutant with and without a contained mutant
+    Given a gate repository
+    And the gate repository holds the fixture specs "green.feature, second.feature"
+    And the gate cucumber report is the fixture "green"
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export function same(a, b) {
+        return a ===
+          <before>;
+      }
+      """
+    And the gate first parent is committed
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export function same(a, b) {
+        return a ===
+          <after>;
+      }
+      """
+    And the gate head is committed
+    When the gate plans the "linux" job
+    Then the gate writes exactly the literal mutation pattern "src/scoped.mjs"
+    When the gate inventories the mutation scope
+    And the native plugin instruments the inventory files
+    And the gate projects the native report
+    And the local multiline mutation report marks its enclosing and contained mutants killed
+    And the gate checks the "linux" job
+    Then the gate verdict is green
+    When the local multiline mutation report drops its enclosing mutant and retains <contained> contained mutants
+    And the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate output includes "lot"
+
+    Examples:
+      | before | after | contained |
+      | a      | b     | 0         |
+      | false  | true  | 1         |

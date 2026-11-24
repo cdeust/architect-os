@@ -20,3 +20,9 @@ Feature: A physical checkout has one live Gate and restores only its own interru
       | interrupted validator |
       | nested repository     |
       | rewritten bytes       |
+      | linked nested worktree |
+      | staged addition |
+      | index mode differs |
+      | index unresolved |
+      | untouched converted checkout |
+      | interrupted mutation with nested repository |

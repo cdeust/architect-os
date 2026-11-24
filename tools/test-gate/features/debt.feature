@@ -169,8 +169,8 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     And the gate head is committed
     And the gate mutation report is the fixture "partial-line"
     When the gate checks the "linux" job
-    Then the gate verdict is green
-    And the gate reports no violation
+    Then the gate verdict is red
+    And the gate output includes "mutant actif hors lot : 9"
     And the gate debt section reads:
       """
       ## Dette de mutation
@@ -530,6 +530,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     Then the gate verdict is red
     And the gate violations are:
       """
+      5: fichiers du rapport différents des lots prévus
       6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : retrait non prouvé, le fichier n'est pas dans le rapport de mutation
       """
 
@@ -537,6 +538,10 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
     And the gate debt registry is the fixture "survivor"
     And the gate first parent is committed
+    And the gate repository file "src/math.mjs" reads:
+      """
+      // The old implementation has been removed.
+      """
     And the gate debt registry is the fixture "empty"
     And the gate head is committed
     And the gate mutation report is the fixture "no-mutant"
@@ -1175,9 +1180,8 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
 
   Scenario: the registry that debt writes from a mutation report is accepted as it is by check on that same report
     Given the gate debt registry is absent
-    And the gate repository holds "src/math.mjs" of the mutation fixture "unsorted"
-    And the gate repository holds "mod/a/src/a.mjs" of the mutation fixture "unsorted"
-    And the gate mutation report is the fixture "unsorted"
+    And the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate mutation report is the fixture "survivor"
     And the gate runs with the arguments "debt"
     And the gate head is committed
     When the gate checks the "linux" job
@@ -1188,10 +1192,10 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       ## Dette de mutation
 
       - registre : mutation-debt.json
-      - survivants au registre : 7
-      - rencontrés dans le périmètre de ce run : 7
+      - survivants au registre : 1
+      - rencontrés dans le périmètre de ce run : 1
       - entrées dont le mutant n'a pas survécu à ce run : 0 (à retirer du registre quand la dette est payée)
-      - entrées ajoutées par ce diff : 7
+      - entrées ajoutées par ce diff : 1
       - entrées retirées par ce diff : 0
       - création du registre par ce diff (le premier parent n'en a pas)
       """
@@ -1810,3 +1814,20 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       porte de test : registre de dette illisible : mutation-debt.json absent
       """
     And the gate repository holds no file "mutation-debt.json"
+
+  Scenario: replacing the source directory with a regular file makes its old debt source absent
+    Given a gate repository
+    And the gate repository holds the fixture specs "green.feature, second.feature"
+    And the gate cucumber report is the fixture "green"
+    And the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate debt registry is the fixture "survivor"
+    And the gate first parent is committed
+    And the gate repository file "src" is removed
+    And the gate repository file "src" reads:
+      """
+      a regular file now
+      """
+    And the gate head is committed
+    When the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate output includes "fichier absent, entrée à retirer dans la même PR"

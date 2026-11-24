@@ -5,6 +5,7 @@ import {
   existsSync,
   fstatSync,
   globSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -26,7 +27,15 @@ function openOnLinux(path: string, flags: number): number {
   let directory = openSync('/', directoryFlags);
   try {
     for (const name of names) {
-      const next = openSync('/proc/self/fd/' + directory + '/' + name, directoryFlags);
+      const child = '/proc/self/fd/' + directory + '/' + name;
+      let next;
+      try {
+        next = openSync(child, directoryFlags);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOTDIR' && lstatSync(child).isSymbolicLink())
+          throw Object.assign(new Error(), { code: 'ELOOP' });
+        throw error;
+      }
       closeSync(directory);
       directory = next;
     }
@@ -75,6 +84,17 @@ export class Workspace {
     return this.readBytes(path)?.toString('utf8') ?? null;
   }
 
+  /** A production source must have the same bytes at every instrumenter and debt entry point. */
+  readSource(path: string): string | null {
+    const bytes = this.readBytes(path);
+    if (bytes === null) return null;
+    try {
+      return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+    } catch {
+      throw new Error('GATE_SOURCE_UTF8 : ' + path);
+    }
+  }
+
   readBytes(path: string): Buffer | null {
     if (path.split('/').some((part) => part === '' || part === '.' || part === '..'))
       throw new Error('GATE_SOURCE_PATH_INVALID : ' + path);
@@ -92,9 +112,8 @@ export class Workspace {
       }
     } catch (error) {
       const { code } = error as NodeJS.ErrnoException;
-      if (code === 'ENOENT') return null;
-      // With O_DIRECTORY, Linux reports ENOTDIR for a symlink used as a directory.
-      if (code === 'ELOOP' || code === 'ENOTDIR') throw new Error('GATE_SOURCE_LINK : ' + path);
+      if (code === 'ENOENT' || code === 'ENOTDIR') return null;
+      if (code === 'ELOOP') throw new Error('GATE_SOURCE_LINK : ' + path);
       throw error;
     }
   }

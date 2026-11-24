@@ -215,6 +215,66 @@ assert p.returncode==1 and 'GATE_TREE_BUSY' in p.stderr,p
             # and starts the program, so the assertions above can fail.
             run(tree, "git", "status", "--porcelain")
             assert ran.exists()
+        elif mode == "linked nested worktree":
+            outer = home / "outside"
+            init(outer)
+            linked = tree / "linked"
+            run(outer, "git", "worktree", "add", "--detach", str(linked), "HEAD")
+            marker = linked / ".git"
+            assert marker.read_text().startswith(f"gitdir: {outer}/.git/worktrees/")
+            refused = launch(tree, "/usr/bin/true", check=False)
+            assert refused.returncode == 1 and "GATE_NESTED_REPOSITORY" in refused.stderr
+            # Even an unresolved marker remains a refusal. Its contents are irrelevant.
+            marker.write_text("gitdir: /missing-gitdir\n")
+            refused = launch(tree, "/usr/bin/true", check=False)
+            assert refused.returncode == 1 and "GATE_NESTED_REPOSITORY" in refused.stderr
+        elif mode == "staged addition":
+            added = tree / "staged.txt"
+            added.write_text("staged only\n")
+            run(tree, "git", "add", "staged.txt")
+            refused = launch(tree, "/usr/bin/true", check=False)
+            assert refused.returncode == 1 and "GATE_TREE_DIRTY" in refused.stderr
+            run(tree, "git", "rm", "--cached", "staged.txt")
+            added.unlink()
+            sha = run(tree, "git", "rev-parse", "HEAD").stdout.strip()
+            code = """from pathlib import Path
+import os,subprocess,sys
+from subprocess import run
+Path('staged.txt').write_text('new')
+run(['/usr/bin/git','add','staged.txt'],check=True)
+fd=int(os.environ['AOS_GATE_LEASE_FD'])
+p=run([sys.executable,'-I',sys.argv[1],'verify',sys.argv[2]],pass_fds=(fd,),capture_output=True,text=True)
+assert p.returncode==1 and 'GATE_RECEIPT_TREE_CHANGED' in p.stderr,p
+"""
+            launch(tree, python, "-I", "-c", code, guard, sha)
+        elif mode in ("index mode differs", "index unresolved"):
+            if mode == "index mode differs":
+                run(tree, "git", "update-index", "--chmod=+x", "src/item.txt")
+            else:
+                oid = run(tree, "git", "rev-parse", "HEAD:src/item.txt").stdout.strip()
+                sp.run(
+                    ["git", "update-index", "--index-info"],
+                    cwd=tree,
+                    input=(f"0 {'0' * len(oid)}\tsrc/item.txt\n"
+                           f"100644 {oid} 1\tsrc/item.txt\n"),
+                    check=True,
+                    text=True,
+                )
+            assert (tree / "src/item.txt").read_bytes() == original
+            proc = launch(tree, "/usr/bin/true", check=False)
+            assert proc.returncode == 1 and "GATE_TREE_DIRTY" in proc.stderr, proc
+        elif mode == "untouched converted checkout":
+            (tree / ".gitattributes").write_text("src/item.txt text eol=crlf\n")
+            run(tree, "git", "add", ".gitattributes")
+            run(tree, "git", "-c", "user.name=fixture", "-c", "user.email=t@example.invalid",
+                "commit", "-qm", "line endings")
+            converted = home / "converted"
+            run(tree, "git", "worktree", "add", "--detach", str(converted), "HEAD")
+            owned.append(ledger(converted))
+            assert run(converted, "git", "status", "--porcelain").stdout == ""
+            assert (converted / "src/item.txt").read_bytes() == b"original contents\r\n"
+            proc = launch(converted, "/usr/bin/true", check=False)
+            assert proc.returncode == 1 and "GATE_TREE_DIRTY" in proc.stderr, proc
         elif mode == "rewritten bytes":
             # Git calls this tree clean, and its bytes are not the commit's: an attribute of the
             # tree collapses the rewritten line when git compares. The Gate reads the bytes.
@@ -356,6 +416,19 @@ for action in ('begin','restore','discard','verify'):
                 code = "from pathlib import Path;import sys;assert Path('src/item.txt').read_bytes()==sys.argv[1].encode()"
                 launch(tree, python, "-I", "-c", code, original.decode())
                 assert not (ledger(tree) / "pending.json").exists()
+            elif mode == "interrupted mutation with nested repository":
+                state = ledger(tree)
+                receipt = state / "latest.json"
+                receipt.write_text("{}")
+                receipt.chmod(0o600)
+                nested = tree / "unrelated"
+                nested.mkdir()
+                (nested / ".git").write_text("gitdir: /outside-checkout\n")
+                proc = run(tree, python, "-I", guard, "full", "/usr/bin/true", check=False)
+                assert proc.returncode == 1 and "GATE_NESTED_REPOSITORY" in proc.stderr, proc
+                assert src.read_bytes() == original
+                assert not (state / "pending.json").exists()
+                assert not receipt.exists()
             elif mode == "trusted issuer":
                 # The installed issuer starts independently of the candidate whose tracked source was damaged.
                 run(tree, str(project / "aos"), "--", python, "-I", guard, "recover")

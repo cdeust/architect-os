@@ -468,7 +468,7 @@ Then('the temporary index was in the temporary directory', function () {
   const indexes = calls(this)
     .map(([, index]) => index)
     .filter((index) => index !== '');
-  assert.equal(indexes.length, 5);
+  assert.equal(indexes.length, 4);
   assert.deepEqual(new Set(indexes).size, 1);
   const folder = dirname(indexes[0] as string);
   assert.equal(dirname(folder), tmp);
@@ -487,7 +487,7 @@ Then(
     assert.ok(had.includes('LANG') && had.includes('LC_CTYPE') && !had.includes('LC_ALL'));
     assert.ok(Object.keys(process.env).length > had.length);
     const recorded = calls(this);
-    assert.equal(recorded.length, 7);
+    assert.equal(recorded.length, 6);
     for (const [, index, , names, configuration] of recorded) {
       assert.deepEqual(names, [...had, ...CONFIGURATION, ...(index === '' ? [] : ['GIT_INDEX_FILE'])].sort());
       assert.deepEqual(configuration, ['/dev/null', '/dev/null', '1']);
@@ -501,7 +501,7 @@ Then(
     const list = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
     assert.ok(list.every((name) => process.env[name] !== undefined));
     const recorded = calls(this);
-    assert.equal(recorded.length, 7);
+    assert.equal(recorded.length, 6);
     for (const [, index, , names, configuration] of recorded) {
       assert.deepEqual(
         names,
@@ -511,3 +511,11 @@ Then(
     }
   },
 );
+
+Given('a linked worktree from the second repository is nested at {string}', function (name: string) {
+  const { directory, other } = fp(this);
+  const nested = join(directory, name);
+  assert.ok(other);
+  git(other, 'worktree', 'add', '--detach', nested, 'HEAD');
+  assert.ok(readFileSync(join(nested, '.git'), 'utf8').startsWith(`gitdir: ${other}/.git/worktrees/`));
+});

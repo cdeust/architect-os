@@ -14,7 +14,6 @@ Feature: what the git of the delivery receives, and the programs it does not sta
 
       Examples:
         | method             |
-        | isClean            |
         | head               |
         | fetch              |
         | remoteHead         |

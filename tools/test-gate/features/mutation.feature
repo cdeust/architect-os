@@ -77,17 +77,18 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     Then the gate verdict is "<verdict>"
     And the gate violations of rule 5 are:
       """
+      <inventory>
       <violation>
       """
 
     Examples:
-      | status     | verdict | violation                                                                                                  |
-      | Survived   | red     | 5: src/math.mjs:7 EqualityOperator #5 : Survived                                                           |
-      | NoCoverage | red     | 5: src/math.mjs:7 EqualityOperator #5 : NoCoverage                                                         |
-      | Pending    | red     | 5: src/math.mjs:7 EqualityOperator #5 : Pending                                                            |
-      | Killed     | green   |                                                                                                            |
-      | Timeout    | green   |                                                                                                            |
-      | Ignored    | red     | 5: src/math.mjs:7 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente |
+      | status     | verdict | violation                                                                                                   | inventory |
+      | Survived   | red     | 5: src/math.mjs:7 EqualityOperator #5 : Survived                                                            | |
+      | NoCoverage | red     | 5: src/math.mjs:7 EqualityOperator #5 : NoCoverage                                                          | |
+      | Pending    | red     | 5: src/math.mjs:7 EqualityOperator #5 : Pending                                                             | |
+      | Killed     | green   |                                                                                                             | |
+      | Timeout    | green   |                                                                                                             | |
+      | Ignored    | red     | 5: src/math.mjs:7 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente  | 5: src/math.mjs : mutant du lot répété ou motif d’ignorance différent : 5 |
 
   Scenario Outline: a mutant the tool could not compile, in the perimeter, is red: <status>
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 7 changed
@@ -163,12 +164,14 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     And the gate repository holds "src/math.mjs" of the mutation fixture "disable-unjustified"
     And the gate head is committed
     And the gate mutation report is the fixture "disable-unjustified"
+    And the gate report uses native ignore statuses
     When the gate checks the "linux" job
     Then the gate verdict is red
     And the gate violations are:
       """
       5: src/math.mjs:7 : directive Stryker refusée : // Stryker disable next-line EqualityOperator: n is never 0
       5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente
+      5: src/math.mjs:8 EqualityOperator #6 : Ignored sans justification « équivalent » sur la ligne précédente
       """
 
   Scenario: a justified equivalent mutant is green: the gate judges the form, the review the equivalence
@@ -177,9 +180,10 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     And the gate repository holds "src/math.mjs" of the mutation fixture "equivalent"
     And the gate head is committed
     And the gate mutation report is the fixture "equivalent"
+    And the gate report uses native ignore statuses
     When the gate checks the "linux" job
     Then the gate verdict is green
-    And the gate report has the line "  - Ignored : 1"
+    And the gate report has the line "  - Ignored : 2"
 
   Scenario Outline: the form of the line above an ignored mutant: <form>
     Given the gate repository holds "src/math.mjs" of the mutation fixture "equivalent" with line 8 changed
@@ -188,25 +192,27 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     And the gate head is committed
     And the gate mutation report is the fixture "equivalent"
     And line 7 of "src/math.mjs" reads "<line>" in the gate mutation report and in the working tree
+    And the gate report uses native ignore statuses for a "<verdict>" verdict
     When the gate checks the "linux" job
     Then the gate verdict is "<verdict>"
     And the gate violations are:
       """
+      <inventory>
       <directive>
       <ignored>
       """
 
     Examples:
-      | form                         | line                                                                                    | verdict | directive                                                                                                             | ignored                                                                                          |
-      | one mutator                  |     // Stryker disable next-line EqualityOperator: équivalent: n > 0 et n >= 0 coïncident ici | green   |                                                                                                                       |                                                                                                  |
-      | not indented, two mutators   | // Stryker disable next-line ConditionalExpression,EqualityOperator: équivalent: idem    | green   |                                                                                                                       |                                                                                                  |
-      | another mutator              |   // Stryker disable next-line ConditionalExpression: équivalent: idem                  | red     |                                                                                                                       | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente |
-      | no mutator                   |   // Stryker disable next-line : équivalent: idem                                       | red     | 5: src/math.mjs:7 : directive Stryker refusée : // Stryker disable next-line : équivalent: idem                       | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente |
-      | no invariant                 |   // Stryker disable next-line EqualityOperator: équivalent:                            | red     | 5: src/math.mjs:7 : directive Stryker refusée : // Stryker disable next-line EqualityOperator: équivalent:            | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente |
-      | no next-line                 |   // Stryker disable EqualityOperator: équivalent: idem                                 | red     | 5: src/math.mjs:7 : directive Stryker refusée : // Stryker disable EqualityOperator: équivalent: idem                 | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente |
-      | block comment                |   /* Stryker disable next-line EqualityOperator: équivalent: idem */                    | red     | 5: src/math.mjs:7 : directive Stryker refusée : /* Stryker disable next-line EqualityOperator: équivalent: idem */    | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente |
-      | code before the comment      |   void 0; // Stryker disable next-line EqualityOperator: équivalent: idem               | red     | 5: src/math.mjs:7 : directive Stryker refusée : void 0; // Stryker disable next-line EqualityOperator: équivalent: idem | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente |
-      | no directive at all          |   // nothing to see here                                                                | red     |                                                                                                                       | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente |
+      | form                         | line                                                                                    | verdict | directive                                                                                                             | ignored                                                                                           | inventory |
+      | one mutator                  |     // Stryker disable next-line EqualityOperator: équivalent: n > 0 et n >= 0 coïncident ici | green   |                                                                                                                       |                                                                                                   | |
+      | not indented, two mutators   | // Stryker disable next-line ConditionalExpression,EqualityOperator: équivalent: idem    | green   |                                                                                                                       |                                                                                                   | |
+      | another mutator              |   // Stryker disable next-line ConditionalExpression: équivalent: idem                  | red     |                                                                                                                       | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente  | 5: src/math.mjs : mutant du lot répété ou motif d’ignorance différent : 3 |
+      | no mutator                   |   // Stryker disable next-line : équivalent: idem                                       | red     | 5: src/math.mjs:7 : directive Stryker refusée : // Stryker disable next-line : équivalent: idem                       | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente  | 5: src/math.mjs : mutant du lot répété ou motif d’ignorance différent : 5 |
+      | no invariant                 |   // Stryker disable next-line EqualityOperator: équivalent:                            | red     | 5: src/math.mjs:7 : directive Stryker refusée : // Stryker disable next-line EqualityOperator: équivalent:            | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente  | 5: src/math.mjs : mutant du lot répété ou motif d’ignorance différent : 5 |
+      | no next-line                 |   // Stryker disable EqualityOperator: équivalent: idem                                 | red     | 5: src/math.mjs:7 : directive Stryker refusée : // Stryker disable EqualityOperator: équivalent: idem                 | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente  | 5: src/math.mjs : mutant du lot répété ou motif d’ignorance différent : 5 |
+      | block comment                |   /* Stryker disable next-line EqualityOperator: équivalent: idem */                    | red     | 5: src/math.mjs:7 : directive Stryker refusée : /* Stryker disable next-line EqualityOperator: équivalent: idem */    | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente  | 5: src/math.mjs : mutant du lot répété ou motif d’ignorance différent : 5 |
+      | code before the comment      |   void 0; // Stryker disable next-line EqualityOperator: équivalent: idem               | red     | 5: src/math.mjs:7 : directive Stryker refusée : void 0; // Stryker disable next-line EqualityOperator: équivalent: idem | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente  | 5: src/math.mjs : mutant du lot répété ou motif d’ignorance différent : 5 |
+      | no directive at all          |   // nothing to see here                                                                | red     |                                                                                                                       | 5: src/math.mjs:8 EqualityOperator #5 : Ignored sans justification « équivalent » sur la ligne précédente  | 5: src/math.mjs : mutant du lot répété ou motif d’ignorance différent : 5 |
 
   Scenario: an ignored mutant on the first line has no line above: red
     Given the gate first parent is committed
@@ -223,6 +229,7 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     Then the gate verdict is red
     And the gate violations are:
       """
+      5: src/first.mjs : source du rapport différente de celle de l’inventaire
       5: src/first.mjs:1 ArithmeticOperator #0 : Ignored sans justification « équivalent » sur la ligne précédente
       """
 
@@ -241,6 +248,7 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     Then the gate verdict is red
     And the gate violations are:
       """
+      5: src/first.mjs : source du rapport différente de celle de l’inventaire
       5: src/first.mjs:1 ArithmeticOperator #0 : Survived
       """
 
@@ -254,6 +262,7 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     Then the gate verdict is red
     And the gate violations are:
       """
+      5: fichiers du rapport différents des lots prévus
       5: src/math.mjs : fichier du périmètre absent du rapport de mutation
       """
 
@@ -267,6 +276,7 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     Then the gate verdict is red
     And the gate violations are:
       """
+      5: src/math.mjs : lot absent du rapport de mutation
       5: src/math.mjs : fichier du périmètre absent du rapport de mutation
       """
 
@@ -283,7 +293,7 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     Then the gate verdict is red
     And the gate violations are:
       """
-      5: src/math.mjs : fichier du périmètre absent du rapport de mutation
+      5: src/math.mjs : source du rapport différente de celle de l’inventaire
       """
 
   Scenario: direct Stryker instrumentation proves a changed production source has no mutants
@@ -309,6 +319,7 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     Then the gate verdict is red
     And the gate violations are:
       """
+      5: fichiers du rapport différents des lots prévus
       5: src/math.mjs : fichier du périmètre absent du rapport de mutation
       """
 
@@ -382,15 +393,16 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
     Then the gate verdict is "<verdict>"
     And the gate violations are:
       """
+      <inventory>
       <violation>
       """
 
     Examples:
-      | edge  | line | verdict | violation                                                                                                      |
-      | end   | 9    | red     | 5: src/math.mjs:7 EqualityOperator #5 : Survived                                                                |
-      | end   | 10   | red     | 5: rapport de mutation illisible : hors schéma : ✖ un mutant sort du texte de son fichier   → at files["src/math.mjs"] |
-      | start | 9    | green   |                                                                                                                  |
-      | start | 10   | red     | 5: rapport de mutation illisible : hors schéma : ✖ un mutant sort du texte de son fichier   → at files["src/math.mjs"] |
+      | edge  | line | verdict | violation                                                                                                       | inventory |
+      | end   | 9    | red     | 5: src/math.mjs:7 EqualityOperator #5 : Survived                                                                 | 5: src/math.mjs : mutant actif hors lot : 5 |
+      | end   | 10   | red     | 5: rapport de mutation illisible : hors schéma : ✖ un mutant sort du texte de son fichier   → at files["src/math.mjs"]  | |
+      | start | 9    | red     |                                                                                                                   | 5: src/math.mjs : mutant(s) du lot absents du rapport : 1 |
+      | start | 10   | red     | 5: rapport de mutation illisible : hors schéma : ✖ un mutant sort du texte de son fichier   → at files["src/math.mjs"]  | |
 
   Scenario: nothing changed in production nor in tests: an empty perimeter needs no mutation report
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"

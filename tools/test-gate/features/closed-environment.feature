@@ -139,8 +139,32 @@ Feature: the gate reads its own repository, whatever the environment it was star
       When the gate asks its git for the changed paths and for the patch of "notes.txt"
       Then the witness program of the gate has not run
 
+    Scenario: the nested patch exposes the witness when only configuration suppresses submodules
+      Given the gate head is committed
+      When the fixture Git requests the nested patch without the command line submodule guard
+      Then the witness program of the gate has run
+
     Scenario: the same program is started by a git asked for the status without the options of the gate, so that the scenarios above can fail
       Given the gate head is committed
       Then the witness program of the gate has not run
       When git is asked for the status with none of the options of the gate
       Then the witness program of the gate has run
+
+  Scenario: the real gate adapter refuses an invalid-byte untracked name before selection
+    Given a gate repository
+    And the gate first parent is committed
+    And the gate repository holds a filename that is not UTF-8
+    When the gate plans the "linux" job
+    Then the gate exits with 1
+    And the gate output includes "un chemin de git n'est pas de l'UTF-8"
+
+  Scenario: a linked worktree is refused by its marker before Git classifies untracked paths
+    Given a gate repository
+    And the gate first parent is committed
+    And a linked worktree with an external gitdir is inside the gate repository
+    Then the gate refuses to read its changes with "dépôt imbriqué dans l'arbre : linked/"
+    Given the gate repository file "linked/.git" reads:
+      """
+      gitdir: /missing-gitdir
+      """
+    Then the gate refuses to read its changes with "dépôt imbriqué dans l'arbre : linked/"

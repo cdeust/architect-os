@@ -41,14 +41,34 @@ Feature: Gate source files have an unambiguous mutation perimeter
     And the gate head is committed
     When the gate plans the "linux" job
     Then the gate exits with 0
-    And the gate writes exactly the literal mutation pattern "src/leaf.mjs:1-2"
+    And the gate writes exactly the literal mutation pattern "src/leaf.mjs"
 
     Examples:
       | separator |
       | LF        |
       | CRLF      |
 
-  Scenario Outline: a production path with a glob metacharacter is refused: <path>
+  Scenario Outline: the installed matcher selects the literal gate path: <path>
+    Given a gate repository under a bracketed directory
+    And the gate first parent is committed
+    And the gate repository has a source with a LF separator at "<path>"
+    And the gate head is committed
+    When the gate plans the "linux" job
+    Then the installed mutation matcher selects "<path>" and only that file instead of "<sibling>"
+
+    Examples:
+      | path              | sibling         |
+      | src/leaf.mjs      | src/leafa.mjs   |
+      | src/leaf[ab].mjs  | src/leafa.mjs   |
+      | src/leaf[.mjs     | src/leaf.mjs    |
+      | src/leaf].mjs     | src/leaf.mjs    |
+      | src/leaf*.mjs     | src/leafa.mjs   |
+      | src/leaf?.mjs     | src/leafa.mjs   |
+      | src/leaf!.mjs     | src/leaf.mjs    |
+      | src/leaf(1).mjs   | src/leaf1.mjs   |
+      | src/leaf).mjs     | src/leaf.mjs    |
+
+  Scenario Outline: brace syntax is refused before minimatch expands the path
     Given a gate repository
     And the gate first parent is committed
     And the gate repository has a source with a LF separator at "<path>"
@@ -59,17 +79,9 @@ Feature: Gate source files have an unambiguous mutation perimeter
 
     Examples:
       | path              |
-      | src/leaf[ab].mjs  |
-      | src/leaf[.mjs     |
-      | src/leaf].mjs     |
       | src/leaf{a,b}.mjs |
       | src/leaf{.mjs     |
       | src/leaf}.mjs     |
-      | src/leaf*.mjs     |
-      | src/leaf?.mjs     |
-      | src/leaf!.mjs     |
-      | src/leaf(.mjs     |
-      | src/leaf).mjs     |
 
   Scenario Outline: a path character that Stryker normalizes or cannot put in a range is refused: <character>
     Given a gate repository
@@ -155,3 +167,45 @@ Feature: Gate source files have an unambiguous mutation perimeter
       | an empty part  | /src/leaf.mjs       |
       | a current part | ./src/leaf.mjs      |
       | a parent part  | src/../leaf.mjs     |
+
+  Scenario Outline: the <job> job reads only its production inputs
+    Given a gate repository
+    And the gate first parent is committed
+    And the gate repository holds a symlink at "docs/latest.md"
+    And the gate repository holds a symlink at "<path>"
+    And the gate head is committed
+    When the gate plans the "<job>" job
+    Then the gate exits with 0
+
+    Examples:
+      | job   | path         |
+      | linux | docs/link.md |
+      | macos | src/link.mjs |
+
+  Scenario Outline: the Gate refuses invalid source bytes in <job> mutation planning
+    Given a gate repository
+    And the gate first parent is committed
+    And the gate repository holds a production source with an invalid UTF-8 comment
+    And the gate head is committed
+    When the gate <operation>
+    Then the gate exits with 1
+    And the gate output includes "GATE_SOURCE_UTF8 : src/bad.mjs"
+
+    Examples:
+      | job       | operation                    |
+      | local     | plans the "linux" job         |
+      | inventory | inventories the mutation scope |
+      | local     | checks the "linux" job        |
+
+  Scenario Outline: a debt command refuses a symlink read as a named workspace error
+    Given a gate repository
+    And the gate repository holds a symlink at "reports/mutation/mutation.json"
+    And the gate repository holds a symlink for the debt registry when "<command>" reads it
+    When the gate runs the debt command "<command>"
+    Then the gate exits with 1
+    And the gate output includes "GATE_SOURCE_LINK : <path>"
+
+    Examples:
+      | command | path                           |
+      | debt    | reports/mutation/mutation.json |
+      | realign | mutation-debt.json             |

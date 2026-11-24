@@ -1,3 +1,4 @@
+import { checkoutIsClean, visibleNestedMarker } from '@architect-os/sandbox/git-worktree';
 import type { Repository } from '../domain/ports.js';
 import { closedEnvironment, runToEnd, type HostEnvironment } from './host-process.js';
 
@@ -5,7 +6,7 @@ import { closedEnvironment, runToEnd, type HostEnvironment } from './host-proces
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
 /**
- * `Repository` over git, in the delivery worktree: one git command per method, a fixed argv started without a shell,
+ * `Repository` over git, in the delivery worktree: admission checks and fixed argv started without a shell,
  * with a closed environment: the variables of the descriptive file that the host sets, and `GIT_TERMINAL_PROMPT=0`. Nothing git prints is returned or shown: a method
  * gives the fact its port names, and a failure the port does not name throws a fixed message with the exit code.
  */
@@ -19,15 +20,15 @@ export class GitRepository implements Repository {
 
   holdsNestedRepository(): boolean {
     // Neither listing enters a nested repository, whatever the tree says of it.
-    const recorded = [this.run(['ls-files', '-s', '-z']).out, this.run(['ls-tree', '-r', '-z', 'HEAD']).out];
-    if (recorded.some((list) => list.split('\0').some((entry) => entry.startsWith('160000 ')))) return true;
-    const others = this.run(['ls-files', '--others', '--exclude-standard', '-z']).out;
-    return others.split('\0').some((name) => name.endsWith('/'));
+    const index = this.run(['ls-files', '-s', '-z']).out;
+    const head = this.run(['ls-tree', '-r', '-z', 'HEAD']).out;
+    if ([index, head].some((list) => list.split('\0').some((entry) => entry.startsWith('160000 '))))
+      return true;
+    return visibleNestedMarker(this.worktree, head) !== undefined;
   }
 
   isClean(): boolean {
-    // On the command line: a `.gitmodules` of the tree overrides the configuration, never this option.
-    return this.run(['status', '--porcelain', '--ignore-submodules=all']).out === '';
+    return checkoutIsClean(this.worktree);
   }
 
   head(): string {

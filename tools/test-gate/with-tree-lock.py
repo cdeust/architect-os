@@ -67,9 +67,9 @@ def private(st, directory=False):
         raise Refusal("GATE_RECOVERY_UNSAFE")
 
 
-def git(*args):
+def git(*args, input=None):
     return subprocess.run(
-        [*GIT, *args], env=GIT_ENV, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+        [*GIT, *args], input=input, env=GIT_ENV, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
     )
 
 
@@ -82,20 +82,74 @@ def checkout():
     return path
 
 
-def refuse_nested_repository():
-    """The Gate judges files. A repository nested in the checkout is one git would enter,
-    reading its configuration: a recorded one has mode 160000, one that is not tracked is
-    listed as a directory."""
+def nested_marker(tree_fd, tracked_ignores):
+    """Walk directories without opening Git markers. check-ignore matches names, it does
+    not enumerate untracked files (Git's builtin/check-ignore.c and dir.c)."""
+    def walk(fd, prefix):
+        if prefix:
+            try:
+                os.stat(".git", dir_fd=fd, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                return prefix
+        children = [
+            os.fsencode(name)
+            for name in os.listdir(fd)
+            if name != ".git" and stat.S_ISDIR(
+                os.stat(name, dir_fd=fd, follow_symlinks=False).st_mode
+            )
+        ]
+        if not children:
+            return None
+        paths = [prefix + name for name in children]
+        pruned = set()
+        if tracked_ignores:
+            # A leading ./ also keeps names beginning with ':' from becoming pathspec magic.
+            matched = git(
+                "check-ignore", "--no-index", "-z", "--stdin", "-v",
+                input=b"".join(b"./" + path + b"\0" for path in paths),
+            )
+            if matched.returncode not in (0, 1):
+                raise Refusal("GATE_CHECKOUT_UNREADABLE")
+            records = iter(matched.stdout.split(b"\0")[:-1])
+            pruned = {
+                path[2:] for origin, _, pattern, path in zip(records, records, records, records)
+                if origin in tracked_ignores and not pattern.startswith(b"!")
+            }
+        for name, path in zip(children, paths):
+            if path in pruned:
+                continue
+            child = os.open(name, DIRECTORY, dir_fd=fd)
+            try:
+                found = walk(child, path + b"/")
+                if found is not None:
+                    return found
+            finally:
+                os.close(child)
+        return None
+
+    return walk(tree_fd, b"")
+
+
+def refuse_nested_repository(fd):
     index = git("ls-files", "-s", "-z")
     head = git("ls-tree", "-r", "-z", "HEAD")
-    other = git("ls-files", "--others", "--exclude-standard", "-z")
-    if index.returncode or head.returncode or other.returncode:
+    if index.returncode or head.returncode:
         raise Refusal("GATE_CHECKOUT_UNREADABLE")
     recorded = index.stdout.split(b"\0") + head.stdout.split(b"\0")
-    if any(entry.startswith(b"160000 ") for entry in recorded) or any(
-        entry.endswith(b"/") for entry in other.stdout.split(b"\0")
-    ):
+    if any(entry.startswith(b"160000 ") for entry in recorded):
         raise Refusal("GATE_NESTED_REPOSITORY")
+    if visible_marker(fd, head.stdout) is not None:
+        raise Refusal("GATE_NESTED_REPOSITORY")
+
+
+def visible_marker(fd, tree):
+    ignores = {
+        name for entry in tree.split(b"\0")
+        if (name := entry.partition(b"\t")[2]).rsplit(b"/", 1)[-1] == b".gitignore"
+    }
+    return nested_marker(fd, ignores)
 
 
 def lease(tree, existing):
@@ -318,20 +372,31 @@ def verify_admission():
 
 
 def dirty():
-    """A file of the commit is not, in the checkout, the bytes and the mode the commit holds.
+    """Compare index entries and checkout bytes directly with the captured tree."""
+    head = git("rev-parse", "--verify", "HEAD^{tree}")
+    if head.returncode:
+        raise Refusal("GATE_CHECKOUT_UNREADABLE")
+    listed = git("ls-tree", "-r", "-z", head.stdout.strip())
+    index = git("ls-files", "-s", "-z")
+    if listed.returncode or index.returncode:
+        raise Refusal("GATE_CHECKOUT_UNREADABLE")
 
-    Read without the index and without git reading the files: a stat cached by the index, an
-    attribute or a conversion cannot make a rewritten file pass for the commit's. A receipt
-    names a commit; the Gate must have judged those bytes."""
-    listed = git("ls-tree", "-r", "-z", "HEAD")
-    if listed.returncode:
+    def entries(result):
+        for entry in result.stdout.split(b"\0")[:-1]:
+            meta, _, name = entry.partition(b"\t")
+            yield name, meta.split(b" ")
+
+    committed = {name: (mode, oid) for name, (mode, _, oid) in entries(listed)}
+    staged = {}
+    for name, (mode, oid, stage) in entries(index):
+        if stage != b"0":
+            return True
+        staged[name] = (mode, oid)
+    if staged != committed:
         return True
+
     links = {}
-    for entry in listed.stdout.split(b"\0"):
-        if not entry:
-            continue
-        meta, _, name = entry.partition(b"\t")
-        mode, _, oid = meta.split(b" ")
+    for name, (mode, oid) in committed.items():
         try:
             # A directory of the path replaced by a link would read the file of another place.
             parts = name.split(b"/")
@@ -375,6 +440,35 @@ def clear_receipt(state):
 
 
 def main(args):
+    # Read-only preflight for the other host adapters. It has no lease or receipt authority.
+    if args == ["inspect-clean"]:
+        checkout()
+        fd = os.open(".", DIRECTORY)
+        try:
+            try:
+                refuse_nested_repository(fd)
+            except Refusal as error:
+                if str(error) != "GATE_NESTED_REPOSITORY":
+                    raise
+                sys.exit(1)
+            if dirty():
+                sys.exit(1)
+            untracked = git("ls-files", "--others", "--exclude-standard", "-z")
+            if untracked.returncode:
+                raise Refusal("GATE_CHECKOUT_UNREADABLE")
+            sys.exit(1 if untracked.stdout else 0)
+        finally:
+            os.close(fd)
+    if args == ["inspect-markers"]:
+        fd = os.open(".", DIRECTORY)
+        try:
+            marker = visible_marker(fd, sys.stdin.buffer.read())
+            if marker is not None:
+                sys.stdout.buffer.write(marker)
+        finally:
+            os.close(fd)
+        return
+
     editing = args in (["begin"], ["restore"], ["discard"]) or (
         len(args) == 2 and args[0] == "verify"
     )
@@ -385,7 +479,11 @@ def main(args):
     # Restoring a recorded source and discarding a receipt stay open: they read no working file
     # through git, and a tree must be recoverable whatever was left in it.
     if candidate or args == ["begin"] or (len(args) == 2 and args[0] == "verify"):
-        refuse_nested_repository()
+        probe = os.open(tree, DIRECTORY)
+        try:
+            refuse_nested_repository(probe)
+        finally:
+            os.close(probe)
     fd, reused = lease(tree, editing or candidate)
     state = state_directory(fd)
     if candidate:
@@ -415,15 +513,15 @@ def main(args):
     elif len(args) > 1 and args[0] in ("exec", "full"):
         if not reused:
             recover(fd, state)
-        refuse_nested_repository()
+        if args[0] == "full":
+            clear_receipt(state)
+        refuse_nested_repository(fd)
         # Never run a gate over bytes left by a different runtime root, or overwrite an
         # operator's changes. A fresh clone or a clean linked worktree needs no pointer.
         if dirty():
             raise Refusal(
                 "GATE_TREE_DIRTY: inspect tracked changes; retry with the original runtime root after an interrupted Gate"
             )
-        if args[0] == "full":
-            clear_receipt(state)
         os.execvp(args[1], args[1:])
     else:
         raise Refusal("GATE_LEASE_USAGE")
@@ -438,4 +536,4 @@ if __name__ == "__main__":
             str(error) if isinstance(error, Refusal) else "GATE_RECOVERY_UNAVAILABLE",
             file=sys.stderr,
         )
-        sys.exit(1)
+        sys.exit(2 if sys.argv[1:2] in (["inspect-clean"], ["inspect-markers"]) else 1)

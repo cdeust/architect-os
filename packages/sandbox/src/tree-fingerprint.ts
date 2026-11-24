@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { visibleNestedMarker } from './git-worktree.js';
 
 export interface TreeFingerprint {
   /** `git rev-parse HEAD`. */
@@ -87,13 +88,11 @@ export function fingerprintTree(worktree: string, timeoutMs = 60_000): TreeFinge
     // L'index temporaire part de celui du commit : dans un index vide, `add -A` écarterait un fichier suivi qu'une
     // règle d'exclusion nomme, et un arbre propre ne serait pas celui de son commit.
     git(worktree, ['read-tree', 'HEAD'], env, timeoutMs, false);
-    // Avant `add`, le seul appel qu'aucune option ne retient d'entrer dans un dépôt imbriqué : l'empreinte se refuse
-    // à un arbre qui en tient un, enregistré (mode 160000) ou non suivi (git le liste comme un dossier).
+    // The private index is seeded from HEAD. Check it and discover visible markers before Git walks the checkout.
     const recorded = git(worktree, ['ls-files', '-s', '-z'], env, timeoutMs, false);
-    const others = git(worktree, ['ls-files', '--others', '--exclude-standard', '-z'], env, timeoutMs, false);
     if (
       recorded.split('\0').some((entry) => entry.startsWith('160000 ')) ||
-      others.split('\0').some((entry) => entry.endsWith('/'))
+      visibleNestedMarker(worktree, recorded, timeoutMs) !== undefined
     )
       throw new Error("l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre");
     git(worktree, ['add', '-A'], env, timeoutMs, false);

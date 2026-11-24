@@ -13,7 +13,7 @@ import {
   type ChangedPath,
 } from '../../src/domain/diff.js';
 import type { Layout } from '../../src/domain/layout.js';
-import { mentioned, mutatedAt, rangePatterns } from '../../src/domain/mutate-pattern.js';
+import { mutatedAt } from '../../src/domain/mutate-pattern.js';
 import {
   judgeMutation,
   perimeterOf,
@@ -245,22 +245,11 @@ Then('the gate workspace paths are {string}', function (expected: string) {
 });
 
 Then(
-  'the range patterns of {string} for the lines {string} are {string}',
-  function (file: string, lines: string, patterns: string) {
-    assert.deepEqual(rangePatterns(file, new Set(list(lines).map(Number))), list(patterns));
-  },
-);
-
-Then(
   'the lines {int} to {int} of {string} are mutated under {string}: {word}',
   function (start: number, end: number, file: string, mutate: string, mutated: string) {
     assert.equal(mutatedAt(list(mutate), file, start, end), mutated === 'yes');
   },
 );
-
-Then('{string} names {string}: {word}', function (mutate: string, file: string, named: string) {
-  assert.equal(mentioned(list(mutate), file), named === 'yes');
-});
 
 When('the gate distributes replay files {string}', function (files: string) {
   const lots = list(files).map((entry) => {

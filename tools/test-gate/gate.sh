@@ -58,7 +58,8 @@ if [ "$job" = linux ] && node -e 'process.exit(JSON.parse(require("fs").readFile
     fi
     AOS_NATIVE_MUTATION_LOTS=1 candidate stryker run
   else
-    candidate stryker run
+    $gate inventory --job linux || exit 1
+    AOS_NATIVE_MUTATION_LOTS=1 candidate stryker run
   fi
   stryker_status=$?
   echo "stryker: $(($(date +%s) - started)) s"
@@ -69,6 +70,8 @@ if [ "$job" = linux ] && node -e 'process.exit(JSON.parse(require("fs").readFile
     fi
     exec $gate inventory-project --job linux
   fi
+  [ "$stryker_status" -eq 0 ] || exit "$stryker_status"
+  $gate inventory-project --job linux || exit 1
   started=$(date +%s)
   $gate replay
   echo "replay: $(($(date +%s) - started)) s"

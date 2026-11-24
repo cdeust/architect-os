@@ -15,7 +15,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 import { Given as CucumberGiven, Then as CucumberThen, When as CucumberWhen } from '@cucumber/cucumber';
 import { parseRawDiff } from '../../src/domain/diff.js';
 import { changedFiles, CONFIG_PATH, runGate } from '../../src/infrastructure/gate.js';
@@ -44,11 +45,15 @@ export const DEBT_PATH = 'mutation-debt.json';
  * Real git, never this repository: commits are made with a fixed identity, no hook, no signature.
  */
 export class GateRepository {
-  readonly dir = mkdtempSync(join(tmpdir(), 'aos-gate-'));
+  readonly dir: string;
   output = '';
   exitCode: number | undefined;
 
-  constructor(private readonly admitFixture: GateWorld['admitFixture']) {
+  constructor(
+    private readonly admitFixture: GateWorld['admitFixture'],
+    prefix = 'aos-gate-',
+  ) {
+    this.dir = mkdtempSync(join(tmpdir(), prefix));
     git(this.dir, ['init', '-q']);
     this.write(CONFIG_PATH, readFileSync(join(FIXTURES, 'gate.json'), 'utf8'));
     this.write('.gitignore', 'reports/\n');
@@ -175,8 +180,8 @@ export function names(list: string): string[] {
   return list === '' ? [] : list.split(', ');
 }
 
-Given('a gate repository', function () {
-  const created = new GateRepository(this.admitFixture);
+Given(/^a gate repository( under a bracketed directory)?$/, function (bracketed?: string) {
+  const created = new GateRepository(this.admitFixture, bracketed ? 'aos-gate-[one]-' : undefined);
   this.state['gateRepository'] = created;
   this.cleanups.push(() => rmSync(created.dir, { recursive: true, force: true }));
 });
@@ -468,6 +473,7 @@ When('the gate asks its git for the changed paths and for the patch of {string}'
   const parent = read.commits().firstParent as string;
   read.changedPaths(parent);
   read.patch(parent, path);
+  read.patch(parent, 'sub');
 });
 
 Given(
@@ -661,3 +667,100 @@ Given(
     });
   },
 );
+
+Then(
+  'the installed mutation matcher selects {string} and only that file instead of {string}',
+  async function (path: string, sibling: string) {
+    const repo = repository(this);
+    assert.equal(repo.exitCode, 0, repo.output);
+    const core = createRequire(import.meta.url).resolve('@stryker-mutator/core');
+    const { FileMatcher } = await import(new URL('config/file-matcher.js', pathToFileURL(core)).href);
+    const { mutate } = JSON.parse(repo.read('reports/gate-plan.json'));
+    assert.equal(mutate.length, 1);
+    const matcher = new FileMatcher(mutate[0], false);
+    assert.equal(matcher.matches(repo.path(path)), true);
+    assert.equal(matcher.matches(repo.path(sibling)), false);
+  },
+);
+
+Given('the gate repository holds a filename that is not UTF-8', function () {
+  const repo = repository(this);
+  mkdirSync(repo.path('src'), { recursive: true });
+  const invalid = Buffer.concat([
+    Buffer.from(repo.path('src') + '/x'),
+    Buffer.from([0xff]),
+    Buffer.from('.mjs'),
+  ]);
+  try {
+    writeFileSync(invalid, 'export const source = true;\n');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EILSEQ') throw error;
+    // APFS rejects these bytes as a filename. Exercise the same adapter with Git's raw stdout protocol.
+    const bin = mkdtempSync(join(tmpdir(), 'aos-gate-byte-git-'));
+    const script = join(bin, 'git');
+    writeFileSync(
+      script,
+      `#!${process.execPath}
+const args = process.argv.slice(2);
+if (args.includes('--others')) {
+  process.stdout.write(Buffer.concat([Buffer.from('src/x'), Buffer.from([255]), Buffer.from('.mjs\\0')]));
+} else {
+  const result = require('node:child_process').spawnSync('/usr/bin/git', args);
+  process.stdout.write(result.stdout);
+  process.exit(result.status);
+}
+`,
+      { mode: 0o700 },
+    );
+    const before = process.env['PATH'];
+    process.env['PATH'] = `${bin}:${before}`;
+    this.cleanups.push(() => {
+      process.env['PATH'] = before;
+      rmSync(bin, { recursive: true, force: true });
+    });
+  }
+});
+
+Given('the gate repository holds a production source with an invalid UTF-8 comment', function () {
+  const repo = repository(this);
+  mkdirSync(repo.path('src'), { recursive: true });
+  writeFileSync(repo.path('src/bad.mjs'), Buffer.from([0x2f, 0x2f, 0x20, 0xff, 0x0a]));
+});
+
+Given('the gate repository holds a symlink at {string}', function (path: string) {
+  const repo = repository(this);
+  mkdirSync(dirname(repo.path(path)), { recursive: true });
+  symlinkSync('/missing-target', repo.path(path));
+});
+
+Given(
+  'the gate repository holds a symlink for the debt registry when {string} reads it',
+  function (command: string) {
+    const repo = repository(this);
+    repo.remove(DEBT_PATH);
+    if (command === 'realign') symlinkSync('/missing-target', repo.path(DEBT_PATH));
+  },
+);
+
+When('the gate runs the debt command {string}', async function (command: string) {
+  await repository(this).run(command === 'realign' ? ['debt', 'realign'] : ['debt']);
+});
+
+Given('a linked worktree with an external gitdir is inside the gate repository', function () {
+  const external = new GateRepository(this.admitFixture);
+  this.cleanups.push(() => rmSync(external.dir, { recursive: true, force: true }));
+  external.commit('external metadata');
+  const repo = repository(this);
+  git(external.dir, ['worktree', 'add', '--detach', repo.path('linked'), 'HEAD']);
+  assert.ok(repo.read('linked/.git').startsWith(`gitdir: ${external.dir}/.git/worktrees/`));
+});
+
+When('the fixture Git requests the nested patch without the command line submodule guard', function () {
+  const repo = repository(this);
+  const parent = repo.rev('HEAD^1');
+  gitWithOptions(
+    repo.dir,
+    ['-c', 'diff.ignoreSubmodules=all'],
+    ['diff', '--unified=0', '--text', '--no-textconv', parent, '--', ':(literal)sub'],
+  );
+});

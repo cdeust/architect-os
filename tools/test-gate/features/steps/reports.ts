@@ -436,3 +436,29 @@ Then(
     assert.deepEqual(observed, unopened);
   },
 );
+
+async function copyNativeIgnores(repo: GateRepository): Promise<void> {
+  const { Instrumenter } = await import('@stryker-mutator/instrumenter');
+  const { noopLogger } = await import('@stryker-mutator/util');
+  const report = mutationReport(repo);
+  const file = report.files['src/math.mjs']!;
+  const { mutants } = await new Instrumenter(noopLogger).instrument(
+    [{ name: repo.path('src/math.mjs'), content: file.source, mutate: true }],
+    { plugins: null, excludedMutations: [], ignorers: [] },
+  );
+  for (const native of mutants) {
+    const row = file.mutants.find((mutant) => mutant.id === native.id);
+    assert.ok(row);
+    if (native.status === 'Ignored')
+      Object.assign(row, { status: 'Ignored', statusReason: native.statusReason });
+  }
+  repo.write(MUTATION, JSON.stringify(report));
+}
+
+Given('the gate report uses native ignore statuses', async function () {
+  await copyNativeIgnores(repository(this));
+});
+
+Given('the gate report uses native ignore statuses for a {string} verdict', async function (verdict: string) {
+  if (verdict === 'green') await copyNativeIgnores(repository(this));
+});

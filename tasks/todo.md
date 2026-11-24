@@ -123,3 +123,32 @@ Five subscription responses completed at the provider with measured usage. Trial
 - [x] Add regression scenarios, verify locally where allowed, and append the journal.
 
 The baseline run confirmed 31 targeted regressions and preserved five controls. Typecheck, formatting and architecture passed. The admitted gate and mutation campaign remain with the independent reviewer.
+
+## PR 135 independent review
+
+- [x] Check index entries and checkout bytes in the lease and delivery, and inspect nested Git markers before untracked enumeration.
+- [x] Use whole-file mutation inventory for the local verdict and align mutation path and read handling.
+- [x] Add regression scenarios and append journal section 110.
+- [x] Record the requested verification results.
+
+### Review findings and witnesses
+
+- **Staged additions and byte identity.** Admission and receipt verification compare the stage-zero paths, modes and object IDs with the captured tree, reject unresolved stages, and check raw bytes and modes. Deliver uses the same byte comparison. The native lease cases exercise a staged addition before admission and during an acquired lease before verify, an index-only mode change, unresolved stages and an untouched CRLF checkout. The delivery port checks a separate linked checkout that Git converted to CRLF and still reports clean.
+- **Nested Git metadata.** The shared native walk uses no-follow stat and directory opens. Git's non-enumerating ignore matcher identifies pruned directories from tracked ignore sources. The adapters refuse visible markers before untracked enumeration. Fingerprint fixtures use the HEAD-seeded private index. Gate, lease and Deliver check both HEAD and the live index. The linked worktree cases put the gitdir outside the checkout and also exercise a marker whose target is absent. The retained ignored-directory control passes. The interrupted-mutation case checks restored bytes, removal of the pending journal and invalidation of the old receipt before refusing the unrelated marker.
+- **Multiline mutation reports.** Local planning selects whole files. The native lot inventory projects identities onto changed lines and the local verdict checks the reported identities, including enclosing nodes. Both multiline verdict rows pass with complete identities and refuse the missing enclosing identities, with zero and one contained mutant respectively. Retired debt files still require whole-file evidence. The comment-only control exercises direct zero-mutant attestation.
+- **Literal selection.** The installed Stryker matcher selects each literal name under a checkout with brackets and excludes the similarly named sibling. The rows cover ordinary punctuation and bracketed filenames. Braces, backslashes and line terminators retain named refusals because their encodings cannot be passed through the pinned matcher or range parser.
+- **Scope and workspace reads.** Linux production and macOS nonmutation plan cases exercise irrelevant links. The workspace distinguishes a regular file replacing an ancestor from a symlink and reuses fatal UTF-8 decoding for production reads. The debt cases verify ordinary absence and named refusals. The adapter invalid-name case uses a raw Git stdout witness where the filesystem itself refuses to create the name.
+- **Per-patch witness.** The guarded diff requests both the ordinary patch and the nested path. The configuration-only patch witness runs the fixture program.
+- **Documentation.** The diagram keeps all rectangle geometry and font sizes. The README and supporting descriptions name the boundaries proved by the scenarios. Journal sections 1 through 109 are an identical byte prefix of the file. Section 110 brings the count to 110 and the diff against the pushed tracking ref at `fe9a7c48` is 10 added lines and 0 deleted. The admission policy explains the configured workstation and server reserves and leaves account-volume writes as a measurement item.
+
+### Verification
+
+The runtime root was `/Volumes/Anthropic/disk-hygiene-vbo30iv1` on macOS.
+
+- `./aos -- npx tsc -b` passed.
+- `./aos -- npx prettier --check .` passed.
+- `./aos -- npm run arch` passed with 416 modules and 1,767 dependencies.
+- `./aos -- npx cucumber-js --profile replay tools/test-gate/features tools/deliver/features packages/sandbox/features/tree-fingerprint.feature features/sandbox/gate-worktree.feature features/arch features/descriptive --format summary` passed all 1,776 scenarios and 9,958 steps in 10 min 12 s.
+- `git diff --check` passed. The original journal bytes are an exact prefix, and both the SVG's rectangle attributes and its font sizes match the pushed version.
+
+Full mutation survivorship, native Linux and hosted integration remain unverified. The maintainer owns the full check, test and Gate commands.

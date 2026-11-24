@@ -11,7 +11,7 @@ import { isJobFeature, isProduction, matchesAny, type Job, type Layout } from '.
 import { requireLiteralMutationPath } from '../domain/mutate-pattern.js';
 import { retiredFiles } from '../domain/debt.js';
 import { canaryViolations } from '../domain/canary.js';
-import { inPerimeter, mutatePatterns, perimeterOf, type MutantRecord } from '../domain/mutation.js';
+import { inPerimeter, mutationFiles, perimeterOf, type MutantRecord } from '../domain/mutation.js';
 import { replayCases, replayViolations, type ReplayCase, type ReplayRecord } from '../domain/replay.js';
 import type { ReadFailure } from '../domain/violation.js';
 import { distributeReplayFiles, replayLotFor } from '../domain/replay-lots.js';
@@ -26,6 +26,7 @@ import { compileFeature } from './gherkin.js';
 import { jsonText } from './json.js';
 import { parseMutationReport } from './mutation-report.js';
 import { CucumberRunner, replayAll, sha256 } from './replay.js';
+import { literalStrykerPattern } from './stryker-pattern.js';
 import { Workspace } from './workspace.js';
 
 /** The descriptive configuration, relative to the repository root. */
@@ -56,11 +57,10 @@ export function changedFiles(
   include: (path: string) => boolean = () => true,
   layout?: Layout,
 ): ChangedFile[] {
-  const nested = repository.nested();
-  if (nested !== undefined) throw new Error(`dépôt imbriqué dans l'arbre : ${nested}`);
+  const untracked = repository.untracked();
   const isSource = (path: string) => layout !== undefined && isProduction(layout, path);
   const whole = (path: string) => {
-    const source = workspace.read(path);
+    const source = isSource(path) ? workspace.readSource(path) : workspace.read(path);
     if (source === null) return [];
     if (isSource(path)) validateMutationSource(path, source);
     return [wholeFile(path, source)];
@@ -73,7 +73,7 @@ export function changedFiles(
           .map(({ path, deleted, link }) => {
             if (link) throw new Error('GATE_SOURCE_LINK : ' + path);
             if (!deleted && isSource(path)) {
-              const source = workspace.read(path);
+              const source = workspace.readSource(path);
               if (source === null) throw new Error('GATE_SOURCE_MISSING : ' + path);
               validateMutationSource(path, source);
             }
@@ -83,14 +83,11 @@ export function changedFiles(
               lines: deleted ? [] : changedLines(path, repository.patch(firstParent, path)),
             };
           })),
-    ...repository
-      .untracked()
-      .filter(include)
-      .flatMap((path) => {
-        const added = whole(path);
-        if (added.length === 0) throw new Error('GATE_SOURCE_MISSING : ' + path);
-        return added;
-      }),
+    ...untracked.filter(include).flatMap((path) => {
+      const added = whole(path);
+      if (added.length === 0) throw new Error('GATE_SOURCE_MISSING : ' + path);
+      return added;
+    }),
   ];
 }
 
@@ -169,7 +166,13 @@ async function replayCommand(
   if (mode !== 'all') {
     const repository = new GitRepository(root);
     const { firstParent } = repository.commits();
-    const changes = changedFiles(repository, workspace, firstParent, undefined, config);
+    const changes = changedFiles(
+      repository,
+      workspace,
+      firstParent,
+      (file) => isProduction(config, file),
+      config,
+    );
     const { perimeter, debt } = mutationScope(config, changes, workspace, repository, firstParent);
     selected = (file, mutant) => file === canary?.file || inPerimeter(perimeter, file, mutant);
     if (sharded) {
@@ -178,7 +181,7 @@ async function replayCommand(
       const { verifyMutationCatalog } = await import('./mutation-catalog.js');
       await verifyMutationCatalog(root, report.tests);
       const { mutationLots } = await import('./mutation-inventory.js');
-      const lots = await mutationLots(root, perimeter, canary?.file, (file) => workspace.read(file));
+      const lots = await mutationLots(root, perimeter, canary?.file, (file) => workspace.readSource(file));
       plan = { mode, batches: distributeReplayFiles(lots) };
     }
   }
@@ -248,14 +251,24 @@ async function gate(
 ) {
   const repository = new GitRepository(root);
   const { head, firstParent } = repository.commits();
-  const changes = changedFiles(repository, workspace, firstParent, undefined, config);
-  // A job without mutation does not read the mutation debt registry.
-  const scope = job.mutation ? mutationScope(config, changes, workspace, repository, firstParent) : null;
+  if (!job.mutation) repository.requireNoNested();
+  const scope = job.mutation
+    ? mutationScope(
+        config,
+        changedFiles(repository, workspace, firstParent, (file) => isProduction(config, file), config),
+        workspace,
+        repository,
+        firstParent,
+      )
+    : null;
   const reports = config.reports;
   if (command === 'plan') {
     // The canary is mutated whole in every run with mutation: rule 7 reads it before any verdict on the code.
     const canary = config.canary === undefined ? [] : [config.canary.file];
-    const mutate = scope === null ? [] : mutatePatterns(scope.perimeter, canary);
+    const mutate =
+      scope === null
+        ? []
+        : mutationFiles(scope.perimeter, canary).map((file) => literalStrykerPattern(root, file));
     workspace.write(reports.plan, jsonText({ job: job.name, head, firstParent, mutate }));
     out.write(`plan ${job.name} : ${mutate.length} motif(s) à muter -> ${reports.plan}\n`);
     return 0;
@@ -289,15 +302,15 @@ async function gate(
   })();
   const baseText = workspace.read(reports.base);
   const base: BaseInput = baseText === null ? null : parseGateBase(baseText);
-  const mutationText = workspace.read(reports.mutation);
+  const mutationText = scope === null ? null : workspace.read(reports.mutation);
   const parsed =
     mutationText === null ? { failure: `${reports.mutation} absent` } : parseMutationReport(mutationText);
   const mutationReport =
     scope === null || 'failure' in parsed
       ? parsed
       : await (
-          await import('./mutation-inventory.js')
-        ).verifyEmptyMutationFiles(root, scope.perimeter, parsed, (file) => workspace.read(file));
+          await import('./local-mutation-proof.js')
+        ).verifyVerdictInventory(root, scope.perimeter, parsed, (file) => workspace.readSource(file));
   const verdict = evaluate({
     job: job.name,
     head,
@@ -356,27 +369,24 @@ export async function runGate(
   if (text === null) return refuse(`${CONFIG_PATH} absent`);
   const config = parseGateConfig(text);
   if ('failure' in config) return refuse(`${CONFIG_PATH} : ${config.failure}`);
-  if (command.name === 'realign') {
-    const realigned = realignDebt(config, workspace);
-    if ('failure' in realigned) return refuse(realigned.failure);
-    out.write(realigned.summary);
-    return realigned.aligned ? 0 : 1;
-  }
-  if (command.name === 'compare') {
+  if (command.name === 'realign' || command.name === 'compare' || command.name === 'debt') {
     try {
-      const result = compareDebt(config, workspace, new GitRepository(root));
+      if (command.name === 'realign') {
+        const result = realignDebt(config, workspace);
+        if ('failure' in result) return refuse(result.failure);
+        out.write(result.summary);
+        return result.aligned ? 0 : 1;
+      }
+      const result =
+        command.name === 'compare'
+          ? compareDebt(config, workspace, new GitRepository(root))
+          : generateDebt(config, workspace);
       if ('failure' in result) return refuse(result.failure);
       out.write(result.summary);
       return 0;
     } catch (error) {
       return refuse((error as Error).message);
     }
-  }
-  if (command.name === 'debt') {
-    const written = generateDebt(config, workspace);
-    if ('failure' in written) return refuse(written.failure);
-    out.write(written.summary);
-    return 0;
   }
   if (command.name === 'replay' || command.name === 'replay-collect') {
     const mode =
@@ -414,10 +424,9 @@ export async function runGate(
         throw new Error('registre de dette illisible au premier parent : ' + debt.parent.failure);
       const { mutationLots } = await import('./mutation-inventory.js');
       const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-      const lots = await mutationLots(root, perimeter, config.canary?.file, (file) => {
-        const bytes = workspace.readBytes(file);
-        return bytes === null ? null : decoder.decode(bytes);
-      });
+      const lots = await mutationLots(root, perimeter, config.canary?.file, (file) =>
+        workspace.readSource(file),
+      );
       const { combineNative, nativeScope, nativeShard, projectNative } = await import('./mutation-shards.js');
       const canary = config.canary?.file;
       const manifest = (shard?: 1 | 2) => {
@@ -439,7 +448,11 @@ export async function runGate(
           throw new Error('inventaire absent ou différent du périmètre courant : ' + path);
         const bytes = workspace.readBytes(rawPath);
         if (bytes === null) throw new Error('rapport de mutation absent : ' + rawPath);
-        return projectNative(decoder.decode(bytes), expected.planned);
+        const patterns =
+          project || command.name === 'inventory-collect'
+            ? expected.planned.map(({ file }) => literalStrykerPattern(root, file))
+            : undefined;
+        return projectNative(decoder.decode(bytes), expected.planned, patterns, false);
       };
       if (command.name === 'inventory-collect') {
         const proofs = ([1, 2] as const).map((shard) => {
@@ -468,7 +481,11 @@ export async function runGate(
         if (project)
           workspace.write(
             config.reports.mutation,
-            jsonText({ ...raw, gateNativeScope: nativeScope(planned) }),
+            jsonText({
+              ...raw,
+              config: { ...raw.config, mutate: planned.map(({ file }) => file) },
+              gateNativeScope: nativeScope(planned),
+            }),
           );
         out.write('lots de mutation vérifiés : ' + planned.length + ' lot(s)\n');
         return 0;

@@ -299,3 +299,31 @@ Then('the delivery log file holds the line {string} and then what was appended',
   assert.equal(lines.length, 3);
   assert.deepEqual([logOf(this).parse(lines[1] as string)], this.state['portAppended']);
 });
+
+Given('the delivery checkout was converted by Git and has been left untouched', function () {
+  const fixture = gitOf(this);
+  const { git, work, root } = fixture;
+  writeFileSync(join(work, '.gitattributes'), 'new.txt text eol=crlf\n');
+  writeFileSync(join(work, 'new.txt'), 'first\n');
+  git(work, 'add', '.gitattributes', 'new.txt');
+  git(work, 'commit', '-qm', 'line endings');
+  const converted = join(root, 'converted');
+  git(work, 'worktree', 'add', '--detach', converted, 'HEAD');
+  assert.equal(readFileSync(join(converted, 'new.txt'), 'utf8'), 'first\r\n');
+  assert.equal(git(converted, 'status', '--porcelain'), '');
+  assert.equal(git(converted, 'show', 'HEAD:new.txt'), 'first\n');
+  fixture.repository = new GitRepository(converted, 'origin', 'git', hostOf(this));
+});
+
+Given('a linked worktree with an external gitdir is inside the delivery repository', function () {
+  const { git, work, bare } = gitOf(this);
+  const head = git(work, 'rev-parse', 'HEAD').trim();
+  git(work, 'push', 'origin', `${head}:refs/heads/external-fixture`);
+  const linked = join(work, 'linked');
+  git(bare, 'worktree', 'add', '--detach', linked, head);
+  assert.ok(readFileSync(join(linked, '.git'), 'utf8').startsWith(`gitdir: ${bare}/worktrees/`));
+});
+
+Given('the nested delivery marker points to a missing gitdir', function () {
+  writeFileSync(join(gitOf(this).work, 'linked/.git'), 'gitdir: /missing-gitdir\n');
+});
