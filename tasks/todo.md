@@ -175,10 +175,11 @@ The hosted gate later judged these lines (journal section 111):
 - [x] Recompiler, contrôler le format et l’architecture, rejouer les scénarios modifiés et mesurer la mutation. Les 1 000 scénarios passent. Les 1 811 mutants TypeScript des trois campagnes comptent zéro survivant et zéro sans couverture. [Résultats](../JOURNAL-SBX.md#résultat-du-step-hors-ligne)
 - [ ] Essai par le Step de production après le signal du mainteneur, avec la session établie à l’installation.
 
-
 ## Routage par modèle, 24 novembre 2026
 
 - [x] Fusionner les comportements SBX et Spec, puis écrire la décision et STRIDE au §13.
-- [ ] Valider la table et dériver le ticket et les choix à l'approbation.
-- [ ] Brancher les sessions, les signaux d'escalade et leurs preuves au Step.
-- [ ] Exécuter la vérification hors ligne, mettre à jour les documents et consigner les limites.
+- [x] Valider la table et dériver le ticket et les choix à l'approbation.
+- [x] Brancher les sessions, les signaux d'escalade et leurs preuves au Step.
+- [x] Mettre à jour les documents et consigner les limites ([journal](../JOURNAL-ROUTING.md)).
+- [ ] Mutation des lignes changées, rebase sur `spec-plug` livrée, barrière complète.
+- [ ] Adaptateur Google de Step ; bandes fixées sur des relevés.
