@@ -235,3 +235,21 @@ Then('the profile sets exactly the variables:', function (table: DataTable) {
 Then('the resolved network domains are exactly {string}', function (domains: string) {
   assert.deepEqual(resolved(this).settings.network.allowedDomains, domains.split(', '));
 });
+
+// I4 (docs/design/exigences-spec.md): the build reads the history of the repository itself, on demand.
+Then('the profile lets a session read the history of the repository', function () {
+  const { srt, files } = template(this);
+  const underGit = (path: string) => path.split('/').some((segment) => segment === '.git');
+  assert.deepEqual(
+    srt.filesystem.denyRead.filter((path: string) => underGit(path) || path.startsWith('${repo}')),
+    [],
+    'a read of the repository or of its .git is denied',
+  );
+  const settings = files['${config}/settings.json'] as { permissions: { deny: string[] } };
+  const denied = settings.permissions.deny;
+  assert.deepEqual(
+    denied.filter((rule) => rule.startsWith('Bash(git ')),
+    ['Bash(git push *)', 'Bash(git config *)'],
+    'a git command other than push and config is refused',
+  );
+});

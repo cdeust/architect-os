@@ -59,6 +59,8 @@ interface Call {
 }
 interface Behaviour {
   fixture?: string;
+  /** A stream written by the scenario itself, in place of a fixture. */
+  text?: string;
   stopped?: boolean;
   nativeExit?: number;
   failure?: Error;
@@ -206,6 +208,7 @@ const writeStep = (
   parallel?: number,
   scouts: readonly ReviewRow[] = [],
   checks: readonly string[] = [],
+  acceptance?: readonly string[],
 ) => {
   writeFileSync(
     join(s.folder, 'step.json'),
@@ -223,6 +226,7 @@ const writeStep = (
         ? { reviews: reviews.map((review) => ({ ...review, effort: 'high', limitSeconds: 900 })) }
         : {}),
       ...(parallel === undefined ? {} : { parallel }),
+      ...(acceptance === undefined ? {} : { acceptance }),
     }),
   );
   writeFileSync(join(s.folder, 'brief.md'), 'Build the thing.\n');
@@ -526,7 +530,7 @@ const start = (s: Step, args: string): Promise<void> => {
         if (tool === 'code.json') {
           for (const { file, content } of s.rewrites) writeFileSync(join(s.folder, file), content);
         }
-        const text = own.fixture === undefined ? '' : fixture(own.fixture);
+        const text = own.text ?? (own.fixture === undefined ? '' : fixture(own.fixture));
         // In two chunks, as a stream arrives.
         onOutput(Buffer.from(text.slice(0, 10)));
         onOutput(Buffer.from(text.slice(10)));
@@ -1355,3 +1359,40 @@ Then('the production Step orchestrates the subscription fixture {string}', async
     null,
   );
 });
+
+// R2 (docs/design/exigences-spec.md): the criteria a Step covers, and a review that gives a status for each.
+Given(
+  'the step folder holds a step.json with a build, a review and the acceptance {string}',
+  function (ids: string) {
+    writeStep(step(this), [{ name: 'quality', model: 'claude-opus-5-5' }], undefined, [], [], ids.split(' '));
+  },
+);
+
+Given('the review session gives the structured verdict:', function (verdict: string) {
+  const result = JSON.parse(fixture('review-sonnet.jsonl').trimEnd().split('\n').at(-1)!) as Record<
+    string,
+    unknown
+  >;
+  const stream = fixture('review-sonnet.jsonl').trimEnd().split('\n').slice(0, -1);
+  stream.push(JSON.stringify({ ...result, structured_output: JSON.parse(verdict) as unknown }));
+  step(this).behaviours['review.json'].text = stream.join('\n') + '\n';
+});
+
+Then('the published record of the step {string} has the reviews:', function (name: string, expected: string) {
+  const record = JSON.parse(step(this).published.get(name)!['record.json']!) as { reviews: unknown };
+  assert.deepEqual(record.reviews, JSON.parse(expected));
+});
+
+Given(
+  'the step folder holds a step.json with a build, a review, the check {string} and the acceptance {string}',
+  function (check: string, ids: string) {
+    writeStep(
+      step(this),
+      [{ name: 'quality', model: 'claude-opus-5-5' }],
+      undefined,
+      [],
+      [check],
+      ids.split(' '),
+    );
+  },
+);

@@ -171,6 +171,8 @@ Then(
       reviews: [],
       parallel: 2,
       tickets: expected,
+      acceptance:
+        load(item.proposal).acceptance_ids ?? load(item.proposal).reviewed_plan.proposal.acceptance_ids,
     });
     assert.deepEqual(JSON.parse(files['brief.md']!.split('```')[1]!.slice(4)).tickets, expected);
   },
@@ -199,6 +201,9 @@ Given('the Plan input is changed to {string}', function (this: World, change: st
       break;
     case 'proposal tickets':
       proposal.tickets = [];
+      break;
+    case 'policy acceptance':
+      policy.step.acceptance = ['AC-001', 'AC-002'];
       break;
     case 'policy tickets':
       policy.step.tickets = [
@@ -444,6 +449,8 @@ Then('the materialized files match the preview and its manifest', function (this
       '\n```\n',
   );
   assert.deepEqual(load(join(folder, 'step.json')).build, load(policy).step.build);
+  // R2: the Step carries the approved criteria, in the approved order, whatever the policy said.
+  assert.deepEqual(load(join(folder, 'step.json')).acceptance, load(proposal).acceptance_ids);
 });
 Then('the Step folder contains the exact host scout question', function (this: World) {
   assert.equal(

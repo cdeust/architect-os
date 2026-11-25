@@ -2,24 +2,93 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
-    "verdict": { "type": "string", "enum": ["accept", "request_changes"] },
+    "verdict": {
+      "type": "string",
+      "enum": ["accept", "request_changes"]
+    },
     "findings": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "level": { "type": "string", "enum": ["correctness", "contradiction", "proposal"] },
-          "file": { "type": "string" },
-          "line": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
-          "quote": { "type": "string" },
-          "reason": { "type": "string" }
+          "level": {
+            "type": "string",
+            "enum": ["correctness", "contradiction", "proposal"]
+          },
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "quote": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
         },
         "required": ["level", "file", "line", "quote", "reason"],
         "additionalProperties": false
       }
     },
-    "not_checked": { "type": "array", "items": { "type": "string" } }
+    "not_checked": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^AC-\\d{1,9}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["met", "unmet", "not_established"]
+          },
+          "evidence": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "file": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300,
+                  "pattern": "^[^\\r\\n]*$"
+                }
+              },
+              "required": ["file", "line", "quote"],
+              "additionalProperties": false
+            }
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "status", "evidence", "reason"],
+        "additionalProperties": false
+      }
+    }
   },
-  "required": ["verdict", "findings", "not_checked"],
+  "required": ["verdict", "findings", "not_checked", "criteria"],
   "additionalProperties": false
 }

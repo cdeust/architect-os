@@ -33,7 +33,13 @@ import {
 import { buildSbxStep } from './sbx-step.js';
 import { ClaudeBuilder, type Builder, type StepSession, type ToolFile } from './builder.js';
 import { measureSession, type SessionMeasure } from './measure.js';
-import { blocks, parseReviewVerdict, ReviewVerdictSchema } from './review-verdict.js';
+import {
+  blocks,
+  criteriaRefusal,
+  parseReviewVerdict,
+  renderAcceptance,
+  ReviewVerdictSchema,
+} from './review-verdict.js';
 import { factsJsonSchema, parseFacts, renderFacts, verifyFacts, type Fact } from './scout-facts.js';
 import { SrtSandboxRunner } from './srt-runner.js';
 import type { SandboxRunner } from './port.js';
@@ -218,6 +224,7 @@ async function review(
   outputs: StepOutputs,
   config: ReviewConfig,
   brief: string,
+  acceptance: readonly string[],
 ): Promise<ReviewOutcome> {
   const prefix = `review.${config.name}`;
   const session = await play(
@@ -230,7 +237,7 @@ async function review(
     brief,
   );
   const verdict = sessionSucceeded(session)
-    ? verdictOf(session.measure.structuredOutput)
+    ? verdictOf(session.measure.structuredOutput, acceptance, deps.readSource)
     : invalid('la session n’a pas abouti');
   deps.writeFile(join(outputs.retained, `${prefix}.verdict.json`), json(verdict.file));
   return { config, verdict, ...session };
@@ -330,28 +337,38 @@ function factsSchemaResult(output: unknown): ReturnType<typeof parseFacts> | str
 }
 
 /** Le verdict de la revue, ou ce qui l'invalide. */
-function verdictOf(output: unknown): {
+function verdictOf(
+  output: unknown,
+  acceptance: readonly string[],
+  read: (path: string) => string | undefined,
+): {
   file: unknown;
   verdict: 'accept' | 'request_changes' | 'invalid';
   blocks: boolean;
   findings: number;
+  criteria: { id: string; status: 'met' | 'unmet' | 'not_established' }[];
 } {
   if (output === undefined) return invalid('la session n’a donné aucune sortie structurée');
+  let verdict: ReturnType<typeof parseReviewVerdict>;
   try {
-    const verdict = parseReviewVerdict(output);
-    return {
-      file: verdict,
-      verdict: verdict.verdict,
-      blocks: blocks(verdict),
-      findings: verdict.findings.length,
-    };
+    verdict = parseReviewVerdict(output);
   } catch (error) {
     return invalid(issues(error as z.ZodError));
   }
+  // Un verdict qui ne rend pas exactement les critères de l'étape, ou qui cite une preuve absente, est invalide.
+  const refused = criteriaRefusal(verdict, acceptance, read);
+  if (refused !== undefined) return invalid(refused);
+  return {
+    file: verdict,
+    verdict: verdict.verdict,
+    blocks: blocks(verdict),
+    findings: verdict.findings.length,
+    criteria: verdict.criteria.map(({ id, status }) => ({ id, status })),
+  };
 }
 // Une déclaration, et non une fonction fléchée au niveau du module : un mutant statique rejoue toute la suite.
 function invalid(why: string) {
-  return { file: { invalid: why }, verdict: 'invalid' as const, blocks: true, findings: 0 };
+  return { file: { invalid: why }, verdict: 'invalid' as const, blocks: true, findings: 0, criteria: [] };
 }
 
 /**
@@ -499,13 +516,16 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       }
     }
     const checked = played.every(passed);
-    const forReviews =
-      played.length === 0 ? brief : `${brief.trimEnd()}\n\n${renderChecks(played, outputBound())}`;
+    const appended = [
+      ...(step.acceptance ? [renderAcceptance(step.acceptance)] : []),
+      ...(played.length > 0 ? [renderChecks(played, outputBound())] : []),
+    ];
+    const forReviews = appended.length === 0 ? brief : `${brief.trimEnd()}\n\n${appended.join('\n')}`;
     if (built && checked) deps.writeFile(join(outputs.retained, 'review.brief.md'), forReviews);
     const outcomes =
       built && checked
         ? await playBounded(step.reviews, step.parallel, (config) =>
-            review(deps, outputs, config, forReviews),
+            review(deps, outputs, config, forReviews, step.acceptance ?? []),
           )
         : [];
     const checks = Object.fromEntries(
@@ -574,6 +594,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         name: config.name,
         verdict: verdict.verdict,
         findings: verdict.findings,
+        ...(verdict.criteria.length > 0 ? { criteria: verdict.criteria } : {}),
       })),
       outcome: built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 'passed' : 'refused',
     });

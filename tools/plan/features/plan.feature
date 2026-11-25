@@ -47,6 +47,7 @@ Feature: Prepare and explicitly approve one step from Define v1
       | proposal command       | PLAN_INPUT_INVALID |
       | proposal tickets       | PLAN_INPUT_INVALID |
       | policy tickets         | PLAN_INPUT_INVALID |
+      | policy acceptance      | PLAN_INPUT_INVALID |
       | policy command         | PLAN_INPUT_INVALID |
       | malformed policy       | PLAN_INPUT_INVALID |
       | prototype question     | PLAN_INPUT_INVALID |

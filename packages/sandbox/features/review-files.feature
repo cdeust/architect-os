@@ -54,6 +54,12 @@ Feature: the descriptive files of the sessions: the build and review prompts, an
       | no reading of the checks as data |
       | no word that a green check is an indication and not a proof |
       | no ban on running a listed command again |
+      | no section on the acceptance criteria |
+      | no status per listed criterion in order |
+      | no lookup of the evidence by the host |
+      | a criterion not established that does not block |
+      | a criterion met because a check passed |
+      | a verdict rule that ignores the criteria |
       | no not_checked for what nothing established |
       | no word on the sandbox of the checks |
 
@@ -68,4 +74,8 @@ Feature: the descriptive files of the sessions: the build and review prompts, an
       | a missing required key     |
       | an open top level          |
       | an open finding            |
+      | no criteria                |
+      | a criterion status that does not exist |
+      | an open criterion          |
+      | an evidence key not required |
       | a finding key not required |

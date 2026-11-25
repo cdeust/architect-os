@@ -80,7 +80,8 @@ export function preparePlan(sources: PlanSources, inputs: StepInputs) {
     '```',
     '',
   ].join('\n');
-  const step = { ...inputs.step, tickets: handoff.tickets };
+  // The criteria the Step covers, in the approved order: every review verdict gives one status each (R2).
+  const step = { ...inputs.step, tickets: handoff.tickets, acceptance: proposal.acceptance_ids };
   const files = { 'brief.md': brief, ...inputs.questions, 'step.json': JSON.stringify(step, null, 2) + '\n' };
   const manifest = {
     version: 1,
