@@ -151,7 +151,11 @@ The runtime root was `/Volumes/Anthropic/disk-hygiene-vbo30iv1` on macOS.
 - `./aos -- npx cucumber-js --profile replay tools/test-gate/features tools/deliver/features packages/sandbox/features/tree-fingerprint.feature features/sandbox/gate-worktree.feature features/arch features/descriptive --format summary` passed all 1,776 scenarios and 9,958 steps in 10 min 12 s.
 - `git diff --check` passed. The original journal bytes are an exact prefix, and both the SVG's rectangle attributes and its font sizes match the pushed version.
 
-Full mutation survivorship, native Linux and hosted integration remain unverified. The maintainer owns the full check, test and Gate commands.
+The hosted gate later judged these lines (journal section 111):
+
+- On `db217dcb`, rule 5 counted 62 surviving mutants on changed lines.
+- On `f5f9c2d7`, it counted 6 out of 655.
+- On `6e4a45e0`, every check passed, including `gate-linux` and its sixteen mutation lanes with independent replay.
 
 ## Builder de Step sous Docker SBX (24 novembre 2026)
 
