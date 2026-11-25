@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { acceptanceIdSchema, ticketsSchema } from './tickets.js';
 
 // Producer c5fc803ae0cd5b154c60fdbc8843698be3042d0b, packages/core/src/domain/define-handoff.ts.
 export function defineHandoffSchema() {
   const requirementId = z.string().regex(/^(?:FR|NFR)-\d{1,9}$/);
-  const acceptanceId = z.string().regex(/^AC-\d{1,9}$/);
+  const acceptanceId = acceptanceIdSchema();
   const statement = z
     .string()
     .refine((text) => /[\p{L}\p{N}]/u.test(text.replace(/(?<![\w-])(?:FR|NFR)-\d{1,9}(?![\w-])/g, '')));
@@ -22,6 +23,7 @@ export function defineHandoffSchema() {
           }),
         )
         .min(1),
+      tickets: ticketsSchema().optional(),
     })
     .refine(({ requirements, acceptance }) => {
       const ids = new Set(requirements.map(({ id }) => id));
@@ -33,7 +35,14 @@ export function defineHandoffSchema() {
         ids.size === covered.size &&
         [...covered].every((id) => ids.has(id))
       );
-    });
+    })
+    .refine(
+      ({ acceptance, tickets }) => {
+        const criteria = new Set(acceptance.map(({ id }) => id));
+        return tickets?.every(({ acceptance_ids }) => acceptance_ids.every((id) => criteria.has(id))) ?? true;
+      },
+      { path: ['tickets'], message: 'TICKET_ACCEPTANCE_UNKNOWN' },
+    );
 }
 
 export type DefineHandoff = z.infer<ReturnType<typeof defineHandoffSchema>>;

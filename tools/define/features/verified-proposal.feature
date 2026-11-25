@@ -16,6 +16,9 @@ Feature: Consume the producer's verified Plan projection
       | missing 1       | refuse  |
       | missing 2       | refuse  |
       | missing 3       | refuse  |
+      | missing 4       | refuse  |
+      | malformed digest| refuse  |
+      | bundle          | refuse  |
       | extra           | refuse  |
       | refusal         | refuse  |
       | transport       | refuse  |

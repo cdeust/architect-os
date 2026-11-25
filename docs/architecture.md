@@ -25,7 +25,7 @@ Proven by the entry file, not by a composition written for a test: `features/san
 
 The local [Define reader](define.md) calls prd-gen over stdio and validates its handoff before emitting planning data.
 The only MCP SDK import for this command lives in `tools/define/src/infrastructure/prd-gen.ts`. The host starts the
-operator-selected plugin's fixed launcher to query its existing run. The gateway and sandboxed builders do not participate in the read.
+operator-selected plugin's bundle, only when its SHA-256 equals the digest the operator gave, to query its existing run. The gateway and sandboxed builders do not participate in the read.
 
 ## Plan at the host
 

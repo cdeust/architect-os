@@ -1,9 +1,10 @@
 # Prepare and approve one Step input bundle
 
-After installing the pinned dependencies and running `./aos -- npm run typecheck`, save the accepted JSON output of [Define](define.md) in a local file. For an ai-architect-mcp-spec checkpoint, read the producer's verified proposal for the same run and Step. The operator selects the trusted plugin root and local Step policy. Keep the exact file bytes, including the trailing newline.
+After installing the pinned dependencies and running `./aos -- npm run typecheck`, select a trusted installed producer bundle and a saved run whose specification has passed the readiness check at the producer's pending implementation gate. For a compatible producer, save the accepted JSON output of [Define](define.md) and the verified proposal for the same run and Step. Keep the exact file bytes, including the trailing newline.
 
 ```sh
-./aos -- npm run --silent plan:proposal -- "$RUN_ID" "$PLUGIN_ROOT" delivery define.json > proposal.json
+./aos -- npm run --silent define -- "$RUN_ID" "$PLUGIN_ROOT" "$BUNDLE_SHA256" > define.json
+./aos -- npm run --silent plan:proposal -- "$RUN_ID" "$PLUGIN_ROOT" "$BUNDLE_SHA256" delivery define.json > proposal.json
 ```
 
 The reader requests `get_pipeline_state(format: "verified_plan_v1", plan_step: "delivery")`. It checks the run, Step name, and the producer's SHA-256 values for the saved Define, proposal and binding. A refused projection exits with empty stdout. These digests check consistency with the operator-selected producer. The operator can also supply a proposal using the schema below. Prepare the preview with:
@@ -25,7 +26,7 @@ The proposal has one Step name, an objective, an observable verification and the
 }
 ```
 
-The host policy is a JSON object with `step`, using the existing `step.json` schema, and `scout_questions`, mapping each configured scout name to the contents of its question file. Use an empty object for questions when the policy has no scouts. Requirements, criteria and proposals supply text and links. The operator chooses the policy file that supplies models, effort, commands, limits and reviews.
+The host policy is a JSON object with `step` (build, scouts, checks, reviews and parallelism) and `scout_questions`, mapping each configured scout name to the contents of its question file. Use an empty object for questions when the policy has no scouts. The operator chooses the policy file that supplies models, effort, commands, limits and reviews. Both proposal and policy reject a `tickets` field with `PLAN_INPUT_INVALID`. When the Define handoff contains tickets, Plan copies its validated array in order to the brief and `step.json`. Each ticket retains its own estimate and prerequisites. Plan still prepares one Step for all criteria.
 
 The preview contains the exact UTF-8 output texts and their manifest. The manifest binds the Define run and Step name to SHA-256 fingerprints of the three source files and every output file. The approval fingerprint is SHA-256 of the manifest encoded by `JSON.stringify`. Keep the preview and the decision file with the planning evidence outside the repository's `steps/` archive.
 
@@ -41,9 +42,13 @@ The destination must be new, match the approved Step name and stay outside every
 "$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run step -- /absolute/intake/delivery
 ```
 
-Step reads the approved folder once. The host archives the input hashes in `steps/<name>/record.json` in the target worktree. Under `ARCHITECT_OS_RUNTIME_ROOT`, reports and verdicts go to `state/steps/<run-id>/delivery/` and raw streams to `run/<run-id>/tmp/steps/delivery/`.
+Step requires the separately issued host receipt `ARCHITECT_OS_STEP_EVIDENCE`, bound to the target tree, input bytes, launcher, reviews and prompt specimens. The production receipt issuer is pending. Step reads the approved folder once and validates `step.json` before launching sessions. The host archives the input hashes and the optional tickets in `steps/<name>/record.json` in the target worktree. Ticket points and dependencies are data for future routing work. Session models and commands come from the host policy. Under `ARCHITECT_OS_RUNTIME_ROOT`, reports and verdicts go to `state/steps/<run-id>/delivery/` and raw streams to `run/<run-id>/tmp/steps/delivery/`.
 
-The integration scenario runs that Step reader with controlled in-memory sessions and checks the archive against the Plan manifest. Automated exploration before approval and a measured replay through Deliver remain future work.
+The offline integration scenario reads both projections across MCP stdio from a fixture, approves and materializes the exact preview, then runs the Step host with controlled sessions and a test receipt. It checks the archived tickets and policy along with the input fingerprints. See the [producer report](../SPEC-PLUG-PRODUCER.md) for the rejected projections from the named checkout. Automated exploration before approval and a measured replay through Deliver remain future work.
+
+## Preview an independently reviewed Spec Plan
+
+Pass `reviewed-plan.json` in place of `proposal.json` to `plan prepare`, using the exact paired `define.json` written by the Spec planning host. Plan verifies both reviews and the bound input bytes. `plan materialize` returns `PLAN_SPECIMEN_EVIDENCE_REQUIRED` for this receipt even with a matching local approval. Production specimen evidence and the receipt issuer are pending.
 
 ## Recorded Define-to-Plan replay
 
@@ -55,8 +60,8 @@ Use a fresh receipt filename for every attempt. These wrappers run the same comm
 
 ```sh
 set -e
-./aos -- npm run --silent baseline:planning -- 01.jsonl define "$RUN_ID" "$PLUGIN_ROOT" > define.json
-./aos -- npm run --silent baseline:planning -- 02.jsonl proposal "$RUN_ID" "$PLUGIN_ROOT" delivery define.json > proposal.json
+./aos -- npm run --silent baseline:planning -- 01.jsonl define "$RUN_ID" "$PLUGIN_ROOT" "$BUNDLE_SHA256" > define.json
+./aos -- npm run --silent baseline:planning -- 02.jsonl proposal "$RUN_ID" "$PLUGIN_ROOT" "$BUNDLE_SHA256" delivery define.json > proposal.json
 ./aos -- npm run --silent baseline:planning -- 03.jsonl prepare define.json proposal.json policy.json > preview.json
 # After an independent decision on the preview:
 ./aos -- npm run --silent baseline:planning -- 04.jsonl materialize define.json proposal.json policy.json decision.json "$INTAKE/delivery"

@@ -1,10 +1,23 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { After, Given, Then, When } from '@cucumber/cucumber';
+import { parseDefinePlanningReply } from '@architect-os/contracts';
 import type { DefineSource } from '../../src/domain/source.js';
 import { runDefine } from '../../src/main.js';
+import { runProposal } from '../../src/proposal.js';
 import { prdGenSource } from '../../src/infrastructure/prd-gen.js';
 import { readDefine } from '../../src/application/read-define.js';
 
@@ -27,6 +40,13 @@ const delivery = {
     { id: 'AC-003', text: 'Retain the ruleset result (NFR-003).', requirement_ids: ['NFR-003'] },
   ],
 };
+
+const tickets = () => [
+  { id: 'TICKET-002', story_points: 13, depends_on: ['TICKET-001'], acceptance_ids: ['AC-002'] },
+  { id: 'TICKET-001', story_points: 1, depends_on: [], acceptance_ids: ['AC-001'] },
+  { id: 'TICKET-003', story_points: 2, depends_on: ['TICKET-001', 'TICKET-002'], acceptance_ids: ['AC-003'] },
+];
+const ticketed = () => ({ handoff: { ...delivery, tickets: tickets() } });
 
 type Reply = Awaited<ReturnType<DefineSource['getHandoff']>>;
 const asText = (data: unknown): Reply => ({
@@ -151,35 +171,160 @@ After<DefineWorld>(function () {
   if (typeof root === 'string') rmSync(root, { recursive: true });
 });
 
-function plugin(world: DefineWorld, reply: Reply): string {
+/**
+ * A fixture producer at `<root>/mcp-server/index.js`, the path the host pins. The digest the operator would give is
+ * kept in the world; the request log lives at the plugin root, outside the hashed bundle.
+ */
+function plugin(world: DefineWorld, reply: Reply, plan?: Reply): string {
   const root = prepare(world);
-  mkdirSync(join(root, 'bin'));
+  mkdirSync(join(root, 'mcp-server'));
+  writeFileSync(join(root, 'mcp-server', 'package.json'), '{"type":"module"}\n');
+  const bundle = join(root, 'mcp-server', 'index.js');
   writeFileSync(
-    join(root, 'bin', 'ensure-deps.mjs'),
+    bundle,
     `
 import { appendFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
-const root = process.argv[2];
+import { fileURLToPath } from 'node:url';
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const record = join(root, 'requests.ndjson');
-appendFileSync(record, JSON.stringify({ skill: process.env.PRD_GEN_SKILL_CONFIG }) + '\\n');
+appendFileSync(record, JSON.stringify({ argv: process.argv.slice(1), skill: process.env.PRD_GEN_SKILL_CONFIG }) + '\\n');
 for await (const line of createInterface({ input: process.stdin })) {
   const request = JSON.parse(line);
   if (request.id === undefined) continue;
   appendFileSync(record, JSON.stringify({ method: request.method, params: request.params }) + '\\n');
   const result = request.method === 'initialize'
     ? { protocolVersion: request.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'prd-gen', version: '0.9.0' } }
-    : ${JSON.stringify(reply)};
+    : request.params?.arguments?.format === 'verified_plan_v1'
+      ? ${JSON.stringify(plan ?? { isError: true, content: [] })}
+      : ${JSON.stringify(reply)};
   process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) + '\\n');
 }
 appendFileSync(record, JSON.stringify({ closed: true }) + '\\n');
 `,
   );
+  world.state['defineBundleDigest'] = createHash('sha256').update(readFileSync(bundle)).digest('hex');
   return root;
 }
 
+const pinned = (world: DefineWorld) => world.state['defineBundleDigest'] as string;
+
 Given('an isolated Define plugin that returns the delivery planning data', function (this: DefineWorld) {
   plugin(this, asText({ handoff: delivery }));
+});
+
+Given('an isolated Define plugin that returns delivery tickets', function (this: DefineWorld) {
+  const file = (value: unknown) => JSON.stringify(value) + '\n';
+  const digest = (input: string) => createHash('sha256').update(input).digest('hex');
+  const proposal = {
+    step: 'delivery',
+    objective: 'Deliver the commit accepted by the gate.',
+    verification: 'Observe a CI-only stop and the verified commit.',
+    acceptance_ids: ['AC-001', 'AC-002', 'AC-003'],
+  };
+  const binding = {
+    version: 1,
+    run_id: runId,
+    define_sha256: digest(file(ticketed())),
+    proposal_sha256: digest(file(proposal)),
+  };
+  plugin(
+    this,
+    asText(ticketed()),
+    asText({
+      verified_plan: { ...binding, plan_sha256: digest(file(binding)), proposal },
+    }),
+  );
+});
+
+When('the host reads the matching verified proposal over stdio', async function (this: DefineWorld) {
+  const root = this.state['defineHostRoot'] as string;
+  const define = this.state['defineResult'] as { code: number; stdout: string };
+  assert.equal(define.code, 0);
+  const path = join(root, 'define.json');
+  writeFileSync(path, define.stdout);
+  const output: string[] = [];
+  const diagnostics: string[] = [];
+  const code = await runProposal({
+    argv: [process.execPath, 'plan:proposal', runId, root, pinned(this), 'delivery', path],
+    execPath: process.execPath,
+    stdout: { write: (text) => output.push(text) },
+    stderr: { write: (text) => diagnostics.push(text) },
+  });
+  assert.deepEqual({ code, diagnostics }, { code: 0, diagnostics: [] });
+  this.state['verifiedProposalOutput'] = output.join('');
+});
+
+Given('a Define reply with valid delivery tickets', function (this: DefineWorld) {
+  this.state['defineReply'] = asText(ticketed());
+});
+
+Given('a Define ticket reply changed to {string}', function (this: DefineWorld, change: string) {
+  const baseline = tickets();
+  const [first, second, third] = baseline;
+  const amend = (fields: Record<string, unknown>) => [{ ...first, ...fields }, second, third];
+  const withId = (id: string) => [{ ...first, id, depends_on: [] }];
+  const variants = {
+    'empty tickets': [],
+    'null tickets': null,
+    'empty acceptance': amend({ acceptance_ids: [] }),
+    'unknown acceptance': amend({ acceptance_ids: ['AC-002', 'AC-999'] }),
+    'repeated acceptance': amend({ acceptance_ids: ['AC-002', 'AC-002'] }),
+    'unknown dependency': amend({ depends_on: ['TICKET-999'] }),
+    'repeated dependency': amend({ depends_on: ['TICKET-001', 'TICKET-001'] }),
+    'duplicate ticket': [...baseline, first],
+    'self dependency': amend({ depends_on: ['TICKET-002'] }),
+    'indirect cycle': [first, { ...second, depends_on: ['TICKET-003'] }, third],
+    'disconnected cycle': [second, { ...third, depends_on: ['TICKET-003'] }],
+    'non-Fibonacci points': amend({ story_points: 4 }),
+    'zero points': amend({ story_points: 0 }),
+    'negative points': amend({ story_points: -1 }),
+    'fractional points': amend({ story_points: 2.5 }),
+    'unsafe points': amend({ story_points: 14472334024676221 }),
+    'string points': amend({ story_points: '13' }),
+    'unsafe ticket id': withId('../TICKET-002'),
+    'zero ticket id': withId('TICKET-000'),
+    'short ticket id': withId('TICKET-02'),
+    'long ticket id': withId('TICKET-0002'),
+    'suffixed ticket id': withId('TICKET-002-a'),
+    'extra ticket command': amend({ command: ['deliver'] }),
+    'missing dependencies': amend({ depends_on: undefined }),
+  };
+  assert.ok(Object.hasOwn(variants, change));
+  this.state['defineReply'] = asText({
+    handoff: { ...delivery, tickets: variants[change as keyof typeof variants] },
+  });
+});
+
+Then('the ticket schema names the refusal for {string}', function (this: DefineWorld, change: string) {
+  const reply = this.state['defineReply'] as Reply;
+  const reasons: Record<string, [string, (string | number)[]]> = {
+    'unknown acceptance': ['TICKET_ACCEPTANCE_UNKNOWN', ['tickets']],
+    'repeated acceptance': ['TICKET_ACCEPTANCE_DUPLICATE', ['tickets', 0, 'acceptance_ids']],
+    'unknown dependency': ['TICKET_DEPENDENCY_UNKNOWN', ['tickets']],
+    'repeated dependency': ['TICKET_DEPENDENCY_DUPLICATE', ['tickets', 0, 'depends_on']],
+    'duplicate ticket': ['TICKET_ID_DUPLICATE', ['tickets']],
+    'self dependency': ['TICKET_DEPENDENCY_CYCLE', ['tickets']],
+    'indirect cycle': ['TICKET_DEPENDENCY_CYCLE', ['tickets']],
+    'disconnected cycle': ['TICKET_DEPENDENCY_CYCLE', ['tickets']],
+    'non-Fibonacci points': ['TICKET_POINTS_INVALID', ['tickets', 0, 'story_points']],
+    'zero points': ['TICKET_POINTS_INVALID', ['tickets', 0, 'story_points']],
+    'negative points': ['TICKET_POINTS_INVALID', ['tickets', 0, 'story_points']],
+  };
+  assert.throws(
+    () => parseDefinePlanningReply(reply.content),
+    (error: unknown) => {
+      assert.ok(error instanceof Error && error.name === 'ZodError' && 'issues' in error);
+      const expected = reasons[change];
+      if (expected) {
+        assert.deepEqual(error.issues, [
+          { code: 'custom', message: expected[0], path: ['handoff', ...expected[1]] },
+        ]);
+      }
+      return true;
+    },
+  );
 });
 
 Given('an isolated directory without a Define launcher', function (this: DefineWorld) {
@@ -194,14 +339,20 @@ Given('the Define invocation has {string}', function (this: DefineWorld, form: s
   this.state['defineArgs'] = {
     'no run or root': [],
     'no plugin root': [runId],
-    'an extra operand': [runId, 'plugin', 'ignored'],
+    'an empty run': ['', 'plugin', 'a'.repeat(64)],
+    'an empty plugin root': [runId, '', 'a'.repeat(64)],
+    'no bundle digest': [runId, 'plugin'],
+    'an uppercase bundle digest': [runId, 'plugin', 'A'.repeat(64)],
+    'a short bundle digest': [runId, 'plugin', 'a'.repeat(63)],
+    'a long bundle digest': [runId, 'plugin', 'a'.repeat(65)],
+    'an extra operand': [runId, 'plugin', 'a'.repeat(64), 'ignored'],
   }[form];
 });
 
 async function invoke(
   world: DefineWorld,
   args: readonly string[],
-  source?: (node: string, root: string) => DefineSource,
+  source?: (node: string, root: string, sha256: string) => DefineSource,
 ): Promise<void> {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -218,17 +369,18 @@ async function invoke(
 }
 
 When('the host invokes the Define reader over stdio', async function (this: DefineWorld) {
-  await invoke(this, [runId, this.state['defineHostRoot'] as string]);
+  await invoke(this, [runId, this.state['defineHostRoot'] as string, pinned(this) ?? 'b'.repeat(64)]);
 });
 
 When('the host reads the Define reply', async function (this: DefineWorld) {
   await invoke(
     this,
-    (this.state['defineArgs'] as string[] | undefined) ?? [runId, 'plugin'],
-    (node?: string, root?: string) => {
+    (this.state['defineArgs'] as string[] | undefined) ?? [runId, 'plugin', 'a'.repeat(64)],
+    (node?: string, root?: string, sha256?: string) => {
       this.state['defineOpened'] = true;
       assert.equal(node, process.execPath);
       assert.equal(root, resolve('plugin'));
+      assert.equal(sha256, 'a'.repeat(64));
       return {
         getHandoff: async (requested) => {
           assert.equal(requested, runId);
@@ -247,13 +399,25 @@ Then('the Define reader writes the three linked requirements and criteria', func
   });
 });
 
+Then('the Define reader writes the exact delivery tickets', function (this: DefineWorld) {
+  assert.deepEqual(this.state['defineResult'], {
+    code: 0,
+    stdout: `${JSON.stringify(ticketed())}\n`,
+    stderr: '',
+  });
+});
+
 Then('the plugin received only the versioned read for the requested run', function (this: DefineWorld) {
   const root = this.state['defineHostRoot'] as string;
   const rows = readFileSync(join(root, 'requests.ndjson'), 'utf8')
     .trim()
     .split('\n')
     .map((row) => JSON.parse(row) as unknown);
-  assert.deepEqual(rows[0], { skill: join(root, 'packages', 'skill', 'skill-config.json') });
+  const real = realpathSync(root);
+  assert.deepEqual(rows[0], {
+    argv: [join(real, 'mcp-server', 'index.js')],
+    skill: join(real, 'packages', 'skill', 'skill-config.json'),
+  });
   const init = rows[1] as { method: string; params: { clientInfo: unknown } };
   assert.equal(init.method, 'initialize');
   assert.deepEqual(init.params.clientInfo, { name: 'architect-os-define', version: '0.1.0' });
@@ -303,12 +467,17 @@ class InMemoryDefineSource implements DefineSource {
 Given(
   'the {string} Define source has a {string} reply',
   function (this: DefineWorld, adapter: string, reply: string) {
-    const answer = reply === 'valid' ? asText({ handoff: delivery }) : changed('producer refusal');
+    const answer =
+      reply === 'tickets'
+        ? asText(ticketed())
+        : reply === 'valid'
+          ? asText({ handoff: delivery })
+          : changed('producer refusal');
     this.state['defineAdapter'] = adapter;
     this.state['defineSource'] =
       adapter === 'memory'
         ? new InMemoryDefineSource(answer)
-        : prdGenSource(process.execPath, plugin(this, answer));
+        : prdGenSource(process.execPath, plugin(this, answer), pinned(this));
   },
 );
 
@@ -338,7 +507,11 @@ Then(
     }
     assert.deepEqual(
       this.state['defineSourceResult'],
-      reply === 'valid' ? { handoff: delivery } : { error: 'DEFINE_REFUSED' },
+      reply === 'tickets'
+        ? ticketed()
+        : reply === 'valid'
+          ? { handoff: delivery }
+          : { error: 'DEFINE_REFUSED' },
     );
   },
 );
@@ -353,4 +526,45 @@ Then('the Define reader preserves the two links to the criterion', function (thi
   assert.equal(stderr, '');
   const planning = JSON.parse(stdout) as { handoff: typeof delivery };
   assert.deepEqual(planning.handoff.acceptance[0]?.requirement_ids, ['FR-001', 'FR-002']);
+});
+
+Given('the operator pins {string} for that Define plugin', function (this: DefineWorld, change: string) {
+  const root = this.state['defineHostRoot'] as string;
+  const bundle = join(root, 'mcp-server', 'index.js');
+  if (change === 'another digest') this.state['defineBundleDigest'] = '0'.repeat(64);
+  else if (change === 'a symlinked bundle') {
+    renameSync(bundle, join(root, 'mcp-server', 'other.js'));
+    symlinkSync(join(root, 'mcp-server', 'other.js'), bundle);
+  } else if (change === 'a changed bundle') writeFileSync(bundle, readFileSync(bundle, 'utf8') + '\n');
+  else throw new Error(change);
+});
+
+Then('the Define plugin was never started', function (this: DefineWorld) {
+  assert.equal(existsSync(join(this.state['defineHostRoot'] as string, 'requests.ndjson')), false);
+});
+
+When(
+  'the host reads the verified proposal over stdio expecting a refusal',
+  async function (this: DefineWorld) {
+    const root = this.state['defineHostRoot'] as string;
+    const path = join(root, 'define.json');
+    writeFileSync(path, `${JSON.stringify(ticketed())}\n`);
+    const output: string[] = [];
+    const diagnostics: string[] = [];
+    const code = await runProposal({
+      argv: [process.execPath, 'plan:proposal', runId, root, pinned(this), 'delivery', path],
+      execPath: process.execPath,
+      stdout: { write: (text) => output.push(text) },
+      stderr: { write: (text) => diagnostics.push(text) },
+    });
+    this.state['proposalRefusal'] = { code, stdout: output.join(''), stderr: diagnostics.join('') };
+  },
+);
+
+Then('the proposal reader refuses with {string}', function (this: DefineWorld, message: string) {
+  assert.deepEqual(this.state['proposalRefusal'], {
+    code: 2,
+    stdout: '',
+    stderr: `architect-os proposal: ${message}\n`,
+  });
 });

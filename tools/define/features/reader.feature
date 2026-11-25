@@ -10,6 +10,50 @@ Feature: Read a validated Define handoff without answering the gate
       | memory  | refused |
       | stdio   | valid   |
       | stdio   | refused |
+      | memory  | tickets |
+      | stdio   | tickets |
+
+  Scenario: The shipped transport path preserves ticket data
+    Given an isolated Define plugin that returns delivery tickets
+    When the host invokes the Define reader over stdio
+    Then the Define reader writes the exact delivery tickets
+    And the plugin received only the versioned read for the requested run
+
+  Scenario Outline: Invalid ticket data is refused at the Define boundary
+    Given a Define reply with valid delivery tickets
+    When the host reads the Define reply
+    Then the Define reader writes the exact delivery tickets
+    Given a Define ticket reply changed to "<case>"
+    When the host reads the Define reply
+    Then the Define reader refuses with "DEFINE_REPLY_INVALID"
+    And the ticket schema names the refusal for "<case>"
+
+    Examples:
+      | case                   |
+      | empty tickets          |
+      | null tickets           |
+      | empty acceptance       |
+      | unknown acceptance     |
+      | repeated acceptance    |
+      | unknown dependency     |
+      | repeated dependency    |
+      | duplicate ticket       |
+      | self dependency        |
+      | indirect cycle         |
+      | disconnected cycle     |
+      | non-Fibonacci points   |
+      | zero points            |
+      | negative points        |
+      | fractional points      |
+      | unsafe points          |
+      | string points          |
+      | unsafe ticket id       |
+      | zero ticket id         |
+      | short ticket id        |
+      | long ticket id         |
+      | suffixed ticket id     |
+      | extra ticket command   |
+      | missing dependencies   |
 
   Scenario: The host accepts a criterion linked to multiple requirements
     Given a Define reply changed to "multiple links"
@@ -69,14 +113,35 @@ Feature: Read a validated Define handoff without answering the gate
   Scenario Outline: Invalid arguments do not start the plugin
     Given the Define invocation has "<missing>"
     When the host reads the Define reply
-    Then the Define reader refuses with "usage: define <run_id> <prd-gen-plugin-root>"
+    Then the Define reader refuses with "usage: define <run_id> <prd-gen-plugin-root> <bundle-sha256>"
     And it never opens a Define source
 
     Examples:
-      | missing          |
-      | no run or root   |
-      | no plugin root   |
-      | an extra operand |
+      | missing                    |
+      | no run or root             |
+      | no plugin root             |
+      | an empty run               |
+      | an empty plugin root       |
+      | no bundle digest           |
+      | an uppercase bundle digest |
+      | a short bundle digest      |
+      | a long bundle digest       |
+      | an extra operand           |
+
+  Scenario Outline: Only the bundle the operator pinned is started for a read
+    Given an isolated Define plugin that returns delivery tickets
+    And the operator pins "<bundle>" for that Define plugin
+    When the host invokes the Define reader over stdio
+    Then the Define reader refuses with "SPEC_BUNDLE_MISMATCH"
+    When the host reads the verified proposal over stdio expecting a refusal
+    Then the proposal reader refuses with "SPEC_BUNDLE_MISMATCH"
+    And the Define plugin was never started
+
+    Examples:
+      | bundle             |
+      | another digest     |
+      | a symlinked bundle |
+      | a changed bundle   |
 
   Scenario: A plugin that cannot be started leaves no planning data
     Given an isolated directory without a Define launcher

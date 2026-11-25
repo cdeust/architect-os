@@ -1113,6 +1113,17 @@ Then('the Step record binds the two approved input files', function () {
   assert.equal(record.admission_sha256, step(this).acceptedAdmission);
 });
 
+Then('the Step record preserves the approved tickets and builder model', function () {
+  const expected = stored<{ step: string }>(this, 'planManifest');
+  const state = step(this);
+  const archive = state.published.get(expected.step);
+  assert.ok(archive);
+  const record = stepRecordSchema().parse(JSON.parse(archive['record.json']!));
+  const approved = JSON.parse(readFileSync(join(state.folder, 'step.json'), 'utf8'));
+  assert.deepEqual(Object(record).tickets, approved.tickets);
+  assert.equal(record.sessions[0]?.model, 'operator-build');
+});
+
 Then('native launch reads the frozen launcher even after the original changes', function () {
   const target = mkdtempSync(join(tmpdir(), 'aos-freeze-target-'));
   const original = {

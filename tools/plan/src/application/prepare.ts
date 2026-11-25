@@ -8,7 +8,7 @@ export interface PlanSources {
 }
 
 export interface StepInputs {
-  readonly stepJson: string;
+  readonly step: object;
   readonly questions: Readonly<Record<string, string>>;
 }
 
@@ -68,6 +68,7 @@ export function preparePlan(sources: PlanSources, inputs: StepInputs) {
     ...proposal,
     requirements: handoff.requirements,
     acceptance: handoff.acceptance,
+    tickets: handoff.tickets,
   };
   const brief = [
     '# Approved plan inputs',
@@ -79,7 +80,8 @@ export function preparePlan(sources: PlanSources, inputs: StepInputs) {
     '```',
     '',
   ].join('\n');
-  const files = { 'brief.md': brief, ...inputs.questions, 'step.json': inputs.stepJson };
+  const step = { ...inputs.step, tickets: handoff.tickets };
+  const files = { 'brief.md': brief, ...inputs.questions, 'step.json': JSON.stringify(step, null, 2) + '\n' };
   const manifest = {
     version: 1,
     run_id: handoff.run_id,

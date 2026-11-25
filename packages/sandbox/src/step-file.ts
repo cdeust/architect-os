@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ticketsSchema } from '@architect-os/contracts';
 
 export const codexModelSchema = z.enum(['gpt-6.2-astra', 'gpt-6.2-sol']);
 export type CodexModel = z.infer<typeof codexModelSchema>;
@@ -76,7 +77,7 @@ const checksSchema = () =>
  * peuvent tourner en même temps. Un nom d'éclaireur peut être celui d'une revue.
  * Le nom entre dans des noms de fichiers : l'expression est ce qui les rend sûrs.
  */
-export const stepFileSchema = () =>
+const stepPolicySchema = () =>
   z.strictObject({
     build: z.union([
       sessionSchema().extend({ provider: z.literal('anthropic').optional() }),
@@ -91,6 +92,8 @@ export const stepFileSchema = () =>
     reviews: namedSessions('review'),
     parallel: z.number().int().min(1).max(8).default(2),
   });
+export const stepFileSchema = () => stepPolicySchema().extend({ tickets: ticketsSchema().optional() });
 export type StepFile = z.infer<ReturnType<typeof stepFileSchema>>;
 
+export const parseStepPolicy = (raw: unknown) => stepPolicySchema().parse(raw);
 export const parseStepFile = (raw: unknown): StepFile => stepFileSchema().parse(raw);
