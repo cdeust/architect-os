@@ -3,6 +3,7 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from architecture_typography import check_typography
 
 ns = {"s": "http://www.w3.org/2000/svg"}
 
@@ -16,7 +17,8 @@ class StaticDiagram(ET.TreeBuilder):
 
 path = Path(sys.argv[1])
 assert path.is_file() and not path.is_symlink(), "expected a regular diagram file"
-root = ET.parse(path, parser=ET.XMLParser(target=StaticDiagram())).getroot()
+root = ET.parse(path, parser=ET.XMLParser(target=StaticDiagram(insert_comments=True))).getroot()
+check_typography(root)
 # This illustration can name the runtime it depicts. Only static SVG drawing
 # primitives and same-document marker references belong in the README image.
 elements = {
@@ -25,11 +27,13 @@ elements = {
 }
 markers = {f"url(#{marker.attrib['id']})" for marker in root.findall("s:defs/s:marker", ns)}
 attributes = set(
-    "aria-label aria-labelledby data-from data-to id role viewBox width height x x1 x2 y y1 y2 rx "
+    "aria-label aria-labelledby data-from data-to data-type-role id role viewBox width height x x1 x2 y y1 y2 rx "
     "font-family font-size font-weight text-anchor transform d points fill stroke stroke-width "
     "stroke-dasharray marker-end marker-start markerHeight markerWidth orient refX refY".split()
 )
 for node in root.iter():
+    if node.tag is ET.Comment:
+        continue
     assert node.tag in elements, node.tag
     assert node.attrib.keys() <= attributes, (node.tag, node.attrib.keys() - attributes)
     for key in ("fill", "stroke"):
@@ -95,6 +99,15 @@ for edge in edges:
     assert start == src[3] and start < end <= dst[1] and dst[1] - end <= 3, edge.attrib
 assert not loop.findall("s:rect", ns), "unowned cards in the loop"
 
+# bench/sbx/native-builder.feature runs the production route for Astra and Sol; the trial on the subscription is open.
+# Each card says what it shows, in its accessible label and in its badge.
+for card, status in (("build-sbx-integration", "ready"), ("build-sbx-trial", "next")):
+    group = loop.find(f"s:g[@id='loop-build']/s:g[@id='{card}']", ns)
+    assert group is not None and group.get("aria-label", "").endswith(f" · {status}"), f"{card} status"
+    assert [node.text for node in group.findall("s:text[@data-type-role='badge']", ns)] == [status], (
+        f"{card} must display its accessible status"
+    )
+
 # A host broker drawn inside a guest, or an SBX VM nested inside SRT, would
 # misstate which process can hold the subscription credential.
 isolation = root.find(".//s:g[@id='runtime-isolation']", ns)
@@ -121,11 +134,11 @@ for index, box in enumerate((host_box, srt_box, sbx_box)):
 for owner, child in ((host_box, broker_box), (sbx_box, client_box)):
     assert owner[0] < child[0] < child[2] < owner[2] and owner[1] < child[1] < child[3] < owner[3]
 
-pipes = isolation.find("s:path[@id='sbx-process-pipes']", ns)
-assert pipes is not None and pipes.get("data-from") == broker.get("id") and pipes.get("data-to") == client.get("id")
-assert pipes.get("marker-start") and pipes.get("marker-end"), "bidirectional SBX process pipes"
-segment = re.fullmatch(r"M([\d.]+) ([\d.]+) H([\d.]+)", pipes.attrib["d"])
-assert segment, pipes.attrib["d"]
+connection = isolation.find("s:path[@id='sbx-responses-http']", ns)
+assert connection is not None and connection.get("data-from") == broker.get("id") and connection.get("data-to") == client.get("id")
+assert connection.get("marker-start") and connection.get("marker-end"), "bidirectional SBX Responses HTTP connection"
+segment = re.fullmatch(r"M([\d.]+) ([\d.]+) H([\d.]+)", connection.attrib["d"])
+assert segment, connection.attrib["d"]
 start, y, end = map(float, segment.groups())
 assert start == broker_box[2] and end == client_box[0]
 assert max(broker_box[1], client_box[1]) < y < min(broker_box[3], client_box[3])

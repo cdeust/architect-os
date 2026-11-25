@@ -17,6 +17,8 @@ Feature: module and worker profiles of the platform (docs/design/platform-v3-srt
       | ${home}/.claude              |
       | ${home}/.claude.json         |
       | ${home}/Library/Keychains    |
+      | ${home}/.local/share/keyrings    |
+      | ${home}/.local/share/kwalletd    |
       | ${sandboxes}                  |
       | ${home}/.npm |
       | ${runtime}/run |

@@ -192,7 +192,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       }
       """
       And the step file "build.report.md" is exactly "Done: two files changed."
-      And the step folder has no file "review.correctness.stream.jsonl"
+      And the step folder has no file "review.quality.stream.jsonl"
       And the step file "build.brief.md" is the same as the step file "brief.md"
       And the step folder has no file "scout.a.facts.json"
       And the step stdout is the line:
@@ -213,10 +213,10 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the sessions started were "code.json review.json"
       And the session 2 got the brief "Build the thing.\n" and the limit 900
       And the session 2 got the arguments "-p --verbose --output-format stream-json --model claude-opus-5-5 --effort high --json-schema" and then the draft-07 schema of the verdict
-      And the step file "review.correctness.stream.jsonl" is the fixture "structured.jsonl"
+      And the step file "review.quality.stream.jsonl" is the fixture "structured.jsonl"
       And the step folder has no file "review.report.md"
       And the step file "build.report.md" is exactly "Done: two files changed."
-      And the step file "review.correctness.measure.json" is:
+      And the step file "review.quality.measure.json" is:
       """
       {
         "completed": true,
@@ -241,7 +241,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "stopped": false
       }
       """
-      And the step file "review.correctness.verdict.json" is:
+      And the step file "review.quality.verdict.json" is:
       """
       {
         "verdict": "accept",
@@ -251,7 +251,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"outcome":"passed","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
+      {"outcome":"passed","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"quality":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
       """
 
     Scenario: a review that accepts with a proposal does not block
@@ -263,7 +263,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       Then the step exits with 0
       And the step stdout is the line:
       """
-      {"outcome":"passed","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
+      {"outcome":"passed","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"quality":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
       """
 
     Scenario: a review that requests changes
@@ -275,9 +275,9 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       Then the step exits with 1
       And the step stdout is the line:
       """
-      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"request_changes","exitCode":0,"blocks":true,"findings":2,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
+      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"quality":{"model":"claude-opus-5-5","verdict":"request_changes","exitCode":0,"blocks":true,"findings":2,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
       """
-      And the step file "review.correctness.verdict.json" is:
+      And the step file "review.quality.verdict.json" is:
       """
       {
         "verdict": "request_changes",
@@ -312,7 +312,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       Then the step exits with 1
       And the step stdout is the line:
       """
-      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":true,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
+      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"quality":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":true,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
       """
 
     Scenario: a review without structured output is invalid
@@ -322,7 +322,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the review session writes the fixture "session.jsonl"
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
-      And the step file "review.correctness.verdict.json" is:
+      And the step file "review.quality.verdict.json" is:
       """
       {
         "invalid": "la session n’a donné aucune sortie structurée"
@@ -330,7 +330,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"invalid","exitCode":0,"blocks":true,"findings":0,"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}}},"costUsd":0.1541816,"costByModel":{"claude-haiku-4-5":0.0141816,"claude-sonnet-5-5":0.14},"record":"steps/demo/record.json"}
+      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"quality":{"model":"claude-opus-5-5","verdict":"invalid","exitCode":0,"blocks":true,"findings":0,"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}}},"costUsd":0.1541816,"costByModel":{"claude-haiku-4-5":0.0141816,"claude-sonnet-5-5":0.14},"record":"steps/demo/record.json"}
       """
 
     Scenario: a review with an invalid verdict is invalid
@@ -340,7 +340,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the review session writes the fixture "review-invalid-verdict.jsonl"
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
-      And the step file "review.correctness.verdict.json" is:
+      And the step file "review.quality.verdict.json" is:
       """
       {
         "invalid": "verdict: Invalid option: expected one of \"accept\"|\"request_changes\""
@@ -348,7 +348,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       """
       And the step stdout is the line:
       """
-      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"correctness":{"model":"claude-opus-5-5","verdict":"invalid","exitCode":0,"blocks":true,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
+      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"quality":{"model":"claude-opus-5-5","verdict":"invalid","exitCode":0,"blocks":true,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
       """
 
     Scenario: a review refused for two reasons at once gives both, separated by a semicolon
@@ -358,7 +358,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the review session writes the fixture "review-two-reasons.jsonl"
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
-      And the step file "review.correctness.verdict.json" is:
+      And the step file "review.quality.verdict.json" is:
       """
       {
         "invalid": "verdict: Invalid option: expected one of \"accept\"|\"request_changes\"; not_checked: Invalid input: expected array, received undefined"
@@ -1149,8 +1149,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
       And the sessions started were "code.json"
-      And the step folder has no file "review.correctness.stream.jsonl"
-      And the step folder has no file "review.correctness.measure.json"
+      And the step folder has no file "review.quality.stream.jsonl"
+      And the step folder has no file "review.quality.measure.json"
       And the step file "build.stream.jsonl" is the fixture "result-error.jsonl"
       And the step file "build.measure.json" is:
       """
@@ -1190,8 +1190,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
       And the sessions started were "code.json"
-      And the step folder has no file "review.correctness.stream.jsonl"
-      And the step folder has no file "review.correctness.measure.json"
+      And the step folder has no file "review.quality.stream.jsonl"
+      And the step folder has no file "review.quality.measure.json"
       And the step file "build.stream.jsonl" is the fixture "session.jsonl"
       And the step file "build.measure.json" is:
       """
@@ -1232,8 +1232,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
       And the sessions started were "code.json"
-      And the step folder has no file "review.correctness.stream.jsonl"
-      And the step folder has no file "review.correctness.measure.json"
+      And the step folder has no file "review.quality.stream.jsonl"
+      And the step folder has no file "review.quality.measure.json"
       And the step file "build.stream.jsonl" is the fixture "session-killed.jsonl"
       And the step file "build.measure.json" is:
       """
@@ -1265,7 +1265,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
 
     Scenario: a nonzero Builder exit stops Step even when the provider completed the turn
       Given a step folder
-      And the step folder holds a step.json with a build, the checks "types" and the reviews "correctness=claude-sonnet-5-5"
+      And the step folder holds a step.json with a build, the checks "types" and the reviews "quality=claude-sonnet-5-5"
       And the build session writes the fixture "build-exact.jsonl"
       And the build session exits with 17
       When I run the step with the arguments "<folder>"
@@ -1329,23 +1329,23 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
       And the sessions started were "code.json review.json"
-      And the step file "review.correctness.verdict.json" is:
+      And the step file "review.quality.verdict.json" is:
         """
         {
           "invalid": "la session n’a pas abouti"
         }
         """
       And the published record field "outcome" is "refused"
-      And the published record lists the reviews "correctness=invalid:0"
+      And the published record lists the reviews "quality=invalid:0"
       And the published record field "sessions.1.exitCode" is <exit>
-      And the step summary lists outcome "refused" and the session "reviews.correctness" includes:
+      And the step summary lists outcome "refused" and the session "reviews.quality" includes:
         """
         {"verdict":"invalid","exitCode":<exit>,"blocks":true,"findings":0}
         """
       And the published record field "sessions.1.stopped" is <stopped>
       And the published record field "sessions.1.completed" is <completed>
       And the published record field "sessions.1.costUsd" is 0.125
-      And the retained measure "review.correctness.measure.json" includes:
+      And the retained measure "review.quality.measure.json" includes:
         """
         {"completed":<completed>,"exitCode":<exit>,"stopped":<stopped>,"inputTokens":3,"outputTokens":300,"costUsd":0.125}
         """
@@ -1445,3 +1445,37 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         | INIT_CWD |
         | cwd      |
         | a link   |
+
+  Rule: Host admission enforces independent correctness review
+
+    Scenario: A legacy Claude builder and Claude correctness reviewer are refused before any session
+      Given a step folder
+      And the step folder holds a step.json with a build and the reviews "correctness=claude-opus-5-5"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the sessions started were ""
+      And the step published nothing
+
+    Scenario Outline: Step binds the builder outcome and routes subscription accounting
+      Then the production Step orchestrates the subscription fixture "<case>"
+
+      Examples:
+        | case |
+        | completed |
+        | mismatched provider |
+
+    Scenario Outline: Host checks an explicit dimension and both legacy correctness labels
+      Given a step folder
+      And the step folder holds the file "step.json":
+        """
+        {"build":{"provider":"anthropic","model":"claude-sonnet-5-5","limitSeconds":30,"effort":"medium"},"reviews":[{"name":"<name>","provider":"anthropic","dimension":"<dimension>","model":"claude-opus-5-5","limitSeconds":20,"effort":"high"}]}
+        """
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: STEP_CORRECTNESS_PROVIDER"
+      And no session was started
+
+      Examples:
+        | name | dimension |
+        | independent | correctness |
+        | justesse | general |

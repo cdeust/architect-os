@@ -444,22 +444,82 @@ Then(
 );
 
 Then('each orchestration phase owns its cards and connects to the next phase', function () {
-  execFileSync('python3', ['features/scripts/architecture-loop.py', 'docs/diagrams/architecture.svg'], {
+  execFileSync('python3', ['-B', 'features/scripts/architecture-loop.py', 'docs/diagrams/architecture.svg'], {
     cwd: ROOT,
   });
 });
 
 Then(
+  'the README puts the SBX builder with its proof and keeps only its open trial on the roadmap',
+  function () {
+    const readme = stored<string>(this, 'sourceText');
+    const sections = readme.split(/^## /m);
+    const roadmap = sections.find((section) => section.startsWith('What comes next\n'));
+    const proof = sections.find((section) => section.startsWith('What is proven, and how to replay it\n'));
+    assert.ok(roadmap && proof, 'expected the roadmap and proof sections');
+    const labels = roadmap
+      .split('\n')
+      .filter((line) => line.startsWith('|'))
+      .map((row) => row.split('|')[1]!.trim());
+    assert.ok(
+      !labels.some((label) => /builder from another provider|production sbx builder/i.test(label)),
+      'the implemented builder still appears on the roadmap',
+    );
+    assert.ok(
+      labels.includes('`next` The subscription patch trial'),
+      'the open trial is missing from the roadmap',
+    );
+    const nativeProof = proof
+      .split('\n')
+      .filter((row) => row.startsWith('|') && row.includes('(bench/sbx/native-builder.feature)'));
+    assert.ok(nativeProof.length > 0, 'expected a proof row linking the native builder scenarios');
+    for (const row of nativeProof)
+      assert.ok(!row.split('|')[1]!.includes('`next`'), 'a native proof is marked next');
+    assert.ok(
+      nativeProof.some((row) => row.includes('Astra') && row.includes('Sol')),
+      'the native proof names both models',
+    );
+    const open = readme.slice(readme.indexOf('**Not yet shown.**'));
+    for (const text of ['real model chooses', 'Secret Service', 'monetary cost'])
+      assert.ok(open.slice(0, 700).includes(text), `the open items omit: ${text}`);
+  },
+);
+
+Then(
+  'the typography check refuses each inserted fragment with its reason',
+  function (table: { hashes(): { fragment: string; reason: string }[] }) {
+    const path = join(ROOT, 'docs/diagrams/architecture.svg');
+    const typography = 'features/scripts/architecture_typography.py';
+    execFileSync('python3', ['-B', typography, path], { cwd: ROOT });
+    const original = readFileSync(path, 'utf8');
+    const dir = mkdtempSync(join(tmpdir(), 'architecture-typography-'));
+    this.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+    const specimen = join(dir, 'diagram.svg');
+    for (const { fragment, reason } of table.hashes()) {
+      writeFileSync(specimen, original.replace('</svg>', fragment + '</svg>'));
+      const run = spawnSync('python3', ['-B', typography, specimen], { cwd: ROOT, encoding: 'utf8' });
+      assert.ifError(run.error);
+      assert.equal(run.status, 1, fragment);
+      assert.ok(run.stderr.includes(reason), `${fragment}: expected "${reason}" in ${run.stderr}`);
+    }
+  },
+);
+
+Then(
   'the architecture diagram validator rejects each inserted fragment',
   function (table: { raw(): string[][] }) {
-    const original = readFileSync(join(ROOT, 'docs/diagrams/architecture.svg'), 'utf8');
+    const path = join(ROOT, 'docs/diagrams/architecture.svg');
+    execFileSync('python3', ['-B', 'features/scripts/architecture-loop.py', path], { cwd: ROOT });
+    const original = readFileSync(path, 'utf8');
     const dir = mkdtempSync(join(tmpdir(), 'architecture-diagram-'));
     this.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
     const specimen = join(dir, 'diagram.svg');
     for (const [fragment] of table.raw()) {
       assert.ok(fragment, 'expected an SVG fragment');
       writeFileSync(specimen, original.replace('</svg>', fragment + '</svg>'));
-      const run = spawnSync('python3', ['features/scripts/architecture-loop.py', specimen], { cwd: ROOT });
+      const run = spawnSync('python3', ['-B', 'features/scripts/architecture-loop.py', specimen], {
+        cwd: ROOT,
+      });
       assert.ifError(run.error);
       assert.equal(run.status, 1, fragment);
     }

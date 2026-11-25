@@ -152,3 +152,12 @@ The runtime root was `/Volumes/Anthropic/disk-hygiene-vbo30iv1` on macOS.
 - `git diff --check` passed. The original journal bytes are an exact prefix, and both the SVG's rectangle attributes and its font sizes match the pushed version.
 
 Full mutation survivorship, native Linux and hosted integration remain unverified. The maintainer owns the full check, test and Gate commands.
+
+## Builder de Step sous Docker SBX (24 novembre 2026)
+
+- [x] B.1 Introduire le port Builder et vérifier ensemble Claude et le double en mémoire.
+- [x] B.2 Relayer les octets natifs vers une route SIWC fermée et vérifier les budgets et les terminaux sur un faux amont.
+- [x] B.3 Monter le worktree du Step, protéger ses entrées réservées et vérifier une écriture native hors ligne.
+- [x] B.4 Intégrer la session de compte, les contrôles de provenance et le reçu du constructeur.
+- [x] Recompiler, contrôler le format et l’architecture, rejouer les scénarios modifiés et mesurer la mutation. Les 1 000 scénarios passent. Les 1 811 mutants TypeScript des trois campagnes comptent zéro survivant et zéro sans couverture. [Résultats](../JOURNAL-SBX.md#résultat-du-step-hors-ligne)
+- [ ] Essai par le Step de production après le signal du mainteneur, avec la session établie à l’installation.

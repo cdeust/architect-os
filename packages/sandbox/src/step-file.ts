@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+export const codexModelSchema = z.enum(['gpt-6.2-astra', 'gpt-6.2-sol']);
+export type CodexModel = z.infer<typeof codexModelSchema>;
+
 // Les schémas sont construits dans des fonctions : un littéral au niveau du module ferait rejouer toute la suite
 // pour chacun de ses mutants (Stryker).
 const sessionSchema = () =>
@@ -26,7 +29,17 @@ const duplicated = (sessions: readonly { name: string }[]): string[] => [
 /** Une liste de sessions nommées (revues ou éclaireurs), au plus 8, chaque nom une seule fois dans la liste. */
 const namedSessions = (kind: string) =>
   z
-    .array(sessionSchema().extend({ name: nameSchema() }))
+    .array(
+      sessionSchema().extend({
+        name: nameSchema(),
+        ...(kind === 'review'
+          ? {
+              provider: z.literal('anthropic').optional(),
+              dimension: z.enum(['correctness', 'general']).optional(),
+            }
+          : {}),
+      }),
+    )
     .max(8)
     .refine((sessions) => duplicated(sessions).length === 0, {
       error: (issue) => `duplicate ${kind} name: ${duplicated(issue.input as { name: string }[]).join(', ')}`,
@@ -65,7 +78,14 @@ const checksSchema = () =>
  */
 export const stepFileSchema = () =>
   z.strictObject({
-    build: sessionSchema(),
+    build: z.union([
+      sessionSchema().extend({ provider: z.literal('anthropic').optional() }),
+      sessionSchema().extend({
+        provider: z.literal('openai'),
+        model: codexModelSchema,
+        effort: z.enum(['low', 'medium', 'high', 'xhigh']),
+      }),
+    ]),
     scouts: namedSessions('scout'),
     checks: checksSchema(),
     reviews: namedSessions('review'),

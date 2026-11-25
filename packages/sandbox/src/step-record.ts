@@ -3,7 +3,7 @@
 // noms pris du fichier descriptif, des valeurs de listes fermées et des empreintes.
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import type { StepFile } from './step-file.js';
+import { codexModelSchema, type StepFile } from './step-file.js';
 import type { TreeFingerprint } from './tree-fingerprint.js';
 
 // Les schémas et les expressions sont construits dans des fonctions : un littéral au niveau du module ferait rejouer
@@ -36,6 +36,20 @@ function keyed<Value extends z.ZodType>(key: RegExp, value: Value) {
   );
 }
 
+/** Missing terminal usage leaves the corresponding run total unknown. */
+export function observedTokens(
+  receipts: readonly import('./responses-proxy.js').ResponseReceipt[],
+  field: 'inputTokens' | 'outputTokens',
+) {
+  let total = 0;
+  for (const receipt of receipts) {
+    const tokens = receipt[field];
+    if (tokens === null) return null;
+    total += tokens;
+  }
+  return total;
+}
+
 export function stepRecordSchema() {
   const commit = () => z.string().regex(/^[0-9a-f]{40}$/);
   const digest = () => z.string().regex(/^[0-9a-f]{64}$/);
@@ -48,19 +62,56 @@ export function stepRecordSchema() {
     admission_sha256: digest().optional(),
     launcher: keyed(/^(?!.*\.\.)[a-z0-9][a-z0-9./-]*$/, digest()),
     sessions: z.array(
-      z.strictObject({
-        role: z.enum(['scout', 'build', 'review']),
-        name: z.string().regex(stepName()).optional(),
-        model: z.string().min(1),
-        effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']),
-        completed: z.boolean(),
-        // Les enregistrements publiés avant la conservation du code de sortie ne portent pas ce champ.
-        exitCode: z.number().int().nonnegative().optional(),
-        stopped: z.boolean(),
-        durationSeconds: seconds(),
-        costUsd: z.number().min(0),
-        costByModel: keyed(modelName(), z.number().min(0)),
-      }),
+      z
+        .strictObject({
+          role: z.enum(['scout', 'build', 'review']),
+          provider: z.enum(['anthropic', 'openai']).optional(),
+          client: z.strictObject({ version: z.string().min(1), sha256: digest() }).optional(),
+          usage: z
+            .strictObject({ inputTokens: seconds().nullable(), outputTokens: seconds().nullable() })
+            .optional(),
+          responses: z
+            .array(
+              z.strictObject({
+                model: codexModelSchema,
+                request: z.int().positive(),
+                terminal: z.enum(['completed', 'failed', 'incomplete', 'interrupted']),
+                inputTokens: seconds().nullable(),
+                outputTokens: seconds().nullable(),
+              }),
+            )
+            .optional(),
+          name: z.string().regex(stepName()).optional(),
+          model: z.string().min(1),
+          effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']),
+          completed: z.boolean(),
+          // Les enregistrements publiés avant la conservation du code de sortie ne portent pas ce champ.
+          exitCode: z.number().int().nonnegative().optional(),
+          stopped: z.boolean(),
+          durationSeconds: seconds(),
+          costUsd: z.number().min(0).nullable(),
+          costByModel: keyed(modelName(), z.number().min(0)),
+        })
+        .refine((session) => {
+          if (session.provider !== 'openai')
+            return session.costUsd !== null && !session.client && !session.usage && !session.responses;
+          if (
+            session.role !== 'build' ||
+            !session.client ||
+            !session.usage ||
+            !session.responses ||
+            session.costUsd !== null
+          )
+            return false;
+          return (
+            codexModelSchema.safeParse(session.model).success &&
+            session.responses.every((r, i) => r.model === session.model && r.request === i + 1) &&
+            session.usage.inputTokens === observedTokens(session.responses, 'inputTokens') &&
+            session.usage.outputTokens === observedTokens(session.responses, 'outputTokens') &&
+            (!session.completed ||
+              (session.responses.length > 0 && session.responses.every((r) => r.terminal === 'completed')))
+          );
+        }),
     ),
     checks: z.array(
       z.strictObject({
@@ -99,6 +150,10 @@ export function publicCosts(costs: Readonly<Record<string, number>>): Record<str
 /** Ce qu'une session a laissé de mesurable. */
 export interface RecordedSession {
   role: 'scout' | 'build' | 'review';
+  provider?: 'anthropic' | 'openai';
+  client?: { version: string; sha256: string };
+  usage?: { inputTokens: number | null; outputTokens: number | null };
+  responses?: readonly import('./responses-proxy.js').ResponseReceipt[];
   /** Absent pour la construction. */
   name?: string | undefined;
   config: Pick<StepFile['build'], 'model' | 'effort'>;
@@ -139,6 +194,14 @@ export function buildRecord(parts: RecordParts): StepRecord {
     launcher: digests(parts.launcher),
     sessions: parts.sessions.map((session) => ({
       role: session.role,
+      ...(session.provider ? { provider: session.provider } : {}),
+      ...(session.client
+        ? {
+            client: session.client,
+            usage: session.usage,
+            responses: session.responses?.slice(),
+          }
+        : {}),
       name: session.name,
       model: session.config.model,
       effort: session.config.effort,
@@ -146,7 +209,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
       exitCode: session.exitCode,
       stopped: session.stopped,
       durationSeconds: session.durationSeconds,
-      costUsd: session.costUsd,
+      costUsd: session.provider === 'openai' ? null : session.costUsd,
       costByModel: publicCosts(session.costByModel),
     })),
     checks: parts.checks.map(({ name, passed, stopped, durationSeconds }) => ({
