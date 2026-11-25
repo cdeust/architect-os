@@ -18,7 +18,7 @@ const MANIFEST = 'reports/mutation-inventory.json';
 const NATIVE = 'reports/mutation/native.json';
 const aggregate = 'reports/mutation/mutation.json';
 
-async function command(repo: GateRepository, ...args: string[]) {
+export async function command(repo: GateRepository, ...args: string[]) {
   let output = '';
   const status = await runHostedGate(
     args,
