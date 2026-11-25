@@ -51,6 +51,8 @@ interface Scenario {
   folder: string;
   result?: TextResult;
   preview?: Preview;
+  /** The routing table Plan reads; the launcher's own when absent. */
+  routingTable?: string;
 }
 const scenarios = new WeakMap<World, Scenario>();
 function scenario(world: World): Scenario {
@@ -62,11 +64,12 @@ const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const load = (path: string) => JSON.parse(readFileSync(path, 'utf8'));
 const json = (path: string, value: unknown) => writeFileSync(path, JSON.stringify(value));
 
-function launch(args: readonly string[]): TextResult {
+function launch(args: readonly string[], routingTable?: string): TextResult {
   let out = '';
   let err = '';
   const code = runPlan({
     argv: [process.execPath, 'plan', ...args],
+    ...(routingTable === undefined ? {} : { routingTable: () => routingTable }),
     stdout: {
       write: (text) => {
         out += text;
@@ -282,7 +285,7 @@ Given('the Plan input is changed to {string}', function (this: World, change: st
 });
 
 function prepare(item: Scenario): TextResult {
-  const result = launch(['prepare', item.define, item.proposal, item.policy]);
+  const result = launch(['prepare', item.define, item.proposal, item.policy], item.routingTable);
   item.result = result;
   if (result.code === 0) item.preview = JSON.parse(result.out);
   return result;
@@ -354,7 +357,10 @@ When('the Plan decision is {string}', function (this: World, kind: string) {
 
 When('I materialize the Plan', function (this: World) {
   const item = scenario(this);
-  item.result = launch(['materialize', item.define, item.proposal, item.policy, item.decision, item.folder]);
+  item.result = launch(
+    ['materialize', item.define, item.proposal, item.policy, item.decision, item.folder],
+    item.routingTable,
+  );
   this.state['planFolder'] = item.folder;
   this.state['planManifest'] = item.preview?.manifest;
 });
@@ -681,4 +687,138 @@ Then('the prepared Plan contains the normalized criteria in the supplied order',
     data.acceptance_ids,
     load(item.proposal).acceptance_ids.map((id: string) => id.trim()),
   );
+});
+
+// Routed policies (docs/design/orchestration-fable-5-2.md, §13): the operator names the ticket and the providers it
+// admits, and Plan derives every model from the launcher's routing table.
+const launcherTable = () =>
+  readFileSync(new URL('../../../../packages/sandbox/routing.json', import.meta.url), 'utf8');
+
+function routedPolicy(item: Scenario, routing: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+  json(item.policy, { step: { routing, ...extra }, scout_questions: {} });
+}
+
+Given(
+  'the Plan policy routes the Step with the providers {string}',
+  function (this: World, providers: string) {
+    routedPolicy(scenario(this), { providers: providers.split(' ') });
+  },
+);
+
+Given(
+  'the Plan policy routes the Step to {string} with the providers {string}',
+  function (this: World, ticket: string, providers: string) {
+    routedPolicy(scenario(this), { ticket, providers: providers.split(' ') });
+  },
+);
+
+Given(
+  'the Plan policy routes the Step with one check and the providers {string}',
+  function (this: World, providers: string) {
+    routedPolicy(
+      scenario(this),
+      { providers: providers.split(' ') },
+      { checks: [{ name: 'types', command: ['npx', 'tsc', '-b'], limitSeconds: 600 }] },
+    );
+  },
+);
+
+Given('the Plan policy routes the Step with a scout named {string}', function (this: World, name: string) {
+  const item = scenario(this);
+  json(item.policy, {
+    step: { routing: { providers: ['anthropic'] }, scouts: [{ name }] },
+    scout_questions: { [name]: 'Where is the CI-only stop enforced?\n' },
+  });
+});
+
+Given('the first Define ticket is estimated at {int} points', function (this: World, points: number) {
+  const item = scenario(this);
+  const define = load(item.define);
+  define.handoff.tickets[0].story_points = points;
+  json(item.define, define);
+});
+
+Given('the routed Plan input is changed to {string}', function (this: World, change: string) {
+  const item = scenario(this);
+  const define = load(item.define);
+  const policy = load(item.policy);
+  switch (change) {
+    case 'a model named by the operator':
+      policy.step.build = { model: 'claude-opus-5-5', effort: 'high', limitSeconds: 60 };
+      break;
+    case 'two independent tickets':
+      define.handoff.tickets[1].depends_on = [];
+      break;
+    case 'no tickets':
+      delete define.handoff.tickets;
+      break;
+    case 'an unknown designated ticket':
+      policy.step.routing.ticket = 'TICKET-009';
+      break;
+    case 'only OpenAI admitted':
+      policy.step.routing.providers = ['openai'];
+      break;
+    case 'Google admitted':
+      policy.step.routing.providers = ['anthropic', 'google'];
+      break;
+    case 'a scout without its question':
+      policy.step.scouts = [{ name: 'history' }];
+      break;
+    case 'a broken routing table':
+      item.routingTable = launcherTable().replace('"status": "provisional"', '"status": "measured"');
+      break;
+    default:
+      throw new Error(`unknown change ${change}`);
+  }
+  json(item.define, define);
+  json(item.policy, policy);
+});
+
+When('the launcher routing table changes after approval', function (this: World) {
+  const table = JSON.parse(launcherTable());
+  table.roles.build.bands[1].candidates[0].limitSeconds = 4801;
+  scenario(this).routingTable = JSON.stringify(table);
+});
+
+function routedStepFile(item: Scenario) {
+  assert.equal(item.result?.code, 0, item.result?.err ?? '');
+  return JSON.parse(item.preview!.files['step.json']!);
+}
+
+Then(
+  'the previewed Step builds {string} with {string} on {string} at {int} points, starting on {string}',
+  function (this: World, model: string, effort: string, ticket: string, points: number, start: string) {
+    const step = routedStepFile(scenario(this));
+    assert.deepEqual({ model: step.build.model, effort: step.build.effort }, { model, effort });
+    assert.deepEqual(
+      { ticket: step.routing.ticket, points: step.routing.points, start: step.routing.start },
+      { ticket, points, start },
+    );
+  },
+);
+
+Then('the previewed Step escalates through the bands {string}', function (this: World, bands: string) {
+  const step = routedStepFile(scenario(this));
+  assert.equal(step.routing.ladder.map(({ band }: { band: number }) => band).join(' '), bands);
+});
+
+Then('the previewed Step reviews by a Google wait and names no other review', function (this: World) {
+  const step = routedStepFile(scenario(this));
+  assert.deepEqual(step.reviews, []);
+  for (const rung of step.routing.ladder)
+    assert.deepEqual(rung.review, { provider: 'google', limitSeconds: 1500, waiting: true });
+});
+
+Then('the previewed Step binds the launcher routing table', function (this: World) {
+  const item = scenario(this);
+  const step = routedStepFile(item);
+  assert.equal(step.routing.table_sha256, hash(launcherTable()));
+  assert.equal(item.preview!.manifest.files_sha256['step.json'], hash(item.preview!.files['step.json']!));
+});
+
+Then('the previewed scout {string} runs on {string}', function (this: World, name: string, model: string) {
+  const item = scenario(this);
+  const step = routedStepFile(item);
+  assert.deepEqual(step.scouts, [{ name, model, effort: 'low', limitSeconds: 300 }]);
+  assert.equal(item.preview!.files[`scout.${name}.md`], 'Where is the CI-only stop enforced?\n');
 });

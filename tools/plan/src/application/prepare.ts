@@ -7,8 +7,11 @@ export interface PlanSources {
   readonly policy: string;
 }
 
+type Tickets = ReturnType<typeof parseDefinePlanningReply>['handoff']['tickets'];
+
 export interface StepInputs {
-  readonly step: object;
+  /** The operator's Step policy, or, for a routed policy, the Step derived from the tickets of the handoff. */
+  readonly step: object | ((tickets: Tickets) => object);
   readonly questions: Readonly<Record<string, string>>;
 }
 
@@ -80,7 +83,8 @@ export function preparePlan(sources: PlanSources, inputs: StepInputs) {
     '```',
     '',
   ].join('\n');
-  const step = { ...inputs.step, tickets: handoff.tickets };
+  const policy = typeof inputs.step === 'function' ? inputs.step(handoff.tickets) : inputs.step;
+  const step = { ...policy, tickets: handoff.tickets };
   const files = { 'brief.md': brief, ...inputs.questions, 'step.json': JSON.stringify(step, null, 2) + '\n' };
   const manifest = {
     version: 1,

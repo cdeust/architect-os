@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { parsePlanApproval } from '@architect-os/contracts';
+import { RoutingError } from '@architect-os/sandbox';
 import { preparePlan } from './application/prepare.js';
 import { readStepInputs, isStepName } from './infrastructure/step-inputs.js';
 import { publishStepInputs } from './infrastructure/publish.js';
@@ -8,7 +10,12 @@ interface PlanProcess {
   readonly argv: readonly string[];
   readonly stdout: { write(text: string): unknown };
   readonly stderr: { write(text: string): unknown };
+  /** The text of the routing table; by default the launcher's own, `packages/sandbox/routing.json`. */
+  readonly routingTable?: () => string;
 }
+
+const launcherRoutingTable = () =>
+  readText(fileURLToPath(import.meta.resolve('@architect-os/sandbox/routing.json')));
 
 function readText(path: string): string {
   // Preserve BOMs and refuse ill-formed UTF-8 so the SHA-256 covers the actual source bytes.
@@ -39,9 +46,10 @@ export function runPlan(proc: PlanProcess): number {
       proposal: readText(proposal),
       policy: readText(policy),
     };
-    draft = preparePlan(sources, readStepInputs(sources.policy));
-  } catch {
-    return refuse('PLAN_INPUT_INVALID');
+    draft = preparePlan(sources, readStepInputs(sources.policy, proc.routingTable ?? launcherRoutingTable));
+  } catch (error) {
+    // A routing refusal is a closed code: the preview says why no session could be chosen.
+    return refuse(error instanceof RoutingError ? error.code : 'PLAN_INPUT_INVALID');
   }
   if (!isStepName(draft.manifest.step)) return refuse('PLAN_STEP_INVALID');
   if (action === 'prepare') {

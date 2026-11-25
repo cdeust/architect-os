@@ -203,3 +203,75 @@ Feature: Prepare and explicitly approve one step from Define v1
       | change    |
       | padded    |
       | reordered |
+
+  Scenario: A routed policy takes every model from the launcher table and the ticket the Step serves
+    Given a recorded delivery Plan input
+    And the saved Define handoff contains ticket estimates
+    And the Plan policy routes the Step with the providers "anthropic"
+    When I prepare the Plan once
+    Then the previewed Step builds "claude-sonnet-5-5" with "medium" on "TICKET-001" at 5 points, starting on "BAND_OF_POINTS"
+    And the previewed Step escalates through the bands "3 8"
+    And the previewed Step reviews by a Google wait and names no other review
+    And the previewed Step binds the launcher routing table
+
+  Scenario: A designated ticket of 13 points starts on Opus, with no band above it
+    Given a recorded delivery Plan input
+    And the saved Define handoff contains ticket estimates
+    And the Plan policy routes the Step to "TICKET-002" with the providers "anthropic"
+    When I prepare the Plan once
+    Then the previewed Step builds "claude-opus-5-5" with "high" on "TICKET-002" at 13 points, starting on "BAND_OF_POINTS"
+    And the previewed Step escalates through the bands "8"
+
+  Scenario: A small ticket starts on Haiku only when the Step has a check without a model
+    Given a recorded delivery Plan input
+    And the saved Define handoff contains ticket estimates
+    And the first Define ticket is estimated at 2 points
+    And the Plan policy routes the Step with one check and the providers "anthropic"
+    When I prepare the Plan once
+    Then the previewed Step builds "claude-haiku-5-5" with "medium" on "TICKET-001" at 2 points, starting on "BAND_OF_POINTS"
+    And the previewed Step escalates through the bands "1 3 8"
+
+  Scenario: Without a check, a small ticket starts one band higher, and the preview says why
+    Given a recorded delivery Plan input
+    And the saved Define handoff contains ticket estimates
+    And the first Define ticket is estimated at 2 points
+    And the Plan policy routes the Step with the providers "anthropic"
+    When I prepare the Plan once
+    Then the previewed Step builds "claude-sonnet-5-5" with "medium" on "TICKET-001" at 2 points, starting on "BAND_REQUIRES_CHECKS"
+    And the previewed Step escalates through the bands "3 8"
+
+  Scenario: A routed scout takes the scout model of the table and keeps the host's question
+    Given a recorded delivery Plan input
+    And the saved Define handoff contains ticket estimates
+    And the Plan policy routes the Step with a scout named "history"
+    When I prepare the Plan once
+    Then the previewed scout "history" runs on "claude-haiku-5-5"
+
+  Scenario: A changed routing table invalidates the old approval
+    Given a recorded delivery Plan input
+    And the saved Define handoff contains ticket estimates
+    And the Plan policy routes the Step with the providers "anthropic"
+    When I prepare the Plan once
+    And the operator records an approval of the preview
+    And the launcher routing table changes after approval
+    And I materialize the Plan
+    Then Plan refuses with "PLAN_NOT_APPROVED" and publishes nothing
+
+  Scenario Outline: A routed policy that cannot be routed produces no preview: <change>
+    Given a recorded delivery Plan input
+    And the saved Define handoff contains ticket estimates
+    And the Plan policy routes the Step with the providers "anthropic"
+    And the routed Plan input is changed to "<change>"
+    When I prepare the Plan once
+    Then Plan refuses with "<error>" and publishes nothing
+
+    Examples:
+      | change                         | error                       |
+      | a model named by the operator  | PLAN_INPUT_INVALID          |
+      | two independent tickets        | ROUTING_TICKET_AMBIGUOUS    |
+      | no tickets                     | ROUTING_TICKETS_REQUIRED    |
+      | an unknown designated ticket   | ROUTING_TICKET_UNKNOWN      |
+      | only OpenAI admitted           | ROUTING_NO_ADMITTED_BUILDER |
+      | Google admitted                | PLAN_INPUT_INVALID          |
+      | a scout without its question   | PLAN_INPUT_INVALID          |
+      | a broken routing table         | PLAN_INPUT_INVALID          |

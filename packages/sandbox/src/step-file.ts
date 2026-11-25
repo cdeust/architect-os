@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { ticketsSchema } from '@architect-os/contracts';
 
 import { codexModelSchema } from './models.js';
-import { routeBlockSchema } from './routing.js';
+import {
+  deriveRoute,
+  routeBlockSchema,
+  routingDigest,
+  type RoutingTable,
+} from './routing.js';
 
 export { codexModelSchema, type CodexModel } from './models.js';
 
@@ -100,3 +105,63 @@ export type StepFile = z.infer<ReturnType<typeof stepFileSchema>>;
 
 export const parseStepPolicy = (raw: unknown) => stepPolicySchema().parse(raw);
 export const parseStepFile = (raw: unknown): StepFile => stepFileSchema().parse(raw);
+
+/**
+ * La politique routée de l'opérateur (docs/design/orchestration-fable-5-2.md, §13) : le ticket que l'étape sert (à
+ * défaut, la racine unique du graphe), les fournisseurs qu'il admet, les noms des éclaireurs, les contrôles et le
+ * parallélisme. Les modèles, les efforts et les limites viennent de la table, jamais de l'opérateur.
+ */
+const routedPolicySchema = () =>
+  z.strictObject({
+    routing: z.strictObject({
+      ticket: z
+        .string()
+        .regex(/^TICKET-\d{3}$/)
+        .optional(),
+      providers: routeBlockSchema().shape.providers,
+    }),
+    scouts: z
+      .array(z.strictObject({ name: nameSchema() }))
+      .max(8)
+      .refine((scouts) => duplicated(scouts).length === 0, 'duplicate scout name')
+      .default([]),
+    checks: checksSchema(),
+    parallel: z.number().int().min(1).max(8).default(2),
+  });
+export type RoutedPolicy = z.infer<ReturnType<typeof routedPolicySchema>>;
+export const parseRoutedPolicy = (raw: unknown): RoutedPolicy => routedPolicySchema().parse(raw);
+
+/**
+ * Le `step.json` d'une politique routée : la première passe de la route pour la construction, le candidat de la table
+ * pour chaque éclaireur, aucune revue hors de l'échelle, et le bloc `routing` qui porte la route entière et l'empreinte
+ * de la table. Plan l'écrit ; Step le refait et compare.
+ */
+export function routedStep(
+  policy: RoutedPolicy,
+  table: RoutingTable,
+  tableText: string,
+  tickets: StepFile['tickets'],
+): StepFile {
+  const route = deriveRoute(table, {
+    tickets,
+    ticket: policy.routing.ticket,
+    providers: policy.routing.providers,
+    checks: policy.checks.length,
+    scouts: policy.scouts.length,
+  });
+  // Une session d'éclaireur ne porte pas de fournisseur : elle est toujours de Claude Code, sous le profil `reviewer`.
+  const { provider: _provider, ...scout } = route.scout ?? { provider: 'anthropic' };
+  return parseStepFile({
+    build: route.ladder[0]!.build,
+    scouts: policy.scouts.map(({ name }) => ({ name, ...scout })),
+    checks: policy.checks,
+    reviews: [],
+    parallel: policy.parallel,
+    ...(tickets ? { tickets } : {}),
+    routing: {
+      providers: policy.routing.providers,
+      table_sha256: routingDigest(tableText),
+      ...route,
+    },
+  });
+}
