@@ -107,6 +107,8 @@ module.exports = {
         'the verdicts of the mutation tool (rule 7); tools/deliver/src/infrastructure/host-process.ts, the single ' +
         'file through which the delivery command starts git, the client of the forge and the gate, on the host, ' +
         'where they need the credentials and the network a sandbox withholds (orchestration-fable-5-2.md, §14). ' +
+        'tools/test-gate/src/infrastructure/tree-lease.ts, the native lease of the checkout of the gate. The guard of ' +
+        'the checkout that the gate and the delivery share is started by packages/sandbox/src/git-worktree.ts. ' +
         'The host-side Define adapter starts the operator-selected plugin only through the separately bounded MCP SDK exception.',
       severity: 'error',
       from: {

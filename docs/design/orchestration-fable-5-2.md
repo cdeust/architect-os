@@ -791,8 +791,9 @@ Le mainteneur commite ce dossier avec le code de l'étape. Le dossier du poste g
 
 | Lancement | Variables prises de l'hôte | Posées par l'appelant |
 |---|---|---|
-| L'empreinte de l'arbre | `PATH`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR` (le dossier personnel en est sorti après la douzième passe, voir plus bas) | `GIT_INDEX_FILE`, pour l'index temporaire ; `GIT_CONFIG_GLOBAL` et `GIT_CONFIG_SYSTEM`, vers un fichier vide |
-| La porte | Les mêmes | `GIT_CONFIG_GLOBAL` et `GIT_CONFIG_SYSTEM`, vers un fichier vide |
+| L'empreinte de l'arbre | `PATH`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR` (le dossier personnel en est sorti après la douzième passe, voir plus bas) | `GIT_INDEX_FILE`, pour l'index temporaire ; `GIT_CONFIG_GLOBAL` et `GIT_CONFIG_SYSTEM`, vers un fichier vide ; `GIT_ATTR_NOSYSTEM=1`, sans fichier d'attributs du système |
+| La porte | Les mêmes | `GIT_CONFIG_GLOBAL` et `GIT_CONFIG_SYSTEM`, vers un fichier vide ; `GIT_ATTR_NOSYSTEM=1` |
+| Le garde de l'extraction, que la porte, son bail et la livraison partagent (`tools/test-gate/with-tree-lock.py`, lancé par `packages/sandbox/src/git-worktree.ts` avec un environnement vide) | Aucune : `PATH=/usr/bin:/bin` et `LC_ALL=C` sont fixés | `GIT_OPTIONAL_LOCKS=0`, `GIT_ATTR_NOSYSTEM=1`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` vers `/dev/null` |
 | La livraison, git et le client de la forge | La liste du fichier descriptif de la commande, prise dans un ensemble fermé : les mêmes, et ce qu'il faut pour s'identifier auprès de la forge sur un autre poste (`SSH_AUTH_SOCK`, `XDG_CONFIG_HOME`, `GH_TOKEN`, `GITHUB_TOKEN`) | `GIT_TERMINAL_PROMPT=0` |
 
 La commande de la porte que la livraison lance (`npm run gate`) garde l'environnement de l'hôte : c'est une suite entière, pas un appel à git, et ses propres appels à git passent par la règle ci-dessus.

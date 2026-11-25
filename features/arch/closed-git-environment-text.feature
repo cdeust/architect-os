@@ -1,5 +1,5 @@
 Feature: no production file that starts git gives process.env to a launch (docs/design/orchestration-fable-5-2.md §14)
-  This file checks the closed launch environments as text. It covers the fingerprint, the gate, the lease and delivery.
+  This file checks the closed launch environments as text. It covers the fingerprint, the gate, the lease, delivery and the guard of the checkout they share.
   The scenarios on the suite itself are in features/descriptive/closed-git-environment.feature.
 
   It is under features/arch, which the mutation profile leaves out; why is written in cucumber.mjs.
@@ -15,6 +15,7 @@ Feature: no production file that starts git gives process.env to a launch (docs/
         | packages/sandbox/src/tree-fingerprint.ts   |
         | tools/test-gate/src/infrastructure/git.ts  |
         | tools/deliver/src/infrastructure/host-process.ts |
+        | packages/sandbox/src/git-worktree.ts       |
 
     Scenario Outline: a copy of <file> that gives process.env to its launch is refused
       Given the text of the committed file "<file>"
@@ -26,6 +27,7 @@ Feature: no production file that starts git gives process.env to a launch (docs/
         | packages/sandbox/src/tree-fingerprint.ts   | { ...host, GIT_INDEX_FILE | { ...process.env, GIT_INDEX_FILE      |
         | tools/test-gate/src/infrastructure/git.ts  | env: closedEnvironment(), | env: process.env,                     |
         | tools/deliver/src/infrastructure/host-process.ts | env: environment, | env: { ...process.env, ...environment }, |
+        | packages/sandbox/src/git-worktree.ts       | env: {},                  | env: process.env,                     |
 
     Scenario Outline: what is not a launch given the whole environment is not refused: <text>
       Given the text of the committed file "packages/sandbox/src/tree-fingerprint.ts"
@@ -39,8 +41,8 @@ Feature: no production file that starts git gives process.env to a launch (docs/
 
   Rule: the list of names written in the fingerprint and the one written in the gate are the same
 
-    The two components share no code, so each writes the list of the variables of the host that git needs; the text of the
-    two files must give the same names, in the same order.
+    The gate does not take its git from the fingerprint, so each writes the list of the variables of the host that git
+    needs; the text of the two files must give the same names, in the same order.
 
     Scenario: the lists of packages/sandbox/src/tree-fingerprint.ts and of tools/test-gate/src/infrastructure/git.ts are the same
       Given the text of the committed file "tools/test-gate/src/infrastructure/git.ts"
