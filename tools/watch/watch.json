@@ -87,9 +87,20 @@
       "url": "https://code.claude.com/docs/en/permissions.md",
       "mechanisms": [
         "packages/sandbox/profiles/builder.json",
-        "packages/sandbox/profiles/reviewer.json"
+        "packages/sandbox/profiles/reviewer.json",
+        ".claude/settings.json"
       ],
-      "relies": "The syntax of the `permissions` rules a profile gives its session."
+      "relies": "The syntax of the `permissions` rules a profile gives its session, and of the committed `.claude/settings.json`: deny before allow, compound commands split, `env`, `sh -c` and `bash -c` not seen through, MCP tools named without parentheses."
+    },
+    {
+      "id": "hooks",
+      "kind": "page",
+      "url": "https://code.claude.com/docs/en/hooks.md",
+      "mechanisms": [
+        ".claude/settings.json",
+        "tools/session-guard/src/main.ts"
+      ],
+      "relies": "A PreToolUse command hook receives the call as JSON on stdin (`tool_name`, `tool_input.command`), its matcher is a regular expression when it holds other characters than letters, digits, `_`, `-`, spaces, `,` and `|`, `$CLAUDE_PROJECT_DIR` names the project root, and exit code 2 blocks the call with stderr shown to Claude; any other non-zero code lets it through."
     },
     {
       "id": "env-vars",

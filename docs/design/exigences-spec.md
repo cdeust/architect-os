@@ -19,8 +19,8 @@ Trois formes de décision :
 | I4 | impl:104-106 : donner à l'exécutant le résumé de l'historien git | Écartée | Le constructeur lit l'historique lui-même, à la demande. L'historien de Spec informe déjà le PRD | `packages/sandbox/features/profile.feature` (« reads the history of the repository on demand »), `features/sandbox/srt-runner.feature` (`git log` sous le vrai srt, profil `builder`) |
 | T1b | test:37 : les tests sont écrits par un autre que l'implémenteur | Écartée, compensée, puis prévue | La porte (aucun mutant survivant sur une ligne changée), plus R2 confrontée par un relecteur indépendant. Prévue : « Scenarios written apart, then frozen » (README, « What comes next ») | §3.2 |
 | T5 | test:63-64 : diff sémantique et portes de sécurité après implémentation | Diff sémantique écarté. Portes de sécurité : **défaut ouvert** | Aucune analyse statique de sécurité ne tourne dans `.github/workflows`. La revue de sécurité par Claude arrive dans la CI par une autre PR (workspace claude-security-review) : c'est une revue par un modèle, pas une analyse statique | §3.3 |
-| P7 | pr:84-85 : ne jamais fusionner, ni `gh pr merge` | Tenue par l'hôte (PR 2) | `.claude/settings.json` refuse `gh pr merge`, la fusion par `gh api` et `mcp__github__merge_pull_request`. La fusion appartient à l'automate du dépôt, sur approbation du propriétaire | PR 2 : scénario descriptif avec copies cassées. Ligne de fond côté GitHub : §5 |
-| P8 | pr:84 : jamais `--admin` | Tenue par l'hôte (PR 2), avec un défaut ouvert côté GitHub | Même fichier : `--admin` refusé | PR 2. Le ruleset laisse le rôle admin contourner « always » (§5) |
+| P7 | pr:84-85 : ne jamais fusionner, ni `gh pr merge` | Tenue par l'hôte, en barrière d'usage | Garde de session `tools/session-guard`, hook `PreToolUse` de `.claude/settings.json`, et règles `deny` du même fichier : une session de ce dépôt ne fusionne pas, ne pose pas le label d'approbation du propriétaire et ne fait pas mettre une branche à jour par la forge. La fusion appartient à l'automate du dépôt (§5) | `tools/session-guard/features/guard.feature` (189 cas), `features/descriptive/claude-files.feature` (copies cassées, hook lancé comme Claude Code le lance). Ce que la barrière ne voit pas : §5 |
+| P8 | pr:84 : jamais `--admin` | Tenue par l'hôte, en barrière d'usage, avec un défaut ouvert côté GitHub | Même garde et mêmes réglages : `--admin` refusé, et une poussée directe sur `main` ou `feat/gate-1a` aussi | Mêmes scénarios. Le ruleset laisse le rôle admin contourner « always » (§5) |
 | P1 | pr:46 : seule une action approuvée par un humain est exécutée | Tenue par l'hôte, dans la branche `delivery-preflight` | Phase 5 de `tools/deliver` conditionnée à une approbation liée au SHA du commit, impossible à sauter en silence. C'est le mécanisme de `delivery-maintenance.json` de cette branche | Transmise au worker de `delivery-preflight` |
 | P10 | pr:85-87 : un humain relit et fusionne | Comme P1 | `delivery-preflight` | Transmise |
 | P2 | pr:74-75 : pousser vers le distant du dépôt cible | Tenue par l'hôte, troisième PR | `deliver.json` par dépôt cible, et l'opération `openPullRequest` (§4) | À construire après la livraison de `delivery-preflight` |
@@ -141,9 +141,58 @@ Aucun texte libre d'une session (rapport, raison d'un constat) n'y entre : il vi
 
 ## 5. La fusion, et la barrière côté GitHub (P7, P8)
 
-La fusion d'une PR appartient à l'automate du dépôt, sur contrôles verts et approbation du propriétaire. Aucune session d'agent de ce dépôt ne fusionne. Les revues des bots sont consultatives.
+La fusion d'une PR appartient à l'automate du dépôt (`.github/workflows/pipeline-after-merge.yml`), sur contrôles verts et approbation du propriétaire. Aucune session d'agent de ce dépôt ne fusionne, ne pose le label d'approbation du propriétaire (`owner-approved`) ni ne contourne les règles d'une branche. Les revues des bots sont consultatives.
 
-Lu en lecture seule le 25 novembre 2026 (`gh api repos/cdeust/architect-os/rulesets/<id>`) : les deux rulesets actifs, `main` et `feat/gate-1a`, portent trois règles, `deletion`, `non_fast_forward` et `required_status_checks`, et un seul contournement : `RepositoryRole` 5 (admin), `bypass_mode: always`. Aucune règle n'exige de pull request ni d'approbation. Toute session qui tient le jeton du propriétaire peut donc pousser sur `main` sans contrôle, quoi que disent les réglages de Claude Code. Les refus de `.claude/settings.json` (PR 2) sont une seconde ligne : ils n'arrêtent ni un processus hors de Claude Code, ni une forme de commande qu'ils ne reconnaissent pas. La barrière réelle est côté GitHub, et c'est un défaut ouvert du ressort du propriétaire : un contournement limité aux pull requests (`bypass_mode: pull_request`) ou retiré, et une règle `pull_request` qui exige son approbation.
+**La barrière côté GitHub.** Lu en lecture seule le 26 novembre 2026 (`gh api repos/cdeust/architect-os/rulesets/<id>`), les deux rulesets actifs, `main` et `feat/gate-1a`, portent trois règles : `deletion`, `non_fast_forward` et `required_status_checks`. Ils ont un seul contournement : `RepositoryRole` 5 (admin), `bypass_mode: always`. Aucune règle n'exige de pull request ni d'approbation. Toute session qui tient le jeton du propriétaire peut donc pousser sur `main` sans contrôle, quoi que disent les réglages de Claude Code. La barrière réelle est côté GitHub. C'est un défaut ouvert du ressort du propriétaire : un contournement limité aux pull requests (`bypass_mode: pull_request`) ou retiré, et une règle `pull_request` qui exige son approbation.
+
+**La barrière d'usage, construite le 26 novembre 2026.** Elle a deux lignes, dans `.claude/settings.json`.
+
+1. Les règles `deny` de Claude Code : `gh pr merge`, `gh * --admin*`, la fusion et le label par `gh api` et `curl`, `env * gh *`, les outils MCP `mcp__github__merge_pull_request` et `mcp__github__update_pull_request_branch`. D'après la documentation (`code.claude.com/docs/en/permissions.md`, inscrite au registre de veille), une étoile peut être n'importe où et une commande composée est découpée. En revanche, `env`, `sh -c` et `bash -c` ne sont pas traversés.
+2. Le hook `PreToolUse` : `node "$CLAUDE_PROJECT_DIR/tools/session-guard/src/cli.ts"`, sur `Bash` et sur tout outil MCP. Il bloque par le code de sortie 2, et toute défaillance du garde est un refus (`code.claude.com/docs/en/hooks.md`, inscrite au registre).
+
+La règle du garde est grossière et fermée par défaut. Elle ne reconnaît aucune forme de commande : la relecture de Spec #406 a montré en quatre tours qu'une liste de formes en oublie toujours une.
+
+- **Normalisation.** Le texte entier de l'appel est lu comme le shell lit un mot : guillemets et barres obliques retirés, casse ignorée, blancs réduits. L'appel est la commande pour `Bash`, le nom et toute l'entrée pour un outil MCP.
+- **Refus.** Le garde refuse dès qu'un véhicule vers GitHub et un objet interdit sont présents, n'importe où dans l'appel.
+  - Véhicules : le mot `gh` par tout chemin, `curl`, `wget`, `http`, `hub`, une adresse `github.com`, un outil `mcp__` dont le nom contient `github`.
+  - Objets :
+    - le label par son nom, par son identifiant (`LA_…`), par une mutation GraphQL de labels, ou par une valeur que l'appel ne montre pas (`--add-label "$…"`, `--input`, `=@fichier`) ;
+    - une fusion ;
+    - `--admin` ;
+    - une mise à jour de branche par la forge.
+  - Une poussée git vers une branche protégée est aussi refusée, même à côté d'une autre commande.
+- **Exception.** Une lecture n'est reconnue que si l'appel entier en est une, sans reste : `gh pr view|list|checks|diff|status`, `gh issue view|list`, `gh label list`, `gh run view|list|watch`. Elle ne contient ni séparateur, ni redirection, ni substitution, ni variable. Tout le reste est refusé.
+
+**Ce qu'elle ne voit pas, écrit ici sans l'enjoliver, et tenu comme tel par des cas qui passent** (`guard.feature`, « declared in the design ») :
+
+- un label construit à l'exécution sans écrire son nom (`xargs -a f.txt gh pr edit 3 --add-label`) ;
+- un alias ou un script écrit plus tôt et lancé ensuite sans rien nommer (`gh ok 3`, `bash x.sh`, un fichier écrit par l'outil Write, que le garde ne lit pas) ;
+- une configuration de client lue depuis un fichier (`curl -K cfg.txt`) ;
+- un interpréteur (`python3 -c …`) ;
+- une extension de `gh`, un client HTTP qu'il ne nomme pas ;
+- tout processus hors de Claude Code ;
+- et, surtout, le jeton du propriétaire : les sessions agissent sous son compte.
+
+C'est une parade contre l'erreur et l'injection naïve, pas une preuve d'identité ni une frontière de sécurité.
+
+Ce qu'elle refuse en trop, accepté parce qu'elle est fermée par défaut :
+
+- un commentaire ou un titre qui nomme le label (on passe alors par `--body-file`) ;
+- `gh pr view … | grep owner-approved` ;
+- une poussée de branche suivie d'une commande qui nomme `main` ;
+- toute écriture `gh api` par `--input` ;
+- un appel MCP GitHub qui cite le label.
+
+**Menaces (STRIDE) de la barrière d'usage.**
+
+| Menace | Décision |
+| --- | --- |
+| Usurpation | Le garde ne prouve aucune identité : une session agit sous le compte du propriétaire. L'approbation qui compte est celle que l'automate vérifie côté GitHub, pas ce que la session déclare |
+| Altération | Une session pourrait réécrire `.claude/settings.json` ou le garde dans son worktree. Le profil `builder` refuse l'écriture de `.claude/settings.json` du worktree. La livraison ne protège pas encore ces chemins : la liste `judgePaths` de la branche `delivery-preflight` couvre `.claude/` et doit y ajouter `tools/session-guard/`. Une session interactive du mainteneur n'a aucune de ces barrières |
+| Répudiation | Un refus écrit une ligne fixe sur stderr, que Claude Code montre à la session. Aucune trace durable : le journal de l'automate et celui de GitHub font foi |
+| Divulgation | Le garde ne lit que l'appel et n'écrit qu'une raison d'une liste fermée, jamais un texte de l'appel |
+| Déni de service | Les refus en trop sont nommés plus haut, avec leur contournement par fichier. Le garde est une fonction pure, bornée par la taille de l'appel |
+| Élévation | Le contournement admin du ruleset reste ouvert (plus haut) : c'est le seul vrai verrou, et il n'est pas dans ce dépôt |
 
 ## 6. Le sens inverse du contrat : un run de Spec déjà passé la porte
 

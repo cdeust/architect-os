@@ -13,7 +13,34 @@
       "Read(**/*.pem)",
       "Read(**/*.key)",
       "Bash(git merge-base *)",
-      "Bash(gh pr update-branch *)"
+      "Bash(gh pr update-branch *)",
+      "Bash(gh pr merge)",
+      "Bash(gh pr merge *)",
+      "Bash(gh * --admin*)",
+      "Bash(gh api *merge*)",
+      "Bash(gh api *Merge*)",
+      "mcp__github__merge_pull_request",
+      "mcp__github__update_pull_request_branch",
+      "Bash(gh *pr merge*)",
+      "Bash(curl */merge*)",
+      "Bash(gh *owner-approved*)",
+      "Bash(curl *owner-approved*)",
+      "Bash(gh *addLabelsToLabelable*)",
+      "Bash(gh *labelIds*)",
+      "Bash(env *gh *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/session-guard/src/cli.ts\""
+          }
+        ]
+      }
     ]
   }
 }

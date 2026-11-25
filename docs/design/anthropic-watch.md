@@ -61,7 +61,7 @@ Le mainteneur avait d'abord fait de « sécurité ou coût » un filtre, et éca
 
 | Poste | Coût | Ce qui le tient bas |
 |---|---|---|
-| Le contrôle | 5 secondes contre les 28 sources réelles, aucun modèle ; un run par semaine | Une lecture par source et par run |
+| Le contrôle | 5 secondes contre les 32 sources réelles, aucun modèle ; un run par semaine | Une lecture par source et par run |
 | La lecture, quand il est rouge | Des jetons, à proportion de ce qui est lu et du modèle qui lit | `--keep` : la différence d'une page, jamais la page entière ; chaque lecture consigne au relevé ce qu'elle a coûté et ce qu'elle a décidé. À venir (`orchestration-fable-5-2.md`, table de routage) : un lecteur par source, en parallèle, sur le plus petit modèle qui sait le faire, dans le profil en lecture seule de la boucle |
 | La première lecture (étape 3) | Les 22 pages et les deux index, une fois | Rapportée au journal |
 

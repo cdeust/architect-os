@@ -4,7 +4,7 @@ Feature: The register tools/watch/watch.json (a descriptive file: its schema, th
 
     Scenario: the register committed in this repository is accepted by the tool
       When the register committed in this repository is loaded
-      Then the watch register is accepted with 31 sources
+      Then the watch register is accepted with 32 sources
 
     Scenario: the register committed in this repository is in the form the tool writes
       When the register committed in this repository is loaded

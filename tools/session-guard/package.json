@@ -1,0 +1,11 @@
+{
+  "name": "@architect-os/session-guard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "The PreToolUse hook of the Claude Code sessions of this repository (docs/design/exigences-spec.md, P7 and P8): it refuses a merge, an administrator bypass and a direct push to the protected branches, whatever wrapper the command is given in. Built-ins only: Claude Code runs it with plain Node, from source.",
+  "imports": {
+    "#guard/*.js": "./src/*.ts"
+  }
+}

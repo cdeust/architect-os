@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 5860.5" width="1400" height="5860.5" role="img" aria-labelledby="t d" font-family="Arial">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 5958.5" width="1400" height="5958.5" role="img" aria-labelledby="t d" font-family="Arial">
   <!--
   Typography (SVG units)
   family = Arial
@@ -401,8 +401,8 @@
 </g>
 </g>
 <g id="loop-delivery" role="group" aria-labelledby="phase-delivery">
-  <rect x="24" y="2866" width="1352" height="313" rx="6" fill="#ffffff" stroke="#d0d7de"/>
-  <rect x="36" y="2880" width="216" height="285" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <rect x="24" y="2866" width="1352" height="411" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="36" y="2880" width="216" height="383" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
   <text x="50" y="2915" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-delivery">8 · Delivery</text>
   <text x="50" y="2946" data-type-role="brick-text" font-size="17" fill="#57606a">Host · Deliver</text>
   <rect x="50" y="2962" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
@@ -425,6 +425,14 @@
   <text x="792" y="3094" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
   <text x="283" y="3123" data-type-role="brick-text" font-size="17" fill="#57606a">Open a pull request on the target repository,</text>
   <text x="283" y="3147" data-type-role="brick-text" font-size="17" fill="#57606a">its body rendered from record.json.</text>
+</g>
+<g role="group" aria-label="Session guard · ready">
+  <rect x="269" y="3165" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
+  <text x="283" y="3193" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Session guard</text>
+  <rect x="757" y="3173" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="792" y="3192" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="3221" data-type-role="brick-text" font-size="17" fill="#57606a">No session merges, sets the approval or bypasses:</text>
+  <text x="283" y="3245" data-type-role="brick-text" font-size="17" fill="#57606a">deny rules and a PreToolUse hook.</text>
 </g>
 <g role="group" aria-label="Human gate · next">
   <rect x="854" y="2880" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
@@ -459,6 +467,7 @@
   <path data-from="loop-reviews" data-to="loop-gate" d="M144 2608 V2631" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
   <path data-from="loop-gate" data-to="loop-delivery" d="M144 2840 V2863" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
 </g>
+<g transform="translate(0 98)">
   <g transform="translate(0 1582.5)">
   <g id="runtime-isolation" role="group" aria-labelledby="isolation-title">
     <line x1="24" y1="1626.5" x2="1376" y2="1626.5" stroke="#d0d7de"/>
@@ -796,4 +805,5 @@
   <text x="36" y="5816.5" data-type-role="brick-text" font-size="17" fill="#57606a">pin moves alone, with the gate as its proof · 5 · record the decision and the reading</text>
   <rect x="1302" y="5726.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
   <text x="1334" y="5744.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+</g>
 </svg>
