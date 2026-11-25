@@ -209,3 +209,56 @@ Feature: Gate source files have an unambiguous mutation perimeter
       | command | path                           |
       | debt    | reports/mutation/mutation.json |
       | realign | mutation-debt.json             |
+
+  Scenario: a configuration replaced by a link is refused as a named workspace error, before any command reads it
+    Given a gate repository
+    And the gate configuration is absent
+    And the gate repository holds a symlink at "tools/test-gate/gate.json"
+    When the gate plans the "linux" job
+    Then the gate exits with 1
+    And the gate output is:
+      """
+      porte de test : GATE_SOURCE_LINK : tools/test-gate/gate.json
+      """
+
+  Scenario Outline: a workspace read gives nothing for a source under <parent>, and a required source is refused
+    Given a gate repository
+    And the gate repository file "src/leaf.mjs" reads:
+      """
+      export const witness = 1;
+      """
+    Then the gate workspace reads nothing at "<path>"
+
+    Examples:
+      | parent              | path                    |
+      | a missing directory | src/missing/leaf.mjs    |
+      | a regular file      | src/leaf.mjs/inner.mjs  |
+
+  Scenario: a workspace that keeps its reports elsewhere writes there only the paths under reports/
+    Given a gate repository
+    Then the gate workspace writes "reports/out.json" to its report place and "notes/reports/out.json" to its tree
+
+  Scenario: a production file whose name begins with an exclamation mark is a literal pattern, not an exclusion
+    Given a gate repository
+    And the gate configuration takes the production files of the root as well
+    And the gate first parent is committed
+    And the gate repository file "!leaf.mjs" reads:
+      """
+      export const witness = 1;
+      """
+    And the gate head is committed
+    When the gate plans the "linux" job
+    Then the gate exits with 0
+    And the gate writes exactly the literal mutation pattern "./!leaf.mjs"
+
+  Scenario: a repository under a directory with braces is refused before a pattern is built, since Stryker would expand them
+    Given a gate repository under a braced directory
+    And the gate first parent is committed
+    And the gate repository file "src/leaf.mjs" reads:
+      """
+      export const witness = 1;
+      """
+    And the gate head is committed
+    When the gate plans the "linux" job
+    Then the gate exits with 1
+    And the gate output includes "GATE_MUTATION_PATH_PATTERN : "

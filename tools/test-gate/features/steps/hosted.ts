@@ -146,7 +146,7 @@ Then('the hosted collector rejects an active mutant without static metadata', as
     patterns: string[];
   };
   assert.throws(
-    () => projectNative(incomplete, lots, patterns),
+    () => projectNative(incomplete, lots, patterns, true),
     /marquage statique absent pour un mutant actif/,
   );
   repo.write(path, incomplete);

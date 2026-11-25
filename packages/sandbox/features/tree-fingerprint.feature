@@ -151,6 +151,12 @@ Feature: the fingerprint of the tree of a worktree
       Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
       And the witness program of the nested repository has not run
 
+    Scenario: a gitlink that the commit records, with no directory to mark it, is refused
+      Given a throwaway repository with one commit
+      And the commit of the repository records a gitlink "sub" with no directory in the tree
+      When I try to take the fingerprint of it
+      Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+
     Scenario: the same program is started by a git asked for the status of that commit with none of the options of the fingerprint, so that the scenarios above can fail
       Given a throwaway repository with one commit
       And a repository nested in the repository at "sub" names a witness program as a filter
@@ -234,3 +240,38 @@ Feature: the fingerprint of the tree of a worktree
     And the file "ignored/.git" of the repository holds "gitdir: /missing-gitdir\n"
     When I take the fingerprint of the repository
     Then the fingerprint is clean
+
+  Rule: the guard of the checkout compares its bytes with the commit, and refuses what it cannot read
+
+    The delivery asks it whether its checkout is clean, and the fingerprint, the gate and the delivery ask it for the
+    first nested marker, before any git call would walk the tree (packages/sandbox/src/git-worktree.ts).
+
+    Scenario: a checkout that holds the bytes of its commit is clean
+      Given a throwaway repository with one commit
+      Then the guard of the checkout finds it clean
+
+    Scenario Outline: a checkout that differs from its commit is not clean: <change>
+      Given a throwaway repository with one commit
+      And the file "<file>" of the repository holds "<text>"
+      Then the guard of the checkout finds it not clean
+
+      Examples:
+        | change            | file     | text                      |
+        | a tracked file    | a.txt    | changed\n                 |
+        | an untracked file | b.txt    | new\n                     |
+        | a nested marker   | sub/.git | gitdir: /missing-gitdir\n |
+
+    Scenario Outline: the guard refuses <place> with its fixed message, whether asked for the cleanliness or the markers
+      Given <place>
+      Then the guard of the checkout refuses to say whether it is clean with "GATE_CHECKOUT_UNREADABLE"
+      And the guard of the checkout refuses to name its markers with "GATE_CHECKOUT_UNREADABLE"
+
+      Examples:
+        | place                                         |
+        | a directory that does not exist               |
+        | a throwaway repository with a directory it cannot list |
+
+    Scenario: the guard says a directory that is not a repository is not a checkout, and walks it for markers
+      Given a directory that is not a repository
+      Then the guard of the checkout refuses to say whether it is clean with "GATE_CHECKOUT_UNREADABLE"
+      And the guard of the checkout names no marker

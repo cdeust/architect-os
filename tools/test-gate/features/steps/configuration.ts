@@ -63,7 +63,7 @@ Then(
 Then('the gate changes against the first parent are:', function (text: string) {
   const repo = repository(this);
   const git = new GitRepository(repo.dir);
-  const changes = changedFiles(git, new Workspace(repo.dir), git.commits().firstParent);
+  const changes = changedFiles(git, new Workspace(repo.dir), git.commits().firstParent, repo.layout());
   const lines = changes.map((change) =>
     `${change.path}${change.deleted ? ' (supprimé)' : ''}: ${change.lines.join(',')}`.trimEnd(),
   );
@@ -80,9 +80,9 @@ Then('the Gate path selector filters tracked, changed and untracked files', func
   const repo = repository(this);
   const git = new GitRepository(repo.dir);
   const workspace = new Workspace(repo.dir);
-  const selected = (file: string) => file.endsWith('.mjs');
+  // The production files of the fixture configuration: src/**/*.mjs and mod/*/src/**/*.mjs.
   const paths = (parent: string | null) =>
-    changedFiles(git, workspace, parent, selected).map(({ path }) => path);
+    changedFiles(git, workspace, parent, repo.layout()).map(({ path }) => path);
 
   repo.write('src/kept.mjs', 'export const kept = 1;\n');
   repo.write('note.txt', 'a tracked file outside the requested scope\n');

@@ -16,6 +16,7 @@ import {
 } from '../../src/infrastructure/mutation-shards.js';
 import { requireCompleteMutationLots, type Lot } from '../../src/infrastructure/mutation-lot-proof.js';
 import { requireNativeMutationReport } from '../../src/infrastructure/mutation-report.js';
+import { literalStrykerPattern } from '../../src/infrastructure/stryker-pattern.js';
 import { FIXTURES, Given, Then, When, repository } from './repository.js';
 
 export function fixtureIgnorer(repo: ReturnType<typeof repository>) {
@@ -256,10 +257,21 @@ When('the native plugin instruments the inventory files', async function () {
       },
     ]),
   );
+  // Stryker reports the patterns it was given: the literal pattern of each file (stryker.config.mjs).
   repo.write(
     'reports/mutation/native.json',
-    JSON.stringify({ files, config: { mutate: lots.map(({ file }) => file) } }),
+    JSON.stringify({
+      files,
+      config: { mutate: lots.map(({ file }) => literalStrykerPattern(repo.dir, file)) },
+    }),
   );
+});
+
+Then('the native report names {string} as the file it mutated', function (pattern: string) {
+  const { config } = JSON.parse(repository(this).read('reports/mutation/native.json')) as {
+    config: { mutate: string[] };
+  };
+  assert.deepEqual(config.mutate, [pattern]);
 });
 
 When('the gate inventories native shard {string}', function (shard: string) {
@@ -491,6 +503,17 @@ When('the gate receives a mutation lot report with {string}', function (variant:
       location: { start: { line: 5, column: 26 }, end: { line: 5, column: 30 } },
     });
   }
+  if (variant === 'ignored outside the lots') {
+    // On the changed line, with a replacement the instrumenter never gives: no lot holds it.
+    mutants.push({
+      id: 'extra',
+      status: 'Ignored',
+      statusReason: 'fixture reason',
+      mutatorName: 'StringLiteral',
+      replacement: '"fixture"',
+      location: { start: { line: 1, column: 1 }, end: { line: 1, column: 7 } },
+    });
+  }
   if (variant === 'ignored without reason') {
     first.status = 'Ignored';
     delete first.statusReason;
@@ -615,7 +638,7 @@ Then('the aggregate rejects empty proofs, foreign coverage and conflicting sourc
   ] as const) {
     await assert.rejects(combineNative(repo.dir, [proof, other], [], undefined, true), message);
   }
-  assert.throws(() => projectNative('not JSON', []), /JSON invalide/);
+  assert.throws(() => projectNative('not JSON', [], undefined, false), /JSON invalide/);
 });
 
 Then('the complete native union refuses missing identities and extra bookkeeping rows', async function () {

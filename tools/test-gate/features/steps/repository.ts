@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { Given as CucumberGiven, Then as CucumberThen, When as CucumberWhen } from '@cucumber/cucumber';
 import { parseRawDiff } from '../../src/domain/diff.js';
+import { parseGateConfig, type GateConfig } from '../../src/infrastructure/config.js';
 import { changedFiles, CONFIG_PATH, runGate } from '../../src/infrastructure/gate.js';
 import { git, gitWithOptions, GitRepository } from '../../src/infrastructure/git.js';
 
@@ -120,6 +121,13 @@ export class GateRepository {
     ]);
   }
 
+  /** The configuration of this repository, the layout `changedFiles` takes its production files from. */
+  layout(): GateConfig {
+    const config = parseGateConfig(this.read(CONFIG_PATH));
+    assert.ok(!('failure' in config), JSON.stringify(config));
+    return config;
+  }
+
   rev(name: string): string {
     return git(this.dir, ['rev-parse', name]).trim();
   }
@@ -180,8 +188,14 @@ export function names(list: string): string[] {
   return list === '' ? [] : list.split(', ');
 }
 
-Given(/^a gate repository( under a bracketed directory)?$/, function (bracketed?: string) {
-  const created = new GateRepository(this.admitFixture, bracketed ? 'aos-gate-[one]-' : undefined);
+Given(/^a gate repository(?: under a (bracketed|braced) directory)?$/, function (kind: string | null) {
+  // An absent optional group is given as null.
+  const prefixes = new Map([
+    ['bracketed', 'aos-gate-[one]-'],
+    ['braced', 'aos-gate-{one}-'],
+  ]);
+  const prefix = kind === null ? undefined : prefixes.get(kind);
+  const created = new GateRepository(this.admitFixture, prefix);
   this.state['gateRepository'] = created;
   this.cleanups.push(() => rmSync(created.dir, { recursive: true, force: true }));
 });
@@ -488,7 +502,10 @@ Given(
 Then('the gate refuses to read its changes with {string}', function (message: string) {
   const repo = repository(this);
   const read = new GitRepository(repo.dir);
-  assert.throws(() => changedFiles(read, new Workspace(repo.dir), read.commits().firstParent), { message });
+  assert.throws(
+    () => changedFiles(read, new Workspace(repo.dir), read.commits().firstParent, repo.layout()),
+    { message },
+  );
 });
 
 Given(
@@ -611,8 +628,9 @@ Then('the gate detects the raw link at {string} without opening the path', funct
   const { firstParent } = read.commits();
   assert.ok(firstParent !== null);
   read.patch = () => assert.fail('must refuse before asking for a patch');
-  workspace.read = () => assert.fail('must refuse before opening the source');
-  assert.throws(() => changedFiles(read, workspace, firstParent, (file) => file === path), {
+  // Every source read goes through readBytes: replaced, it shows that the path is never opened.
+  workspace.readBytes = () => assert.fail('must refuse before opening the source');
+  assert.throws(() => changedFiles(read, workspace, firstParent, repo.layout()), {
     message: 'GATE_SOURCE_LINK : ' + path,
   });
 });
@@ -638,6 +656,37 @@ Then('the gate workspace closes its descriptors after source reads', function ()
   assert.equal(workspace.read('src/leaf.mjs'), 'export const witness = 1;\n');
   assert.equal(workspace.read('src/missing.mjs'), null);
   assert.equal(count(), before);
+});
+
+Then('the gate workspace reads nothing at {string}', function (path: string) {
+  const workspace = repository(this).workspace();
+  assert.equal(workspace.read(path), null);
+  assert.equal(workspace.readSource(path), null);
+  assert.throws(() => workspace.requireSource(path), { message: 'GATE_SOURCE_MISSING : ' + path });
+  assert.equal(workspace.requireSource('src/leaf.mjs'), 'export const witness = 1;\n');
+});
+
+Then(
+  'the gate workspace writes {string} to its report place and {string} to its tree',
+  function (report: string, source: string) {
+    const repo = repository(this);
+    const place = mkdtempSync(join(tmpdir(), 'aos-gate-reports-'));
+    this.cleanups.push(() => rmSync(place, { recursive: true, force: true }));
+    const workspace = new Workspace(repo.dir, (path) => join(place, path));
+    workspace.write(report, 'report\n');
+    workspace.write(source, 'source\n');
+    assert.equal(readFileSync(join(place, report), 'utf8'), 'report\n');
+    assert.equal(repo.read(source), 'source\n');
+    assert.equal(existsSync(join(place, source)), false);
+    assert.equal(repo.exists(report), false);
+  },
+);
+
+Given('the gate configuration takes the production files of the root as well', function () {
+  const repo = repository(this);
+  const config = JSON.parse(repo.read(CONFIG_PATH));
+  config.production.include = ['*.mjs', ...config.production.include];
+  repo.write(CONFIG_PATH, JSON.stringify(config));
 });
 
 Given('the HOME of the process holds a .gitconfig that sets core.autocrlf', function () {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { hasAdmittedRun } from '@architect-os/sandbox/runtime-context';
 import { ProcessGate } from '../../src/infrastructure/process-gate.js';
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DeliveryEntry, Repository, RuleSuite } from '../../src/domain/ports.js';
 import { GitRepository } from '../../src/infrastructure/git-repository.js';
@@ -327,3 +327,18 @@ Given('a linked worktree with an external gitdir is inside the delivery reposito
 Given('the nested delivery marker points to a missing gitdir', function () {
   writeFileSync(join(gitOf(this).work, 'linked/.git'), 'gitdir: /missing-gitdir\n');
 });
+
+// A gitlink with no directory in the checkout: only the recorded mode 160000 can show it, no marker can.
+Given(
+  'a gitlink {string} is recorded only in the {word} of the delivery repository',
+  function (name: string, place: string) {
+    const { git, work } = gitOf(this);
+    const head = git(work, 'rev-parse', 'HEAD').trim();
+    git(work, 'update-index', '--add', '--cacheinfo', `160000,${head},${name}`);
+    if (place === 'head') {
+      git(work, 'commit', '-qm', 'gitlink');
+      git(work, 'rm', '-q', '--cached', name);
+    } else assert.equal(place, 'index');
+    assert.equal(existsSync(join(work, name)), false);
+  },
+);

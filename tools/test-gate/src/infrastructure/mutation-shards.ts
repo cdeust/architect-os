@@ -36,8 +36,8 @@ export interface NativeProof {
 export function projectNative(
   text: string,
   lots: readonly Lot[],
-  patterns?: readonly string[],
-  requireStatic = patterns !== undefined,
+  patterns: readonly string[] | undefined,
+  requireStatic: boolean,
 ): NativeProof {
   const report = requireStatic ? requireNativeMutationReport(text) : parseMutationReport(text);
   if ('failure' in report) throw new Error(report.failure);

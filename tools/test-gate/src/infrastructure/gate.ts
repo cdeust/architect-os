@@ -49,51 +49,49 @@ function staticSet(paths: readonly string[], read: (path: string) => string): St
   return { ids, errors };
 }
 
-/** The diff against the first parent (every tracked file without one), plus untracked files as whole additions. */
+/**
+ * The production files of `layout` that changed: the diff against the first parent (every tracked file without one),
+ * plus untracked files as whole additions. Each is read as a mutation source, refused when Stryker could not take it
+ * literally or would not count its lines as git does.
+ */
 export function changedFiles(
   repository: GitRepository,
   workspace: Workspace,
   firstParent: string | null,
-  include: (path: string) => boolean = () => true,
-  layout?: Layout,
+  layout: Layout,
 ): ChangedFile[] {
   const untracked = repository.untracked();
-  const isSource = (path: string) => layout !== undefined && isProduction(layout, path);
-  const whole = (path: string) => {
-    const source = isSource(path) ? workspace.readSource(path) : workspace.read(path);
-    if (source === null) return [];
-    if (isSource(path)) validateMutationSource(path, source);
-    return [wholeFile(path, source)];
-  };
+  const include = (path: string) => isProduction(layout, path);
+  const source = (path: string) => validateMutationSource(path, workspace.requireSource(path));
   return [
     ...(firstParent === null
-      ? repository.tracked().filter(include).flatMap(whole)
+      ? repository
+          .tracked()
+          .filter(include)
+          .flatMap((path) => {
+            // A file of the index that the checkout no longer holds is no addition of a root commit.
+            const text = workspace.readSource(path);
+            return text === null ? [] : [wholeFile(path, validateMutationSource(path, text))];
+          })
       : parseRawDiff(repository.changedPaths(firstParent))
           .filter(({ path }) => include(path))
           .map(({ path, deleted, link }) => {
             if (link) throw new Error('GATE_SOURCE_LINK : ' + path);
-            if (!deleted && isSource(path)) {
-              const source = workspace.readSource(path);
-              if (source === null) throw new Error('GATE_SOURCE_MISSING : ' + path);
-              validateMutationSource(path, source);
-            }
+            if (!deleted) source(path);
             return {
               path,
               deleted,
               lines: deleted ? [] : changedLines(path, repository.patch(firstParent, path)),
             };
           })),
-    ...untracked.filter(include).flatMap((path) => {
-      const added = whole(path);
-      if (added.length === 0) throw new Error('GATE_SOURCE_MISSING : ' + path);
-      return added;
-    }),
+    ...untracked.filter(include).map((path) => wholeFile(path, source(path))),
   ];
 }
 
-function validateMutationSource(path: string, source: string): void {
+function validateMutationSource(path: string, source: string): string {
   requireLiteralMutationPath(path);
   requireSharedLineCoordinates(path, source);
+  return source;
 }
 
 /** The mutation debt registry and the perimeter Stryker must mutate: rule 5's, plus the files of retired entries. */
@@ -108,6 +106,8 @@ export function mutationScope(
   const production = workspace.glob(config.production);
   return { debt, perimeter: perimeterOf(config, changes, retiredFiles(debt, production)) };
 }
+
+type MutationScope = ReturnType<typeof mutationScope>;
 
 /** The inputs of rule 7, null when gate.json declares neither a canary nor a replay. */
 function controlOf(config: GateConfig, workspace: Workspace, mutationText: string | null) {
@@ -166,13 +166,7 @@ async function replayCommand(
   if (mode !== 'all') {
     const repository = new GitRepository(root);
     const { firstParent } = repository.commits();
-    const changes = changedFiles(
-      repository,
-      workspace,
-      firstParent,
-      (file) => isProduction(config, file),
-      config,
-    );
+    const changes = changedFiles(repository, workspace, firstParent, config);
     const { perimeter, debt } = mutationScope(config, changes, workspace, repository, firstParent);
     selected = (file, mutant) => file === canary?.file || inPerimeter(perimeter, file, mutant);
     if (sharded) {
@@ -234,6 +228,25 @@ function replayShardPath(shard: number): string {
 }
 
 /** A production checkout lease can revoke or publish the checked Linux result. */
+/** The mutation report of a job with mutation, checked against the lots of its perimeter, and the controls of rule 7. */
+async function mutationEvidence(
+  config: GateConfig,
+  root: string,
+  workspace: Workspace,
+  scope: MutationScope,
+) {
+  const path = config.reports.mutation;
+  const text = workspace.read(path);
+  const parsed = text === null ? { failure: `${path} absent` } : parseMutationReport(text);
+  const report =
+    'failure' in parsed
+      ? parsed
+      : await (
+          await import('./local-mutation-proof.js')
+        ).verifyVerdictInventory(root, scope.perimeter, parsed, (file) => workspace.readSource(file));
+  return { ...scope, report, control: controlOf(config, workspace, text) };
+}
+
 export interface GateReceiptAuthority {
   discard(): void;
   publish(config: GateConfig, workspace: Workspace): void;
@@ -251,16 +264,17 @@ async function gate(
 ) {
   const repository = new GitRepository(root);
   const { head, firstParent } = repository.commits();
-  if (!job.mutation) repository.requireNoNested();
-  const scope = job.mutation
-    ? mutationScope(
-        config,
-        changedFiles(repository, workspace, firstParent, (file) => isProduction(config, file), config),
-        workspace,
-        repository,
-        firstParent,
-      )
-    : null;
+  let scope: MutationScope | null = null;
+  // A job with mutation refuses a nested repository when it lists its untracked changes; a job without, here.
+  if (job.mutation)
+    scope = mutationScope(
+      config,
+      changedFiles(repository, workspace, firstParent, config),
+      workspace,
+      repository,
+      firstParent,
+    );
+  else repository.requireNoNested();
   const reports = config.reports;
   if (command === 'plan') {
     // The canary is mutated whole in every run with mutation: rule 7 reads it before any verdict on the code.
@@ -302,15 +316,6 @@ async function gate(
   })();
   const baseText = workspace.read(reports.base);
   const base: BaseInput = baseText === null ? null : parseGateBase(baseText);
-  const mutationText = scope === null ? null : workspace.read(reports.mutation);
-  const parsed =
-    mutationText === null ? { failure: `${reports.mutation} absent` } : parseMutationReport(mutationText);
-  const mutationReport =
-    scope === null || 'failure' in parsed
-      ? parsed
-      : await (
-          await import('./local-mutation-proof.js')
-        ).verifyVerdictInventory(root, scope.perimeter, parsed, (file) => workspace.readSource(file));
   const verdict = evaluate({
     job: job.name,
     head,
@@ -319,14 +324,8 @@ async function gate(
     staticParent,
     run,
     base,
-    mutation:
-      scope === null
-        ? null
-        : {
-            ...scope,
-            report: mutationReport,
-            control: controlOf(config, workspace, mutationText),
-          },
+    // A job without mutation reads no mutation report.
+    mutation: scope === null ? null : await mutationEvidence(config, root, workspace, scope),
   });
   const report = renderReport(verdict);
   workspace.write(reports.report, report);
@@ -411,13 +410,7 @@ export async function runGate(
     try {
       const repository = new GitRepository(root);
       const { head, firstParent } = repository.commits();
-      const changes = changedFiles(
-        repository,
-        workspace,
-        firstParent,
-        (file) => isProduction(config, file),
-        config,
-      );
+      const changes = changedFiles(repository, workspace, firstParent, config);
       const { debt, perimeter } = mutationScope(config, changes, workspace, repository, firstParent);
       if ('failure' in debt.current) throw new Error('registre de dette illisible : ' + debt.current.failure);
       if (debt.parent !== null && 'failure' in debt.parent)

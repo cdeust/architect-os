@@ -242,6 +242,18 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       Given the nested delivery marker points to a missing gitdir
       Then the delivery repository holds a nested repository
 
+    Scenario Outline: delivery finds a gitlink recorded only in the <place>, with no directory to mark it
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository is at the commit "c1"
+      And a gitlink "sub" is recorded only in the <place> of the delivery repository
+      Then the delivery repository holds a nested repository
+
+      Examples:
+        | place |
+        | index |
+        | head  |
+
   Rule: git enters no repository nested in the tree, whatever the tree says of it
 
     The nested repository of the fixture names a witness program as a filter of one of its files and as the program of

@@ -124,6 +124,15 @@ Feature: the gate reads its own repository, whatever the environment it was star
       Then the gate refuses to read its changes with "dépôt imbriqué dans l'arbre : sub/"
       And the witness program of the gate has not run
 
+    Scenario: a job without mutation, which reads no change, refuses the nested repository as well
+      When the gate checks the "macos" job
+      Then the gate exits with 1
+      And the gate output is:
+        """
+        porte de test : dépôt imbriqué dans l'arbre : sub/
+        """
+      And the witness program of the gate has not run
+
     Scenario: a nested repository that the head records is refused, and its program does not run
       Given the gate head is committed
       Then the gate refuses to read its changes with "dépôt imbriqué dans l'arbre : sub"

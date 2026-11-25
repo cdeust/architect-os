@@ -13,15 +13,15 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import type { FileSet } from '../domain/layout.js';
 
 // Darwin's <sys/fcntl.h> O_NOFOLLOW_ANY is not exported by Node (node_modules/@types/node/fs.d.ts).
 const DARWIN_NOFOLLOW_ANY = 0x20000000;
 
-/** Linux exposes the pinned directory for each relative open through procfs (proc_pid_fd(5)). */
+/** Linux exposes the pinned directory for each relative open through procfs (proc_pid_fd(5)). `path` is absolute. */
 function openOnLinux(path: string, flags: number): number {
-  const names = path.slice(1).split('/');
+  const names = relative('/', path).split('/');
   const leaf = names.pop() as string;
   const directoryFlags = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
   let directory = openSync('/', directoryFlags);
@@ -93,6 +93,13 @@ export class Workspace {
     } catch {
       throw new Error('GATE_SOURCE_UTF8 : ' + path);
     }
+  }
+
+  /** A source the tree must hold, git having listed it: its absence is refused. */
+  requireSource(path: string): string {
+    const source = this.readSource(path);
+    if (source === null) throw new Error('GATE_SOURCE_MISSING : ' + path);
+    return source;
   }
 
   readBytes(path: string): Buffer | null {

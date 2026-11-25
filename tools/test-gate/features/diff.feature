@@ -91,7 +91,6 @@ Feature: Test gate diff against the first parent
       And the gate head is committed
       Then the gate changes against the first parent are:
         """
-        src/.gitattributes: 1
         src/gone.mjs: 1
         """
 
@@ -112,7 +111,6 @@ Feature: Test gate diff against the first parent
       And the gate head is committed
       Then the gate changes against the first parent are:
         """
-        .gitignore: 2
         src/gone.mjs: 1
         """
 
@@ -125,7 +123,9 @@ Feature: Test gate diff against the first parent
         """
 
     Scenario: a path that git would quote in a header keeps its name and its lines
-      Given the gate repository file 'src/we"ird\name.mjs' reads:
+      A backslash is quoted too, but Stryker normalizes it: such a source is refused (mutation-perimeter.feature).
+
+      Given the gate repository file 'src/we"ird.mjs' reads:
         """
         one
         two
@@ -133,7 +133,7 @@ Feature: Test gate diff against the first parent
       And the gate head is committed
       Then the gate changes against the first parent are:
         """
-        src/we"ird\name.mjs: 1,2
+        src/we"ird.mjs: 1,2
         """
 
     Scenario: an attribute that makes git call a rewritten file unchanged does not hide its line
@@ -153,7 +153,6 @@ Feature: Test gate diff against the first parent
         """
       Then the gate changes against the first parent are:
         """
-        .gitattributes: 1
         src/id.mjs: 1
         """
 

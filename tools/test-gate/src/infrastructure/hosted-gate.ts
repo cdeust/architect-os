@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import { canaryViolations } from '../domain/canary.js';
-import { isProduction } from '../domain/layout.js';
 import { inPerimeter } from '../domain/mutation.js';
 import { replayCases, replayViolations, type ReplayEntry } from '../domain/replay.js';
 import { jobOf, parseGateConfig, ReplayRecordSchema } from './config.js';
@@ -70,13 +69,7 @@ export async function runHostedGate(
       throw new Error('configuration Linux sans canari, mutation ou rejeu');
     const repository = new GitRepository(root);
     const { head, firstParent } = repository.commits();
-    const changes = changedFiles(
-      repository,
-      workspace,
-      firstParent,
-      (file) => isProduction(config, file),
-      config,
-    );
+    const changes = changedFiles(repository, workspace, firstParent, config);
     const { debt, perimeter } = mutationScope(config, changes, workspace, repository, firstParent);
     if ('failure' in debt.current || (debt.parent !== null && 'failure' in debt.parent))
       throw new Error('registre de dette illisible');
@@ -93,7 +86,7 @@ export async function runHostedGate(
       if (!workspace.readBytes(directory + '/' + MANIFEST)?.equals(Buffer.from(text)))
         throw new Error('inventaire différent du périmètre courant pour le lot ' + number);
       const native = read(directory + '/' + NATIVE);
-      const proof = projectNative(native, lots, patterns);
+      const proof = projectNative(native, lots, patterns, true);
       if (canaryViolations(canary, proof.report).length !== 0)
         throw new Error('canari de mutation refusé dans le lot ' + number);
       const projected = requireNativeMutationReport(jsonText(proof.raw));

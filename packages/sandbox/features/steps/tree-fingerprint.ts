@@ -13,6 +13,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+import { checkoutIsClean, visibleNestedMarker } from '../../src/git-worktree.js';
 import { fingerprintTree, type TreeFingerprint } from '../../src/tree-fingerprint.js';
 import { Given, Then, When } from './helpers.js';
 
@@ -512,10 +513,61 @@ Then(
   },
 );
 
+// A gitlink with no directory in the checkout: only its recorded mode 160000 shows it, no marker can.
+Given(
+  'the commit of the repository records a gitlink {string} with no directory in the tree',
+  function (name: string) {
+    const { directory } = fp(this);
+    const head = git(directory, 'rev-parse', 'HEAD').trim();
+    git(directory, 'update-index', '--add', '--cacheinfo', `160000,${head},${name}`);
+    git(directory, 'commit', '-qm', 'gitlink');
+    assert.equal(existsSync(join(directory, name)), false);
+  },
+);
+
 Given('a linked worktree from the second repository is nested at {string}', function (name: string) {
   const { directory, other } = fp(this);
   const nested = join(directory, name);
   assert.ok(other);
   git(other, 'worktree', 'add', '--detach', nested, 'HEAD');
   assert.ok(readFileSync(join(nested, '.git'), 'utf8').startsWith(`gitdir: ${other}/.git/worktrees/`));
+});
+
+// --- the guard of the checkout (git-worktree.ts) ------------------------------------------------------------------
+
+Given('a directory that does not exist', function () {
+  const directory = throwaway(this);
+  rmSync(directory, { recursive: true });
+});
+
+Given('a throwaway repository with a directory it cannot list', function () {
+  const directory = throwaway(this);
+  commitOne(directory, 'a.txt');
+  const closed = join(directory, 'closed');
+  mkdirSync(closed, { mode: 0o000 });
+  // Cleanups run in reverse order: the directory is opened again before the repository is removed.
+  this.cleanups.push(() => chmodSync(closed, 0o700));
+});
+
+Then('the guard of the checkout finds it clean', function () {
+  assert.equal(checkoutIsClean(fp(this).directory), true);
+});
+
+Then('the guard of the checkout finds it not clean', function () {
+  assert.equal(checkoutIsClean(fp(this).directory), false);
+});
+
+Then(
+  'the guard of the checkout refuses to say whether it is clean with {string}',
+  function (message: string) {
+    assert.throws(() => checkoutIsClean(fp(this).directory), { message });
+  },
+);
+
+Then('the guard of the checkout refuses to name its markers with {string}', function (message: string) {
+  assert.throws(() => visibleNestedMarker(fp(this).directory, ''), { message });
+});
+
+Then('the guard of the checkout names no marker', function () {
+  assert.equal(visibleNestedMarker(fp(this).directory, ''), undefined);
 });
