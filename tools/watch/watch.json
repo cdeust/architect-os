@@ -160,9 +160,50 @@
       "url": "https://code.claude.com/docs/en/github-actions.md",
       "mechanisms": [
         ".github/workflows/claude.yml",
-        ".github/workflows/claude-review.yml"
+        ".github/workflows/claude-review.yml",
+        ".github/workflows/claude-security-review.yml"
       ],
-      "relies": "The inputs of `anthropics/claude-code-action` the two workflows give."
+      "relies": "The inputs of `anthropics/claude-code-action` the three workflows give."
+    },
+    {
+      "id": "security-review-action",
+      "kind": "page",
+      "url": "https://raw.githubusercontent.com/anthropics/claude-code-security-review/main/action.yml",
+      "mechanisms": [
+        "docs/infrastructure.md",
+        ".github/workflows/claude-security-review.yml"
+      ],
+      "relies": "Why `anthropics/claude-code-security-review` is not the engine of the security review: an API key only (`claude-api-key`), a retired default model, `@anthropic-ai/claude-code` and pip packages not pinned, a cache marker saved before the key is checked. A change here can lift a condition of its adoption.",
+      "read": {
+        "sha256": "22dbc162466fc31f66336537db01dfb20e3eb72dd52aa58e093b8d3eb4730138",
+        "on": "2026-11-25"
+      }
+    },
+    {
+      "id": "security-review-prompt",
+      "kind": "page",
+      "url": "https://raw.githubusercontent.com/anthropics/claude-code-security-review/main/claudecode/prompts.py",
+      "mechanisms": [
+        ".github/claude-security-review/scan-instructions.txt"
+      ],
+      "relies": "The audit prompt of `get_security_audit_prompt`, adapted at commit 0c6a49f into the scan instructions of the security review.",
+      "read": {
+        "sha256": "a779b599d3badeddff9d01f9a1cbe7828c03a4eb17b4717782131963c825d5d0",
+        "on": "2026-11-25"
+      }
+    },
+    {
+      "id": "security-review-filter",
+      "kind": "page",
+      "url": "https://raw.githubusercontent.com/anthropics/claude-code-security-review/main/claudecode/claude_api_client.py",
+      "mechanisms": [
+        ".github/claude-security-review/false-positive-filtering.txt"
+      ],
+      "relies": "The default filtering section of `_generate_single_finding_prompt`, adapted at commit 0c6a49f into the false-positive filter of the security review; and `validate_api_access`, whose retired model turns the upstream filter off.",
+      "read": {
+        "sha256": "32b5ca67c3d26b65e2467f289b7df054ff9fea6873e2111bcb7259ab3931d05e",
+        "on": "2026-11-25"
+      }
     },
     {
       "id": "agent-sdk-typescript",

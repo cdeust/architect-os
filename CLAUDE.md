@@ -87,6 +87,7 @@ A behaviour that a descriptive file can express is not written in code. Code is 
 | How a commit is delivered: remote, branches, trial prefix, required jobs, append-only files, bounds | `tools/deliver/deliver.json`                                                  | `tools/deliver/src/infrastructure/deliver-schema.ts` |
 | The free-space floors of each environment a runtime root may be marked with, their provenance       | `tools/runtime/admission.json`                                                | `tools/runtime/src/infrastructure/policy-file.ts`    |
 | Where the admission takes its host Node from: installer and runner locations, in order              | `tools/runtime/node-locations`                                                | `aos`                                                |
+| The audit, the false-positive filter and the restriction of Claude Code of the CI security review   | `.github/claude-security-review/*`                                            | `.github/workflows/claude-security-review.yml`       |
 | Review agents and commands                                                                          | `.claude/agents/*.md`, `.claude/commands/*.md`                                | Claude Code                                          |
 
 Every descriptive file has a scenario that loads the committed file, checks it against its schema, and shows that a broken copy is rejected; a broken file makes `npm run check` red.
