@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["findings"],
+  "properties": {
+    "findings": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file",
+          "line",
+          "severity",
+          "category",
+          "description",
+          "exploit_scenario",
+          "recommendation",
+          "confidence"
+        ],
+        "properties": {
+          "file": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "line": { "type": "integer", "minimum": 1 },
+          "severity": { "enum": ["HIGH", "MEDIUM"] },
+          "category": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "exploit_scenario": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "recommendation": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "confidence": { "type": "number", "minimum": 0.8, "maximum": 1 }
+        }
+      }
+    }
+  }
+}

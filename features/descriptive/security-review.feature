@@ -49,6 +49,12 @@ Feature: The Claude security review
       | that prints the full output                   |
       | that allows Bash                              |
       | that loads other MCP servers                  |
+      | with a reviewer that may comment              |
+      | without the shape of the answer               |
+      | with a review job that may write              |
+      | with a publish job that holds the secret      |
+      | with a publish job that may write contents    |
+      | with a publish job that runs a script of the default branch |
 
   Scenario: the security review blocks no merge
     The resolver merges on the gate and the Claude review alone, and the ruleset requires the two gate jobs alone.
@@ -89,3 +95,41 @@ Feature: The Claude security review
       | with a GitHub expression   |
       | without its provenance     |
       | without the license notice |
+
+  Scenario: the shape of the findings is the schema the publisher checks
+    Then the shape of the findings is a schema the publisher checks and the command line can carry
+
+  Scenario Outline: the publisher neutralises a finding whose text tries to <attempt>
+    The reviewer's JSON is untrusted: a prompt injected by the diff shapes it. An app such as Codex obeys an @mention
+    whoever writes it, and a merge resolver reads a line `Verdict:`.
+    Then the publisher renders a finding whose text tries to <attempt>
+    And the comment has no @mention, no verdict line, no HTML and no stray code span
+
+    Examples:
+      | attempt           |
+      | mention an app    |
+      | pass a verdict    |
+      | hide HTML         |
+      | close a code span |
+
+  Scenario: the publisher says when no finding passed
+    Then the publisher renders an empty list as a comment that says no finding passed
+
+  Scenario Outline: the publisher refuses an answer <kind>
+    Then the publisher refuses an answer <kind>
+
+    Examples:
+      | kind                             |
+      | not JSON                         |
+      | without findings                 |
+      | with another key                 |
+      | with a finding of another key    |
+      | with a finding without its file  |
+      | with a LOW finding               |
+      | with a low confidence            |
+      | with a line that is not a number |
+      | with a fractional line           |
+      | with a line that is a boolean    |
+      | with a confidence that is a boolean |
+      | with a description too long      |
+      | with too many findings           |
