@@ -41,7 +41,7 @@ Positional paths given to `cucumber-js` are merged with the `paths` of `cucumber
 
 Git lists changed paths in the raw diff and counts lines using LF. The gate refuses changed production sources containing a lone CR, U+2028 or U+2029 with `GATE_SOURCE_LINE_SEPARATOR`. CRLF is one line break for both Git and Stryker. `GATE_MUTATION_PATH_PATTERN` refuses paths containing glob metacharacters, backslashes or line terminators before the gate builds a mutation pattern.
 
-The gate reads only regular files. It opens source paths without following a link in any component, and refuses a current symlink in the raw diff before asking for its patch. `GATE_SOURCE_LINK` names the refused path. Source paths stay within the checkout, and reports use their admitted directory.
+The gate reads only regular files. It opens source paths without following a link in any component, and refuses a current symlink in the raw diff before asking for its patch. `GATE_SOURCE_LINK` names the refused path. Source paths stay within the checkout, and reports use their admitted directory. A link that git lists where a directory of production sources could be (a directory segment of a production glob) is refused with `GATE_SOURCE_LINK` as well: git lists it as one path and the sources Node loads through it would be in no perimeter.
 
 Stryker derives the report file list from mutant results. For a requested file whose result is missing or empty, the gate directly instruments its checkout source. It accepts an empty result only when no discovered mutant overlaps any changed line. It still checks that source for mutation directives. The regression scenarios are in `tools/test-gate/features/mutation-perimeter.feature` and `tools/test-gate/features/mutation.feature`.
 

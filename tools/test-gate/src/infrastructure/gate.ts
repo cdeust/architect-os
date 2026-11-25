@@ -7,7 +7,14 @@ import {
   wholeFile,
   type ChangedFile,
 } from '../domain/diff.js';
-import { isJobFeature, isProduction, matchesAny, type Job, type Layout } from '../domain/layout.js';
+import {
+  isJobFeature,
+  isProduction,
+  matchesAny,
+  mayHoldProduction,
+  type Job,
+  type Layout,
+} from '../domain/layout.js';
 import { requireLiteralMutationPath } from '../domain/mutate-pattern.js';
 import { retiredFiles } from '../domain/debt.js';
 import { canaryViolations } from '../domain/canary.js';
@@ -61,29 +68,34 @@ export function changedFiles(
   layout: Layout,
 ): ChangedFile[] {
   const untracked = repository.untracked();
+  const tracked = firstParent === null ? repository.tracked() : [];
+  const changed = firstParent === null ? [] : parseRawDiff(repository.changedPaths(firstParent));
   const include = (path: string) => isProduction(layout, path);
+  // Git lists a link as one path: where a directory of sources could be, Node would load through it what is not listed.
+  for (const path of [
+    ...tracked,
+    ...changed.filter(({ deleted }) => !deleted).map(({ path }) => path),
+    ...untracked,
+  ])
+    if (!include(path) && mayHoldProduction(layout, path)) workspace.requireNotLink(path);
   const source = (path: string) => validateMutationSource(path, workspace.requireSource(path));
   return [
-    ...(firstParent === null
-      ? repository
-          .tracked()
-          .filter(include)
-          .flatMap((path) => {
-            // A file of the index that the checkout no longer holds is no addition of a root commit.
-            const text = workspace.readSource(path);
-            return text === null ? [] : [wholeFile(path, validateMutationSource(path, text))];
-          })
-      : parseRawDiff(repository.changedPaths(firstParent))
-          .filter(({ path }) => include(path))
-          .map(({ path, deleted, link }) => {
-            if (link) throw new Error('GATE_SOURCE_LINK : ' + path);
-            if (!deleted) source(path);
-            return {
-              path,
-              deleted,
-              lines: deleted ? [] : changedLines(path, repository.patch(firstParent, path)),
-            };
-          })),
+    ...tracked.filter(include).flatMap((path) => {
+      // A file of the index that the checkout no longer holds is no addition of a root commit.
+      const text = workspace.readSource(path);
+      return text === null ? [] : [wholeFile(path, validateMutationSource(path, text))];
+    }),
+    ...changed
+      .filter(({ path }) => include(path))
+      .map(({ path, deleted, link }) => {
+        if (link) throw new Error('GATE_SOURCE_LINK : ' + path);
+        if (!deleted) source(path);
+        return {
+          path,
+          deleted,
+          lines: deleted ? [] : changedLines(path, repository.patch(firstParent as string, path)),
+        };
+      }),
     ...untracked.filter(include).map((path) => wholeFile(path, source(path))),
   ];
 }

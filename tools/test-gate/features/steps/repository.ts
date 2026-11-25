@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { Given as CucumberGiven, Then as CucumberThen, When as CucumberWhen } from '@cucumber/cucumber';
 import { parseRawDiff } from '../../src/domain/diff.js';
+import { mayHoldProduction } from '../../src/domain/layout.js';
 import { parseGateConfig, type GateConfig } from '../../src/infrastructure/config.js';
 import { changedFiles, CONFIG_PATH, runGate } from '../../src/infrastructure/gate.js';
 import { git, gitWithOptions, GitRepository } from '../../src/infrastructure/git.js';
@@ -679,6 +680,13 @@ Then(
     assert.equal(repo.read(source), 'source\n');
     assert.equal(existsSync(join(place, source)), false);
     assert.equal(repo.exists(report), false);
+  },
+);
+
+Then(
+  'the directory {string} may hold a production file of the gate configuration: {word}',
+  function (path: string, may: string) {
+    assert.equal(mayHoldProduction(repository(this).layout(), path), may === 'yes');
   },
 );
 

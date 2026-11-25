@@ -262,3 +262,75 @@ Feature: Gate source files have an unambiguous mutation perimeter
     When the gate plans the "linux" job
     Then the gate exits with 1
     And the gate output includes "GATE_MUTATION_PATH_PATTERN : "
+
+  Rule: a link where a directory of production sources could be is refused, since Node would load through it sources the gate never lists
+
+    Git lists a link as one path and never descends into it: a directory of sources replaced by a link to a copy elsewhere
+    showed its files as deleted, with no line to mutate, while the tests ran the copy.
+
+    Scenario: a tracked directory of sources replaced by a committed link is refused
+      Given a gate repository
+      And the gate repository has a source with a LF separator at "src/leaf.mjs"
+      And the gate first parent is committed
+      And the gate repository replaces "src" with a directory link to a disposable sibling
+      And the gate head is committed
+      When the gate plans the "linux" job
+      Then the gate exits with 1
+      And the gate output is:
+        """
+        porte de test : GATE_SOURCE_LINK : src
+        """
+
+    Scenario: an untracked link where a module directory could be is refused
+      Given a gate repository
+      And the gate first parent is committed
+      And the gate head is committed
+      And the gate repository replaces "mod/one" with a directory link to a disposable sibling
+      When the gate plans the "linux" job
+      Then the gate exits with 1
+      And the gate output is:
+        """
+        porte de test : GATE_SOURCE_LINK : mod/one
+        """
+
+    Scenario: a link of a root commit where the directory of sources could be is refused
+      Given a gate repository
+      And the gate repository replaces "src" with a directory link to a disposable sibling
+      And the gate head is committed
+      When the gate plans the "linux" job
+      Then the gate exits with 1
+      And the gate output is:
+        """
+        porte de test : GATE_SOURCE_LINK : src
+        """
+
+    Scenario: a regular file where a module directory could be, and a link outside the sources, are accepted
+      Given a gate repository
+      And the gate first parent is committed
+      And the gate repository file "mod/notes" reads:
+        """
+        a note
+        """
+      And the gate repository holds a symlink at "docs/latest"
+      And the gate head is committed
+      And the gate repository file "mod/draft" reads:
+        """
+        an untracked note
+        """
+      When the gate plans the "linux" job
+      Then the gate exits with 0
+
+    Scenario Outline: the directory "<path>" may hold a production file of the fixture configuration: <may>
+      Given a gate repository
+      Then the directory "<path>" may hold a production file of the gate configuration: <may>
+
+      Examples:
+        | path           | may | reason                                         |
+        | src            | yes | the first segment of src/**/*.mjs              |
+        | src/a/b        | yes | under the ** of src/**/*.mjs                   |
+        | mod            | yes | the first segment of mod/*/src/**/*.mjs        |
+        | mod/one        | yes | the * of mod/*/src/**/*.mjs                    |
+        | mod/one/src    | yes | every segment of mod/*/src matched             |
+        | mod/one/lib    | no  | lib is not src                                 |
+        | docs           | no  | no glob begins with docs                       |
+        | leaf.mjs       | no  | a file segment is not a directory: *.mjs root  |
