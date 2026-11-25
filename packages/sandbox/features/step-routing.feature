@@ -193,3 +193,69 @@ Feature: a routed Step plays its ladder, one band at a time, on objective signal
       And the published record field "routing.passes.0.signal" is "accepted"
       And the published record field "sessions.1.pass" is 1
       And the published record field "outcome" is "passed"
+
+  Rule: the review of a promoted pass rules on every blocking finding of the pass before it
+
+    Scenario: the review of pass 2 receives the findings of pass 1 with their ids and resolves them all: the step passes
+      Given a step folder
+      And the launcher routing table sends reviews to Gemini, then Opus, and builds on Sol alone from 3 and 8 points
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "" and the providers "anthropic openai"
+      And the review session 1 writes the fixture "review-request-changes.jsonl"
+      And the review session 2 writes the fixture "review-prior-resolved.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 0
+      And the brief of review session 1 does not contain "## Findings of the previous review"
+      And the brief of review session 2 contains "## Findings of the previous review"
+      And the brief of review session 2 contains "- PF-1 correctness \"src/a.ts\":3 \"wrong\""
+      And the brief of review session 2 contains "- PF-2 proposal \"src/a.ts\":3 \"wrong\""
+      And the published record field "routing.passes.1.signal" is "accepted"
+      And the published record field "outcome" is "passed"
+
+    Scenario Outline: the review of pass 2 that does not rule exactly on the findings it received is invalid: <case>
+      Given a step folder
+      And the launcher routing table sends reviews to Gemini, then Opus, and builds on Sol alone from 3 and 8 points
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "" and the providers "anthropic openai"
+      And the review session 1 writes the fixture "review-request-changes.jsonl"
+      And the review session 2 writes the fixture "<fixture>"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 1
+      And the retained verdict "pass-2.review.independent.verdict.json" is invalid because "<why>"
+      And the published record field "routing.passes.1.signal" is "review_invalid"
+      And the published record field "outcome" is "refused"
+
+      Examples:
+        | case                    | fixture                       | why                                                         |
+        | one id omitted          | review-prior-omitted.jsonl    | la revue ne statue pas sur PF-2                             |
+        | no status at all        | review-accept-proposal.jsonl  | la revue ne statue pas sur PF-1, PF-2                       |
+        | an id it did not get    | review-prior-invented.jsonl   | la revue statue sur un constat inconnu ou répété : PF-3     |
+        | an id given twice       | review-prior-repeated.jsonl   | la revue statue sur un constat inconnu ou répété : PF-1     |
+
+    Scenario: a finding the review of pass 2 says is unresolved blocks, and on the last band the step is refused
+      Given a step folder
+      And the launcher routing table sends reviews to Gemini, then Opus, and builds on Sol alone from 3 and 8 points
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "" and the providers "anthropic openai"
+      And the review session 1 writes the fixture "review-request-changes.jsonl"
+      And the review session 2 writes the fixture "review-prior-unresolved.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 1
+      And the published record field "routing.passes.1.signal" is "changes_requested"
+      And the published record field "outcome" is "refused"
+
+    Scenario: a first review that rules on findings no pass gave it is invalid
+      Given a step folder
+      And the launcher routing table sends reviews to Gemini, then Opus, and builds on Sol alone from 8 points
+      And the step folder holds a routed step.json for a ticket of 13 points, with the checks "" and the providers "anthropic openai"
+      And the review session writes the fixture "review-prior-resolved.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the retained verdict "review.independent.verdict.json" is invalid because "la revue statue sur un constat inconnu ou répété : PF-1, PF-2"
+      And the published record field "outcome" is "refused"
+
+    Scenario: a pass promoted on a failed check gives its review no prior findings
+      Given a step folder
+      And the launcher routing table sends reviews to Gemini, then Opus, and builds on Sol alone from 3 and 8 points
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "types" and the providers "anthropic openai"
+      And the check 1 ends with the exit code 1
+      And the review session writes the fixture "review-accept-proposal.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 0
+      And the brief of review session 1 does not contain "## Findings of the previous review"

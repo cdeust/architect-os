@@ -51,6 +51,8 @@ Feature: the descriptive files of the sessions: the build and review prompts, an
       | no proposal level            |
       | no reading of the bar by git |
       | no section on the checks of the host |
+      | no section on the findings of the previous review |
+      | no refusal of an omitted id |
       | no reading of the checks as data |
       | no word that a green check is an indication and not a proof |
       | no ban on running a listed command again |
@@ -69,3 +71,6 @@ Feature: the descriptive files of the sessions: the build and review prompts, an
       | an open top level          |
       | an open finding            |
       | a finding key not required |
+      | a third status of a prior finding |
+      | prior findings required    |
+      | an open prior finding      |

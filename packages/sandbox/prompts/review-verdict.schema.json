@@ -18,7 +18,19 @@
         "additionalProperties": false
       }
     },
-    "not_checked": { "type": "array", "items": { "type": "string" } }
+    "not_checked": { "type": "array", "items": { "type": "string" } },
+    "prior_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^PF-\\d{1,3}$" },
+          "status": { "type": "string", "enum": ["resolved", "unresolved"] }
+        },
+        "required": ["id", "status"],
+        "additionalProperties": false
+      }
+    }
   },
   "required": ["verdict", "findings", "not_checked"],
   "additionalProperties": false

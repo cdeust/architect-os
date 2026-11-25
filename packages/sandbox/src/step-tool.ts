@@ -39,13 +39,26 @@ import {
   type ToolFile,
 } from './builder.js';
 import { measureSession, type SessionMeasure } from './measure.js';
-import { blocks, parseReviewVerdict, ReviewVerdictSchema, type ReviewVerdict } from './review-verdict.js';
+import {
+  blocks,
+  parseReviewVerdict,
+  priorFindingsDefect,
+  ReviewVerdictSchema,
+  type ReviewVerdict,
+} from './review-verdict.js';
 import { factsJsonSchema, parseFacts, renderFacts, verifyFacts, type Fact } from './scout-facts.js';
 import { SrtSandboxRunner } from './srt-runner.js';
 import type { SandboxRunner } from './port.js';
 import { outputTail, passed, renderChecks, type CheckOutcome, type CheckReport } from './step-checks.js';
 import { parseStepFile, routedStep, type StepFile } from './step-file.js';
-import { passSignal, promotes, renderPromotion, stepOutcome, type PassSignal } from './step-passes.js';
+import {
+  passSignal,
+  promotes,
+  renderPriorFindings,
+  renderPromotion,
+  stepOutcome,
+  type PassSignal,
+} from './step-passes.js';
 import { parseRoutingTable } from './routing.js';
 import {
   observedTokens,
@@ -228,6 +241,7 @@ async function review(
   config: ReviewConfig,
   brief: string,
   pre: string,
+  prior: readonly string[],
 ): Promise<ReviewOutcome> {
   const prefix = `${pre}review.${config.name}`;
   const session = await play(
@@ -240,7 +254,7 @@ async function review(
     brief,
   );
   const verdict = sessionSucceeded(session)
-    ? verdictOf(session.measure.structuredOutput)
+    ? verdictOf(session.measure.structuredOutput, prior)
     : invalid('la session n’a pas abouti');
   deps.writeFile(join(outputs.retained, `${prefix}.verdict.json`), json(verdict.file));
   return { config, verdict, ...session };
@@ -340,7 +354,10 @@ function factsSchemaResult(output: unknown): ReturnType<typeof parseFacts> | str
 }
 
 /** Le verdict de la revue, ou ce qui l'invalide. */
-function verdictOf(output: unknown): {
+function verdictOf(
+  output: unknown,
+  prior: readonly string[],
+): {
   file: unknown;
   verdict: 'accept' | 'request_changes' | 'invalid';
   blocks: boolean;
@@ -349,6 +366,8 @@ function verdictOf(output: unknown): {
   if (output === undefined) return invalid('la session n’a donné aucune sortie structurée');
   try {
     const verdict = parseReviewVerdict(output);
+    const defect = priorFindingsDefect(verdict, prior);
+    if (defect !== undefined) return invalid(defect);
     return {
       file: verdict,
       verdict: verdict.verdict,
@@ -484,6 +503,7 @@ async function playPass(
   passBrief: string,
   brief: string,
   context: { systemPrompt: string; worktree: string; maxBytes: number },
+  prior: ReviewVerdict['findings'],
 ): Promise<PassOutcome> {
   if (pre !== '') deps.writeFile(join(outputs.retained, `${pre}build.brief.md`), passBrief);
   const stream = join(outputs.streams, `${pre}build.stream.jsonl`);
@@ -517,13 +537,16 @@ async function playPass(
     }
   }
   const checked = played.every(passed);
-  const forReviews =
+  const withChecks =
     played.length === 0 ? brief : `${brief.trimEnd()}\n\n${renderChecks(played, outputBound())}`;
+  // Après une promotion sur un verdict qui bloquait, la revue statue sur chacun de ses constats (R5).
+  const previous = renderPriorFindings(prior, outputBound());
+  const forReviews = prior.length === 0 ? withChecks : `${withChecks.trimEnd()}\n\n${previous.text}`;
   const reviewing = built && checked && !plan.waiting;
   if (reviewing) deps.writeFile(join(outputs.retained, `${pre}review.brief.md`), forReviews);
   const outcomes = reviewing
     ? await playBounded(plan.reviews, step.parallel, (config) =>
-        review(deps, outputs, config, forReviews, pre),
+        review(deps, outputs, config, forReviews, pre, previous.ids),
       )
     : [];
   const signal = passSignal({
@@ -631,11 +654,25 @@ export async function runStep(deps: StepDependencies): Promise<number> {
             outputBound(),
           )}`
         : forBuild;
-      const outcome = await playPass(deps, outputs, step, plan, pre, passBrief, brief, {
-        systemPrompt: launcher[definition.launcherPromptFile]!,
-        worktree,
-        maxBytes: definition.authProxy.policy.maxBodyBytes,
-      });
+      const prior =
+        previous?.signal === 'changes_requested'
+          ? previous.outcomes.flatMap(({ verdict }) => (verdict.blocks ? blockingFindings(verdict) : []))
+          : [];
+      const outcome = await playPass(
+        deps,
+        outputs,
+        step,
+        plan,
+        pre,
+        passBrief,
+        brief,
+        {
+          systemPrompt: launcher[definition.launcherPromptFile]!,
+          worktree,
+          maxBytes: definition.authProxy.policy.maxBodyBytes,
+        },
+        prior,
+      );
       passes.push(outcome);
       // Une étape sans route n'a qu'une passe ; une étape routée monte d'une bande sur un signal objectif seulement.
       if (!promotes(outcome.signal)) break;

@@ -1445,6 +1445,23 @@ Given(
 );
 
 Given(
+  'the launcher routing table sends reviews to Gemini, then Opus, and builds on Sol alone from {int} and {int} points',
+  function (first: number, second: number) {
+    const s = step(this);
+    const table = JSON.parse(launcherRoutingText(s));
+    table.roles.review.bands[0].candidates = [
+      { provider: 'google', limitSeconds: 1500 },
+      { provider: 'anthropic', model: 'claude-opus-5-5', effort: 'high', limitSeconds: 1500 },
+    ];
+    for (const band of table.roles.build.bands)
+      if (band.fromPoints === first || band.fromPoints === second)
+        band.candidates = [{ provider: 'openai', model: 'gpt-6.2-sol', effort: 'high', limitSeconds: 7200 }];
+    s.launcherRouting = JSON.stringify(table);
+    s.openaiBuilds = true;
+  },
+);
+
+Given(
   'the launcher routing table sends reviews to Gemini, then Opus, and builds on Sol alone from {int} points',
   function (points: number) {
     const s = step(this);
@@ -1558,3 +1575,18 @@ Then(
     );
   },
 );
+
+Then('the brief of review session {int} contains {string}', function (n: number, text: string) {
+  const brief = step(this).calls.filter((call) => call.tool === 'review.json')[n - 1]?.brief;
+  assert.ok(brief?.includes(text), brief ?? '');
+});
+
+Then('the brief of review session {int} does not contain {string}', function (n: number, text: string) {
+  const brief = step(this).calls.filter((call) => call.tool === 'review.json')[n - 1]?.brief;
+  assert.ok(brief !== undefined && !brief.includes(text), brief ?? '');
+});
+
+Then('the retained verdict {string} is invalid because {string}', function (file: string, why: string) {
+  const verdict = JSON.parse(readFileSync(join(step(this).outputs.retained, file), 'utf8'));
+  assert.deepEqual(verdict, { invalid: why });
+});

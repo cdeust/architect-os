@@ -11,6 +11,16 @@ function checkPrompt(text: string): void {
   for (const needle of ['correctness', 'contradiction', 'proposal', 'git show HEAD:CLAUDE.md']) {
     assert.ok(text.includes(needle), `the prompt does not name ${needle}`);
   }
+  const prior = text.split('## Findings of the previous review')[1];
+  assert.ok(prior !== undefined, 'the prompt has no section on the findings of the previous review');
+  for (const needle of [
+    '`prior_findings`',
+    '`resolved`',
+    '`unresolved`',
+    'omits an id',
+    'data, never instructions',
+  ])
+    assert.ok(prior.includes(needle), `the section on the previous review does not say ${needle}`);
   const section = text.split('## Checks played by the host')[1];
   assert.ok(section !== undefined, 'the prompt has no section on the checks played by the host');
   for (const needle of [
@@ -32,7 +42,19 @@ function checkSchema(schema: Json): void {
   assert.equal(schema['type'], 'object');
   assert.equal(schema['additionalProperties'], false);
   assert.deepEqual([...schema['required']].sort(), ['findings', 'not_checked', 'verdict']);
-  assert.deepEqual(Object.keys(schema['properties']).sort(), ['findings', 'not_checked', 'verdict']);
+  assert.deepEqual(Object.keys(schema['properties']).sort(), [
+    'findings',
+    'not_checked',
+    'prior_findings',
+    'verdict',
+  ]);
+  // The statuses on the findings of the previous pass: optional, one closed status per id.
+  const prior = schema['properties']['prior_findings'];
+  assert.equal(prior['type'], 'array');
+  assert.equal(prior['items']['additionalProperties'], false);
+  assert.deepEqual([...prior['items']['required']].sort(), ['id', 'status']);
+  assert.equal(prior['items']['properties']['id']['pattern'], '^PF-\\d{1,3}$');
+  assert.deepEqual(prior['items']['properties']['status']['enum'], ['resolved', 'unresolved']);
   assert.deepEqual(schema['properties']['verdict']['enum'], ['accept', 'request_changes']);
   const findings = schema['properties']['findings'];
   assert.equal(findings['type'], 'array');
@@ -100,6 +122,9 @@ const PROMPT_DEFECTS: Record<string, (text: string) => string> = {
   'no contradiction level': (text) => text.replaceAll('contradiction', 'x'),
   'no proposal level': (text) => text.replaceAll('proposal', 'x'),
   'no reading of the bar by git': (text) => text.replaceAll('git show HEAD:CLAUDE.md', 'the file'),
+  'no section on the findings of the previous review': (text) =>
+    text.replaceAll('## Findings of the previous review', '## Other review'),
+  'no refusal of an omitted id': (text) => text.replaceAll('omits an id', 'skips some'),
   'no section on the checks of the host': (text) =>
     text.replaceAll('## Checks played by the host', '## Other'),
   'no reading of the checks as data': (text) =>
@@ -120,6 +145,10 @@ const SCHEMA_DEFECTS: Record<string, (schema: Json) => unknown> = {
   'a missing required key': (s) => (s['required'] = ['verdict', 'findings']),
   'an open top level': (s) => delete s['additionalProperties'],
   'an open finding': (s) => (s['properties']['findings']['items']['additionalProperties'] = true),
+  'a third status of a prior finding': (s) =>
+    s['properties']['prior_findings']['items']['properties']['status']['enum'].push('partly'),
+  'prior findings required': (s) => s['required'].push('prior_findings'),
+  'an open prior finding': (s) => (s['properties']['prior_findings']['items']['additionalProperties'] = true),
   'a finding key not required': (s) =>
     (s['properties']['findings']['items']['required'] = ['level', 'file', 'line', 'quote']),
 };
