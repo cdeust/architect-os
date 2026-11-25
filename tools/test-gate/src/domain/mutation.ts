@@ -9,7 +9,6 @@ import {
 } from './debt.js';
 import type { ChangedFile } from './diff.js';
 import { isProduction, type Layout } from './layout.js';
-import { mentioned, rangePatterns } from './mutate-pattern.js';
 import type { ReadFailure, Violation } from './violation.js';
 
 export interface Perimeter {
@@ -26,16 +25,9 @@ export interface Perimeter {
   readonly retired: readonly string[];
 }
 
-/**
- * The `mutate` patterns of a run: the changed lines of each judged file as ranges, so that a change mutates its own
- * code only, and `whole` (the files of retired debt entries, the canary) whole. Sorted, distinct.
- */
-export function mutatePatterns(perimeter: Perimeter, whole: readonly string[]): string[] {
-  const entire = new Set([...perimeter.retired, ...whole]);
-  const ranges = [...perimeter.changedLines]
-    .filter(([file]) => !entire.has(file))
-    .flatMap(([file, lines]) => rangePatterns(file, lines));
-  return [...new Set([...entire, ...ranges])].sort();
+/** Select whole files. The inventory projects their mutants onto the perimeter. */
+export function mutationFiles(perimeter: Perimeter, whole: readonly string[]): string[] {
+  return [...new Set([...perimeter.files, ...whole])].sort();
 }
 
 /**
@@ -81,8 +73,10 @@ export interface MutantRecord {
 
 export interface MutationReport {
   readonly files: ReadonlyMap<string, { readonly source: string; readonly mutants: readonly MutantRecord[] }>;
-  /** config.mutate of the run: a file listed there but absent from `files` was mutated and had no mutant. */
+  /** config.mutate of the run, used to verify range and whole-file scope. */
   readonly mutate: readonly string[];
+  /** Failure of independent inventory verification, when checked by the adapter. */
+  readonly inventoryFailure?: string | undefined;
   /** Every test of the run, by id: `<feature>:<line>`. */
   readonly tests: ReadonlyMap<string, string>;
   /** Set only when Gate projected a verified native report. */
@@ -158,13 +152,13 @@ export function judgeMutation(
     violations.push(...unread.violations);
     return { perimeter, mutants, invalid, debt: unread.summary, violations };
   }
+  if (report.inventoryFailure !== undefined) add(report.inventoryFailure);
   const known = acceptedIdentities(debt);
   let accepted = 0;
   for (const file of perimeter.judged) {
     const result = report.files.get(file);
     if (result === undefined) {
-      if (!mentioned(report.mutate, file))
-        add(`${file} : fichier du périmètre absent du rapport de mutation`);
+      add(`${file} : fichier du périmètre absent du rapport de mutation`);
       continue;
     }
     const lines = result.source.split('\n');

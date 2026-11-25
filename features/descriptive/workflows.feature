@@ -174,6 +174,16 @@ Feature: GitHub workflows
       | watch.yml         |
       | bench-sandbox.yml |
 
+  Scenario Outline: <file> builds before each Stryker run, since the configuration of Stryker loads helpers from the build
+    Given the committed workflow "<file>"
+    Then each Stryker run of the workflow follows a build in its job
+    And a copy of the workflow without the build before Stryker is refused
+
+    Examples:
+      | file              |
+      | gate-lane.yml     |
+      | mutation-full.yml |
+
   Scenario Outline: the independent advisory runner refuses <fault>
     Given the committed workflow "watch.yml"
     Then a copy with "<fault>" is refused by hosted admission policy

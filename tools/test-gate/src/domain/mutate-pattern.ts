@@ -8,18 +8,10 @@ import { matchesGlob } from 'node:path';
 // No `^`: exec tries index 0 first, where the lazy path group absorbs any prefix, so a match always starts there.
 const RANGE = /(.*?):(\d+)(?::\d+)?-(\d+)(?::\d+)?$/;
 
-/** One pattern per run of consecutive lines: `file:first-last`, whole lines. */
-export function rangePatterns(file: string, lines: ReadonlySet<number>): string[] {
-  const sorted = [...lines].sort((a, b) => a - b);
-  const patterns: string[] = [];
-  let first = sorted[0] as number;
-  sorted.forEach((line, index) => {
-    const next = sorted[index + 1];
-    if (next === line + 1) return;
-    patterns.push(`${file}:${first}-${line}`);
-    first = next as number;
-  });
-  return patterns;
+/** Stryker normalizes backslashes. Minimatch expands braces before parsing character classes. */
+export function requireLiteralMutationPath(path: string): void {
+  if (/[{}\\\r\n\u2028\u2029]/.test(path) || RANGE.test(path))
+    throw new Error('GATE_MUTATION_PATH_PATTERN : ' + path);
 }
 
 /**
@@ -31,13 +23,5 @@ export function mutatedAt(mutate: readonly string[], file: string, start: number
     const range = RANGE.exec(pattern);
     if (range === null) return pattern === file || matchesGlob(file, pattern);
     return range[1] === file && Number(range[2]) <= start && end <= Number(range[3]);
-  });
-}
-
-/** Whether a pattern of the run names `file`, whole or by a range: a file so named and absent had no mutant. */
-export function mentioned(mutate: readonly string[], file: string): boolean {
-  return mutate.some((pattern) => {
-    const path = RANGE.exec(pattern)?.[1] ?? pattern;
-    return path === file || matchesGlob(file, path);
   });
 }

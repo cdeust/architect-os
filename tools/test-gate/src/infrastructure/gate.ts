@@ -1,10 +1,24 @@
 import { parseArguments } from '../domain/arguments.js';
 import type { BaseInput } from '../domain/count.js';
-import { parseUnifiedDiff, wholeFile, type ChangedFile } from '../domain/diff.js';
-import { isJobFeature, isProduction, matchesAny, type Job } from '../domain/layout.js';
+import {
+  changedLines,
+  parseRawDiff,
+  requireSharedLineCoordinates,
+  wholeFile,
+  type ChangedFile,
+} from '../domain/diff.js';
+import {
+  isJobFeature,
+  isProduction,
+  matchesAny,
+  mayHoldProduction,
+  type Job,
+  type Layout,
+} from '../domain/layout.js';
+import { requireLiteralMutationPath } from '../domain/mutate-pattern.js';
 import { retiredFiles } from '../domain/debt.js';
 import { canaryViolations } from '../domain/canary.js';
-import { inPerimeter, mutatePatterns, perimeterOf, type MutantRecord } from '../domain/mutation.js';
+import { inPerimeter, mutationFiles, perimeterOf, type MutantRecord } from '../domain/mutation.js';
 import { replayCases, replayViolations, type ReplayCase, type ReplayRecord } from '../domain/replay.js';
 import type { ReadFailure } from '../domain/violation.js';
 import { distributeReplayFiles, replayLotFor } from '../domain/replay-lots.js';
@@ -19,6 +33,7 @@ import { compileFeature } from './gherkin.js';
 import { jsonText } from './json.js';
 import { parseMutationReport } from './mutation-report.js';
 import { CucumberRunner, replayAll, sha256 } from './replay.js';
+import { literalStrykerPattern } from './stryker-pattern.js';
 import { Workspace } from './workspace.js';
 
 /** The descriptive configuration, relative to the repository root. */
@@ -41,21 +56,54 @@ function staticSet(paths: readonly string[], read: (path: string) => string): St
   return { ids, errors };
 }
 
-/** The diff against the first parent (every tracked file without one), plus untracked files as whole additions. */
+/**
+ * The production files of `layout` that changed: the diff against the first parent (every tracked file without one),
+ * plus untracked files as whole additions. Each is read as a mutation source, refused when Stryker could not take it
+ * literally or would not count its lines as git does.
+ */
 export function changedFiles(
   repository: GitRepository,
   workspace: Workspace,
   firstParent: string | null,
-  include: (path: string) => boolean = () => true,
+  layout: Layout,
 ): ChangedFile[] {
-  const whole = (path: string) => wholeFile(path, workspace.read(path) as string);
-  const present = (path: string) => workspace.read(path) !== null;
+  const untracked = repository.untracked();
+  const tracked = firstParent === null ? repository.tracked() : [];
+  const changed = firstParent === null ? [] : parseRawDiff(repository.changedPaths(firstParent));
+  const include = (path: string) => isProduction(layout, path);
+  // Git lists a link as one path: where a directory of sources could be, Node would load through it what is not listed.
+  for (const path of [
+    ...tracked,
+    ...changed.filter(({ deleted }) => !deleted).map(({ path }) => path),
+    ...untracked,
+  ])
+    if (!include(path) && mayHoldProduction(layout, path)) workspace.requireNotLink(path);
+  const source = (path: string) => validateMutationSource(path, workspace.requireSource(path));
   return [
-    ...(firstParent === null
-      ? repository.tracked().filter(include).filter(present).map(whole)
-      : parseUnifiedDiff(repository.diff(firstParent)).filter(({ path }) => include(path))),
-    ...repository.untracked().filter(include).map(whole),
+    ...tracked.filter(include).flatMap((path) => {
+      // A file of the index that the checkout no longer holds is no addition of a root commit.
+      const text = workspace.readSource(path);
+      return text === null ? [] : [wholeFile(path, validateMutationSource(path, text))];
+    }),
+    ...changed
+      .filter(({ path }) => include(path))
+      .map(({ path, deleted, link }) => {
+        if (link) throw new Error('GATE_SOURCE_LINK : ' + path);
+        if (!deleted) source(path);
+        return {
+          path,
+          deleted,
+          lines: deleted ? [] : changedLines(path, repository.patch(firstParent as string, path)),
+        };
+      }),
+    ...untracked.filter(include).map((path) => wholeFile(path, source(path))),
   ];
+}
+
+function validateMutationSource(path: string, source: string): string {
+  requireLiteralMutationPath(path);
+  requireSharedLineCoordinates(path, source);
+  return source;
 }
 
 /** The mutation debt registry and the perimeter Stryker must mutate: rule 5's, plus the files of retired entries. */
@@ -70,6 +118,8 @@ export function mutationScope(
   const production = workspace.glob(config.production);
   return { debt, perimeter: perimeterOf(config, changes, retiredFiles(debt, production)) };
 }
+
+type MutationScope = ReturnType<typeof mutationScope>;
 
 /** The inputs of rule 7, null when gate.json declares neither a canary nor a replay. */
 function controlOf(config: GateConfig, workspace: Workspace, mutationText: string | null) {
@@ -128,7 +178,7 @@ async function replayCommand(
   if (mode !== 'all') {
     const repository = new GitRepository(root);
     const { firstParent } = repository.commits();
-    const changes = changedFiles(repository, workspace, firstParent);
+    const changes = changedFiles(repository, workspace, firstParent, config);
     const { perimeter, debt } = mutationScope(config, changes, workspace, repository, firstParent);
     selected = (file, mutant) => file === canary?.file || inPerimeter(perimeter, file, mutant);
     if (sharded) {
@@ -137,7 +187,7 @@ async function replayCommand(
       const { verifyMutationCatalog } = await import('./mutation-catalog.js');
       await verifyMutationCatalog(root, report.tests);
       const { mutationLots } = await import('./mutation-inventory.js');
-      const lots = await mutationLots(root, perimeter, canary?.file, (file) => workspace.read(file));
+      const lots = await mutationLots(root, perimeter, canary?.file, (file) => workspace.readSource(file));
       plan = { mode, batches: distributeReplayFiles(lots) };
     }
   }
@@ -190,12 +240,31 @@ function replayShardPath(shard: number): string {
 }
 
 /** A production checkout lease can revoke or publish the checked Linux result. */
+/** The mutation report of a job with mutation, checked against the lots of its perimeter, and the controls of rule 7. */
+async function mutationEvidence(
+  config: GateConfig,
+  root: string,
+  workspace: Workspace,
+  scope: MutationScope,
+) {
+  const path = config.reports.mutation;
+  const text = workspace.read(path);
+  const parsed = text === null ? { failure: `${path} absent` } : parseMutationReport(text);
+  const report =
+    'failure' in parsed
+      ? parsed
+      : await (
+          await import('./local-mutation-proof.js')
+        ).verifyVerdictInventory(root, scope.perimeter, parsed, (file) => workspace.readSource(file));
+  return { ...scope, report, control: controlOf(config, workspace, text) };
+}
+
 export interface GateReceiptAuthority {
   discard(): void;
   publish(config: GateConfig, workspace: Workspace): void;
 }
 
-function gate(
+async function gate(
   config: GateConfig,
   job: Job,
   command: 'plan' | 'check',
@@ -207,14 +276,25 @@ function gate(
 ) {
   const repository = new GitRepository(root);
   const { head, firstParent } = repository.commits();
-  const changes = changedFiles(repository, workspace, firstParent);
-  // A job without mutation does not read the mutation debt registry.
-  const scope = job.mutation ? mutationScope(config, changes, workspace, repository, firstParent) : null;
+  let scope: MutationScope | null = null;
+  // A job with mutation refuses a nested repository when it lists its untracked changes; a job without, here.
+  if (job.mutation)
+    scope = mutationScope(
+      config,
+      changedFiles(repository, workspace, firstParent, config),
+      workspace,
+      repository,
+      firstParent,
+    );
+  else repository.requireNoNested();
   const reports = config.reports;
   if (command === 'plan') {
     // The canary is mutated whole in every run with mutation: rule 7 reads it before any verdict on the code.
     const canary = config.canary === undefined ? [] : [config.canary.file];
-    const mutate = scope === null ? [] : mutatePatterns(scope.perimeter, canary);
+    const mutate =
+      scope === null
+        ? []
+        : mutationFiles(scope.perimeter, canary).map((file) => literalStrykerPattern(root, file));
     workspace.write(reports.plan, jsonText({ job: job.name, head, firstParent, mutate }));
     out.write(`plan ${job.name} : ${mutate.length} motif(s) à muter -> ${reports.plan}\n`);
     return 0;
@@ -248,7 +328,6 @@ function gate(
   })();
   const baseText = workspace.read(reports.base);
   const base: BaseInput = baseText === null ? null : parseGateBase(baseText);
-  const mutationText = workspace.read(reports.mutation);
   const verdict = evaluate({
     job: job.name,
     head,
@@ -257,17 +336,8 @@ function gate(
     staticParent,
     run,
     base,
-    mutation:
-      scope === null
-        ? null
-        : {
-            ...scope,
-            report:
-              mutationText === null
-                ? { failure: `${reports.mutation} absent` }
-                : parseMutationReport(mutationText),
-            control: controlOf(config, workspace, mutationText),
-          },
+    // A job without mutation reads no mutation report.
+    mutation: scope === null ? null : await mutationEvidence(config, root, workspace, scope),
   });
   const report = renderReport(verdict);
   workspace.write(reports.report, report);
@@ -301,31 +371,33 @@ export async function runGate(
   if ('failure' in command) return refuse(command.failure);
   if (command.name === 'check' && command.job === 'linux') receipt?.discard();
   if (command.name === 'inventory') workspace.remove(INVENTORY_PATH);
-  const text = workspace.read(CONFIG_PATH);
+  let text;
+  try {
+    text = workspace.read(CONFIG_PATH);
+  } catch (error) {
+    return refuse((error as Error).message);
+  }
   if (text === null) return refuse(`${CONFIG_PATH} absent`);
   const config = parseGateConfig(text);
   if ('failure' in config) return refuse(`${CONFIG_PATH} : ${config.failure}`);
-  if (command.name === 'realign') {
-    const realigned = realignDebt(config, workspace);
-    if ('failure' in realigned) return refuse(realigned.failure);
-    out.write(realigned.summary);
-    return realigned.aligned ? 0 : 1;
-  }
-  if (command.name === 'compare') {
+  if (command.name === 'realign' || command.name === 'compare' || command.name === 'debt') {
     try {
-      const result = compareDebt(config, workspace, new GitRepository(root));
+      if (command.name === 'realign') {
+        const result = realignDebt(config, workspace);
+        if ('failure' in result) return refuse(result.failure);
+        out.write(result.summary);
+        return result.aligned ? 0 : 1;
+      }
+      const result =
+        command.name === 'compare'
+          ? compareDebt(config, workspace, new GitRepository(root))
+          : generateDebt(config, workspace);
       if ('failure' in result) return refuse(result.failure);
       out.write(result.summary);
       return 0;
     } catch (error) {
       return refuse((error as Error).message);
     }
-  }
-  if (command.name === 'debt') {
-    const written = generateDebt(config, workspace);
-    if ('failure' in written) return refuse(written.failure);
-    out.write(written.summary);
-    return 0;
   }
   if (command.name === 'replay' || command.name === 'replay-collect') {
     const mode =
@@ -350,17 +422,16 @@ export async function runGate(
     try {
       const repository = new GitRepository(root);
       const { head, firstParent } = repository.commits();
-      const changes = changedFiles(repository, workspace, firstParent, (file) => isProduction(config, file));
+      const changes = changedFiles(repository, workspace, firstParent, config);
       const { debt, perimeter } = mutationScope(config, changes, workspace, repository, firstParent);
       if ('failure' in debt.current) throw new Error('registre de dette illisible : ' + debt.current.failure);
       if (debt.parent !== null && 'failure' in debt.parent)
         throw new Error('registre de dette illisible au premier parent : ' + debt.parent.failure);
       const { mutationLots } = await import('./mutation-inventory.js');
       const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-      const lots = await mutationLots(root, perimeter, config.canary?.file, (file) => {
-        const bytes = workspace.readBytes(file);
-        return bytes === null ? null : decoder.decode(bytes);
-      });
+      const lots = await mutationLots(root, perimeter, config.canary?.file, (file) =>
+        workspace.readSource(file),
+      );
       const { combineNative, nativeScope, nativeShard, projectNative } = await import('./mutation-shards.js');
       const canary = config.canary?.file;
       const manifest = (shard?: 1 | 2) => {
@@ -382,7 +453,11 @@ export async function runGate(
           throw new Error('inventaire absent ou différent du périmètre courant : ' + path);
         const bytes = workspace.readBytes(rawPath);
         if (bytes === null) throw new Error('rapport de mutation absent : ' + rawPath);
-        return projectNative(decoder.decode(bytes), expected.planned);
+        const patterns =
+          project || command.name === 'inventory-collect'
+            ? expected.planned.map(({ file }) => literalStrykerPattern(root, file))
+            : undefined;
+        return projectNative(decoder.decode(bytes), expected.planned, patterns, false);
       };
       if (command.name === 'inventory-collect') {
         const proofs = ([1, 2] as const).map((shard) => {
@@ -411,7 +486,11 @@ export async function runGate(
         if (project)
           workspace.write(
             config.reports.mutation,
-            jsonText({ ...raw, gateNativeScope: nativeScope(planned) }),
+            jsonText({
+              ...raw,
+              config: { ...raw.config, mutate: planned.map(({ file }) => file) },
+              gateNativeScope: nativeScope(planned),
+            }),
           );
         out.write('lots de mutation vérifiés : ' + planned.length + ' lot(s)\n');
         return 0;
@@ -424,5 +503,9 @@ export async function runGate(
       return refuse((error as Error).message);
     }
   }
-  return gate(config, job, command.name, root, env, out, workspace, receipt);
+  try {
+    return await gate(config, job, command.name, root, env, out, workspace, receipt);
+  } catch (error) {
+    return refuse((error as Error).message);
+  }
 }

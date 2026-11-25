@@ -33,8 +33,13 @@ export interface NativeProof {
 }
 
 /** Validate the raw native report and preserve only in-lot identities and native ignores. */
-export function projectNative(text: string, lots: readonly Lot[], patterns?: readonly string[]): NativeProof {
-  const report = patterns === undefined ? parseMutationReport(text) : requireNativeMutationReport(text);
+export function projectNative(
+  text: string,
+  lots: readonly Lot[],
+  patterns: readonly string[] | undefined,
+  requireStatic: boolean,
+): NativeProof {
+  const report = requireStatic ? requireNativeMutationReport(text) : parseMutationReport(text);
   if ('failure' in report) throw new Error(report.failure);
   const outside = new Set<string>();
   const failure = verifyMutationLots(lots, report, (id) => outside.add(id), patterns);

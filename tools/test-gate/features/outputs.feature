@@ -8,7 +8,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     And the gate repository holds the fixture specs "green.feature, second.feature"
     And the gate cucumber report is the fixture "green"
 
-  Scenario: a changed production line plans that line of that file only, as a Stryker mutation range
+  Scenario: a changed production line selects its whole file for inventory projection
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 3 changed
     And the gate repository holds "mod/a/src/a.mjs" of the mutation fixture "covered-by-feature"
     And the gate first parent is committed
@@ -22,7 +22,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
       """
     And the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs:3-3"] }
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs"] }
       """
 
   Scenario: an added .feature plans no mutation
@@ -57,7 +57,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": null, "mutate": ["src/math.mjs:1-9"] }
+      { "job": "linux", "head": "<head>", "firstParent": null, "mutate": ["src/math.mjs"] }
       """
 
   Scenario: a green check writes the base of the next run, the step summary and prints the report
@@ -127,7 +127,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": null, "mutate": ["src/math.mjs:1-9"] }
+      { "job": "linux", "head": "<head>", "firstParent": null, "mutate": ["src/math.mjs"] }
       """
 
   Scenario Outline: the canary is planned in every job with mutation, once, among the sorted files: <canary>
@@ -148,8 +148,8 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     Examples:
       | canary         | mutate                             |
       | src/math.mjs   | ["src/math.mjs"]                   |
-      | canary/a.mjs   | ["canary/a.mjs", "src/math.mjs:3-3"] |
-      | zz/c.mjs       | ["src/math.mjs:3-3", "zz/c.mjs"]     |
+      | canary/a.mjs   | ["canary/a.mjs", "src/math.mjs"] |
+      | zz/c.mjs       | ["src/math.mjs", "zz/c.mjs"]     |
 
   Scenario: the macos job plans no canary
     Given the gate head is committed
@@ -163,7 +163,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
       { "job": "macos", "head": "<head>", "firstParent": null, "mutate": [] }
       """
 
-  Scenario: each run of consecutive changed lines is one range
+  Scenario: disjoint changed lines still select one whole file
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
     And the gate first parent is committed
     And the gate repository file "src/math.mjs" reads:
@@ -181,5 +181,5 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs:3-3", "src/math.mjs:7-7"] }
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs"] }
       """

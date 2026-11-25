@@ -42,7 +42,7 @@ export function parseDebtRegistry(text: string): DebtRegistry | ReadFailure {
 function sourcesOf(files: Iterable<string>, workspace: Workspace): Map<string, string> {
   const sources = new Map<string, string>();
   for (const file of files) {
-    const text = workspace.read(file);
+    const text = workspace.readSource(file);
     if (text !== null) sources.set(file, text);
   }
   return sources;
@@ -64,12 +64,11 @@ export function readDebt(
   const entries = [current, parent].flatMap((registry) =>
     registry === null || 'failure' in registry ? [] : registry.survivors,
   );
-  const present = new Set(entries.map((entry) => entry.file).filter((file) => workspace.exists(file)));
   const sources = sourcesOf(
     entries.map((entry) => entry.file),
     workspace,
   );
-  return { path, current, parent, present, sources };
+  return { path, current, parent, present: new Set(sources.keys()), sources };
 }
 
 /**

@@ -17,6 +17,19 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | in-memory |
         | git       |
 
+    Scenario Outline: a tree holds no nested repository until one is left in it, tracked or not
+      Given a delivery repository of the <adapter> adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository is at the commit "c1"
+      Then the delivery repository holds no nested repository
+      When a repository is left nested in the delivery worktree
+      Then the delivery repository holds a nested repository
+
+      Examples:
+        | adapter   |
+        | in-memory |
+        | git       |
+
     Scenario Outline: a branch the remote does not have, and a branch it has
       Given a delivery repository of the <adapter> adapter
       And the delivery repository holds the commit "c1"
@@ -185,7 +198,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
       Examples:
         | method             | message                          |
-        | isClean            | git status exited with code 128  |
+        | isClean            | GATE_CHECKOUT_UNREADABLE  |
         | head               | git rev-parse exited with code 128 |
         | fetch              | git fetch exited with code 128   |
         | remoteHead         | git rev-parse exited with code 128 |
@@ -201,18 +214,84 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
       Examples:
         | method             | argv                                                           |
-        | isClean            | -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain |
-        | head               | -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse --verify HEAD^{commit} |
-        | fetch              | -c core.fsmonitor=false -c core.hooksPath=/dev/null fetch --quiet --prune origin |
-        | remoteHead         | -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse --verify --quiet refs/remotes/origin/main^{commit} |
-        | isAncestor         | -c core.fsmonitor=false -c core.hooksPath=/dev/null merge-base --is-ancestor aaa bbb |
-        | deletedLines       | -c core.fsmonitor=false -c core.hooksPath=/dev/null diff --numstat aaa bbb -- docs/a.md |
-        | push               | -c core.fsmonitor=false -c core.hooksPath=/dev/null push --quiet origin aaa:refs/heads/main |
-        | deleteRemoteBranch | -c core.fsmonitor=false -c core.hooksPath=/dev/null push --quiet origin :refs/heads/main |
+        | head               | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse --verify HEAD^{commit} |
+        | fetch              | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all fetch --quiet --prune --recurse-submodules=no origin |
+        | remoteHead         | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse --verify --quiet refs/remotes/origin/main^{commit} |
+        | isAncestor         | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all merge-base --is-ancestor aaa bbb |
+        | deletedLines       | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all diff --numstat --ignore-submodules=all aaa bbb -- docs/a.md |
+        | push               | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all push --quiet --recurse-submodules=no origin aaa:refs/heads/main |
+        | deleteRemoteBranch | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all push --quiet --recurse-submodules=no origin :refs/heads/main |
 
     Scenario: a git executable that does not exist throws a fixed message
       Given a delivery repository over the git executable "/nonexistent/git"
       Then calling "head" on the delivery repository throws "git could not be run to its end"
+
+    Scenario: delivery refuses the raw bytes of an untouched converted checkout
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository is at the commit "c1"
+      And the delivery checkout was converted by Git and has been left untouched
+      Then the delivery repository is not clean
+
+    Scenario: delivery refuses a linked worktree by its marker without requiring its gitdir
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository is at the commit "c1"
+      And a linked worktree with an external gitdir is inside the delivery repository
+      Then the delivery repository holds a nested repository
+      Given the nested delivery marker points to a missing gitdir
+      Then the delivery repository holds a nested repository
+
+    Scenario Outline: delivery finds a gitlink recorded only in the <place>, with no directory to mark it
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository is at the commit "c1"
+      And a gitlink "sub" is recorded only in the <place> of the delivery repository
+      Then the delivery repository holds a nested repository
+
+      Examples:
+        | place |
+        | index |
+        | head  |
+
+  Rule: git enters no repository nested in the tree, whatever the tree says of it
+
+    The nested repository of the fixture names a witness program as a filter of one of its files and as the program of
+    its fetches; the `.gitmodules` of the tree asks git to look into it whatever the configuration says
+    (`ignore = none`) and to fetch inside it (`fetchRecurseSubmodules = true`).
+
+    Background:
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery remote holds the branch "main" at the commit "c1"
+      And the delivery repository is at the commit "c1"
+      And a repository is left nested in the delivery worktree
+      And everything in the delivery worktree is committed
+
+    Scenario: a nested repository that the head records is found, and its program does not run
+      Then the delivery repository holds a nested repository
+      And the witness program of the nested delivery repository has not run
+
+    Scenario Outline: the method <method> does not start the program of the nested repository
+      When I call "<method>" on the delivery repository
+      Then the witness program of the nested delivery repository has not run
+
+      Examples:
+        | method                |
+        | holdsNestedRepository |
+        | isClean               |
+        | fetch                 |
+        | head                  |
+
+    Scenario Outline: the same program is started by a git asked for the <command> without the options of the delivery, so that the scenarios above can fail
+      Then the witness program of the nested delivery repository has not run
+      When the fixture git, without the options of the delivery, is asked for the <command> of the delivery worktree
+      Then the witness program of the nested delivery repository has run
+
+      Examples:
+        | command |
+        | status  |
+        | fetch   |
 
   Rule: Forge
 

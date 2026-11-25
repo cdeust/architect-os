@@ -4,9 +4,16 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { countRule, type Count } from '../../src/domain/count.js';
 import type { DebtInput, DebtRegistry } from '../../src/domain/debt.js';
-import { parseUnifiedDiff, type ChangedFile } from '../../src/domain/diff.js';
+import {
+  changedLines,
+  decodeExactly,
+  hunkLines,
+  parseRawDiff,
+  type ChangedFile,
+  type ChangedPath,
+} from '../../src/domain/diff.js';
 import type { Layout } from '../../src/domain/layout.js';
-import { mentioned, mutatedAt, rangePatterns } from '../../src/domain/mutate-pattern.js';
+import { mutatedAt } from '../../src/domain/mutate-pattern.js';
 import {
   judgeMutation,
   perimeterOf,
@@ -61,15 +68,69 @@ Then('the gate count base source is {string}', function (expected: string) {
   assert.equal((this.state['count'] as Count).source, expected);
 });
 
-When('the gate parses the unified diff:', function (text: string) {
-  this.state['parsed'] = parseUnifiedDiff(text);
+When('the gate reads the hunks of the patch:', function (text: string) {
+  this.state['hunkLines'] = hunkLines(text);
 });
 
-Then('the gate parsed diff is:', function (expected: string) {
-  const lines = (this.state['parsed'] as ChangedFile[]).map(
-    (file) => `${file.path}${file.deleted ? ' (supprimé)' : ''}: ${file.lines.join(',')}`,
-  );
+Then('the gate changed lines of the patch are {string}', function (expected: string) {
+  assert.equal((this.state['hunkLines'] as number[]).join(','), expected);
+});
+
+When(
+  'the gate reads the lines of the changed path {string} from the patch:',
+  function (path: string, patch: string) {
+    this.state['hunkLines'] = changedLines(path, patch);
+  },
+);
+
+Then(
+  'the gate refuses the empty patch of the changed path {string} with {string}',
+  function (path: string, message: string) {
+    assert.throws(() => changedLines(path, ''), { message });
+  },
+);
+
+When('the gate decodes the bytes {string} that git printed', function (hex: string) {
+  this.state['decoding'] = () => decodeExactly(Buffer.from(hex, 'hex'));
+});
+
+/** `\\uFEFF` in the expected text stands for the byte order mark a table cell would not show. */
+Then('the gate decoded text is {string}', function (text: string) {
+  assert.equal((this.state['decoding'] as () => string)(), text.replaceAll('\\uFEFF', '\uFEFF'));
+});
+
+Then('the gate refuses the bytes with {string}', function (message: string) {
+  assert.throws(this.state['decoding'] as () => string, { message });
+});
+
+/** The list as git prints it with `-z`: each field ended by a NUL. Kept as a thunk: a refusal is an outcome too. */
+When('the gate reads the list of changed paths, one field per line:', function (text: string) {
+  const raw = text
+    .split('\n')
+    .map((field) => `${field}\0`)
+    .join('');
+  this.state['rawDiff'] = () => parseRawDiff(raw);
+});
+
+/** `<NUL>` in the text stands for the NUL byte a table cell cannot hold. */
+When('the gate reads the list of changed paths {string}', function (text: string) {
+  const raw = text.replaceAll('<NUL>', '\0');
+  this.state['rawDiff'] = () => parseRawDiff(raw);
+});
+
+const rawDiff = (state: Record<string, unknown>) => state['rawDiff'] as () => ChangedPath[];
+
+Then('the gate changed paths are:', function (expected: string) {
+  const lines = rawDiff(this.state)().map(({ path, deleted }) => `${path}${deleted ? ' (supprimé)' : ''}`);
   assert.deepEqual(lines, expected.split('\n'));
+});
+
+Then('the gate changed paths are none', function () {
+  assert.deepEqual(rawDiff(this.state)(), []);
+});
+
+Then('the gate refuses the list of changed paths with {string}', function (message: string) {
+  assert.throws(rawDiff(this.state), { message });
 });
 
 /** `src/a.mjs:1,2` -> a ChangedFile; no line after the colon is a file with no added line. */
@@ -184,22 +245,11 @@ Then('the gate workspace paths are {string}', function (expected: string) {
 });
 
 Then(
-  'the range patterns of {string} for the lines {string} are {string}',
-  function (file: string, lines: string, patterns: string) {
-    assert.deepEqual(rangePatterns(file, new Set(list(lines).map(Number))), list(patterns));
-  },
-);
-
-Then(
   'the lines {int} to {int} of {string} are mutated under {string}: {word}',
   function (start: number, end: number, file: string, mutate: string, mutated: string) {
     assert.equal(mutatedAt(list(mutate), file, start, end), mutated === 'yes');
   },
 );
-
-Then('{string} names {string}: {word}', function (mutate: string, file: string, named: string) {
-  assert.equal(mentioned(list(mutate), file), named === 'yes');
-});
 
 When('the gate distributes replay files {string}', function (files: string) {
   const lots = list(files).map((entry) => {

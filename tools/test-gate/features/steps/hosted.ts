@@ -18,7 +18,7 @@ const MANIFEST = 'reports/mutation-inventory.json';
 const NATIVE = 'reports/mutation/native.json';
 const aggregate = 'reports/mutation/mutation.json';
 
-async function command(repo: GateRepository, ...args: string[]) {
+export async function command(repo: GateRepository, ...args: string[]) {
   let output = '';
   const status = await runHostedGate(
     args,
@@ -146,7 +146,7 @@ Then('the hosted collector rejects an active mutant without static metadata', as
     patterns: string[];
   };
   assert.throws(
-    () => projectNative(incomplete, lots, patterns),
+    () => projectNative(incomplete, lots, patterns, true),
     /marquage statique absent pour un mutant actif/,
   );
   repo.write(path, incomplete);

@@ -31,6 +31,24 @@ export function isProduction(layout: Layout, path: string): boolean {
   return inFileSet(path, layout.production);
 }
 
+/**
+ * Whether `directory` can hold a production file: some include glob matches it segment by segment as a directory (its
+ * last segment names files) or reaches a `**` first. Excludes are not read: they narrow files, and a link is refused
+ * wherever an included file could be.
+ */
+export function mayHoldProduction(layout: Layout, directory: string): boolean {
+  const names = directory.split('/');
+  return layout.production.include.some((glob) => {
+    const segments = glob.split('/');
+    for (const [index, name] of names.entries()) {
+      const segment = segments[index] as string;
+      if (segment === '**') return true;
+      if (index === segments.length - 1 || !matchesGlob(name, segment)) return false;
+    }
+    return true;
+  });
+}
+
 export function isJobFeature(layout: Layout, job: Job, path: string): boolean {
   return inFileSet(path, layout.features) && matchesAny(path, job.features);
 }

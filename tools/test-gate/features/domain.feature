@@ -16,53 +16,122 @@ Feature: Test gate domain functions, observed directly
       | none        | root     |
       | abc         | fallback |
 
-  Scenario: lines of a diff before the first file header are ignored
-    When the gate parses the unified diff:
-      """
-      @@ -1 +1 @@
-      deleted file mode 100644
-      diff --git a/x.mjs b/x.mjs
-      @@ -1 +1 @@
-      """
-    Then the gate parsed diff is:
-      """
-      x.mjs: 1
-      """
-
   Scenario: a hunk that adds twelve lines lists all twelve
-    When the gate parses the unified diff:
+    When the gate reads the hunks of the patch:
       """
       diff --git a/x.mjs b/x.mjs
+      index 1111111..2222222 100644
+      --- a/x.mjs
+      +++ b/x.mjs
       @@ -0,0 +1,12 @@
       """
-    Then the gate parsed diff is:
-      """
-      x.mjs: 1,2,3,4,5,6,7,8,9,10,11,12
-      """
+    Then the gate changed lines of the patch are "1,2,3,4,5,6,7,8,9,10,11,12"
 
   Scenario: a hunk that replaces twelve lines by twelve lists the twelve new lines
-    When the gate parses the unified diff:
+    When the gate reads the hunks of the patch:
       """
-      diff --git a/x.mjs b/x.mjs
       @@ -10,12 +10,12 @@
       """
-    Then the gate parsed diff is:
+    Then the gate changed lines of the patch are "10,11,12,13,14,15,16,17,18,19,20,21"
+
+  Scenario: a hunk without count is one line, a pure deletion is none, and the hunks of a patch add up
+    When the gate reads the hunks of the patch:
       """
-      x.mjs: 10,11,12,13,14,15,16,17,18,19,20,21
+      @@ -3 +3 @@
+      @@ -7,2 +6,0 @@
+      @@ -20,0 +19,2 @@ a function name after the hunk
+      """
+    Then the gate changed lines of the patch are "3,19,20"
+
+  Scenario: a content line that holds what looks like a hunk is not a hunk
+    When the gate reads the hunks of the patch:
+      """
+      @@ -1 +1,3 @@
+      -@@ -50 +50 @@
+      +@@ -60 +60 @@
+      + @@ -70 +70 @@
+      """
+    Then the gate changed lines of the patch are "1,2,3"
+
+  Scenario: a patch with no hunk has no changed line
+    When the gate reads the hunks of the patch:
+      """
+      diff --git a/x.mjs b/x.mjs
+      old mode 100644
+      new mode 100755
+      """
+    Then the gate changed lines of the patch are ""
+
+  Scenario: a changed path with a patch has the lines of its hunks
+    When the gate reads the lines of the changed path "src/a.mjs" from the patch:
+      """
+      @@ -3 +3,2 @@
+      """
+    Then the gate changed lines of the patch are "3,4"
+
+  Scenario: a changed path whose patch is empty is refused: the path named nothing when it was given back to git
+    Then the gate refuses the empty patch of the changed path "src/a.mjs" with "chemin changé sans diff : src/a.mjs"
+
+  Scenario Outline: what git printed is read exactly when it is UTF-8: <case>
+    When the gate decodes the bytes "<hex>" that git printed
+    Then the gate decoded text is "<text>"
+
+    Examples:
+      | case                 | hex                    | text       |
+      | plain letters        | 7372632f612e6d6a73     | src/a.mjs  |
+      | an accented letter   | 7372632fc3a92e6d6a73   | src/é.mjs  |
+      | a byte order mark    | efbbbf61               | \uFEFFa   |
+      | nothing              |                        |            |
+
+  Scenario Outline: a name that is not UTF-8 is refused, never read under another spelling: <case>
+    When the gate decodes the bytes "<hex>" that git printed
+    Then the gate refuses the bytes with "un chemin de git n'est pas de l'UTF-8"
+
+    Examples:
+      | case                      | hex                  |
+      | a byte no sequence starts | 7372632fff2e6d6a73   |
+      | a sequence cut short      | 7372632fc32e6d6a73   |
+      | an overlong encoding      | c0af                 |
+
+  Scenario: the list of the changed paths gives each path as it is, and says which are deleted
+    When the gate reads the list of changed paths, one field per line:
+      """
+      :100644 100644 1111111111111111111111111111111111111111 0000000000000000000000000000000000000000 M
+      src/a.mjs
+      :000000 100644 0000000000000000000000000000000000000000 0000000000000000000000000000000000000000 A
+      src/we"ird name.mjs
+      :100644 000000 1111111111111111111111111111111111111111 0000000000000000000000000000000000000000 D
+      src/gone.mjs
+      :100644 120000 1111111111111111111111111111111111111111 0000000000000000000000000000000000000000 T
+      src/link.mjs
+      """
+    Then the gate changed paths are:
+      """
+      src/a.mjs
+      src/we"ird name.mjs
+      src/gone.mjs (supprimé)
+      src/link.mjs
       """
 
-  Scenario: a line that continues after the file header is not a header, its hunks stay with the previous file
-    When the gate parses the unified diff:
-      """
-      diff --git a/y.mjs b/y.mjs
-      @@ -1 +1 @@
-      diff --git a/x b/x extra
-      @@ -5 +5 @@
-      """
-    Then the gate parsed diff is:
-      """
-      y.mjs: 1,5
-      """
+  Scenario: an empty list of changed paths is no path
+    When the gate reads the list of changed paths ""
+    Then the gate changed paths are none
+
+  Scenario Outline: a list of changed paths the gate does not understand is refused: <case>
+    When the gate reads the list of changed paths "<list>"
+    Then the gate refuses the list of changed paths with "<message>"
+
+    Examples:
+      | case                         | list                                                                                                    | message                               |
+      | no NUL at its end            | :100644 100644 1111111111111111111111111111111111111111 0000000000000000000000000000000000000000 M<NUL>a | liste des chemins changés illisible   |
+      | a record without its path    | :100644 100644 1111111111111111111111111111111111111111 0000000000000000000000000000000000000000 M<NUL>  | liste des chemins changés illisible   |
+      | an empty path                | :100644 100644 1111111111111111111111111111111111111111 0000000000000000000000000000000000000000 M<NUL><NUL> | liste des chemins changés illisible |
+      | a status it does not know    | :100644 100644 1111111111111111111111111111111111111111 0000000000000000000000000000000000000000 U<NUL>a<NUL> | liste des chemins changés illisible |
+      | an abbreviated object name   | :100644 100644 1111111 0000000 M<NUL>a<NUL>                                                             | liste des chemins changés illisible   |
+      | text before the record       | x:100644 100644 1111111111111111111111111111111111111111 0000000000000000000000000000000000000000 M<NUL>a<NUL> | liste des chemins changés illisible |
+      | text after the status        | :100644 100644 1111111111111111111111111111111111111111 0000000000000000000000000000000000000000 MM<NUL>a<NUL> | liste des chemins changés illisible |
+      | a nested repository added    | :000000 160000 0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 A<NUL>sub<NUL> | dépôt imbriqué dans l'arbre : sub |
+      | a nested repository removed  | :160000 000000 1111111111111111111111111111111111111111 0000000000000000000000000000000000000000 D<NUL>sub<NUL> | dépôt imbriqué dans l'arbre : sub |
 
   Scenario: a production file with no added line is not in the perimeter
     When the gate computes the perimeter of the changes "src/a.mjs:"

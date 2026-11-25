@@ -3,6 +3,8 @@ import { noopLogger } from '@stryker-mutator/util';
 import { Instrumenter } from '@stryker-mutator/instrumenter';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { requireSharedLineCoordinates } from '../domain/diff.js';
+import { requireLiteralMutationPath } from '../domain/mutate-pattern.js';
 import type { Perimeter } from '../domain/mutation.js';
 
 const instrumenter = new Instrumenter(noopLogger);
@@ -31,6 +33,20 @@ function sourceDigest(source: string): string {
   return createHash('sha256').update(source).digest('hex');
 }
 
+async function instrumentSource(root: string, file: string, source: string) {
+  requireLiteralMutationPath(file);
+  requireSharedLineCoordinates(file, source);
+  return instrumenter.instrument(
+    [{ name: resolve(root, file), content: source, mutate: true }],
+    inventoryOptions,
+  );
+}
+
+/** Git lines and the gate's report use one-based positions. */
+function overlaps(lines: readonly number[], start: number, end: number): boolean {
+  return lines.some((line) => line >= start && line <= end);
+}
+
 /** Discover before projecting: Stryker range containment would omit enclosing, multiline AST nodes. */
 export async function mutationLots(
   root: string,
@@ -48,10 +64,7 @@ export async function mutationLots(
     // The perimeter keeps the changed line order from Git.
     const lines = [...(perimeter.changedLines.get(file) ?? [])];
     const whole = wholeFiles.has(file);
-    const { mutants } = await instrumenter.instrument(
-      [{ name: resolve(root, file), content: source, mutate: true }],
-      inventoryOptions,
-    );
+    const { mutants } = await instrumentSource(root, file, source);
     lots.push({
       file,
       sourceSha256: sourceDigest(source),
@@ -62,7 +75,7 @@ export async function mutationLots(
         // Instrumenter API uses zero-based positions. The gate consumes one-based reporter positions.
         const start = { line: location.start.line + 1, column: location.start.column + 1 };
         const end = { line: location.end.line + 1, column: location.end.column + 1 };
-        if (!whole && !lines.some((line) => line >= start.line && line <= end.line)) return [];
+        if (!whole && !overlaps(lines, start.line, end.line)) return [];
         return [
           {
             start,

@@ -23,6 +23,10 @@
       "types": "./dist/src/gate-receipt.d.ts",
       "default": "./src/gate-receipt.ts"
     },
+    "./git-worktree": {
+      "types": "./dist/src/git-worktree.d.ts",
+      "default": "./src/git-worktree.ts"
+    },
     "./gate-reports": {
       "types": "./dist/src/gate-reports.d.ts",
       "default": "./src/gate-reports.ts"

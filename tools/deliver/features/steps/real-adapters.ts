@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { hasAdmittedRun } from '@architect-os/sandbox/runtime-context';
 import { ProcessGate } from '../../src/infrastructure/process-gate.js';
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DeliveryEntry, Repository, RuleSuite } from '../../src/domain/ports.js';
 import { GitRepository } from '../../src/infrastructure/git-repository.js';
@@ -97,8 +97,30 @@ Then(
   },
 );
 
+Given('everything in the delivery worktree is committed', function () {
+  gitOf(this).commitEverything();
+});
+
+When(
+  'the fixture git, without the options of the delivery, is asked for the {word} of the delivery worktree',
+  function (command: string) {
+    const { git, work } = gitOf(this);
+    if (command === 'status') git(work, 'status', '--porcelain');
+    else git(work, 'fetch', '--quiet', '--prune', 'origin');
+  },
+);
+
+Then('the witness program of the nested delivery repository has not run', function () {
+  assert.equal(gitOf(this).witnessRan(), false);
+});
+
+Then('the witness program of the nested delivery repository has run', function () {
+  assert.equal(gitOf(this).witnessRan(), true);
+});
+
 /** The methods a scenario calls by name, with arguments that are the scenario's own. */
 const calls: Record<string, (repository: Repository) => unknown> = {
+  holdsNestedRepository: (repository) => repository.holdsNestedRepository(),
   isClean: (repository) => repository.isClean(),
   head: (repository) => repository.head(),
   fetch: (repository) => repository.fetch(),
@@ -277,3 +299,46 @@ Then('the delivery log file holds the line {string} and then what was appended',
   assert.equal(lines.length, 3);
   assert.deepEqual([logOf(this).parse(lines[1] as string)], this.state['portAppended']);
 });
+
+Given('the delivery checkout was converted by Git and has been left untouched', function () {
+  const fixture = gitOf(this);
+  const { git, work, root } = fixture;
+  writeFileSync(join(work, '.gitattributes'), 'new.txt text eol=crlf\n');
+  writeFileSync(join(work, 'new.txt'), 'first\n');
+  git(work, 'add', '.gitattributes', 'new.txt');
+  git(work, 'commit', '-qm', 'line endings');
+  const converted = join(root, 'converted');
+  git(work, 'worktree', 'add', '--detach', converted, 'HEAD');
+  assert.equal(readFileSync(join(converted, 'new.txt'), 'utf8'), 'first\r\n');
+  assert.equal(git(converted, 'status', '--porcelain'), '');
+  assert.equal(git(converted, 'show', 'HEAD:new.txt'), 'first\n');
+  fixture.repository = new GitRepository(converted, 'origin', 'git', hostOf(this));
+});
+
+Given('a linked worktree with an external gitdir is inside the delivery repository', function () {
+  const { git, work, bare } = gitOf(this);
+  const head = git(work, 'rev-parse', 'HEAD').trim();
+  git(work, 'push', 'origin', `${head}:refs/heads/external-fixture`);
+  const linked = join(work, 'linked');
+  git(bare, 'worktree', 'add', '--detach', linked, head);
+  assert.ok(readFileSync(join(linked, '.git'), 'utf8').startsWith(`gitdir: ${bare}/worktrees/`));
+});
+
+Given('the nested delivery marker points to a missing gitdir', function () {
+  writeFileSync(join(gitOf(this).work, 'linked/.git'), 'gitdir: /missing-gitdir\n');
+});
+
+// A gitlink with no directory in the checkout: only the recorded mode 160000 can show it, no marker can.
+Given(
+  'a gitlink {string} is recorded only in the {word} of the delivery repository',
+  function (name: string, place: string) {
+    const { git, work } = gitOf(this);
+    const head = git(work, 'rev-parse', 'HEAD').trim();
+    git(work, 'update-index', '--add', '--cacheinfo', `160000,${head},${name}`);
+    if (place === 'head') {
+      git(work, 'commit', '-qm', 'gitlink');
+      git(work, 'rm', '-q', '--cached', name);
+    } else assert.equal(place, 'index');
+    assert.equal(existsSync(join(work, name)), false);
+  },
+);

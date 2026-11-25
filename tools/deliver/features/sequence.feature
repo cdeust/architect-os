@@ -203,6 +203,22 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
 
   Rule: a precondition that fails ends the run before any act of the later phases, and logs nothing
 
+    Scenario: a tree that holds a nested repository: asked first, and nothing else is asked of git
+      Given the delivery tree holds a nested repository
+      When I deliver "step" until "end"
+      Then the delivery result is:
+        """
+        {"outcome":"stopped","phase":"préalables","reason":"dépôt imbriqué dans l'arbre"}
+        """
+      And the delivery acts are:
+        """
+        """
+      And the delivery calls named "holdsNestedRepository, isClean, head, fetch, remoteHead" are:
+        """
+        holdsNestedRepository
+        """
+      And the delivery log holds no entry
+
     Scenario: a tree that is not clean
       Given the delivery tree is not clean
       When I deliver "step" until "end"

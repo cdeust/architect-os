@@ -757,7 +757,7 @@ Le mainteneur commite ce dossier avec le code de l'étape. Le dossier du poste g
 | **R** | Qui a joué quoi, sur quel arbre | C'est l'objet de l'enregistrement ; il est commité avec le code |
 | **I** | Un texte venu d'une session entre au dépôt par l'enregistrement | L'enregistrement ne porte aucun texte de session : des nombres, des noms pris du fichier descriptif, des valeurs de listes fermées (verdict, issue), des empreintes. Le nom d'un modèle dans le coût par modèle vient du flux d'une session : il n'est gardé que s'il passe l'expression des noms de modèles, sinon il est compté sous `other` |
 | **I** | La consigne commitée porte un secret ou un chemin du poste | Elle est écrite par le mainteneur pour être lue par une session, donc déjà sans secret ; le balayage de secrets du dépôt s'y applique comme au reste. Elle devient publique : rien de privé n'y entre |
-| **D** | Le calcul de l'empreinte lance un programme : git lit sa configuration (filtres, moniteur de fichiers) | La configuration est celle de l'hôte, que le profil `builder` ne peut pas écrire (prouvé par le test d'évasion) ; git est lancé par un argv, avec `core.fsmonitor` et `core.hooksPath` neutralisés ; borne de temps |
+| **D** | Le calcul de l'empreinte lance un programme : git lit sa configuration (filtres, moniteur de fichiers) | La configuration du dépôt est celle de l'hôte, que le profil `builder` ne peut pas écrire (prouvé par le test d'évasion) ; git est lancé par un argv, avec `core.fsmonitor` et `core.hooksPath` neutralisés ; borne de temps. Corrigé le 24 novembre 2026 (journal §108) : une session peut écrire la configuration d'un dépôt **imbriqué** dans son worktree, et git y entre ; l'empreinte, la porte, son verrou et la livraison n'y entrent plus (`--ignore-submodules=all` et `--recurse-submodules=no` sur la ligne de commande : un `.gitmodules` de l'arbre l'emporte sur la configuration, jamais sur l'option), lisent les attributs dans l'arbre vide (`--attr-source`), et refusent un arbre qui tient un dépôt imbriqué avant tout appel qui y entrerait |
 | **E** | L'hôte écrit hors du worktree | Le chemin est construit par l'hôte depuis le worktree et un nom validé ; aucun chemin ne vient d'une session |
 
 **Précisé à la construction** (18 novembre 2026, journal §99).
@@ -791,8 +791,9 @@ Le mainteneur commite ce dossier avec le code de l'étape. Le dossier du poste g
 
 | Lancement | Variables prises de l'hôte | Posées par l'appelant |
 |---|---|---|
-| L'empreinte de l'arbre | `PATH`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR` (le dossier personnel en est sorti après la douzième passe, voir plus bas) | `GIT_INDEX_FILE`, pour l'index temporaire ; `GIT_CONFIG_GLOBAL` et `GIT_CONFIG_SYSTEM`, vers un fichier vide |
-| La porte | Les mêmes | `GIT_CONFIG_GLOBAL` et `GIT_CONFIG_SYSTEM`, vers un fichier vide |
+| L'empreinte de l'arbre | `PATH`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR` (le dossier personnel en est sorti après la douzième passe, voir plus bas) | `GIT_INDEX_FILE`, pour l'index temporaire ; `GIT_CONFIG_GLOBAL` et `GIT_CONFIG_SYSTEM`, vers un fichier vide ; `GIT_ATTR_NOSYSTEM=1`, sans fichier d'attributs du système |
+| La porte | Les mêmes | `GIT_CONFIG_GLOBAL` et `GIT_CONFIG_SYSTEM`, vers un fichier vide ; `GIT_ATTR_NOSYSTEM=1` |
+| Le garde de l'extraction, que la porte, son bail et la livraison partagent (`tools/test-gate/with-tree-lock.py`, lancé par `packages/sandbox/src/git-worktree.ts` avec un environnement vide) | Aucune : `PATH=/usr/bin:/bin` et `LC_ALL=C` sont fixés | `GIT_OPTIONAL_LOCKS=0`, `GIT_ATTR_NOSYSTEM=1`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` vers `/dev/null` |
 | La livraison, git et le client de la forge | La liste du fichier descriptif de la commande, prise dans un ensemble fermé : les mêmes, et ce qu'il faut pour s'identifier auprès de la forge sur un autre poste (`SSH_AUTH_SOCK`, `XDG_CONFIG_HOME`, `GH_TOKEN`, `GITHUB_TOKEN`) | `GIT_TERMINAL_PROMPT=0` |
 
 La commande de la porte que la livraison lance (`npm run gate`) garde l'environnement de l'hôte : c'est une suite entière, pas un appel à git, et ses propres appels à git passent par la règle ci-dessus.

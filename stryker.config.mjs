@@ -8,6 +8,9 @@ import { existsSync, lstatSync, mkdirSync, readFileSync } from 'node:fs';
 import { checkPrivateDirectory } from '@architect-os/sandbox/state-journal';
 import { gateReportPath } from './tools/test-gate/src/infrastructure/report-paths.ts';
 import { join } from 'node:path';
+// From the build, as the plugin below: plain Node loads this file, and a source file that imports another by its
+// `.js` name resolves only once compiled. The gate builds before it starts the mutation tool (tools/test-gate/gate.sh).
+import { literalStrykerPattern } from './tools/test-gate/dist/src/infrastructure/stryker-pattern.js';
 import { mutationFeaturesFor } from './cucumber-paths.mjs';
 
 const report = (name) => gateReportPath(process.env, 'reports/' + name);
@@ -20,7 +23,9 @@ const legacyPlan = existsSync(PLAN) ? JSON.parse(readFileSync(PLAN, 'utf8')) : {
 const native = process.env['AOS_NATIVE_MUTATION_LOTS'] === '1';
 const inventory = native ? JSON.parse(readFileSync(report('mutation-inventory.json'), 'utf8')) : null;
 const mutate =
-  inventory === null ? legacyPlan.mutate : (inventory.patterns ?? inventory.lots.map(({ file }) => file));
+  inventory === null
+    ? legacyPlan.mutate
+    : (inventory.patterns ?? inventory.lots.map(({ file }) => literalStrykerPattern(process.cwd(), file)));
 
 export default {
   testRunner: 'cucumber',
@@ -37,7 +42,11 @@ export default {
     profile: 'mutation',
     ...(inventory?.patterns === undefined
       ? {}
-      : { features: mutationFeaturesFor(inventory.lots.map(({ file }) => file)) }),
+      : {
+          features: mutationFeaturesFor(
+            inventory.lots.map(({ file }) => literalStrykerPattern(process.cwd(), file)),
+          ),
+        }),
   },
   coverageAnalysis: 'perTest',
   // One worker. The suite is not built to run in parallel: the workers share one sandbox and the machine (fixed ports of

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { literalStrykerPattern } from './stryker-pattern.js';
 import type { Lot } from './mutation-lot-proof.js';
 
 // The hosted run 44905674009 used about sixteen Linux runners and spent nearly an hour of runner time on 20 dry-runs.
@@ -94,6 +95,7 @@ export function planHostedSlices(
   read: (file: string) => string,
   costs: MutationCosts,
   count = HOSTED_LANES,
+  root = process.cwd(),
 ): HostedSlice[] {
   if (!Number.isSafeInteger(count) || count < 1) throw new Error('nombre de lots natifs invalide');
   const proof = lots.find(({ file }) => file === canary);
@@ -137,8 +139,12 @@ export function planHostedSlices(
       return {
         lots: [...whole, proof, ...[...scoped].map(([lot, mutants]) => ({ ...lot, whole: false, mutants }))],
         patterns: [...whole, proof]
-          .map(({ file }) => file)
-          .concat(assigned.map(({ lot, mutants }) => range(lot.file, mutants[0] as Mutant))),
+          .map(({ file }) => literalStrykerPattern(root, file))
+          .concat(
+            assigned.map(({ lot, mutants }) =>
+              range(literalStrykerPattern(root, lot.file), mutants[0] as Mutant),
+            ),
+          ),
       };
     });
 }

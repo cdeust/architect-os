@@ -51,6 +51,8 @@ export function runToEnd(
     cwd,
     env: environment,
     encoding: 'utf8',
+    // The lists of a whole tree pass here: the default bound (1 MiB) would end git before its end.
+    maxBuffer: 1 << 30,
   });
   return result.status === null ? undefined : { status: result.status, out: result.stdout };
 }

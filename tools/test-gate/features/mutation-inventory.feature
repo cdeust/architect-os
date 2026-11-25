@@ -130,6 +130,47 @@ Feature: The inventory projects native mutants onto changed production lines
       porte de test : zz/absent.mjs : source de mutation absente
       """
 
+  Scenario Outline: a configured canary that the mutation tool would not read literally cannot produce an inventory: <case>
+    Given a gate repository
+    And the gate repository has a source with a <separator> separator at "<file>"
+    And the gate configuration declares the canary "<file>" with:
+      """
+      {}
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    Then the mutation inventory is refused
+    And the gate output is:
+      """
+      porte de test : <diagnostic> : <file>
+      """
+
+    Examples:
+      | case               | separator | file           | diagnostic                 |
+      | a lone CR          | CR        | zz/probe.mjs   | GATE_SOURCE_LINE_SEPARATOR |
+      | braces in its path | LF        | zz/{probe}.mjs | GATE_MUTATION_PATH_PATTERN |
+
+  Scenario Outline: a file named with pattern characters is projected from its literal pattern and checked by its name: <file>
+    Given a gate repository
+    And the gate repository file "<file>" reads:
+      """
+      export const value = true;
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    And the native plugin instruments the inventory files
+    Then the native report names "<pattern>" as the file it mutated
+    When the gate projects the native report
+    Then the gate exits with 0
+    And the verified projection contains only the inventory mutants
+    When the gate checks its mutation inventory
+    Then the mutation inventory check returns "pass"
+
+    Examples:
+      | file              | pattern               |
+      | src/scoped(1).mjs | src/scoped[(]1[)].mjs |
+      | src/scoped[1].mjs | src/scoped[[]1[]].mjs |
+
   Scenario: a whole-file lot keeps unlocated nodes and refuses an unplanned source
     Given a gate repository
     And the gate repository file "src/scoped.mjs" reads:
@@ -163,6 +204,30 @@ Feature: The inventory projects native mutants onto changed production lines
     And the gate mutation fixture declares its independent mutation profile
     And the gate first parent is committed
     And the gate repository file "src/scoped.mjs" reads:
+      """
+      export const changed = true;
+      """
+    And the gate head is committed
+    When the gate inventories native shard "1"
+    And the native plugin instruments the inventory files
+    And the native producer "1" publishes its raw proof
+    And the gate inventories native shard "2"
+    And the native plugin instruments the inventory files
+    And the native producer "2" publishes its raw proof
+    And the gate collects the two native production lots
+    Then the gate exits with 0
+    And the gate output is:
+      """
+      producteurs de mutation vérifiés : 2
+      """
+
+  Scenario: the two native producers of a file named with pattern characters are collected from its literal pattern
+    Given a gate repository
+    And the gate repository holds the fixture specs "green.feature, second.feature"
+    And the gate repository can run the fixture suite with cucumber-js
+    And the gate mutation fixture declares its independent mutation profile
+    And the gate first parent is committed
+    And the gate repository file "src/scoped(1).mjs" reads:
       """
       export const changed = true;
       """
@@ -536,3 +601,104 @@ Feature: The inventory projects native mutants onto changed production lines
     When the gate runs with the arguments "inventory --job macos"
     Then the gate exits with 1
     And the gate output includes "le job ne prévoit pas de mutation"
+
+  Scenario Outline: the local verdict requires an enclosing mutant with and without a contained mutant
+    Given a gate repository
+    And the gate repository holds the fixture specs "green.feature, second.feature"
+    And the gate cucumber report is the fixture "green"
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export function same(a, b) {
+        return a ===
+          <before>;
+      }
+      """
+    And the gate first parent is committed
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export function same(a, b) {
+        return a ===
+          <after>;
+      }
+      """
+    And the gate head is committed
+    When the gate plans the "linux" job
+    Then the gate writes exactly the literal mutation pattern "src/scoped.mjs"
+    When the gate inventories the mutation scope
+    And the native plugin instruments the inventory files
+    And the gate projects the native report
+    And the local multiline mutation report marks its enclosing and contained mutants killed
+    And the gate checks the "linux" job
+    Then the gate verdict is green
+    When the local multiline mutation report drops its enclosing mutant and retains <contained> contained mutants
+    And the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate output includes "lot"
+
+    Examples:
+      | before | after | contained |
+      | a      | b     | 0         |
+      | false  | true  | 1         |
+
+  Scenario: the local verdict keeps a file without native mutants that the report omits
+    Given a gate repository
+    And the gate repository holds the fixture specs "green.feature, second.feature"
+    And the gate cucumber report is the fixture "green"
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      // old
+      export const value = Math.PI;
+      """
+    And the gate first parent is committed
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      // new
+      export const value = Math.PI;
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    And the gate receives a mutation lot report with "omitted native file"
+    And the gate checks the "linux" job
+    Then the gate verdict is green
+
+  Scenario: the local verdict refuses a report that omits a file with native mutants, even when none is on a changed line
+    Given a gate repository
+    And the gate repository holds the fixture specs "green.feature, second.feature"
+    And the gate cucumber report is the fixture "green"
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      // old
+      export const value = true;
+      """
+    And the gate first parent is committed
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      // new
+      export const value = true;
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    And the gate receives a mutation lot report with "omitted native file"
+    And the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate output includes "src/scoped.mjs : lot absent du rapport de mutation"
+
+  Scenario: the local verdict refuses an ignored mutant of a changed line that the inventory does not hold
+    Given a gate repository
+    And the gate repository holds the fixture specs "green.feature, second.feature"
+    And the gate cucumber report is the fixture "green"
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export const same = (a, b) => a === a;
+      """
+    And the gate first parent is committed
+    And the gate repository file "src/scoped.mjs" reads:
+      """
+      export const same = (a, b) => a === b;
+      """
+    And the gate head is committed
+    When the gate inventories the mutation scope
+    And the gate receives a mutation lot report with "ignored outside the lots"
+    And the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate output includes "mutant ignoré hors inventaire : extra"

@@ -73,20 +73,22 @@ Feature: the fingerprint of the tree of a worktree
       | call           |
       | rev-parse HEAD |
       | read-tree HEAD |
+      | ls-files -s -z |
       | add -A         |
       | write-tree     |
 
-  Scenario: the five git calls are argv with the options that switch off the monitor and the hooks, and the temporary index
+  Scenario: the six git calls are argv with the options that switch off the monitor, the hooks, the attributes of the tree and the descent into a nested repository, and the temporary index
     Given a fake git that records its calls
     And a temporary directory that the fingerprint must leave empty
     And a throwaway directory
     When I take the fingerprint of the directory
     Then the fake git was called, in this order, with:
-      | -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD        | no index  |
-      | -c core.fsmonitor=false -c core.hooksPath=/dev/null read-tree HEAD        | the index |
-      | -c core.fsmonitor=false -c core.hooksPath=/dev/null add -A                | the index |
-      | -c core.fsmonitor=false -c core.hooksPath=/dev/null write-tree            | the index |
-      | -c core.fsmonitor=false -c core.hooksPath=/dev/null rev-parse HEAD^{tree} | no index  |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse HEAD        | no index  |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all read-tree HEAD        | the index |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all ls-files -s -z        | the index |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all add -A                | the index |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all write-tree            | the index |
+      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse HEAD^{tree} | no index  |
     And the fake git ran in the directory
     And the temporary index was in the temporary directory
     And the temporary directory is empty
@@ -114,6 +116,7 @@ Feature: the fingerprint of the tree of a worktree
       | call                | answer                                                                |
       | rev-parse HEAD      | the exit code 3 and a marker                                          |
       | read-tree HEAD      | the exit code 3 and a marker                                          |
+      | ls-files -s -z      | the exit code 3 and a marker                                          |
       | add -A              | the exit code 3 and a marker                                          |
       | write-tree          | the exit code 3 and a marker                                          |
       | rev-parse HEAD^{tree} | the exit code 3 and a marker                                        |
@@ -123,6 +126,44 @@ Feature: the fingerprint of the tree of a worktree
       | rev-parse HEAD      | the text "ccccccccccccccccccccccccccccccccccccccc" and the exit code 0 |
       | rev-parse HEAD      | the text "ccccccccccccccccccccccccccccccccccccccccc" and the exit code 0 |
       | rev-parse HEAD      | the text "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC" and the exit code 0 |
+
+  Rule: what a session wrote in the tree decides nothing of what git does for the fingerprint
+
+    Scenario: an attribute file of the tree does not change the bytes that enter the fingerprint
+      Given a throwaway repository with one commit
+      And the file ".gitattributes" of the repository holds "*.txt ident\n"
+      And the file "a.txt" of the repository holds "$Id: a line git would shorten $\n"
+      When I take the fingerprint of the repository
+      Then the fingerprint tree holds the file "a.txt" with the bytes it has on disk
+
+    Scenario: a repository nested in the tree, not tracked, is refused, and the program its configuration names is not started
+      Given a throwaway repository with one commit
+      And a repository nested in the repository at "sub" names a witness program as a filter
+      When I try to take the fingerprint of it
+      Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+      And the witness program of the nested repository has not run
+
+    Scenario: a repository nested in the tree, recorded by the commit, is refused, and the program its configuration names is not started
+      Given a throwaway repository with one commit
+      And a repository nested in the repository at "sub" names a witness program as a filter
+      And everything in the repository is committed
+      When I try to take the fingerprint of it
+      Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+      And the witness program of the nested repository has not run
+
+    Scenario: a gitlink that the commit records, with no directory to mark it, is refused
+      Given a throwaway repository with one commit
+      And the commit of the repository records a gitlink "sub" with no directory in the tree
+      When I try to take the fingerprint of it
+      Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+
+    Scenario: the same program is started by a git asked for the status of that commit with none of the options of the fingerprint, so that the scenarios above can fail
+      Given a throwaway repository with one commit
+      And a repository nested in the repository at "sub" names a witness program as a filter
+      And everything in the repository is committed
+      Then the witness program of the nested repository has not run
+      When a git with none of the options of the fingerprint is asked for the status of the repository
+      Then the witness program of the nested repository has run
 
   Scenario: the configuration of the host is not read: a CRLF file is not converted, and a file the host excludes is in the tree
     Given a throwaway repository with one commit
@@ -167,7 +208,7 @@ Feature: the fingerprint of the tree of a worktree
       And the process has the variable "GIT_CONFIG_COUNT" set to "0"
       And the process has the variable "GH_TOKEN" set to "secret"
       When I take the fingerprint of the directory
-      Then each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, and GIT_INDEX_FILE where it is due
+      Then each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due
 
     Scenario: each call receives the five names of the list when the process has set all five
       Three names are set below. The two others are set by the steps that come first: PATH by the fake git, which puts
@@ -180,4 +221,57 @@ Feature: the fingerprint of the tree of a worktree
       And the process has the variable "LC_ALL" set to "C"
       And the process has the variable "LC_CTYPE" set to "C"
       When I take the fingerprint of the directory
-      Then each call of the fake git received exactly the five names of the list, the two configuration variables set to the empty file, and GIT_INDEX_FILE where it is due
+      Then each call of the fake git received exactly the five names of the list, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due
+
+  Scenario: a nested linked worktree is refused by its marker even when its gitdir is unavailable
+    Given a throwaway repository with one commit
+    And a second throwaway repository with one commit
+    And a linked worktree from the second repository is nested at "linked"
+    When I try to take the fingerprint of it
+    Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+    Given the file "linked/.git" of the repository holds "gitdir: /missing-gitdir\\n"
+    When I try to take the fingerprint of it
+    Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+
+  Scenario: a tracked ignore rule prunes a directory before the nested-marker walk enters it
+    Given a throwaway repository with one commit
+    And the file ".gitignore" of the repository holds "ignored/\n"
+    And everything in the repository is committed
+    And the file "ignored/.git" of the repository holds "gitdir: /missing-gitdir\n"
+    When I take the fingerprint of the repository
+    Then the fingerprint is clean
+
+  Rule: the guard of the checkout compares its bytes with the commit, and refuses what it cannot read
+
+    The delivery asks it whether its checkout is clean, and the fingerprint, the gate and the delivery ask it for the
+    first nested marker, before any git call would walk the tree (packages/sandbox/src/git-worktree.ts).
+
+    Scenario: a checkout that holds the bytes of its commit is clean
+      Given a throwaway repository with one commit
+      Then the guard of the checkout finds it clean
+
+    Scenario Outline: a checkout that differs from its commit is not clean: <change>
+      Given a throwaway repository with one commit
+      And the file "<file>" of the repository holds "<text>"
+      Then the guard of the checkout finds it not clean
+
+      Examples:
+        | change            | file     | text                      |
+        | a tracked file    | a.txt    | changed\n                 |
+        | an untracked file | b.txt    | new\n                     |
+        | a nested marker   | sub/.git | gitdir: /missing-gitdir\n |
+
+    Scenario Outline: the guard refuses <place> with its fixed message, whether asked for the cleanliness or the markers
+      Given <place>
+      Then the guard of the checkout refuses to say whether it is clean with "GATE_CHECKOUT_UNREADABLE"
+      And the guard of the checkout refuses to name its markers with "GATE_CHECKOUT_UNREADABLE"
+
+      Examples:
+        | place                                         |
+        | a directory that does not exist               |
+        | a throwaway repository with a directory it cannot list |
+
+    Scenario: the guard says a directory that is not a repository is not a checkout, and walks it for markers
+      Given a directory that is not a repository
+      Then the guard of the checkout refuses to say whether it is clean with "GATE_CHECKOUT_UNREADABLE"
+      And the guard of the checkout names no marker

@@ -140,6 +140,174 @@ assert p.returncode==1 and 'GATE_TREE_BUSY' in p.stderr,p
                     guard,
                 )
             assert launch(tree, "/usr/bin/true").returncode == 0
+        elif mode == "nested repository":
+            # What a session can leave in its worktree: a repository whose own configuration
+            # names a program as the clean filter of one file, left racy so that a git that
+            # enters the repository must run the filter to know whether the file changed.
+            witness = home / "witness"
+            ran = home / "witness.ran"
+            witness.write_text(f"#!/bin/sh\n: > '{ran}'\ncat\n")
+            witness.chmod(0o755)
+            nested = tree / "sub"
+            nested.mkdir()
+            run(nested, "git", "init", "-q")
+            (nested / ".gitattributes").write_text("f.txt filter=witness\n")
+            (nested / "f.txt").write_text("inner\n")
+            run(nested, "git", "add", "-A")
+            run(
+                nested,
+                "git",
+                "-c",
+                "user.name=fixture",
+                "-c",
+                "user.email=t@example.invalid",
+                "commit",
+                "-qm",
+                "inner",
+            )
+            run(nested, "git", "config", "filter.witness.clean", str(witness))
+            run(nested, "git", "add", "f.txt")
+            (nested / "f.txt").write_text("outer\n")
+            ran.unlink(missing_ok=True)
+            sha = run(tree, "git", "rev-parse", "HEAD").stdout.strip()
+
+            # A tracked file of the tree asks git to look into the nested repository whatever the
+            # configuration says.
+            (tree / ".gitmodules").write_text(
+                '[submodule "sub"]\n\tpath = sub\n\turl = ./sub\n\tignore = none\n'
+            )
+
+            def refused():
+                # Running or certifying a candidate is refused.
+                for args in (
+                    ("exec", "/usr/bin/true"),
+                    ("candidate", "/usr/bin/true"),
+                    ("verify", sha),
+                ):
+                    proc = run(tree, python, "-I", guard, *args, check=False)
+                    assert (
+                        proc.returncode == 1
+                        and "GATE_NESTED_REPOSITORY" in proc.stderr
+                    ), (args, proc)
+                # Restoring a recorded source stays open, and reads nothing through git that
+                # would enter the nested repository.
+                assert run(tree, python, "-I", guard, "recover").returncode == 0
+                assert not ran.exists()
+
+            # Not tracked: git lists it as a directory.
+            refused()
+            # Recorded by a commit, as the host would after a step: an entry of mode 160000.
+            run(tree, "git", "add", "-A")
+            run(
+                tree,
+                "git",
+                "-c",
+                "user.name=fixture",
+                "-c",
+                "user.email=t@example.invalid",
+                "commit",
+                "-qm",
+                "the work of a session",
+            )
+            sha = run(tree, "git", "rev-parse", "HEAD").stdout.strip()
+            refused()
+            # The control: a git without the options of the Gate enters the nested repository
+            # and starts the program, so the assertions above can fail.
+            run(tree, "git", "status", "--porcelain")
+            assert ran.exists()
+        elif mode == "linked nested worktree":
+            outer = home / "outside"
+            init(outer)
+            linked = tree / "linked"
+            run(outer, "git", "worktree", "add", "--detach", str(linked), "HEAD")
+            marker = linked / ".git"
+            assert marker.read_text().startswith(f"gitdir: {outer}/.git/worktrees/")
+            refused = launch(tree, "/usr/bin/true", check=False)
+            assert refused.returncode == 1 and "GATE_NESTED_REPOSITORY" in refused.stderr
+            # Even an unresolved marker remains a refusal. Its contents are irrelevant.
+            marker.write_text("gitdir: /missing-gitdir\n")
+            refused = launch(tree, "/usr/bin/true", check=False)
+            assert refused.returncode == 1 and "GATE_NESTED_REPOSITORY" in refused.stderr
+        elif mode == "staged addition":
+            added = tree / "staged.txt"
+            added.write_text("staged only\n")
+            run(tree, "git", "add", "staged.txt")
+            refused = launch(tree, "/usr/bin/true", check=False)
+            assert refused.returncode == 1 and "GATE_TREE_DIRTY" in refused.stderr
+            run(tree, "git", "rm", "--cached", "staged.txt")
+            added.unlink()
+            sha = run(tree, "git", "rev-parse", "HEAD").stdout.strip()
+            code = """from pathlib import Path
+import os,subprocess,sys
+from subprocess import run
+Path('staged.txt').write_text('new')
+run(['/usr/bin/git','add','staged.txt'],check=True)
+fd=int(os.environ['AOS_GATE_LEASE_FD'])
+p=run([sys.executable,'-I',sys.argv[1],'verify',sys.argv[2]],pass_fds=(fd,),capture_output=True,text=True)
+assert p.returncode==1 and 'GATE_RECEIPT_TREE_CHANGED' in p.stderr,p
+"""
+            launch(tree, python, "-I", "-c", code, guard, sha)
+        elif mode in ("index mode differs", "index unresolved"):
+            if mode == "index mode differs":
+                run(tree, "git", "update-index", "--chmod=+x", "src/item.txt")
+            else:
+                oid = run(tree, "git", "rev-parse", "HEAD:src/item.txt").stdout.strip()
+                sp.run(
+                    ["git", "update-index", "--index-info"],
+                    cwd=tree,
+                    input=(f"0 {'0' * len(oid)}\tsrc/item.txt\n"
+                           f"100644 {oid} 1\tsrc/item.txt\n"),
+                    check=True,
+                    text=True,
+                )
+            assert (tree / "src/item.txt").read_bytes() == original
+            proc = launch(tree, "/usr/bin/true", check=False)
+            assert proc.returncode == 1 and "GATE_TREE_DIRTY" in proc.stderr, proc
+        elif mode == "untouched converted checkout":
+            (tree / ".gitattributes").write_text("src/item.txt text eol=crlf\n")
+            run(tree, "git", "add", ".gitattributes")
+            run(tree, "git", "-c", "user.name=fixture", "-c", "user.email=t@example.invalid",
+                "commit", "-qm", "line endings")
+            converted = home / "converted"
+            run(tree, "git", "worktree", "add", "--detach", str(converted), "HEAD")
+            owned.append(ledger(converted))
+            assert run(converted, "git", "status", "--porcelain").stdout == ""
+            assert (converted / "src/item.txt").read_bytes() == b"original contents\r\n"
+            proc = launch(converted, "/usr/bin/true", check=False)
+            assert proc.returncode == 1 and "GATE_TREE_DIRTY" in proc.stderr, proc
+        elif mode == "rewritten bytes":
+            # Git calls this tree clean, and its bytes are not the commit's: an attribute of the
+            # tree collapses the rewritten line when git compares. The Gate reads the bytes.
+            (tree / ".gitattributes").write_text("*.txt ident\n")
+            (tree / "src/id.txt").write_text("$Id$\n")
+            run(tree, "git", "add", "-A")
+            run(
+                tree,
+                "git",
+                "-c",
+                "user.name=fixture",
+                "-c",
+                "user.email=t@example.invalid",
+                "commit",
+                "-qm",
+                "an identifier",
+            )
+            assert launch(tree, "/usr/bin/true").returncode == 0
+            (tree / "src/id.txt").write_text("$Id: a line the commit does not hold $\n")
+            assert run(tree, "git", "diff", "--quiet", "HEAD", check=False).returncode == 0
+            proc = launch(tree, "/usr/bin/true", check=False)
+            assert proc.returncode == 1 and "GATE_TREE_DIRTY" in proc.stderr, proc
+            # A mode the commit does not hold, and a file replaced by a link to the same bytes.
+            (tree / "src/id.txt").write_text("$Id$\n")
+            assert launch(tree, "/usr/bin/true").returncode == 0
+            (tree / "src/id.txt").chmod(0o755)
+            proc = launch(tree, "/usr/bin/true", check=False)
+            assert proc.returncode == 1 and "GATE_TREE_DIRTY" in proc.stderr, proc
+            (tree / "src/id.txt").chmod(0o644)
+            (tree / "src/id.txt").rename(home / "elsewhere.txt")
+            (tree / "src/id.txt").symlink_to(home / "elsewhere.txt")
+            proc = launch(tree, "/usr/bin/true", check=False)
+            assert proc.returncode == 1 and "GATE_TREE_DIRTY" in proc.stderr, proc
         elif mode == "unchecked source":
             sha = run(tree, "git", "rev-parse", "HEAD").stdout.strip()
             (tree / "other.ts").write_text("unchecked")
@@ -248,6 +416,19 @@ for action in ('begin','restore','discard','verify'):
                 code = "from pathlib import Path;import sys;assert Path('src/item.txt').read_bytes()==sys.argv[1].encode()"
                 launch(tree, python, "-I", "-c", code, original.decode())
                 assert not (ledger(tree) / "pending.json").exists()
+            elif mode == "interrupted mutation with nested repository":
+                state = ledger(tree)
+                receipt = state / "latest.json"
+                receipt.write_text("{}")
+                receipt.chmod(0o600)
+                nested = tree / "unrelated"
+                nested.mkdir()
+                (nested / ".git").write_text("gitdir: /outside-checkout\n")
+                proc = run(tree, python, "-I", guard, "full", "/usr/bin/true", check=False)
+                assert proc.returncode == 1 and "GATE_NESTED_REPOSITORY" in proc.stderr, proc
+                assert src.read_bytes() == original
+                assert not (state / "pending.json").exists()
+                assert not receipt.exists()
             elif mode == "trusted issuer":
                 # The installed issuer starts independently of the candidate whose tracked source was damaged.
                 run(tree, str(project / "aos"), "--", python, "-I", guard, "recover")

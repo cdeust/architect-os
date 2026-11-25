@@ -63,6 +63,7 @@ function refuse(reason: Reason): Start {
 
 /** Phase 1. */
 function prerequisites(options: DeliverOptions, config: DeliverConfig, repository: Repository): Start {
+  if (repository.holdsNestedRepository()) return refuse("dépôt imbriqué dans l'arbre");
   if (!repository.isClean()) return refuse('arbre non propre');
   const hash = repository.head();
   if (!/^[0-9a-f]{40}$/.test(hash)) return refuse('empreinte de commit invalide');

@@ -8,6 +8,8 @@ import type { Journal } from './in-memory-journal.js';
  */
 export class InMemoryRepository implements Repository {
   clean = true;
+  /** The tree holds a repository of its own. */
+  nested = false;
   /** The branches of the remote itself. */
   readonly remotes = new Map<string, string>();
   /** Fault injection: the branches whose push is refused whatever the history says. */
@@ -43,6 +45,11 @@ export class InMemoryRepository implements Repository {
   /** A file of the worktree changes. */
   touch(): void {
     this.clean = false;
+  }
+
+  holdsNestedRepository(): boolean {
+    this.journal.record('holdsNestedRepository');
+    return this.nested;
   }
 
   isClean(): boolean {

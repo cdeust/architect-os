@@ -51,7 +51,7 @@ Feature: Test gate, rule 7 in check: the canary, then the replay record of every
       """
       { "sum": "Killed", "isPositive": "Killed" }
       """
-    And the gate mutation report keeps only the mutants "0"
+    And the gate mutation report keeps only the mutants "0, 1"
     When the gate checks the "linux" job
     Then the gate violations are:
       """
@@ -133,6 +133,8 @@ Feature: Test gate, rule 7 in check: the canary, then the replay record of every
 
   Scenario: a perimeter without a replayable mutant needs no replay record
     Given the gate configuration declares the replay
+    And line 1 of "src/math.mjs" reads "// only the leading comment changed" in the gate mutation report and in the working tree
+    And the gate head is committed
     And the gate mutation report keeps only the mutants "5"
     When the gate checks the "linux" job
     Then the gate verdict is green
@@ -181,11 +183,12 @@ Feature: Test gate, rule 7 in check: the canary, then the replay record of every
       """
       { "isPositive": "Killed" }
       """
-    And the gate mutation report keeps only the mutants "0, 2, 4"
+    And the gate mutation report keeps only the mutants "0, 1, 2, 4"
     When the gate checks the "linux" job
     Then the gate violations are:
       """
       7: canari src/math.mjs:2 BlockStatement #0 : hors des fonctions déclarées
+      7: canari src/math.mjs:3 ArithmeticOperator #1 : hors des fonctions déclarées
       """
 
   Scenario Outline: the gate rejects a replay record with a <case>
