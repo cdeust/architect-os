@@ -13,7 +13,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import type { FileSet } from '../domain/layout.js';
 
 // Darwin's <sys/fcntl.h> O_NOFOLLOW_ANY is not exported by Node (node_modules/@types/node/fs.d.ts).
@@ -21,7 +21,8 @@ const DARWIN_NOFOLLOW_ANY = 0x20000000;
 
 /** Linux exposes the pinned directory for each relative open through procfs (proc_pid_fd(5)). `path` is absolute. */
 function openOnLinux(path: string, flags: number): number {
-  const names = relative('/', path).split('/');
+  // Stryker disable next-line MethodExpression: équivalent: `path` is absolute, and its empty first name reopens the directory "/" the walk starts from
+  const names = path.slice(1).split('/');
   const leaf = names.pop() as string;
   const directoryFlags = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
   let directory = openSync('/', directoryFlags);

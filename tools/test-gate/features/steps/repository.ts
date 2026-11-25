@@ -583,6 +583,23 @@ Given(
   },
 );
 
+Given('the gate repository directory {string} cannot be searched', function (path: string) {
+  const directory = repository(this).path(path);
+  chmodSync(directory, 0o600);
+  // Cleanups run in reverse order: the directory is opened again before the repository is removed.
+  this.cleanups.push(() => chmodSync(directory, 0o700));
+});
+
+Then(
+  'the gate workspace fails to read source {string} with an error that begins {string}',
+  function (path: string, start: string) {
+    assert.throws(
+      () => repository(this).workspace().readSource(path),
+      (error: Error) => error.message.startsWith(start),
+    );
+  },
+);
+
 Given('the gate workspace has a directory where the source {string} is expected', function (path: string) {
   mkdirSync(repository(this).path(path), { recursive: true });
 });
