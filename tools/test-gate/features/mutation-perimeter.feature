@@ -143,13 +143,16 @@ Feature: Gate source files have an unambiguous mutation perimeter
     And the gate output includes "GATE_SOURCE_LINK : probe/leaf.mjs"
 
   Scenario: a source under a directory the gate cannot search is an error of the open that failed, not of another call
+    The closed directory is not the last one of the path: under Linux the walk opens each directory itself, and only a
+    directory that fails inside the walk reaches the check that tells a link from what the open refused.
+
     Given a gate repository
-    And the gate repository file "src/closed/leaf.mjs" reads:
+    And the gate repository file "src/closed/inner/leaf.mjs" reads:
       """
       export const witness = 1;
       """
     And the gate repository directory "src/closed" cannot be searched
-    Then the gate workspace fails to read source "src/closed/leaf.mjs" with an error that begins "EACCES: permission denied, open "
+    Then the gate workspace fails to read source "src/closed/inner/leaf.mjs" with an error that begins "EACCES: permission denied, open "
 
   Scenario: a source read refuses a non-regular file
     Given a gate repository
