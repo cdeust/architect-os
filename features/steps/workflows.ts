@@ -506,6 +506,35 @@ Then('a copy with {string} is refused by hosted admission policy', function (fau
   assert.throws(() => assertHostedAdmission(stringify(doc), path.split('/').at(-1) ?? ''));
 });
 
+// Stryker loads helpers from the build (stryker.config.mjs): a job that runs it builds first.
+function assertBuildBeforeStryker(source: string): void {
+  let runs = 0;
+  for (const [id, job] of Object.entries(workflow(source).jobs)) {
+    const lines = (job.steps ?? []).flatMap((step) => (step.run ? step.run.split('\n') : []));
+    const stryker = lines.findIndex((line) => /\bstryker run\b/.test(line));
+    if (stryker === -1) continue;
+    runs += 1;
+    assert.ok(
+      lines.slice(0, stryker).some((line) => /\btsc -b\b/.test(line)),
+      id + ': stryker run without a build before it',
+    );
+  }
+  assert.ok(runs > 0, 'no stryker run');
+}
+
+Then('each Stryker run of the workflow follows a build in its job', function () {
+  assertBuildBeforeStryker(text(this));
+});
+
+Then('a copy of the workflow without the build before Stryker is refused', function () {
+  const broken = text(this)
+    .split('\n')
+    .filter((line) => !/\btsc -b\b/.test(line))
+    .join('\n');
+  assert.notEqual(broken, text(this));
+  assert.throws(() => assertBuildBeforeStryker(broken), /stryker run without a build before it/);
+});
+
 const runnerEnv = (dir: string): Record<string, string> => ({
   PATH: '/usr/bin:/bin',
   RUNNER_TEMP: dir,

@@ -78,7 +78,12 @@ jobs:
       - name: Stryker
         env:
           AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
-        run: sh tools/runtime/gate-job.sh -- /usr/bin/python3 -I tools/test-gate/with-tree-lock.py exec /usr/bin/python3 -I tools/test-gate/with-tree-lock.py candidate npx stryker run
+        # stryker.config.mjs loads its pattern helper from the build: build first, as gate-lane.yml does.
+        run: |
+          sh tools/runtime/gate-job.sh -- /usr/bin/python3 -I tools/test-gate/with-tree-lock.py exec bash -e -o pipefail <<'ADMITTED'
+          /usr/bin/python3 -I tools/test-gate/with-tree-lock.py candidate npm exec --no -- tsc -b
+          /usr/bin/python3 -I tools/test-gate/with-tree-lock.py candidate npx stryker run
+          ADMITTED
 
       - name: Replay every verdict (rule 7)
         env:
