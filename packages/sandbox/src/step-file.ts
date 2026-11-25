@@ -2,7 +2,13 @@ import { z } from 'zod';
 import { ticketsSchema } from '@architect-os/contracts';
 
 import { codexModelSchema } from './models.js';
-import { deriveRoute, routeBlockSchema, routingDigest, type RoutingTable } from './routing.js';
+import {
+  deriveRoute,
+  routeBlockSchema,
+  routingDigest,
+  ticketIdSchema,
+  type RoutingTable,
+} from './routing.js';
 
 export { codexModelSchema, type CodexModel } from './models.js';
 
@@ -109,10 +115,7 @@ export const parseStepFile = (raw: unknown): StepFile => stepFileSchema().parse(
 const routedPolicySchema = () =>
   z.strictObject({
     routing: z.strictObject({
-      ticket: z
-        .string()
-        .regex(/^TICKET-\d{3}$/)
-        .optional(),
+      ticket: ticketIdSchema().optional(),
       providers: routeBlockSchema().shape.providers,
     }),
     scouts: z

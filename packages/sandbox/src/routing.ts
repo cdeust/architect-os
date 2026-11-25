@@ -26,6 +26,9 @@ export class RoutingError extends Error {
 // chacun de ses mutants (Stryker).
 const limit = () => z.int().min(1).max(7200);
 
+/** L'identifiant d'un ticket, tel que le schéma partagé des tickets l'accepte : une seule règle pour toute la chaîne. */
+export const ticketIdSchema = () => ticketsSchema().element.shape.id;
+
 /** Les fournisseurs dont Step a un adaptateur : l'opérateur n'en admet pas d'autre. */
 export const admittedProviderSchema = () => z.enum(['anthropic', 'openai']);
 export type AdmittedProvider = z.infer<ReturnType<typeof admittedProviderSchema>>;
@@ -107,7 +110,7 @@ export function routeBlockSchema() {
     anthropicCandidate().extend({ waiting: z.boolean() }),
   ]);
   return z.strictObject({
-    ticket: z.string().regex(/^TICKET-\d{3}$/),
+    ticket: ticketIdSchema(),
     points: z.int().min(1),
     providers: z
       .array(admittedProviderSchema())

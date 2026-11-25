@@ -760,6 +760,9 @@ Given('the routed Plan input is changed to {string}', function (this: World, cha
     case 'an unknown designated ticket':
       policy.step.routing.ticket = 'TICKET-009';
       break;
+    case 'a designated ticket no producer numbers':
+      policy.step.routing.ticket = 'TICKET-000';
+      break;
     case 'only OpenAI admitted':
       policy.step.routing.providers = ['openai'];
       break;

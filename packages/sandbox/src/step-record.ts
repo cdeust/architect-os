@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { ticketsSchema } from '@architect-os/contracts';
 import { codexModelSchema, type StepFile } from './step-file.js';
+import { ticketIdSchema } from './routing.js';
 import type { TreeFingerprint } from './tree-fingerprint.js';
 
 // Les schémas et les expressions sont construits dans des fonctions : un littéral au niveau du module ferait rejouer
@@ -65,7 +66,7 @@ export function stepRecordSchema() {
     // son constructeur et le signal que l'hôte en a tiré.
     routing: z
       .strictObject({
-        ticket: z.string().regex(/^TICKET-\d{3}$/),
+        ticket: ticketIdSchema(),
         points: z.int().min(1),
         table_sha256: digest(),
         start: z.enum(['BAND_OF_POINTS', 'BAND_REQUIRES_CHECKS']),

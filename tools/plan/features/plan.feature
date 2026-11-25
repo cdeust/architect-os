@@ -271,6 +271,7 @@ Feature: Prepare and explicitly approve one step from Define v1
       | two independent tickets        | ROUTING_TICKET_AMBIGUOUS    |
       | no tickets                     | ROUTING_TICKETS_REQUIRED    |
       | an unknown designated ticket   | ROUTING_TICKET_UNKNOWN      |
+      | a designated ticket no producer numbers | PLAN_INPUT_INVALID |
       | only OpenAI admitted           | ROUTING_NO_ADMITTED_BUILDER |
       | Google admitted                | PLAN_INPUT_INVALID          |
       | a scout without its question   | PLAN_INPUT_INVALID          |
