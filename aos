@@ -20,7 +20,7 @@
 # tools/runtime/node-locations (where an installer or the runner puts Node) that holds an executable `node`, which
 # must report the version of .nvmrc. It runs the admission, and the listing of the npm settings below. Other programs
 # are started by absolute path: /usr/bin/env and /bin/sh, on macOS and on Linux. PROGRAM is looked up in the caller's
-# PATH, unchanged.
+# PATH, unchanged, except for the reserved delivery verb: the owner launcher starts its installed CLI.
 set -u
 umask 077
 
@@ -127,6 +127,20 @@ XDG_CACHE_HOME=$root/cache/xdg
 NODE_COMPILE_CACHE=$root/cache/node
 export ARCHITECT_OS_RUNTIME_ROOT ARCHITECT_OS_RUN_DIR ARCHITECT_OS_HOST_XDG_CONFIG_HOME TMPDIR TMP TEMP \
   XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME NODE_COMPILE_CACHE
+
+# Delivery is a launcher verb. Only this entry selects its interpreter, installed modules and
+# working directory. The original physical directory is the subject, never a program search path.
+if [ "$1" = deliver ]; then
+  shift
+  INIT_CWD=$(pwd -P) || fail
+  case "$checkout/" in
+    "$INIT_CWD/"*) refuse DELIVERY_LAUNCHER_IN_SUBJECT ;;
+  esac
+  [ -e "$INIT_CWD/.git" ] || refuse DELIVERY_WORKTREE_REQUIRED
+  export INIT_CWD
+  cd -P -- "$checkout" || fail
+  set -- "$node" "$checkout/tools/deliver/dist/src/cli.js" "$@"
+fi
 
 # PROGRAM, through /usr/bin/env, which removes each listed spelling, then gives npm's four locations one value each,
 # then /bin/sh, which execs PROGRAM with its arguments as they are (env would read a PROGRAM holding `=` as a variable).

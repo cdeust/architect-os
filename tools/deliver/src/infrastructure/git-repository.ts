@@ -48,6 +48,32 @@ export class GitRepository implements Repository {
     return status === 0 ? out.trim() : undefined;
   }
 
+  parentsOf(commit: string): readonly string[] {
+    // Read only the headers of this object: grafts, shallow boundaries and the commit message have no vote.
+    const header = this.run(['cat-file', 'commit', commit]).out.split('\n\n', 1)[0]!;
+    return header
+      .split('\n')
+      .filter((line) => line.startsWith('parent '))
+      .map((line) => line.slice(7));
+  }
+
+  changedPaths(parent: string, commit: string): readonly string[] {
+    // Two objects, never the index or a checkout. Suppressing rename detection yields both names.
+    const out = this.run([
+      'diff-tree',
+      '-r',
+      '--name-only',
+      '-z',
+      '--no-renames',
+      '--no-relative',
+      '--ignore-submodules=none',
+      parent,
+      commit,
+      '--',
+    ]).out;
+    return out.split('\0').filter(Boolean);
+  }
+
   isAncestor(ancestor: string, descendant: string): boolean {
     return this.run(['merge-base', '--is-ancestor', ancestor, descendant], 1).status === 0;
   }
@@ -90,6 +116,7 @@ export class GitRepository implements Repository {
       // rights of the owner: no file monitor and no hook, the attributes read from the empty tree, and no descent
       // into a repository nested in the tree, whose own configuration would name programs to start.
       [
+        '--no-replace-objects',
         `--attr-source=${EMPTY_TREE}`,
         '-c',
         'core.fsmonitor=false',

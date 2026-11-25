@@ -11,6 +11,7 @@ export class ProcessGate implements Gate {
     private readonly command: string[],
     private readonly log: string,
     private readonly env: Readonly<NodeJS.ProcessEnv>,
+    private readonly searchPath: string,
   ) {}
 
   verdictHash(): string | undefined {
@@ -22,9 +23,10 @@ export class ProcessGate implements Gate {
     const root = this.env.ARCHITECT_OS_RUNTIME_ROOT!,
       run = this.env.ARCHITECT_OS_RUN_DIR!;
     const environment = closedEnvironment(
-      { names: ['PATH', 'PG_BIN'], env: this.env },
+      { names: ['PG_BIN'], env: this.env },
       {
         ...runLocations(root, run),
+        PATH: this.searchPath,
         ARCHITECT_OS_RUNTIME_ROOT: root,
         ARCHITECT_OS_RUN_DIR: run,
         ARCHITECT_OS_ADMISSION_BINDING: this.env.ARCHITECT_OS_ADMISSION_BINDING!,

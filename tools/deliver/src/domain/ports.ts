@@ -1,5 +1,6 @@
 // The ports of the delivery command (docs/design/orchestration-fable-5-2.md §14, « Étape 1, la commande de livraison »).
 // Each method is one fact asked or one act done; none takes free text from a caller.
+import type { ApprovalKind, ApprovalReason, ApprovalRecord } from './approval.js';
 
 /** Where a run stopped. */
 export type Phase = 'préalables' | "branche d'essai" | 'porte' | 'CI' | 'publication';
@@ -14,6 +15,7 @@ export type Reason =
   | 'empreinte de commit invalide'
   | 'branche distante absente'
   | "la branche distante n'est pas un ancêtre du commit"
+  | "la tête distante n'est pas le parent unique du commit"
   | 'les branches distantes diffèrent'
   | 'rien à livrer'
   | 'un fichier en ajout seul a perdu des lignes'
@@ -27,7 +29,8 @@ export type Reason =
   | 'une branche distante a bougé'
   | 'push refusé'
   | "le ruleset n'a pas rendu pass"
-  | 'évaluation du ruleset introuvable';
+  | 'évaluation du ruleset introuvable'
+  | ApprovalReason;
 
 export type RuleSuite = 'pass' | 'fail' | 'bypass';
 
@@ -63,6 +66,10 @@ export interface Repository {
   fetch(): void;
   /** The hash of the branch on the remote, as last fetched. */
   remoteHead(branch: string): string | undefined;
+  /** Every parent of the named commit, in recorded order; a root has none. */
+  parentsOf(commit: string): readonly string[];
+  /** Object-to-object paths, including deleted files, mode changes and both ends of renames. */
+  changedPaths(parent: string, commit: string): readonly string[];
   isAncestor(ancestor: string, descendant: string): boolean;
   /** The lines removed from that file between the two commits. */
   deletedLines(from: string, to: string, path: string): number;
@@ -87,6 +94,16 @@ export interface Gate {
 
 export interface Clock {
   sleep(seconds: number): Promise<void>;
+  /** Whole seconds since the epoch. */
+  now(): number;
+}
+
+/**
+ * The records of the owner, outside the subject and out of reach of what the delivery starts: read again at each ask,
+ * so that a record withdrawn or expired during a run stops it.
+ */
+export interface Approvals {
+  read(kind: ApprovalKind): ApprovalRecord;
 }
 
 /** What a run that got past the preconditions leaves. */
@@ -99,6 +116,11 @@ export interface DeliveryEntry {
   reason?: Reason;
   ci: { run?: number; attempts: number; polls: number };
   gate: 'reused' | 'ran' | undefined;
+  /**
+   * What allowed the destinations to be pushed: `until-ci`, the run asked to stop before them and publishes nothing,
+   * or the record of the owner that was read, with its bounds.
+   */
+  approval: 'until-ci' | { approvedAt: number; expiresAt: number };
   /** The branches pushed by this run, in order. */
   published: string[];
   /** The evaluation read for each branch of the file, pushed by this run or already at the hash. */

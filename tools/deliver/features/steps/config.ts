@@ -24,7 +24,9 @@ const base = (): Record<string, unknown> => ({
   workflow: 'gate',
   requiredJobs: ['gate-linux', 'gate-macos'],
   appendOnly: ['docs/design/journal.md'],
-  gateCommand: ['npm', 'run', 'gate'],
+  approvalHours: 24,
+  judgePaths: ['tools/test-gate/', 'package.json'],
+  gateCommand: ['../test-gate/gate.sh'],
   gateLog: 'reports/deliver-gate.log',
   environment: ['PATH', 'HOME', 'GH_TOKEN'],
   log: '${state}/deliveries.jsonl',
@@ -146,3 +148,13 @@ Then(
     });
   },
 );
+
+Then('the committed delivery Gate entry belongs to the launcher', function () {
+  assert.deepEqual(scene(this).raw['gateCommand'], ['../test-gate/gate.sh']);
+});
+
+Then('the delivery policy contains the normalized paths {string}', function (paths: string) {
+  const result = parsed(this);
+  assert.ok(result.ok);
+  assert.deepEqual(result.config.judgePaths, paths.split(', '));
+});

@@ -1,10 +1,12 @@
 // The delivery command (docs/design/orchestration-fable-5-2.md §14, « Étape 1, la commande de livraison »): six phases
 // over the ports, the first that fails ends the run. Everything is bound to the one hash read in phase 1; no phase
 // reads HEAD again. A port that throws is not a reason of the list: the error leaves `deliver` as it is.
+import { decideApproval, type ApprovalDecision, type ApprovalKind } from '../domain/approval.js';
 import type { DeliverConfig } from '../domain/config.js';
 import { ciState } from '../domain/ci.js';
-import { planPublication, type RemoteBranch } from '../domain/plan.js';
+import { changesJudge, planPublication, type RemoteBranch } from '../domain/plan.js';
 import type {
+  Approvals,
   CiRun,
   Clock,
   DeliveryEntry,
@@ -26,6 +28,7 @@ export interface DeliverOptions {
 
 export interface DeliverPorts {
   readonly repository: Repository;
+  readonly approvals: Approvals;
   readonly forge: Forge;
   readonly gate: Gate;
   readonly clock: Clock;
@@ -61,8 +64,24 @@ function refuse(reason: Reason): Start {
   return { ok: false, reason };
 }
 
+/** The owner's record of that kind, read once, against this commit now. */
+function approvalOf(
+  kind: ApprovalKind,
+  hash: string,
+  config: DeliverConfig,
+  ports: DeliverPorts,
+): ApprovalDecision {
+  return decideApproval(kind, ports.approvals.read(kind), {
+    repository: config.repository,
+    commit: hash,
+    now: ports.clock.now(),
+    maxSeconds: config.approvalHours * 3600,
+  });
+}
+
 /** Phase 1. */
-function prerequisites(options: DeliverOptions, config: DeliverConfig, repository: Repository): Start {
+function prerequisites(options: DeliverOptions, config: DeliverConfig, ports: DeliverPorts): Start {
+  const { repository } = ports;
   if (repository.holdsNestedRepository()) return refuse("dépôt imbriqué dans l'arbre");
   if (!repository.isClean()) return refuse('arbre non propre');
   const hash = repository.head();
@@ -81,6 +100,21 @@ function prerequisites(options: DeliverOptions, config: DeliverConfig, repositor
   }
   const plan = planPublication(hash, remotes);
   if (!plan.ok) return refuse(plan.reason);
+  const parents = repository.parentsOf(hash);
+  if (parents.length !== 1 || parents[0] !== plan.parent) {
+    return refuse("la tête distante n'est pas le parent unique du commit");
+  }
+  if (changesJudge(repository.changedPaths(plan.parent, hash), config.judgePaths)) {
+    const decision = approvalOf('maintenance', hash, config, ports);
+    if ('reason' in decision) return refuse(decision.reason);
+  }
+  // Asked before the trial branch: a run that would stop at the destinations does not spend a gate and a CI first.
+  let approval: DeliveryEntry['approval'] = 'until-ci';
+  if (options.until === 'end') {
+    const decision = approvalOf('publication', hash, config, ports);
+    if ('reason' in decision) return refuse(decision.reason);
+    approval = decision.approved;
+  }
   for (const path of config.appendOnly) {
     if (repository.deletedLines(plan.parent, hash, path) !== 0) {
       return refuse('un fichier en ajout seul a perdu des lignes');
@@ -95,6 +129,7 @@ function prerequisites(options: DeliverOptions, config: DeliverConfig, repositor
     parent: plan.parent,
     ci: { attempts: 0, polls: 0 },
     gate: undefined,
+    approval,
     published: [],
     ruleSuites: new Map(),
   };
@@ -195,6 +230,9 @@ async function publish(
   ports: DeliverPorts,
 ): Promise<Stop | undefined> {
   const { repository, forge, clock } = ports;
+  // Read again: the owner may have withdrawn the record during the gate and the CI, or it may have expired.
+  const decision = approvalOf('publication', entry.hash, config, ports);
+  if ('reason' in decision) return { phase: 'publication', reason: decision.reason };
   repository.fetch();
   if (remotes.some((remote) => repository.remoteHead(remote.branch) !== remote.head)) {
     return { phase: 'publication', reason: 'une branche distante a bougé' };
@@ -250,7 +288,7 @@ export async function deliver(
   ports: DeliverPorts,
 ): Promise<Delivery> {
   ports.progress.phase('préalables');
-  const start = prerequisites(options, config, ports.repository);
+  const start = prerequisites(options, config, ports);
   if (!start.ok) return { outcome: 'stopped', phase: 'préalables', reason: start.reason };
   const { entry } = start;
   const stop = await play(entry, start, options, config, ports);

@@ -693,7 +693,7 @@ Les pilotes du §13 (HR2 à HR4) gardent leur place : ils mesurent des pièces q
 | 5. Publication | Le même commit, et lui seul, atteint `feat/gate-1a` puis `main` | Les deux branches sont relues juste avant : elles doivent être au parent relevé en phase 1 ; push sans force, par l'empreinte ; l'évaluation du ruleset est lue après chaque push et doit être `pass` |
 | 6. Rangement | Plus de branche d'essai ; le lanceur et le dépôt principal suivent | Suppression de la branche d'essai ; avance rapide des deux arbres |
 
-Elle s'arrête sur demande avant la phase 5 (`--until ci`) : c'est la couture où un gate humain se pose, la publication devenant alors l'acte d'une personne.
+Elle s'arrête sur demande avant la phase 5 (`--until ci`) : c'est la couture où un gate humain se pose, la publication devenant alors l'acte d'une personne. **Depuis le 25 novembre 2026** (étape 1 de `docs/design/trusted-gate.md`), ce gate est tenu par l'hôte : la phase 5 exige l'approbation de publication du propriétaire pour l'empreinte exacte, un fichier de root écrit par `sudo "$LAUNCHER/tools/deliver/approve"`, lue aux préalables puis juste avant la première destination ; `--until ci` est le seul mode sans elle, il ne publie rien et le reçu le dit (`"approval":"until-ci"`).
 
 **La reprise d'une livraison interrompue** (ajouté le 18 novembre 2026, après deux constats de revue sur la même cause : la conception ne la décrivait pas). Relancer la commande sur le même commit est la reprise ; elle ne doit rien permettre qu'une première exécution n'aurait permis.
 
@@ -722,7 +722,7 @@ Elle s'arrête sur demande avant la phase 5 (`--until ci`) : c'est la couture o�
 
 **La portée d'une règle, précisée après une revue** (18 novembre 2026). La consigne de la dernière tranche disait : une valeur du fichier descriptif n'est jamais le premier élément d'un argv. La revue a relevé que la commande de la porte, `gateCommand`, vient de ce fichier et que son premier élément est un programme. La règle vaut pour ce qui entre dans un argv de `git` ou du client de la forge : un nom de branche, de dépôt, de workflow ne s'y trouve jamais en première position ni là où une option serait lue. La commande de la porte est autre chose : nommer ce programme est la fonction de cette clé, dans un fichier commité et relu, dont le schéma refuse tout caractère de contrôle ; c'est le même statut que la commande d'un contrôle sans modèle dans le fichier d'une étape.
 
-**Construite** (journal §89 à §93) : `npm run deliver -- <nom> [--until ci]`.
+**Construite** (journal §89 à §93) : `npm run deliver -- <nom> [--until ci]`. Depuis l'étape 1 de `docs/design/trusted-gate.md` : `"$LAUNCHER/aos" -- deliver <nom> [--until ci]`, la commande compilée du lanceur installé ; le script `npm run deliver` du candidat est retiré.
 
 **Ce qu'elle ne ferme pas.** L'écart nommé plus haut : elle rend la livraison exacte et rejouable, elle reste lancée par l'orchestrateur avec le compte du propriétaire. Le gate humain est une décision du propriétaire, et `--until ci` est l'endroit où il se pose.
 

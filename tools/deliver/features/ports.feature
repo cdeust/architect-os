@@ -3,6 +3,21 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
   Rule: Repository
 
+    Scenario Outline: the recorded parents and changed names belong to the requested objects
+      Given a delivery repository of the <adapter> adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository holds the commit "c2" after "c1" that removed 1 lines from "a.md"
+      And the delivery repository is at the commit "c1"
+      Then the delivery parent list of "c1" contains only ""
+      And the delivery parent list of "c2" contains only "c1"
+      And the delivery changed paths from "c1" to "c2" are "a.md, c2.txt"
+      And the delivery changed paths from "c2" to "c2" are ""
+
+      Examples:
+        | adapter   |
+        | in-memory |
+        | git       |
+
     Scenario Outline: the head is a full hash, and the tree is clean until a file changes
       Given a delivery repository of the <adapter> adapter
       And the delivery repository holds the commit "c1"
@@ -202,6 +217,8 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | head               | git rev-parse exited with code 128 |
         | fetch              | git fetch exited with code 128   |
         | remoteHead         | git rev-parse exited with code 128 |
+        | parentsOf          | git cat-file exited with code 128 |
+        | changedPaths       | git diff-tree exited with code 128 |
         | isAncestor         | git merge-base exited with code 128 |
         | deletedLines       | git diff exited with code 129    |
         | deleteRemoteBranch | git push exited with code 128    |
@@ -214,13 +231,15 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
       Examples:
         | method             | argv                                                           |
-        | head               | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse --verify HEAD^{commit} |
-        | fetch              | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all fetch --quiet --prune --recurse-submodules=no origin |
-        | remoteHead         | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse --verify --quiet refs/remotes/origin/main^{commit} |
-        | isAncestor         | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all merge-base --is-ancestor aaa bbb |
-        | deletedLines       | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all diff --numstat --ignore-submodules=all aaa bbb -- docs/a.md |
-        | push               | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all push --quiet --recurse-submodules=no origin aaa:refs/heads/main |
-        | deleteRemoteBranch | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all push --quiet --recurse-submodules=no origin :refs/heads/main |
+        | parentsOf          | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all cat-file commit bbb |
+        | changedPaths       | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all diff-tree -r --name-only -z --no-renames --no-relative --ignore-submodules=none aaa bbb -- |
+        | head               | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse --verify HEAD^{commit} |
+        | fetch              | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all fetch --quiet --prune --recurse-submodules=no origin |
+        | remoteHead         | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse --verify --quiet refs/remotes/origin/main^{commit} |
+        | isAncestor         | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all merge-base --is-ancestor aaa bbb |
+        | deletedLines       | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all diff --numstat --ignore-submodules=all aaa bbb -- docs/a.md |
+        | push               | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all push --quiet --recurse-submodules=no origin aaa:refs/heads/main |
+        | deleteRemoteBranch | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all push --quiet --recurse-submodules=no origin :refs/heads/main |
 
     Scenario: a git executable that does not exist throws a fixed message
       Given a delivery repository over the git executable "/nonexistent/git"
@@ -816,6 +835,115 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       When I sleep 3600 seconds on the delivery clock
       And I sleep 5 seconds on the delivery clock
       Then the timer delivery clock asked for "3600000, 5000" milliseconds
+
+    Scenario Outline: the time is the whole seconds of its source
+      Given a delivery clock of the <adapter> adapter
+      Then the delivery clock says 1795600000 seconds
+
+      Examples:
+        | adapter   |
+        | in-memory |
+        | timer     |
+
+    Scenario: the time of the in-memory clock moves by what is slept, and the timer's does not wait for its timer
+      Given a delivery clock of the in-memory adapter
+      When I sleep 30 seconds on the delivery clock
+      Then the delivery clock says 1795600030 seconds
+      Given a delivery clock of the timer adapter
+      When I sleep 30 seconds on the delivery clock
+      Then the delivery clock says 1795600000 seconds
+
+  Rule: Approvals
+
+    The `file` row reads a temporary directory that the scenario's uid owns, mode 0700, and is told that uid as the
+    owner: the production adapter is the same class, told `/etc/architect-os` and uid 0.
+
+    Scenario Outline: a record of the owner is read as it was written, for its kind only
+      Given a delivery approvals of the <adapter> adapter
+      And the delivery approvals hold a <kind> record of "0123456789abcdef0123456789abcdef01234567" in "cdeust/architect-os" from 1795600000 to 1795686400
+      Then the delivery approvals read for <kind> the record of "0123456789abcdef0123456789abcdef01234567" in "cdeust/architect-os" from 1795600000 to 1795686400
+      And the delivery approvals read for <other> nothing
+
+      Examples:
+        | adapter   | kind        | other       |
+        | in-memory | publication | maintenance |
+        | in-memory | maintenance | publication |
+        | file      | publication | maintenance |
+        | file      | maintenance | publication |
+
+    Scenario Outline: nothing written is nothing read
+      Given a delivery approvals of the <adapter> adapter
+      Then the delivery approvals read for publication nothing
+      And the delivery approvals read for maintenance nothing
+
+      Examples:
+        | adapter   |
+        | in-memory |
+        | file      |
+
+    Scenario Outline: the file adapter gives no authority to a record that is not the owner's alone, or not of its form
+      Given a delivery approvals of the file adapter
+      And the delivery approvals hold a publication record of "0123456789abcdef0123456789abcdef01234567" in "cdeust/architect-os" from 1795600000 to 1795686400
+      And the approval file of publication is altered: <change>
+      Then the delivery approvals read for publication an untrusted record
+
+      Examples:
+        | change                       |
+        | the file group writable      |
+        | the file world writable      |
+        | the file of another owner    |
+        | the directory group writable |
+        | the directory world writable |
+        | the directory a link         |
+        | the file a link              |
+        | the file a second link       |
+        | the file a directory         |
+        | the file a named pipe        |
+        | the file over 4096 bytes     |
+        | the file not JSON            |
+        | kind "maintenance"           |
+        | commit "0123"                |
+        | commit "x0123456789abcdef0123456789abcdef01234567" |
+        | commit "0123456789abcdef0123456789abcdef01234567x" |
+        | commit "0123456789ABCDEF0123456789ABCDEF01234567" |
+        | approvedAt 0                 |
+        | expiresAt 1.5                |
+        | expiresAt "1795686400"       |
+        | repository 7                 |
+        | extra "field"                |
+        | without expiresAt            |
+        | without repository           |
+
+    Scenario Outline: a maintenance record says what the change is meant to do
+      Given a delivery approvals of the file adapter
+      And the delivery approvals hold a maintenance record of "0123456789abcdef0123456789abcdef01234567" in "cdeust/architect-os" from 1795600000 to 1795686400
+      And the approval file of maintenance is altered: <change>
+      Then the delivery approvals read for maintenance an untrusted record
+
+      Examples:
+        | change            |
+        | intent "   "      |
+        | intent ""         |
+        | without intent    |
+
+    Scenario: a publication record carries no intent
+      Given a delivery approvals of the file adapter
+      And the delivery approvals hold a publication record of "0123456789abcdef0123456789abcdef01234567" in "cdeust/architect-os" from 1795600000 to 1795686400
+      And the approval file of publication is altered: intent "Publish"
+      Then the delivery approvals read for publication an untrusted record
+
+    Scenario: a record of exactly 4096 bytes is still read (positive control of the bound)
+      Given a delivery approvals of the file adapter
+      And the delivery approvals hold a publication record of "0123456789abcdef0123456789abcdef01234567" in "cdeust/architect-os" from 1795600000 to 1795686400
+      And the approval file of publication is altered: the file of exactly 4096 bytes
+      Then the delivery approvals read for publication the record of "0123456789abcdef0123456789abcdef01234567" in "cdeust/architect-os" from 1795600000 to 1795686400
+
+    Scenario: a missing directory of the owner is no record, and the reader leaves no descriptor open
+      Given a delivery approvals of the file adapter over a directory that does not exist
+      Then the delivery approvals read for publication nothing
+      Given a delivery approvals of the file adapter
+      And the delivery approvals hold a publication record of "0123456789abcdef0123456789abcdef01234567" in "cdeust/architect-os" from 1795600000 to 1795686400
+      Then the delivery approvals reader leaves no descriptor open, on a record read and on one refused
 
   Rule: DeliveryLog
 

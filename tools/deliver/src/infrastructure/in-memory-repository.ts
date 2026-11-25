@@ -34,7 +34,20 @@ export class InMemoryRepository implements Repository {
 
   /** Makes `parent` a parent of `child`. */
   link(parent: string, child: string): void {
-    this.parents.set(child, this.parentsOf(child).add(parent));
+    this.parents.set(child, this.parentSet(child).add(parent));
+  }
+
+  /** Changed paths for each pair of trees, as given by the fixture. */
+  readonly changes = new Map<string, string[]>();
+
+  parentsOf(commit: string): readonly string[] {
+    this.journal.record('parentsOf', commit);
+    return [...this.parentSet(commit)];
+  }
+
+  changedPaths(parent: string, commit: string): readonly string[] {
+    this.journal.record('changedPaths', parent, commit);
+    return this.changes.get(`${parent} ${commit}`) ?? [];
   }
 
   /** `hash` removed `lines` lines from the file `path`, relative to its parent. */
@@ -110,7 +123,7 @@ export class InMemoryRepository implements Repository {
       if (hash === from) return;
 
       found.add(hash);
-      for (const parent of this.parentsOf(hash)) walk(parent);
+      for (const parent of this.parentSet(hash)) walk(parent);
     };
     walk(to);
     return found;
@@ -119,12 +132,12 @@ export class InMemoryRepository implements Repository {
   /** Whether `ancestor` is `descendant` or one of its ancestors. */
   private reaches(ancestor: string, descendant: string): boolean {
     if (ancestor === descendant) return true;
-    for (const parent of this.parentsOf(descendant)) if (this.reaches(ancestor, parent)) return true;
+    for (const parent of this.parentSet(descendant)) if (this.reaches(ancestor, parent)) return true;
     return false;
   }
 
   /** The parents of `hash`; a commit the history does not know has none. */
-  private parentsOf(hash: string): Set<string> {
+  private parentSet(hash: string): Set<string> {
     return this.parents.get(hash) ?? new Set<string>();
   }
 }

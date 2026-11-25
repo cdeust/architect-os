@@ -17,7 +17,7 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Then the delivery command exited 0
       And the delivery command printed on its standard output:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"ran","approval":{"approvedAt":"NOW","expiresAt":"NOW+24h"},"published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
         """
       And the delivery command wrote on its standard error:
         """
@@ -43,7 +43,7 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Then the delivery command exited 0
       And the delivery command printed on its standard output:
         """
-        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"ran","approval":"until-ci","published":[],"ruleSuites":{}}
         """
       And the delivery command wrote on its standard error:
         """
@@ -69,7 +69,7 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Then the delivery command exited 0
       And the delivery command printed on its standard output:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"reused","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"reused","approval":{"approvedAt":"NOW","expiresAt":"NOW+24h"},"published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
         """
       And the remote of the delivery command holds "main" at the commit "h1"
       And the remote of the delivery command has no branch "sentinel/gate-1a-step"
@@ -83,7 +83,7 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Then the delivery command exited 1
       And the delivery command printed on its standard output:
         """
-        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"gate":"ran","published":[],"phase":"porte","reason":"porte rouge","ruleSuites":{}}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"gate":"ran","approval":{"approvedAt":"NOW","expiresAt":"NOW+24h"},"published":[],"phase":"porte","reason":"porte rouge","ruleSuites":{}}
         """
       And the delivery command wrote on its standard error:
         """

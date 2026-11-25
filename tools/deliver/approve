@@ -1,0 +1,84 @@
+#!/bin/sh
+# The owner's approval of one commit, for the delivery of the installed launcher (docs/design/trusted-gate.md, « Step 1
+# as built »). Run by the owner, from the installed launcher, as root:
+#
+#   sudo "$LAUNCHER/tools/deliver/approve" publication <owner/repository> <commit> [hours]
+#   sudo "$LAUNCHER/tools/deliver/approve" maintenance <owner/repository> <commit> <intent> [hours]
+#
+# It writes /etc/architect-os/delivery-<kind>.json, owned by root, mode 0644, by an atomic rename into a directory that
+# root owns, mode 0755: the one place, and the one form, that the delivery reads (tools/deliver/src/infrastructure/
+# file-approvals.ts). The record names the repository, the full commit hash, when it was given and when it ends (hours,
+# 24 by default, at most 168; the policy, `approvalHours` of deliver.json, may allow less). A new record of a kind
+# replaces the previous one. To withdraw: sudo rm /etc/architect-os/delivery-<kind>.json.
+#
+# ARCHITECT_OS_APPROVAL_DIRECTORY, when set, names another directory and lifts the root requirement: the scenarios
+# write there. A record written anywhere else than /etc/architect-os, or by another uid than root, is read by no
+# delivery. sudo does not pass the variable on (env_reset).
+#
+# Exit codes: 0 written (one line on stdout); 2 refused, `approve: <CODE>` on stderr, nothing written; 3 a write failed.
+set -u
+umask 022
+
+refuse() {
+  printf 'approve: %s\n' "$1" >&2
+  exit 2
+}
+
+directory=${ARCHITECT_OS_APPROVAL_DIRECTORY:-/etc/architect-os}
+if [ -z "${ARCHITECT_OS_APPROVAL_DIRECTORY-}" ] && [ "$(/usr/bin/id -u)" != 0 ]; then refuse APPROVE_REQUIRES_ROOT; fi
+
+[ "$#" -ge 3 ] || refuse USAGE
+kind=$1 repository=$2 commit=$3
+shift 3
+intent=
+case $kind in
+  publication) ;;
+  maintenance)
+    [ "$#" -ge 1 ] || refuse USAGE
+    intent=$1
+    shift
+    case $intent in
+      *[!\ ]*) ;;
+      *) refuse APPROVE_INTENT_REQUIRED ;;
+    esac
+    # Written inside a JSON string by printf: no quote, no backslash, no control character.
+    case $intent in
+      *[\"\\]* | *[[:cntrl:]]*) refuse APPROVE_INTENT_REFUSED ;;
+    esac
+    ;;
+  *) refuse USAGE ;;
+esac
+hours=${1-24}
+[ "$#" -le 1 ] || refuse USAGE
+
+case $repository in
+  */*/* | /* | */ | *[!A-Za-z0-9._/-]* | . | .. | ./* | ../* | */. | */..) refuse APPROVE_REPOSITORY_REFUSED ;;
+  ?*/?*) ;;
+  *) refuse APPROVE_REPOSITORY_REFUSED ;;
+esac
+case $commit in
+  *[!0-9a-f]*) refuse APPROVE_COMMIT_REFUSED ;;
+esac
+[ "${#commit}" -eq 40 ] || refuse APPROVE_COMMIT_REFUSED
+case $hours in
+  '' | *[!0-9]* | 0*) refuse APPROVE_HOURS_REFUSED ;;
+esac
+[ "$hours" -le 168 ] || refuse APPROVE_HOURS_REFUSED
+
+now=$(/bin/date -u +%s) || exit 3
+expires=$((now + hours * 3600))
+if [ "$kind" = maintenance ]; then
+  extra=$(printf ',"intent":"%s"' "$intent")
+else
+  extra=
+fi
+
+/bin/mkdir -p -m 0755 -- "$directory" || exit 3
+temporary=$(/usr/bin/mktemp "$directory/.delivery-$kind.XXXXXX") || exit 3
+trap '/bin/rm -f -- "$temporary"' EXIT
+printf '{"kind":"%s","repository":"%s","commit":"%s","approvedAt":%s,"expiresAt":%s%s}\n' \
+  "$kind" "$repository" "$commit" "$now" "$expires" "$extra" >"$temporary" || exit 3
+/bin/chmod -- 0644 "$temporary" || exit 3
+/bin/mv -f -- "$temporary" "$directory/delivery-$kind.json" || exit 3
+trap - EXIT
+printf 'approved %s of %s in %s for %s hours, until %s (epoch seconds)\n' "$kind" "$commit" "$repository" "$hours" "$expires"

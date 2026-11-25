@@ -161,3 +161,15 @@ Full mutation survivorship, native Linux and hosted integration remain unverifie
 - [x] B.4 Intégrer la session de compte, les contrôles de provenance et le reçu du constructeur.
 - [x] Recompiler, contrôler le format et l’architecture, rejouer les scénarios modifiés et mesurer la mutation. Les 1 000 scénarios passent. Les 1 811 mutants TypeScript des trois campagnes comptent zéro survivant et zéro sans couverture. [Résultats](../JOURNAL-SBX.md#résultat-du-step-hors-ligne)
 - [ ] Essai par le Step de production après le signal du mainteneur, avec la session établie à l’installation.
+
+## Trusted Gate, delivery preflight
+
+- [x] Bind the trial to a single-parent commit and classify its object diff with the launcher's policy.
+- [x] Pin the delivery entry and host programs and bind maintenance approval to the owner's intended change.
+- [x] Exercise the adapter contracts, refusals and ordinary path, update the operator documentation, and record verification.
+- [x] Require the owner's root-owned approval of the exact commit before publication, read again before the first destination; `--until ci` publishes nothing and says so in its receipt (P1, P10).
+- [x] Read the maintenance and publication records through one port, owned by root with their directory; give the owner one command, `tools/deliver/approve`.
+- [x] Commit the design, its step 1 as built and its threat model (`docs/design/trusted-gate.md`).
+- [ ] Steps 2 to 4 of the design: protected hosted proof, object importer and exporter, Step bound to the commit.
+
+[Review and measurements](../JOURNAL-TRUSTED-GATE-1.md) cover both repository adapters, the installed launcher, the approvals and the before-change controls.

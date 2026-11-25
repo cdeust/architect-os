@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { deliver, type Delivery } from '../../src/application/deliver.js';
 import type { DeliverConfig } from '../../src/domain/config.js';
 import type { CiRun, RuleSuite } from '../../src/domain/ports.js';
+import { InMemoryApprovals } from '../../src/infrastructure/in-memory-approvals.js';
 import { InMemoryClock } from '../../src/infrastructure/in-memory-clock.js';
 import { InMemoryForge } from '../../src/infrastructure/in-memory-forge.js';
 import { InMemoryGate } from '../../src/infrastructure/in-memory-gate.js';
@@ -11,6 +12,9 @@ import { InMemoryProgress } from '../../src/infrastructure/in-memory-progress.js
 import { InMemoryRepository } from '../../src/infrastructure/in-memory-repository.js';
 import { Given, Then, When, type DeliverWorld } from './support.js';
 
+/** The time of a scene before anything is slept, in seconds since the epoch. */
+const SCENE_START = 1_795_600_000;
+
 interface Scene {
   config: DeliverConfig;
   /** The commit to deliver and its parent, as hexadecimal hashes. */
@@ -18,6 +22,7 @@ interface Scene {
   parent: string;
   journal: Journal;
   repository: InMemoryRepository;
+  approvals: InMemoryApprovals;
   forge: InMemoryForge;
   gate: InMemoryGate;
   clock: InMemoryClock;
@@ -124,6 +129,15 @@ Given(
     forge.evaluate('main', hex(commit), ['pass']);
     const gate = new InMemoryGate(journal);
     gate.afterRun = hex(commit);
+    // The owner approved the publication of the commit at the start of the scene, for a day.
+    const approvals = new InMemoryApprovals(journal);
+    approvals.records.set('publication', {
+      state: 'present',
+      repository: 'cdeust/architect-os',
+      commit: hex(commit),
+      approvedAt: SCENE_START,
+      expiresAt: SCENE_START + 86_400,
+    });
     this.state['delivery'] = {
       config: {
         description: 'scenario',
@@ -134,7 +148,9 @@ Given(
         workflow: 'gate',
         requiredJobs: ['gate-linux', 'gate-macos'],
         appendOnly: ['docs/design/journal.md'],
-        gateCommand: ['npm', 'run', 'gate'],
+        approvalHours: 24,
+        judgePaths: ['tools/test-gate/', 'package.json'],
+        gateCommand: ['../test-gate/gate.sh'],
         gateLog: 'reports/deliver-gate.log',
         log: '${state}/deliveries.jsonl',
         environment: ['PATH'],
@@ -147,9 +163,10 @@ Given(
       parent: hex(parent),
       journal,
       repository,
+      approvals,
       forge,
       gate,
-      clock: new InMemoryClock(journal),
+      clock: new InMemoryClock(journal, SCENE_START),
       log: new InMemoryLog(journal),
       progress: new InMemoryProgress(),
     } satisfies Scene;
@@ -235,7 +252,9 @@ Given('the delivery rule suite of {string} answers {string}', function (branch: 
 
 When('I deliver {string} until {string}', async function (name: string, until: string) {
   const s = scene(this);
-  s.result = await deliver({ name, until: until as 'end' | 'ci' }, s.config, s);
+  await assert.doesNotReject(async () => {
+    s.result = await deliver({ name, until: until as 'end' | 'ci' }, s.config, s);
+  });
 });
 
 /** The result as JSON: the maps of a result become objects, the keys left undefined are absent. */
@@ -345,3 +364,35 @@ Then(
     );
   },
 );
+
+Given("the delivery owner's publication record is absent", function () {
+  scene(this).approvals.records.delete('publication');
+});
+
+Given(
+  "the delivery owner's publication record of {string} ends {int} seconds after the start of the scene",
+  function (commit: string, seconds: number) {
+    scene(this).approvals.records.set('publication', {
+      state: 'present',
+      repository: 'cdeust/architect-os',
+      commit: hex(commit),
+      approvedAt: SCENE_START,
+      expiresAt: SCENE_START + seconds,
+    });
+  },
+);
+
+Given('the delivery owner approved the maintenance of {string} for a day', function (commit: string) {
+  scene(this).approvals.records.set('maintenance', {
+    state: 'present',
+    repository: 'cdeust/architect-os',
+    commit: hex(commit),
+    approvedAt: SCENE_START,
+    expiresAt: SCENE_START + 86_400,
+  });
+});
+
+Given('the delivery commit {string} changes the paths {string}', function (commit: string, paths: string) {
+  const s = scene(this);
+  s.repository.changes.set(`${s.parent} ${hex(commit)}`, paths.split(', '));
+});

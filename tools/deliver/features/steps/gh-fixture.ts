@@ -27,6 +27,7 @@ export interface GhForgeFixture extends ForgeFixture {
   asked(): string[];
   /** The names of the environment the client received, sorted and joined by a space, one line per call, in order. */
   environments(): string[];
+  searchPaths(): string[];
 }
 
 const keys: Record<string, (subject: string) => string> = {
@@ -81,6 +82,10 @@ export function ghForge(world: DeliverWorld): GhForgeFixture {
     forge: new GhForge(REPO, process.execPath, prefix, process.cwd(), hostOf(world)),
     program: process.execPath,
     prefix,
+    searchPaths: () =>
+      readFileSync(file + '.path', 'utf8')
+        .trimEnd()
+        .split('\n'),
     answers,
     asked,
     environments,

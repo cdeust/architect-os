@@ -40,7 +40,7 @@ export function processGate(world: DeliverWorld): ProcessGateFixture {
     runtime,
     logPath: join(runtime.run, GATE_LOG),
     get gate() {
-      return new ProcessGate(worktree, command, GATE_LOG, runtime.env);
+      return new ProcessGate(worktree, command, GATE_LOG, runtime.env, '/usr/bin:/bin');
     },
     willLeave(verdict, code) {
       fixture.leaves(verdict, code, 'publish');
@@ -63,10 +63,14 @@ export interface TimerClockFixture extends ClockFixture {
 
 export function timerClock(): TimerClockFixture {
   const asked: number[] = [];
-  const clock = new TimerClock((handler, milliseconds) => {
-    asked.push(milliseconds);
-    handler();
-  });
+  // The source is 999 milliseconds past the start of the rows: the clock gives whole seconds, rounded down.
+  const clock = new TimerClock(
+    (handler, milliseconds) => {
+      asked.push(milliseconds);
+      handler();
+    },
+    () => 1_795_600_000_999,
+  );
   return { clock, asked };
 }
 

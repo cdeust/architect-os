@@ -14,7 +14,11 @@ export interface DeliverConfig {
   jobDependencies?: Record<string, { producers: string[]; admissionStep: string }>;
   /** Files that may only grow between the parent and the commit. */
   appendOnly: string[];
-  /** The gate as an argv, started in the delivery worktree. */
+  /** The longest life, in hours, an owner's approval record may give itself. */
+  approvalHours: number;
+  /** Root-relative subtrees (trailing slash), and basename patterns at any depth. */
+  judgePaths: string[];
+  /** Gate argv; resolve its executable from the launcher's policy directory and run it in the subject. */
   gateCommand: string[];
   /** Where the two outputs of the gate are written, under the reports directory of the admitted run. */
   gateLog: string;

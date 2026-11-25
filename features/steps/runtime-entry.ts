@@ -979,12 +979,13 @@ Given(
     mkdirSync(work);
     fixtureGit(work, 'init', '--quiet');
     fixtureGit(work, 'remote', 'add', 'origin', bare);
+    writeFileSync(join(work, '.gitignore'), 'reports/\n');
     writeFileSync(join(work, 'a.md'), 'a\n');
     fixtureGit(work, 'add', '--all');
     fixtureGit(work, 'commit', '--quiet', '--message', 'p0');
     for (const branch of ['feat/gate-1a', 'main'])
       fixtureGit(work, 'push', '--quiet', 'origin', `HEAD:refs/heads/${branch}`);
-    writeFileSync(join(work, '.gitignore'), 'reports/\n');
+    writeFileSync(join(work, 'a.md'), 'b\n');
     fixtureGit(work, 'add', '--all');
     fixtureGit(work, 'commit', '--quiet', '--message', 'h1');
     const hash = fixtureGit(work, 'rev-parse', 'HEAD').trim();

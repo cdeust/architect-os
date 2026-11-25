@@ -9,6 +9,13 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
       And the committed deliver config names the section of its design
       And the committed deliver config says what its environment key is
       And the committed deliver config gives the host variables of git and of the forge client
+      And the committed delivery Gate entry belongs to the launcher
+
+    Scenario: the delivery policy normalizes an owner-specified path for case-insensitive matching
+      Given a deliver config of the base form
+      And the deliver config field "judgePaths" is set to '["UPPER/","Some.JSON"]'
+      When the deliver config is parsed
+      Then the delivery policy contains the normalized paths "upper/, some.json"
 
     Scenario: the base form of these scenarios is accepted
       Given a deliver config of the base form
@@ -71,6 +78,9 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | requiredJobs   | ["a","b","c","d","e","f","g","h"]                      |
         | appendOnly     | []                                                     |
         | appendOnly     | ["a","b","c","d","e","f","g","h"]                      |
+        | judgePaths     | ["tools/test-gate/"]                                   |
+        | approvalHours  | 1                                                      |
+        | approvalHours  | 168                                                    |
         | gateCommand    | ["a"]                                                  |
         | gateCommand    | ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p"] |
         | gateLog        | "reports/a"                                                    |
@@ -124,6 +134,8 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | requiredJobs   |
         | environment    |
         | appendOnly     |
+        | judgePaths     |
+        | approvalHours  |
         | gateCommand    |
         | gateLog        |
         | log            |
@@ -195,6 +207,12 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | appendOnly     | ["a\\\\b"]                     | $.appendOnly.0 a repository path is relative       |
         | appendOnly     | [""]                           | $.appendOnly.0                                     |
         | appendOnly     | "docs/design/journal.md"       | $.appendOnly                                       |
+        | judgePaths     | []                             | $.judgePaths                                       |
+        | approvalHours  | 0                              | $.approvalHours                                    |
+        | approvalHours  | 169                            | $.approvalHours                                    |
+        | approvalHours  | 1.5                            | $.approvalHours                                    |
+        | approvalHours  | "24"                           | $.approvalHours                                    |
+        | judgePaths     | [""]                           | $.judgePaths.0                                     |
         | gateCommand    | []                             | $.gateCommand                                      |
         | gateCommand    | ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q"] | $.gateCommand        |
         | gateCommand    | [""]                           | $.gateCommand.0                                    |

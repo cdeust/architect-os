@@ -34,7 +34,13 @@ function inMemoryRepository(): RepositoryFixture {
     commit(label, parent, removal) {
       const hash = (hashes.size + 1).toString(16).padStart(40, '0');
       hashes.set(label, hash);
-      if (parent !== undefined) repository.link(hashOf(parent), hash);
+      if (parent !== undefined) {
+        repository.link(hashOf(parent), hash);
+        repository.changes.set(`${hashOf(parent)} ${hash}`, [
+          label + '.txt',
+          ...(removal ? [removal.path] : []),
+        ]);
+      }
       if (removal !== undefined) repository.removes(hash, removal.path, removal.lines);
     },
     checkout(label) {
@@ -85,8 +91,11 @@ interface InMemoryClockFixture extends ClockFixture {
   slept(): number;
 }
 
+/** The instant every clock row starts at: 1795600000 seconds since the epoch. */
+export const CLOCK_START = 1_795_600_000;
+
 function inMemoryClock(): InMemoryClockFixture {
-  const clock = new InMemoryClock(new Journal());
+  const clock = new InMemoryClock(new Journal(), CLOCK_START);
   return { clock, slept: () => clock.slept };
 }
 
@@ -341,6 +350,10 @@ Then('the delivery clock sleep resolved', function () {
   assert.equal(this.state['portSlept'], true);
 });
 
+Then('the delivery clock says {int} seconds', function (seconds: number) {
+  assert.equal(clockOf(this).clock.now(), seconds);
+});
+
 Then('the in-memory delivery clock counted {int} seconds', function (seconds: number) {
   assert.equal((clockOf(this) as InMemoryClockFixture).slept(), seconds);
 });
@@ -354,6 +367,7 @@ const entry = (outcome: DeliveryEntry['outcome'], hash: string): DeliveryEntry =
   parent: '0'.repeat(40),
   ci: { run: 7, attempts: 1, polls: 2 },
   gate: 'ran',
+  approval: { approvedAt: 1_795_600_000, expiresAt: 1_795_686_400 },
   published: ['main'],
   ruleSuites: new Map<string, RuleSuite>([['main', 'pass']]),
 });
@@ -391,3 +405,23 @@ When('I report the phases {string} to the delivery progress', function (phases: 
 Then('the delivery progress holds the phases {string}', function (phases: string) {
   assert.equal(progressOf(this).phases().join(', '), phases);
 });
+
+Then(
+  'the delivery parent list of {string} contains only {string}',
+  function (label: string, parents: string) {
+    const { repository, hashOf } = repo(this);
+    assert.deepEqual(
+      repository.parentsOf(hashOf(label)),
+      parents === '' ? [] : parents.split(', ').map(hashOf),
+    );
+  },
+);
+Then(
+  'the delivery changed paths from {string} to {string} are {string}',
+  function (from: string, to: string, paths: string) {
+    const { repository, hashOf } = repo(this);
+    const changed = repository.changedPaths(hashOf(from), hashOf(to));
+    assert.ok(Array.isArray(changed));
+    assert.deepEqual([...changed].sort(), paths === '' ? [] : paths.split(', ').sort());
+  },
+);

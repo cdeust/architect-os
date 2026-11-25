@@ -28,7 +28,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         publication
         rangement
         """
-      And the delivery calls named "isClean, head, remoteHead, isAncestor, deletedLines" are:
+      And the delivery calls named "isClean, head, remoteHead, isAncestor, parentsOf, changedPaths, deletedLines" are:
         """
         isClean
         head
@@ -36,6 +36,8 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         remoteHead main
         isAncestor p0 h1
         isAncestor p0 h1
+        parentsOf h1
+        changedPaths p0 h1
         deletedLines p0 h1 docs/design/journal.md
         remoteHead feat/gate-1a
         remoteHead main
@@ -57,7 +59,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
         """
       And the delivery log holds exactly the result
       And the delivery clock slept 0 seconds
@@ -90,7 +92,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
         """
       And the delivery log holds exactly the result
 
@@ -123,7 +125,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":"until-ci","published":[],"ruleSuites":{}}
         """
       And the delivery log holds exactly the result
 
@@ -166,7 +168,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":["main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
         """
       And the delivery log holds exactly the result
 
@@ -440,7 +442,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"branche d'essai","reason":"push de la branche d'essai refusé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"published":[],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"branche d'essai","reason":"push de la branche d'essai refusé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{}}
         """
       And the delivery log holds exactly the result
 
@@ -468,7 +470,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"porte","reason":"porte rouge","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"porte","reason":"porte rouge","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{}}
         """
       And the delivery log holds exactly the result
 
@@ -529,7 +531,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI rouge","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"CI","reason":"CI rouge","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{}}
         """
       And the delivery log holds exactly the result
 
@@ -567,7 +569,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
         """
       And the delivery clock slept 60 seconds
 
@@ -576,7 +578,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       When I deliver "step" until "end"
       Then the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":2},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":2},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
         """
 
     Scenario: a CI that never answers within the polls
@@ -608,7 +610,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{}}
         """
 
     Scenario: a CI with no run at all within the polls
@@ -617,7 +619,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       When I deliver "step" until "end"
       Then the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":2},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":2},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{}}
         """
 
     Scenario: a single poll allowed
@@ -688,7 +690,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
         """
 
     Scenario: no runner at the last permitted attempt: no rerun, stopped
@@ -718,7 +720,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"aucun runner après le nombre de tentatives permis","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"CI","reason":"aucun runner après le nombre de tentatives permis","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{}}
         """
 
     Scenario: no runner with a single attempt allowed: no rerun at all
@@ -788,7 +790,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":2,"polls":3},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":2,"polls":3},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{}}
         """
 
     Scenario: no runner on the only poll: no rerun at all
@@ -802,7 +804,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{}}
         """
 
     Scenario: the seconds between two polls are the ones of the file
@@ -835,7 +837,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"une branche distante a bougé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"publication","reason":"une branche distante a bougé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{}}
         """
       And the delivery log holds exactly the result
 
@@ -898,7 +900,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"une branche distante a bougé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"publication","reason":"une branche distante a bougé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{}}
         """
 
     Scenario: a branch found at the hash that was deleted: nothing is pushed, no rule suite is read
@@ -974,7 +976,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"push refusé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"publication","reason":"push refusé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{}}
         """
 
     Scenario: a push of the second branch that is refused
@@ -1001,7 +1003,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"push refusé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["feat/gate-1a"],"ruleSuites":{"feat/gate-1a":"pass"}}
+        {"outcome":"stopped","phase":"publication","reason":"push refusé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":["feat/gate-1a"],"ruleSuites":{"feat/gate-1a":"pass"}}
         """
 
     Scenario: a rule suite that is not found twice, then pass: the second branch waits for it
@@ -1072,7 +1074,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"évaluation du ruleset introuvable","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["feat/gate-1a"],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"publication","reason":"évaluation du ruleset introuvable","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":["feat/gate-1a"],"ruleSuites":{}}
         """
 
     Scenario: a single read of the rule suite allowed
@@ -1105,7 +1107,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["feat/gate-1a"],"ruleSuites":{"feat/gate-1a":"bypass"}}
+        {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":["feat/gate-1a"],"ruleSuites":{"feat/gate-1a":"bypass"}}
         """
       And the delivery log holds exactly the result
 
@@ -1149,7 +1151,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"fail"}}
+        {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"fail"}}
         """
 
     Scenario: a first branch already at the hash is read and passes: the second is pushed
@@ -1192,7 +1194,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{"feat/gate-1a":"bypass"}}
+        {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{"feat/gate-1a":"bypass"}}
         """
 
     Scenario: a first branch already at the hash whose rule suite failed
@@ -1223,7 +1225,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{"feat/gate-1a":"fail"}}
+        {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{"feat/gate-1a":"fail"}}
         """
 
     Scenario: a first branch already at the hash whose rule suite is never found
@@ -1258,7 +1260,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"évaluation du ruleset introuvable","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","phase":"publication","reason":"évaluation du ruleset introuvable","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":{"approvedAt":1795600000,"expiresAt":1795686400},"published":[],"ruleSuites":{}}
         """
 
     Scenario: a second branch already at the hash is read after the first is pushed and read
@@ -1282,3 +1284,66 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       Then the delivery forge gives no rule suite of the branch "main" at "h1"
       When the delivery repository pushes "h1" to "main"
       Then the delivery forge gives the rule suite "pass" of the branch "main" at "h1"
+
+  Rule: the owner's approval of the publication is read before the trial branch and again before the first destination
+
+    The background approved the publication of "h1" from the start of the scene for a day; the scene's time moves only
+    by what the clock slept.
+
+    Scenario: a delivery to its end reads the approval twice: before the trial branch, and before the destinations
+      When I deliver "step" until "end"
+      Then the delivery calls named "approval, push, fetch" are:
+        """
+        fetch
+        approval publication
+        push h1 sentinel/gate-1a-step
+        approval publication
+        fetch
+        push h1 feat/gate-1a
+        push h1 main
+        """
+
+    Scenario: until the CI, the approval is not read, and the entry says why
+      Given the delivery owner's publication record is absent
+      When I deliver "step" until "ci"
+      Then the delivery calls named "approval" are:
+        """
+        """
+      And the delivery result is:
+        """
+        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","approval":"until-ci","published":[],"ruleSuites":{}}
+        """
+
+    Scenario: a change of the judge asks for both approvals, maintenance first
+      Given the delivery commit "h1" changes the paths "tools/test-gate/gate.sh"
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "préalables" because "modification du juge sans approbation de maintenance"
+      And the delivery calls named "approval" are:
+        """
+        approval maintenance
+        """
+      Given the delivery owner approved the maintenance of "h1" for a day
+      When I deliver "step" until "end"
+      Then the delivery outcome is "delivered"
+
+    Scenario: an approval that expires while the CI is awaited stops the run before the first destination
+      Given the delivery owner's publication record of "h1" ends 60 seconds after the start of the scene
+      And the delivery CI answers "waiting, waiting, waiting, green"
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "publication" because "approbation de publication périmée"
+      And the delivery acts are:
+        """
+        fetch
+        push h1 sentinel/gate-1a-step
+        gate
+        sleep 30
+        sleep 30
+        sleep 30
+        log stopped
+        """
+
+    Scenario: the same approval, still valid when the CI is green, publishes (positive control of the expiry)
+      Given the delivery owner's publication record of "h1" ends 91 seconds after the start of the scene
+      And the delivery CI answers "waiting, waiting, waiting, green"
+      When I deliver "step" until "end"
+      Then the delivery outcome is "delivered"

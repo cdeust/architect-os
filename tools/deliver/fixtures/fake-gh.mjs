@@ -9,6 +9,7 @@
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 
 const [file, ...args] = process.argv.slice(2);
+appendFileSync(`${file}.path`, `${process.env.PATH}\n`);
 appendFileSync(`${file}.argv`, `${args.join(' ')}\n`);
 appendFileSync(
   `${file}.env`,

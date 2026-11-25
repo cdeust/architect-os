@@ -17,6 +17,8 @@ Feature: what the git of the delivery receives, and the programs it does not sta
         | head               |
         | fetch              |
         | remoteHead         |
+        | parentsOf          |
+        | changedPaths       |
         | isAncestor         |
         | deletedLines       |
         | push               |

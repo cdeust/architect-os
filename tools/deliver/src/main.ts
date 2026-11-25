@@ -1,12 +1,15 @@
-// The composition root of `npm run deliver` (docs/design/orchestration-fable-5-2.md §14): the one place that builds
+// The composition root of the installed delivery command (docs/design/orchestration-fable-5-2.md §14): the one place that builds
 // objects. The entry `cli.ts` only hands it the process. Every dependency of the process is injected.
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deliver } from './application/deliver.js';
 import type { DeliverConfig } from './domain/config.js';
 import { parseDeliverConfig } from './infrastructure/deliver-schema.js';
+import { FileApprovals } from './infrastructure/file-approvals.js';
 import { entryLine, FileLog } from './infrastructure/file-log.js';
 import { GhForge } from './infrastructure/gh-forge.js';
+import { closedEnvironment } from './infrastructure/host-process.js';
 import { GitRepository } from './infrastructure/git-repository.js';
 import { ProcessGate } from './infrastructure/process-gate.js';
 import { StreamProgress } from './infrastructure/stream-progress.js';
@@ -29,8 +32,16 @@ export interface DeliverDependencies {
   /** The program that runs the GitHub client, and what goes before `api` in its argv. */
   readonly gh: { readonly program: string; readonly prefix: readonly string[] };
   readonly setTimer: (handler: () => void, milliseconds: number) => unknown;
+  /** The time, in milliseconds since the epoch. */
+  readonly now: () => number;
   /** The descriptive file `deliver.json`. */
   readonly config: string;
+  /** The owner's directory of approval records, and the one uid that may write it and them. */
+  readonly approvals: { readonly directory: string; readonly owner: number };
+  /** The search path git and the client of the forge get for their helpers. */
+  readonly hostPath: string;
+  /** The search path of the gate: the host's, then the installed tools of the launcher. */
+  readonly gatePath: string;
 }
 
 export interface Arguments {
@@ -77,9 +88,15 @@ export function hostEnvironment(
   return { ...given, XDG_CONFIG_HOME: handed.slice('set:'.length) };
 }
 
-function loadConfig(path: string): { ok: true; config: DeliverConfig } | { ok: false; reason: string } {
+function loadConfig(
+  path: string,
+  worktree: string,
+): { ok: true; config: DeliverConfig } | { ok: false; reason: string } {
   let raw: unknown;
   try {
+    if (realpathSync(path).startsWith(realpathSync(worktree) + '/')) {
+      return { ok: false, reason: 'DELIVERY_LAUNCHER_IN_SUBJECT' };
+    }
     raw = JSON.parse(String(readFileSync(path)));
   } catch {
     return { ok: false, reason: 'the descriptive file cannot be read' };
@@ -95,21 +112,25 @@ export async function runDeliver(deps: DeliverDependencies): Promise<number> {
   };
   const options = parseArguments(deps.argv);
   if (options === undefined) return refuse(usage());
-  const loaded = loadConfig(deps.config);
+  const worktree = deps.env['INIT_CWD'] ?? deps.cwd;
+  const loaded = loadConfig(deps.config, worktree);
   if (!loaded.ok) return refuse(loaded.reason);
   const { config } = loaded;
 
   const env = hostEnvironment(deps.env);
   if (env === undefined) return refuse(`${HANDED_XDG_CONFIG_HOME} is neither "unset" nor "set:<value>"`);
-  const worktree = deps.env['INIT_CWD'] ?? deps.cwd;
-  const host = { names: config.environment, env };
+  const names = config.environment;
+  const host = { names, env: closedEnvironment({ names, env }, { PATH: deps.hostPath }) };
+  const [program, ...args] = config.gateCommand;
+  const gateCommand = [resolve(dirname(deps.config), program!), ...args];
   try {
     // Built inside the `try`: an adapter that refuses what it is given says so like a port that throws.
     const ports = {
       repository: new GitRepository(worktree, config.remote, deps.git, host),
+      approvals: new FileApprovals(deps.approvals.directory, deps.approvals.owner),
       forge: new GhForge(config.repository, deps.gh.program, deps.gh.prefix, worktree, host),
-      gate: new ProcessGate(worktree, config.gateCommand, config.gateLog, deps.env),
-      clock: new TimerClock(deps.setTimer),
+      gate: new ProcessGate(worktree, gateCommand, config.gateLog, deps.env, deps.gatePath),
+      clock: new TimerClock(deps.setTimer, deps.now),
       log: new FileLog(config.log, deps.env['ARCHITECT_OS_RUNTIME_ROOT']),
       progress: new StreamProgress(deps.stderr),
     };
@@ -127,6 +148,8 @@ export async function runDeliver(deps: DeliverDependencies): Promise<number> {
 /** The process, as far as the command reads it. */
 export interface DeliverProcess {
   readonly argv: readonly string[];
+  readonly platform: string;
+  readonly arch: string;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly stdout: { write(text: string): unknown };
   readonly stderr: { write(text: string): unknown };
@@ -135,15 +158,38 @@ export interface DeliverProcess {
 
 /** The real dependencies: the streams of the process, git and gh, the timer, the file of this package. */
 export function deliverDependencies(proc: DeliverProcess): DeliverDependencies {
+  const directory = dirname(fileURLToPath(import.meta.resolve('@architect-os/deliver/package.json')));
+  const hostPath = [
+    dirname(process.execPath),
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+  ].join(':');
   return {
     argv: proc.argv.slice(2),
     cwd: proc.cwd(),
     env: proc.env,
     stdout: proc.stdout,
     stderr: proc.stderr,
-    git: 'git',
-    gh: { program: 'gh', prefix: [] },
+    git: '/usr/bin/git',
+    gh: {
+      program:
+        proc.platform === 'darwin'
+          ? proc.arch === 'arm64'
+            ? '/opt/homebrew/bin/gh'
+            : '/usr/local/bin/gh'
+          : '/usr/bin/gh',
+      prefix: [],
+    },
+    // Root's: a session, confined or not, that runs as the owner's uid cannot write there without sudo.
+    approvals: { directory: '/etc/architect-os', owner: 0 },
+    hostPath,
+    gatePath: hostPath + ':' + resolve(directory, '../../node_modules/.bin'),
     setTimer: setTimeout,
-    config: fileURLToPath(new URL('../deliver.json', import.meta.url)),
+    now: Date.now,
+    config: resolve(directory, 'deliver.json'),
   };
 }

@@ -35,8 +35,14 @@ Then('a real Gate subprocess has exactly its admitted paths, PATH and PG_BIN', a
     NODE_OPTIONS: 'no-node-injection',
     ARCHITECT_OS_HOST_XDG_CONFIG_HOME: 'set:/operator/identity',
   };
-  const gate = new ProcessGate(worktree, ['/usr/bin/env'], 'reports/deliver-gate.log', original);
-  assert.equal(await gate.run(), 0);
+  const gate = new ProcessGate(
+    worktree,
+    ['/usr/bin/env'],
+    'reports/deliver-gate.log',
+    original,
+    '/installed/bin',
+  );
+  await assert.doesNotReject(async () => assert.equal(await gate.run(), 0));
   const child = Object.fromEntries(
     log()
       .trimEnd()
@@ -46,7 +52,7 @@ Then('a real Gate subprocess has exactly its admitted paths, PATH and PG_BIN', a
         return [entry.slice(0, separator), entry.slice(separator + 1)];
       }),
   );
-  assert.deepEqual(child, { ...runtime.env, PATH: original.PATH, PG_BIN: original.PG_BIN });
+  assert.deepEqual(child, { ...runtime.env, PATH: '/installed/bin', PG_BIN: original.PG_BIN });
   assert.equal(hasAdmittedRun(child), true);
   assert.equal(modeOf(logPath), '600');
   assert.equal(modeOf(join(runtime.run, 'reports')), '700');
@@ -125,6 +131,8 @@ const calls: Record<string, (repository: Repository) => unknown> = {
   head: (repository) => repository.head(),
   fetch: (repository) => repository.fetch(),
   remoteHead: (repository) => repository.remoteHead('main'),
+  parentsOf: (repository) => repository.parentsOf('bbb'),
+  changedPaths: (repository) => repository.changedPaths('aaa', 'bbb'),
   isAncestor: (repository) => repository.isAncestor('aaa', 'bbb'),
   deletedLines: (repository) => repository.deletedLines('aaa', 'bbb', 'docs/a.md'),
   push: (repository) => repository.push('aaa', 'main'),
@@ -262,6 +270,7 @@ When('I append to the delivery log an entry with the rule suites {string}', func
     parent: '1'.repeat(40),
     ci: { attempts: 1, polls: 1 },
     gate: undefined,
+    approval: 'until-ci',
     published: [],
     ruleSuites: new Map(
       suites === 'none'
