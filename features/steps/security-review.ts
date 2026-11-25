@@ -17,6 +17,8 @@ const CONFIG_PATH = 'review-config';
 const SETTINGS = `${REVIEW_DIR}/managed-settings.json`;
 const INSTRUCTIONS = [`${REVIEW_DIR}/scan-instructions.txt`, `${REVIEW_DIR}/false-positive-filtering.txt`];
 const PRESENT = "steps.credential.outputs.present == 'true'";
+/** The bound of the diff the reviewer reads (operational: 1 MiB). */
+const MAX_DIFF_BYTES = 1048576;
 const PINNED = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.\/-]+@[0-9a-f]{40}$/;
 const EXPRESSION = /\$\{\{(.*?)\}\}/g;
 const SECRET = /\bsecrets\.([A-Za-z_][A-Za-z0-9_]*)/g;
@@ -140,12 +142,26 @@ export function assertSecurityReview(text: string): void {
   for (const at of [restrict, diff, engine])
     assert.equal(steps[at]?.if, PRESENT, `${steps[at]?.name} waits for the credential`);
 
+  const diffStep = steps[diff];
+  assert.deepEqual(diffStep?.env, {
+    GH_TOKEN: '${{ github.token }}',
+    PR: '${{ github.event.pull_request.number }}',
+    MAX_DIFF_BYTES: String(MAX_DIFF_BYTES),
+  });
+  for (const line of ['head -c "$MAX_DIFF_BYTES"', '# TRUNCATED', 'review-input/pr.diff']) {
+    assert.ok((diffStep?.run ?? '').includes(line), `the diff step lacks: ${line}`);
+  }
+
   const reviewer = steps[engine];
   const inputs = Object.values(reviewer?.with ?? {}).map(String);
   assert.ok(reviewer?.uses !== undefined, 'the engine is an action');
   assert.ok(
     inputs.some((value) => value === `\${{ secrets.${secret} }}`),
     'the engine takes the secret the guard looked for',
+  );
+  assert.ok(
+    inputs.some((value) => value.includes('review-input/pr.diff')),
+    'the engine is told where the diff is',
   );
   for (const path of INSTRUCTIONS) {
     assert.ok(existsSync(join(ROOT, path)), `missing ${path}`);
@@ -226,9 +242,9 @@ const REVIEW_BREAKS: Record<string, (yaml: string) => string> = {
     at(yaml, '      github.event.pull_request.head.repo.full_name == github.repository\n', '      true\n'),
   'that runs on drafts': (yaml) => without(yaml, '      && !github.event.pull_request.draft\n'),
   'that runs for Dependabot': (yaml) => without(yaml, "\n      && github.actor != 'dependabot[bot]'"),
-  'with broader contents': (yaml) => at(yaml, '      contents: read\n', '      contents: write\n'),
+  'with broader contents': (yaml) => at(yaml, '      contents: read #', '      contents: write #'),
   'with the identity token': (yaml) =>
-    at(yaml, '      pull-requests: write\n', '      pull-requests: write\n      id-token: write\n'),
+    at(yaml, '      pull-requests: write #', '      id-token: write\n      pull-requests: write #'),
   'with an environment': (yaml) =>
     at(yaml, '    runs-on: ubuntu-24.04\n', '    runs-on: ubuntu-24.04\n    environment: review\n'),
   'without a timeout': (yaml) => without(yaml, '    timeout-minutes: 30\n'),
@@ -282,6 +298,20 @@ const REVIEW_BREAKS: Record<string, (yaml: string) => string> = {
       yaml,
       '          github_token: ${{ github.token }}\n',
       '          github_token: ${{ secrets.GITHUB_TOKEN }}\n',
+    ),
+  'with a secret for the diff': (yaml) =>
+    at(
+      yaml,
+      '          GH_TOKEN: ${{ github.token }}\n',
+      '          GH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}\n',
+    ),
+  'without the bound of the diff': (yaml) =>
+    at(yaml, "MAX_DIFF_BYTES: '1048576'", "MAX_DIFF_BYTES: '999999999999'"),
+  'without the cut of a long diff': (yaml) =>
+    at(
+      yaml,
+      '              head -c "$MAX_DIFF_BYTES" review-input/whole.diff\n',
+      '              cat review-input/whole.diff\n',
     ),
   'with a step that may fail silently': (yaml) =>
     at(yaml, '        id: diff\n', '        id: diff\n        continue-on-error: true\n'),

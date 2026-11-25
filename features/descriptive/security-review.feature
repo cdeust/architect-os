@@ -41,6 +41,9 @@ Feature: The Claude security review
       | with an event expression in a command         |
       | with a secret in the environment of a step    |
       | with a second secret for the engine           |
+      | with a secret for the diff                    |
+      | without the bound of the diff                 |
+      | without the cut of a long diff                |
       | with a step that may fail silently            |
       | that tracks progress                          |
       | that prints the full output                   |
