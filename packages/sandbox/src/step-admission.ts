@@ -85,22 +85,57 @@ export interface StepAdmissionSubject {
   readonly plan_review?: z.infer<typeof independence>;
 }
 
+/**
+ * Every route that can open a session, with the provider and model its specimen must name. A routed Step can run every
+ * pass of its ladder: each builder, and each review that does not wait, needs its own evidence before any side effect.
+ */
 function promptSubjects(subject: StepAdmissionSubject) {
   const promptSha = (tool: string) => {
     const definition = parseTool(JSON.parse(subject.launcher[tool]!));
     return admissionDigest(subject.launcher[definition.launcherPromptFile]!);
   };
-  const required = [
-    { role: 'build', model: subject.step.build.model, prompt_sha256: promptSha('code.json') },
-  ];
+  const { step } = subject;
+  const passRole = (base: string, index: number) => (index === 0 ? base : `${base}:pass-${index + 1}`);
+  const required = step.routing
+    ? step.routing.ladder.flatMap(({ build, review }, index) => [
+        {
+          role: passRole('build', index),
+          provider: build.provider,
+          model: build.model,
+          prompt_sha256: promptSha('code.json'),
+        },
+        ...(review.waiting
+          ? []
+          : [
+              {
+                role: passRole('review:independent', index),
+                provider: review.provider,
+                model: review.model,
+                prompt_sha256: promptSha('review.json'),
+              },
+            ]),
+      ])
+    : [
+        {
+          role: 'build',
+          provider: step.build.provider ?? 'anthropic',
+          model: step.build.model,
+          prompt_sha256: promptSha('code.json'),
+        },
+      ];
   for (const [group, roles, tool] of [
-    ['scout', subject.step.scouts, 'scout.json'],
-    ['review', subject.step.reviews, 'review.json'],
+    ['scout', step.scouts, 'scout.json'],
+    ['review', step.reviews, 'review.json'],
   ] as const) {
     if (roles.length === 0) continue;
     const prompt_sha256 = promptSha(tool);
     for (const role of roles)
-      required.push({ role: group + ':' + role.name, model: role.model, prompt_sha256 });
+      required.push({
+        role: group + ':' + role.name,
+        provider: 'anthropic',
+        model: role.model,
+        prompt_sha256,
+      });
   }
   return required;
 }
@@ -191,8 +226,7 @@ export function requireStepAdmission(value: unknown, subject: StepAdmissionSubje
 
     if (
       !evaluated ||
-      evaluated.model.provider !==
-        (route.role === 'build' ? (subject.step.build.provider ?? 'anthropic') : 'anthropic') ||
+      evaluated.model.provider !== route.provider ||
       evaluated.model.model !== route.model ||
       evaluated.prompt_sha256 !== route.prompt_sha256 ||
       !successfulReplays(evaluated)

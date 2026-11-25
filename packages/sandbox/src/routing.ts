@@ -103,7 +103,7 @@ export type RoutingTable = z.infer<ReturnType<typeof routingTableSchema>>;
  */
 export function routeBlockSchema() {
   const review = z.discriminatedUnion('provider', [
-    googleCandidate().extend({ waiting: z.boolean() }),
+    googleCandidate().extend({ waiting: z.literal(true) }),
     anthropicCandidate().extend({ waiting: z.boolean() }),
   ]);
   return z.strictObject({

@@ -23,15 +23,49 @@ export function admittedFixture(
   const reviewer = { provider: 'google', model: 'fixture-reviewer' };
   const review = { drafter: author, reviewer, status: 'clear' };
   const define_sha256 = subject.define_sha256 ?? hash('fixture Define');
+  // A routed Step can run each pass of its ladder: one specimen per builder, and per review that does not wait.
+  const routing = subject.step.routing;
+  const builds = routing
+    ? routing.ladder.flatMap(({ build, review }, index) => {
+        const suffix = index === 0 ? '' : `:pass-${index + 1}`;
+        return [
+          {
+            role: 'build' + suffix,
+            provider: build.provider,
+            model: build.model,
+            prompt: 'prompts/build.md',
+          },
+          ...(review.waiting
+            ? []
+            : [
+                {
+                  role: 'review:independent' + suffix,
+                  provider: review.provider,
+                  model: review.model,
+                  prompt: 'prompts/review.md',
+                },
+              ]),
+        ];
+      })
+    : [
+        {
+          role: 'build',
+          provider: subject.step.build.provider ?? 'anthropic',
+          model: subject.step.build.model,
+          prompt: 'prompts/build.md',
+        },
+      ];
   const slots = [
-    { role: 'build', model: subject.step.build.model, prompt: 'prompts/build.md' },
+    ...builds,
     ...subject.step.scouts.map(({ name, model }) => ({
       role: 'scout:' + name,
+      provider: 'anthropic',
       model,
       prompt: 'prompts/scout.md',
     })),
     ...subject.step.reviews.map(({ name, model }) => ({
       role: 'review:' + name,
+      provider: 'anthropic',
       model,
       prompt: 'prompts/review.md',
     })),
@@ -67,12 +101,9 @@ export function admittedFixture(
       raw_receipt_sha256: subject.reviewed_plan_sha256 ?? hash('fixture proposal receipt'),
       review,
     },
-    specimens: slots.map(({ role, model, prompt }) => ({
+    specimens: slots.map(({ role, provider, model, prompt }) => ({
       role,
-      model: {
-        provider: String(role === 'build' ? (subject.step.build.provider ?? 'anthropic') : 'anthropic'),
-        model,
-      },
+      model: { provider, model },
       prompt_sha256: hash(subject.launcher[prompt]!),
       oracle_sha256: hash('The receipt is named and correctly attributed'),
       cases_sha256: hash(JSON.stringify([caseInput])),

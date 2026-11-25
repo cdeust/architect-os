@@ -31,14 +31,22 @@ import {
   type CodeToolDependencies,
 } from './code-tool.js';
 import { buildSbxStep } from './sbx-step.js';
-import { ClaudeBuilder, type Builder, type StepSession, type ToolFile } from './builder.js';
+import {
+  ClaudeBuilder,
+  type Builder,
+  type BuildOutcome,
+  type StepSession,
+  type ToolFile,
+} from './builder.js';
 import { measureSession, type SessionMeasure } from './measure.js';
-import { blocks, parseReviewVerdict, ReviewVerdictSchema } from './review-verdict.js';
+import { blocks, parseReviewVerdict, ReviewVerdictSchema, type ReviewVerdict } from './review-verdict.js';
 import { factsJsonSchema, parseFacts, renderFacts, verifyFacts, type Fact } from './scout-facts.js';
 import { SrtSandboxRunner } from './srt-runner.js';
 import type { SandboxRunner } from './port.js';
 import { outputTail, passed, renderChecks, type CheckOutcome, type CheckReport } from './step-checks.js';
-import { parseStepFile, type StepFile } from './step-file.js';
+import { parseStepFile, routedStep, type StepFile } from './step-file.js';
+import { passSignal, promotes, renderPromotion, stepOutcome, type PassSignal } from './step-passes.js';
+import { parseRoutingTable } from './routing.js';
 import {
   observedTokens,
   buildRecord,
@@ -191,13 +199,14 @@ async function playCheck(
   deps: StepDependencies,
   outputs: StepOutputs,
   config: CheckConfig,
+  pre: string,
 ): Promise<CheckReport> {
   const before = deps.now();
   const outcome = await deps.check(config.command, config.limitSeconds);
   const durationSeconds = Math.round((deps.now() - before) / 1000);
   const { exitCode, stopped, cut, output } = outcome;
   deps.writeFile(
-    join(outputs.retained, `check.${config.name}.json`),
+    join(outputs.retained, `${pre}check.${config.name}.json`),
     json({ command: config.command, exitCode, stopped, durationSeconds, cut, output }),
   );
   return { name: config.name, command: config.command, exitCode, stopped, durationSeconds, cut, output };
@@ -218,8 +227,9 @@ async function review(
   outputs: StepOutputs,
   config: ReviewConfig,
   brief: string,
+  pre: string,
 ): Promise<ReviewOutcome> {
-  const prefix = `review.${config.name}`;
+  const prefix = `${pre}review.${config.name}`;
   const session = await play(
     deps,
     outputs,
@@ -389,9 +399,10 @@ export function launcherFiles(
   readLauncher: StepDependencies['readLauncher'],
   step: StepFile,
 ): Record<string, string> {
+  const plans = passPlans(step);
   const tools: ToolFile[] = [
     'code.json',
-    ...(step.reviews.length > 0 ? (['review.json'] as const) : []),
+    ...(plans.some(({ reviews }) => reviews.length > 0) ? (['review.json'] as const) : []),
     ...(step.scouts.length > 0 ? (['scout.json'] as const) : []),
   ];
   const files = new Map<string, string>();
@@ -403,13 +414,153 @@ export function launcherFiles(
       files.set(file, readLauncher(file));
     }
   }
-  if (step.build.provider === 'openai') {
+  // La table entre dans l'admission avec le lanceur : Step refait la route depuis cette copie gelée.
+  if (step.routing) files.set('routing.json', readLauncher('routing.json'));
+  if (plans.some(({ build }) => build.provider === 'openai')) {
     for (const asset of ['sbx/isolation.json', 'sbx/codex-guest.py']) files.set(asset, readLauncher(asset));
   }
   // Les contrôles tournent sous le profil `checker`, qu'aucun fichier d'outil ne nomme.
   const checker = 'profiles/checker.json';
   if (step.checks.length > 0) files.set(checker, readLauncher(checker));
   return Object.fromEntries([...files.keys()].sort().map((file) => [file, files.get(file) as string]));
+}
+
+/** Une passe à jouer : sa bande (étape routée), sa construction, ses revues, et si sa revue attend. */
+interface PassPlan {
+  band?: number;
+  build: StepFile['build'];
+  reviews: ReviewConfig[];
+  waiting: boolean;
+}
+
+interface PassOutcome {
+  plan: PassPlan;
+  build: BuildOutcome;
+  played: CheckReport[];
+  outcomes: ReviewOutcome[];
+  signal: PassSignal;
+}
+
+/**
+ * Les passes d'une étape : une seule sans route, celle du fichier ; avec une route, une par barreau de l'échelle, chacune
+ * avec sa revue indépendante, ou l'attente de cette revue.
+ */
+function passPlans(step: StepFile): PassPlan[] {
+  if (!step.routing) return [{ build: step.build, reviews: step.reviews, waiting: false }];
+  return step.routing.ladder.map(({ band, build, review }) => ({
+    band,
+    build,
+    reviews: review.waiting
+      ? []
+      : [
+          {
+            name: 'independent',
+            provider: review.provider,
+            dimension: 'correctness' as const,
+            model: review.model,
+            effort: review.effort,
+            limitSeconds: review.limitSeconds,
+          },
+        ],
+    waiting: review.waiting,
+  }));
+}
+
+/** Les constats d'un verdict valide ; aucun pour un verdict invalide, dont l'hôte ne transmet rien. */
+function blockingFindings(verdict: ReviewOutcome['verdict']): ReviewVerdict['findings'] {
+  return verdict.verdict === 'invalid' ? [] : (verdict.file as ReviewVerdict).findings;
+}
+
+/**
+ * Une passe : la construction sur son brief, les contrôles un à un tant qu'ils passent, puis les revues sur le brief de
+ * l'étape et les contrôles, sauf si la revue attend. Les fichiers d'une passe après la première portent `pass-<n>.`.
+ */
+async function playPass(
+  deps: StepDependencies,
+  outputs: StepOutputs,
+  step: StepFile,
+  plan: PassPlan,
+  pre: string,
+  passBrief: string,
+  brief: string,
+  context: { systemPrompt: string; worktree: string; maxBytes: number },
+): Promise<PassOutcome> {
+  if (pre !== '') deps.writeFile(join(outputs.retained, `${pre}build.brief.md`), passBrief);
+  const stream = join(outputs.streams, `${pre}build.stream.jsonl`);
+  deps.writeFile(stream, '');
+  const build = await deps.builder.build({
+    config: plan.build,
+    ...context,
+    brief: passBrief,
+    onOutput: (chunk) => deps.appendFile(stream, chunk),
+  });
+  if (build.provider !== (plan.build.provider ?? 'anthropic')) throw Error('BUILDER_PROVIDER');
+  const { report, structuredOutput: _structured, ...metrics } = build.measure;
+  deps.writeFile(
+    join(outputs.retained, `${pre}build.measure.json`),
+    json({
+      ...metrics,
+      costUsd: build.provider === 'openai' ? null : metrics.costUsd,
+      exitCode: build.exitCode,
+      stopped: build.stopped,
+    }),
+  );
+  deps.writeFile(join(outputs.retained, `${pre}build.report.md`), report);
+  const built = sessionSucceeded(build);
+  // Les contrôles, l'un après l'autre ; le premier qui ne passe pas met fin à la phase.
+  const played: CheckReport[] = [];
+  if (built) {
+    for (const config of step.checks) {
+      const checked = await playCheck(deps, outputs, config, pre);
+      played.push(checked);
+      if (!passed(checked)) break;
+    }
+  }
+  const checked = played.every(passed);
+  const forReviews =
+    played.length === 0 ? brief : `${brief.trimEnd()}\n\n${renderChecks(played, outputBound())}`;
+  const reviewing = built && checked && !plan.waiting;
+  if (reviewing) deps.writeFile(join(outputs.retained, `${pre}review.brief.md`), forReviews);
+  const outcomes = reviewing
+    ? await playBounded(plan.reviews, step.parallel, (config) =>
+        review(deps, outputs, config, forReviews, pre),
+      )
+    : [];
+  const signal = passSignal({
+    built,
+    buildStopped: build.stopped,
+    checked,
+    waiting: plan.waiting,
+    verdicts: outcomes.map(({ verdict }) => verdict),
+  });
+  return { plan, build, played, outcomes, signal };
+}
+
+/**
+ * La route d'une étape routée, refaite depuis la table gelée du lanceur et les tickets du fichier : un `step.json` qui
+ * n'en est pas la copie exacte (modèle, effort, limite, échelle, empreinte de la table) est refusé avant toute session.
+ */
+function verifyRoute(step: StepFile, launcher: Readonly<Record<string, string>>): void {
+  const routing = step.routing;
+  if (!routing) return;
+  const text = launcher['routing.json']!;
+  let expected: StepFile;
+  try {
+    expected = routedStep(
+      {
+        routing: { ticket: routing.ticket, providers: routing.providers },
+        scouts: step.scouts.map(({ name }) => ({ name })),
+        checks: step.checks,
+        parallel: step.parallel,
+      },
+      parseRoutingTable(text),
+      text,
+      step.tickets,
+    );
+  } catch {
+    throw new Refusal('STEP_ROUTING_MISMATCH');
+  }
+  if (JSON.stringify(expected) !== JSON.stringify(step)) throw new Refusal('STEP_ROUTING_MISMATCH');
 }
 
 /** Une étape ; son code de sortie : 0, 1 (l'étape ne passe pas) ou 2 (refus, échec de l'outil). */
@@ -426,6 +577,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     // Pris avant toute session, et les textes lus ici sont ceux que l'hôte publiera : jamais relus à la fin.
     const tree = deps.fingerprint();
     const launcher = launcherFiles(deps.readLauncher, step);
+    verifyRoute(step, launcher);
     const startedAt = deps.date();
     const inputs = {
       'brief.md': brief,
@@ -466,48 +618,31 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     );
     deps.writeFile(join(outputs.retained, 'build.brief.md'), forBuild);
     const definition = parseTool(JSON.parse(launcher['code.json']!));
-    const stream = join(outputs.streams, 'build.stream.jsonl');
-    deps.writeFile(stream, '');
-    const build = await deps.builder.build({
-      config: step.build,
-      systemPrompt: launcher[definition.launcherPromptFile]!,
-      worktree,
-      brief: forBuild,
-      maxBytes: definition.authProxy.policy.maxBodyBytes,
-      onOutput: (chunk) => deps.appendFile(stream, chunk),
-    });
-    if (build.provider !== (step.build.provider ?? 'anthropic')) throw Error('BUILDER_PROVIDER');
-    const { report, structuredOutput: _structured, ...metrics } = build.measure;
-    deps.writeFile(
-      join(outputs.retained, 'build.measure.json'),
-      json({
-        ...metrics,
-        costUsd: build.provider === 'openai' ? null : metrics.costUsd,
-        exitCode: build.exitCode,
-        stopped: build.stopped,
-      }),
-    );
-    deps.writeFile(join(outputs.retained, 'build.report.md'), report);
-    const built = sessionSucceeded(build);
-    // Les contrôles, l'un après l'autre ; le premier qui ne passe pas met fin à la phase.
-    const played: CheckReport[] = [];
-    if (built) {
-      for (const config of step.checks) {
-        const report = await playCheck(deps, outputs, config);
-        played.push(report);
-        if (!passed(report)) break;
-      }
+    const plans = passPlans(step);
+    const passes: PassOutcome[] = [];
+    for (const [index, plan] of plans.entries()) {
+      const previous = passes.at(-1);
+      const pre = index === 0 ? '' : `pass-${index + 1}.`;
+      const passBrief = previous
+        ? `${forBuild.trimEnd()}\n\n${renderPromotion(
+            { pass: index, model: previous.plan.build.model, signal: previous.signal },
+            previous.played.filter((report) => !passed(report)),
+            previous.outcomes.flatMap(({ verdict }) => (verdict.blocks ? blockingFindings(verdict) : [])),
+            outputBound(),
+          )}`
+        : forBuild;
+      const outcome = await playPass(deps, outputs, step, plan, pre, passBrief, brief, {
+        systemPrompt: launcher[definition.launcherPromptFile]!,
+        worktree,
+        maxBytes: definition.authProxy.policy.maxBodyBytes,
+      });
+      passes.push(outcome);
+      // Une étape sans route n'a qu'une passe ; une étape routée monte d'une bande sur un signal objectif seulement.
+      if (!promotes(outcome.signal)) break;
     }
-    const checked = played.every(passed);
-    const forReviews =
-      played.length === 0 ? brief : `${brief.trimEnd()}\n\n${renderChecks(played, outputBound())}`;
-    if (built && checked) deps.writeFile(join(outputs.retained, 'review.brief.md'), forReviews);
-    const outcomes =
-      built && checked
-        ? await playBounded(step.reviews, step.parallel, (config) =>
-            review(deps, outputs, config, forReviews),
-          )
-        : [];
+    const last = passes.at(-1)!;
+    const { build, played, outcomes } = last;
+    const routed = step.routing !== undefined;
     const checks = Object.fromEntries(
       played.map((report) => [
         report.name,
@@ -535,9 +670,10 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     );
     const measures = [
       ...scoutOutcomes.map(({ measure }) => measure),
-      build.measure,
-      ...outcomes.map(({ measure }) => measure),
+      ...passes.flatMap((pass) => [pass.build.measure, ...pass.outcomes.map(({ measure }) => measure)]),
     ];
+    const numbered = <Entry extends object>(entry: Entry, index: number) =>
+      routed ? { ...entry, pass: index + 1 } : entry;
     const record = buildRecord({
       step: name,
       admission_sha256,
@@ -545,37 +681,69 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       tree,
       inputs,
       tickets: step.tickets,
+      ...(step.routing
+        ? {
+            routing: {
+              ticket: step.routing.ticket,
+              points: step.routing.points,
+              table_sha256: step.routing.table_sha256,
+              start: step.routing.start,
+              passes: passes.map(({ plan, signal }, index) => ({
+                pass: index + 1,
+                band: plan.band!,
+                provider: plan.build.provider ?? 'anthropic',
+                model: plan.build.model,
+                effort: plan.build.effort,
+                signal,
+              })),
+            },
+          }
+        : {}),
       launcher,
       sessions: [
         ...scoutOutcomes.map((scout) => recorded('scout', scout.config, scout, scout.config.name)),
-        {
-          ...recorded('build', step.build, build),
-          provider: build.provider,
-          ...(build.provider === 'openai'
-            ? {
-                client: build.client,
-                usage: {
-                  inputTokens: observedTokens(build.receipts, 'inputTokens'),
-                  outputTokens: observedTokens(build.receipts, 'outputTokens'),
-                },
-                responses: build.receipts,
-              }
-            : {}),
-        },
-        ...outcomes.map((review) => recorded('review', review.config, review, review.config.name)),
+        ...passes.flatMap(({ plan, build: played, outcomes: done }, index) => [
+          numbered(
+            {
+              ...recorded('build', plan.build, played),
+              provider: played.provider,
+              ...(played.provider === 'openai'
+                ? {
+                    client: played.client,
+                    usage: {
+                      inputTokens: observedTokens(played.receipts, 'inputTokens'),
+                      outputTokens: observedTokens(played.receipts, 'outputTokens'),
+                    },
+                    responses: played.receipts,
+                  }
+                : {}),
+            },
+            index,
+          ),
+          ...done.map((review) =>
+            numbered(recorded('review', review.config, review, review.config.name), index),
+          ),
+        ]),
       ],
-      checks: played.map((report) => ({
-        name: report.name,
-        passed: passed(report),
-        stopped: report.stopped,
-        durationSeconds: report.durationSeconds,
-      })),
-      reviews: outcomes.map(({ config, verdict }) => ({
-        name: config.name,
-        verdict: verdict.verdict,
-        findings: verdict.findings,
-      })),
-      outcome: built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 'passed' : 'refused',
+      checks: passes.flatMap(({ played: reports }, index) =>
+        reports.map((report) =>
+          numbered(
+            {
+              name: report.name,
+              passed: passed(report),
+              stopped: report.stopped,
+              durationSeconds: report.durationSeconds,
+            },
+            index,
+          ),
+        ),
+      ),
+      reviews: passes.flatMap(({ outcomes: done }, index) =>
+        done.map(({ config, verdict }) =>
+          numbered({ name: config.name, verdict: verdict.verdict, findings: verdict.findings }, index),
+        ),
+      ),
+      outcome: stepOutcome(last.signal),
     });
     // Relu par son propre schéma : ce que la porte refuserait n'entre pas dans le worktree.
     deps.steps.publish(name, { ...inputs, 'record.json': json(stepRecordSchema().parse(record)) });
@@ -595,8 +763,10 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       },
       checks,
       reviews,
-      costUsd:
-        build.provider === 'openai' ? null : measures.reduce((sum, measure) => sum + measure.costUsd, 0),
+      ...(record.routing ? { routing: record.routing } : {}),
+      costUsd: passes.some((pass) => pass.build.provider === 'openai')
+        ? null
+        : measures.reduce((sum, measure) => sum + measure.costUsd, 0),
       costByModel: sumByModel(measures.map((measure) => measure.costByModel)),
       record: `steps/${name}/record.json`,
     };

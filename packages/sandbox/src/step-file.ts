@@ -2,12 +2,7 @@ import { z } from 'zod';
 import { ticketsSchema } from '@architect-os/contracts';
 
 import { codexModelSchema } from './models.js';
-import {
-  deriveRoute,
-  routeBlockSchema,
-  routingDigest,
-  type RoutingTable,
-} from './routing.js';
+import { deriveRoute, routeBlockSchema, routingDigest, type RoutingTable } from './routing.js';
 
 export { codexModelSchema, type CodexModel } from './models.js';
 

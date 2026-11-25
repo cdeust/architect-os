@@ -61,6 +61,37 @@ export function stepRecordSchema() {
     tree: z.strictObject({ commit: commit(), tree: commit(), clean: z.boolean() }),
     inputs: keyed(/^(brief\.md|step\.json|scout\.[a-z][a-z0-9-]{0,31}\.md)$/, digest()),
     tickets: ticketsSchema().optional(),
+    // Une étape routée : le ticket servi, ses points, la table, la raison de la bande de départ, et chaque passe avec
+    // son constructeur et le signal que l'hôte en a tiré.
+    routing: z
+      .strictObject({
+        ticket: z.string().regex(/^TICKET-\d{3}$/),
+        points: z.int().min(1),
+        table_sha256: digest(),
+        start: z.enum(['BAND_OF_POINTS', 'BAND_REQUIRES_CHECKS']),
+        passes: z
+          .array(
+            z.strictObject({
+              pass: z.int().min(1),
+              band: z.int().min(1),
+              provider: z.enum(['anthropic', 'openai']),
+              model: z.string().min(1),
+              effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']),
+              signal: z.enum([
+                'accepted',
+                'stopped',
+                'build_failed',
+                'check_failed',
+                'review_waiting',
+                'review_invalid',
+                'changes_requested',
+              ]),
+            }),
+          )
+          .min(1)
+          .refine((passes) => passes.every(({ pass }, index) => pass === index + 1), 'ROUTING_PASS_ORDER'),
+      })
+      .optional(),
     admission_sha256: digest().optional(),
     launcher: keyed(/^(?!.*\.\.)[a-z0-9][a-z0-9./-]*$/, digest()),
     sessions: z.array(
@@ -84,6 +115,7 @@ export function stepRecordSchema() {
             )
             .optional(),
           name: z.string().regex(stepName()).optional(),
+          pass: z.int().min(1).optional(),
           model: z.string().min(1),
           effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']),
           completed: z.boolean(),
@@ -118,6 +150,7 @@ export function stepRecordSchema() {
     checks: z.array(
       z.strictObject({
         name: z.string().regex(stepName()),
+        pass: z.int().min(1).optional(),
         passed: z.boolean(),
         stopped: z.boolean(),
         durationSeconds: seconds(),
@@ -126,11 +159,13 @@ export function stepRecordSchema() {
     reviews: z.array(
       z.strictObject({
         name: z.string().regex(stepName()),
+        pass: z.int().min(1).optional(),
         verdict: z.enum(['accept', 'request_changes', 'invalid']),
         findings: seconds(),
       }),
     ),
-    outcome: z.enum(['passed', 'refused']),
+    // `waiting` : la revue d'une étape routée attend un fournisseur que Step ne peut pas appeler.
+    outcome: z.enum(['passed', 'refused', 'waiting']),
   });
 }
 export type StepRecord = z.infer<ReturnType<typeof stepRecordSchema>>;
@@ -158,6 +193,8 @@ export interface RecordedSession {
   responses?: readonly import('./responses-proxy.js').ResponseReceipt[];
   /** Absent pour la construction. */
   name?: string | undefined;
+  /** Le rang de la passe, pour une étape routée seulement. */
+  pass?: number;
   config: Pick<StepFile['build'], 'model' | 'effort'>;
   completed: boolean;
   exitCode: number;
@@ -175,10 +212,17 @@ export interface RecordParts {
   /** Le texte lu au départ de chaque fichier d'entrée, par nom de fichier. */
   inputs: Readonly<Record<string, string>>;
   tickets?: StepFile['tickets'];
+  routing?: StepRecord['routing'];
   /** Le texte de chaque fichier du lanceur, par chemin relatif à `packages/sandbox`. */
   launcher: Readonly<Record<string, string>>;
   sessions: readonly RecordedSession[];
-  checks: readonly { name: string; passed: boolean; stopped: boolean; durationSeconds: number }[];
+  checks: readonly {
+    name: string;
+    pass?: number;
+    passed: boolean;
+    stopped: boolean;
+    durationSeconds: number;
+  }[];
   reviews: StepRecord['reviews'];
   outcome: StepRecord['outcome'];
 }
@@ -195,6 +239,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
     ...(parts.admission_sha256 ? { admission_sha256: parts.admission_sha256 } : {}),
     inputs: digests(parts.inputs),
     ...(parts.tickets ? { tickets: parts.tickets } : {}),
+    ...(parts.routing ? { routing: parts.routing } : {}),
     launcher: digests(parts.launcher),
     sessions: parts.sessions.map((session) => ({
       role: session.role,
@@ -207,6 +252,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
           }
         : {}),
       name: session.name,
+      ...(session.pass === undefined ? {} : { pass: session.pass }),
       model: session.config.model,
       effort: session.config.effort,
       completed: session.completed,
@@ -216,8 +262,9 @@ export function buildRecord(parts: RecordParts): StepRecord {
       costUsd: session.provider === 'openai' ? null : session.costUsd,
       costByModel: publicCosts(session.costByModel),
     })),
-    checks: parts.checks.map(({ name, passed, stopped, durationSeconds }) => ({
+    checks: parts.checks.map(({ name, pass, passed, stopped, durationSeconds }) => ({
       name,
+      ...(pass === undefined ? {} : { pass }),
       passed,
       stopped,
       durationSeconds,

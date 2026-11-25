@@ -449,7 +449,12 @@ Then('the materialized files match the preview and its manifest', function (this
       JSON.stringify(payload, null, 2) +
       '\n```\n',
   );
-  assert.deepEqual(load(join(folder, 'step.json')).build, load(policy).step.build);
+  const published = load(join(folder, 'step.json'));
+  // A routed policy names no build: the Step builds with the first pass of its route.
+  assert.deepEqual(
+    published.build,
+    load(policy).step.routing ? published.routing.ladder[0].build : load(policy).step.build,
+  );
 });
 Then('the Step folder contains the exact host scout question', function (this: World) {
   assert.equal(

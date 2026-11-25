@@ -38,7 +38,9 @@ import { factsJsonSchema } from '../../src/scout-facts.js';
 import { stepRecordSchema } from '../../src/step-record.js';
 import { stepsFolder } from '../../src/steps-folder.js';
 import { repoOf } from './runner.js';
-import { parseStepFile } from '../../src/step-file.js';
+import { parseRoutedPolicy, parseStepFile, routedStep } from '../../src/step-file.js';
+import { parseRoutingTable } from '../../src/routing.js';
+import type { BuildRequest } from '../../src/builder.js';
 import type { TreeFingerprint } from '../../src/tree-fingerprint.js';
 import {
   codeToolSession,
@@ -100,6 +102,14 @@ const newPhase = (): Phase => ({
 });
 interface Step {
   fixtureBuilder?: Builder;
+  /** The routing table the launcher holds, when it is not the committed one. */
+  launcherRouting?: string;
+  /** What the build session of each pass does, by its rank (1 is the first pass). */
+  buildPasses: Map<number, Behaviour>;
+  /** The role whose specimen the admission evidence lacks. */
+  droppedSpecimen?: string;
+  /** Builds for OpenAI are answered by a native receipt, Claude builds by the code tool. */
+  openaiBuilds?: boolean;
   refusedAdmission?: string;
   acceptedAdmission?: string;
   folder: string;
@@ -136,6 +146,42 @@ interface Step {
   stderr: string;
   code?: number;
 }
+/**
+ * A builder for a routed Step whose ladder crosses providers: an OpenAI build returns a native receipt of its model and
+ * counts as a build call, so that the behaviour of each pass is found by its rank; a Claude build goes to the code tool.
+ */
+const mixedBuilder = (s: Step, claude: Builder): Builder => ({
+  build: async (request: BuildRequest) => {
+    if (request.config.provider !== 'openai') return claude.build(request);
+    const { model, effort, limitSeconds } = request.config;
+    s.calls.push({
+      tool: 'code.json',
+      argv: ['--model', model, '--effort', effort],
+      brief: request.brief,
+      limitSeconds,
+    });
+    const own = s.buildPasses.get(s.calls.filter((call) => call.tool === 'code.json').length) ?? {};
+    const exitCode = own.nativeExit ?? 0;
+    const stopped = own.stopped ?? false;
+    const completed = exitCode === 0 && !stopped;
+    return {
+      provider: 'openai',
+      exitCode,
+      stopped,
+      measure: { ...measureSession(''), completed, inputTokens: 4, outputTokens: 3 },
+      client: { version: 'codex-cli 0.170.0', sha256: 'd'.repeat(64) },
+      receipts: [
+        {
+          model,
+          request: 1,
+          terminal: completed ? 'completed' : 'interrupted',
+          inputTokens: 4,
+          outputTokens: 3,
+        },
+      ],
+    };
+  },
+});
 const gate = (gates: Map<number, Deferred>, n: number): Deferred => {
   const known = gates.get(n);
   if (known !== undefined) return known;
@@ -158,6 +204,7 @@ const newStepFolder = (world: SandboxWorld, name: string) => {
     outputs: { retained: join(parent, 'retained-output'), streams: join(parent, 'raw-streams') },
     calls: [],
     behaviours: { 'code.json': {}, 'review.json': {}, 'scout.json': {} },
+    buildPasses: new Map(),
     phases: { 'scout.json': newPhase(), 'review.json': newPhase() },
     checks: newPhase(),
     checkCalls: [],
@@ -433,6 +480,7 @@ const launcherFile =
   (s: Step) =>
   (file: string): string => {
     if (s.missing.has(file)) throw new Error(`missing launcher file ${file}`);
+    if (file === 'routing.json') return s.launcherRouting ?? readFileSync(join(PKG, file), 'utf8');
     return /^(code|review|scout)\.json$/.test(file) ? readFileSync(join(PKG, file), 'utf8') : `fixed:${file}`;
   };
 
@@ -490,6 +538,14 @@ const start = (s: Step, args: string): Promise<void> => {
         const { approval: _approval, ...payload } = evidence.payload;
         return requireStepAdmission({ ...evidence, payload }, subject);
       }
+      if (s.droppedSpecimen !== undefined) {
+        evidence.payload.specimens = evidence.payload.specimens.filter(
+          ({ role }) => role !== s.droppedSpecimen,
+        );
+        evidence.approved_sha256 = createHash('sha256')
+          .update(JSON.stringify(evidence.payload))
+          .digest('hex');
+      }
       if (s.refusedAdmission === 'stale') evidence.payload.inputs_sha256['brief.md'] = 'a'.repeat(64);
       if (s.refusedAdmission === 'failed specimen') {
         evidence.payload.specimens[0]!.results[0]!.observed = { verdict: 'refuse', findings: [] };
@@ -508,12 +564,20 @@ const start = (s: Step, args: string): Promise<void> => {
         s.published.set(name, { ...files });
       },
     },
-    builder: s.fixtureBuilder ?? new ClaudeBuilder((...args) => deps.session(...args)),
+    builder:
+      s.fixtureBuilder ??
+      (s.openaiBuilds
+        ? mixedBuilder(s, new ClaudeBuilder((...args) => deps.session(...args)))
+        : new ClaudeBuilder((...args) => deps.session(...args))),
     session: async (tool, argv, brief, limitSeconds, onOutput) => {
       s.calls.push({ tool, argv, brief, limitSeconds });
       const phase = tool === 'code.json' ? undefined : s.phases[tool];
       const n = s.calls.filter((call) => call.tool === tool).length;
-      const own = { ...s.behaviours[tool], ...phase?.behaviours.get(n) };
+      const own = {
+        ...s.behaviours[tool],
+        ...phase?.behaviours.get(n),
+        ...(tool === 'code.json' ? s.buildPasses.get(n) : {}),
+      };
       if (phase !== undefined) {
         phase.runningWhenStarted.push(phase.running);
         phase.running++;
@@ -1355,3 +1419,142 @@ Then('the production Step orchestrates the subscription fixture {string}', async
     null,
   );
 });
+
+// Routed Steps (docs/design/orchestration-fable-5-2.md, §13): step.json is what Plan writes from the launcher table.
+const launcherRoutingText = (s: Step) => s.launcherRouting ?? readFileSync(join(PKG, 'routing.json'), 'utf8');
+
+Given(
+  'the step folder holds a routed step.json for a ticket of {int} points, with the checks {string} and the providers {string}',
+  function (points: number, checks: string, providers: string) {
+    const s = step(this);
+    const text = launcherRoutingText(s);
+    const policy = parseRoutedPolicy({
+      routing: { providers: providers.split(' ') },
+      checks:
+        checks === ''
+          ? []
+          : checks.split(' ').map((name) => ({ name, command: ['npm', 'run', name], limitSeconds: 120 })),
+    });
+    const tickets = [{ id: 'TICKET-001', story_points: points, depends_on: [], acceptance_ids: ['AC-1'] }];
+    writeFileSync(
+      join(s.folder, 'step.json'),
+      JSON.stringify(routedStep(policy, parseRoutingTable(text), text, tickets)),
+    );
+    writeFileSync(join(s.folder, 'brief.md'), 'Build the thing.\n');
+  },
+);
+
+Given(
+  'the launcher routing table sends reviews to Gemini, then Opus, and builds on Sol alone from {int} points',
+  function (points: number) {
+    const s = step(this);
+    const table = JSON.parse(launcherRoutingText(s));
+    table.roles.review.bands[0].candidates = [
+      { provider: 'google', limitSeconds: 1500 },
+      { provider: 'anthropic', model: 'claude-opus-5-5', effort: 'high', limitSeconds: 1500 },
+    ];
+    for (const band of table.roles.build.bands)
+      if (band.fromPoints === points)
+        band.candidates = [{ provider: 'openai', model: 'gpt-6.2-sol', effort: 'high', limitSeconds: 7200 }];
+    s.launcherRouting = JSON.stringify(table);
+    s.openaiBuilds = true;
+  },
+);
+
+Given('the routed step.json is tampered with: {}', function (change: string) {
+  const s = step(this);
+  const file = join(s.folder, 'step.json');
+  const routed = JSON.parse(readFileSync(file, 'utf8'));
+  switch (change) {
+    case 'a stronger first builder':
+      routed.build = { ...routed.build, model: 'claude-opus-5-5', effort: 'high' };
+      break;
+    case 'a longer first build':
+      routed.build.limitSeconds += 1;
+      break;
+    case 'a ladder without its last band':
+      routed.routing.ladder.pop();
+      break;
+    case 'a review outside the ladder':
+      routed.reviews = [{ name: 'quality', model: 'claude-opus-5-5', effort: 'high', limitSeconds: 900 }];
+      break;
+    case 'the digest of another table':
+      routed.routing.table_sha256 = 'e'.repeat(64);
+      break;
+    case 'a ticket estimated higher than its route':
+      routed.tickets[0].story_points = 13;
+      break;
+    case 'a Google review marked as a session':
+      routed.routing.ladder[0].review.waiting = false;
+      break;
+    case 'another admitted provider':
+      routed.routing.providers = ['openai'];
+      break;
+    default:
+      throw new Error(`unknown change ${change}`);
+  }
+  writeFileSync(file, JSON.stringify(routed));
+});
+
+When('the launcher routing table changed after Plan read it', function () {
+  const s = step(this);
+  const table = JSON.parse(launcherRoutingText(s));
+  table.roles.build.bands[1].candidates[0].limitSeconds = 4801;
+  s.launcherRouting = JSON.stringify(table);
+});
+
+Given('the build session of pass {int} is stopped by its limit', function (n: number) {
+  step(this).buildPasses.set(n, { ...step(this).buildPasses.get(n), stopped: true });
+});
+
+Given('the build session of pass {int} exits with {int}', function (n: number, code: number) {
+  step(this).buildPasses.set(n, { ...step(this).buildPasses.get(n), nativeExit: code });
+});
+
+Given('the build session of pass {int} writes the fixture {string}', function (n: number, name: string) {
+  step(this).buildPasses.set(n, { ...step(this).buildPasses.get(n), fixture: name });
+});
+
+Given('the admission evidence lacks the specimen of {string}', function (role: string) {
+  step(this).droppedSpecimen = role;
+});
+
+const builds = (s: Step) => s.calls.filter((call) => call.tool === 'code.json');
+
+Then('the build sessions started with the models {string}', function (models: string) {
+  assert.equal(
+    builds(step(this))
+      .map(({ argv }) => argv[argv.indexOf('--model') + 1])
+      .join(' '),
+    models,
+  );
+});
+
+Then('the brief of build pass {int} contains {string}', function (n: number, text: string) {
+  const brief = builds(step(this))[n - 1]?.brief;
+  assert.ok(brief?.includes(text.replaceAll('\\n', '\n')), brief ?? '');
+});
+
+Then('the brief of build pass {int} is the brief of the step', function (n: number) {
+  assert.equal(builds(step(this))[n - 1]?.brief, 'Build the thing.\n');
+});
+
+Then('the step stderr begins with {string}', function (text: string) {
+  assert.ok(step(this).stderr.startsWith(text), step(this).stderr);
+});
+
+Then(
+  'the published record routing serves {string} at {int} points from the committed table, starting on {string}',
+  function (ticket: string, points: number, start: string) {
+    const published = step(this).published.get('demo');
+    assert.ok(published);
+    const { routing } = JSON.parse(published['record.json']!);
+    const table = createHash('sha256')
+      .update(readFileSync(join(PKG, 'routing.json'), 'utf8'))
+      .digest('hex');
+    assert.deepEqual(
+      { ticket: routing.ticket, points: routing.points, table: routing.table_sha256, start: routing.start },
+      { ticket, points, table, start },
+    );
+  },
+);
