@@ -1,0 +1,50 @@
+{
+  "description": "The routing table of the launcher (docs/design/orchestration-fable-5-2.md, §13): for each role of a Step session, bands of story points, and for each band the ordered candidates (provider, model, effort, limit). Plan derives the sessions of a Step from the points of the ticket it serves; Step derives them again from this file, frozen with the launcher, and refuses any difference. The first candidate whose provider the operator admits starts; the host promotes a pass to the next band only on a failed check, a valid verdict that requests changes, or a session stopped by its limit, one band at a time.",
+  "version": 1,
+  "status": "provisional",
+  "basis": "Policy of the owner, 24 November 2026: Gemini's own agent, called directly, is the independent reviewer and never a builder; Opus and Sol implement complex tickets; Sonnet and Terra are all-round; Haiku and Luna explore. Bands start at 1, 3 and 8 points, and the band of 1 and 2 points is reserved to Steps with at least one check without a model, because only there does the host verify a small model's output mechanically. No threshold is measured: the pilots HR1 and HR5 calibrate no band of points. Limits and efforts are the most frequent ones of the committed steps (Sonnet medium 4800 s, Opus high 7200 s, review 1500 s); Haiku has never built here, its 1200 s is the limit of the shortest committed build. Terra, Luna and every Gemini model have no qualified executable identifier: they are no candidate until one is qualified, and Step has no Google adapter, so a Google review route is a named wait. Every Step record keeps the ticket, its points, the band, the model and effort of each pass, its signal and its usage, so that the bands can be set on facts.",
+  "roles": {
+    "scout": {
+      "bands": [
+        {
+          "fromPoints": 1,
+          "candidates": [
+            { "provider": "anthropic", "model": "claude-haiku-5-5", "effort": "low", "limitSeconds": 300 }
+          ]
+        }
+      ]
+    },
+    "build": {
+      "bands": [
+        {
+          "fromPoints": 1,
+          "requiresChecks": true,
+          "candidates": [
+            { "provider": "anthropic", "model": "claude-haiku-5-5", "effort": "medium", "limitSeconds": 1200 }
+          ]
+        },
+        {
+          "fromPoints": 3,
+          "candidates": [
+            {
+              "provider": "anthropic",
+              "model": "claude-sonnet-5-5",
+              "effort": "medium",
+              "limitSeconds": 4800
+            }
+          ]
+        },
+        {
+          "fromPoints": 8,
+          "candidates": [
+            { "provider": "anthropic", "model": "claude-opus-5-5", "effort": "high", "limitSeconds": 7200 },
+            { "provider": "openai", "model": "gpt-6.2-sol", "effort": "high", "limitSeconds": 7200 }
+          ]
+        }
+      ]
+    },
+    "review": {
+      "bands": [{ "fromPoints": 1, "candidates": [{ "provider": "google", "limitSeconds": 1500 }] }]
+    }
+  }
+}

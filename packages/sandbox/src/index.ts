@@ -10,4 +10,5 @@ export * from './native-launcher.js';
 export * from './process-options.js';
 export * from './timer.js';
 export * from './step-file.js';
+export * from './routing.js';
 export * from './step-record.js';

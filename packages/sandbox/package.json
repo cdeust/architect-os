@@ -11,6 +11,7 @@
       "default": "./dist/src/index.js"
     },
     "./require-run": "./require-run.mjs",
+    "./routing.json": "./routing.json",
     "./runtime-context": {
       "types": "./dist/src/runtime-context.d.ts",
       "default": "./src/runtime-context.ts"
