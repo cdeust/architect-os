@@ -167,11 +167,30 @@ Feature: the fingerprint of the tree of a worktree
       Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
       And the witness program of the nested repository has not run
 
-    Scenario: a gitlink that the commit records, with no directory to mark it, is refused
+    Scenario Outline: the fingerprint recognises a gitlink at the <position> record of Git’s byte list
       Given a throwaway repository with one commit
-      And the commit of the repository records a gitlink "sub" with no directory in the tree
+      And the commit of the repository records a gitlink "<name>" with no directory in the tree
       When I try to take the fingerprint of it
       Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+
+      # The two regular entries in the fixture are .gitignore and a.txt, in Git order.
+      Examples:
+        | position | name   |
+        | first    | !link  |
+        | middle   | 0link  |
+        | last     | zlink  |
+
+    Scenario: the fingerprint accepts an ordinary filename containing the gitlink mode
+      Given a throwaway repository with one commit
+      And the file "160000 notes" of the repository holds "ordinary file"
+      And everything in the repository is committed
+      When I take the fingerprint of the repository
+      Then the fingerprint is clean
+
+    Scenario: the fingerprint accepts an empty Git tree
+      Given a throwaway repository with an empty root commit
+      When I take the fingerprint of the repository
+      Then the fingerprint is clean
 
     Scenario: the same program is started by a git asked for the status of that commit with none of the options of the fingerprint, so that the scenarios above can fail
       Given a throwaway repository with one commit

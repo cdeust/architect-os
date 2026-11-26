@@ -63,6 +63,11 @@ Then('a legacy checkout verdict cannot satisfy the delivery Gate', function () {
 
 // Repository over git
 
+Given('the delivery repository holds an empty root commit', function () {
+  const { git, work } = gitOf(this);
+  git(work, 'commit', '--quiet', '--allow-empty', '--message', 'empty tree');
+});
+
 Given(
   'the delivery repository holds the commit {string} after {string} with the file {string} of {int} lines',
   function (label: string, parent: string, path: string, count: number) {

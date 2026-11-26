@@ -286,17 +286,34 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       And a marker that no ignore file ignores is left in the delivery worktree
       Then the delivery repository holds a nested repository
 
-    Scenario Outline: delivery finds a gitlink recorded only in the <place>, with no directory to mark it
+    Scenario Outline: delivery recognises a gitlink in the <position> record of the <place>
       Given a delivery repository of the git adapter
       And the delivery repository holds the commit "c1"
       And the delivery repository is at the commit "c1"
-      And a gitlink "sub" is recorded only in the <place> of the delivery repository
+      And a gitlink "<name>" is recorded only in the <place> of the delivery repository
       Then the delivery repository holds a nested repository
 
+      # The regular entries in c1 are a.md, b.md and c1.txt, in Git order.
       Examples:
-        | place |
-        | index |
-        | head  |
+        | place | position | name  |
+        | index | first    | 0link |
+        | index | middle   | alink |
+        | index | last     | zlink |
+        | head  | first    | 0link |
+        | head  | middle   | alink |
+        | head  | last     | zlink |
+
+    Scenario: delivery accepts an ordinary filename containing the gitlink mode
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository holds the commit "c2" after "c1" with the binary file "160000 notes"
+      And the delivery repository is at the commit "c2"
+      Then the delivery repository holds no nested repository
+
+    Scenario: delivery accepts an empty Git index and tree
+      Given a delivery repository of the git adapter
+      And the delivery repository holds an empty root commit
+      Then the delivery repository holds no nested repository
 
   Rule: what the repository replaces and what the machine adds are not what the delivery counts
 

@@ -73,6 +73,12 @@ Given('a throwaway repository with one commit', function () {
   commitOne(throwaway(this), 'a.txt');
 });
 
+Given('a throwaway repository with an empty root commit', function () {
+  const directory = throwaway(this);
+  git(directory, 'init', '-q');
+  git(directory, 'commit', '--quiet', '--allow-empty', '--message', 'empty tree');
+});
+
 // A repository nested in the tree: what a session can leave in its worktree. Its own configuration names the witness as
 // the `clean` filter of one file, left racy (rewritten with the same size right after it entered the nested index), so
 // that a git that enters the nested repository must run the filter to know whether the file changed.
