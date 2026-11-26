@@ -179,6 +179,9 @@ Feature: The Claude review
       | claude-review.yml          | with an action that does not wait for the proof of bubblewrap                                          |
       | claude-security-review.yml | with an action that does not wait for the proof of bubblewrap                                          |
       | claude.yml                 | with an action that has no condition                                                                   |
+      | claude.yml                 | with the condition of another file and its steps gated to match                                        |
+      | claude-review.yml          | with the condition of another file and its steps gated to match                                        |
+      | claude-security-review.yml | with the condition of another file and its steps gated to match                                        |
       | claude-review.yml          | with an action that waits for the proof of bubblewrap or for anything else                             |
       | claude-security-review.yml | with an action that waits for the proof of bubblewrap or for anything else                             |
       | claude.yml                 | with the condition of the action between expression markers                                            |
