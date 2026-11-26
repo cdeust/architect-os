@@ -38,7 +38,8 @@ export function isProduction(layout: Layout, path: string): boolean {
  * insensitive to both, and a link `Src` there serves the files of `src/`.
  */
 export function mayHoldProduction(layout: Layout, directory: string): boolean {
-  // Upper then lower, as a volume folds case: U+017F (long s) and U+212A (Kelvin sign) each reach their ASCII letter.
+  // Upper then lower, as a volume folds case: U+017F (long s) reaches s, and U+03F4 (capital theta symbol), which NFC
+  // keeps, reaches θ as Θ does.
   const fold = (text: string) => text.normalize('NFC').toUpperCase().toLowerCase();
   const names = fold(directory).split('/');
   return layout.production.include.some((glob) => {

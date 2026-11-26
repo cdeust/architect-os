@@ -381,7 +381,7 @@ Feature: Gate source files have an unambiguous mutation perimeter
       Examples:
         | path      | may | reason                                                    |
         | packages  | yes | the first segment of packages/*/src/**/*.ts               |
-        | pacKages  | yes | the Kelvin sign folds to k, as on a volume blind to case  |
+        | pacKages  | yes | NFC turns the Kelvin sign into K                          |
         | ſervices  | yes | the long s folds to s, as on a volume blind to case       |
         | docs      | no  | no glob begins with docs                                  |
 
@@ -392,3 +392,4 @@ Feature: Gate source files have an unambiguous mutation perimeter
         | path    | glob         | may | reason                                                        |
         | café   | café/**/*.mjs | yes | the decomposed é is the composed one once both are normalized |
         | cafe    | café/**/*.mjs | no  | e is not é                                                    |
+        | ϴ       | θ/**/*.mjs   | yes | ϴ, which NFC keeps, and θ fold to the same letter             |
