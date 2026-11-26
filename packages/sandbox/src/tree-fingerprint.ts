@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closedGitOptions, machineIndependentGitEnvironment } from './git-closed.js';
-import { visibleNestedMarker } from './git-worktree.js';
+import { containsGitlink, visibleNestedMarker } from './git-worktree.js';
 
 export interface TreeFingerprint {
   /** `git rev-parse HEAD`. */
@@ -28,46 +28,51 @@ function hash(): RegExp {
 
 /**
  * Un appel git, borné dans le temps. Il échoue (message fixe, qui nomme l'appel et ne porte rien de ce que git a
- * imprimé) s'il sort autrement que par 0 (ne pas démarrer ou dépasser sa borne n'est pas sortir par 0) ; `hashed` demande en plus une empreinte.
+ * imprimé) s'il sort autrement que par 0 (ne pas démarrer ou dépasser sa borne n'est pas sortir par 0).
  */
 function git(
   worktree: string,
   call: readonly string[],
   environment: Readonly<Record<string, string>>,
   timeoutMs: number,
-  hashed: boolean,
-): string {
+): Buffer {
   // Les options et l'environnement de chaque git que l'hôte lance viennent d'un seul module (git-closed.ts) : aucune
   // variable de l'hôte hors de sa liste, aucune configuration de la machine.
   const result = spawnSync('git', [...closedGitOptions(), ...call], {
     cwd: worktree,
     env: environment,
-    encoding: 'utf8',
     timeout: timeoutMs,
     // Les deux listes d'un arbre entier passent ici : la borne par défaut (1 Mio) arrêterait git avant sa fin.
     maxBuffer: 1 << 30,
   });
-  const failure = new Error(`l'empreinte de l'arbre a échoué : git ${call.join(' ')}`);
-  // Un appel qui ne démarre pas ou dépasse sa borne n'a pas de code de sortie : `status` vaut `null`.
-  if (result.status !== 0) throw failure;
-  const printed = result.stdout.trim();
-  if (hashed && !hash().test(printed)) throw failure;
+  if (result.status !== 0) throw new Error(`l'empreinte de l'arbre a échoué : git ${call.join(' ')}`);
+  return result.stdout;
+}
+
+function gitHash(
+  worktree: string,
+  call: readonly string[],
+  environment: Readonly<Record<string, string>>,
+  timeoutMs: number,
+): string {
+  const printed = git(worktree, call, environment, timeoutMs).toString().trim();
+  if (!hash().test(printed)) throw new Error(`l'empreinte de l'arbre a échoué : git ${call.join(' ')}`);
   return printed;
 }
 
 /** L'empreinte de l'arbre de `worktree` ; chaque appel git est borné à `timeoutMs`. */
 export function fingerprintTree(worktree: string, timeoutMs = 60_000): TreeFingerprint {
   const host = machineIndependentGitEnvironment();
-  const commit = git(worktree, ['rev-parse', 'HEAD'], host, timeoutMs, true);
+  const commit = gitHash(worktree, ['rev-parse', 'HEAD'], host, timeoutMs);
   const folder = mkdtempSync(join(tmpdir(), 'aos-tree-'));
   try {
     const env = machineIndependentGitEnvironment({ GIT_INDEX_FILE: join(folder, 'index') });
     // L'index temporaire part de celui du commit : dans un index vide, `add -A` écarterait un fichier suivi qu'une
     // règle d'exclusion nomme, et un arbre propre ne serait pas celui de son commit.
-    git(worktree, ['read-tree', 'HEAD'], env, timeoutMs, false);
+    git(worktree, ['read-tree', 'HEAD'], env, timeoutMs);
     // The private index is seeded from HEAD. Check it and discover visible markers before Git walks the checkout.
-    const recorded = git(worktree, ['ls-files', '-s', '-z'], env, timeoutMs, false);
-    if (recorded.split('\0').some((entry) => entry.startsWith('160000 ')))
+    const recorded = git(worktree, ['ls-files', '-s', '-z'], env, timeoutMs);
+    if (containsGitlink(recorded))
       throw new Error("l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre");
     const marker = visibleNestedMarker(worktree, recorded, timeoutMs);
     // Un fichier d'exclusion suivi qui n'est plus celui enregistré n'écarte rien, qu'une session y ait ajouté une
@@ -79,9 +84,9 @@ export function fingerprintTree(worktree: string, timeoutMs = 60_000): TreeFinge
           ? "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
           : "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre, sous un dossier qu'écarte un fichier d'exclusion suivi qui n'est plus celui enregistré : ses règles ne sont pas appliquées",
       );
-    git(worktree, ['add', '-A'], env, timeoutMs, false);
-    const tree = git(worktree, ['write-tree'], env, timeoutMs, true);
-    const committed = git(worktree, ['rev-parse', 'HEAD^{tree}'], host, timeoutMs, true);
+    git(worktree, ['add', '-A'], env, timeoutMs);
+    const tree = gitHash(worktree, ['write-tree'], env, timeoutMs);
+    const committed = gitHash(worktree, ['rev-parse', 'HEAD^{tree}'], host, timeoutMs);
     return { commit, tree, clean: tree === committed };
   } finally {
     rmSync(folder, { recursive: true });

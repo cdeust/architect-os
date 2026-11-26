@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { checkoutIsClean, visibleNestedMarker } from '../../src/git-worktree.js';
 import { fingerprintTree, type TreeFingerprint } from '../../src/tree-fingerprint.js';
-import { gitInFixture } from '../git-fixture.js';
+import { commitDistinctIgnorePaths, gitInFixture } from '../git-fixture.js';
 import { Given, ROOT, Then, When } from './helpers.js';
 
 // Where throwaway directories go, whatever TMPDIR a scenario sets for the fingerprint.
@@ -710,4 +710,8 @@ When('a git with none of the options of the guard lists the untracked files of t
 
 Then('the witness program of the configuration of the repository has run', function () {
   assert.equal(witnessRan(this), true);
+});
+
+Given('the fingerprint repository commits the two distinct pathname ignore files', function () {
+  commitDistinctIgnorePaths(fp(this).directory);
 });

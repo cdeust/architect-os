@@ -258,6 +258,16 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | in-memory |
         | git       |
 
+    Scenario: delivery preflight and native cleanliness agree for distinct pathname bytes
+      The repository contains a literal U+FFFD directory and, on Linux, a sibling whose name is the byte FF.
+
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository is at the commit "c1"
+      And the delivery repository commits the two distinct pathname ignore files
+      Then the delivery repository holds no nested repository
+      And the delivery repository is clean
+
     Scenario: a repository in a directory that the recorded ignore file ignores is not looked for, and one found only because that file changed makes the tree not clean
       A tracked ignore file that is no longer the recorded one prunes nothing (a session can add a rule to it to hide a
       repository). The marker then found is not reported as a nested repository: the tree is refused as not clean, which
