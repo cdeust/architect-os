@@ -117,12 +117,17 @@ export function ghForge(world: DeliverWorld, workflow = 'gate'): GhForgeFixture 
       });
     },
     hasAttempts(hash: string, id: number, attempts: CiJob[][]) {
-      answers('runs', hash, { stdout: runsText(workflow, hash, id, 'completed') });
+      // As GitHub lists a run: with its attempt number.
+      answers('runs', hash, {
+        stdout: JSON.stringify({
+          workflow_runs: [
+            { id, name: workflow, head_sha: hash, status: 'completed', run_attempt: attempts.length },
+          ],
+        }),
+      });
       answers('run', String(id), {
         stdout: JSON.stringify({ id, head_sha: hash, status: 'completed', run_attempt: attempts.length }),
       });
-      // Read without job names, the run is its jobs as listed: those of its latest attempt.
-      answers('jobs', String(id), { stdout: JSON.stringify({ jobs: (attempts.at(-1) ?? []).map(jobText) }) });
       let next = 1;
       attempts.forEach((jobs, index) => {
         answers('attempt', `${id}/${index + 1}`, {

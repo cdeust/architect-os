@@ -266,9 +266,14 @@ Given(
 );
 
 Then(
-  'the delivery forge gives for the commit {string}, asked for no job, the run {int} with the jobs {string}',
-  function (hash: string, id: number, jobs: string) {
-    assert.deepEqual(forgeOf(this).forge.run(hash, 'gate'), { id, completed: true, jobs: JSON.parse(jobs) });
+  'the delivery forge gives for the commit {string}, asked for no job, the run {int} at attempt {int} with the jobs {string}',
+  function (hash: string, id: number, attempt: number, jobs: string) {
+    assert.deepEqual(forgeOf(this).forge.run(hash, 'gate'), {
+      id,
+      completed: true,
+      attempt,
+      jobs: JSON.parse(jobs),
+    });
   },
 );
 

@@ -60,13 +60,13 @@ export class InMemoryForge implements Forge {
     if (recorded !== undefined) {
       const current = recorded.attempts.length;
       const jobsOf = (attempt: number): CiJob[] => recorded.attempts.slice(attempt - 1, attempt).flat();
-      // Without job names the forge reads the run as listed, its latest attempt alone and without its number.
-      if (jobNames === undefined) return { id: recorded.id, completed: true, jobs: jobsOf(current) };
+      // GitHub lists a completed run with its attempt number, and the forge then reads every attempt: without job
+      // names, as with 'all', every effective job.
       return {
         id: recorded.id,
         completed: true,
         attempt: current,
-        jobs: effectiveJobs(current, jobsOf, jobNames === 'all' ? undefined : jobNames),
+        jobs: effectiveJobs(current, jobsOf, Array.isArray(jobNames) ? jobNames : undefined),
       };
     }
     const replayed = this.replayed.get(hash);
