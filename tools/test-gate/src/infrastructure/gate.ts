@@ -71,13 +71,12 @@ export function changedFiles(
   const tracked = firstParent === null ? repository.tracked() : [];
   const changed = firstParent === null ? [] : parseRawDiff(repository.changedPaths(firstParent));
   const include = (path: string) => isProduction(layout, path);
-  // Git lists a link as one path: where a directory of sources could be, Node would load through it what is not listed.
-  for (const path of [
-    ...tracked,
-    ...changed.filter(({ deleted }) => !deleted).map(({ path }) => path),
-    ...untracked,
-  ])
-    if (!include(path) && mayHoldProduction(layout, path)) workspace.requireNotLink(path);
+  // Git lists a link as one path, ignores some, and keeps the others of the first parent out of the diff: Node would
+  // load through any of them sources no perimeter holds. The directories that can hold sources are walked on disk.
+  const link = workspace
+    .linksUnder((path) => mayHoldProduction(layout, path))
+    .find((path) => include(path) || mayHoldProduction(layout, path));
+  if (link !== undefined) throw new Error('GATE_SOURCE_LINK : ' + link);
   const source = (path: string) => validateMutationSource(path, workspace.requireSource(path));
   return [
     ...tracked.filter(include).flatMap((path) => {
@@ -87,8 +86,7 @@ export function changedFiles(
     }),
     ...changed
       .filter(({ path }) => include(path))
-      .map(({ path, deleted, link }) => {
-        if (link) throw new Error('GATE_SOURCE_LINK : ' + path);
+      .map(({ path, deleted }) => {
         if (!deleted) source(path);
         return {
           path,

@@ -1,9 +1,11 @@
 Feature: The gate walks only the paths of a change, and names first what it checks first
   A commit with a first parent is judged by its diff and its untracked files: a tracked file the diff does not name is
-  not read, and a path the diff deletes is no longer in the checkout. Each path is still asked whether it is a link
-  where a directory of production sources could be, and that question needs a path that exists.
+  not read, and a path the diff deletes is no longer in the checkout. Links are another matter: the directories that
+  can hold production sources are walked on disk, whatever git lists, ignores or kept from the first parent.
 
-  Scenario: a link committed at the first parent where sources could be, unchanged since, is not asked again, whatever the globs start with
+  Scenario: a link committed at the first parent where sources could be, unchanged since, is still refused, whatever the globs start with
+    Its target can change without any path of the diff changing: the tests would load sources no perimeter holds.
+
     Given a gate repository
     And the gate configuration reads:
       """
@@ -24,7 +26,6 @@ Feature: The gate walks only the paths of a change, and names first what it chec
       """
     And the gate repository has a source with a LF separator at "src/leaf.mjs"
     And the gate repository replaces "lib/src" with a directory link to a disposable sibling
-    And the directory "lib/src" may hold a production file of the gate configuration: yes
     And the gate first parent is committed
     And the gate repository file "src/leaf.mjs" reads:
       """
@@ -32,10 +33,10 @@ Feature: The gate walks only the paths of a change, and names first what it chec
       """
     And the gate head is committed
     When the gate plans the "linux" job
-    Then the gate exits with 0
+    Then the gate exits with 1
     And the gate output is:
       """
-      plan linux : 1 motif(s) à muter -> reports/gate-plan.json
+      porte de test : GATE_SOURCE_LINK : lib/src
       """
 
   Scenario: a deleted file where a module directory could be is not asked whether it is a link

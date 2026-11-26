@@ -9,6 +9,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -104,12 +105,20 @@ export class Workspace {
   }
 
   /**
-   * Refuse a link at a path git listed: git walks no link, so its parents are directories of the tree. A path of the
-   * index that the checkout no longer holds is no link.
+   * The links of the tree, walked from its root into the directories `descend` accepts, never through a link: what
+   * git lists, ignores or leaves out of a diff makes no difference. Sorted paths, relative to the root.
    */
-  requireNotLink(path: string): void {
-    if (lstatSync(resolve(this.physicalRoot, path), { throwIfNoEntry: false })?.isSymbolicLink())
-      throw new Error('GATE_SOURCE_LINK : ' + path);
+  linksUnder(descend: (path: string) => boolean): string[] {
+    const links: string[] = [];
+    const walk = (directory: string, prefix: string) => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = prefix + entry.name;
+        if (entry.isSymbolicLink()) links.push(path);
+        else if (entry.isDirectory() && descend(path)) walk(resolve(directory, entry.name), path + '/');
+      }
+    };
+    walk(this.physicalRoot, '');
+    return links.sort();
   }
 
   readBytes(path: string): Buffer | null {

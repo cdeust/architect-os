@@ -9,6 +9,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -599,6 +600,11 @@ Then(
     );
   },
 );
+
+Given('the target of the link {string} changes its file {string}', function (link: string, file: string) {
+  const target = realpathSync(repository(this).path(link));
+  writeFileSync(join(target, file), 'export const witness = 2 + 3;\n');
+});
 
 Given('the gate workspace has a directory where the source {string} is expected', function (path: string) {
   mkdirSync(repository(this).path(path), { recursive: true });

@@ -342,6 +342,57 @@ Feature: Gate source files have an unambiguous mutation perimeter
       When the gate plans the "linux" job
       Then the gate exits with 0
 
+    Scenario: a directory of sources replaced by a link that the tree ignores is refused
+      Git lists neither an ignored link nor what it serves; the directories that can hold sources are walked on disk.
+
+      Given a gate repository
+      And the gate repository has a source with a LF separator at "src/leaf.mjs"
+      And the gate first parent is committed
+      And the gate repository file "src/leaf.mjs" is removed
+      And the gate repository file ".gitignore" reads:
+        """
+        reports/
+        src
+        """
+      And the gate repository replaces "src" with a directory link to a disposable sibling
+      And the gate head is committed
+      When the gate plans the "linux" job
+      Then the gate exits with 1
+      And the gate output is:
+        """
+        porte de test : GATE_SOURCE_LINK : src
+        """
+
+    Scenario: a module directory that was a link at the first parent, whose target the head changed, is refused
+      Given a gate repository
+      And the gate repository replaces "mod/one" with a directory link to a disposable sibling
+      And the gate first parent is committed
+      And the target of the link "mod/one" changes its file "leaf.mjs"
+      And the gate head is committed
+      When the gate plans the "linux" job
+      Then the gate exits with 1
+      And the gate output is:
+        """
+        porte de test : GATE_SOURCE_LINK : mod/one
+        """
+
+    Scenario: an ignored production file that is a link is refused
+      Given a gate repository
+      And the gate first parent is committed
+      And the gate repository file ".gitignore" reads:
+        """
+        reports/
+        src/leaf.mjs
+        """
+      And the gate repository replaces "src/leaf.mjs" with a file link to a disposable sibling
+      And the gate head is committed
+      When the gate plans the "linux" job
+      Then the gate exits with 1
+      And the gate output is:
+        """
+        porte de test : GATE_SOURCE_LINK : src/leaf.mjs
+        """
+
     Scenario: a regular file where a module directory could be, and a link outside the sources, are accepted
       Given a gate repository
       And the gate first parent is committed
