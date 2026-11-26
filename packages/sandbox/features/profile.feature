@@ -65,6 +65,20 @@ Feature: Builder profile template
       | ${runtime}/cache |
       | ${runtime}/state |
 
+  Scenario Outline: a denial of a read on, above or below the history is caught: <path>
+    When I load the committed builder profile
+    Then a builder profile that denies reading "<path>" does not let a session read the history
+
+    Examples:
+      | path                        |
+      | ${repo}/.git                |
+      | ${repo}/.git/objects        |
+      | ${repo}/.git/objects/pack   |
+      | ${repo}/.git/packed-refs    |
+      | ${worktree}/.git/HEAD       |
+      | ${repo}/.git/worktrees      |
+      | ${repo}/.git/refs/heads     |
+
   Scenario: reaches the model only through the host auth proxy, with a session token as API key and its own config dir and deny rules
     When I load the committed builder profile
     Then the profile allows the network domains exactly:
