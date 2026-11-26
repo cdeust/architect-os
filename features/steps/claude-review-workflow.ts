@@ -431,16 +431,31 @@ const TOKEN = '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}';
 const BOTS = 'claude[bot],chatgpt-codex-connector[bot],dependabot[bot]';
 /**
  * The three actions, by the name of their workflow file: the directory of their managed settings, where it is checked
- * out, the command that installs it, and every input of the action but its prompt, to the letter. The name selects
+ * out, the command that installs it, the names of the steps, and every input of the action to the letter, but the
+ * text of its prompt: whether the action has a prompt is written, and a prompt is a text that is not empty. The name selects
  * the entry, never the contents: a file cannot choose what it is compared with. The action keeps the last permission
  * mode it is given, in either spelling (`lastPermissionMode`, base-action/src/parse-sdk-options.ts at 4411a9e9), so
  * the arguments are compared whole, never searched.
  */
 export const ACTIONS: Record<
   string,
-  { directory: string; path: string; run: string; prompt: boolean; inputs: Record<string, unknown> }
+  {
+    directory: string;
+    path: string;
+    run: string;
+    /** The names of the checkout and of the installer of the managed settings, then the id and the name of the action. */
+    names: [string, string, string, string];
+    prompt: boolean;
+    inputs: Record<string, unknown>;
+  }
 > = {
   'claude.yml': {
+    names: [
+      'Checkout the settings of this run',
+      'Install the managed settings of the bot',
+      'claude',
+      'Run Claude Code',
+    ],
     directory: '.github/claude',
     path: 'claude-config',
     run: script(
@@ -458,6 +473,12 @@ export const ACTIONS: Record<
     },
   },
   'claude-review.yml': {
+    names: [
+      'Checkout the review files of this run',
+      'Restrict Claude Code to reading and guard its comments',
+      'review',
+      'PR Review',
+    ],
     directory: '.github/claude-review',
     path: 'review-config',
     run: script(
@@ -479,6 +500,12 @@ export const ACTIONS: Record<
     },
   },
   'claude-security-review.yml': {
+    names: [
+      'Checkout the review files of this run',
+      'Restrict Claude Code to reading the checkout',
+      'engine',
+      'Security review',
+    ],
     directory: '.github/claude-security-review',
     path: 'review-config',
     run: install('review-config/.github/claude-security-review', 'managed-settings.json', '0644'),
@@ -547,7 +574,7 @@ export function assertActions(file: string, text: string): number {
     entry !== undefined,
     `the file ${file} runs the action, and the rule holds no entry under that name`,
   );
-  const { directory, path, run, prompt, inputs } = entry;
+  const { directory, path, run, names, prompt, inputs } = entry;
   closed('the workflow', doc, WORKFLOW_KEYS);
   assert.equal(new Set(actions.map(({ id }) => id)).size, actions.length, 'a job runs more than one action');
   for (const { id, job, steps, at } of actions) {
@@ -579,20 +606,37 @@ export function assertActions(file: string, text: string): number {
     const installer = steps[installers[0] as number] as StepT;
     assert.equal(installer.run, run, 'the step settings is not the installer written for this file');
     closed('the step settings', installer, ['id', 'name', 'if', 'run']);
-    const { prompt: asked, ...given } = action.with ?? {};
-    assert.deepEqual(given, inputs, 'the inputs of the action are not those written for this file');
-    assert.equal(typeof asked === 'string', prompt, 'the action has a prompt where none is written, or none');
+    // Every input written for the file, and no other; the prompt, where one is written, by its presence and not its text.
+    const asked = action.with?.['prompt'];
     assert.deepEqual(
-      { id: installer.id, if: installer.if },
-      { id: 'settings', if: gate.if },
-      'the step settings does not run on the condition of its job',
+      prompt && asked !== undefined ? { ...action.with, prompt: '' } : action.with,
+      prompt ? { ...inputs, prompt: '' } : inputs,
+      'the inputs of the action are not those written for this file',
+    );
+    assert.ok(
+      !prompt || (typeof asked === 'string' && asked !== ''),
+      'the prompt of the action is not a text',
+    );
+    assert.deepEqual(
+      { id: action.id, name: action.name },
+      { id: names[2], name: names[3] },
+      'the action does not have the id and the name written for this file',
+    );
+    assert.deepEqual(
+      { id: installer.id, name: installer.name, if: installer.if },
+      { id: 'settings', name: names[1], if: gate.if },
+      'the step settings does not have the name written for this file, or does not run on the condition of its job',
     );
     const checkouts = (steps as StepT[])
       .slice(0, installers[0])
       .filter((step) => step.with?.['path'] === path);
     assert.equal(checkouts.length, 1, 'the managed settings come from no checkout of the run');
     closed('the checkout of the managed settings', checkouts[0], ['name', 'uses', 'with']);
-    assert.equal(checkouts[0]?.uses, CHECKOUT_PIN, 'the checkout of the managed settings has another pin');
+    assert.deepEqual(
+      { name: checkouts[0]?.name, uses: checkouts[0]?.uses },
+      { name: names[0], uses: CHECKOUT_PIN },
+      'the checkout of the managed settings has another name or another pin',
+    );
     assert.deepEqual(
       checkouts[0]?.with,
       {
@@ -742,7 +786,14 @@ const contentsOf = (other: string) => (doc: RawWorkflow) => {
 };
 /** The inputs of another file's action on this file's action: its mode and its tools. */
 const inputsOf = (other: string) => (doc: RawWorkflow) => {
-  shape(doc).action['with'] = { ...ACTIONS[other]?.inputs, prompt: 'x' };
+  const { action } = shape(doc);
+  const own = (action['with'] as Record<string, unknown>)['prompt'];
+  action['with'] = { ...ACTIONS[other]?.inputs, ...(own === undefined ? {} : { prompt: own }) };
+};
+const prompt = (value: unknown) => (doc: RawWorkflow) => {
+  const inputs = shape(doc).action['with'] as Record<string, unknown>;
+  if (value === undefined) delete inputs['prompt'];
+  else inputs['prompt'] = value;
 };
 const args = (change: (was: string) => string) => (doc: RawWorkflow) => {
   const { action } = shape(doc);
@@ -874,6 +925,11 @@ const SHAPE_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = {
     (doc) => void ((shape(doc).action['with'] as Record<string, unknown>)['allowed_bots'] = '*'),
     NOT_THE_INPUTS,
   ],
+  'with a prompt that is false': [prompt(false), NOT_THE_INPUTS],
+  'with a prompt, where none is written': [prompt('x'), NOT_THE_INPUTS],
+  'without its prompt': [prompt(undefined), NOT_THE_INPUTS],
+  'with a prompt that is not a text': [prompt(false), /the prompt of the action is not a text/],
+  'with an empty prompt': [prompt(''), /the prompt of the action is not a text/],
   'with a second action in the job of the first': [
     (doc) => {
       const { steps, proof, action } = shape(doc);
@@ -970,7 +1026,7 @@ const SHAPE_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = {
   ],
   'with an installer of the managed settings on a condition of its own': [
     (doc) => void (shape(doc).settings['if'] = 'false'),
-    /the step settings does not run on the condition of its job/,
+    /does not run on the condition of its job/,
   ],
 };
 
@@ -1025,6 +1081,97 @@ Then(
       }
       assert.throws(() => assertModesForbidden(JSON.stringify(settings)), path);
     }
+  },
+);
+
+/**
+ * A property over a committed file, in place of one more list of cases: every change of one key of the four steps
+ * the rule holds to the letter (the checkout of the managed settings, their installer, the proof, the action), and of
+ * the keys inside their mappings, must be refused. A change is: the key deleted; its value replaced by `false`, by
+ * `''`, by `'x'`; a text with one character more; and one unknown key added to each step, to each mapping of a
+ * step, to the job and to the workflow. A replacement equal to the committed value is no change and is left out. One exception, the documented
+ * one: a prompt replaced by another text that is not empty.
+ */
+function changesOfOneKey(file: string): { what: string; text: string; allowed: boolean }[] {
+  const original = parse(readFileSync(join(ROOT, '.github/workflows', file), 'utf8')) as RawWorkflow;
+  const path = ACTIONS[file]?.path;
+  const places = (doc: RawWorkflow): Record<string, Record<string, unknown>> => {
+    const { job, steps, proof, settings, action } = shape(doc);
+    const checkout = steps.find((step) => (step['with'] as RawStep | undefined)?.['path'] === path);
+    assert.ok(checkout !== undefined, 'the committed workflow no longer checks out its settings');
+    return { checkout, settings, proof, action, job, workflow: doc };
+  };
+  const out: { what: string; text: string; allowed: boolean }[] = [];
+  const change = (what: string, apply: (doc: RawWorkflow) => void, allowed = false): void => {
+    const doc = structuredClone(original);
+    apply(doc);
+    out.push({ what, text: stringify(doc), allowed });
+  };
+  const values = (was: unknown): unknown[] =>
+    [false, '', 'x', ...(typeof was === 'string' ? [`${was}x`] : [])].filter((value) => value !== was);
+  for (const place of ['checkout', 'settings', 'proof', 'action']) {
+    change(`${place}: an unknown key`, (doc) => void ((places(doc)[place] as RawStep)['zz'] = 'x'));
+    for (const [key, was] of Object.entries(places(original)[place] as RawStep)) {
+      const inner = typeof was === 'object' && was !== null ? Object.entries(was) : [];
+      if (typeof was === 'object' && was !== null) {
+        change(
+          `${place}.${key}: an unknown key`,
+          (doc) => void (((places(doc)[place] as RawStep)[key] as RawStep)['zz'] = 'x'),
+        );
+      }
+      const holders: [string, (doc: RawWorkflow) => Record<string, unknown>, string, unknown][] = [
+        [`${place}.${key}`, (doc) => places(doc)[place] as RawStep, key, was],
+        ...inner.map(
+          ([name, value]): [string, (doc: RawWorkflow) => Record<string, unknown>, string, unknown] => [
+            `${place}.${key}.${name}`,
+            (doc) => (places(doc)[place] as RawStep)[key] as Record<string, unknown>,
+            name,
+            value,
+          ],
+        ),
+      ];
+      for (const [label, holder, name, value] of holders) {
+        change(`${label} deleted`, (doc) => void delete holder(doc)[name]);
+        for (const other of values(value)) {
+          const anotherPrompt = label === 'action.with.prompt' && typeof other === 'string' && other !== '';
+          change(
+            `${label} = ${JSON.stringify(other)}`,
+            (doc) => void (holder(doc)[name] = other),
+            anotherPrompt,
+          );
+        }
+      }
+    }
+  }
+  for (const place of ['job', 'workflow']) {
+    change(`${place}: an unknown key`, (doc) => void ((places(doc)[place] as RawStep)['zz'] = 'x'));
+  }
+  return out;
+}
+
+Then(
+  'each of the {int} changes of one key of the four steps of {string} is refused, but {int} that give its prompt another text',
+  function (count: number, file: string, exceptions: number) {
+    const changes = changesOfOneKey(file);
+    const accepted = (text: string): boolean => {
+      try {
+        assertActions(file, text);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    assert.ok(accepted(readFileSync(join(ROOT, '.github/workflows', file), 'utf8')), 'the committed file');
+    assert.deepEqual(
+      changes.filter(({ text, allowed }) => accepted(text) !== allowed).map(({ what }) => what),
+      [],
+      'changes the rule accepts and should refuse, or refuses and should accept',
+    );
+    assert.deepEqual(
+      [changes.length, changes.filter(({ allowed }) => allowed).length],
+      [count, exceptions],
+      'the number of changes tried, and of those that give the prompt another text',
+    );
   },
 );
 

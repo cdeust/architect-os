@@ -89,6 +89,12 @@ Feature: The Claude review
       | claude-security-review.yml | without a mode                                |
       | claude-security-review.yml | without its managed settings                  |
       | claude-security-review.yml | with managed settings from the default branch |
+      | claude.yml | with a prompt that is false |
+      | claude.yml | with a prompt, where none is written |
+      | claude-review.yml | without its prompt |
+      | claude-security-review.yml | without its prompt |
+      | claude-review.yml | with a prompt that is not a text |
+      | claude-security-review.yml | with an empty prompt |
       | claude.yml | with the contents of claude-review.yml |
       | claude-review.yml | with the contents of claude.yml |
       | claude-security-review.yml | with the contents of claude-review.yml |
@@ -217,6 +223,21 @@ Feature: The Claude review
       | bench-sandbox.yml | with a command that sets the scrub without the action            |
       | mutation-full.yml | with a command that sets the scrub without the action            |
       | claude.yml        | without the proof of bubblewrap                                  |
+
+  Scenario Outline: no change of one key of the steps the rule holds to the letter passes in "<file>"
+    A property over the committed file, not a list of cases: for the checkout of the managed settings, their installer,
+    the proof and the action, every key and every key inside their mappings is deleted, replaced by false, by an empty
+    text, by "x", and, for a text, given one character more; one unknown key is added to each of these steps, to each of their
+    mappings, to the job and to the workflow. Each change is refused. The one exception is written: a prompt replaced by another text that
+    is not empty, since the rule holds the presence of a prompt and not its text. The numbers are what the committed
+    file gives: a step that gains or loses a key changes them here.
+    Then each of the <changes> changes of one key of the four steps of "<file>" is refused, but <prompts> that give its prompt another text
+
+    Examples:
+      | file                       | changes | prompts |
+      | claude.yml                 | 121     | 0       |
+      | claude-review.yml          | 135     | 2       |
+      | claude-security-review.yml | 146     | 2       |
 
   Scenario: the job of the @claude bot reads with its own token
     Its token is in the environment of Claude Code; the bot writes with the token of the Claude app.
