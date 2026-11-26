@@ -338,6 +338,30 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
       5: src/math.mjs:1 : directive Stryker refusée : // Stryker disable all
       """
 
+  Scenario Outline: a directive whose comment breaks the line before Stryker is still read, as Stryker reads it: <case>
+    Stryker matches its directives on the text of a comment, where the space it allows before the word may be a line
+    break (@stryker-mutator/instrumenter, transformers/directive-bookkeeper.js).
+
+    Given the gate first parent is committed
+    And the gate repository file "src/math.mjs" reads:
+      """
+      export const before = 1;
+      <first>
+      <second>
+      """
+    And the gate head is committed
+    And the gate mutation report is the fixture "no-mutant"
+    When the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate violations are:
+      """
+      5: src/math.mjs:2 : directive Stryker refusée : <shown>
+      """
+
+    Examples:
+      | case                      | first | second                 | shown                         |
+      | a block comment           | /*    | Stryker disable all*/  | /* Stryker disable all*/      |
+
   Scenario: an absent mutation report is red when the perimeter is not empty
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 7 changed
     And the gate first parent is committed

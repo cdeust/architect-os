@@ -77,6 +77,8 @@ export interface DebtJudgement {
 
 const DEBT_STATUSES = new Set(['Survived', 'NoCoverage']);
 const NOT_KILLED = new Set(['Survived', 'NoCoverage', 'Pending']);
+/** The statuses that detect a mutant: only they, or the mutant gone, prove the removal of its entry. */
+const DETECTED = new Set(['Killed', 'Timeout', 'RuntimeError']);
 
 /** The readable identity of an entry: `file:l:c-l:c mutator original -> replacement`. */
 export function debtIdentity(entry: DebtEntry): string {
@@ -259,6 +261,15 @@ export function judgeDebt(
       add(`${id} : retrait non prouvé, le fichier n'est pas dans le rapport de mutation`);
     else if (identitiesOf(readable, entry.file, (status) => NOT_KILLED.has(status)).has(id)) {
       add(`${id} : retrait refusé, le survivant existe toujours`);
+    } else {
+      // Present and not killed above: a status that detects nothing (Ignored, CompileError) proves no removal.
+      const found = readable.files.get(entry.file);
+      const undetected = found?.mutants.find(
+        (mutant) =>
+          !DETECTED.has(mutant.status) && debtIdentity(entryOf(entry.file, mutant, found.source)) === id,
+      );
+      if (undetected !== undefined)
+        add(`${id} : retrait refusé, le mutant n'est pas détecté : ${undetected.status}`);
     }
   }
   let notSurvived = 0;

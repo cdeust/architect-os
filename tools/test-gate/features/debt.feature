@@ -519,6 +519,46 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
       | NoCoverage |
       | Pending    |
 
+  Scenario Outline: a removed entry whose mutant is still there undetected is refused: <status>
+    A removal is proved by a detection of its mutant, or by its mutant gone: a mutant the tool ignored or could not
+    compile was not detected.
+
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate debt registry is the fixture "survivor"
+    And the gate first parent is committed
+    And the gate debt registry is the fixture "empty"
+    And the gate head is committed
+    And the gate mutation report is the fixture "survivor"
+    And mutant "5" of the gate mutation report has the status "<status>"
+    When the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate violations of rule 6 are:
+      """
+      6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : retrait refusé, le mutant n'est pas détecté : <status>
+      """
+
+    Examples:
+      | status       |
+      | Ignored      |
+      | CompileError |
+
+  Scenario Outline: a removed entry whose mutant is detected is proved: <status>
+    Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate debt registry is the fixture "survivor"
+    And the gate first parent is committed
+    And the gate debt registry is the fixture "empty"
+    And the gate head is committed
+    And the gate mutation report is the fixture "survivor"
+    And mutant "5" of the gate mutation report has the status "<status>"
+    When the gate checks the "linux" job
+    Then the gate reports no violation of rule 6
+
+    Examples:
+      | status       |
+      | Killed       |
+      | Timeout      |
+      | RuntimeError |
+
   Scenario: a removed entry whose file the mutation report does not speak of is not proved
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
     And the gate debt registry is the fixture "survivor"
