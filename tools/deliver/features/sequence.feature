@@ -1347,3 +1347,24 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       And the delivery CI answers "waiting, waiting, waiting, green"
       When I deliver "step" until "end"
       Then the delivery outcome is "delivered"
+
+    Scenario: a change of the judge reads its maintenance record again before the destinations
+      Given the delivery commit "h1" changes the paths "tools/test-gate/gate.sh"
+      And the delivery owner approved the maintenance of "h1" for a day
+      When I deliver "step" until "end"
+      Then the delivery calls named "approval" are:
+        """
+        approval maintenance
+        approval publication
+        approval maintenance
+        approval publication
+        """
+      And the delivery outcome is "delivered"
+
+    Scenario: a maintenance record that expires while the CI is awaited stops the run before the first destination
+      Given the delivery commit "h1" changes the paths "tools/test-gate/gate.sh"
+      And the delivery owner's maintenance record of "h1" ends 60 seconds after the start of the scene
+      And the delivery CI answers "waiting, waiting, waiting, green"
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "publication" because "approbation de maintenance périmée"
+      And the delivery remote branch "main" is still at "p0"

@@ -163,7 +163,9 @@ The largest mistake in the proposed direction is the phrase **“the host read t
   is exactly the judged diff.
 - **The judge.** The paths changed between the two objects (`diff-tree -r --name-only -z --no-renames`: additions,
   deletions, mode changes, both names of a rename) are classified against `judgePaths` of the installed policy, before
-  the trial push. A change of the judge needs the owner's maintenance approval of that commit.
+  the trial push. A rule `dir/` is a root-relative subtree, `**/name/` a directory of that name at any depth
+  (`**/node_modules/`), any other a basename pattern. A change of the judge needs the owner's maintenance approval of
+  that commit, read in the preflight and again before the first destination.
 - **Publication (P1 and P10 of the retired publication prompts).** Phase 5, the push of the commit to the destinations
   of the policy, needs the owner's publication approval of that commit. It is asked in the preflight, before the trial
   branch, and read again just before the first destination is pushed, so that a record withdrawn or expired during
@@ -185,7 +187,8 @@ sudo "$LAUNCHER/tools/deliver/approve" publication cdeust/architect-os <full com
 sudo "$LAUNCHER/tools/deliver/approve" maintenance cdeust/architect-os <full commit hash> "Require the macOS job"
 ```
 
-It needs root (sudo, so the owner's password), and writes one file, `/etc/architect-os/delivery-<kind>.json`, mode
+It needs root (sudo, so the owner's password); it refuses an existing directory that is a link, not owned by root, or
+writable by group or others, and refuses `ARCHITECT_OS_APPROVAL_DIRECTORY` when it runs as root. It writes one file, `/etc/architect-os/delivery-<kind>.json`, mode
 0644, owned by root, by an atomic rename into `/etc/architect-os` (created 0755 by root when absent). The record names
 the kind, the repository, the full hash, the time it was given and the time it ends: 24 hours by default, at most what
 `approvalHours` of the policy allows (24). A new record of a kind replaces the previous one; `sudo rm

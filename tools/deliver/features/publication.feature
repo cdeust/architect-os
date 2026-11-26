@@ -146,6 +146,17 @@ Feature: The destinations move only on the owner's approval of the exact commit,
         | maintenance cdeust/architect-os HASH say_"yes"         | APPROVE_INTENT_REFUSED     |
         | maintenance cdeust/architect-os HASH back\\slash       | APPROVE_INTENT_REFUSED     |
 
+    Scenario Outline: the owner's command does not write into a directory that is <change>
+      Given the owner's approval directory of the delivery command is altered: the <change>
+      When the owner runs the approval command with 'publication cdeust/architect-os HASH'
+      Then the approval command refused with "APPROVE_DIRECTORY_UNSAFE" and wrote nothing
+
+      Examples:
+        | change                          |
+        | directory a link                |
+        | directory writable by all       |
+        | directory writable by its group |
+
     Scenario: without a directory named for a scenario, the owner's command writes only as root
       When the approval command is run as this user into the owner directory
       Then the approval command refused with "APPROVE_REQUIRES_ROOT" and wrote nothing

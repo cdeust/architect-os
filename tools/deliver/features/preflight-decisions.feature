@@ -23,3 +23,9 @@ Feature: The released policy identifies the programs and paths that require main
       | other/tools/test-gate/x  | ordinary |
       | nested/package.json      | judge    |
       | package.json.txt         | ordinary |
+      | node_modules/x/index.js  | judge    |
+      | tools/node_modules/x.js  | judge    |
+      | tools/node_modules       | judge    |
+      | NODE_MODULES/x           | judge    |
+      | tools/node_modules_x/y   | ordinary |
+      | my-node_modules/x        | ordinary |

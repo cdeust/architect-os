@@ -12,8 +12,8 @@
 # replaces the previous one. To withdraw: sudo rm /etc/architect-os/delivery-<kind>.json.
 #
 # ARCHITECT_OS_APPROVAL_DIRECTORY, when set, names another directory and lifts the root requirement: the scenarios
-# write there. A record written anywhere else than /etc/architect-os, or by another uid than root, is read by no
-# delivery. sudo does not pass the variable on (env_reset).
+# write there. It is refused when the command runs as root. A record written anywhere else than /etc/architect-os, or
+# by another uid than root, is read by no delivery. sudo does not pass the variable on (env_reset).
 #
 # Exit codes: 0 written (one line on stdout); 2 refused, `approve: <CODE>` on stderr, nothing written; 3 a write failed.
 set -u
@@ -24,8 +24,14 @@ refuse() {
   exit 2
 }
 
+uid=$(/usr/bin/id -u) || exit 3
 directory=${ARCHITECT_OS_APPROVAL_DIRECTORY:-/etc/architect-os}
-if [ -z "${ARCHITECT_OS_APPROVAL_DIRECTORY-}" ] && [ "$(/usr/bin/id -u)" != 0 ]; then refuse APPROVE_REQUIRES_ROOT; fi
+if [ -n "${ARCHITECT_OS_APPROVAL_DIRECTORY-}" ]; then
+  # Root writes only the owner's directory: a variable cannot send its record anywhere else.
+  [ "$uid" != 0 ] || refuse APPROVE_DIRECTORY_REFUSED
+elif [ "$uid" != 0 ]; then
+  refuse APPROVE_REQUIRES_ROOT
+fi
 
 [ "$#" -ge 3 ] || refuse USAGE
 kind=$1 repository=$2 commit=$3
@@ -73,7 +79,20 @@ else
   extra=
 fi
 
-/bin/mkdir -p -m 0755 -- "$directory" || exit 3
+# An existing directory is used only if it is a directory, not a link, owned by the uid that writes, and writable by
+# no one else: the same conditions as the reader's. Otherwise it is created, 0755.
+if [ -L "$directory" ]; then refuse APPROVE_DIRECTORY_UNSAFE; fi
+if [ -e "$directory" ]; then
+  [ -d "$directory" ] || refuse APPROVE_DIRECTORY_UNSAFE
+  # shellcheck disable=SC2046 # the fields of one `ls -ldn` line: mode, links, uid, ...
+  set -- $(/bin/ls -ldn -- "$directory")
+  [ "$3" = "$uid" ] || refuse APPROVE_DIRECTORY_UNSAFE
+  case $1 in
+    ?????w* | ????????w*) refuse APPROVE_DIRECTORY_UNSAFE ;;
+  esac
+else
+  /bin/mkdir -m 0755 -- "$directory" || exit 3
+fi
 temporary=$(/usr/bin/mktemp "$directory/.delivery-$kind.XXXXXX") || exit 3
 trap '/bin/rm -f -- "$temporary"' EXIT
 printf '{"kind":"%s","repository":"%s","commit":"%s","approvedAt":%s,"expiresAt":%s%s}\n' \

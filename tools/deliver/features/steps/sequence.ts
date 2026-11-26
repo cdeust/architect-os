@@ -396,3 +396,20 @@ Given('the delivery commit {string} changes the paths {string}', function (commi
   const s = scene(this);
   s.repository.changes.set(`${s.parent} ${hex(commit)}`, paths.split(', '));
 });
+
+Given(
+  "the delivery owner's maintenance record of {string} ends {int} seconds after the start of the scene",
+  function (commit: string, seconds: number) {
+    scene(this).approvals.records.set('maintenance', {
+      state: 'present',
+      repository: 'cdeust/architect-os',
+      commit: hex(commit),
+      approvedAt: SCENE_START,
+      expiresAt: SCENE_START + seconds,
+    });
+  },
+);
+
+Then('the delivery remote branch {string} is still at {string}', function (branch: string, hash: string) {
+  assert.equal(scene(this).repository.remotes.get(branch), hex(hash));
+});

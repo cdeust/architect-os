@@ -56,6 +56,8 @@ interface Started {
   entry: DeliveryEntry;
   publish: string[];
   remotes: RemoteBranch[];
+  /** The commit changes the judge: its maintenance record is read again before the destinations. */
+  judge: boolean;
 }
 
 type Start = Started | { ok: false; reason: Reason };
@@ -104,7 +106,8 @@ function prerequisites(options: DeliverOptions, config: DeliverConfig, ports: De
   if (parents.length !== 1 || parents[0] !== plan.parent) {
     return refuse("la tête distante n'est pas le parent unique du commit");
   }
-  if (changesJudge(repository.changedPaths(plan.parent, hash), config.judgePaths)) {
+  const judge = changesJudge(repository.changedPaths(plan.parent, hash), config.judgePaths);
+  if (judge) {
     const decision = approvalOf('maintenance', hash, config, ports);
     if ('reason' in decision) return refuse(decision.reason);
   }
@@ -133,7 +136,7 @@ function prerequisites(options: DeliverOptions, config: DeliverConfig, ports: De
     published: [],
     ruleSuites: new Map(),
   };
-  return { ok: true, entry, publish: plan.publish, remotes };
+  return { ok: true, entry, publish: plan.publish, remotes, judge };
 }
 
 /** Phase 2. */
@@ -224,15 +227,17 @@ async function readRuleSuite(
  */
 async function publish(
   entry: DeliveryEntry,
-  remotes: readonly RemoteBranch[],
-  behind: readonly string[],
+  start: Started,
   config: DeliverConfig,
   ports: DeliverPorts,
 ): Promise<Stop | undefined> {
   const { repository, forge, clock } = ports;
-  // Read again: the owner may have withdrawn the record during the gate and the CI, or it may have expired.
-  const decision = approvalOf('publication', entry.hash, config, ports);
-  if ('reason' in decision) return { phase: 'publication', reason: decision.reason };
+  const { remotes, publish: behind } = start;
+  // Read again: the owner may have withdrawn a record during the gate and the CI, or it may have expired.
+  for (const kind of start.judge ? (['maintenance', 'publication'] as const) : (['publication'] as const)) {
+    const decision = approvalOf(kind, entry.hash, config, ports);
+    if ('reason' in decision) return { phase: 'publication', reason: decision.reason };
+  }
   repository.fetch();
   if (remotes.some((remote) => repository.remoteHead(remote.branch) !== remote.head)) {
     return { phase: 'publication', reason: 'une branche distante a bougé' };
@@ -275,7 +280,7 @@ async function play(
     return undefined;
   }
   progress.phase('publication');
-  const refused = await publish(entry, start.remotes, start.publish, config, ports);
+  const refused = await publish(entry, start, config, ports);
   if (refused !== undefined) return refused;
   progress.phase('rangement');
   ports.repository.deleteRemoteBranch(entry.trial);

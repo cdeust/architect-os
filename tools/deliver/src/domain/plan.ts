@@ -23,14 +23,16 @@ export function planPublication(hash: string, remotes: readonly RemoteBranch[]):
   return { ok: true, parent: first.head, publish: behind.map((remote) => remote.branch) };
 }
 
-/** A directory entry or any of its descendants, or a tool/configuration basename wherever it is installed. */
+// A rule is one of three forms. `dir/`: that root-relative subtree, and a change that replaces one of its ancestors.
+// `**/name/`: a directory of that name at any depth, and anything below it (Node resolves `node_modules` from every
+// directory up to the root). Anything else: a basename pattern, at any depth.
 export function changesJudge(paths: readonly string[], rules: readonly string[]): boolean {
   return paths.some((name) => {
     const path = name.toLowerCase();
-    return rules.some((rule) =>
-      rule.endsWith('/')
-        ? path.startsWith(rule) || rule.startsWith(path + '/')
-        : posix.matchesGlob(posix.basename(path), rule),
-    );
+    return rules.some((rule) => {
+      if (rule.startsWith('**/') && rule.endsWith('/')) return path.split('/').includes(rule.slice(3, -1));
+      if (rule.endsWith('/')) return path.startsWith(rule) || rule.startsWith(path + '/');
+      return posix.matchesGlob(posix.basename(path), rule);
+    });
   });
 }

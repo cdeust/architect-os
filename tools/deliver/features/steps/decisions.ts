@@ -92,5 +92,8 @@ Then('the plan is refused as {string}', function (reason: string) {
 
 Then('the released judge classifies {string} as {string}', async function (path: string, kind: string) {
   const { changesJudge } = await import('../../src/domain/plan.js');
-  assert.equal(changesJudge([path], ['tools/test-gate/', 'package.json']), kind === 'judge');
+  assert.equal(
+    changesJudge([path], ['tools/test-gate/', '**/node_modules/', 'package.json']),
+    kind === 'judge',
+  );
 });

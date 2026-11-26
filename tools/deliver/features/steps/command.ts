@@ -7,6 +7,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  symlinkSync,
   statSync,
   renameSync,
   copyFileSync,
@@ -655,6 +656,11 @@ Given("the owner's approval directory of the delivery command is altered: {}", f
   const directory = approvalsOf(c);
   if (change === 'the record writable by all') chmodSync(join(directory, 'delivery-publication.json'), 0o666);
   else if (change === 'the directory writable by all') chmodSync(directory, 0o777);
+  else if (change === 'the directory writable by its group') chmodSync(directory, 0o775);
+  else if (change === 'the directory a link') {
+    renameSync(directory, directory + '-elsewhere');
+    symlinkSync(directory + '-elsewhere', directory);
+  }
   // No file can be given to another uid without root: the command is told another uid is the owner instead.
   else if (change === 'the owner another uid') this.state['approvalOwner'] = process.getuid!() + 1;
   else assert.fail(`unknown change ${change}`);

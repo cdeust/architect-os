@@ -50,7 +50,7 @@
   "appendOnly": ["docs/design/journal.md"],
   "approvalHours": 24,
   "judgePaths": [
-    "node_modules/",
+    "**/node_modules/",
     ".claude/",
     "claude.md",
     "codeowners",
