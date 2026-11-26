@@ -59,6 +59,7 @@
     "tools/deliver/",
     "tools/test-gate/",
     "tools/runtime/",
+    "tools/session-guard/",
     "scripts/",
     "packages/sandbox/",
     "packages/contracts/",

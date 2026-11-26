@@ -42,6 +42,8 @@ Feature: The released policy identifies the programs and paths that require main
       | node_modules/.bin/tsc             | judge    |
       | .github/workflows/gate.yml        | judge    |
       | tools/deliver/approve             | judge    |
+      | tools/session-guard/src/guard.ts  | judge    |
+      | tools/session-guarded/x           | ordinary |
       | tools/test-gate/gate.json         | judge    |
       | nested/package.json               | judge    |
       | gateway/src/main.ts               | ordinary |
