@@ -103,7 +103,7 @@ Feature: The Claude security review
     The reviewer's JSON is untrusted: a prompt injected by the diff shapes it. An app such as Codex obeys an @mention
     whoever writes it, and a merge resolver reads a line `Verdict:`.
     Then the publisher renders a finding whose text tries to <attempt>
-    And the comment has no @mention, no verdict line, no HTML and no stray code span
+    And the comment has no @mention, no verdict line, and renders nothing of the finding
 
     Examples:
       | attempt           |
@@ -111,9 +111,44 @@ Feature: The Claude security review
       | pass a verdict    |
       | hide HTML         |
       | close a code span |
+      | insert a link     |
+      | show an image     |
+      | use an entity     |
 
   Scenario: the publisher says when no finding passed
     Then the publisher renders an empty list as a comment that says no finding passed
+
+  Scenario: the publisher cuts a long comment at a finding
+    Then the publisher cuts a comment that would pass its bound at a finding, with a line that says so
+
+  Scenario Outline: a shape of the findings <kind> is rejected
+    Given the committed workflow "claude-security-review.yml"
+    Then a shape of the findings <kind> is rejected
+
+    Examples:
+      | kind                                 |
+      | that allows another key              |
+      | that allows another key in a finding |
+      | that allows a LOW finding            |
+      | that lowers the confidence floor     |
+      | that lifts the number of findings    |
+      | that lifts the length of a field     |
+      | that drops a required field          |
+
+  Scenario: the publisher posts one comment and gives gh nothing but its token
+    Then the publisher posts one comment with the findings, and gives gh nothing but its token
+
+  Scenario: the publisher posts a fixed notice for a refused answer
+    Then the publisher posts the fixed notice for a refused answer and says why in the job summary
+
+  Scenario: the publisher posts nothing for a pull request number that is not a number
+    Then the publisher posts nothing for a pull request number that is not a number
+
+  Scenario: the publisher says when gh fails
+    Then the publisher exits 3 and says so in the job summary when gh fails
+
+  Scenario: the publisher leaves out a run link of another host
+    Then the publisher leaves out a run link that is not a run of GitHub
 
   Scenario Outline: the publisher refuses an answer <kind>
     Then the publisher refuses an answer <kind>
@@ -133,3 +168,6 @@ Feature: The Claude security review
       | with a confidence that is a boolean |
       | with a description too long      |
       | with too many findings           |
+      | holding the shape of a key of Anthropic |
+      | holding the shape of a GitHub token |
+      | holding the shape of a fine-grained GitHub token |

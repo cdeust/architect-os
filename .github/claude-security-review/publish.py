@@ -5,13 +5,13 @@ Runs in the job `publish` of .github/workflows/claude-security-review.yml, after
 secret but the job's token. The reviewer posts nothing itself: it returns JSON (`--json-schema`), which is untrusted,
 since a prompt injected by the diff can shape it. This script checks it against findings.schema.json (beside this
 file), neutralises what a reader could act on (an @mention, which an app such as Codex obeys whoever writes it; a
-line `Verdict:`, which a merge resolver reads, kept out by writing each field on one line after a prefix; HTML),
-and writes one comment.
+line `Verdict:`, which a merge resolver reads; a link, an image, HTML: each field is one code span on one line
+after a prefix), refuses an answer that holds the shape of a credential, and writes one comment.
 
   publish.py render    reads the JSON on stdin, prints the comment; exit 0, or 2 when the JSON is refused
   publish.py post      reads FINDINGS, PR, GITHUB_REPOSITORY, RUN_URL; posts the comment with gh; a refused JSON
-                       posts a fixed notice instead and writes the reason to GITHUB_STEP_SUMMARY; exit 0, or 3
-                       when gh fails
+                       posts a fixed notice instead and writes the reason to GITHUB_STEP_SUMMARY; exit 0, 2 when
+                       PR is not a number (nothing posted), or 3 when gh fails
 
 Only the standard library: the job installs nothing.
 """
@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -91,14 +92,24 @@ def check(value: Any, schema: dict[str, Any], where: str = "$") -> None:
         raise Refused(f"{where}: schema type not supported: {kind}")
 
 
-def neutral(text: str) -> str:
-    """Text a reader cannot act on: one line, no @mention, no HTML, no backtick to close a code span.
+def span(text: str) -> str:
+    """Text a reader cannot act on, as one code span on one line.
 
-    One line is what keeps a `Verdict:` line out: every field is written after a prefix of its own on a line of the
-    comment, so no field can begin a line, and a resolver that reads `^Verdict:` finds none.
+    In a code span GitHub renders no Markdown link or image, no autolink, no HTML and no entity: they show as text. A
+    backtick of the text, which would close the span, becomes an apostrophe. `@` becomes `\uff20`, so no mention
+    notifies and no app that reads the raw text sees one. The span is also what keeps a `Verdict:` line out: a field
+    is one span on one line, so a line of the comment that holds it begins with a backtick or with the prefix of the
+    field, never with `Verdict:`.
     """
     flat = " ".join(line.strip() for line in text.splitlines() if line.strip())
-    return flat.replace("@", "\uff20").replace("<", "&lt;").replace(">", "&gt;").replace("`", "'")
+    return "`" + flat.replace("`", "'").replace("@", "\uff20") + "`"
+
+
+# What the comment must never carry, whatever the reviewer was made to return: a credential of Anthropic or of GitHub.
+# source: the prefixes of the keys and OAuth tokens of the Claude Console (sk-ant-) and of GitHub tokens
+# (https://github.blog/engineering/platform-security/behind-githubs-new-authentication-token-formats/).
+CREDENTIAL = re.compile(r"sk-ant-[A-Za-z0-9_-]{8,}|gh[opsur]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}")
+RUN_URL = re.compile(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/[0-9]+")
 
 
 def parse(raw: str) -> list[dict[str, Any]]:
@@ -112,21 +123,27 @@ def parse(raw: str) -> list[dict[str, Any]]:
 
 def render(findings: list[dict[str, Any]], run_url: str = "") -> str:
     parts = [HEADER]
-    if run_url:
-        parts.append(f"[Run]({neutral(run_url)})\n")
+    if RUN_URL.fullmatch(run_url):
+        parts.append(f"[Run]({run_url})\n")
     if not findings:
         parts.append("\nNo security finding passed the filter.\n")
+    size = sum(len(part) for part in parts)
     for index, finding in enumerate(findings, start=1):
-        parts.append(
-            f"\n**{index}. {finding['severity']}, {neutral(finding['category'])}** "
-            f"`{neutral(finding['file'])}:{finding['line']}` (confidence {finding['confidence']:.2f})\n\n"
-            f"- Description: {neutral(finding['description'])}\n"
-            f"- Exploit scenario: {neutral(finding['exploit_scenario'])}\n"
-            f"- Recommendation: {neutral(finding['recommendation'])}\n"
+        part = (
+            f"\n**{index}. {finding['severity']}** {span(finding['category'])} "
+            f"{span(finding['file'] + ':' + str(finding['line']))} (confidence {finding['confidence']:.2f})\n\n"
+            f"- Description: {span(finding['description'])}\n"
+            f"- Exploit scenario: {span(finding['exploit_scenario'])}\n"
+            f"- Recommendation: {span(finding['recommendation'])}\n"
         )
+        if size + len(part) > MAX_BODY:
+            parts.append(f"\n(cut: {len(findings) - index + 1} more findings did not fit in one comment)\n")
+            break
+        parts.append(part)
+        size += len(part)
     body = "".join(parts)
-    if len(body) > MAX_BODY:
-        body = body[:MAX_BODY] + "\n\n(cut: the comment reached its bound)\n"
+    if CREDENTIAL.search(body):
+        raise Refused("the answer holds the shape of a credential")
     return body
 
 
@@ -139,8 +156,6 @@ def summary(line: str) -> None:
 
 def post(body: str) -> int:
     pr = os.environ["PR"]
-    if not pr.isdigit():
-        raise Refused("PR is not a number")
     with tempfile.TemporaryDirectory() as scratch:
         file = Path(scratch) / "body.md"
         file.write_text(body, encoding="utf-8")
@@ -174,6 +189,9 @@ def main(argv: list[str]) -> int:
             return 2
         return 0
     if argv == ["post"]:
+        if not os.environ.get("PR", "").isdigit():
+            summary("The findings were not posted: PR is not a number.")
+            return 2
         try:
             body = render(parse(os.environ.get("FINDINGS", "")), os.environ.get("RUN_URL", ""))
         except Refused as error:
