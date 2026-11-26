@@ -259,18 +259,11 @@ export function judgeDebt(
     const id = debtIdentity(entry);
     if (!covered(readable, entry))
       add(`${id} : retrait non prouvé, le fichier n'est pas dans le rapport de mutation`);
-    else if (identitiesOf(readable, entry.file, (status) => NOT_KILLED.has(status)).has(id)) {
+    else if (identitiesOf(readable, entry.file, (status) => NOT_KILLED.has(status)).has(id))
       add(`${id} : retrait refusé, le survivant existe toujours`);
-    } else {
-      // Present and not killed above: a status that detects nothing (Ignored, CompileError) proves no removal.
-      const found = readable.files.get(entry.file);
-      const undetected = found?.mutants.find(
-        (mutant) =>
-          !DETECTED.has(mutant.status) && debtIdentity(entryOf(entry.file, mutant, found.source)) === id,
-      );
-      if (undetected !== undefined)
-        add(`${id} : retrait refusé, le mutant n'est pas détecté : ${undetected.status}`);
-    }
+    // Present and not killed: a status that detects nothing (Ignored, CompileError) proves no removal either.
+    else if (identitiesOf(readable, entry.file, (status) => !DETECTED.has(status)).has(id))
+      add(`${id} : retrait refusé, le mutant n'est pas détecté`);
   }
   let notSurvived = 0;
   for (const entry of entries) {

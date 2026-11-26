@@ -39,7 +39,7 @@ Feature: The gate walks only the paths of a change, and names first what it chec
       porte de test : GATE_SOURCE_LINK : lib/src
       """
 
-  Scenario: a deleted file where a module directory could be is not asked whether it is a link
+  Scenario: a deleted file where a module directory could be is not read
     Given a gate repository
     And the gate repository file "mod/notes" reads:
       """

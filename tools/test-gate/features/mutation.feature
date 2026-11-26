@@ -362,6 +362,22 @@ Feature: Test gate, rule 5: no surviving mutant in the perimeter
       | case                      | first | second                 | shown                         |
       | a block comment           | /*    | Stryker disable all*/  | /* Stryker disable all*/      |
 
+  Scenario: a block directive with no space before Stryker is read, as Stryker reads it
+    Given the gate first parent is committed
+    And the gate repository file "src/math.mjs" reads:
+      """
+      export const before = 1;
+      /*Stryker disable all*/
+      """
+    And the gate head is committed
+    And the gate mutation report is the fixture "no-mutant"
+    When the gate checks the "linux" job
+    Then the gate verdict is red
+    And the gate violations are:
+      """
+      5: src/math.mjs:2 : directive Stryker refusée : /*Stryker disable all*/
+      """
+
   Scenario: an absent mutation report is red when the perimeter is not empty
     Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor" with line 7 changed
     And the gate first parent is committed

@@ -105,20 +105,17 @@ export class Workspace {
   }
 
   /**
-   * The first link of the tree at a path `holds` accepts, walked from the root into the directories it accepts, never
-   * through a link: what git lists, ignores or leaves out of a diff makes no difference. A path relative to the root.
+   * The links of the tree at the paths `holds` accepts, walked from the root into the directories it accepts, never
+   * through a link: what git lists, ignores or leaves out of a diff makes no difference. Paths relative to the root.
    */
-  linkWhere(holds: (path: string) => boolean): string | undefined {
-    const walk = (directory: string, prefix: string): string | undefined => {
-      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+  linksWhere(holds: (path: string) => boolean): string[] {
+    const walk = (directory: string, prefix: string): string[] =>
+      readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
         const path = prefix + entry.name;
-        if (!holds(path)) continue;
-        if (entry.isSymbolicLink()) return path;
-        const found = entry.isDirectory() ? walk(resolve(directory, entry.name), path + '/') : undefined;
-        if (found !== undefined) return found;
-      }
-      return undefined;
-    };
+        if (!holds(path)) return [];
+        if (entry.isSymbolicLink()) return [path];
+        return entry.isDirectory() ? walk(resolve(directory, entry.name), path + '/') : [];
+      });
     return walk(this.physicalRoot, '');
   }
 

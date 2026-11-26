@@ -534,7 +534,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     Then the gate verdict is red
     And the gate violations of rule 6 are:
       """
-      6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : retrait refusé, le mutant n'est pas détecté : <status>
+      6: src/math.mjs:7:10-7:15 EqualityOperator "n > 0" -> "n >= 0" : retrait refusé, le mutant n'est pas détecté
       """
 
     Examples:
