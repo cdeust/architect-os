@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parse } from 'yaml';
+import { parse, stringify } from 'yaml';
 import { z } from 'zod';
 import { Given, ROOT, Then, stored } from './helpers.js';
 
@@ -16,7 +16,6 @@ import { Given, ROOT, Then, stored } from './helpers.js';
  */
 const WORKFLOW = '.github/workflows/claude-review.yml';
 const ACTION_PIN = 'anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c';
-const USERS_OF_THE_ACTION = ['claude.yml', 'claude-review.yml', 'claude-security-review.yml'];
 
 const Scalar = z.union([z.string(), z.number(), z.boolean()]);
 const Step = z.strictObject({
@@ -29,6 +28,43 @@ const Step = z.strictObject({
   env: z.record(z.string(), z.string()).optional(),
 });
 type StepT = z.infer<typeof Step>;
+
+/** A workflow as YAML gives it, before any schema: the rules below read keys a schema would not name. */
+export type RawStep = Record<string, unknown>;
+export interface RawJob {
+  [key: string]: unknown;
+  steps?: RawStep[];
+}
+export interface RawWorkflow {
+  [key: string]: unknown;
+  jobs: Record<string, RawJob>;
+}
+
+/**
+ * The one way a rule recognises a step that runs Claude Code: the action, its `base-action` directory and the
+ * repository of the base action, in any capitals, since GitHub reads the owner and the name of an action without
+ * regard to case. The pin, the scrub, the permission mode, the managed settings and bubblewrap all ask this function,
+ * and the rule of the pin then accepts one spelling.
+ */
+const ENGINE = /^anthropics\/claude-code-(base-)?action[/@]/i;
+export const runsTheAction = (step: { uses?: unknown }): boolean =>
+  typeof step.uses === 'string' && ENGINE.test(step.uses);
+
+/** Every step of a workflow that runs the action, with the steps of its job and its place among them. */
+export function actionsOf(doc: RawWorkflow): { id: string; job: RawJob; steps: RawStep[]; at: number }[] {
+  return Object.entries(doc.jobs).flatMap(([id, job]) => {
+    const steps = job.steps ?? [];
+    return steps.flatMap((step, at) => (runsTheAction(step) ? [{ id, job, steps, at }] : []));
+  });
+}
+
+const workflowTexts = (): { file: string; text: string }[] => {
+  const dir = join(ROOT, '.github/workflows');
+  return readdirSync(dir)
+    .sort()
+    .map((file) => ({ file, text: readFileSync(join(dir, file), 'utf8') }));
+};
+
 const ReviewJob = z.strictObject({
   name: z.literal('Claude review'),
   needs: z.literal('budget'),
@@ -50,19 +86,6 @@ const REVIEW_FILES = {
   'sparse-checkout': '.github/claude-review',
   'sparse-checkout-cone-mode': false,
 };
-const INSTALL = [
-  'set -euo pipefail',
-  'sudo install -D -m 0644 -o root -g root review-config/.github/claude-review/managed-settings.json /etc/claude-code/managed-settings.json',
-  'sudo install -D -m 0755 -o root -g root review-config/.github/claude-review/comment-guard.py /etc/claude-code/comment-guard.py',
-  'rm -rf review-config',
-].join('\n');
-const CLAUDE_ARGS = [
-  '--strict-mcp-config',
-  '--permission-mode default',
-  '--allowedTools "mcp__github_inline_comment__create_inline_comment"',
-  '--model "claude-opus-5-5"',
-];
-
 function index(steps: StepT[], label: string, found: (step: StepT) => boolean): number {
   const at = steps.findIndex(found);
   assert.ok(at >= 0, `the review job has no step that ${label}`);
@@ -90,7 +113,7 @@ export function assertClaudeReview(text: string): void {
   const restrict = index(steps, 'installs the managed settings', (step) =>
     (step.run ?? '').includes('/etc/claude-code/'),
   );
-  assert.equal(steps[restrict]?.run?.trim(), INSTALL);
+  assert.equal(steps[restrict]?.run, ACTIONS['claude-review.yml']?.run);
   assert.equal(steps[restrict]?.if, undefined, 'the restriction is conditional');
   const diff = index(steps, 'writes the diff', (step) => step.id === 'diff');
   const review = index(steps, 'runs the action', (step) => step.id === 'review');
@@ -129,7 +152,7 @@ export function assertClaudeReview(text: string): void {
   ]);
   assert.equal(inputs['claude_code_oauth_token'], '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}');
   assert.equal(inputs['track_progress'], true);
-  assert.deepEqual(String(inputs['claude_args']).trim().split('\n'), CLAUDE_ARGS);
+  assert.equal(inputs['claude_args'], ACTIONS['claude-review.yml']?.inputs['claude_args']);
   const prompt = String(inputs['prompt']);
   for (const told of [
     'review-input/pr.diff',
@@ -153,12 +176,11 @@ Then('the review job holds the guards of the Claude review', function () {
 });
 
 Then('the three workflows that use the action pin it to one commit', function () {
-  for (const file of USERS_OF_THE_ACTION) {
-    const text = readFileSync(join(ROOT, '.github/workflows', file), 'utf8');
-    const pins = [...text.matchAll(/anthropics\/claude-code-action@[0-9a-f]{40}/g)].map((match) => match[0]);
-    assert.ok(pins.length > 0, `${file} does not use the action`);
-    for (const pin of pins) assert.equal(pin, ACTION_PIN, `${file} pins another commit`);
-  }
+  const pins = workflowTexts().flatMap(({ file, text }) =>
+    actionsOf(parse(text) as RawWorkflow).map(({ steps, at }) => ({ file, uses: steps[at]?.['uses'] })),
+  );
+  assert.equal(new Set(pins.map(({ file }) => file)).size, 3, 'the workflow files that run the action');
+  for (const { file, uses } of pins) assert.equal(uses, ACTION_PIN, `${file} pins another commit`);
 });
 
 const at = (yaml: string, find: string, replace: string): string => {
@@ -353,52 +375,288 @@ Then("the review's managed settings {} are rejected", function (kind: string) {
 });
 
 /**
- * Every workflow that runs the action fixes its permission mode and installs managed settings that forbid the auto
- * and bypass modes, before the action starts: a new pin cannot change the mode in silence (from v1.0.290 the action
- * starts a session in auto mode unless `allowed_bots` is set, src/modes/permission-mode.ts).
+ * The rule of the steps that run the action, in every workflow file of the directory. It is a net for an honest edit
+ * of a workflow, not a boundary: it accepts one shape and refuses every other without guessing how the other is bad,
+ * so a changed shape must change the text expected here in the same pull request, in front of its reviewers. Whoever
+ * can change a workflow can change this file with it; the boundary is the review, and a credential that cannot write
+ * workflows (docs/infrastructure.md, "Which commit a run takes its files from").
+ *
+ * The shape. The action is used in the steps of a job and nowhere else in the document. Its workflow, its job and
+ * every step of its job have no key but those listed. The job runs on the image the proof is written for and holds
+ * one action: the pinned one, scrubbed, with the inputs written for its file below, on the exact condition. The step just before
+ * it is the proof of bubblewrap, to the letter; a step `settings` before that is one of the installers below, to the
+ * letter, fed by a sparse checkout of the commit of the run. With that condition GitHub starts no action unless both
+ * succeeded.
+ *
+ * Not compared here: the text of the prompt, of which the rules of the two reviews check what they need; the other steps of the
+ * job, and so what an earlier step leaves on the runner or does to the installed files; the body of an action of
+ * another repository. Three checks are searches, not comparisons, and say so: `runsTheAction` (a pattern, so that
+ * another spelling is found, then refused by the pin), and the two refusals of a place where an action would hide.
+ *
+ * Why a proof: Claude Code refuses to start under `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` on Linux without bubblewrap
+ * (run 45771449067), and the action installs it only when `allowed_non_write_users` is set, in a step that may fail
+ * (action.yml at 4411a9e9, "Install subprocess isolation dependencies"). The proof removes the cause of that recorded
+ * failure, and stops a runner without a working bubblewrap before the model is called. Keeping a credential from a subprocess is Claude
+ * Code's. Why a mode: from v1.0.290 the action starts a session in auto mode unless one of several inputs is set
+ * (`defaultsToAutoMode`, src/modes/permission-mode.ts).
  */
-const MODES = ['default', 'acceptEdits'];
-const MANAGED = '/etc/claude-code/managed-settings.json';
-
-export function assertModeFixed(text: string): void {
-  const doc = parse(text) as { jobs: Record<string, { steps?: StepT[] }> };
-  const jobs = Object.values(doc.jobs).filter((job) =>
-    (job.steps ?? []).some((step) => step.uses?.startsWith('anthropics/claude-code-action@')),
-  );
-  assert.ok(jobs.length > 0, 'no job runs the action');
-  for (const job of jobs) {
-    const steps = job.steps ?? [];
-    const action = steps.findIndex((step) => step.uses?.startsWith('anthropics/claude-code-action@'));
-    const args = String(steps[action]?.with?.['claude_args'] ?? '');
-    assert.deepEqual(
-      steps[action]?.env,
-      { CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' },
-      'the environment of the subprocesses is not scrubbed of the credentials',
-    );
-    const modes = [...args.matchAll(/--permission-mode\s+(\S+)/g)].map((match) => match[1]);
-    assert.equal(modes.length, 1, 'the permission mode is not set once');
-    assert.ok(MODES.includes(modes[0] ?? ''), `permission mode ${modes[0]}`);
-    const install = steps.findIndex((step) => (step.run ?? '').includes(` ${MANAGED}`));
-    assert.ok(install >= 0 && install < action, 'no managed settings installed before the action');
-    const source = (steps[install]?.run ?? '').match(
-      / (\S+\/managed-settings\.json) \/etc\/claude-code\/managed-settings\.json/,
-    )?.[1];
-    assert.ok(source !== undefined, 'the source of the managed settings is not named');
-    const checkout = steps
-      .slice(0, install)
-      .find((step) => source.startsWith(`${String(step.with?.['path'])}/`));
-    assert.ok(checkout !== undefined, 'the managed settings come from no checkout of the run');
-    assert.equal(checkout.with?.['ref'], '${{ github.sha }}');
-    assert.equal(
-      checkout.with?.['sparse-checkout-cone-mode'],
-      false,
-      'the settings checkout brings more than its directory',
-    );
-    assert.equal(checkout.with?.['persist-credentials'], false);
-    const committed = source.slice(String(checkout.with?.['path']).length + 1);
-    assert.equal(checkout.with?.['sparse-checkout'], committed.slice(0, committed.lastIndexOf('/')));
-    assertModesForbidden(readFileSync(join(ROOT, committed), 'utf8'));
+const SCRUB = 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB';
+const SCRUB_IMAGE = 'ubuntu-24.04';
+const WORKFLOW_KEYS = ['name', 'on', 'permissions', 'concurrency', 'jobs'];
+const JOB_KEYS = ['name', 'needs', 'if', 'runs-on', 'timeout-minutes', 'permissions', 'outputs', 'steps'];
+const STEP_KEYS = ['id', 'name', 'if', 'uses', 'with', 'env', 'run'];
+const PRESENT = "steps.credential.outputs.present == 'true'";
+export const WAITS = "steps.settings.outcome == 'success' && steps.bubblewrap.outcome == 'success'";
+/** The two conditions of an action: after its settings and its proof; and, in a job that looks for a credential, after it. */
+export const WAITS_AFTER_CREDENTIAL = `${PRESENT} && ${WAITS}`;
+const PROOF = {
+  id: 'bubblewrap',
+  name: 'Prove bubblewrap before the scrub of subprocesses',
+  run: [
+    'set -euo pipefail',
+    'ubuntu=/etc/apt/sources.list.d/ubuntu.sources',
+    'test -s "$ubuntu"',
+    'apt=(sudo apt-get -o "Dir::Etc::sourcelist=$ubuntu" -o Dir::Etc::sourceparts=/dev/null)',
+    '"${apt[@]}" update --error-on=any',
+    '"${apt[@]}" install -y --no-install-recommends bubblewrap socat',
+    'sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0',
+    'bwrap --version',
+    'bwrap --unshare-user --unshare-pid --ro-bind / / --proc /proc true',
+    '',
+  ].join('\n'),
+};
+const install = (from: string, file: string, mode: string): string =>
+  `sudo install -D -m ${mode} -o root -g root ${from}/${file} /etc/claude-code/${file}`;
+const script = (...lines: string[]): string => ['set -euo pipefail', ...lines, ''].join('\n');
+const lines = (...each: string[]): string => [...each, ''].join('\n');
+const CHECKOUT_PIN = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
+const TOKEN = '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}';
+const BOTS = 'claude[bot],chatgpt-codex-connector[bot],dependabot[bot]';
+/**
+ * The three actions, by the name of their workflow file: the directory of their managed settings, where it is checked
+ * out, the command that installs it, the names of the steps, and every input of the action to the letter, but the
+ * text of its prompt: whether the action has a prompt is written, and a prompt is a text that is not empty. The name selects
+ * the entry, never the contents: a file cannot choose what it is compared with. The action keeps the last permission
+ * mode it is given, in either spelling (`lastPermissionMode`, base-action/src/parse-sdk-options.ts at 4411a9e9), so
+ * the arguments are compared whole, never searched.
+ */
+export const ACTIONS: Record<
+  string,
+  {
+    directory: string;
+    path: string;
+    run: string;
+    /** The names of the checkout and of the installer of the managed settings, then the id and the name of the action. */
+    names: [string, string, string, string];
+    prompt: boolean;
+    /** The condition decided for the action of this file. */
+    waits: string;
+    inputs: Record<string, unknown>;
   }
+> = {
+  'claude.yml': {
+    names: [
+      'Checkout the settings of this run',
+      'Install the managed settings of the bot',
+      'claude',
+      'Run Claude Code',
+    ],
+    directory: '.github/claude',
+    path: 'claude-config',
+    run: script(
+      install('claude-config/.github/claude', 'managed-settings.json', '0644'),
+      'rm -rf claude-config',
+    ),
+    prompt: false,
+    waits: WAITS,
+    inputs: {
+      claude_code_oauth_token: TOKEN,
+      claude_args: lines(
+        '--permission-mode acceptEdits',
+        '--allowedTools "Read,Glob,Grep,Edit,Write"',
+        '--model "claude-opus-5-5"',
+      ),
+    },
+  },
+  'claude-review.yml': {
+    names: [
+      'Checkout the review files of this run',
+      'Restrict Claude Code to reading and guard its comments',
+      'review',
+      'PR Review',
+    ],
+    directory: '.github/claude-review',
+    path: 'review-config',
+    run: script(
+      install('review-config/.github/claude-review', 'managed-settings.json', '0644'),
+      install('review-config/.github/claude-review', 'comment-guard.py', '0755'),
+      'rm -rf review-config',
+    ),
+    prompt: true,
+    waits: WAITS,
+    inputs: {
+      claude_code_oauth_token: TOKEN,
+      track_progress: true,
+      allowed_bots: BOTS,
+      claude_args: lines(
+        '--strict-mcp-config',
+        '--permission-mode default',
+        '--allowedTools "mcp__github_inline_comment__create_inline_comment"',
+        '--model "claude-opus-5-5"',
+      ),
+    },
+  },
+  'claude-security-review.yml': {
+    names: [
+      'Checkout the review files of this run',
+      'Restrict Claude Code to reading the checkout',
+      'engine',
+      'Security review',
+    ],
+    directory: '.github/claude-security-review',
+    path: 'review-config',
+    run: install('review-config/.github/claude-security-review', 'managed-settings.json', '0644'),
+    prompt: true,
+    waits: WAITS_AFTER_CREDENTIAL,
+    inputs: {
+      claude_code_oauth_token: TOKEN,
+      github_token: '${{ github.token }}',
+      allowed_bots: BOTS,
+      claude_args: lines(
+        '--strict-mcp-config',
+        '--permission-mode default',
+        '--allowedTools "Read,Grep,Glob"',
+        '--model "claude-opus-5-5"',
+        "--json-schema '${{ steps.schema.outputs.json }}'",
+      ),
+    },
+  },
+};
+
+const closed = (what: string, value: unknown, keys: string[]): void => {
+  assert.ok(typeof value === 'object' && value !== null && !Array.isArray(value), `${what} is not a mapping`);
+  for (const key of Object.keys(value)) {
+    assert.ok(keys.includes(key), `${what} has a key the rule does not know: ${key}`);
+  }
+};
+
+/** How many times `found` holds in a parsed document, at any depth: what a rule that reads `steps` could miss. */
+function count(value: unknown, found: (key: string, inner: unknown) => boolean): number {
+  if (typeof value !== 'object' || value === null) return 0;
+  return Object.entries(value).reduce(
+    (sum, [key, inner]) => sum + (found(key, inner) ? 1 : 0) + count(inner, found),
+    0,
+  );
+}
+
+/** Refuses a workflow file whose actions are not in the shape written for its name; the number of its actions. */
+export function assertActions(file: string, text: string): number {
+  const doc = parse(text) as RawWorkflow;
+  const actions = actionsOf(doc);
+  assert.equal(
+    count(doc, (key, inner) => key === 'uses' && runsTheAction({ uses: inner })),
+    actions.length,
+    'the action is used where no rule reads it',
+  );
+  assert.equal(
+    count(doc, (key) => key === SCRUB),
+    actions.length,
+    'the scrub is not set once in the step of each action and nowhere else',
+  );
+  for (const [id, job] of Object.entries(doc.jobs)) {
+    const called = job['uses'];
+    assert.ok(
+      called === undefined || (typeof called === 'string' && called.startsWith('./.github/workflows/')),
+      `job ${id} calls a workflow of another repository, where an action would hide`,
+    );
+    for (const step of job.steps ?? []) {
+      assert.ok(
+        !(typeof step['uses'] === 'string' && step['uses'].startsWith('./')),
+        `job ${id} uses a local action, where an action would hide`,
+      );
+    }
+  }
+  if (actions.length === 0) return 0;
+  const entry = ACTIONS[file];
+  assert.ok(
+    entry !== undefined,
+    `the file ${file} runs the action, and the rule holds no entry under that name`,
+  );
+  const { directory, path, run, names, prompt, waits, inputs } = entry;
+  closed('the workflow', doc, WORKFLOW_KEYS);
+  assert.equal(new Set(actions.map(({ id }) => id)).size, actions.length, 'a job runs more than one action');
+  for (const { id, job, steps, at } of actions) {
+    closed(`job ${id}`, job, JOB_KEYS);
+    steps.forEach((step, index) => closed(`step ${index + 1} of job ${id}`, step, STEP_KEYS));
+    assert.equal(job['runs-on'], SCRUB_IMAGE, 'the job does not run on the image the proof is written for');
+
+    const action = steps[at] as StepT;
+    assert.equal(action.uses, ACTION_PIN, 'the action has another pin or another spelling');
+    assert.deepEqual(action.env, { [SCRUB]: '1' }, 'the environment of the subprocesses is not scrubbed');
+    assert.equal(action.if, waits, 'the condition of the action is not the one written for this file');
+    // In a job that looks for a credential, the two steps the action waits for run on that credential too.
+    const gate = action.if === WAITS ? {} : { if: PRESENT };
+
+    assert.deepEqual(
+      steps[at - 1],
+      { ...PROOF, ...gate },
+      'the step before the action is not the proof of bubblewrap',
+    );
+
+    const installers = steps.flatMap((step, index) => (step['id'] === 'settings' ? [index] : []));
+    assert.ok(
+      installers.length === 1 && (installers[0] as number) < at,
+      'no step settings before the action',
+    );
+    const installer = steps[installers[0] as number] as StepT;
+    assert.equal(installer.run, run, 'the step settings is not the installer written for this file');
+    closed('the step settings', installer, ['id', 'name', 'if', 'run']);
+    // Every input written for the file, and no other; the prompt, where one is written, by its presence and not its text.
+    const asked = action.with?.['prompt'];
+    assert.deepEqual(
+      prompt && asked !== undefined ? { ...action.with, prompt: '' } : action.with,
+      prompt ? { ...inputs, prompt: '' } : inputs,
+      'the inputs of the action are not those written for this file',
+    );
+    assert.ok(
+      !prompt || (typeof asked === 'string' && asked !== ''),
+      'the prompt of the action is not a text',
+    );
+    assert.deepEqual(
+      { id: action.id, name: action.name },
+      { id: names[2], name: names[3] },
+      'the action does not have the id and the name written for this file',
+    );
+    assert.deepEqual(
+      { id: installer.id, name: installer.name, if: installer.if },
+      { id: 'settings', name: names[1], if: gate.if },
+      'the step settings does not have the name written for this file, or does not run on the condition of its job',
+    );
+    const checkouts = (steps as StepT[])
+      .slice(0, installers[0])
+      .filter((step) => step.with?.['path'] === path);
+    assert.equal(checkouts.length, 1, 'the managed settings come from no checkout of the run');
+    closed('the checkout of the managed settings', checkouts[0], ['name', 'uses', 'with']);
+    assert.deepEqual(
+      { name: checkouts[0]?.name, uses: checkouts[0]?.uses },
+      { name: names[0], uses: CHECKOUT_PIN },
+      'the checkout of the managed settings has another name or another pin',
+    );
+    assert.deepEqual(
+      checkouts[0]?.with,
+      {
+        ref: '${{ github.sha }}',
+        path,
+        'fetch-depth': 1,
+        'persist-credentials': false,
+        'sparse-checkout': directory,
+        'sparse-checkout-cone-mode': false,
+      },
+      'the checkout of the managed settings is not the sparse checkout of the commit of the run',
+    );
+    assertModesForbidden(readFileSync(join(ROOT, directory, 'managed-settings.json'), 'utf8'));
+  }
+  return actions.length;
 }
 
 /** What a credential of a hosted runner sits behind, denied by name in every Claude workflow's managed settings. */
@@ -425,43 +683,433 @@ function assertModesForbidden(settings: string): void {
   for (const path of SENSITIVE) assert.ok(deny.includes(path), `not denied: ${path}`);
 }
 
+/** The files that run an action, each judged by the rule. */
+function workflowsOfTheAction(files: { file: string; text: string }[]): string[] {
+  return files
+    .filter(({ file, text }) => {
+      try {
+        return assertActions(file, text) > 0;
+      } catch (error) {
+        throw new Error(`${file}: ${error instanceof Error ? error.message : String(error)}`, {
+          cause: error,
+        });
+      }
+    })
+    .map(({ file }) => file);
+}
+
+Then(
+  'every action of every workflow file waits for the proof of bubblewrap and for its managed settings, and the files that run one are exactly:',
+  function (table: { raw(): string[][] }) {
+    assert.deepEqual(workflowsOfTheAction(workflowTexts()), table.raw().flat().sort());
+  },
+);
+
 Then(
   'every workflow that runs the action fixes its mode and forbids auto and bypass:',
   function (table: { raw(): string[][] }) {
     for (const [file] of table.raw()) {
-      assertModeFixed(readFileSync(join(ROOT, '.github/workflows', String(file)), 'utf8'));
+      assert.ok(
+        assertActions(String(file), readFileSync(join(ROOT, '.github/workflows', String(file)), 'utf8')) > 0,
+      );
     }
   },
 );
 
-const MODE_BREAKS: Record<string, (yaml: string) => string> = {
-  'without the scrub of its subprocesses': (yaml) =>
-    yaml.replace(/\n *CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: ["']1["']/, '\n          KEEP: "1"'),
-  'in auto mode': (yaml) => yaml.replace(/--permission-mode (default|acceptEdits)/, '--permission-mode auto'),
-  'without a mode': (yaml) => yaml.replace(/\n *--permission-mode (default|acceptEdits)/, ''),
-  'with two modes': (yaml) =>
-    yaml.replace(
-      /(--permission-mode (default|acceptEdits))/,
-      '$1\n            --permission-mode bypassPermissions',
-    ),
-  'without its managed settings': (yaml) =>
-    yaml.replace(
-      /(\n *|run: )sudo install -D -m 0644 -o root -g root \S+\/managed-settings\.json \/etc\/claude-code\/managed-settings\.json/,
-      (_match, lead: string) => (lead === 'run: ' ? 'run: true' : ''),
-    ),
-  'with its settings checked out in cone mode': (yaml) =>
-    yaml.replace('sparse-checkout-cone-mode: false', 'sparse-checkout-cone-mode: true'),
-  'with managed settings from the default branch': (yaml) =>
-    yaml.replace(/ (review-config|claude-config)\/(\.github\/\S+\/managed-settings\.json)/, ' $2'),
+/** A validator for assert.throws: an assertion of the rule whose first line is the refusal named, and nothing else. */
+function refusalOf(refusal: RegExp): (error: unknown) => boolean {
+  return (error) =>
+    error instanceof assert.AssertionError && refusal.test(error.message.split('\n')[0] ?? '');
+}
+
+/** Each break, and the refusal it must meet: a copy refused for another reason proves nothing. */
+const MODE_BREAKS: Record<string, [(yaml: string) => string, RegExp]> = {
+  'without the scrub of its subprocesses': [
+    (yaml) => yaml.replace(/\n *CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: ["']1["']/, '\n          KEEP: "1"'),
+    /^the scrub is not set once in the step of each action and nowhere else$/,
+  ],
+  'in auto mode': [
+    (yaml) => yaml.replace(/--permission-mode (default|acceptEdits)/, '--permission-mode auto'),
+    /^the inputs of the action are not those written for this file$/,
+  ],
+  'without a mode': [
+    (yaml) => yaml.replace(/\n *--permission-mode (default|acceptEdits)/, ''),
+    /^the inputs of the action are not those written for this file$/,
+  ],
+  'with two modes': [
+    (yaml) =>
+      yaml.replace(
+        /(--permission-mode (default|acceptEdits))/,
+        '$1\n            --permission-mode bypassPermissions',
+      ),
+    /^the inputs of the action are not those written for this file$/,
+  ],
+  'without its managed settings': [
+    (yaml) =>
+      yaml.replace(
+        /(\n *|run: )sudo install -D -m 0644 -o root -g root \S+\/managed-settings\.json \/etc\/claude-code\/managed-settings\.json/,
+        (_match, lead: string) => (lead === 'run: ' ? 'run: true' : ''),
+      ),
+    /^the step settings is not the installer written for this file$/,
+  ],
+  'with its settings checked out in cone mode': [
+    (yaml) => yaml.replace('sparse-checkout-cone-mode: false', 'sparse-checkout-cone-mode: true'),
+    /^the checkout of the managed settings is not the sparse checkout of the commit of the run$/,
+  ],
+  'with managed settings from the default branch': [
+    (yaml) => yaml.replace(/ (review-config|claude-config)\/(\.github\/\S+\/managed-settings\.json)/, ' $2'),
+    /^the step settings is not the installer written for this file$/,
+  ],
 };
 
+/** An action as a careless copy would add it: scrubbed, pinned, and waiting for nothing. */
+const BARE_ACTION = {
+  uses: ACTION_PIN,
+  env: { [SCRUB]: '1' },
+  with: { claude_args: '--permission-mode default' },
+};
+
+/** The action of the committed workflow, its job, and the two steps it waits for. */
+function shape(doc: RawWorkflow): {
+  job: RawJob;
+  steps: RawStep[];
+  proof: RawStep;
+  settings: RawStep;
+  action: RawStep;
+} {
+  const [first] = actionsOf(doc);
+  assert.ok(first !== undefined, 'the committed workflow runs no action');
+  const { job, steps, at } = first;
+  const settings = steps.find((step) => step['id'] === 'settings');
+  assert.ok(settings !== undefined, 'the committed workflow no longer installs its settings');
+  return { job, steps, proof: steps[at - 1] as RawStep, settings, action: steps[at] as RawStep };
+}
+const firstSteps = (doc: RawWorkflow): RawStep[] => (Object.values(doc.jobs)[0] as RawJob).steps as RawStep[];
+const condition = (change: (was: string) => string) => (doc: RawWorkflow) => {
+  const { action } = shape(doc);
+  action['if'] = change(String(action['if']));
+};
+const proofRun = (change: (was: string) => string) => (doc: RawWorkflow) => {
+  const { proof } = shape(doc);
+  proof['run'] = change(String(proof['run']));
+};
+const moved =
+  (which: 'proof' | 'settings', to: (steps: RawStep[], step: RawStep) => RawStep[]) => (doc: RawWorkflow) => {
+    const found = shape(doc);
+    found.job.steps = to(
+      found.steps.filter((step) => step !== found[which]),
+      found[which],
+    );
+  };
+const second = (step: RawStep) => (doc: RawWorkflow) => {
+  doc.jobs['second'] = { 'runs-on': SCRUB_IMAGE, steps: [step] };
+};
+
+const NOT_THE_PROOF = /the step before the action is not the proof of bubblewrap/;
+const NOT_THE_CONDITION = /the condition of the action is not the one written for this file/;
+const NOT_THE_INPUTS = /the inputs of the action are not those written for this file/;
+const NOT_THE_INSTALLER = /the step settings is not the installer written for this file/;
+/** The whole of another workflow file under this name: valid where it was written, not here. */
+const contentsOf = (other: string) => (doc: RawWorkflow) => {
+  for (const key of Object.keys(doc)) delete doc[key];
+  Object.assign(doc, parse(readFileSync(join(ROOT, '.github/workflows', other), 'utf8')));
+};
+/** The inputs of another file's action on this file's action: its mode and its tools. */
+const inputsOf = (other: string) => (doc: RawWorkflow) => {
+  const { action } = shape(doc);
+  const own = (action['with'] as Record<string, unknown>)['prompt'];
+  action['with'] = { ...ACTIONS[other]?.inputs, ...(own === undefined ? {} : { prompt: own }) };
+};
+const prompt = (value: unknown) => (doc: RawWorkflow) => {
+  const inputs = shape(doc).action['with'] as Record<string, unknown>;
+  if (value === undefined) delete inputs['prompt'];
+  else inputs['prompt'] = value;
+};
+const args = (change: (was: string) => string) => (doc: RawWorkflow) => {
+  const { action } = shape(doc);
+  const inputs = action['with'] as Record<string, unknown>;
+  inputs['claude_args'] = change(String(inputs['claude_args']));
+};
+const UNKNOWN_KEY = (key: string): RegExp => new RegExp(`has a key the rule does not know: ${key}$`, 'm');
+
+/** A broken copy, and the words of the refusal it must get: a copy refused for another reason proves nothing. */
+const SHAPE_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = {
+  'without the proof of bubblewrap': [moved('proof', (steps) => steps), NOT_THE_PROOF],
+  'with the proof of bubblewrap after the action': [
+    moved('proof', (steps, proof) => [...steps, proof]),
+    NOT_THE_PROOF,
+  ],
+  'with a step between the proof of bubblewrap and the action': [
+    (doc) => {
+      const { steps, action } = shape(doc);
+      steps.splice(steps.indexOf(action), 0, {
+        name: 'Restrict again',
+        run: 'sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=1',
+      });
+    },
+    NOT_THE_PROOF,
+  ],
+  'with a proof of bubblewrap on another condition': [
+    (doc) => void (shape(doc).proof['if'] = `env.${SCRUB} == '1'`),
+    NOT_THE_PROOF,
+  ],
+  'whose proof updates unrelated image repositories': [
+    proofRun((run) => run.replace('"${apt[@]}" update --error-on=any', 'sudo apt-get update')),
+    NOT_THE_PROOF,
+  ],
+  'that installs bubblewrap without proving it': [
+    proofRun((run) => run.split('\nbwrap ')[0] + '\n'),
+    NOT_THE_PROOF,
+  ],
+  'that reads the version of bubblewrap and creates no namespace': [
+    proofRun((run) => run.replace(/bwrap --unshare-user[^\n]*\n/, '')),
+    NOT_THE_PROOF,
+  ],
+  'that leaves user namespaces restricted': [
+    proofRun((run) => run.replace(/sudo sysctl[^\n]*\n/, '')),
+    NOT_THE_PROOF,
+  ],
+  'whose proof of bubblewrap goes on after a failure': [
+    proofRun((run) => run.replace('set -euo pipefail\n', '')),
+    NOT_THE_PROOF,
+  ],
+  'whose proof of bubblewrap ends before its first line': [
+    proofRun((run) => `exit 0\n${run}`),
+    NOT_THE_PROOF,
+  ],
+  'with a proof of bubblewrap that may fail': [
+    (doc) => void (shape(doc).proof['continue-on-error'] = true),
+    UNKNOWN_KEY('continue-on-error'),
+  ],
+  'with a shell on the proof of bubblewrap that only checks its syntax': [
+    (doc) => void (shape(doc).proof['shell'] = 'bash -n {0}'),
+    UNKNOWN_KEY('shell'),
+  ],
+
+  'with an action that does not wait for the proof of bubblewrap': [
+    condition((was) => was.replace(" && steps.bubblewrap.outcome == 'success'", '')),
+    NOT_THE_CONDITION,
+  ],
+  'with an action that does not wait for its managed settings': [
+    condition((was) => was.replace("steps.settings.outcome == 'success' && ", '')),
+    NOT_THE_CONDITION,
+  ],
+  'with an action that has no condition': [(doc) => void delete shape(doc).action['if'], NOT_THE_CONDITION],
+  // The other condition the rule knows, with the two steps it waits for gated as that condition requires: coherent, and not the file's own.
+  'with the condition of another file and its steps gated to match': [
+    (doc) => {
+      const { action, proof, settings } = shape(doc);
+      const other = action['if'] === WAITS ? WAITS_AFTER_CREDENTIAL : WAITS;
+      action['if'] = other;
+      for (const step of [proof, settings]) {
+        if (other === WAITS) delete step['if'];
+        else step['if'] = PRESENT;
+      }
+    },
+    NOT_THE_CONDITION,
+  ],
+  'with an action that waits for the proof of bubblewrap or for anything else': [
+    condition((was) => `${was} || always()`),
+    NOT_THE_CONDITION,
+  ],
+  'with the condition of the action between expression markers': [
+    condition((was) => `\${{ ${was} }}`),
+    NOT_THE_CONDITION,
+  ],
+  'with a space before the expression markers of the condition, which makes it a text that is always true': [
+    condition((was) => ` \${{ ${was} }}`),
+    NOT_THE_CONDITION,
+  ],
+  'with the condition of the action written without spaces': [
+    condition((was) => was.replaceAll(' == ', '==')),
+    NOT_THE_CONDITION,
+  ],
+  'with the condition of the action in other capitals': [
+    condition((was) => was.replaceAll('outcome', 'Outcome')),
+    NOT_THE_CONDITION,
+  ],
+  'with the proof of bubblewrap named between square brackets in the condition': [
+    condition((was) => was.replace('steps.bubblewrap.outcome', "steps['bubblewrap'].outcome")),
+    NOT_THE_CONDITION,
+  ],
+
+  'with a second permission mode, in the equals spelling, after the canonical one': [
+    args((was) => `${was}--permission-mode=plan\n`),
+    NOT_THE_INPUTS,
+  ],
+  'with its permission mode in the equals spelling alone': [
+    args((was) => was.replace(/--permission-mode (\S+)/, '--permission-mode=$1')),
+    NOT_THE_INPUTS,
+  ],
+  'with a tool added to its arguments': [
+    args((was) => was.replace('--allowedTools "', '--allowedTools "Bash,')),
+    NOT_THE_INPUTS,
+  ],
+  'with an input the rule does not know': [
+    (doc) =>
+      void ((shape(doc).action['with'] as Record<string, unknown>)['settings'] =
+        '{"permissions":{"defaultMode":"plan"}}'),
+    NOT_THE_INPUTS,
+  ],
+  'with another secret as the credential of the action': [
+    (doc) =>
+      void ((shape(doc).action['with'] as Record<string, unknown>)['claude_code_oauth_token'] =
+        '${{ secrets.OTHER }}'),
+    NOT_THE_INPUTS,
+  ],
+  'with an environment on the installer of the managed settings': [
+    (doc) => void (shape(doc).settings['env'] = { PATH: '/home/runner/work/bin' }),
+    UNKNOWN_KEY('env'),
+  ],
+  'with the contents of claude-review.yml': [contentsOf('claude-review.yml'), NOT_THE_INSTALLER],
+  'with the contents of claude.yml': [contentsOf('claude.yml'), NOT_THE_INSTALLER],
+  // The condition is checked before the installer: a file whose condition differs is refused on it first.
+  'with the contents of claude-review.yml, whose condition differs': [
+    contentsOf('claude-review.yml'),
+    NOT_THE_CONDITION,
+  ],
+  'with the inputs written for the action of claude-review.yml': [
+    inputsOf('claude-review.yml'),
+    NOT_THE_INPUTS,
+  ],
+  'with the inputs written for the action of claude.yml': [inputsOf('claude.yml'), NOT_THE_INPUTS],
+  'with another list of allowed bots': [
+    (doc) => void ((shape(doc).action['with'] as Record<string, unknown>)['allowed_bots'] = '*'),
+    NOT_THE_INPUTS,
+  ],
+  'with a prompt that is false': [prompt(false), NOT_THE_INPUTS],
+  'with a prompt, where none is written': [prompt('x'), NOT_THE_INPUTS],
+  'without its prompt': [prompt(undefined), NOT_THE_INPUTS],
+  'with a prompt that is not a text': [prompt(false), /the prompt of the action is not a text/],
+  'with an empty prompt': [prompt(''), /the prompt of the action is not a text/],
+  'with a second action in the job of the first': [
+    (doc) => {
+      const { steps, proof, action } = shape(doc);
+      steps.push({ ...proof, id: 'again' }, { ...action, id: 'second' });
+    },
+    /a job runs more than one action/,
+  ],
+  'with a second action inside a group of parallel steps': [
+    (doc) => void shape(doc).steps.push({ parallel: [{ ...BARE_ACTION }] }),
+    /the action is used where no rule reads it/,
+  ],
+  'with an action inside a group of parallel steps of its first job': [
+    (doc) => void firstSteps(doc).push({ parallel: [{ ...BARE_ACTION }] }),
+    /the action is used where no rule reads it/,
+  ],
+  'with a group of parallel steps in the job of the action': [
+    (doc) => void shape(doc).steps.unshift({ parallel: [{ run: 'true' }] }),
+    UNKNOWN_KEY('parallel'),
+  ],
+  'with a default shell of the job that only checks the syntax': [
+    (doc) => void (shape(doc).job['defaults'] = { run: { shell: 'bash -n {0}' } }),
+    UNKNOWN_KEY('defaults'),
+  ],
+  'with a default shell of the workflow that only checks the syntax': [
+    (doc) => void (doc['defaults'] = { run: { shell: 'bash -n {0}' } }),
+    UNKNOWN_KEY('defaults'),
+  ],
+  'with a PATH of the job that the proof of bubblewrap would search': [
+    (doc) => void (shape(doc).job['env'] = { PATH: '/home/runner/work/bin:/usr/bin:/bin' }),
+    UNKNOWN_KEY('env'),
+  ],
+  'with a BASH_ENV of the workflow that the proof of bubblewrap would read': [
+    (doc) => void (doc['env'] = { BASH_ENV: 'review-config/profile' }),
+    UNKNOWN_KEY('env'),
+  ],
+  'in a container': [(doc) => void (shape(doc).job['container'] = 'ubuntu:24.04'), UNKNOWN_KEY('container')],
+  'with the scrub in the environment of the job': [
+    (doc) => void (shape(doc).job['env'] = { [SCRUB]: '1' }),
+    /the scrub is not set once in the step of each action and nowhere else/,
+  ],
+  'with a command that sets the scrub without the action': [
+    (doc) => void firstSteps(doc).push({ run: 'claude -p review', env: { [SCRUB]: '1' } }),
+    /the scrub is not set once in the step of each action and nowhere else/,
+  ],
+
+  'with the action in a second job that proves nothing': [
+    second({ ...BARE_ACTION, if: WAITS }),
+    NOT_THE_PROOF,
+  ],
+  'with the base action in a second job': [
+    second({ ...BARE_ACTION, uses: `anthropics/claude-code-base-action@${'0'.repeat(40)}` }),
+    /another pin or another spelling/,
+  ],
+  'with a second job that runs the action in other capitals': [
+    second({
+      ...BARE_ACTION,
+      uses: ACTION_PIN.replace('anthropics/claude-code-action', 'Anthropics/Claude-Code-Action'),
+    }),
+    /another pin or another spelling/,
+  ],
+  'with a scrubbed action added to its first job': [
+    (doc) => void firstSteps(doc).push({ ...BARE_ACTION }),
+    /runs the action, and the rule holds no entry under that name/,
+  ],
+  'that calls a workflow of another repository': [
+    (doc) =>
+      void (doc.jobs['called'] = { uses: `octo/reviews/.github/workflows/review.yml@${'0'.repeat(40)}` }),
+    /calls a workflow of another repository/,
+  ],
+  'with a local action before its first step': [
+    (doc) => void firstSteps(doc).unshift({ uses: './.github/actions/review' }),
+    /uses a local action/,
+  ],
+  'on a floating runner label': [
+    (doc) => void (shape(doc).job['runs-on'] = 'ubuntu-latest'),
+    /image the proof is written for/,
+  ],
+  'on an image the proof of bubblewrap is not written for': [
+    (doc) => void (shape(doc).job['runs-on'] = 'ubuntu-26.04'),
+    /image the proof is written for/,
+  ],
+
+  'with managed settings whose installation may fail': [
+    (doc) => void (shape(doc).settings['continue-on-error'] = true),
+    UNKNOWN_KEY('continue-on-error'),
+  ],
+  'with managed settings installed after the action': [
+    moved('settings', (steps, settings) => [...steps, settings]),
+    /no step settings before the action/,
+  ],
+  'with an installer of the managed settings that ends before it installs': [
+    (doc) => void (shape(doc).settings['run'] = `exit 0\n${String(shape(doc).settings['run'])}`),
+    NOT_THE_INSTALLER,
+  ],
+  'with an installer of the managed settings on a condition of its own': [
+    (doc) => void (shape(doc).settings['if'] = 'false'),
+    /does not run on the condition of its job/,
+  ],
+};
+
+/** The committed file as the rule reads it, parsed and written back, then broken: it passes before, not after. */
+function brokenCopy(file: string, kind: string): { text: string; refusal: RegExp } {
+  const broken = SHAPE_BREAKS[kind];
+  assert.ok(broken !== undefined, `no broken workflow named "${kind}"`);
+  const [breakIt, refusal] = broken;
+  const doc = parse(readFileSync(join(ROOT, '.github/workflows', file), 'utf8')) as RawWorkflow;
+  assertActions(file, stringify(doc));
+  breakIt(doc);
+  return { text: stringify(doc), refusal };
+}
+
+Then('{string} {} is rejected by the rule of bubblewrap', function (file: string, kind: string) {
+  const { text, refusal } = brokenCopy(file, kind);
+  assert.throws(() => assertActions(file, text), refusal);
+});
+
 Then('{string} {} is rejected by the rule of the permission mode', function (file: string, kind: string) {
-  const breakIt = MODE_BREAKS[kind];
-  assert.ok(breakIt !== undefined, `no broken workflow named "${kind}"`);
+  const modeBreak = MODE_BREAKS[kind];
+  if (modeBreak === undefined) {
+    const { text, refusal } = brokenCopy(file, kind);
+    assert.throws(() => assertActions(file, text), refusal);
+    return;
+  }
+  const [breakIt, refusal] = modeBreak;
   const original = readFileSync(join(ROOT, '.github/workflows', file), 'utf8');
   const broken = breakIt(original);
   assert.notEqual(broken, original);
-  assert.throws(() => assertModeFixed(broken));
+  assert.throws(() => assertActions(file, broken), refusalOf(refusal));
 });
 
 Then(
@@ -484,8 +1132,162 @@ Then(
         assert.ok(denied !== undefined, `no denied path named "${what}"`);
         settings.permissions.deny = settings.permissions.deny.filter((rule) => rule !== denied);
       }
-      assert.throws(() => assertModesForbidden(JSON.stringify(settings)), path);
+      // The refusal of the one thing removed, and no other: a denied path is named whole, as a literal.
+      const removed = SENSITIVE.find((rule) => rule.includes(what)) ?? '';
+      const refusal =
+        what === 'auto mode'
+          ? /^auto mode is not forbidden$/
+          : what === 'bypass mode'
+            ? /^bypass mode is not forbidden$/
+            : what === 'reads outside the checkout'
+              ? /^reads outside the checkout are not blocked$/
+              : new RegExp(`^not denied: ${removed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+      assert.throws(() => assertModesForbidden(JSON.stringify(settings)), refusalOf(refusal), path);
     }
+  },
+);
+
+const KEY_REFUSALS: [RegExp, RegExp][] = [
+  [/^checkout\.(name|uses)$/, /the checkout of the managed settings has another name or another pin/],
+  [/^checkout\.with(\.path)?$/, /the managed settings come from no checkout of the run/],
+  [
+    /^checkout\.with\./,
+    /the checkout of the managed settings is not the sparse checkout of the commit of the run/,
+  ],
+  [/^settings\.id$/, /no step settings before the action/],
+  [/^settings\.run$/, NOT_THE_INSTALLER],
+  [/^settings\.(name|if)$/, /the step settings does not have the name written for this file/],
+  [/^proof\./, NOT_THE_PROOF],
+  [/^action\.(id|name)$/, /the action does not have the id and the name written for this file/],
+  [/^action\.if$/, NOT_THE_CONDITION],
+  [/^action\.env\./, /the environment of the subprocesses is not scrubbed/],
+  [/^action\.with(\.|$)/, NOT_THE_INPUTS],
+];
+
+/** The assertion a change to this key must reach. Only a nonempty replacement prompt may pass. */
+function refusalForKey(key: string, replacement?: unknown): RegExp | undefined {
+  const missingScrub = /the scrub is not set once in the step of each action and nowhere else/;
+  if (key === 'action.uses') {
+    return runsTheAction({ uses: replacement })
+      ? /the action has another pin or another spelling/
+      : missingScrub;
+  }
+  if (key === 'action.env' || (key === `action.env.${SCRUB}` && replacement === undefined))
+    return missingScrub;
+  if (key === 'action.with.prompt' && replacement !== undefined) {
+    return typeof replacement === 'string' && replacement !== ''
+      ? undefined
+      : /the prompt of the action is not a text/;
+  }
+  const refusal = KEY_REFUSALS.find(([path]) => path.test(key))?.[1];
+  assert.ok(refusal, `no refusal specified for ${key}`);
+  return refusal;
+}
+
+type KeyChange = { what: string; text: string; refusal: RegExp | undefined };
+
+/**
+ * A property over a committed file, in place of one more list of cases: every change of one key of the four steps
+ * the rule holds to the letter (the checkout of the managed settings, their installer, the proof, the action), and of
+ * the keys inside their mappings, must be refused. A change is: the key deleted; its value replaced by `false`, by
+ * `''`, by `'x'`; a text with one character more; and one unknown key added to each step, to each mapping of a
+ * step, to the job and to the workflow. A replacement equal to the committed value is no change and is left out. One exception, the documented
+ * one: a prompt replaced by another text that is not empty.
+ */
+function changesOfOneKey(file: string): KeyChange[] {
+  const original = parse(readFileSync(join(ROOT, '.github/workflows', file), 'utf8')) as RawWorkflow;
+  const path = ACTIONS[file]?.path;
+  const places = (doc: RawWorkflow): Record<string, Record<string, unknown>> => {
+    const { job, steps, proof, settings, action } = shape(doc);
+    const checkout = steps.find((step) => (step['with'] as RawStep | undefined)?.['path'] === path);
+    assert.ok(checkout !== undefined, 'the committed workflow no longer checks out its settings');
+    return { checkout, settings, proof, action, job, workflow: doc };
+  };
+  const out: KeyChange[] = [];
+  const change = (what: string, apply: (doc: RawWorkflow) => void, refusal: RegExp | undefined): void => {
+    const doc = structuredClone(original);
+    apply(doc);
+    out.push({ what, text: stringify(doc), refusal });
+  };
+  const values = (was: unknown): unknown[] =>
+    [false, '', 'x', ...(typeof was === 'string' ? [`${was}x`] : [])].filter((value) => value !== was);
+  for (const place of ['checkout', 'settings', 'proof', 'action']) {
+    for (const [key, was] of Object.entries(places(original)[place] as RawStep)) {
+      const inner = typeof was === 'object' && was !== null ? Object.entries(was) : [];
+      if (typeof was === 'object' && was !== null) {
+        change(
+          `${place}.${key}: an unknown key`,
+          (doc) => void (((places(doc)[place] as RawStep)[key] as RawStep)['zz'] = 'x'),
+          refusalForKey(`${place}.${key}.zz`, 'x'),
+        );
+      }
+      const holders: [string, (doc: RawWorkflow) => Record<string, unknown>, string, unknown][] = [
+        [`${place}.${key}`, (doc) => places(doc)[place] as RawStep, key, was],
+        ...inner.map(
+          ([name, value]): [string, (doc: RawWorkflow) => Record<string, unknown>, string, unknown] => [
+            `${place}.${key}.${name}`,
+            (doc) => (places(doc)[place] as RawStep)[key] as Record<string, unknown>,
+            name,
+            value,
+          ],
+        ),
+      ];
+      for (const [label, holder, name, value] of holders) {
+        change(`${label} deleted`, (doc) => void delete holder(doc)[name], refusalForKey(label));
+        for (const other of values(value)) {
+          change(
+            `${label} = ${JSON.stringify(other)}`,
+            (doc) => void (holder(doc)[name] = other),
+            refusalForKey(label, other),
+          );
+        }
+      }
+    }
+  }
+  for (const place of ['checkout', 'settings', 'proof', 'action', 'job', 'workflow']) {
+    change(
+      `${place}: an unknown key`,
+      (doc) => void ((places(doc)[place] as RawStep)['zz'] = 'x'),
+      UNKNOWN_KEY('zz'),
+    );
+  }
+  return out;
+}
+
+Then(
+  'each of the {int} changes of one key of the four steps of {string} is refused, but {int} that give its prompt another text',
+  function (count: number, file: string, exceptions: number) {
+    const changes = changesOfOneKey(file);
+    assertActions(file, readFileSync(join(ROOT, '.github/workflows', file), 'utf8'));
+    for (const { what, text, refusal } of changes) {
+      const variant = `${file}: ${what}`;
+      assert.doesNotThrow(() => parse(text), variant);
+      try {
+        assertActions(file, text);
+      } catch (error) {
+        if (error instanceof assert.AssertionError && refusal?.test(error.message.split('\n')[0] ?? ''))
+          continue;
+        throw new Error(`${variant}: ${String(error)}`, { cause: error });
+      }
+      assert.equal(refusal, undefined, `${variant} was accepted`);
+    }
+    assert.deepEqual(
+      [changes.length, changes.filter(({ refusal }) => refusal === undefined).length],
+      [count, exceptions],
+      'the number of changes tried, and of those that give the prompt another text',
+    );
+  },
+);
+
+Then(
+  'a copy of {string} {} is refused among the workflow files, by its name',
+  function (file: string, kind: string) {
+    const { text, refusal } = brokenCopy(file, kind);
+    const files = workflowTexts().map((entry) => (entry.file === file ? { file, text } : entry));
+    assert.throws(
+      () => workflowsOfTheAction(files),
+      (error: Error) => error.message.startsWith(`${file}: `) && refusal.test(error.message),
+    );
   },
 );
 

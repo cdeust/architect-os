@@ -56,8 +56,7 @@ jobs:
       - name: Host dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends bubblewrap socat ripgrep
+          "$GITHUB_WORKSPACE/aos" -- sh "$GITHUB_WORKSPACE/tools/runtime/install-host-packages.sh" bench
           bwrap --version
           socat -V | head -2
           rg --version | head -1
@@ -73,9 +72,6 @@ jobs:
         if: runner.os == 'Linux'
         working-directory: .
         run: |
-          sudo apt-get install -y --no-install-recommends postgresql-common
-          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
-          sudo apt-get install -y --no-install-recommends postgresql-17
           echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
           /usr/lib/postgresql/17/bin/postgres --version
 
