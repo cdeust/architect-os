@@ -167,11 +167,49 @@ Feature: the fingerprint of the tree of a worktree
       Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
       And the witness program of the nested repository has not run
 
-    Scenario: a gitlink that the commit records, with no directory to mark it, is refused
+    Scenario Outline: the fingerprint recognises a gitlink at the <position> record of Git’s byte list
       Given a throwaway repository with one commit
-      And the commit of the repository records a gitlink "sub" with no directory in the tree
+      And the commit of the repository records a gitlink "<name>" with no directory in the tree
       When I try to take the fingerprint of it
       Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+
+      # The two regular entries in the fixture are .gitignore and a.txt, in Git order.
+      Examples:
+        | position | name   |
+        | first    | !link  |
+        | middle   | 0link  |
+        | last     | zlink  |
+
+    Scenario Outline: the path of the first gitlink is read from Git's bytes at the <position> record
+      Given a throwaway repository with one commit
+      And the commit of the repository records a gitlink "<name>" with no directory in the tree
+      Then the first gitlink of its head and of its index is "<name>"
+
+      # The two regular entries in the fixture are .gitignore and a.txt, in Git order.
+      Examples:
+        | position | name  |
+        | first    | !link |
+        | middle   | 0link |
+        | last     | zlink |
+
+    Scenario: the path of the first of two gitlinks is the one read, the first at the head of Git's list
+      Given a throwaway repository with one commit
+      And the commit of the repository records a gitlink "!link" with no directory in the tree
+      And the commit of the repository records a gitlink "zlink" with no directory in the tree
+      Then the first gitlink of its head and of its index is "!link"
+
+    Scenario: the fingerprint accepts an ordinary filename containing the gitlink mode
+      Given a throwaway repository with one commit
+      And the file "160000 notes" of the repository holds "ordinary file"
+      And everything in the repository is committed
+      When I take the fingerprint of the repository
+      Then the fingerprint is clean
+      And its head and its index hold no gitlink
+
+    Scenario: the fingerprint accepts an empty Git tree
+      Given a throwaway repository with an empty root commit
+      When I take the fingerprint of the repository
+      Then the fingerprint is clean
 
     Scenario: the same program is started by a git asked for the status of that commit with none of the options of the fingerprint, so that the scenarios above can fail
       Given a throwaway repository with one commit
@@ -337,6 +375,16 @@ Feature: the fingerprint of the tree of a worktree
 
     The delivery asks it whether its checkout is clean, and the fingerprint, the gate and the delivery ask it for the
     first nested marker, before any git call would walk the tree (packages/sandbox/src/git-worktree.ts).
+
+    Scenario: the fingerprint and the native guard preserve the bytes of tracked ignore paths
+      One directory has the literal U+FFFD name. Its sibling has the single byte FF on Linux and an ordinary
+      name on macOS. Each committed ignore file excludes its own cache with an ordinary marker.
+
+      Given a throwaway repository with one commit
+      And the fingerprint repository commits the two distinct pathname ignore files
+      When I take the fingerprint of the repository
+      Then the fingerprint is clean
+      And the guard of the checkout finds it clean
 
     Scenario: a directory in place of a tracked ignore file refuses both inspections
       Given a throwaway repository with one commit

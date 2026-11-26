@@ -258,6 +258,16 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | in-memory |
         | git       |
 
+    Scenario: delivery preflight and native cleanliness agree for distinct pathname bytes
+      The repository contains a literal U+FFFD directory and, on Linux, a sibling whose name is the byte FF.
+
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository is at the commit "c1"
+      And the delivery repository commits the two distinct pathname ignore files
+      Then the delivery repository holds no nested repository
+      And the delivery repository is clean
+
     Scenario: a repository in a directory that the recorded ignore file ignores is not looked for, and one found only because that file changed makes the tree not clean
       A tracked ignore file that is no longer the recorded one prunes nothing (a session can add a rule to it to hide a
       repository). The marker then found is not reported as a nested repository: the tree is refused as not clean, which
@@ -276,17 +286,34 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       And a marker that no ignore file ignores is left in the delivery worktree
       Then the delivery repository holds a nested repository
 
-    Scenario Outline: delivery finds a gitlink recorded only in the <place>, with no directory to mark it
+    Scenario Outline: delivery recognises a gitlink in the <position> record of the <place>
       Given a delivery repository of the git adapter
       And the delivery repository holds the commit "c1"
       And the delivery repository is at the commit "c1"
-      And a gitlink "sub" is recorded only in the <place> of the delivery repository
+      And a gitlink "<name>" is recorded only in the <place> of the delivery repository
       Then the delivery repository holds a nested repository
 
+      # The regular entries in c1 are a.md, b.md and c1.txt, in Git order.
       Examples:
-        | place |
-        | index |
-        | head  |
+        | place | position | name  |
+        | index | first    | 0link |
+        | index | middle   | alink |
+        | index | last     | zlink |
+        | head  | first    | 0link |
+        | head  | middle   | alink |
+        | head  | last     | zlink |
+
+    Scenario: delivery accepts an ordinary filename containing the gitlink mode
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository holds the commit "c2" after "c1" with the binary file "160000 notes"
+      And the delivery repository is at the commit "c2"
+      Then the delivery repository holds no nested repository
+
+    Scenario: delivery accepts an empty Git index and tree
+      Given a delivery repository of the git adapter
+      And the delivery repository holds an empty root commit
+      Then the delivery repository holds no nested repository
 
   Rule: what the repository replaces and what the machine adds are not what the delivery counts
 

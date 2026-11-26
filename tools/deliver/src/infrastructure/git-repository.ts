@@ -1,7 +1,7 @@
 import { closedGitOptions, hostConfiguredGitEnvironment } from '@architect-os/sandbox/git-closed';
-import { checkoutIsClean, visibleNestedMarker } from '@architect-os/sandbox/git-worktree';
+import { checkoutIsClean, containsGitlink, visibleNestedMarker } from '@architect-os/sandbox/git-worktree';
 import type { Repository } from '../domain/ports.js';
-import { closedEnvironment, runToEnd, type HostEnvironment } from './host-process.js';
+import { closedEnvironment, runToEndBytes, type Finished, type HostEnvironment } from './host-process.js';
 
 /**
  * `Repository` over git, in the delivery worktree: admission checks and fixed argv started without a shell,
@@ -21,8 +21,7 @@ export class GitRepository implements Repository {
     // Neither listing enters a nested repository, whatever the tree says of it.
     const index = this.run(['ls-files', '-s', '-z']).out;
     const head = this.run(['ls-tree', '-r', '-z', 'HEAD']).out;
-    if ([index, head].some((list) => list.split('\0').some((entry) => entry.startsWith('160000 '))))
-      return true;
+    if (containsGitlink(index) || containsGitlink(head)) return true;
     // A marker found only because a tracked ignore file is no longer the recorded one is not reported here: that
     // tree is not clean, and `isClean` refuses it under its true name (the guard refuses the marker there too).
     const marker = visibleNestedMarker(this.worktree, head);
@@ -34,7 +33,7 @@ export class GitRepository implements Repository {
   }
 
   head(): string {
-    return this.run(['rev-parse', '--verify', 'HEAD^{commit}']).out.trim();
+    return this.run(['rev-parse', '--verify', 'HEAD^{commit}']).out.toString().trim();
   }
 
   fetch(): void {
@@ -47,7 +46,7 @@ export class GitRepository implements Repository {
       ['rev-parse', '--verify', '--quiet', `refs/remotes/${this.remote}/${branch}^{commit}`],
       1,
     );
-    return status === 0 ? out.trim() : undefined;
+    return status === 0 ? out.toString().trim() : undefined;
   }
 
   isAncestor(ancestor: string, descendant: string): boolean {
@@ -56,8 +55,8 @@ export class GitRepository implements Repository {
 
   deletedLines(from: string, to: string, path: string): number {
     const { out } = this.run(['diff', '--numstat', '--ignore-submodules=all', from, to, '--', path]);
-    if (out === '') return 0;
-    const deleted = out.split('\t')[1];
+    if (out.length === 0) return 0;
+    const deleted = out.toString().split('\t')[1];
     return deleted === '-' ? 1 : Number(deleted);
   }
 
@@ -77,7 +76,7 @@ export class GitRepository implements Repository {
   }
 
   /** Runs git; an exit code other than 0 and the ones `allowed` throws. */
-  private run(args: string[], ...allowed: number[]): { status: number; out: string } {
+  private run(args: string[], ...allowed: number[]): Finished<Buffer> {
     const result = this.start(args);
     if (result.status !== 0 && !allowed.includes(result.status))
       throw new Error(`git ${args[0]} exited with code ${result.status}`);
@@ -85,8 +84,8 @@ export class GitRepository implements Repository {
   }
 
   /** Runs git and gives its exit code; throws only when git did not run to its end (not found, or a signal). */
-  private start(args: string[]): { status: number; out: string } {
-    const finished = runToEnd(
+  private start(args: string[]): Finished<Buffer> {
+    const finished = runToEndBytes(
       this.git,
       // The delivery pushes with the rights of the owner: what precedes its subcommands and its whole environment
       // come from packages/sandbox/src/git-closed.ts, with the variables it took by the names of deliver.json.

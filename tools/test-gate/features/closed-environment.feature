@@ -200,6 +200,16 @@ Feature: the gate reads its own repository, whatever the environment it was star
       Then the gate refuses to read its changes with "dépôt imbriqué dans l'arbre : sub"
       And the witness program of the gate has not run
 
+    Scenario: a gitlink of the index whose name is not UTF-8 is refused by its name, before it is read as a nested repository
+      Given the index of the gate repository records a gitlink whose name is not UTF-8
+      Then the gate refuses to read its changes with "un chemin de git n'est pas de l'UTF-8"
+
+    Scenario: a gitlink of the head whose name is not UTF-8, gone from the index, is refused by its name
+      Given the index of the gate repository records a gitlink whose name is not UTF-8
+      And the gate repository commits its index
+      And the gitlink whose name is not UTF-8 leaves the index of the gate repository
+      Then the gate refuses to read its changes with "un chemin de git n'est pas de l'UTF-8"
+
     Scenario: a nested repository that the head records, gone from the index and from the tree, is refused
       Given the gate head is committed
       And the nested repository "sub" leaves the index and the tree of the gate repository

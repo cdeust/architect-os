@@ -14,7 +14,7 @@ function inspect(
   root: string,
   mode: 'inspect-clean' | 'inspect-markers',
   accepted: readonly (number | null)[],
-  input?: string,
+  input?: Buffer,
   timeout = 60_000,
 ) {
   const result = spawnSync('/usr/bin/python3', ['-I', guard, mode], {
@@ -40,10 +40,29 @@ export interface NestedMarker {
   readonly changedIgnoreFile?: string;
 }
 
+/**
+ * The path of the first Git link of a NUL-delimited list of `ls-files -s -z` or `ls-tree -r -z`: the record that starts
+ * with mode 160000, whose path follows its first TAB. Read as bytes: a path is never decoded before it is found, and
+ * `160000 ` inside a path (after a TAB, never after a NUL) is not a mode.
+ */
+export function firstGitlinkPath(list: Buffer): string | undefined {
+  // A NUL before the first record makes every record start after a NUL, the first one included.
+  const framed = Buffer.concat([Buffer.alloc(1), list]);
+  const at = framed.indexOf('\x00160000 ');
+  if (at === -1) return undefined;
+  // Git ends every record of a -z list with a NUL, the last one included.
+  return framed.subarray(framed.indexOf('\t', at) + 1, framed.indexOf('\0', at + 1)).toString('utf8');
+}
+
+/** Whether a NUL-delimited list of Git records holds a Git link. */
+export function containsGitlink(list: Buffer): boolean {
+  return firstGitlinkPath(list) !== undefined;
+}
+
 /** The first visible nested .git marker, without opening it or asking Git to classify it. */
 export function visibleNestedMarker(
   root: string,
-  committed: string,
+  committed: Buffer,
   timeout?: number,
 ): NestedMarker | undefined {
   // The guard prints the marker and, after a NUL, the changed ignore file that ignored its directory.

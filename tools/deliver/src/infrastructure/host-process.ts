@@ -7,9 +7,9 @@ import { closeSync, constants, fstatSync, ftruncateSync, openSync } from 'node:f
  */
 
 /** What a program printed on its standard output, and the exit code it ended with. */
-export interface Finished {
+export interface Finished<Output = string> {
   status: number;
-  out: string;
+  out: Output;
 }
 
 /**
@@ -41,20 +41,30 @@ export function closedEnvironment(
  * error is captured and dropped, neither returned nor shown. `undefined`: the program did not run to its end (it could
  * not be started, or a signal ended it); a program that exited with a non-zero code is a `Finished` like another.
  */
+export function runToEndBytes(
+  program: string,
+  args: readonly string[],
+  cwd: string,
+  environment: Readonly<Record<string, string>>,
+): Finished<Buffer> | undefined {
+  const result = spawnSync(program, args, {
+    cwd,
+    env: environment,
+    // The lists of a whole tree pass here: the default bound (1 MiB) would end git before its end.
+    maxBuffer: 1 << 30,
+  });
+  return result.status === null ? undefined : { status: result.status, out: result.stdout };
+}
+
+/** Text protocol of the host callers that expect text, such as the GitHub JSON response. */
 export function runToEnd(
   program: string,
   args: readonly string[],
   cwd: string,
   environment: Readonly<Record<string, string>>,
 ): Finished | undefined {
-  const result = spawnSync(program, args, {
-    cwd,
-    env: environment,
-    encoding: 'utf8',
-    // The lists of a whole tree pass here: the default bound (1 MiB) would end git before its end.
-    maxBuffer: 1 << 30,
-  });
-  return result.status === null ? undefined : { status: result.status, out: result.stdout };
+  const finished = runToEndBytes(program, args, cwd, environment);
+  return finished && { status: finished.status, out: finished.out.toString() };
 }
 
 /**

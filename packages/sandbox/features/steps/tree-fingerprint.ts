@@ -14,9 +14,9 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { checkoutIsClean, visibleNestedMarker } from '../../src/git-worktree.js';
+import { checkoutIsClean, firstGitlinkPath, visibleNestedMarker } from '../../src/git-worktree.js';
 import { fingerprintTree, type TreeFingerprint } from '../../src/tree-fingerprint.js';
-import { gitInFixture } from '../git-fixture.js';
+import { commitDistinctIgnorePaths, gitBytesInFixture, gitInFixture } from '../git-fixture.js';
 import { Given, ROOT, Then, When } from './helpers.js';
 
 // Where throwaway directories go, whatever TMPDIR a scenario sets for the fingerprint.
@@ -71,6 +71,12 @@ const commitOne = (directory: string, tracked: string): void => {
 
 Given('a throwaway repository with one commit', function () {
   commitOne(throwaway(this), 'a.txt');
+});
+
+Given('a throwaway repository with an empty root commit', function () {
+  const directory = throwaway(this);
+  git(directory, 'init', '-q');
+  git(directory, 'commit', '--quiet', '--allow-empty', '--message', 'empty tree');
 });
 
 // A repository nested in the tree: what a session can leave in its worktree. Its own configuration names the witness as
@@ -609,11 +615,11 @@ Then(
 );
 
 Then('the guard of the checkout refuses to name its markers with {string}', function (message: string) {
-  assert.throws(() => visibleNestedMarker(fp(this).directory, ''), { message });
+  assert.throws(() => visibleNestedMarker(fp(this).directory, Buffer.alloc(0)), { message });
 });
 
 Then('the guard of the checkout names no marker', function () {
-  assert.equal(visibleNestedMarker(fp(this).directory, ''), undefined);
+  assert.equal(visibleNestedMarker(fp(this).directory, Buffer.alloc(0)), undefined);
 });
 
 // Observe the guard's decision at the point where it hands the sets to the directory walk.
@@ -655,33 +661,45 @@ Then(
 
 Then('the guard refuses the recorded markers of its head with {string}', function (message: string) {
   const { directory } = fp(this);
-  const tree = git(directory, 'ls-tree', '-r', '-z', 'HEAD');
+  const tree = gitBytesInFixture(directory, ['ls-tree', '-r', '-z', 'HEAD']);
   assert.throws(() => visibleNestedMarker(directory, tree), { message });
 });
 
 Then('the guard of the checkout names no marker of its index', function () {
   const { directory } = fp(this);
-  assert.equal(visibleNestedMarker(directory, git(directory, 'ls-files', '-s', '-z')), undefined);
+  assert.equal(
+    visibleNestedMarker(directory, gitBytesInFixture(directory, ['ls-files', '-s', '-z'])),
+    undefined,
+  );
 });
 
 Then('the guard of the checkout names no marker of its head', function () {
   const { directory } = fp(this);
-  assert.equal(visibleNestedMarker(directory, git(directory, 'ls-tree', '-r', '-z', 'HEAD')), undefined);
+  assert.equal(
+    visibleNestedMarker(directory, gitBytesInFixture(directory, ['ls-tree', '-r', '-z', 'HEAD'])),
+    undefined,
+  );
 });
 
 Then('the guard of the checkout names the marker {string} of its head', function (path: string) {
   const { directory } = fp(this);
-  assert.deepEqual(visibleNestedMarker(directory, git(directory, 'ls-tree', '-r', '-z', 'HEAD')), { path });
+  assert.deepEqual(
+    visibleNestedMarker(directory, gitBytesInFixture(directory, ['ls-tree', '-r', '-z', 'HEAD'])),
+    { path },
+  );
 });
 
 Then(
   'the guard of the checkout names the marker {string} under the changed ignore file {string}',
   function (path: string, changedIgnoreFile: string) {
     const { directory } = fp(this);
-    assert.deepEqual(visibleNestedMarker(directory, git(directory, 'ls-tree', '-r', '-z', 'HEAD')), {
-      path,
-      changedIgnoreFile,
-    });
+    assert.deepEqual(
+      visibleNestedMarker(directory, gitBytesInFixture(directory, ['ls-tree', '-r', '-z', 'HEAD'])),
+      {
+        path,
+        changedIgnoreFile,
+      },
+    );
   },
 );
 
@@ -710,4 +728,26 @@ When('a git with none of the options of the guard lists the untracked files of t
 
 Then('the witness program of the configuration of the repository has run', function () {
   assert.equal(witnessRan(this), true);
+});
+
+Given('the fingerprint repository commits the two distinct pathname ignore files', function () {
+  commitDistinctIgnorePaths(fp(this).directory);
+});
+
+Then('the first gitlink of its head and of its index is {string}', function (path: string) {
+  const { directory } = fp(this);
+  for (const list of [
+    ['ls-tree', '-r', '-z', 'HEAD'],
+    ['ls-files', '-s', '-z'],
+  ])
+    assert.equal(firstGitlinkPath(gitBytesInFixture(directory, list)), path);
+});
+
+Then('its head and its index hold no gitlink', function () {
+  const { directory } = fp(this);
+  for (const list of [
+    ['ls-tree', '-r', '-z', 'HEAD'],
+    ['ls-files', '-s', '-z'],
+  ])
+    assert.equal(firstGitlinkPath(gitBytesInFixture(directory, list)), undefined);
 });
