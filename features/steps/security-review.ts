@@ -160,7 +160,7 @@ export function assertSecurityReview(text: string): void {
   const [secret] = names;
   assert.deepEqual(guard?.env, { PRESENT: `\${{ secrets.${secret} != '' }}` });
 
-  assert.equal(steps[restrict]?.run, ACTIONS[REVIEW_DIR]?.run);
+  assert.equal(steps[restrict]?.run, ACTIONS['claude-security-review.yml']?.run);
   for (const at of [restrict, diff])
     assert.equal(steps[at]?.if, PRESENT, `${steps[at]?.name} waits for the credential`);
   assert.equal(
@@ -253,7 +253,7 @@ function assertClaudeCodeAction(engine: Step): void {
     'prompt',
   ]);
   assert.equal(inputs['github_token'], '${{ github.token }}');
-  assert.equal(inputs['claude_args'], ACTIONS[REVIEW_DIR]?.args);
+  assert.equal(inputs['claude_args'], ACTIONS['claude-security-review.yml']?.inputs['claude_args']);
 }
 
 Then('it satisfies the security review workflow rules', function () {

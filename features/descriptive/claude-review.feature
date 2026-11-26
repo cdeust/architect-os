@@ -59,8 +59,8 @@ Feature: The Claude review
       | that set an environment                      |
 
   Scenario: every workflow that runs the action fixes its permission mode and forbids auto and bypass
-    A new pin of the action cannot change the mode in silence: the arguments of each action are compared whole with
-    the ones written for it (the action keeps the last mode it is given, in either spelling), and each installs
+    A new pin of the action cannot change the mode in silence: the inputs of each action but its prompt are compared whole with
+    the ones written for its file, chosen by the name of the file (the action keeps the last mode it is given, in either spelling), and each installs
     managed settings that forbid auto and bypass, block reads outside the checkout and deny by name what a credential
     of the runner sits behind, from a sparse checkout of the commit of the run, before the action.
     Then every workflow that runs the action fixes its mode and forbids auto and bypass:
@@ -89,6 +89,14 @@ Feature: The Claude review
       | claude-security-review.yml | without a mode                                |
       | claude-security-review.yml | without its managed settings                  |
       | claude-security-review.yml | with managed settings from the default branch |
+      | claude.yml | with the contents of claude-review.yml |
+      | claude-review.yml | with the contents of claude.yml |
+      | claude-security-review.yml | with the contents of claude-review.yml |
+      | claude.yml | with the inputs written for the action of claude-review.yml |
+      | claude-review.yml | with the inputs written for the action of claude.yml |
+      | claude-security-review.yml | with the inputs written for the action of claude-review.yml |
+      | claude-review.yml | with another list of allowed bots |
+      | claude-security-review.yml | with another list of allowed bots |
       | claude.yml | with a second permission mode, in the equals spelling, after the canonical one |
       | claude-review.yml | with a second permission mode, in the equals spelling, after the canonical one |
       | claude-security-review.yml | with a second permission mode, in the equals spelling, after the canonical one |
@@ -205,6 +213,7 @@ Feature: The Claude review
     Examples:
       | file              | kind                                                             |
       | watch.yml         | with an action inside a group of parallel steps of its first job |
+      | watch.yml         | with a scrubbed action added to its first job                    |
       | bench-sandbox.yml | with a command that sets the scrub without the action            |
       | mutation-full.yml | with a command that sets the scrub without the action            |
       | claude.yml        | without the proof of bubblewrap                                  |

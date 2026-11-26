@@ -113,7 +113,7 @@ export function assertClaudeReview(text: string): void {
   const restrict = index(steps, 'installs the managed settings', (step) =>
     (step.run ?? '').includes('/etc/claude-code/'),
   );
-  assert.equal(steps[restrict]?.run, ACTIONS['.github/claude-review']?.run);
+  assert.equal(steps[restrict]?.run, ACTIONS['claude-review.yml']?.run);
   assert.equal(steps[restrict]?.if, undefined, 'the restriction is conditional');
   const diff = index(steps, 'writes the diff', (step) => step.id === 'diff');
   const review = index(steps, 'runs the action', (step) => step.id === 'review');
@@ -152,7 +152,7 @@ export function assertClaudeReview(text: string): void {
   ]);
   assert.equal(inputs['claude_code_oauth_token'], '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}');
   assert.equal(inputs['track_progress'], true);
-  assert.equal(inputs['claude_args'], ACTIONS['.github/claude-review']?.args);
+  assert.equal(inputs['claude_args'], ACTIONS['claude-review.yml']?.inputs['claude_args']);
   const prompt = String(inputs['prompt']);
   for (const told of [
     'review-input/pr.diff',
@@ -383,21 +383,20 @@ Then("the review's managed settings {} are rejected", function (kind: string) {
  *
  * The shape. The action is used in the steps of a job and nowhere else in the document. Its workflow, its job and
  * every step of its job have no key but those listed. The job runs on the image the proof is written for and holds
- * one action: the pinned one, scrubbed, with the inputs and the arguments of its entry below, on the exact condition. The step just before
+ * one action: the pinned one, scrubbed, with the inputs written for its file below, on the exact condition. The step just before
  * it is the proof of bubblewrap, to the letter; a step `settings` before that is one of the installers below, to the
  * letter, fed by a sparse checkout of the commit of the run. With that condition GitHub starts no action unless both
  * succeeded.
  *
- * Not compared here: the values of the inputs other than the credential and the arguments (the prompt,
- * `allowed_bots`, `track_progress`, `github_token`, which the rules of the two reviews read); the other steps of the
+ * Not compared here: the text of the prompt, of which the rules of the two reviews check what they need; the other steps of the
  * job, and so what an earlier step leaves on the runner or does to the installed files; the body of an action of
  * another repository. Three checks are searches, not comparisons, and say so: `runsTheAction` (a pattern, so that
  * another spelling is found, then refused by the pin), and the two refusals of a place where an action would hide.
  *
  * Why a proof: Claude Code refuses to start under `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` on Linux without bubblewrap
  * (run 45771449067), and the action installs it only when `allowed_non_write_users` is set, in a step that may fail
- * (action.yml at 4411a9e9, "Install subprocess isolation dependencies"). The proof makes a review start, and stops a
- * runner without a working bubblewrap before the model is called. Keeping a credential from a subprocess is Claude
+ * (action.yml at 4411a9e9, "Install subprocess isolation dependencies"). The proof removes the cause of that recorded
+ * failure, and stops a runner without a working bubblewrap before the model is called. Keeping a credential from a subprocess is Claude
  * Code's. Why a mode: from v1.0.290 the action starts a session in auto mode unless one of several inputs is set
  * (`defaultsToAutoMode`, src/modes/permission-mode.ts).
  */
@@ -429,52 +428,73 @@ const script = (...lines: string[]): string => ['set -euo pipefail', ...lines, '
 const lines = (...each: string[]): string => [...each, ''].join('\n');
 const CHECKOUT_PIN = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
 const TOKEN = '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}';
+const BOTS = 'claude[bot],chatgpt-codex-connector[bot],dependabot[bot]';
 /**
- * The three actions, by the directory of their managed settings: where it is checked out, the command that installs
- * it, the inputs the action takes and its arguments, to the letter. The action keeps the last permission mode it is
- * given, in either spelling (`lastPermissionMode`, base-action/src/parse-sdk-options.ts at 4411a9e9), so the
- * arguments are compared whole, never searched.
+ * The three actions, by the name of their workflow file: the directory of their managed settings, where it is checked
+ * out, the command that installs it, and every input of the action but its prompt, to the letter. The name selects
+ * the entry, never the contents: a file cannot choose what it is compared with. The action keeps the last permission
+ * mode it is given, in either spelling (`lastPermissionMode`, base-action/src/parse-sdk-options.ts at 4411a9e9), so
+ * the arguments are compared whole, never searched.
  */
-export const ACTIONS: Record<string, { path: string; run: string; inputs: string[]; args: string }> = {
-  '.github/claude': {
-    inputs: ['claude_args', 'claude_code_oauth_token'],
-    args: lines(
-      '--permission-mode acceptEdits',
-      '--allowedTools "Read,Glob,Grep,Edit,Write"',
-      '--model "claude-opus-5-5"',
-    ),
+export const ACTIONS: Record<
+  string,
+  { directory: string; path: string; run: string; prompt: boolean; inputs: Record<string, unknown> }
+> = {
+  'claude.yml': {
+    directory: '.github/claude',
     path: 'claude-config',
     run: script(
       install('claude-config/.github/claude', 'managed-settings.json', '0644'),
       'rm -rf claude-config',
     ),
+    prompt: false,
+    inputs: {
+      claude_code_oauth_token: TOKEN,
+      claude_args: lines(
+        '--permission-mode acceptEdits',
+        '--allowedTools "Read,Glob,Grep,Edit,Write"',
+        '--model "claude-opus-5-5"',
+      ),
+    },
   },
-  '.github/claude-review': {
-    inputs: ['allowed_bots', 'claude_args', 'claude_code_oauth_token', 'prompt', 'track_progress'],
-    args: lines(
-      '--strict-mcp-config',
-      '--permission-mode default',
-      '--allowedTools "mcp__github_inline_comment__create_inline_comment"',
-      '--model "claude-opus-5-5"',
-    ),
+  'claude-review.yml': {
+    directory: '.github/claude-review',
     path: 'review-config',
     run: script(
       install('review-config/.github/claude-review', 'managed-settings.json', '0644'),
       install('review-config/.github/claude-review', 'comment-guard.py', '0755'),
       'rm -rf review-config',
     ),
+    prompt: true,
+    inputs: {
+      claude_code_oauth_token: TOKEN,
+      track_progress: true,
+      allowed_bots: BOTS,
+      claude_args: lines(
+        '--strict-mcp-config',
+        '--permission-mode default',
+        '--allowedTools "mcp__github_inline_comment__create_inline_comment"',
+        '--model "claude-opus-5-5"',
+      ),
+    },
   },
-  '.github/claude-security-review': {
-    inputs: ['allowed_bots', 'claude_args', 'claude_code_oauth_token', 'github_token', 'prompt'],
-    args: lines(
-      '--strict-mcp-config',
-      '--permission-mode default',
-      '--allowedTools "Read,Grep,Glob"',
-      '--model "claude-opus-5-5"',
-      "--json-schema '${{ steps.schema.outputs.json }}'",
-    ),
+  'claude-security-review.yml': {
+    directory: '.github/claude-security-review',
     path: 'review-config',
     run: install('review-config/.github/claude-security-review', 'managed-settings.json', '0644'),
+    prompt: true,
+    inputs: {
+      claude_code_oauth_token: TOKEN,
+      github_token: '${{ github.token }}',
+      allowed_bots: BOTS,
+      claude_args: lines(
+        '--strict-mcp-config',
+        '--permission-mode default',
+        '--allowedTools "Read,Grep,Glob"',
+        '--model "claude-opus-5-5"',
+        "--json-schema '${{ steps.schema.outputs.json }}'",
+      ),
+    },
   },
 };
 
@@ -494,8 +514,8 @@ function count(value: unknown, found: (key: string, inner: unknown) => boolean):
   );
 }
 
-/** Refuses a workflow whose actions are not in the one shape; the number of its actions. */
-export function assertActions(text: string): number {
+/** Refuses a workflow file whose actions are not in the shape written for its name; the number of its actions. */
+export function assertActions(file: string, text: string): number {
   const doc = parse(text) as RawWorkflow;
   const actions = actionsOf(doc);
   assert.equal(
@@ -521,7 +541,14 @@ export function assertActions(text: string): number {
       );
     }
   }
-  if (actions.length > 0) closed('the workflow', doc, WORKFLOW_KEYS);
+  if (actions.length === 0) return 0;
+  const entry = ACTIONS[file];
+  assert.ok(
+    entry !== undefined,
+    `the file ${file} runs the action, and the rule holds no entry under that name`,
+  );
+  const { directory, path, run, prompt, inputs } = entry;
+  closed('the workflow', doc, WORKFLOW_KEYS);
   assert.equal(new Set(actions.map(({ id }) => id)).size, actions.length, 'a job runs more than one action');
   for (const { id, job, steps, at } of actions) {
     closed(`job ${id}`, job, JOB_KEYS);
@@ -550,25 +577,11 @@ export function assertActions(text: string): number {
       'no step settings before the action',
     );
     const installer = steps[installers[0] as number] as StepT;
-    const known = Object.entries(ACTIONS).find(([, { run }]) => run === installer.run);
-    assert.ok(known !== undefined, 'the step settings is not a known installer');
-    const [directory, { path, inputs, args }] = known;
+    assert.equal(installer.run, run, 'the step settings is not the installer written for this file');
     closed('the step settings', installer, ['id', 'name', 'if', 'run']);
-    assert.deepEqual(
-      Object.keys(action.with ?? {}).sort(),
-      inputs,
-      'the inputs of the action are not the known ones',
-    );
-    assert.equal(
-      action.with?.['claude_code_oauth_token'],
-      TOKEN,
-      'the credential of the action is not the secret',
-    );
-    assert.equal(
-      action.with?.['claude_args'],
-      args,
-      'the arguments of the action are not the canonical ones',
-    );
+    const { prompt: asked, ...given } = action.with ?? {};
+    assert.deepEqual(given, inputs, 'the inputs of the action are not those written for this file');
+    assert.equal(typeof asked === 'string', prompt, 'the action has a prompt where none is written, or none');
     assert.deepEqual(
       { id: installer.id, if: installer.if },
       { id: 'settings', if: gate.if },
@@ -626,7 +639,7 @@ function workflowsOfTheAction(files: { file: string; text: string }[]): string[]
   return files
     .filter(({ file, text }) => {
       try {
-        return assertActions(text) > 0;
+        return assertActions(file, text) > 0;
       } catch (error) {
         throw new Error(`${file}: ${error instanceof Error ? error.message : String(error)}`, {
           cause: error,
@@ -647,7 +660,9 @@ Then(
   'every workflow that runs the action fixes its mode and forbids auto and bypass:',
   function (table: { raw(): string[][] }) {
     for (const [file] of table.raw()) {
-      assert.ok(assertActions(readFileSync(join(ROOT, '.github/workflows', String(file)), 'utf8')) > 0);
+      assert.ok(
+        assertActions(String(file), readFileSync(join(ROOT, '.github/workflows', String(file)), 'utf8')) > 0,
+      );
     }
   },
 );
@@ -718,7 +733,17 @@ const second = (step: RawStep) => (doc: RawWorkflow) => {
 
 const NOT_THE_PROOF = /the step before the action is not the proof of bubblewrap/;
 const NOT_THE_CONDITION = /the condition of the action is not the canonical one/;
-const NOT_THE_ARGUMENTS = /the arguments of the action are not the canonical ones/;
+const NOT_THE_INPUTS = /the inputs of the action are not those written for this file/;
+const NOT_THE_INSTALLER = /the step settings is not the installer written for this file/;
+/** The whole of another workflow file under this name: valid where it was written, not here. */
+const contentsOf = (other: string) => (doc: RawWorkflow) => {
+  for (const key of Object.keys(doc)) delete doc[key];
+  Object.assign(doc, parse(readFileSync(join(ROOT, '.github/workflows', other), 'utf8')));
+};
+/** The inputs of another file's action on this file's action: its mode and its tools. */
+const inputsOf = (other: string) => (doc: RawWorkflow) => {
+  shape(doc).action['with'] = { ...ACTIONS[other]?.inputs, prompt: 'x' };
+};
 const args = (change: (was: string) => string) => (doc: RawWorkflow) => {
   const { action } = shape(doc);
   const inputs = action['with'] as Record<string, unknown>;
@@ -812,31 +837,42 @@ const SHAPE_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = {
 
   'with a second permission mode, in the equals spelling, after the canonical one': [
     args((was) => `${was}--permission-mode=plan\n`),
-    NOT_THE_ARGUMENTS,
+    NOT_THE_INPUTS,
   ],
   'with its permission mode in the equals spelling alone': [
     args((was) => was.replace(/--permission-mode (\S+)/, '--permission-mode=$1')),
-    NOT_THE_ARGUMENTS,
+    NOT_THE_INPUTS,
   ],
   'with a tool added to its arguments': [
     args((was) => was.replace('--allowedTools "', '--allowedTools "Bash,')),
-    NOT_THE_ARGUMENTS,
+    NOT_THE_INPUTS,
   ],
   'with an input the rule does not know': [
     (doc) =>
       void ((shape(doc).action['with'] as Record<string, unknown>)['settings'] =
         '{"permissions":{"defaultMode":"plan"}}'),
-    /the inputs of the action are not the known ones/,
+    NOT_THE_INPUTS,
   ],
   'with another secret as the credential of the action': [
     (doc) =>
       void ((shape(doc).action['with'] as Record<string, unknown>)['claude_code_oauth_token'] =
         '${{ secrets.OTHER }}'),
-    /the credential of the action is not the secret/,
+    NOT_THE_INPUTS,
   ],
   'with an environment on the installer of the managed settings': [
     (doc) => void (shape(doc).settings['env'] = { PATH: '/home/runner/work/bin' }),
     UNKNOWN_KEY('env'),
+  ],
+  'with the contents of claude-review.yml': [contentsOf('claude-review.yml'), NOT_THE_INSTALLER],
+  'with the contents of claude.yml': [contentsOf('claude.yml'), NOT_THE_INSTALLER],
+  'with the inputs written for the action of claude-review.yml': [
+    inputsOf('claude-review.yml'),
+    NOT_THE_INPUTS,
+  ],
+  'with the inputs written for the action of claude.yml': [inputsOf('claude.yml'), NOT_THE_INPUTS],
+  'with another list of allowed bots': [
+    (doc) => void ((shape(doc).action['with'] as Record<string, unknown>)['allowed_bots'] = '*'),
+    NOT_THE_INPUTS,
   ],
   'with a second action in the job of the first': [
     (doc) => {
@@ -900,7 +936,7 @@ const SHAPE_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = {
   ],
   'with a scrubbed action added to its first job': [
     (doc) => void firstSteps(doc).push({ ...BARE_ACTION }),
-    NOT_THE_CONDITION,
+    /runs the action, and the rule holds no entry under that name/,
   ],
   'that calls a workflow of another repository': [
     (doc) =>
@@ -930,7 +966,7 @@ const SHAPE_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = {
   ],
   'with an installer of the managed settings that ends before it installs': [
     (doc) => void (shape(doc).settings['run'] = `exit 0\n${String(shape(doc).settings['run'])}`),
-    /the step settings is not a known installer/,
+    NOT_THE_INSTALLER,
   ],
   'with an installer of the managed settings on a condition of its own': [
     (doc) => void (shape(doc).settings['if'] = 'false'),
@@ -944,27 +980,27 @@ function brokenCopy(file: string, kind: string): { text: string; refusal: RegExp
   assert.ok(broken !== undefined, `no broken workflow named "${kind}"`);
   const [breakIt, refusal] = broken;
   const doc = parse(readFileSync(join(ROOT, '.github/workflows', file), 'utf8')) as RawWorkflow;
-  assertActions(stringify(doc));
+  assertActions(file, stringify(doc));
   breakIt(doc);
   return { text: stringify(doc), refusal };
 }
 
 Then('{string} {} is rejected by the rule of bubblewrap', function (file: string, kind: string) {
   const { text, refusal } = brokenCopy(file, kind);
-  assert.throws(() => assertActions(text), refusal);
+  assert.throws(() => assertActions(file, text), refusal);
 });
 
 Then('{string} {} is rejected by the rule of the permission mode', function (file: string, kind: string) {
   const breakIt = MODE_BREAKS[kind];
   if (breakIt === undefined) {
     const { text, refusal } = brokenCopy(file, kind);
-    assert.throws(() => assertActions(text), refusal);
+    assert.throws(() => assertActions(file, text), refusal);
     return;
   }
   const original = readFileSync(join(ROOT, '.github/workflows', file), 'utf8');
   const broken = breakIt(original);
   assert.notEqual(broken, original);
-  assert.throws(() => assertActions(broken));
+  assert.throws(() => assertActions(file, broken));
 });
 
 Then(
