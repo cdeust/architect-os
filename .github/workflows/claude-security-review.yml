@@ -125,7 +125,7 @@ jobs:
       - name: Security review
         id: engine
         if: steps.credential.outputs.present == 'true'
-        uses: anthropics/claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed # v1.0.271
+        uses: anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c # v1.0.290
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # The job's own token, not the OIDC exchange of the Claude app: no identity token, and comments by
@@ -142,6 +142,7 @@ jobs:
             Return the findings that pass the filter as the structured output, one entry each, with the file and a line the diff adds or changes; an empty list when none passes. You have no tool to post anything: the workflow publishes what you return.
           claude_args: |
             --strict-mcp-config
+            --permission-mode default
             --allowedTools "Read,Grep,Glob"
             --model "claude-opus-5-5"
             --json-schema '${{ steps.schema.outputs.json }}'

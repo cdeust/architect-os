@@ -170,6 +170,24 @@ Feature: The Claude security review
       | with too many findings           |
       | with a confidence that is not finite |
       | with an infinite confidence |
+      | holding a key of Anthropic cut by a zero-width space |
+      | holding a key of Anthropic cut by a zero-width non-joiner |
+      | holding a key of Anthropic cut by a zero-width joiner |
+      | holding a key of Anthropic cut by a word joiner |
+      | holding a key of Anthropic cut by a byte order mark |
+      | holding a key of Anthropic cut by a soft hyphen |
+      | holding a key of Anthropic cut by a left-to-right mark |
+      | holding a key of Anthropic cut by a right-to-left mark |
+      | holding a key of Anthropic cut by a right-to-left override |
+      | holding a GitHub token cut by a zero-width space |
+      | holding a GitHub token cut by a zero-width non-joiner |
+      | holding a GitHub token cut by a zero-width joiner |
+      | holding a GitHub token cut by a word joiner |
+      | holding a GitHub token cut by a byte order mark |
+      | holding a GitHub token cut by a soft hyphen |
+      | holding a GitHub token cut by a left-to-right mark |
+      | holding a GitHub token cut by a right-to-left mark |
+      | holding a GitHub token cut by a right-to-left override |
       | holding the shape of a key of Anthropic |
       | holding the shape of a GitHub token |
       | holding the shape of a fine-grained GitHub token |

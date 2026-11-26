@@ -4,6 +4,7 @@
   "permissions": {
     "deny": ["Bash", "WebFetch", "WebSearch", "Write", "Edit", "NotebookEdit", "Read(.git/**)"],
     "disableBypassPermissionsMode": "disable",
+    "disableAutoMode": "disable",
     "blockReadsOutsideWorkingDirectories": true
   }
 }
