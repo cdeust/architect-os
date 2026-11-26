@@ -23,7 +23,7 @@ import { parseRawDiff } from '../../src/domain/diff.js';
 import { isProduction, mayHoldProduction } from '../../src/domain/layout.js';
 import { parseGateConfig, type GateConfig } from '../../src/infrastructure/config.js';
 import { changedFiles, CONFIG_PATH, runGate } from '../../src/infrastructure/gate.js';
-import { gitInFixture } from '../../../../packages/sandbox/features/git-fixture.js';
+import { gitBytesInFixture, gitInFixture } from '../../../../packages/sandbox/features/git-fixture.js';
 import { GitRepository } from '../../src/infrastructure/git.js';
 
 /** Structural view of the root World (features/support/world.ts); a component cannot import across projects. */
@@ -604,6 +604,35 @@ Given(
     repo.remove(name);
   },
 );
+
+// A name of one byte that is not UTF-8, then `-link`: git keeps it as bytes in the index, with no file in the tree, so
+// that the fixture holds on a file system that refuses such a name.
+const NOT_UTF8_GITLINK = Buffer.concat([Buffer.from([0xff]), Buffer.from('-link')]);
+
+Given('the index of the gate repository records a gitlink whose name is not UTF-8', function () {
+  const { dir } = repository(this);
+  const head = git(dir, ['rev-parse', 'HEAD']).trim();
+  const record = Buffer.concat([Buffer.from(`160000 ${head} 0\t`), NOT_UTF8_GITLINK, Buffer.from([0])]);
+  gitBytesInFixture(dir, ['update-index', '-z', '--index-info'], record);
+});
+
+Given('the gate repository commits its index', function () {
+  git(repository(this).dir, [
+    '-c',
+    'user.name=t',
+    '-c',
+    'user.email=t@example.com',
+    'commit',
+    '-qm',
+    'index',
+  ]);
+});
+
+Given('the gitlink whose name is not UTF-8 leaves the index of the gate repository', function () {
+  const zero = '0'.repeat(40);
+  const record = Buffer.concat([Buffer.from(`0 ${zero}\t`), NOT_UTF8_GITLINK, Buffer.from([0])]);
+  gitBytesInFixture(repository(this).dir, ['update-index', '-z', '--index-info'], record);
+});
 
 Then('the gate reads its changes without a refusal', function () {
   const repo = repository(this);

@@ -3,6 +3,7 @@ import { hasAdmittedRun } from '@architect-os/sandbox/runtime-context';
 import { ProcessGate } from '../../src/infrastructure/process-gate.js';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { commitDistinctIgnorePaths } from '../../../../packages/sandbox/features/git-fixture.js';
 import type { DeliveryEntry, Repository, RuleSuite } from '../../src/domain/ports.js';
 import { GitRepository } from '../../src/infrastructure/git-repository.js';
 import { hostOf, temporaryDirectory } from './fixtures.js';
@@ -61,6 +62,11 @@ Then('a legacy checkout verdict cannot satisfy the delivery Gate', function () {
 });
 
 // Repository over git
+
+Given('the delivery repository holds an empty root commit', function () {
+  const { git, work } = gitOf(this);
+  git(work, 'commit', '--quiet', '--allow-empty', '--message', 'empty tree');
+});
 
 Given(
   'the delivery repository holds the commit {string} after {string} with the file {string} of {int} lines',
@@ -386,4 +392,8 @@ When('a marker that no ignore file ignores is left in the delivery worktree', fu
   const { work } = gitOf(this);
   mkdirSync(join(work, 'sub'));
   writeFileSync(join(work, 'sub', '.git'), 'gitdir: /missing-gitdir\n');
+});
+
+Given('the delivery repository commits the two distinct pathname ignore files', function () {
+  commitDistinctIgnorePaths(gitOf(this).work);
 });
