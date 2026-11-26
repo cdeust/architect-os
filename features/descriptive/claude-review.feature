@@ -97,7 +97,7 @@ Feature: The Claude review
       | claude-security-review.yml | with an empty prompt |
       | claude.yml | with the contents of claude-review.yml |
       | claude-review.yml | with the contents of claude.yml |
-      | claude-security-review.yml | with the contents of claude-review.yml |
+      | claude-security-review.yml | with the contents of claude-review.yml, whose condition differs |
       | claude.yml | with the inputs written for the action of claude-review.yml |
       | claude-review.yml | with the inputs written for the action of claude.yml |
       | claude-security-review.yml | with the inputs written for the action of claude-review.yml |
@@ -138,6 +138,7 @@ Feature: The Claude review
       | ~/.config/gh/**            |
       | ~/.git-credentials         |
       | ~/.gitconfig               |
+      | //home/runner/work/_temp/** |
       | //home/runner/work/_temp/  |
 
   Scenario: every action is in the one shape the rule accepts

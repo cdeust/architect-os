@@ -807,8 +807,6 @@ const second = (step: RawStep) => (doc: RawWorkflow) => {
 
 const NOT_THE_PROOF = /the step before the action is not the proof of bubblewrap/;
 const NOT_THE_CONDITION = /the condition of the action is not the one written for this file/;
-const NOT_THIS_FILE =
-  /the condition of the action is not the one written for this file|the step settings is not the installer written for this file/;
 const NOT_THE_INPUTS = /the inputs of the action are not those written for this file/;
 const NOT_THE_INSTALLER = /the step settings is not the installer written for this file/;
 /** The whole of another workflow file under this name: valid where it was written, not here. */
@@ -963,9 +961,13 @@ const SHAPE_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = {
     (doc) => void (shape(doc).settings['env'] = { PATH: '/home/runner/work/bin' }),
     UNKNOWN_KEY('env'),
   ],
-  // Another file's text differs from this file's first in its condition, where the conditions differ, else in its installer.
-  'with the contents of claude-review.yml': [contentsOf('claude-review.yml'), NOT_THIS_FILE],
-  'with the contents of claude.yml': [contentsOf('claude.yml'), NOT_THIS_FILE],
+  'with the contents of claude-review.yml': [contentsOf('claude-review.yml'), NOT_THE_INSTALLER],
+  'with the contents of claude.yml': [contentsOf('claude.yml'), NOT_THE_INSTALLER],
+  // The condition is checked before the installer: a file whose condition differs is refused on it first.
+  'with the contents of claude-review.yml, whose condition differs': [
+    contentsOf('claude-review.yml'),
+    NOT_THE_CONDITION,
+  ],
   'with the inputs written for the action of claude-review.yml': [
     inputsOf('claude-review.yml'),
     NOT_THE_INPUTS,
@@ -1130,6 +1132,8 @@ Then(
         assert.ok(denied !== undefined, `no denied path named "${what}"`);
         settings.permissions.deny = settings.permissions.deny.filter((rule) => rule !== denied);
       }
+      // The refusal of the one thing removed, and no other: a denied path is named whole, as a literal.
+      const removed = SENSITIVE.find((rule) => rule.includes(what)) ?? '';
       const refusal =
         what === 'auto mode'
           ? /^auto mode is not forbidden$/
@@ -1137,7 +1141,7 @@ Then(
             ? /^bypass mode is not forbidden$/
             : what === 'reads outside the checkout'
               ? /^reads outside the checkout are not blocked$/
-              : /^not denied: /;
+              : new RegExp(`^not denied: ${removed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
       assert.throws(() => assertModesForbidden(JSON.stringify(settings)), refusalOf(refusal), path);
     }
   },
