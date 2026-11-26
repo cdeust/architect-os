@@ -68,7 +68,7 @@ export async function runHostedGate(
     if (canary === undefined || replay === undefined || jobOf(config, 'linux')?.mutation !== true)
       throw new Error('configuration Linux sans canari, mutation ou rejeu');
     const repository = new GitRepository(root);
-    const { head, firstParent } = repository.commits();
+    const { head, firstParent, destination } = repository.judged(config.destination);
     const changes = changedFiles(repository, workspace, firstParent, config);
     const { debt, perimeter } = mutationScope(config, changes, workspace, repository, firstParent);
     if ('failure' in debt.current || (debt.parent !== null && 'failure' in debt.parent))
@@ -79,7 +79,11 @@ export async function runHostedGate(
     const manifest = (number: number) => {
       // The admitted lane indexes the dense result of planHostedSlices. Read both fields before writing.
       const { lots, patterns } = slices[number - 1] as HostedSlice;
-      return { lots, patterns, text: jsonText({ head, firstParent, lane: number, lots, patterns }) };
+      return {
+        lots,
+        patterns,
+        text: jsonText({ head, firstParent, destination, lane: number, lots, patterns }),
+      };
     };
     const proved = (number: number, directory: string) => {
       const { lots, patterns, text } = manifest(number);

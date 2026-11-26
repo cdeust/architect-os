@@ -100,8 +100,21 @@ const stepPolicySchema = () =>
     reviews: namedSessions('review'),
     parallel: z.number().int().min(1).max(8).default(2),
   });
+/**
+ * Ce que Plan ajoute à la politique, et qu'une politique ne peut pas nommer : les tickets et les critères
+ * d'acceptation approuvés, que chaque verdict de revue couvre un par un, dans cet ordre (exigence R2,
+ * docs/design/exigences-spec.md). Absents dans les dossiers d'avant Plan, qui restent rejouables.
+ */
 export const stepFileSchema = () =>
-  stepPolicySchema().extend({ tickets: ticketsSchema().optional(), routing: routeBlockSchema().optional() });
+  stepPolicySchema().extend({
+    tickets: ticketsSchema().optional(),
+    acceptance: z
+      .array(z.string().regex(/^AC-\d{1,9}$/))
+      .min(1)
+      .refine((ids) => new Set(ids).size === ids.length, { error: 'duplicate acceptance id' })
+      .optional(),
+    routing: routeBlockSchema().optional(),
+  });
 export type StepFile = z.infer<ReturnType<typeof stepFileSchema>>;
 
 export const parseStepPolicy = (raw: unknown) => stepPolicySchema().parse(raw);

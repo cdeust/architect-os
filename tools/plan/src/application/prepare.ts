@@ -84,7 +84,8 @@ export function preparePlan(sources: PlanSources, inputs: StepInputs) {
     '',
   ].join('\n');
   const policy = typeof inputs.step === 'function' ? inputs.step(handoff.tickets) : inputs.step;
-  const step = { ...policy, tickets: handoff.tickets };
+  // The criteria the Step covers, in the approved order: every review verdict gives one status each (R2).
+  const step = { ...policy, tickets: handoff.tickets, acceptance: proposal.acceptance_ids };
   const files = { 'brief.md': brief, ...inputs.questions, 'step.json': JSON.stringify(step, null, 2) + '\n' };
   const manifest = {
     version: 1,

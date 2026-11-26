@@ -41,8 +41,10 @@ import {
 import { measureSession, type SessionMeasure } from './measure.js';
 import {
   blocks,
+  criteriaRefusal,
   parseReviewVerdict,
   priorFindingsDefect,
+  renderAcceptance,
   ReviewVerdictSchema,
   type ReviewVerdict,
 } from './review-verdict.js';
@@ -241,6 +243,7 @@ async function review(
   config: ReviewConfig,
   brief: string,
   pre: string,
+  acceptance: readonly string[],
   prior: readonly string[],
 ): Promise<ReviewOutcome> {
   const prefix = `${pre}review.${config.name}`;
@@ -254,7 +257,7 @@ async function review(
     brief,
   );
   const verdict = sessionSucceeded(session)
-    ? verdictOf(session.measure.structuredOutput, prior)
+    ? verdictOf(session.measure.structuredOutput, acceptance, prior, deps.readSource)
     : invalid('la session n’a pas abouti');
   deps.writeFile(join(outputs.retained, `${prefix}.verdict.json`), json(verdict.file));
   return { config, verdict, ...session };
@@ -356,31 +359,40 @@ function factsSchemaResult(output: unknown): ReturnType<typeof parseFacts> | str
 /** Le verdict de la revue, ou ce qui l'invalide. */
 function verdictOf(
   output: unknown,
+  acceptance: readonly string[],
   prior: readonly string[],
+  read: (path: string) => string | undefined,
 ): {
   file: unknown;
   verdict: 'accept' | 'request_changes' | 'invalid';
   blocks: boolean;
   findings: number;
+  criteria: { id: string; status: 'met' | 'unmet' | 'not_established' }[];
 } {
   if (output === undefined) return invalid('la session n’a donné aucune sortie structurée');
+  let verdict: ReturnType<typeof parseReviewVerdict>;
   try {
-    const verdict = parseReviewVerdict(output);
-    const defect = priorFindingsDefect(verdict, prior);
-    if (defect !== undefined) return invalid(defect);
-    return {
-      file: verdict,
-      verdict: verdict.verdict,
-      blocks: blocks(verdict),
-      findings: verdict.findings.length,
-    };
+    verdict = parseReviewVerdict(output);
   } catch (error) {
     return invalid(issues(error as z.ZodError));
   }
+  // Un verdict qui ne rend pas exactement les critères de l'étape, ou qui cite une preuve absente, est invalide.
+  const refused = criteriaRefusal(verdict, acceptance, read);
+  if (refused !== undefined) return invalid(refused);
+  // Après une promotion sur un verdict qui bloquait, il statue sur chaque constat de la passe d'avant (R5).
+  const defect = priorFindingsDefect(verdict, prior);
+  if (defect !== undefined) return invalid(defect);
+  return {
+    file: verdict,
+    verdict: verdict.verdict,
+    blocks: blocks(verdict),
+    findings: verdict.findings.length,
+    criteria: verdict.criteria.map(({ id, status }) => ({ id, status })),
+  };
 }
 // Une déclaration, et non une fonction fléchée au niveau du module : un mutant statique rejoue toute la suite.
 function invalid(why: string) {
-  return { file: { invalid: why }, verdict: 'invalid' as const, blocks: true, findings: 0 };
+  return { file: { invalid: why }, verdict: 'invalid' as const, blocks: true, findings: 0, criteria: [] };
 }
 
 /**
@@ -541,16 +553,20 @@ async function playPass(
     }
   }
   const checked = played.every(passed);
-  const withChecks =
-    played.length === 0 ? brief : `${brief.trimEnd()}\n\n${renderChecks(played, outputBound())}`;
-  // Après une promotion sur un verdict qui bloquait, la revue statue sur chacun de ses constats (R5).
+  // Le brief de l'étape, puis les critères que le verdict couvre (R2), les contrôles joués, et après une promotion sur
+  // un verdict qui bloquait, les constats de la passe d'avant sur lesquels la revue statue (R5).
   const previous = renderPriorFindings(prior, outputBound());
-  const forReviews = prior.length === 0 ? withChecks : `${withChecks.trimEnd()}\n\n${previous.text}`;
+  const appended = [
+    ...(step.acceptance ? [renderAcceptance(step.acceptance)] : []),
+    ...(played.length > 0 ? [renderChecks(played, outputBound())] : []),
+    ...(prior.length > 0 ? [previous.text] : []),
+  ];
+  const forReviews = appended.length === 0 ? brief : `${brief.trimEnd()}\n\n${appended.join('\n')}`;
   const reviewing = built && checked && !plan.waiting;
   if (reviewing) deps.writeFile(join(outputs.retained, `${pre}review.brief.md`), forReviews);
   const outcomes = reviewing
     ? await playBounded(plan.reviews, step.parallel, (config) =>
-        review(deps, outputs, config, forReviews, pre, previous.ids),
+        review(deps, outputs, config, forReviews, pre, step.acceptance ?? [], previous.ids),
       )
     : [];
   const signal = passSignal({
@@ -590,7 +606,12 @@ function verifyRoute(step: StepFile, launcher: Readonly<Record<string, string>>)
       `STEP_ROUTING_MISMATCH: ${error instanceof RoutingError ? error.code : 'ROUTING_TABLE_INVALID'}`,
     );
   }
-  if (JSON.stringify(expected) !== JSON.stringify(step)) throw new Refusal('STEP_ROUTING_MISMATCH');
+  // Plan ajoute les critères approuvés à côté de la route : ils ne viennent pas de la table, l'admission les lie.
+  const approved = parseStepFile({
+    ...expected,
+    ...(step.acceptance ? { acceptance: step.acceptance } : {}),
+  });
+  if (JSON.stringify(approved) !== JSON.stringify(step)) throw new Refusal('STEP_ROUTING_MISMATCH');
 }
 
 /** Une étape ; son code de sortie : 0, 1 (l'étape ne passe pas) ou 2 (refus, échec de l'outil). */
@@ -783,7 +804,15 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       ),
       reviews: passes.flatMap(({ outcomes: done }, index) =>
         done.map(({ config, verdict }) =>
-          numbered({ name: config.name, verdict: verdict.verdict, findings: verdict.findings }, index),
+          numbered(
+            {
+              name: config.name,
+              verdict: verdict.verdict,
+              findings: verdict.findings,
+              ...(verdict.criteria.length > 0 ? { criteria: verdict.criteria } : {}),
+            },
+            index,
+          ),
         ),
       ),
       outcome: stepOutcome(last.signal),
@@ -902,12 +931,19 @@ export const toolDependencies =
  * La lecture d'un fichier du worktree où l'étape tourne : le chemin est résolu depuis `cwd`, et rien n'est lu si le
  * chemin réel du fichier (liens suivis) n'est pas un fichier ordinaire sous le chemin réel de `cwd`.
  */
+/**
+ * Au plus 1 Mio par fichier cité : un fait d'éclaireur ou une preuve de critère (R2) cite une ligne de code, et un
+ * fichier plus grand, que le constructeur a pu écrire, ne coûte pas sa taille à l'hôte à chaque citation.
+ */
+export const SOURCE_MAX_BYTES = 1_048_576;
+
 const sourceReader =
   (cwd: string) =>
   (path: string): string | undefined => {
     try {
       const real = realpathSync(resolve(cwd, path));
-      if (real.startsWith(realpathSync(cwd) + sep) && statSync(real).isFile())
+      const stats = statSync(real);
+      if (real.startsWith(realpathSync(cwd) + sep) && stats.isFile() && stats.size <= SOURCE_MAX_BYTES)
         return readFileSync(real, 'utf8');
     } catch {
       // Absent, ou illisible pour ce processus : ce n'est pas un fichier du worktree à citer.

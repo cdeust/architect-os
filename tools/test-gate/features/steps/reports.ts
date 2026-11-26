@@ -28,7 +28,7 @@ function mutationReport(repo: GateRepository): MutationFixture {
   return JSON.parse(repo.read(MUTATION)) as MutationFixture;
 }
 
-function fixtureSource(fixture: string, path: string): string {
+export function fixtureSource(fixture: string, path: string): string {
   const report = JSON.parse(
     readFileSync(join(FIXTURES, 'mutation', `${fixture}.json`), 'utf8'),
   ) as MutationFixture;
@@ -37,7 +37,7 @@ function fixtureSource(fixture: string, path: string): string {
   return file.source;
 }
 
-function replaceLine(text: string, line: number, content: string): string {
+export function replaceLine(text: string, line: number, content: string): string {
   const lines = text.split('\n');
   assert.ok(line >= 1 && line <= lines.length, `line ${line} is outside the file`);
   lines[line - 1] = content;

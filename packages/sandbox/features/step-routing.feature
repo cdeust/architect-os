@@ -61,6 +61,29 @@ Feature: a routed Step plays its ladder, one band at a time, on objective signal
       Then the step exits with 2
       And the step stderr is "architect-os step: STEP_ADMISSION_REQUIRED"
 
+    Scenario: the evidence of a routed Step proves the review of a promoted pass on a case with prior findings
+      Given a step folder
+      And the launcher routing table sends reviews to Gemini, then Opus, and builds on Sol alone from 3 and 8 points
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "" and the providers "anthropic openai"
+      And the review session writes the fixture "review-accept-proposal.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 0
+
+    Scenario Outline: the evidence of the review of a promoted pass without a faithful prior-findings case is refused: <change>
+      Given a step folder
+      And the launcher routing table sends reviews to Gemini, then Opus, and builds on Sol alone from 3 and 8 points
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "" and the providers "anthropic openai"
+      And the admission evidence of "<role>" has its prior-findings case <change>
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: STEP_ADMISSION_REQUIRED"
+      And no session was started
+
+      Examples:
+        | role                      | change             |
+        | review:independent:pass-2 | removed            |
+        | review:independent:pass-2 | observed otherwise |
+
     Scenario: the launcher files of a routed Step hold the table, and the review tool only when a review can run
       Given a step folder
       And the step folder holds a routed step.json for a ticket of 5 points, with the checks "types" and the providers "anthropic"

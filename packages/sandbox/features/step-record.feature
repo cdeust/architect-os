@@ -501,6 +501,11 @@ Feature: the step leaves its brief and its record in the worktree
         | reviews.0.findings           | -1                                                                    |
         | reviews.0.findings           | 0.5                                                                   |
         | reviews.0.extra              | true                                                                  |
+        | reviews.0.criteria           | []                                                                    |
+        | reviews.0.criteria           | [{"id":"xAC-1","status":"met"}]                                       |
+        | reviews.0.criteria           | [{"id":"AC-1x","status":"met"}]                                       |
+        | reviews.0.criteria           | [{"id":"AC-1","status":"partial"}]                                    |
+        | reviews.0.criteria           | [{"id":"AC-1","status":"met","evidence":[]}]                          |
         | outcome                      | "stopped"                                                             |
 
     Scenario Outline: accepted: <field> becomes <value>
@@ -510,6 +515,7 @@ Feature: the step leaves its brief and its record in the worktree
 
       Examples:
         | field                      | value                                |
+        | reviews.0.criteria         | [{"id":"AC-1","status":"met"},{"id":"AC-2","status":"unmet"},{"id":"AC-3","status":"not_established"}] |
         | sessions.0.effort          | "low"                                |
         | sessions.0.effort          | "high"                               |
         | sessions.0.effort          | "xhigh"                              |

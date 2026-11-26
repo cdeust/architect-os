@@ -163,6 +163,16 @@ export function stepRecordSchema() {
         pass: z.int().min(1).optional(),
         verdict: z.enum(['accept', 'request_changes', 'invalid']),
         findings: seconds(),
+        // Le statut de chaque critère d'acceptation qu'un verdict valide a rendu (R2) ; absent sans critère.
+        criteria: z
+          .array(
+            z.strictObject({
+              id: z.string().regex(/^AC-\d{1,9}$/),
+              status: z.enum(['met', 'unmet', 'not_established']),
+            }),
+          )
+          .min(1)
+          .optional(),
       }),
     ),
     // `waiting` : la revue d'une étape routée attend un fournisseur que Step ne peut pas appeler.

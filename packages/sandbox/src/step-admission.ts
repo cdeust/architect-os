@@ -23,7 +23,32 @@ const independence = z
     ({ drafter, reviewer }) => drafter.provider !== reviewer.provider && drafter.model !== reviewer.model,
   );
 
-const outcome = z.strictObject({ verdict: z.enum(['pass', 'refuse']), findings: z.array(z.string()) });
+// `criteria` : le statut attendu, puis observé, de chaque critère d'acceptation du spécimen (R2). Facultatif pour les
+// rôles qui ne rendent pas de critères ; une preuve de prompt de revue en exige au moins un cas (`attestsCriteria`).
+const outcome = z.strictObject({
+  verdict: z.enum(['pass', 'refuse']),
+  findings: z.array(z.string()),
+  criteria: z
+    .array(
+      z.strictObject({
+        id: z.string().regex(/^AC-\d{1,9}$/),
+        status: z.enum(['met', 'unmet', 'not_established']),
+      }),
+    )
+    .min(1)
+    .optional(),
+  // `prior_findings` : le statut attendu, puis observé, de chaque constat de la passe d'avant (R5). Une preuve de prompt
+  // d'une revue qui suit une promotion en exige au moins un cas (`attestsPriorFindings`).
+  prior_findings: z
+    .array(
+      z.strictObject({
+        id: z.string().regex(/^PF-\d{1,3}$/),
+        status: z.enum(['resolved', 'unresolved']),
+      }),
+    )
+    .min(1)
+    .optional(),
+});
 const specimen = z.strictObject({
   id: z.string().min(1),
   input_sha256: sha,
@@ -148,9 +173,24 @@ function successfulReplays(proof: z.infer<typeof promptProof>) {
     proof.results.every(
       ({ expected, observed }) =>
         expected.verdict === observed.verdict &&
-        JSON.stringify(expected.findings) === JSON.stringify(observed.findings),
+        JSON.stringify(expected.findings) === JSON.stringify(observed.findings) &&
+        JSON.stringify(expected.criteria) === JSON.stringify(observed.criteria) &&
+        JSON.stringify(expected.prior_findings) === JSON.stringify(observed.prior_findings),
     )
   );
+}
+
+/** Une preuve du prompt de revue a au moins un cas qui attend un statut par critère : sans lui, rien ne montre que le prompt rend ces statuts. */
+/** La revue d'une passe promue (`review:independent:pass-<n>`) statue sur les constats d'avant : sa preuve le montre. */
+function attestsPriorFindings(role: string, proof: z.infer<typeof promptProof>) {
+  return (
+    !/^review:independent:pass-\d+$/.test(role) ||
+    proof.results.some(({ expected }) => expected.prior_findings !== undefined)
+  );
+}
+
+function attestsCriteria(role: string, proof: z.infer<typeof promptProof>) {
+  return !role.startsWith('review:') || proof.results.some(({ expected }) => expected.criteria !== undefined);
 }
 
 type AdmissionPayload = z.infer<typeof payload>;
@@ -229,7 +269,9 @@ export function requireStepAdmission(value: unknown, subject: StepAdmissionSubje
       evaluated.model.provider !== route.provider ||
       evaluated.model.model !== route.model ||
       evaluated.prompt_sha256 !== route.prompt_sha256 ||
-      !successfulReplays(evaluated)
+      !successfulReplays(evaluated) ||
+      !attestsCriteria(route.role, evaluated) ||
+      !attestsPriorFindings(route.role, evaluated)
     ) {
       throw new Error('STEP_ADMISSION_SPECIMENS_REQUIRED');
     }

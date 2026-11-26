@@ -419,7 +419,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs"] }
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "destination": { "reference": "refs/remotes/origin/main", "commit": "<destination>", "commits": 1 }, "mutate": ["src/math.mjs"] }
       """
 
   Scenario: a changed file that also loses an entry is planned whole, not by its changed lines
@@ -432,7 +432,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs"] }
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "destination": { "reference": "refs/remotes/origin/main", "commit": "<destination>", "commits": 1 }, "mutate": ["src/math.mjs"] }
       """
 
   Scenario Outline: an entry is judged only where the run mutated its lines: <mutate>
@@ -470,7 +470,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs"] }
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "destination": { "reference": "refs/remotes/origin/main", "commit": "<destination>", "commits": 1 }, "mutate": ["src/math.mjs"] }
       """
 
   Scenario: the plan does not hold the file of a removed entry that the diff deleted
@@ -483,7 +483,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": [] }
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "destination": { "reference": "refs/remotes/origin/main", "commit": "<destination>", "commits": 1 }, "mutate": [] }
       """
 
   Scenario: the plan of the macos job holds no file, whatever the registry removed
@@ -495,7 +495,7 @@ Feature: Test gate, rule 6: the mutation debt registry only shrinks
     When the gate plans the "macos" job
     Then the gate plan is:
       """
-      { "job": "macos", "head": "<head>", "firstParent": "<parent>", "mutate": [] }
+      { "job": "macos", "head": "<head>", "firstParent": "<parent>", "destination": { "reference": "refs/remotes/origin/main", "commit": "<destination>", "commits": 1 }, "mutate": [] }
       """
 
   Scenario Outline: a removed entry whose mutant still is not killed is refused: <status>

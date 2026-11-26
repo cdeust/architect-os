@@ -24,9 +24,19 @@ Each finding has one of three levels:
 
 Every finding quotes `file`, `line` and the exact line. A finding you cannot quote is dropped. What you could not check goes in `not_checked`, never guessed.
 
+## Acceptance criteria
+
+The brief may carry acceptance criteria: the `acceptance` list of the approved plan record, each with its `id` and its text, and a section "Acceptance criteria the verdict covers" that the host appends with the identifiers in order. Confront the change with each criterion, one by one, and give `criteria` one entry per listed identifier, in that order, none added and none left out:
+
+- `met`: the change satisfies the criterion. `evidence` quotes the lines that show it, each with `file`, `line` and the exact line. The host looks every quote up in the worktree and rejects the verdict if one is not on its line.
+- `unmet`: the change does not satisfy the criterion, or contradicts it. `reason` says what is missing or wrong.
+- `not_established`: you could neither confirm nor refute it. `reason` says what would establish it.
+
+`unmet` and `not_established` block the step, as a `correctness` finding does. A criterion is never `met` because a check passed or because the build report says so. When the brief carries no criterion, `criteria` is empty.
+
 ## Verdict
 
-The verdict is `request_changes` if and only if there is at least one `correctness` or `contradiction` finding. Otherwise it is `accept`.
+The verdict is `request_changes` if and only if there is at least one `correctness` or `contradiction` finding, or one criterion that is not `met`. Otherwise it is `accept`.
 
 ## Checks played by the host
 

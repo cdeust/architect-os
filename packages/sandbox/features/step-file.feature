@@ -251,3 +251,30 @@ Feature: step.json, the descriptive file of a step
   Scenario: a step file whose tickets form a cycle is refused
     When I make a broken copy of the step file example whose tickets depend on each other
     Then parsing the step file fails
+
+  Scenario Outline: the acceptance of a Step is a list of whole acceptance identifiers: <acceptance>
+    When I make a copy of the step file example with the acceptance <acceptance>
+    Then the step file copy keeps the acceptance <acceptance>
+
+    Examples:
+      | acceptance                     |
+      | ["AC-1"]                       |
+      | ["AC-002","AC-001"]            |
+      | ["AC-123456789"]               |
+
+  Scenario Outline: an acceptance that is not a list of whole identifiers is refused: <acceptance>
+    When I make a copy of the step file example with the acceptance <acceptance>
+    Then parsing the broken step file fails
+
+    Examples:
+      | acceptance           |
+      | []                   |
+      | ["xAC-1"]            |
+      | ["AC-1x"]            |
+      | ["AC-"]              |
+      | ["AC-1234567890"]    |
+      | "AC-1"               |
+
+  Scenario: an acceptance that names a criterion twice is refused, and the refusal says so
+    When I make a copy of the step file example with the acceptance ["AC-1","AC-2","AC-1"]
+    Then parsing the broken step file fails with "acceptance: duplicate acceptance id"

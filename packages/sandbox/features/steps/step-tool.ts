@@ -61,6 +61,8 @@ interface Call {
 }
 interface Behaviour {
   fixture?: string;
+  /** A stream written by the scenario itself, in place of a fixture. */
+  text?: string;
   stopped?: boolean;
   nativeExit?: number;
   failure?: Error;
@@ -108,6 +110,8 @@ interface Step {
   buildPasses: Map<number, Behaviour>;
   /** The role whose specimen the admission evidence lacks. */
   droppedSpecimen?: string;
+  /** How the evidence alters the prior-findings case of a role: removed, or observed with another status. */
+  priorCase?: { role: string; change: 'removed' | 'observed otherwise' };
   /** Builds for OpenAI are answered by a native receipt, Claude builds by the code tool. */
   openaiBuilds?: boolean;
   refusedAdmission?: string;
@@ -253,6 +257,7 @@ const writeStep = (
   parallel?: number,
   scouts: readonly ReviewRow[] = [],
   checks: readonly string[] = [],
+  acceptance?: readonly string[],
 ) => {
   writeFileSync(
     join(s.folder, 'step.json'),
@@ -270,6 +275,7 @@ const writeStep = (
         ? { reviews: reviews.map((review) => ({ ...review, effort: 'high', limitSeconds: 900 })) }
         : {}),
       ...(parallel === undefined ? {} : { parallel }),
+      ...(acceptance === undefined ? {} : { acceptance }),
     }),
   );
   writeFileSync(join(s.folder, 'brief.md'), 'Build the thing.\n');
@@ -538,6 +544,29 @@ const start = (s: Step, args: string): Promise<void> => {
         const { approval: _approval, ...payload } = evidence.payload;
         return requireStepAdmission({ ...evidence, payload }, subject);
       }
+      if (s.priorCase !== undefined) {
+        const { role, change } = s.priorCase;
+        const proof = evidence.payload.specimens.find((item) => item.role === role)!;
+        if (change === 'removed') {
+          proof.results = proof.results.filter(({ expected }) => !('prior_findings' in expected));
+          proof.cases_sha256 = createHash('sha256')
+            .update(
+              JSON.stringify(
+                proof.results.map(({ id, input_sha256, expected }) => ({ id, input_sha256, expected })),
+              ),
+            )
+            .digest('hex');
+        } else {
+          // A copy: the fixture's observed outcome is the expected one, and the cases hash covers the expected.
+          const result = proof.results.find(({ expected }) => 'prior_findings' in expected)!;
+          const observed: Record<string, unknown> = { ...result.expected };
+          observed['prior_findings'] = [{ id: 'PF-1', status: 'unresolved' }];
+          result.observed = observed as typeof result.observed;
+        }
+        evidence.approved_sha256 = createHash('sha256')
+          .update(JSON.stringify(evidence.payload))
+          .digest('hex');
+      }
       if (s.droppedSpecimen !== undefined) {
         evidence.payload.specimens = evidence.payload.specimens.filter(
           ({ role }) => role !== s.droppedSpecimen,
@@ -590,7 +619,7 @@ const start = (s: Step, args: string): Promise<void> => {
         if (tool === 'code.json') {
           for (const { file, content } of s.rewrites) writeFileSync(join(s.folder, file), content);
         }
-        const text = own.fixture === undefined ? '' : fixture(own.fixture);
+        const text = own.text ?? (own.fixture === undefined ? '' : fixture(own.fixture));
         // In two chunks, as a stream arrives.
         onOutput(Buffer.from(text.slice(0, 10)));
         onOutput(Buffer.from(text.slice(10)));
@@ -1128,6 +1157,9 @@ Given('a worktree folder with a file, a directory, a link inside and links outsi
   // A file this process may not read is not a source.
   writeFileSync(join(worktree, 'locked.txt'), 'secret\n');
   chmodSync(join(worktree, 'locked.txt'), 0o000);
+  // A file up to the bound is a source; one byte more is not (R2: a review may cite up to ten proofs per criterion).
+  writeFileSync(join(worktree, 'at-bound.txt'), 'x'.repeat(1_048_576));
+  writeFileSync(join(worktree, 'past-bound.txt'), 'x'.repeat(1_048_577));
   // The worktree reached through a link: its real path is what a file is compared with.
   symlinkSync(worktree, join(root, 'worktree-link'));
   this.state['worktree'] = worktree;
@@ -1678,3 +1710,55 @@ Then('the brief of build pass {int} does not contain {string}', function (n: num
   const brief = builds(step(this))[n - 1]?.brief;
   assert.ok(brief !== undefined && !brief.includes(text), brief ?? '');
 });
+
+// R2 (docs/design/exigences-spec.md): the criteria a Step covers, and a review that gives a status for each.
+Given(
+  'the step folder holds a step.json with a build, a review and the acceptance {string}',
+  function (ids: string) {
+    writeStep(step(this), [{ name: 'quality', model: 'claude-opus-5-5' }], undefined, [], [], ids.split(' '));
+  },
+);
+
+Given('the review session gives the structured verdict:', function (verdict: string) {
+  const result = JSON.parse(fixture('review-sonnet.jsonl').trimEnd().split('\n').at(-1)!) as Record<
+    string,
+    unknown
+  >;
+  const stream = fixture('review-sonnet.jsonl').trimEnd().split('\n').slice(0, -1);
+  stream.push(JSON.stringify({ ...result, structured_output: JSON.parse(verdict) as unknown }));
+  step(this).behaviours['review.json'].text = stream.join('\n') + '\n';
+});
+
+Then('the published record of the step {string} has the reviews:', function (name: string, expected: string) {
+  const record = JSON.parse(step(this).published.get(name)!['record.json']!) as { reviews: unknown };
+  assert.deepEqual(record.reviews, JSON.parse(expected));
+});
+
+Given(
+  'the step folder holds a step.json with a build, a review, the check {string} and the acceptance {string}',
+  function (check: string, ids: string) {
+    writeStep(
+      step(this),
+      [{ name: 'quality', model: 'claude-opus-5-5' }],
+      undefined,
+      [],
+      [check],
+      ids.split(' '),
+    );
+  },
+);
+
+Then(
+  'the step dependencies read the source {string} whole, of {int} bytes',
+  function (path: string, size: number) {
+    const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+    assert.equal(deps.readSource(path)?.length, size);
+  },
+);
+
+Given(
+  'the admission evidence of {string} has its prior-findings case {}',
+  function (role: string, change: string) {
+    step(this).priorCase = { role, change: change as 'removed' | 'observed otherwise' };
+  },
+);

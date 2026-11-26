@@ -572,3 +572,88 @@ Then(
     }
   },
 );
+
+/** The review specimen of the fixture, changed by one discrepancy (R2): its cases must attest criteria statuses. */
+function reviewReplay(discrepancy?: string) {
+  const original = subject();
+  const receipt = admittedFixture(original);
+  const index = receipt.payload.specimens.findIndex(({ role }) => role.startsWith('review:'));
+  assert.ok(index > 0, 'the fixture subject has a review');
+  const statuses = [
+    { id: 'AC-001', status: 'met' },
+    { id: 'AC-002', status: 'unmet' },
+    { id: 'AC-003', status: 'not_established' },
+  ];
+  const cases: { id: string; input_sha256: string; expected: Record<string, unknown> }[] = [
+    {
+      id: 'criteria',
+      input_sha256: sha('a change that meets AC-001 only'),
+      expected:
+        discrepancy === 'no case with criteria'
+          ? { verdict: 'refuse', findings: ['AC-002'] }
+          : { verdict: 'refuse', findings: ['AC-002'], criteria: statuses },
+    },
+  ];
+  // A proof may hold cases without criteria beside the one that attests them: one is enough.
+  if (discrepancy === 'a case without criteria beside it')
+    cases.push({
+      id: 'plain',
+      input_sha256: sha('a change without criteria'),
+      expected: { verdict: 'pass', findings: [] },
+    });
+  if (discrepancy?.startsWith('the criterion id '))
+    (cases[0]!.expected['criteria'] as { id: string }[])[0]!.id = discrepancy.slice(
+      'the criterion id '.length,
+    );
+  const proof = {
+    ...receipt.payload.specimens[index]!,
+    results: cases.map((item) => ({
+      ...item,
+      observed: structuredClone(item.expected) as Record<string, unknown>,
+    })),
+    cases_sha256: sha(JSON.stringify(cases)),
+  };
+  switch (discrepancy) {
+    case undefined:
+    case 'no case with criteria':
+    case 'a case without criteria beside it':
+      break;
+    case 'the criterion id xAC-001':
+    case 'the criterion id AC-001x':
+    case 'the criterion id AC-':
+      break;
+    case 'different criterion status':
+      proof.results[0]!.observed['criteria'] = [statuses[0], { id: 'AC-002', status: 'met' }];
+      break;
+    case 'missing observed criteria':
+      delete proof.results[0]!.observed['criteria'];
+      break;
+    default:
+      assert.fail(discrepancy);
+  }
+  const specimens = receipt.payload.specimens.map((item, at) => (at === index ? proof : item));
+  const payload = { ...receipt.payload, specimens };
+  return { receipt: { ...receipt, payload, approved_sha256: sha(JSON.stringify(payload)) }, original };
+}
+
+Then('Step admission accepts a review specimen whose criteria statuses replay', function () {
+  const { receipt, original } = reviewReplay();
+  assert.equal(requireStepAdmission(receipt, original), receipt.approved_sha256);
+});
+
+Then('Step admission refuses a review specimen with {string}', function (discrepancy: string) {
+  const { receipt, original } = reviewReplay(discrepancy);
+  assert.throws(() => requireStepAdmission(receipt, original), {
+    message: 'STEP_ADMISSION_SPECIMENS_REQUIRED',
+  });
+});
+
+Then('Step admission accepts a review specimen with {string}', function (variant: string) {
+  const { receipt, original } = reviewReplay(variant);
+  assert.equal(requireStepAdmission(receipt, original), receipt.approved_sha256);
+});
+
+Then('Step admission does not parse a review specimen with {string}', function (variant: string) {
+  const { receipt, original } = reviewReplay(variant);
+  assert.throws(() => requireStepAdmission(receipt, original), { name: 'ZodError' });
+});

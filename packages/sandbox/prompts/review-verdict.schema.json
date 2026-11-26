@@ -19,6 +19,33 @@
       }
     },
     "not_checked": { "type": "array", "items": { "type": "string" } },
+    "criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^AC-\\d{1,9}$" },
+          "status": { "type": "string", "enum": ["met", "unmet", "not_established"] },
+          "evidence": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "file": { "type": "string", "minLength": 1, "maxLength": 300 },
+                "line": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+                "quote": { "type": "string", "minLength": 1, "maxLength": 300, "pattern": "^[^\\r\\n]*$" }
+              },
+              "required": ["file", "line", "quote"],
+              "additionalProperties": false
+            }
+          },
+          "reason": { "type": "string" }
+        },
+        "required": ["id", "status", "evidence", "reason"],
+        "additionalProperties": false
+      }
+    },
     "prior_findings": {
       "type": "array",
       "items": {
@@ -32,6 +59,6 @@
       }
     }
   },
-  "required": ["verdict", "findings", "not_checked"],
+  "required": ["verdict", "findings", "not_checked", "criteria"],
   "additionalProperties": false
 }
