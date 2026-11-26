@@ -122,75 +122,162 @@ export const GATE_ENTRIES: Record<string, (on: Record<string, unknown>, file: st
   },
 };
 
+/**
+ * The runner images a job may name: each with its version. A label such as `ubuntu-latest` moves to another image
+ * without a commit of this repository (docs.github.com, "GitHub-hosted runners": the `-latest` labels), and what a
+ * job finds installed moves with it: on 26 November 2026 it gave Ubuntu 26.04 with bubblewrap to two workflows while
+ * the third, on `ubuntu-24.04`, had none (docs/infrastructure.md, "Bubblewrap before the scrub"). A new image is a
+ * line here.
+ */
+const RUNNER_IMAGES = ['ubuntu-24.04', 'macos-26'];
+const MATRIX_KEY = /^\$\{\{\s*matrix\.([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}$/;
+
+/**
+ * The labels a job can run on: its `runs-on`, or what its matrix gives the one key it names, in the list of that key
+ * and in every entry of `include` that sets it. An `include` that sets other keys adds no label.
+ */
+function runnerLabels(job: Workflow['jobs'][string]): unknown[] {
+  const label = job['runs-on'];
+  const key = typeof label === 'string' ? MATRIX_KEY.exec(label)?.[1] : undefined;
+  if (key === undefined) return [label];
+  const matrix = (job.strategy as { matrix?: Record<string, unknown> } | undefined)?.matrix ?? {};
+  const listed = matrix[key] ?? [];
+  const included = matrix['include'] ?? [];
+  assert.ok(Array.isArray(listed) && Array.isArray(included), `matrix.${key} is not a list of labels`);
+  const added = (included as unknown[]).flatMap((entry) =>
+    typeof entry === 'object' && entry !== null && key in entry
+      ? [(entry as Record<string, unknown>)[key]]
+      : [],
+  );
+  assert.ok(listed.length + added.length > 0, `matrix.${key} is not a list of labels`);
+  return [...listed, ...added];
+}
+
+function assertNamedImages(text: string): void {
+  for (const [id, job] of Object.entries(workflow(text).jobs)) {
+    // A job that calls a reusable workflow has no runner of its own: the called file is judged as a workflow.
+    if (job.uses !== undefined) continue;
+    for (const label of runnerLabels(job)) {
+      assert.ok(
+        typeof label === 'string' && RUNNER_IMAGES.includes(label),
+        `job ${id} runs on ${JSON.stringify(label)}, not on an image named with its version`,
+      );
+    }
+  }
+}
+
+/** A validator for assert.throws: an assertion of the rule whose first line is the refusal named. */
+function refusedFor(refusal: RegExp): (error: unknown) => boolean {
+  return (error) =>
+    error instanceof assert.AssertionError && refusal.test(error.message.split('\n')[0] ?? '');
+}
+
 function assertGate(text: string, file: string): void {
   const doc = workflow(text);
   assert.ok(typeof doc.on === 'object' && !Array.isArray(doc.on), 'on is a mapping');
   const triggers = GATE_ENTRIES[file];
   assert.ok(triggers !== undefined, `${file} is not an entry of the gate`);
   triggers(doc.on, file);
-  assert.deepEqual(doc.permissions, { contents: 'read', actions: 'read' });
+  assert.deepEqual(
+    doc.permissions,
+    { contents: 'read', actions: 'read' },
+    `the permissions of ${file} are not contents: read and actions: read`,
+  );
   assert.ok(!text.includes('secrets.'), `${file} must not use a secret`);
-  assert.deepEqual(Object.keys(doc.jobs).sort(), [
-    'gate-linux',
-    'gate-linux-cucumber',
-    'gate-linux-lane',
-    'gate-linux-plan',
-    'gate-macos',
-  ]);
+  assert.deepEqual(
+    Object.keys(doc.jobs).sort(),
+    ['gate-linux', 'gate-linux-cucumber', 'gate-linux-lane', 'gate-linux-plan', 'gate-macos'],
+    `the jobs of ${file} are not the five jobs of the gate`,
+  );
   const judge = doc.jobs['gate-linux'];
-  assert.deepEqual(judge?.needs, ['gate-linux-cucumber', 'gate-linux-plan', 'gate-linux-lane']);
+  assert.deepEqual(
+    judge?.needs,
+    ['gate-linux-cucumber', 'gate-linux-plan', 'gate-linux-lane'],
+    'the judge does not need the shards, the plan and the lanes',
+  );
   // The plan job announces the lanes; nothing may skip it, and nothing may let it fail unseen.
   const plan = doc.jobs['gate-linux-plan'];
   const announced = '${{ needs.gate-linux-plan.outputs.lanes }}';
-  assert.equal(plan?.if, undefined);
-  assert.equal(plan?.needs, undefined);
-  assert.equal(plan?.['runs-on'], 'ubuntu-24.04');
-  assert.deepEqual(plan?.outputs, { lanes: '${{ steps.plan.outputs.lanes }}' });
+  assert.equal(plan?.if, undefined, 'the plan job has a condition');
+  assert.equal(plan?.needs, undefined, 'the plan job needs another job');
+  assert.equal(plan?.['runs-on'], 'ubuntu-24.04', 'the plan job does not run on ubuntu-24.04');
+  assert.deepEqual(
+    plan?.outputs,
+    { lanes: '${{ steps.plan.outputs.lanes }}' },
+    'the plan job does not output the lanes of its step plan',
+  );
   assert.ok(!text.includes('continue-on-error'), `${file} must not let a job or a step fail unseen`);
   const planSteps = plan?.steps ?? [];
-  assert.equal(planSteps.at(-1)?.id, 'plan');
+  assert.equal(planSteps.at(-1)?.id, 'plan', 'the last step of the plan job is not the step plan');
   assert.equal(
     planSteps.at(-2)?.run,
     'sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts lanes',
+    'the plan job does not derive the plan before it announces it',
   );
   assert.equal(
     planSteps.at(-1)?.run,
     'sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs announce',
+    'the step plan does not announce the lanes',
   );
-  for (const step of planSteps) assert.equal(step.if, undefined);
-  assert.equal(planSteps.filter(({ id }) => id === 'plan').length, 1);
+  for (const step of planSteps) assert.equal(step.if, undefined, 'a step of the plan job has a condition');
+  assert.equal(
+    planSteps.filter(({ id }) => id === 'plan').length,
+    1,
+    'the plan job has more than one step plan',
+  );
   // No expression is written into a command: what a job announces reaches a step through its environment.
   for (const job of Object.values(doc.jobs))
     for (const { run } of job.steps)
       assert.ok(!(run ?? '').includes('${{'), `${file}: expression in a command`);
-  assert.deepEqual(doc.jobs['gate-linux-cucumber']?.strategy, {
-    'fail-fast': false,
-    matrix: { shard: [1, 2] },
-  });
+  assert.deepEqual(
+    doc.jobs['gate-linux-cucumber']?.strategy,
+    {
+      'fail-fast': false,
+      matrix: { shard: [1, 2] },
+    },
+    'the shards are not a matrix of two',
+  );
   const lane = doc.jobs['gate-linux-lane'];
   // The lanes are the plan, never a list of the workflow: no lane starts that the plan does not hold.
-  assert.equal(lane?.needs, 'gate-linux-plan');
-  assert.equal(lane?.if, undefined);
-  assert.deepEqual(lane?.strategy, {
-    'fail-fast': false,
-    matrix: { lane: '${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}' },
-  });
-  assert.equal(lane?.uses, './.github/workflows/gate-lane.yml');
-  assert.deepEqual(lane?.with, { lane: '${{ matrix.lane }}' });
-  assert.equal(doc.jobs['gate-linux']?.if, '${{ always() }}');
+  assert.equal(lane?.needs, 'gate-linux-plan', 'the lanes do not need the plan job alone');
+  assert.equal(lane?.if, undefined, 'the lanes have a condition');
+  assert.deepEqual(
+    lane?.strategy,
+    {
+      'fail-fast': false,
+      matrix: { lane: '${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}' },
+    },
+    'the matrix of the lanes is not the list the plan announces',
+  );
+  assert.equal(lane?.uses, './.github/workflows/gate-lane.yml', 'the lanes do not call gate-lane.yml');
+  assert.deepEqual(
+    lane?.with,
+    { lane: '${{ matrix.lane }}' },
+    'the lanes do not give gate-lane.yml their lane',
+  );
+  assert.equal(doc.jobs['gate-linux']?.if, '${{ always() }}', 'the judge does not always run');
   const linuxSteps = doc.jobs['gate-linux']?.steps ?? [];
-  assert.equal(linuxSteps[0]?.id, 'admission');
-  assert.equal(linuxSteps[0]?.name, 'Require all producers');
-  assert.deepEqual(linuxSteps[0]?.env, {
-    CUCUMBER_RESULT: '${{ needs.gate-linux-cucumber.result }}',
-    PLAN_RESULT: '${{ needs.gate-linux-plan.result }}',
-    LANES_RESULT: '${{ needs.gate-linux-lane.result }}',
-  });
+  assert.equal(linuxSteps[0]?.id, 'admission', 'the first step of the judge is not the admission');
+  assert.equal(
+    linuxSteps[0]?.name,
+    'Require all producers',
+    'the admission is not named Require all producers',
+  );
+  assert.deepEqual(
+    linuxSteps[0]?.env,
+    {
+      CUCUMBER_RESULT: '${{ needs.gate-linux-cucumber.result }}',
+      PLAN_RESULT: '${{ needs.gate-linux-plan.result }}',
+      LANES_RESULT: '${{ needs.gate-linux-lane.result }}',
+    },
+    'the admission does not read the results of the shards, the plan and the lanes',
+  );
   assert.equal(
     linuxSteps[0]?.run,
     'test "$CUCUMBER_RESULT" = success && test "$PLAN_RESULT" = success && test "$LANES_RESULT" = success',
+    'the admission does not require the success of the shards, the plan and the lanes',
   );
-  assert.equal(linuxSteps[0]?.if, undefined);
+  assert.equal(linuxSteps[0]?.if, undefined, 'the admission has a condition');
   // The judge derives the plan from its own checkout before it downloads, and judges on that plan alone.
   const hosted = 'sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts ';
   const at = (name: string) => linuxSteps.findIndex((step) => step.name === name);
@@ -202,18 +289,32 @@ function assertGate(text: string, file: string): void {
     0 < derive && derive < fetch && fetch < collect && collect < verdict,
     `${file}: order of the judge`,
   );
-  assert.equal(linuxSteps[derive]?.run, hosted + 'lanes');
-  assert.equal(linuxSteps[collect]?.run, hosted + 'collect "$AOS_ANNOUNCED_LANES"');
-  assert.equal(linuxSteps[collect]?.env?.['AOS_ANNOUNCED_LANES'], announced);
-  for (const index of [derive, fetch, collect, verdict]) assert.equal(linuxSteps[index]?.if, undefined);
-  assert.equal(linuxSteps.filter(({ run }) => (run ?? '').startsWith(hosted)).length, 2);
+  assert.equal(linuxSteps[derive]?.run, hosted + 'lanes', 'the judge does not derive the plan again');
+  assert.equal(
+    linuxSteps[collect]?.run,
+    hosted + 'collect "$AOS_ANNOUNCED_LANES"',
+    'the judge does not collect against the announced plan',
+  );
+  assert.equal(
+    linuxSteps[collect]?.env?.['AOS_ANNOUNCED_LANES'],
+    announced,
+    'the judge does not read the announced plan from the plan job',
+  );
+  for (const index of [derive, fetch, collect, verdict])
+    assert.equal(linuxSteps[index]?.if, undefined, 'a step of the judge has a condition');
+  assert.equal(
+    linuxSteps.filter(({ run }) => (run ?? '').startsWith(hosted)).length,
+    2,
+    'the judge runs hosted.ts for more than deriving and collecting',
+  );
   assert.equal(
     linuxSteps.find(({ name }) => name === 'Upload reports')?.if,
     '$' + "{{ always() && steps.admission.outcome == 'success' && steps.exports.outcome == 'success' }}",
+    'the reports are uploaded on another condition',
   );
   for (const [id, job] of Object.entries(doc.jobs)) {
-    assert.equal(job.permissions, undefined);
-    assert.equal(job.secrets, undefined);
+    assert.equal(job.permissions, undefined, `the job ${id} sets its own permissions`);
+    assert.equal(job.secrets, undefined, `the job ${id} receives secrets`);
     assert.equal(
       job.name,
       id === 'gate-linux-cucumber'
@@ -221,6 +322,7 @@ function assertGate(text: string, file: string): void {
         : id === 'gate-linux-lane'
           ? id + '-${{ matrix.lane }}'
           : id,
+      `the job ${id} has another name`,
     );
   }
   for (const step of Object.values(doc.jobs).flatMap((job) => job.steps)) {
@@ -339,6 +441,62 @@ Then('every checkout in it has persist-credentials false', function () {
   assertCheckoutWithoutCredentials(text(this));
 });
 
+/** Every file of the directory, found and not listed: a new workflow is judged without a row anywhere. */
+function assertEveryFileNamesItsImages(files: { file: string; text: string }[]): void {
+  assert.ok(files.length > 0, 'no workflow file');
+  for (const { file, text } of files) {
+    try {
+      assertNamedImages(text);
+    } catch (error) {
+      throw new Error(`${file}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    }
+  }
+}
+
+Then('every job of every workflow file runs on an image named with its version', function () {
+  assertEveryFileNamesItsImages(workflowFiles());
+});
+
+Then('a new workflow file whose job runs on ubuntu-latest is refused by its name', function () {
+  const added = {
+    file: 'eleventh.yml',
+    text: 'on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps: []\n',
+  };
+  assert.throws(
+    () => assertEveryFileNamesItsImages([...workflowFiles(), added]),
+    /^Error: eleventh\.yml: job a runs on "ubuntu-latest", not on an image named with its version/,
+  );
+});
+
+Then('a copy of the workflow whose matrix includes a key that is not its runner is accepted', function () {
+  const copy = text(this).replace(/^( {8}os: \[.+\])$/m, '$1\n        include:\n          - artifact: bench');
+  assert.notEqual(copy, text(this));
+  assertNamedImages(copy);
+});
+
+/** Each replaces the first runner of the workflow, or the list of its matrix. */
+const IMAGE_BREAKS: Record<string, (yaml: string) => string> = {
+  'on ubuntu-latest': (yaml) => yaml.replace(/^( {4}runs-on: ).+$/m, '$1ubuntu-latest'),
+  'on macos-latest': (yaml) => yaml.replace(/^( {4}runs-on: ).+$/m, '$1macos-latest'),
+  'on an image this repository does not name': (yaml) =>
+    yaml.replace(/^( {4}runs-on: ).+$/m, '$1ubuntu-22.04'),
+  'on a label taken from an input': (yaml) => yaml.replace(/^( {4}runs-on: ).+$/m, '$1${{ inputs.runner }}'),
+  'on a list of labels': (yaml) => yaml.replace(/^( {4}runs-on: ).+$/m, '$1[self-hosted, linux]'),
+  'without a runner': (yaml) => yaml.replace(/^ {4}runs-on: .+\n/m, ''),
+  'with a floating label in its matrix': (yaml) =>
+    yaml.replace(/^( {8}os: )\[.+\]$/m, '$1[ubuntu-24.04, macos-latest]'),
+  'with a label added by the include of its matrix': (yaml) =>
+    yaml.replace(/^( {8}os: \[.+\])$/m, '$1\n        include:\n          - os: ubuntu-latest'),
+};
+
+Then('a copy of the workflow whose job runs {} is rejected', function (kind: string) {
+  const breakIt = IMAGE_BREAKS[kind];
+  assert.ok(breakIt !== undefined, `no broken workflow named "${kind}"`);
+  const broken = breakIt(text(this));
+  assert.notEqual(broken, text(this));
+  assert.throws(() => assertNamedImages(broken), /not on an image named with its version/);
+});
+
 Then('it satisfies the gate workflow rules', function () {
   assertGate(text(this), file(this));
 });
@@ -360,42 +518,99 @@ Then('a gate workflow that starts or judges lanes outside the plan it derives is
   const original = text(this);
   const file = stored<Loaded>(this, 'workflow').path.split('/').at(-1) as string;
   assertGate(original, file);
-  const edits: [string, string][] = [
-    ['lane: ${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}', 'lane: [1, 2, 3]'],
-    ['lane: ${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}', "lane: ${{ fromJSON('[1]') }}"],
-    ['    needs: gate-linux-plan\n', ''],
+  const edits: [string, string, RegExp][] = [
+    [
+      'lane: ${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}',
+      'lane: [1, 2, 3]',
+      /^the matrix of the lanes is not the list the plan announces$/,
+    ],
+    [
+      'lane: ${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}',
+      "lane: ${{ fromJSON('[1]') }}",
+      /^the matrix of the lanes is not the list the plan announces$/,
+    ],
+    ['    needs: gate-linux-plan\n', '', /^the lanes do not need the plan job alone$/],
     [
       'needs: [gate-linux-cucumber, gate-linux-plan, gate-linux-lane]',
       'needs: [gate-linux-cucumber, gate-linux-lane]',
+      /^the judge does not need the shards, the plan and the lanes$/,
     ],
-    [' && test "$PLAN_RESULT" = success', ''],
-    [' && test "$LANES_RESULT" = success', ''],
-    ['test "$PLAN_RESULT" = success', 'test "$PLAN_RESULT" != failure'],
-    ['PLAN_RESULT: ${{ needs.gate-linux-plan.result }}', 'PLAN_RESULT: success'],
+    [
+      ' && test "$PLAN_RESULT" = success',
+      '',
+      /^the admission does not require the success of the shards, the plan and the lanes$/,
+    ],
+    [
+      ' && test "$LANES_RESULT" = success',
+      '',
+      /^the admission does not require the success of the shards, the plan and the lanes$/,
+    ],
+    [
+      'test "$PLAN_RESULT" = success',
+      'test "$PLAN_RESULT" != failure',
+      /^the admission does not require the success of the shards, the plan and the lanes$/,
+    ],
+    [
+      'PLAN_RESULT: ${{ needs.gate-linux-plan.result }}',
+      'PLAN_RESULT: success',
+      /^the admission does not read the results of the shards, the plan and the lanes$/,
+    ],
     [
       'LANES_RESULT: ${{ needs.gate-linux-lane.result }}',
       'LANES_RESULT: ${{ needs.gate-linux-plan.result }}',
+      /^the admission does not read the results of the shards, the plan and the lanes$/,
     ],
-    ['hosted.ts collect "$AOS_ANNOUNCED_LANES"', 'hosted.ts collect'],
+    [
+      'hosted.ts collect "$AOS_ANNOUNCED_LANES"',
+      'hosted.ts collect',
+      /^the judge does not collect against the announced plan$/,
+    ],
     [
       'hosted.ts collect "$AOS_ANNOUNCED_LANES"',
       'hosted.ts collect "${{ needs.gate-linux-plan.outputs.lanes }}"',
+      /: expression in a command$/,
     ],
-    ['AOS_ANNOUNCED_LANES: ${{ needs.gate-linux-plan.outputs.lanes }}', "AOS_ANNOUNCED_LANES: '[1]'"],
-    ['      lanes: ${{ steps.plan.outputs.lanes }}', "      lanes: '[1]'"],
-    ['node tools/test-gate/report-files.mjs announce', 'echo "lanes=[1]" >> "$GITHUB_OUTPUT"'],
-    ['    if: ${{ always() }}', "    if: ${{ needs.gate-linux-plan.result == 'success' }}"],
-    ['    name: gate-linux-plan\n', '    name: gate-linux-plan\n    continue-on-error: true\n'],
-    ['    name: gate-linux-plan\n', "    name: gate-linux-plan\n    if: github.event_name == 'push'\n"],
+    [
+      'AOS_ANNOUNCED_LANES: ${{ needs.gate-linux-plan.outputs.lanes }}',
+      "AOS_ANNOUNCED_LANES: '[1]'",
+      /^the judge does not read the announced plan from the plan job$/,
+    ],
+    [
+      '      lanes: ${{ steps.plan.outputs.lanes }}',
+      "      lanes: '[1]'",
+      /^the plan job does not output the lanes of its step plan$/,
+    ],
+    [
+      'node tools/test-gate/report-files.mjs announce',
+      'echo "lanes=[1]" >> "$GITHUB_OUTPUT"',
+      /^the step plan does not announce the lanes$/,
+    ],
+    [
+      '    if: ${{ always() }}',
+      "    if: ${{ needs.gate-linux-plan.result == 'success' }}",
+      /^the judge does not always run$/,
+    ],
+    [
+      '    name: gate-linux-plan\n',
+      '    name: gate-linux-plan\n    continue-on-error: true\n',
+      / must not let a job or a step fail unseen$/,
+    ],
+    [
+      '    name: gate-linux-plan\n',
+      "    name: gate-linux-plan\n    if: github.event_name == 'push'\n",
+      /^the plan job has a condition$/,
+    ],
     [
       '      - name: Derive the mutation plan again from this checkout\n',
       '      - name: Take the announced plan\n',
+      /: order of the judge$/,
     ],
   ];
-  for (const [from, to] of edits) {
+  // Each edit is refused for its own reason: an edit refused for another reason proves nothing of the rule it breaks.
+  for (const [from, to, refusal] of edits) {
     const edited = original.replace(from, to);
     assert.notEqual(edited, original, from);
-    assert.throws(() => assertGate(edited, file), from + ' -> ' + to);
+    assert.throws(() => assertGate(edited, file), refusedFor(refusal), from + ' -> ' + to);
   }
   // The judge that derives its plan after the download would download what a producer announced.
   const derive = original.slice(
@@ -406,7 +621,7 @@ Then('a gate workflow that starts or judges lanes outside the plan it derives is
     .replace(derive, '')
     .replace('      - name: Bind the Gate plan', derive + '      - name: Bind the Gate plan');
   assert.notEqual(moved, original);
-  assert.throws(() => assertGate(moved, file));
+  assert.throws(() => assertGate(moved, file), refusedFor(/: order of the judge$/));
 });
 
 Then(
@@ -521,7 +736,10 @@ Then('a workflow with a checkout that keeps its credentials is rejected', functi
 Then('a gate workflow triggered by pull_request_target is rejected', function () {
   const broken = text(this).replace(/^ {2}pull_request:$/m, '  pull_request_target:');
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertGate(broken, file(this)));
+  assert.throws(
+    () => assertGate(broken, file(this)),
+    refusedFor(/ is triggered by pull_request alone$|^the pull_request trigger of /),
+  );
 });
 
 const PUSH_ENTRY_BREAKS: Record<string, (yaml: string) => string> = {
@@ -550,7 +768,7 @@ Then('a push entry of the gate {} is rejected', function (kind: string) {
 Then('a gate workflow that uses a secret is rejected', function () {
   const broken = text(this).replace('${{ github.token }}', '${{ secrets.GITHUB_TOKEN }}');
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertGate(broken, file(this)));
+  assert.throws(() => assertGate(broken, file(this)), refusedFor(/ must not use a secret$/));
 });
 
 Then('a gate workflow with a cache is rejected', function () {
@@ -559,13 +777,16 @@ Then('a gate workflow with a cache is rejected', function () {
     'node-version-file: .nvmrc\n          cache: npm',
   );
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertGate(broken, file(this)));
+  assert.throws(() => assertGate(broken, file(this)), refusedFor(/ must not use a cache$/));
 });
 
 Then('a gate workflow with broader permissions is rejected', function () {
   const broken = text(this).replace('  actions: read\n', '  actions: write\n');
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertGate(broken, file(this)));
+  assert.throws(
+    () => assertGate(broken, file(this)),
+    refusedFor(/^the permissions of .* are not contents: read and actions: read$/),
+  );
 });
 
 const provision = 'sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"';
@@ -937,3 +1158,118 @@ Then('a copy of the workflow {word} is refused', function (fault: string) {
   }
   assert.throws(() => assertDestinationPointed(stringify(doc)));
 });
+
+const hostInstaller =
+  '"$GITHUB_WORKSPACE/aos" -- sh "$GITHUB_WORKSPACE/tools/runtime/install-host-packages.sh"';
+
+function assertHostInstall(steps: Workflow['jobs'][string]['steps'], bench: boolean, job: string): void {
+  const lines = steps.flatMap((step) =>
+    (step.run ?? '').split('\n').map((line) => ({ command: line.trim(), condition: step.if })),
+  );
+  const invocation = hostInstaller + (bench ? ' bench' : ' gate');
+  const installers = lines.filter(({ command }) => command === invocation);
+  assert.equal(installers.length, 1, job + ' installer count');
+  assert.equal(
+    installers[0]!.condition,
+    bench ? "runner.os == 'Linux'" : undefined,
+    job + ' installer condition',
+  );
+  const commands = lines.map(({ command }) => command);
+  assert.ok(commands.indexOf(invocation) < commands.indexOf('/usr/lib/postgresql/17/bin/postgres --version'));
+  assert.ok(commands.every((line) => !/\bapt(?:-get)?\b|apt\.postgresql\.org\.sh/.test(line)));
+}
+
+Then('a disabled package installer with trailing whitespace is rejected', function () {
+  const steps = [
+    { if: 'false', run: hostInstaller + ' gate  ' },
+    { run: '/usr/lib/postgresql/17/bin/postgres --version' },
+  ];
+  assert.throws(() => assertHostInstall(steps, false, 'fixture'), /installer condition/);
+});
+
+Then('the Linux package jobs use their shared host installer', function () {
+  for (const [file, jobs] of Object.entries({
+    'gate.yml': ['gate-linux-cucumber'],
+    'gate-lane.yml': ['mutation', 'replay'],
+    'mutation-full.yml': ['mutation-full'],
+    'bench-sandbox.yml': ['bench'],
+  })) {
+    const doc = workflow(readFileSync(join(ROOT, '.github/workflows', file), 'utf8'));
+    for (const id of jobs) {
+      assertHostInstall(doc.jobs[id]?.steps ?? [], file === 'bench-sandbox.yml', file + '/' + id);
+    }
+  }
+});
+
+Then(
+  'the {word} package install with {word} failure uses only its required archives',
+  function (mode: string, failure: string) {
+    const dir = mkdtempSync(join(tmpdir(), 'apt-scope-'));
+    const ubuntu =
+      'Types: deb\nURIs: https://example.invalid/ubuntu\nSuites: noble\nComponents: main universe\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg';
+    const pgdg =
+      'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: noble-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n';
+    try {
+      writeFileSync(join(dir, 'ubuntu'), ubuntu);
+      writeFileSync(
+        join(dir, 'cp'),
+        [
+          '#!/bin/sh',
+          'set -eu',
+          'test "$#" = 2 && test "$1" = /etc/apt/sources.list.d/ubuntu.sources || exit 2',
+          'exec /bin/cp "$FIXTURE/ubuntu" "$2"',
+          '',
+        ].join('\n'),
+        { mode: 0o700 },
+      );
+      writeFileSync(
+        join(dir, 'sudo'),
+        [
+          '#!/bin/sh',
+          'set -eu',
+          'test "$1" = apt-get',
+          'test "$2" = -o',
+          'test "$4" = -o',
+          'test "$3" = Dir::Etc::sourcelist=/dev/null',
+          'parts=${5#Dir::Etc::sourceparts=}',
+          'shift 5',
+          'phase=ubuntu',
+          'if [ -f "$parts/pgdg.sources" ]; then phase=pgdg; fi',
+          'ls -1 "$parts" > "$FIXTURE/$phase-$1.files"',
+          'for source in "$parts"/*.sources; do /bin/cp "$source" "$FIXTURE/$phase-$1-${source##*/}"; done',
+          'echo "$phase $*" >> "$FIXTURE/commands"',
+          'if [ "$FAILURE" = "$phase-$1" ]; then exit 37; fi',
+          '',
+        ].join('\n'),
+        { mode: 0o700 },
+      );
+      const result = spawnSync('/bin/sh', [join(ROOT, 'tools/runtime/install-host-packages.sh'), mode], {
+        env: { PATH: dir + ':/usr/bin:/bin', TMPDIR: dir, FIXTURE: dir, FAILURE: failure },
+        encoding: 'utf8',
+      });
+      const commands = [
+        'ubuntu update --error-on=any',
+        'ubuntu install -y --no-install-recommends bubblewrap socat ripgrep postgresql-common',
+        'pgdg update --error-on=any',
+        'pgdg install -y --no-install-recommends postgresql-17' +
+          (mode === 'gate' ? ' postgresql-17-pgvector' : ''),
+      ];
+      const failed = commands.findIndex((cmd) => cmd.split(' ').slice(0, 2).join('-') === failure);
+      const expected = failed < 0 ? commands : commands.slice(0, failed + 1);
+      assert.equal(result.status, failed < 0 ? 0 : 37, result.stderr);
+      assert.deepEqual(readFileSync(join(dir, 'commands'), 'utf8').trim().split('\n'), expected);
+      for (const line of expected) {
+        const [phase, action] = line.split(' ');
+        const saved = join(dir, phase + '-' + action);
+        const names = readFileSync(saved + '.files', 'utf8')
+          .trim()
+          .split('\n');
+        assert.deepEqual(names, phase === 'ubuntu' ? ['ubuntu.sources'] : ['pgdg.sources', 'ubuntu.sources']);
+        assert.equal(readFileSync(saved + '-ubuntu.sources', 'utf8'), ubuntu);
+        if (phase === 'pgdg') assert.equal(readFileSync(saved + '-pgdg.sources', 'utf8'), pgdg);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);

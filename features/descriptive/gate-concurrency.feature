@@ -58,6 +58,18 @@ Feature: the gate has two entries, and only the runs of a pull request are in a 
         | gate.yml is also triggered by workflow_call       | gate.yml is triggered by pull_request alone        |
         | gate.yml filters its pull_request trigger         | the pull_request trigger of gate.yml has no filter |
 
+  Rule: the two entries hold the same keys above their jobs, and the same permissions, since the generator copies only the jobs
+
+    Scenario Outline: a copy where <fault> is refused
+      Given a copy of the committed workflows of the gate where <fault>
+      Then that copy of the workflows of the gate is refused: "<refusal>"
+
+      Examples:
+        | fault                                             | refusal                                                                      |
+        | gate.yml gains an environment above its jobs      | gate.yml holds other keys than name, on, concurrency, permissions and jobs   |
+        | gate-push.yml gains an environment above its jobs | gate-push.yml holds other keys than name, on, permissions and jobs           |
+        | gate.yml widens its permissions                   | the permissions of gate-push.yml are not those of gate.yml                   |
+
   Rule: the push entry and the lane workflow declare no concurrency key, at workflow level nor on a job
 
     Scenario Outline: a copy where <fault> is refused, since a run in a group can be cancelled by a later run that names it

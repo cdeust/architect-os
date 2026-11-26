@@ -3,8 +3,9 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parse } from 'yaml';
+import { parse, stringify } from 'yaml';
 import { z } from 'zod';
+import { ACTIONS, WAITS, WAITS_AFTER_CREDENTIAL, runsTheAction } from './claude-review-workflow.js';
 import { Given, ROOT, Then, stored } from './helpers.js';
 import { committedMainRuleset, requiredChecks } from './ruleset-main.js';
 
@@ -160,12 +161,14 @@ export function assertSecurityReview(text: string): void {
   const [secret] = names;
   assert.deepEqual(guard?.env, { PRESENT: `\${{ secrets.${secret} != '' }}` });
 
-  assert.equal(
-    steps[restrict]?.run,
-    `sudo install -D -m 0644 -o root -g root ${CONFIG_PATH}/${SETTINGS} /etc/claude-code/managed-settings.json`,
-  );
-  for (const at of [restrict, diff, engine])
+  assert.equal(steps[restrict]?.run, ACTIONS['claude-security-review.yml']?.run);
+  for (const at of [restrict, diff])
     assert.equal(steps[at]?.if, PRESENT, `${steps[at]?.name} waits for the credential`);
+  assert.equal(
+    steps[engine]?.if,
+    WAITS_AFTER_CREDENTIAL,
+    'the engine waits for the credential, its settings and its proof',
+  );
 
   const diffStep = steps[diff];
   assert.deepEqual(diffStep?.env, {
@@ -206,7 +209,7 @@ export function assertSecurityReview(text: string): void {
     assert.ok(!/\bsecrets\b/.test(value.replace(EXPRESSION, '')), `a secret outside an expression: ${value}`);
   }
 
-  if (reviewer?.uses?.startsWith('anthropics/claude-code-action@') === true) assertClaudeCodeAction(reviewer);
+  if (reviewer !== undefined && runsTheAction(reviewer)) assertClaudeCodeAction(reviewer);
   assertPublish(doc.jobs.publish);
 }
 
@@ -251,14 +254,7 @@ function assertClaudeCodeAction(engine: Step): void {
     'prompt',
   ]);
   assert.equal(inputs['github_token'], '${{ github.token }}');
-  const args = String(inputs['claude_args']).trim().split('\n');
-  assert.deepEqual(args, [
-    '--strict-mcp-config',
-    '--permission-mode default',
-    '--allowedTools "Read,Grep,Glob"',
-    '--model "claude-opus-5-5"',
-    "--json-schema '${{ steps.schema.outputs.json }}'",
-  ]);
+  assert.equal(inputs['claude_args'], ACTIONS['claude-security-review.yml']?.inputs['claude_args']);
 }
 
 Then('it satisfies the security review workflow rules', function () {
@@ -306,12 +302,18 @@ const REVIEW_BREAKS: Record<string, (yaml: string) => string> = {
     at(yaml, 'sparse-checkout-cone-mode: false', 'sparse-checkout-cone-mode: true'),
   'that checks out the whole run commit': (yaml) =>
     without(yaml, '          sparse-checkout: .github/claude-security-review\n'),
-  'without the credential guard on the engine': (yaml) =>
-    at(
-      yaml,
-      "        id: engine\n        if: steps.credential.outputs.present == 'true'\n",
-      '        id: engine\n',
-    ),
+  // From the parsed document: a condition folded across lines is the same condition, and is still broken here.
+  'without the credential guard on the engine': (yaml) => {
+    const doc = parse(yaml) as { jobs: Record<string, { steps: Step[] }> };
+    const engine = doc.jobs['security-review']?.steps.find((step) => step.id === 'engine');
+    assert.equal(
+      engine?.if,
+      WAITS_AFTER_CREDENTIAL,
+      'the committed engine no longer waits for the credential',
+    );
+    engine.if = WAITS;
+    return stringify(doc);
+  },
   'without its skip notice': (yaml) => without(yaml, stepBlock(yaml, 'Say the review was skipped')),
   'without the restriction': (yaml) =>
     without(yaml, stepBlock(yaml, 'Restrict Claude Code to reading the checkout')),

@@ -157,7 +157,7 @@ Request changes on a PR that has any of these:
 - A branch-to-`main` comparison in CI or tooling, an unpinned dependency (`^`, `~`, `latest`), or a lockfile out of sync.
 - A `tags`, `name` or `retry` option in `cucumber.mjs`, a skipped, pending or undefined step, or a computed `Examples` table.
 - A `Stryker disable` that lacks the justified form `// Stryker disable next-line <Mutator>: équivalent: <invariant>`.
-- A change to `tools/test-gate` or to a workflow of the gate (`.github/workflows/gate.yml`, `gate-push.yml`, `gate-lane.yml`) that the PR does not explain (R-6).
+- A change to `tools/test-gate` or to a workflow of the gate (`.github/workflows/gate.yml`, `gate-push.yml`, `gate-lane.yml`, and `features/support/gate-push-entry.ts`, which writes the head of `gate-push.yml`) that the PR does not explain (R-6).
 - Docs (`docs/`, this file) left stale by a change that alters architecture, boundaries or commands.
 - A change that adds or changes an element of the system and leaves its diagram (`docs/diagrams/`) or the text of the README that describes it as they were. The table of bricks (`docs/bricks.md`) and the count of the suite are not enough.
 - A change that builds a point marked `next` and leaves the mark, in the README or in a diagram, or that records a decision of design without building it and leaves it out of the roadmap of the README (« What comes next ») and of the diagram it belongs to.

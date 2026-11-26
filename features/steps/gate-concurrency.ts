@@ -110,6 +110,23 @@ function assertGateEntries(gate: Gate): void {
   assertNoConcurrencyKey(gate, PUSH_ENTRY);
   assertNoConcurrencyKey(gate, LANE);
 
+  // The push entry is written from the pull-request entry from its line `jobs:` on; what comes before is written by
+  // the generator. A key of the source above its jobs (env, defaults, run-name) would change one entry and not the
+  // other: the two hold exactly these keys, and the same permissions.
+  const pushDoc = document(gate, PUSH_ENTRY);
+  assert.ok(
+    isDeepStrictEqual(Object.keys(entry), ['name', 'on', 'concurrency', 'permissions', 'jobs']),
+    `${PULL_REQUEST_ENTRY} holds other keys than name, on, concurrency, permissions and jobs`,
+  );
+  assert.ok(
+    isDeepStrictEqual(Object.keys(pushDoc), ['name', 'on', 'permissions', 'jobs']),
+    `${PUSH_ENTRY} holds other keys than name, on, permissions and jobs`,
+  );
+  assert.ok(
+    isDeepStrictEqual(pushDoc['permissions'], entry['permissions']),
+    `the permissions of ${PUSH_ENTRY} are not those of ${PULL_REQUEST_ENTRY}`,
+  );
+
   // No other workflow file names a group of the gate, at workflow level or on a job. Group names are case insensitive.
   for (const file of Object.keys(gate.workflows)) {
     if (file === PULL_REQUEST_ENTRY) continue;
@@ -221,6 +238,19 @@ const trigger = (lines: string) =>
 
 /** Each fault, as an edit of a copy of the committed tree on disk. */
 const FAULTS: Record<string, (root: string) => void> = {
+  // What the generator does not copy: the keys above the jobs.
+  'gate.yml gains an environment above its jobs': edits(
+    PULL_REQUEST_ENTRY,
+    swap('\njobs:\n', '\nenv:\n  X: "1"\n\njobs:\n'),
+  ),
+  'gate-push.yml gains an environment above its jobs': edits(
+    PUSH_ENTRY,
+    swap('\njobs:\n', '\nenv:\n  X: "1"\n\njobs:\n'),
+  ),
+  'gate.yml widens its permissions': edits(
+    PULL_REQUEST_ENTRY,
+    swap('  actions: read\n', '  actions: write\n'),
+  ),
   // The group of the pull-request entry.
   'gate.yml has one group for all pull requests': edits(PULL_REQUEST_ENTRY, group('gate-pr')),
   'gate.yml is grouped by the head branch': edits(

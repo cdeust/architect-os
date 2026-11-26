@@ -37,8 +37,7 @@ jobs:
 
       - name: Host dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends bubblewrap socat ripgrep
+          "$GITHUB_WORKSPACE/aos" -- sh "$GITHUB_WORKSPACE/tools/runtime/install-host-packages.sh" gate
           bwrap --version
 
       - name: Host requirement - allow unprivileged user namespaces with capabilities (E-07, R-13)
@@ -46,10 +45,8 @@ jobs:
 
       - name: PostgreSQL 17 (PGDG) with pgvector
         run: |
-          sudo apt-get install -y --no-install-recommends postgresql-common
-          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
-          sudo apt-get install -y --no-install-recommends postgresql-17 postgresql-17-pgvector
           echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
+          /usr/lib/postgresql/17/bin/postgres --version
 
       - name: Admit the Gate job
         id: runtime
