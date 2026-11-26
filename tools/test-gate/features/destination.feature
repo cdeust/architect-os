@@ -96,7 +96,27 @@ Feature: The gate judges the merge GitHub would build, first parent the destinat
       Then the gate exits with 1
       And the gate output includes "GATE_DESTINATION_NOT_INTEGRATED"
 
+    Scenario: a destination with a history unrelated to the head is not called a conflict: git's refusal stops the gate
+      Given the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+      And the gate branch is committed
+      And the gate destination is moved to a root commit unrelated to the head
+      When the gate plans the "linux" job
+      Then the gate exits with 1
+      And the gate output includes "merge-tree"
+      And the gate output does not include "GATE_DESTINATION_CONFLICT"
+
   Rule: the decision on the facts git gives
+
+    Scenario Outline: the refusal <refusal> says what to do
+      Then the destination refusal "<refusal>" of "refs/remotes/origin/main" reads "<text>"
+
+      Examples:
+        | refusal                         | text                                                                                                                  |
+        | GATE_DESTINATION_MISSING        | GATE_DESTINATION_MISSING : la destination refs/remotes/origin/main est absente du dépôt ; la récupérer avant la porte |
+        | GATE_DESTINATION_CONFLICT       | GATE_DESTINATION_CONFLICT : la tête ne se fusionne pas sans conflit dans refs/remotes/origin/main ; intégrer la destination d'abord |
+        | GATE_DESTINATION_NOT_INTEGRATED | GATE_DESTINATION_NOT_INTEGRATED : refs/remotes/origin/main a des commits que la tête n'a pas ; intégrer la destination d'abord |
+        | GATE_DESTINATION_MISMATCH       | GATE_DESTINATION_MISMATCH : la fusion de refs/remotes/origin/main et de la tête n'a pas l'arbre de la tête |
+
 
     Scenario Outline: head "<head>", first parent "<parent>", destination "<destination>", behind <behind>, merge "<merged>": <decision>
       Then the gate decides, for these facts, "<decision>"
@@ -115,21 +135,20 @@ Feature: The gate judges the merge GitHub would build, first parent the destinat
         | H    |        |             | 0      | 0     | T        | none D=none 1                   |
         | H    |        | H           | 0      | 0     | T        | none D=H 1                      |
 
-  Rule: in CI, the fetch of the workflow gives the gate the first parent of GitHub's merge commit, in a shallow clone
+  Rule: in CI, the step of the workflow points the destination at the first parent of the commit the event judges
 
-    Scenario Outline: on <event>, after the fetch step of gate.yml in a clone of depth 2, the gate judges <judged>
+    No fetch: the live branch may have moved since GitHub built its merge commit, or since the push. The checkout is
+    of depth 2, as actions/checkout leaves it; main of the forge has moved on by one commit after the merge commit.
+
+    Scenario Outline: on <event>, after the step of gate.yml, the gate judges the first parent of the head, 1 commit
       Given a forge repository whose main has two commits and a pull request of one commit, with GitHub's merge commit
+      And main of the forge has moved on since, and a trial branch is two commits ahead of the second commit of main
       And a checkout of depth 2 of <checkout>, as actions/checkout leaves it
-      When the fetch step of gate.yml runs in that checkout
-      Then the gate of that checkout takes <judged> as its first parent, the destination at <destination>, 1 commit judged
+      When the step of gate.yml that points the destination runs in that checkout
+      Then the gate of that checkout takes <judged> as its first parent, the destination at it, 1 commit judged
 
       Examples:
-        | event          | checkout                 | judged                          | destination        |
-        | a pull request | the merge commit         | the second commit of main       | its first parent   |
-        | a push to main | the second commit of main | the first commit of main        | the head           |
-
-    Scenario: the same fetch at depth 1 on a push to main would take the parent of the head away (why the depth is 2)
-      Given a forge repository whose main has two commits and a pull request of one commit, with GitHub's merge commit
-      And a checkout of depth 2 of the second commit of main, as actions/checkout leaves it
-      When the fetch step of gate.yml runs in that checkout at depth 1
-      Then the gate of that checkout sees the head as a root commit
+        | event                    | checkout                  | judged                       |
+        | a pull request           | the merge commit          | the second commit of main    |
+        | a push to main           | the second commit of main | the first commit of main     |
+        | a push to a trial branch | the trial branch          | the first commit of the trial |

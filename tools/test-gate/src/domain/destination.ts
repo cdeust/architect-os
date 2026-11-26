@@ -13,10 +13,11 @@ export interface DestinationFacts {
   readonly parent: string | null;
   /** The commit the destination reference names; undefined when the reference does not exist. */
   readonly destination: string | undefined;
-  /** Commits of the destination not in the head (0: the destination is in the history of the head). */
-  readonly behind: number;
-  /** Commits of the head not in the destination. */
-  readonly ahead: number;
+  /**
+   * Asked only when the destination is neither the head nor its first parent: the commits of the destination not in
+   * the head (`behind`, 0 when the destination is in the history of the head) and of the head not in the destination.
+   */
+  readonly counts: () => { readonly behind: number; readonly ahead: number };
   /** The tree of the merge of the destination and the head, or `conflict`; asked only when it is needed. */
   readonly merged: () => string | 'conflict';
   readonly headTree: string;
@@ -50,10 +51,11 @@ export function judgedParent(
   // The head is the destination (a push to it), or the destination is its first parent (GitHub's merge commit, or a
   // single commit on the destination): the first parent of the head, as before.
   if (destination === head || destination === parent) return { firstParent: parent, destination, commits: 1 };
-  if (facts.behind === 0) {
+  const { behind, ahead } = facts.counts();
+  if (behind === 0) {
     // The merge is the head's own tree by construction; checked by object identifiers all the same.
     if (facts.merged() !== facts.headTree) return { refusal: 'GATE_DESTINATION_MISMATCH' };
-    return { firstParent: destination, destination, commits: facts.ahead };
+    return { firstParent: destination, destination, commits: ahead };
   }
   return {
     refusal: facts.merged() === 'conflict' ? 'GATE_DESTINATION_CONFLICT' : 'GATE_DESTINATION_NOT_INTEGRATED',

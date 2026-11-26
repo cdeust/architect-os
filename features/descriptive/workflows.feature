@@ -197,13 +197,14 @@ Feature: GitHub workflows
       | a bare operational Node |
       | an unguarded npx        |
 
-  Scenario Outline: every job of <file> that runs the gate fetches its destination first, from env, into the reference of gate.json
+  Scenario Outline: every job of <file> that runs the gate points its destination first at the first parent of its head, the reference of gate.json from env
     Given the committed workflow "<file>"
-    Then every job that runs the gate fetches the destination of gate.json before it
+    Then every job that runs the gate points the destination of gate.json before it
     And a copy of the workflow without-the-fetch is refused
     And a copy of the workflow with-the-fetch-after-the-gate is refused
     And a copy of the workflow with-the-branch-written-into-the-command is refused
     And a copy of the workflow with-another-branch is refused
+    And a copy of the workflow with-the-live-branch-fetched is refused
 
     Examples:
       | file          |

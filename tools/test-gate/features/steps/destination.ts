@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DataTable } from '@cucumber/cucumber';
 import { parse } from 'yaml';
-import { judgedParent } from '../../src/domain/destination.js';
+import { destinationMessage, judgedParent, type DestinationRefusal } from '../../src/domain/destination.js';
 import { git, gitWithOptions, GitRepository } from '../../src/infrastructure/git.js';
 import { fixtureSource, replaceLine } from './reports.js';
 import { Given, Then, When, repository } from './repository.js';
@@ -73,6 +73,25 @@ Given('the gate destination is moved to a commit made with the tree of the head'
   git(repo.dir, ['update-ref', DESTINATION, forged]);
 });
 
+Given('the gate destination is moved to a root commit unrelated to the head', function () {
+  const repo = repository(this);
+  const empty = git(repo.dir, ['mktree']).trim();
+  const root = git(repo.dir, [...IDENTITY, 'commit-tree', empty, '-m', 'unrelated']).trim();
+  git(repo.dir, ['update-ref', DESTINATION, root]);
+});
+
+Then('the gate output does not include {string}', function (text: string) {
+  const { output } = repository(this);
+  assert.ok(!output.includes(text), output);
+});
+
+Then(
+  'the destination refusal {string} of {string} reads {string}',
+  function (refusal: string, reference: string, text: string) {
+    assert.equal(destinationMessage(refusal as DestinationRefusal, reference), text);
+  },
+);
+
 Then('the gate decides, for these facts, {string}', function (expected: string, table: DataTable) {
   const [row] = table.hashes() as [Record<string, string>];
   const asked: string[] = [];
@@ -80,8 +99,7 @@ Then('the gate decides, for these facts, {string}', function (expected: string, 
     head: row['head']!,
     parent: row['parent'] === '' ? null : row['parent']!,
     destination: row['destination'] === '' ? undefined : row['destination'],
-    behind: Number(row['behind']),
-    ahead: Number(row['ahead']),
+    counts: () => (asked.push('counts'), { behind: Number(row['behind']), ahead: Number(row['ahead']) }),
     headTree: row['tree']!,
     merged: () => (asked.push('merged'), row['merged'] as string),
   });
@@ -93,14 +111,16 @@ Then('the gate decides, for these facts, {string}', function (expected: string, 
   // The merge is built only when the destination is neither the head nor its first parent.
   const shortcut =
     row['destination'] === '' || row['destination'] === row['head'] || row['destination'] === row['parent'];
-  assert.deepEqual(asked, shortcut ? [] : ['merged']);
+  assert.deepEqual(asked, shortcut ? [] : ['counts', 'merged']);
 });
 
 interface Forge {
   root: string;
   origin: string;
+  work: string;
   main: [string, string];
   merge: string;
+  trial?: string;
   checkout?: string;
 }
 
@@ -131,13 +151,43 @@ Given(
     git(work, [...IDENTITY, 'merge', '-q', '--no-ff', '--no-edit', '-m', 'merge', topic]);
     const merge = git(work, ['rev-parse', 'HEAD']).trim();
     git(work, ['push', '-q', origin, `${second}:refs/heads/main`, `${merge}:refs/pull/1/merge`]);
-    this.state['forge'] = { root, origin, main: [first, second], merge } satisfies Forge;
+    this.state['forge'] = { root, origin, work, main: [first, second], merge } satisfies Forge;
+  },
+);
+
+Given(
+  'main of the forge has moved on since, and a trial branch is two commits ahead of the second commit of main',
+  function () {
+    const forge = forgeOf(this);
+    const commit = (file: string, message: string, parent: string): string => {
+      git(forge.work, ['checkout', '-q', '--detach', parent]);
+      writeFileSync(join(forge.work, file), message + '\n');
+      git(forge.work, ['add', '-A']);
+      git(forge.work, [...IDENTITY, 'commit', '-q', '-m', message]);
+      return git(forge.work, ['rev-parse', 'HEAD']).trim();
+    };
+    const third = commit('d.txt', 'main 3', forge.main[1]);
+    const trialFirst = commit('e.txt', 'trial 1', forge.main[1]);
+    const trial = commit('f.txt', 'trial 2', trialFirst);
+    git(forge.work, [
+      'push',
+      '-q',
+      forge.origin,
+      `${third}:refs/heads/main`,
+      `${trial}:refs/heads/sentinel/gate-1a-x`,
+    ]);
+    forge.trial = trialFirst;
   },
 );
 
 Given('a checkout of depth 2 of {}, as actions\\/checkout leaves it', function (which: string) {
   const forge = forgeOf(this);
-  const target = which === 'the merge commit' ? 'refs/pull/1/merge' : 'refs/heads/main';
+  const targets: Record<string, string> = {
+    'the merge commit': 'refs/pull/1/merge',
+    'the trial branch': 'refs/heads/sentinel/gate-1a-x',
+  };
+  // The second commit of main, by its hash: main of the forge has moved on since the push.
+  const target = targets[which] ?? forge.main[1];
   const checkout = join(forge.root, 'checkout');
   git(forge.root, ['init', '-q', checkout]);
   git(checkout, ['remote', 'add', 'origin', `file://${forge.origin}`]);
@@ -147,53 +197,37 @@ Given('a checkout of depth 2 of {}, as actions\\/checkout leaves it', function (
   forge.checkout = checkout;
 });
 
-function runFetchStep(world: object, depth?: number): void {
-  const forge = forgeOf(world);
+When('the step of gate.yml that points the destination runs in that checkout', function () {
+  const forge = forgeOf(this);
   const doc = parse(readFileSync(join(ROOT, '.github/workflows/gate.yml'), 'utf8')) as {
     jobs: Record<string, { steps?: { name?: string; run?: string; env?: Record<string, string> }[] }>;
   };
-  const step = doc.jobs['gate-linux']?.steps?.find(
-    (candidate) => candidate.name === 'Fetch the destination the gate judges against',
+  const step = doc.jobs['gate-linux']?.steps?.find((candidate) =>
+    candidate.name?.startsWith('Point the destination'),
   );
   assert.ok(step?.run !== undefined && step.env !== undefined);
-  // The command of the workflow as it is written, its env as the workflow gives it.
-  const run = depth === undefined ? step.run : step.run.replace('--depth=2', `--depth=${depth}`);
-  assert.ok(depth === undefined || run !== step.run);
   // The line as the shell of the runner reads it: words split on blanks outside double quotes, `$NAME` expanded from
   // the env of the step. Nothing else is shell syntax in it (the workflow contract of workflows.feature pins it).
-  const words = [...run.matchAll(/"([^"]*)"|(\S+)/g)].map(([, quoted, bare]) =>
+  const words = [...step.run.matchAll(/"([^"]*)"|(\S+)/g)].map(([, quoted, bare]) =>
     (quoted ?? bare ?? '').replace(/\$([A-Z_]+)/g, (_all, name: string) => step.env?.[name] ?? ''),
   );
   assert.equal(words[0], 'git');
   gitWithOptions(forge.checkout as string, [], words.slice(1));
-}
-
-When('the fetch step of gate.yml runs in that checkout', function () {
-  runFetchStep(this);
-});
-
-When('the fetch step of gate.yml runs in that checkout at depth {int}', function (depth: number) {
-  runFetchStep(this, depth);
-});
-
-Then('the gate of that checkout sees the head as a root commit', function () {
-  assert.equal(new GitRepository(forgeOf(this).checkout as string).commits().firstParent, null);
 });
 
 Then(
-  'the gate of that checkout takes {} as its first parent, the destination at {}, {int} commit judged',
-  function (judged: string, destination: string, commits: number) {
+  'the gate of that checkout takes {} as its first parent, the destination at it, {int} commit judged',
+  function (judged: string, commits: number) {
     const forge = forgeOf(this);
-    const repository = new GitRepository(forge.checkout as string);
-    const result = repository.judged('refs/remotes/origin/main');
-    const parent = judged === 'the second commit of main' ? forge.main[1] : forge.main[0];
+    const expected: Record<string, string> = {
+      'the second commit of main': forge.main[1],
+      'the first commit of main': forge.main[0],
+      'the first commit of the trial': forge.trial as string,
+    };
+    const parent = expected[judged];
+    assert.ok(parent !== undefined, judged);
+    const result = new GitRepository(forge.checkout as string).judged('refs/remotes/origin/main');
     assert.equal(result.firstParent, parent);
-    const head = git(forge.checkout as string, ['rev-parse', 'HEAD']).trim();
-    const expected = destination === 'the head' ? head : parent;
-    assert.deepEqual(result.destination, {
-      reference: 'refs/remotes/origin/main',
-      commit: expected,
-      commits,
-    });
+    assert.deepEqual(result.destination, { reference: 'refs/remotes/origin/main', commit: parent, commits });
   },
 );

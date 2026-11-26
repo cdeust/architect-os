@@ -701,12 +701,11 @@ Then('the hosted install leaves the lifecycle witness untouched', function () {
 });
 
 // The destination the gate judges against (tools/test-gate/src/domain/destination.ts): every job that runs the gate
-// fetches it first, into the one reference gate.json names, with the branch from env, never written into the command.
+// points it first at the first parent of the commit it judges, the one reference gate.json names, from env.
 const RUNS_GATE = /tools\/test-gate\/src\/(main|hosted)\.ts|npm run gate\b/;
-const FETCH =
-  /^git fetch --quiet --no-tags --depth=2 origin "\+refs\/heads\/\$AOS_GATE_DESTINATION:refs\/remotes\/origin\/\$AOS_GATE_DESTINATION"$/;
+const FETCH = /^git update-ref "\$AOS_GATE_DESTINATION" HEAD\^1$/;
 
-export function assertDestinationFetched(source: string): void {
+export function assertDestinationPointed(source: string): void {
   const gate = JSON.parse(readFileSync(join(ROOT, 'tools/test-gate/gate.json'), 'utf8')) as {
     destination: string;
   };
@@ -716,19 +715,15 @@ export function assertDestinationFetched(source: string): void {
     if (at === -1) continue;
     jobs += 1;
     const fetch = job.steps.findIndex((step) => FETCH.test(step.run ?? ''));
-    assert.ok(fetch !== -1 && fetch < at, id + ': the gate runs without its destination fetched before it');
-    const branch = job.steps[fetch]!.env?.['AOS_GATE_DESTINATION'];
-    assert.ok(
-      branch !== undefined && /^[A-Za-z0-9._/-]+$/.test(branch),
-      id + ': the branch of the destination',
-    );
-    assert.equal(`refs/remotes/origin/${branch}`, gate.destination, id + ': not the reference of gate.json');
+    assert.ok(fetch !== -1 && fetch < at, id + ': the gate runs without its destination pointed before it');
+    const reference = job.steps[fetch]!.env?.['AOS_GATE_DESTINATION'];
+    assert.equal(reference, gate.destination, id + ': not the reference of gate.json');
   }
   assert.ok(jobs > 0, 'no job runs the gate');
 }
 
-Then('every job that runs the gate fetches the destination of gate.json before it', function () {
-  assertDestinationFetched(text(this));
+Then('every job that runs the gate points the destination of gate.json before it', function () {
+  assertDestinationPointed(text(this));
 });
 
 Then('a copy of the workflow {word} is refused', function (fault: string) {
@@ -751,14 +746,16 @@ Then('a copy of the workflow {word} is refused', function (fault: string) {
       job.steps.push(fetch);
       break;
     case 'with-the-branch-written-into-the-command':
-      fetch.run =
-        'git fetch --quiet --no-tags --depth=2 origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/main"';
+      fetch.run = 'git update-ref "${{ env.AOS_GATE_DESTINATION }}" HEAD^1';
+      break;
+    case 'with-the-live-branch-fetched':
+      fetch.run = 'git fetch --quiet --no-tags --depth=2 origin "+refs/heads/main:$AOS_GATE_DESTINATION"';
       break;
     case 'with-another-branch':
-      fetch.env = { AOS_GATE_DESTINATION: 'feat/gate-1a' };
+      fetch.env = { AOS_GATE_DESTINATION: 'refs/remotes/origin/feat/gate-1a' };
       break;
     default:
       assert.fail(fault);
   }
-  assert.throws(() => assertDestinationFetched(stringify(doc)));
+  assert.throws(() => assertDestinationPointed(stringify(doc)));
 });

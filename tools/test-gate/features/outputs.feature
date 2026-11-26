@@ -183,3 +183,8 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
       """
       { "job": "linux", "head": "<head>", "firstParent": "<parent>", "destination": { "reference": "refs/remotes/origin/main", "commit": "<destination>", "commits": 1 }, "mutate": ["src/math.mjs"] }
       """
+
+  Scenario: the report of a root commit names no destination commit, and one commit judged
+    Given the gate head is committed
+    When the gate checks the "linux" job
+    Then the gate report has the line "- destination : refs/remotes/origin/main à aucune, 1 commit(s) jugé(s)"

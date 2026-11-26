@@ -83,7 +83,6 @@ function gitList(cwd: string, args: readonly string[]): string {
 export class GitRepository {
   constructor(private readonly root: string) {}
 
-  /** HEAD and its first parent (`HEAD^1`), null for a root commit. */
   /**
    * What `judgedParent` needs to choose the first parent: the head, its first parent, the commit the destination
    * reference names (absent when `rev-parse` does not resolve it), the commits on each side, the tree of the head, and
@@ -92,31 +91,28 @@ export class GitRepository {
    */
   destinationFacts(reference: string): DestinationFacts {
     const { head, firstParent } = this.commits();
+    // The reference is a remote-tracking name by the schema of gate.json, so it never reads as an option.
     let destination: string | undefined;
     try {
-      destination = git(this.root, [
-        'rev-parse',
-        '--verify',
-        '--quiet',
-        '--end-of-options',
-        `${reference}^{commit}`,
-      ]).trim();
+      destination = git(this.root, ['rev-parse', '--verify', `${reference}^{commit}`]).trim();
     } catch {
-      destination = undefined;
+      // rev-parse --verify exits non-zero on a reference that does not name a commit: no destination.
     }
-    const counts =
-      destination === undefined || destination === head || destination === firstParent
-        ? ['0', '0']
-        : git(this.root, ['rev-list', '--left-right', '--count', `${destination}...${head}`])
-            .trim()
-            .split(/\s+/);
     const headTree = git(this.root, ['rev-parse', '--verify', `${head}^{tree}`]).trim();
     return {
       head,
       parent: firstParent,
       destination,
-      behind: Number(counts[0]),
-      ahead: Number(counts[1]),
+      counts: () => {
+        // `rev-list --left-right --count` prints the two counts separated by one tab, then a line end (Number skips it).
+        const [behind, ahead] = git(this.root, [
+          'rev-list',
+          '--left-right',
+          '--count',
+          `${destination as string}...${head}`,
+        ]).split('\t');
+        return { behind: Number(behind), ahead: Number(ahead) };
+      },
       headTree,
       merged: () => {
         try {
@@ -150,6 +146,7 @@ export class GitRepository {
     };
   }
 
+  /** HEAD and its first parent (`HEAD^1`), null for a root commit. */
   commits(): { head: string; firstParent: string | null } {
     const [head, firstParent] = git(this.root, ['rev-list', '--parents', '-n', '1', 'HEAD'])
       .trim()
