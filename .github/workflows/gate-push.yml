@@ -1,0 +1,363 @@
+# GENERATED from .github/workflows/gate.yml by `npm run workflow:gate-push` (features/support/gate-push-entry.ts).
+# Do not edit: change gate.yml, then run the command. features/descriptive/gate-concurrency.feature requires this
+# file to equal what the command writes.
+# The CI gate (docs/design/platform-v3-srt.md §7): plan, Gherkin suite, Stryker on the changed lines, verdict.
+# No secret, no cache. The token is the automatic one, restricted to contents: read and actions: read.
+# The push entry. The pull-request entry is gate.yml; the jobs below are its jobs, unchanged, so that both report the
+# checks gate-linux and gate-macos as jobs of their own run: a job of a called workflow would report as
+# `<caller job> / <job>`.
+# No concurrency key, here or on a job: a run on main publishes the base of the count that the next run reads, and a
+# run on a trial branch is the one the delivery waits for. A run in no group cannot be cancelled through a group.
+name: gate-push
+
+on:
+  push:
+    branches:
+      - main
+      # The delivery (CONTRIBUTING.md, the maintainer's line): a commit is pushed to a trial branch first, where
+      # this gate gives it the two checks the rulesets of feat/gate-1a and of main require; it then reached both
+      # branches as it is, by a push, until main took pull requests only (26 November 2026, docs/infrastructure.md,
+      # "How a pull request reaches main"). feat/gate-1a is not listed: it would run the same commit a second time.
+      - sentinel/gate-1a-*
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  gate-linux-cucumber:
+    name: gate-linux-cucumber-${{ matrix.shard }}
+    runs-on: ubuntu-24.04
+    env:
+      AOS_GATE_JOB: cucumber-${{ matrix.shard }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Host dependencies
+        run: |
+          "$GITHUB_WORKSPACE/aos" -- sh "$GITHUB_WORKSPACE/tools/runtime/install-host-packages.sh" gate
+          bwrap --version
+
+      - name: Host requirement - allow unprivileged user namespaces with capabilities (E-07, R-13)
+        run: |
+          echo "before: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          echo "after: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)"
+
+      - name: PostgreSQL 17 (PGDG) with pgvector
+        run: |
+          echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
+          /usr/lib/postgresql/17/bin/postgres --version
+
+      - name: Admit the Gate job
+        id: runtime
+        run: ./aos -- node tools/runtime/gate-job.mjs capture
+
+      - name: Install (lockfile, scripts disabled)
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- npm ci --ignore-scripts
+
+      - name: Run the functional suite lot
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+          AOS_SHARD: ${{ matrix.shard }}
+        run: |
+          sh tools/runtime/gate-job.sh -- /usr/bin/python3 -I tools/test-gate/with-tree-lock.py exec bash -e -o pipefail <<'ADMITTED'
+          /usr/bin/python3 -I tools/test-gate/with-tree-lock.py candidate npm exec --no -- tsc -b
+          /usr/bin/python3 -I tools/test-gate/with-tree-lock.py candidate npm exec --no -- cucumber-js --shard "$AOS_SHARD/2" || test -s "$ARCHITECT_OS_RUN_DIR/reports/cucumber.ndjson"
+          git rev-parse --verify HEAD > "$ARCHITECT_OS_RUN_DIR/reports/cucumber-head"
+          ADMITTED
+
+      - name: Verify the report tree for upload
+        id: exports
+        if: always() && steps.runtime.outcome == 'success'
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs publish
+
+      - name: Upload the functional report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gate-cucumber-linux-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: |
+            ${{ steps.exports.outputs.reports }}/cucumber.ndjson
+            ${{ steps.exports.outputs.reports }}/cucumber-head
+          if-no-files-found: error
+
+  # The lanes follow the work (docs/design/platform-v3-srt.md §7, « Lots hébergés »): this job derives the plan of
+  # the mutation from the commit and gives the lanes to the matrix below, one when the perimeter is empty. Its output
+  # only decides what starts: gate-linux derives the plan again from its own checkout and judges on that one.
+  gate-linux-plan:
+    name: gate-linux-plan
+    runs-on: ubuntu-24.04
+    env:
+      AOS_GATE_JOB: gate-linux-plan
+    timeout-minutes: 30
+    outputs:
+      lanes: ${{ steps.plan.outputs.lanes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
+      - name: Point the destination of the gate at the first parent of the commit this event judges
+        # tools/test-gate/src/domain/destination.ts: the gate takes as first parent the reference `destination` of
+        # tools/test-gate/gate.json. In CI the head is the commit GitHub judges (its merge commit for a pull request,
+        # the pushed commit otherwise), so the destination is that commit's first parent, never a fetch of the live
+        # branch, which may have moved since. The reference comes from env, never written into the command.
+        env:
+          AOS_GATE_DESTINATION: refs/remotes/origin/main
+        run: git update-ref "$AOS_GATE_DESTINATION" HEAD^1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Admit the Gate job
+        id: runtime
+        run: ./aos -- node tools/runtime/gate-job.mjs capture
+
+      - name: Install (lockfile, scripts disabled)
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- npm ci --ignore-scripts
+
+      - name: Plan the mutation lanes
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts lanes
+
+      - name: Announce the lanes to the matrix
+        id: plan
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs announce
+
+  gate-linux-lane:
+    name: gate-linux-lane-${{ matrix.lane }}
+    needs: gate-linux-plan
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: ${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}
+    uses: ./.github/workflows/gate-lane.yml
+    with:
+      lane: ${{ matrix.lane }}
+
+  gate-linux:
+    name: gate-linux
+    runs-on: ubuntu-24.04
+    env:
+      AOS_GATE_JOB: gate-linux
+    needs: [gate-linux-cucumber, gate-linux-plan, gate-linux-lane]
+    if: ${{ always() }}
+    steps:
+      - name: Require all producers
+        id: admission
+        env:
+          CUCUMBER_RESULT: ${{ needs.gate-linux-cucumber.result }}
+          PLAN_RESULT: ${{ needs.gate-linux-plan.result }}
+          LANES_RESULT: ${{ needs.gate-linux-lane.result }}
+        # A plan job that failed or was cancelled leaves the lanes skipped: every result but success is red here.
+        run: test "$CUCUMBER_RESULT" = success && test "$PLAN_RESULT" = success && test "$LANES_RESULT" = success
+
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
+      - name: Point the destination of the gate at the first parent of the commit this event judges
+        # tools/test-gate/src/domain/destination.ts: the gate takes as first parent the reference `destination` of
+        # tools/test-gate/gate.json. In CI the head is the commit GitHub judges (its merge commit for a pull request,
+        # the pushed commit otherwise), so the destination is that commit's first parent, never a fetch of the live
+        # branch, which may have moved since. The reference comes from env, never written into the command.
+        env:
+          AOS_GATE_DESTINATION: refs/remotes/origin/main
+        run: git update-ref "$AOS_GATE_DESTINATION" HEAD^1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Admit the Gate job
+        id: runtime
+        run: ./aos -- node tools/runtime/gate-job.mjs capture
+
+      - name: Install (lockfile, scripts disabled)
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- npm ci --ignore-scripts
+
+      - name: Derive the mutation plan again from this checkout
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts lanes
+
+      - name: Fetch reports from the effective producer jobs
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: sh tools/runtime/gate-job.sh -- sh tools/test-gate/fetch-ci-artifacts.sh
+
+      - name: Base of the count (artifact of the last green main run)
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: sh tools/runtime/gate-job.sh -- sh tools/test-gate/fetch-gate-base.sh linux
+
+      - name: Bind the Gate plan to this checkout
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/main.ts plan --job linux
+
+      - name: Verify and collect independent replay lots
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+          # What the plan job announced, compared with the plan of this job and never read as one. Through env only.
+          AOS_ANNOUNCED_LANES: ${{ needs.gate-linux-plan.outputs.lanes }}
+        run: sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts collect "$AOS_ANNOUNCED_LANES"
+
+      - name: Gate
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+          AOS_CUCUMBER_SHARDS: '2'
+        run: sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/main.ts check --job linux
+
+      - name: Verify the report tree for upload
+        id: exports
+        if: always() && steps.runtime.outcome == 'success'
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs publish
+
+      - name: Upload reports
+        if: ${{ always() && steps.admission.outcome == 'success' && steps.exports.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gate-reports-linux
+          path: ${{ steps.exports.outputs.reports }}/
+          if-no-files-found: warn
+
+      - name: Upload base for the next run
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gate-base-linux
+          path: ${{ steps.exports.outputs.reports }}/gate-base.json
+          if-no-files-found: error
+
+  gate-macos:
+    name: gate-macos
+    # Pinned image: macos-latest moves without notice. The green runs of 2026-11-04 ran macos-26-arm64 (macOS 26.6.2).
+    runs-on: macos-26
+    env:
+      AOS_GATE_JOB: gate-macos
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
+      - name: Point the destination of the gate at the first parent of the commit this event judges
+        # tools/test-gate/src/domain/destination.ts: the gate takes as first parent the reference `destination` of
+        # tools/test-gate/gate.json. In CI the head is the commit GitHub judges (its merge commit for a pull request,
+        # the pushed commit otherwise), so the destination is that commit's first parent, never a fetch of the live
+        # branch, which may have moved since. The reference comes from env, never written into the command.
+        env:
+          AOS_GATE_DESTINATION: refs/remotes/origin/main
+        run: git update-ref "$AOS_GATE_DESTINATION" HEAD^1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      # features/sandbox/ needs no Postgres: none is installed, a @postgres scenario landing there fails visibly.
+      - name: Install the pinned host Node for admission
+        run: |
+          bin=/opt/hostedtoolcache/node/26.11.1/arm64/bin
+          sdk=${RUNNER_TOOL_CACHE:?}/node/26.11.1/arm64/bin/node
+          test "$(command -v node)" -ef "$sdk"
+          test "$("$sdk" --version)" = "v$(cat "$GITHUB_WORKSPACE/.nvmrc")"
+          sudo install -d -m 0755 "$bin"
+          test "$sdk" -ef "$bin/node" || sudo install -m 0755 "$sdk" "$bin/node"
+
+      - name: Admit the Gate job
+        id: runtime
+        run: ./aos -- node tools/runtime/gate-job.mjs capture
+
+      - name: Install (lockfile, scripts disabled)
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- npm ci --ignore-scripts
+
+      - name: Base of the count (artifact of the last green main run)
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: sh tools/runtime/gate-job.sh -- sh tools/test-gate/fetch-gate-base.sh macos
+
+      - name: Gate
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- npm run gate -- --job macos
+
+      - name: Verify the report tree for upload
+        id: exports
+        if: always() && steps.runtime.outcome == 'success'
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs publish
+
+      - name: Upload reports
+        if: always() && steps.exports.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gate-reports-macos
+          path: ${{ steps.exports.outputs.reports }}/
+          if-no-files-found: warn
+
+      - name: Upload base for the next run
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gate-base-macos
+          path: ${{ steps.exports.outputs.reports }}/gate-base.json
+          if-no-files-found: error

@@ -12,6 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { isDeepStrictEqual } from 'node:util';
 import { basename, dirname, join } from 'node:path';
 import { parse, stringify } from 'yaml';
 import { z } from 'zod';
@@ -45,6 +46,7 @@ const WorkflowSchema = z.object({
         permissions: z.unknown().optional(),
         secrets: z.unknown().optional(),
         strategy: z.unknown().optional(),
+        outputs: z.record(z.string(), z.string()).optional(),
         uses: z.string().optional(),
         with: z.record(z.string(), z.unknown()).optional(),
         'runs-on': z.unknown().optional(),
@@ -97,6 +99,30 @@ function assertCheckoutWithoutCredentials(text: string): void {
 }
 
 /**
+ * The two entries of the gate, and the triggers of each (docs/infrastructure.md, "The two entries of the gate").
+ * gate.yml is the pull-request entry: `pull_request` alone, without a filter, so that every run of it has the number
+ * of a pull request. gate-push.yml is the push entry: `main` and the trial branches of the delivery, nothing else.
+ */
+export const GATE_ENTRIES: Record<string, (on: Record<string, unknown>, file: string) => void> = {
+  'gate.yml': (on, file) => {
+    assert.ok(
+      isDeepStrictEqual(Object.keys(on), ['pull_request']),
+      `${file} is triggered by pull_request alone`,
+    );
+    assert.ok(
+      on['pull_request'] === null || isDeepStrictEqual(on['pull_request'], {}),
+      `the pull_request trigger of ${file} has no filter`,
+    );
+  },
+  'gate-push.yml': (on, file) => {
+    assert.ok(
+      isDeepStrictEqual(on, { push: { branches: ['main', 'sentinel/gate-1a-*'] } }),
+      `${file} is triggered by a push to main or to a trial branch alone`,
+    );
+  },
+};
+
+/**
  * The runner images a job may name: each with its version. A label such as `ubuntu-latest` moves to another image
  * without a commit of this repository (docs.github.com, "GitHub-hosted runners": the `-latest` labels), and what a
  * job finds installed moves with it: on 26 November 2026 it gave Ubuntu 26.04 with bubblewrap to two workflows while
@@ -140,42 +166,155 @@ function assertNamedImages(text: string): void {
   }
 }
 
-function assertGate(text: string): void {
+/** A validator for assert.throws: an assertion of the rule whose first line is the refusal named. */
+function refusedFor(refusal: RegExp): (error: unknown) => boolean {
+  return (error) =>
+    error instanceof assert.AssertionError && refusal.test(error.message.split('\n')[0] ?? '');
+}
+
+function assertGate(text: string, file: string): void {
   const doc = workflow(text);
   assert.ok(typeof doc.on === 'object' && !Array.isArray(doc.on), 'on is a mapping');
-  assert.ok('pull_request' in doc.on, 'gate.yml has the pull_request trigger');
-  assert.ok(!('pull_request_target' in doc.on), 'gate.yml must not use pull_request_target');
-  assert.deepEqual(doc.permissions, { contents: 'read', actions: 'read' });
-  assert.ok(!text.includes('secrets.'), 'gate.yml must not use a secret');
-  assert.deepEqual(Object.keys(doc.jobs).sort(), [
-    'gate-linux',
-    'gate-linux-cucumber',
-    'gate-linux-lane',
-    'gate-macos',
-  ]);
-  assert.deepEqual(doc.jobs['gate-linux']?.needs, ['gate-linux-cucumber', 'gate-linux-lane']);
-  assert.deepEqual(doc.jobs['gate-linux-cucumber']?.strategy, {
-    'fail-fast': false,
-    matrix: { shard: [1, 2] },
-  });
+  const triggers = GATE_ENTRIES[file];
+  assert.ok(triggers !== undefined, `${file} is not an entry of the gate`);
+  triggers(doc.on, file);
+  assert.deepEqual(
+    doc.permissions,
+    { contents: 'read', actions: 'read' },
+    `the permissions of ${file} are not contents: read and actions: read`,
+  );
+  assert.ok(!text.includes('secrets.'), `${file} must not use a secret`);
+  assert.deepEqual(
+    Object.keys(doc.jobs).sort(),
+    ['gate-linux', 'gate-linux-cucumber', 'gate-linux-lane', 'gate-linux-plan', 'gate-macos'],
+    `the jobs of ${file} are not the five jobs of the gate`,
+  );
+  const judge = doc.jobs['gate-linux'];
+  assert.deepEqual(
+    judge?.needs,
+    ['gate-linux-cucumber', 'gate-linux-plan', 'gate-linux-lane'],
+    'the judge does not need the shards, the plan and the lanes',
+  );
+  // The plan job announces the lanes; nothing may skip it, and nothing may let it fail unseen.
+  const plan = doc.jobs['gate-linux-plan'];
+  const announced = '${{ needs.gate-linux-plan.outputs.lanes }}';
+  assert.equal(plan?.if, undefined, 'the plan job has a condition');
+  assert.equal(plan?.needs, undefined, 'the plan job needs another job');
+  assert.equal(plan?.['runs-on'], 'ubuntu-24.04', 'the plan job does not run on ubuntu-24.04');
+  assert.deepEqual(
+    plan?.outputs,
+    { lanes: '${{ steps.plan.outputs.lanes }}' },
+    'the plan job does not output the lanes of its step plan',
+  );
+  assert.ok(!text.includes('continue-on-error'), `${file} must not let a job or a step fail unseen`);
+  const planSteps = plan?.steps ?? [];
+  assert.equal(planSteps.at(-1)?.id, 'plan', 'the last step of the plan job is not the step plan');
+  assert.equal(
+    planSteps.at(-2)?.run,
+    'sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts lanes',
+    'the plan job does not derive the plan before it announces it',
+  );
+  assert.equal(
+    planSteps.at(-1)?.run,
+    'sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs announce',
+    'the step plan does not announce the lanes',
+  );
+  for (const step of planSteps) assert.equal(step.if, undefined, 'a step of the plan job has a condition');
+  assert.equal(
+    planSteps.filter(({ id }) => id === 'plan').length,
+    1,
+    'the plan job has more than one step plan',
+  );
+  // No expression is written into a command: what a job announces reaches a step through its environment.
+  for (const job of Object.values(doc.jobs))
+    for (const { run } of job.steps)
+      assert.ok(!(run ?? '').includes('${{'), `${file}: expression in a command`);
+  assert.deepEqual(
+    doc.jobs['gate-linux-cucumber']?.strategy,
+    {
+      'fail-fast': false,
+      matrix: { shard: [1, 2] },
+    },
+    'the shards are not a matrix of two',
+  );
   const lane = doc.jobs['gate-linux-lane'];
-  assert.deepEqual(lane?.strategy, {
-    'fail-fast': false,
-    matrix: { lane: Array.from({ length: 16 }, (_, i) => i + 1) },
-  });
-  assert.equal(lane?.uses, './.github/workflows/gate-lane.yml');
-  assert.deepEqual(lane?.with, { lane: '${{ matrix.lane }}' });
-  assert.equal(doc.jobs['gate-linux']?.if, '${{ always() }}');
+  // The lanes are the plan, never a list of the workflow: no lane starts that the plan does not hold.
+  assert.equal(lane?.needs, 'gate-linux-plan', 'the lanes do not need the plan job alone');
+  assert.equal(lane?.if, undefined, 'the lanes have a condition');
+  assert.deepEqual(
+    lane?.strategy,
+    {
+      'fail-fast': false,
+      matrix: { lane: '${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}' },
+    },
+    'the matrix of the lanes is not the list the plan announces',
+  );
+  assert.equal(lane?.uses, './.github/workflows/gate-lane.yml', 'the lanes do not call gate-lane.yml');
+  assert.deepEqual(
+    lane?.with,
+    { lane: '${{ matrix.lane }}' },
+    'the lanes do not give gate-lane.yml their lane',
+  );
+  assert.equal(doc.jobs['gate-linux']?.if, '${{ always() }}', 'the judge does not always run');
   const linuxSteps = doc.jobs['gate-linux']?.steps ?? [];
-  assert.equal(linuxSteps[0]?.id, 'admission');
-  assert.equal(linuxSteps[0]?.name, 'Require all producers');
+  assert.equal(linuxSteps[0]?.id, 'admission', 'the first step of the judge is not the admission');
+  assert.equal(
+    linuxSteps[0]?.name,
+    'Require all producers',
+    'the admission is not named Require all producers',
+  );
+  assert.deepEqual(
+    linuxSteps[0]?.env,
+    {
+      CUCUMBER_RESULT: '${{ needs.gate-linux-cucumber.result }}',
+      PLAN_RESULT: '${{ needs.gate-linux-plan.result }}',
+      LANES_RESULT: '${{ needs.gate-linux-lane.result }}',
+    },
+    'the admission does not read the results of the shards, the plan and the lanes',
+  );
+  assert.equal(
+    linuxSteps[0]?.run,
+    'test "$CUCUMBER_RESULT" = success && test "$PLAN_RESULT" = success && test "$LANES_RESULT" = success',
+    'the admission does not require the success of the shards, the plan and the lanes',
+  );
+  assert.equal(linuxSteps[0]?.if, undefined, 'the admission has a condition');
+  // The judge derives the plan from its own checkout before it downloads, and judges on that plan alone.
+  const hosted = 'sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts ';
+  const at = (name: string) => linuxSteps.findIndex((step) => step.name === name);
+  const derive = at('Derive the mutation plan again from this checkout');
+  const fetch = at('Fetch reports from the effective producer jobs');
+  const collect = at('Verify and collect independent replay lots');
+  const verdict = at('Gate');
+  assert.ok(
+    0 < derive && derive < fetch && fetch < collect && collect < verdict,
+    `${file}: order of the judge`,
+  );
+  assert.equal(linuxSteps[derive]?.run, hosted + 'lanes', 'the judge does not derive the plan again');
+  assert.equal(
+    linuxSteps[collect]?.run,
+    hosted + 'collect "$AOS_ANNOUNCED_LANES"',
+    'the judge does not collect against the announced plan',
+  );
+  assert.equal(
+    linuxSteps[collect]?.env?.['AOS_ANNOUNCED_LANES'],
+    announced,
+    'the judge does not read the announced plan from the plan job',
+  );
+  for (const index of [derive, fetch, collect, verdict])
+    assert.equal(linuxSteps[index]?.if, undefined, 'a step of the judge has a condition');
+  assert.equal(
+    linuxSteps.filter(({ run }) => (run ?? '').startsWith(hosted)).length,
+    2,
+    'the judge runs hosted.ts for more than deriving and collecting',
+  );
   assert.equal(
     linuxSteps.find(({ name }) => name === 'Upload reports')?.if,
     '$' + "{{ always() && steps.admission.outcome == 'success' && steps.exports.outcome == 'success' }}",
+    'the reports are uploaded on another condition',
   );
   for (const [id, job] of Object.entries(doc.jobs)) {
-    assert.equal(job.permissions, undefined);
-    assert.equal(job.secrets, undefined);
+    assert.equal(job.permissions, undefined, `the job ${id} sets its own permissions`);
+    assert.equal(job.secrets, undefined, `the job ${id} receives secrets`);
     assert.equal(
       job.name,
       id === 'gate-linux-cucumber'
@@ -183,10 +322,11 @@ function assertGate(text: string): void {
         : id === 'gate-linux-lane'
           ? id + '-${{ matrix.lane }}'
           : id,
+      `the job ${id} has another name`,
     );
   }
   for (const step of Object.values(doc.jobs).flatMap((job) => job.steps)) {
-    assert.ok(!('cache' in (step.with ?? {})), 'gate.yml must not use a cache');
+    assert.ok(!('cache' in (step.with ?? {})), `${file} must not use a cache`);
     if (step.uses?.startsWith('actions/checkout@') === true) {
       assert.equal(step.with?.['fetch-depth'], 2, 'checkout with fetch-depth: 2');
     }
@@ -196,8 +336,12 @@ function assertGate(text: string): void {
 function assertGateLane(text: string): void {
   const doc = workflow(text);
   assert.deepEqual(doc.on, { workflow_call: { inputs: { lane: { type: 'number', required: true } } } });
-  assert.deepEqual(doc.permissions, { contents: 'read', actions: 'read' });
-  assert.ok(!text.includes('secrets.'));
+  assert.deepEqual(
+    doc.permissions,
+    { contents: 'read', actions: 'read' },
+    'the permissions of gate-lane.yml are not contents: read and actions: read',
+  );
+  assert.ok(!text.includes('secrets.'), 'gate-lane.yml must not use a secret');
   assert.deepEqual(Object.keys(doc.jobs).sort(), ['mutation', 'replay']);
   assert.equal(doc.jobs['mutation']?.needs, undefined);
   assert.equal(doc.jobs['replay']?.needs, 'mutation');
@@ -205,8 +349,8 @@ function assertGateLane(text: string): void {
   assertNpmCiSafe(text);
   assertCheckoutWithoutCredentials(text);
   for (const [id, job] of Object.entries(doc.jobs)) {
-    assert.equal(job.permissions, undefined);
-    assert.equal(job.secrets, undefined);
+    assert.equal(job.permissions, undefined, `the job ${id} sets its own permissions`);
+    assert.equal(job.secrets, undefined, `the job ${id} receives secrets`);
     assert.equal(job.name, id);
     assert.equal(job['runs-on'], 'ubuntu-24.04');
     for (const step of job.steps) {
@@ -285,6 +429,10 @@ Given('the committed workflow {string}', function (name: string) {
 
 const text = (world: Parameters<typeof stored>[0]): string => stored<Loaded>(world, 'workflow').text;
 
+/** The file name of the loaded workflow: what tells one entry of the gate from the other. */
+const file = (world: Parameters<typeof stored>[0]): string =>
+  basename(stored<Loaded>(world, 'workflow').path);
+
 Then('every action it uses is pinned by a commit SHA', function () {
   assertPinned(text(this));
 });
@@ -354,18 +502,147 @@ Then('a copy of the workflow whose job runs {} is rejected', function (kind: str
 });
 
 Then('it satisfies the gate workflow rules', function () {
-  assertGate(text(this));
+  assertGate(text(this), file(this));
 });
 
 Then('Gate jobs reject explicit secrets and permissions', function () {
   const original = text(this);
-  const verify = original.includes('workflow_call:') ? assertGateLane : assertGate;
-  for (const setting of ['secrets: inherit', 'permissions: write-all']) {
+  const entry = file(this);
+  const verify = original.includes('workflow_call:')
+    ? assertGateLane
+    : (source: string) => assertGate(source, entry);
+  for (const [setting, refusal] of [
+    ['secrets: inherit', /^the job \S+ receives secrets$/],
+    ['permissions: write-all', /^the job \S+ sets its own permissions$/],
+  ] as const) {
     const edited = original.replace(/^(    name: .+)$/m, '$1\n    ' + setting);
     assert.notEqual(edited, original);
-    assert.throws(() => verify(edited));
+    assert.throws(() => verify(edited), refusedFor(refusal));
   }
 });
+
+Then('a gate workflow that starts or judges lanes outside the plan it derives is rejected', function () {
+  const original = text(this);
+  const file = stored<Loaded>(this, 'workflow').path.split('/').at(-1) as string;
+  assertGate(original, file);
+  const edits: [string, string, RegExp][] = [
+    [
+      'lane: ${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}',
+      'lane: [1, 2, 3]',
+      /^the matrix of the lanes is not the list the plan announces$/,
+    ],
+    [
+      'lane: ${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}',
+      "lane: ${{ fromJSON('[1]') }}",
+      /^the matrix of the lanes is not the list the plan announces$/,
+    ],
+    ['    needs: gate-linux-plan\n', '', /^the lanes do not need the plan job alone$/],
+    [
+      'needs: [gate-linux-cucumber, gate-linux-plan, gate-linux-lane]',
+      'needs: [gate-linux-cucumber, gate-linux-lane]',
+      /^the judge does not need the shards, the plan and the lanes$/,
+    ],
+    [
+      ' && test "$PLAN_RESULT" = success',
+      '',
+      /^the admission does not require the success of the shards, the plan and the lanes$/,
+    ],
+    [
+      ' && test "$LANES_RESULT" = success',
+      '',
+      /^the admission does not require the success of the shards, the plan and the lanes$/,
+    ],
+    [
+      'test "$PLAN_RESULT" = success',
+      'test "$PLAN_RESULT" != failure',
+      /^the admission does not require the success of the shards, the plan and the lanes$/,
+    ],
+    [
+      'PLAN_RESULT: ${{ needs.gate-linux-plan.result }}',
+      'PLAN_RESULT: success',
+      /^the admission does not read the results of the shards, the plan and the lanes$/,
+    ],
+    [
+      'LANES_RESULT: ${{ needs.gate-linux-lane.result }}',
+      'LANES_RESULT: ${{ needs.gate-linux-plan.result }}',
+      /^the admission does not read the results of the shards, the plan and the lanes$/,
+    ],
+    [
+      'hosted.ts collect "$AOS_ANNOUNCED_LANES"',
+      'hosted.ts collect',
+      /^the judge does not collect against the announced plan$/,
+    ],
+    [
+      'hosted.ts collect "$AOS_ANNOUNCED_LANES"',
+      'hosted.ts collect "${{ needs.gate-linux-plan.outputs.lanes }}"',
+      /: expression in a command$/,
+    ],
+    [
+      'AOS_ANNOUNCED_LANES: ${{ needs.gate-linux-plan.outputs.lanes }}',
+      "AOS_ANNOUNCED_LANES: '[1]'",
+      /^the judge does not read the announced plan from the plan job$/,
+    ],
+    [
+      '      lanes: ${{ steps.plan.outputs.lanes }}',
+      "      lanes: '[1]'",
+      /^the plan job does not output the lanes of its step plan$/,
+    ],
+    [
+      'node tools/test-gate/report-files.mjs announce',
+      'echo "lanes=[1]" >> "$GITHUB_OUTPUT"',
+      /^the step plan does not announce the lanes$/,
+    ],
+    [
+      '    if: ${{ always() }}',
+      "    if: ${{ needs.gate-linux-plan.result == 'success' }}",
+      /^the judge does not always run$/,
+    ],
+    [
+      '    name: gate-linux-plan\n',
+      '    name: gate-linux-plan\n    continue-on-error: true\n',
+      / must not let a job or a step fail unseen$/,
+    ],
+    [
+      '    name: gate-linux-plan\n',
+      "    name: gate-linux-plan\n    if: github.event_name == 'push'\n",
+      /^the plan job has a condition$/,
+    ],
+    [
+      '      - name: Derive the mutation plan again from this checkout\n',
+      '      - name: Take the announced plan\n',
+      /: order of the judge$/,
+    ],
+  ];
+  // Each edit is refused for its own reason: an edit refused for another reason proves nothing of the rule it breaks.
+  for (const [from, to, refusal] of edits) {
+    const edited = original.replace(from, to);
+    assert.notEqual(edited, original, from);
+    assert.throws(() => assertGate(edited, file), refusedFor(refusal), from + ' -> ' + to);
+  }
+  // The judge that derives its plan after the download would download what a producer announced.
+  const derive = original.slice(
+    original.indexOf('      - name: Derive the mutation plan again from this checkout'),
+    original.indexOf('      - name: Fetch reports from the effective producer jobs'),
+  );
+  const moved = original
+    .replace(derive, '')
+    .replace('      - name: Bind the Gate plan', derive + '      - name: Bind the Gate plan');
+  assert.notEqual(moved, original);
+  assert.throws(() => assertGate(moved, file), refusedFor(/: order of the judge$/));
+});
+
+Then(
+  'its Linux admission step, given the results {string}, {string} and {string}, exits {string}',
+  function (cucumber: string, plan: string, lanes: string, outcome: string) {
+    const step = workflow(text(this)).jobs['gate-linux']?.steps[0];
+    assert.equal(step?.id, 'admission');
+    const result = spawnSync('/bin/sh', ['-e', '-c', step?.run as string], {
+      env: { PATH: '/usr/bin:/bin', CUCUMBER_RESULT: cucumber, PLAN_RESULT: plan, LANES_RESULT: lanes },
+      encoding: 'utf8',
+    });
+    assert.equal(result.status === 0 ? 'green' : 'red', outcome, result.stderr);
+  },
+);
 
 Then('it satisfies the live workflow rules', function () {
   assertLive(text(this));
@@ -466,13 +743,39 @@ Then('a workflow with a checkout that keeps its credentials is rejected', functi
 Then('a gate workflow triggered by pull_request_target is rejected', function () {
   const broken = text(this).replace(/^ {2}pull_request:$/m, '  pull_request_target:');
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertGate(broken));
+  assert.throws(
+    () => assertGate(broken, file(this)),
+    refusedFor(/ is triggered by pull_request alone$|^the pull_request trigger of /),
+  );
+});
+
+const PUSH_ENTRY_BREAKS: Record<string, (yaml: string) => string> = {
+  'triggered by pull_request too': (yaml) => yaml.replace(/^on:\n/m, 'on:\n  pull_request:\n'),
+  'triggered by pull_request_target': (yaml) => yaml.replace(/^on:\n/m, 'on:\n  pull_request_target:\n'),
+  'triggered by workflow_dispatch too': (yaml) => yaml.replace(/^on:\n/m, 'on:\n  workflow_dispatch:\n'),
+  'pushed from every branch': (yaml) => yaml.replace(/^ {2}push:\n(?: {4,}.*\n)+/m, '  push:\n'),
+  'pushed from another branch': (yaml) => yaml.replace('      - main\n', '      - main\n      - feat/x\n'),
+  'without the trial branches of the delivery': (yaml) => yaml.replace('      - sentinel/gate-1a-*\n', ''),
+  'without main': (yaml) => yaml.replace('      - main\n', ''),
+};
+
+Then('a push entry of the gate {} is rejected', function (kind: string) {
+  const breakIt = PUSH_ENTRY_BREAKS[kind];
+  assert.ok(breakIt !== undefined, `no broken push entry named "${kind}"`);
+  const broken = breakIt(text(this));
+  assert.notEqual(broken, text(this));
+  // The broken copy still loads as a workflow: it is refused by the rule of the entry, not by its syntax.
+  workflow(broken);
+  assert.throws(
+    () => assertGate(broken, file(this)),
+    /is triggered by a push to main or to a trial branch alone/,
+  );
 });
 
 Then('a gate workflow that uses a secret is rejected', function () {
   const broken = text(this).replace('${{ github.token }}', '${{ secrets.GITHUB_TOKEN }}');
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertGate(broken));
+  assert.throws(() => assertGate(broken, file(this)), refusedFor(/ must not use a secret$/));
 });
 
 Then('a gate workflow with a cache is rejected', function () {
@@ -481,13 +784,16 @@ Then('a gate workflow with a cache is rejected', function () {
     'node-version-file: .nvmrc\n          cache: npm',
   );
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertGate(broken));
+  assert.throws(() => assertGate(broken, file(this)), refusedFor(/ must not use a cache$/));
 });
 
 Then('a gate workflow with broader permissions is rejected', function () {
   const broken = text(this).replace('  actions: read\n', '  actions: write\n');
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertGate(broken));
+  assert.throws(
+    () => assertGate(broken, file(this)),
+    refusedFor(/^the permissions of .* are not contents: read and actions: read$/),
+  );
 });
 
 const provision = 'sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"';
@@ -505,7 +811,7 @@ function assertHostedAdmission(source: string, file: string): void {
       list.every((step) => !step.uses?.startsWith('actions/cache@') && !('cache' in (step.with ?? {}))),
     );
     if (file !== 'bench-sandbox.yml') assert.equal(list[setup]?.with?.['package-manager-cache'], false, id);
-    const isGate = ['gate.yml', 'gate-lane.yml', 'mutation-full.yml'].includes(file);
+    const isGate = ['gate.yml', 'gate-push.yml', 'gate-lane.yml', 'mutation-full.yml'].includes(file);
     const capture = './aos -- node tools/runtime/gate-job.mjs capture';
     const entry = isGate
       ? 'sh tools/runtime/gate-job.sh -- '

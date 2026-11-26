@@ -10,7 +10,31 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Given the delivery command has its required producer only in the preceding attempt
       When I run the delivery command with "step --until ci"
       Then the delivery command exited 0
-      And the delivery command only read the third and second job attempts, in order
+      And the delivery command read only job attempts "3, 2" in order
+
+    Scenario Outline: delivery reads every effective job of a planned family on a partial rerun
+      Given the <groups> delivery command has a <pair> latest pair with an older <result> lane
+      When I run the delivery command with "step --until ci"
+      Then the delivery command exited <exit>
+      And the delivery command read only job attempts "2, 1" in order
+
+      Examples:
+        | groups        | pair     | result  | exit |
+        | planned-only  | split    | success | 0    |
+        | planned-only  | split    | failure | 1    |
+        | planned-only  | complete | failure | 1    |
+        | fixed-first   | split    | success | 0    |
+        | planned-first | split    | success | 0    |
+        | fixed-first   | complete | failure | 1    |
+        | planned-first | complete | failure | 1    |
+
+    Scenario: a short historical attempt cannot hide a failed planned lane from delivery
+      Given the planned-first delivery command has a complete latest pair with an older failure lane
+      And the older delivery attempt returns only one already seen job of three
+      When I run the delivery command with "step --until ci"
+      Then the delivery command exited 3
+      And the delivery command read only job attempts "2, 1" in order
+      And the log of the delivery command holds 0 lines
 
     Scenario: a delivery to its end
       When I run the delivery command with "step"

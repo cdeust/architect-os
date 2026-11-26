@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 6014.5" width="1400" height="6014.5" role="img" aria-labelledby="t d" font-family="Arial">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 6506.5" width="1400" height="6506.5" role="img" aria-labelledby="t d" font-family="Arial">
   <!--
   Typography (SVG units)
   family = Arial
@@ -10,13 +10,13 @@
   legend = 17
   -->
   <title id="t">architect-os: what is ready, and where what comes next will join</title>
-  <desc id="d">The architecture of architect-os in one image, in five parts. Ready marks components implemented in this version. Next marks planned work or pending integration beside the brick it will join. 1. The native gateway authenticates each client on loopback and routes its calls to modules and task workers. The gateway starts the data process and the model broker on standard input and output. Only data holds the database URL. Only the model broker holds the API key. A module calls back with its call ID. A worker can reach only the broker and uses a token scoped to its task. 2. Define reads a validated prd-gen handoff over MCP from the bundle the operator pinned by its SHA-256. Optional ticket estimates and prerequisites reach the approved Step and its host record. The named Spec producer still needs both versioned projections. The admitted planning host can drive a pinned Spec bundle through drafting and independent review and resume from its private journal. Plan accepts the verified Spec proposal or a draft from Claude Code, Codex or Antigravity. It can also import a completed Antigravity exchange. Plan previews one Step. A plain proposal can be materialized with local approval. The independently reviewed Spec projection stops at preview. Step verifies a separate host receipt for its inputs, target tree, launcher, independent reviews and prompt specimens. The host verifies scout citations against repository lines before including them in the Builder brief. The orchestration loop takes a brief, those verified facts, a build session, checks without a model, the replay of the host, reviews that cannot write the worktree and give a status for every approved acceptance criterion, the gate, and a delivery command written to push the same commit to the work branch and then to main, while main now takes pull requests only; after a refusal, the orchestrator writes a new brief; the host writes steps/&lt;name&gt;/ into the worktree. Next, the delivery opens a pull request on the target repository, its body rendered from the record of the Step. Step builds through one typed Builder port with two adapters: Claude Code under SRT, and the pinned Codex 0.170.0 client in a Docker SBX Linux VM for Astra and Sol. On macOS, the real production entry ran both Steps with the real client under an unprivileged user. The native tool wrote the file in the worktree, the SRT checker read it, and the host published a record with the model, effort, client digest and terminal usage. The test processes simulated the identity service and the model responses, and the Claude review was a recorded stream. The subscription is installed once and kept in the host credential store between Steps. The macOS Keychain was exercised by two processes, with one renewal for two concurrent consumers, and a Step without an account stopped with SBX_SIGN_IN_REQUIRED. The VM reaches the Step proxy on the host and the npm registry. A second listening port received nothing and a request outside the route was refused. The open trial is a production Step whose patch the real model chooses on the subscription. The Linux Secret Service store is not yet verified and the monetary cost is unknown. Gemini reviews through the native Google agent outside SBX. The historical Antigravity probe stopped at session creation. Nine earlier single-request trials ran the text-only bench protocol; six provider completions reported 402 tokens. 3. The isolation diagram places the host beside two separate runtimes. SRT isolates production Step sessions and the gateway’s modules and workers in OS processes under five profiles. Docker SBX creates a Linux VM for the native Builder. Its unprivileged native client posts to the Step proxy on the host over HTTP and reaches the npm registry; any other port or destination is refused. The host keeps the subscription in its OS credential store between Steps, renews it and verifies the account. The host meters terminal usage and verifies VM removal. The Builder writes the worktree while the host controls Git metadata. Host Git sources attributes from the empty tree. The fingerprint, Gate and Deliver check for visible nested Git markers before untracked discovery. The Gate lease and Deliver also compare checkout bytes with the commit. The authentication proxy on the host gives the Claude session a scoped token so the credential stays on the host throughout the session. The required ./aos entry checks the marked runtime root and the available space on the root and home filesystems before npm, then records admission in the new run directory. Repository automation uses this entry. All five profiles use private session directories. The host retains Step results and journals under the root and writes raw streams to the run temporary directory. Gate locks each physical checkout, writes to its run reports directory, and retains the checked Linux receipt for Deliver. A canary under the same profile must fail before each command. What each profile opens is the generated image isolation-profiles.svg, held equal to the five profile files by the gate. 4. Five checks before the gate, then the host gate and npm run deliver. In CI, Linux splits the full scenario suite into two shards and checks mutants in sixteen lanes with independent replay. macOS runs the sandbox scenarios. The three Claude workflows of CI run on ubuntu-24.04: each installs its managed settings and proves bubblewrap before the action, which starts only when both steps succeeded. Next: the subscription token, today a repository secret that a same-repository pull request rewriting a workflow receives, given only to the files of main. 5. The evidence desk verifies each DOI at doi.org and matches normalized passages in the supplied full text; the watch of Anthropic compares the public sources the platform relies on with a committed register.</desc>
+  <desc id="d">The architecture of architect-os in one image, in five parts. Ready marks components implemented in this version. Next marks planned work or pending integration beside the brick it will join. 1. The native gateway authenticates each client on loopback and routes its calls to modules and task workers. The gateway starts the data process and the model broker on standard input and output. Only data holds the database URL. Only the model broker holds the API key. A module calls back with its call ID. A worker can reach only the broker and uses a token scoped to its task. 2. Define reads a validated prd-gen handoff over MCP from the bundle the operator pinned by its SHA-256. Optional ticket estimates and prerequisites reach the approved Step and its host record. The named Spec producer still needs both versioned projections. The admitted planning host can drive a pinned Spec bundle through drafting and independent review and resume from its private journal. Plan accepts the verified Spec proposal or a draft from Claude Code, Codex or Antigravity. It can also import a completed Antigravity exchange. Plan previews one Step. A plain proposal can be materialized with local approval. The independently reviewed Spec projection stops at preview. Step verifies a separate host receipt for its inputs, target tree, launcher, independent reviews and prompt specimens. The host verifies scout citations against repository lines before including them in the Builder brief. The orchestration loop takes a brief, those verified facts, a build session, checks without a model, the replay of the host, reviews that cannot write the worktree and give a status for every approved acceptance criterion, the gate, and a delivery command written to push the same commit to the work branch and then to main, while main now takes pull requests only; after a refusal, the orchestrator writes a new brief; the host writes steps/&lt;name&gt;/ into the worktree. Deliver checks Linux and macOS for the candidate commit, verifies the job count and execution IDs for each numbered attempt, and reads every attempt for planned mutation lanes. Each planned family reserves its prefix across the configuration; fixed producers may be shared explicitly. The Linux judge checks the job lists of all attempts and the artifact list of its run before downloading. Next, the delivery opens a pull request on the target repository, its body rendered from the record of the Step.  Next in the loop: three explorations before Plan and the remaining human gates; an issuer of the production receipt that Step requires; and a measure of the duration of the suite, alone and under contention. Step builds through one typed Builder port with two adapters: Claude Code under SRT, and the pinned Codex 0.170.0 client in a Docker SBX Linux VM for Astra and Sol. On macOS, the real production entry ran both Steps with the real client under an unprivileged user. The native tool wrote the file in the worktree, the SRT checker read it, and the host published a record with the model, effort, client digest and terminal usage. The test processes simulated the identity service and the model responses, and the Claude review was a recorded stream. The subscription is installed once and kept in the host credential store between Steps. The macOS Keychain was exercised by two processes, with one renewal for two concurrent consumers, and a Step without an account stopped with SBX_SIGN_IN_REQUIRED. The VM reaches the Step proxy on the host and the npm registry. A second listening port received nothing and a request outside the route was refused. The open trial is a production Step whose patch the real model chooses on the subscription. The Linux Secret Service store is not yet verified and the monetary cost is unknown. Gemini reviews through the native Google agent outside SBX. The historical Antigravity probe stopped at session creation. Nine earlier single-request trials ran the text-only bench protocol; six provider completions reported 402 tokens. 3. The isolation diagram places the host beside two separate runtimes. SRT isolates production Step sessions and the gateway’s modules and workers in OS processes under five profiles. Docker SBX creates a Linux VM for the native Builder. Its unprivileged native client posts to the Step proxy on the host over HTTP and reaches the npm registry; any other port or destination is refused. The host keeps the subscription in its OS credential store between Steps, renews it and verifies the account. The host meters terminal usage and verifies VM removal. The Builder writes the worktree while the host controls Git metadata. Host Git sources attributes from the empty tree. The fingerprint, Gate and Deliver check for visible nested Git markers before untracked discovery. The Gate lease and Deliver also compare checkout bytes with the commit. Fingerprint, Gate and Deliver pass Git pathnames to the guard as bytes, and Host Git takes one closed option set. The authentication proxy on the host gives the Claude session a scoped token so the credential stays on the host throughout the session. The required ./aos entry checks the marked runtime root and the available space on the root and home filesystems before npm, then records admission in the new run directory. Repository automation uses this entry. All five profiles use private session directories. The host retains Step results and journals under the root and writes raw streams to the run temporary directory. Gate locks each physical checkout, writes to its run reports directory, and retains the checked Linux receipt for Deliver. A canary under the same profile must fail before each command. What each profile opens is the generated image isolation-profiles.svg, held equal to the five profile files by the gate. 4. Five checks before the gate, then the host gate and npm run deliver. In CI, two entry workflows with the same jobs serve pull requests and pushes; a new commit of a pull request cancels the run of the commit it supersedes, and a push run is never cancelled that way. Linux splits the full scenario suite into two shards and checks mutants in one to sixteen lanes planned from the commit, with independent replay, and the judge derives the plan again. On the host the gate judges the merge GitHub builds and refuses a destination that is missing, in conflict or not integrated; it walks source directories on disk and refuses links, invalid UTF-8 and Stryker directives without their justified form. The hosted judge uses its read token to retrieve the parent count and list the jobs and artifacts, and checks those lists before it fetches any archive. Next, Deliver binds the run it reads to its workflow, the push event, the trial branch and the SHA together. The three Claude workflows of CI run on ubuntu-24.04: each installs its managed settings and proves bubblewrap before the action, which starts only when both steps succeeded. Next: the subscription token, today a repository secret that a same-repository pull request rewriting a workflow receives, given only to the files of main. The Claude review runs the action v1.0.290 in its official mode, without a shell, under a hook that guards its comments, and closes its tracking comment with its verdict; the security review is advisory, and a job without a model posts its findings. main takes pull requests only: its ruleset requires the checks gate-linux and gate-macos with no bypass actor, and the resolver merges a pull request when its gate is green and the Claude review of the same head approves. Fresh inputs are played by hand and are next as a phase of the Step. macOS runs the sandbox scenarios. 5. The evidence desk verifies each DOI at doi.org and matches normalized passages in the supplied full text; the watch of Anthropic compares the public sources the platform relies on with a committed register. The register names 31 sources, 25 of them pages.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#57606a"/></marker>
     <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#cf222e"/></marker>
     <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1a7f37"/></marker>
   </defs>
-  <rect x="0.5" y="0.5" width="1399" height="6013.5" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="0.5" y="0.5" width="1399" height="6505.5" rx="10" fill="#ffffff" stroke="#d0d7de"/>
   <text x="24" y="40" data-type-role="diagram-title" font-size="32" font-weight="600" fill="#1f2328">architect-os: what is ready, and where what comes next will join</text>
   <rect x="24" y="49" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
   <text x="56" y="67" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
@@ -164,7 +164,7 @@
   <text x="281" y="1028" data-type-role="brick-name" font-size="20" fill="#1a7f37" font-weight="600">Implemented</text>
   <text x="863" y="1028" data-type-role="brick-name" font-size="20" fill="#0969da" font-weight="600">Extensions and qualification</text>
 <g id="loop-brief" role="group" aria-labelledby="phase-brief">
-  <rect x="24" y="1052" width="1352" height="215" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="24" y="1052" width="1352" height="313" rx="6" fill="#ffffff" stroke="#d0d7de"/>
   <rect x="36" y="1066" width="216" height="187" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
   <text x="50" y="1101" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-brief">1 · Brief</text>
   <text x="50" y="1132" data-type-role="brick-text" font-size="17" fill="#57606a">Host · orchestrator</text>
@@ -201,265 +201,297 @@
   <text x="868" y="1220" data-type-role="brick-text" font-size="17" fill="#57606a">Record recurring errors in a bounded, versioned</text>
   <text x="868" y="1244" data-type-role="brick-text" font-size="17" fill="#57606a">history. Turn repeat defects into checks.</text>
 </g>
+<g role="group" aria-label="Explorations before Plan · next">
+  <rect x="854" y="1262" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="1290" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Explorations before Plan</text>
+  <rect x="1277" y="1270" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="1289" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="1318" data-type-role="brick-text" font-size="17" fill="#57606a">Three explorations before Plan, and the remaining</text>
+  <text x="868" y="1342" data-type-role="brick-text" font-size="17" fill="#57606a">human gates of the full cycle.</text>
+</g>
 </g>
 <g id="loop-scouts" role="group" aria-labelledby="phase-scouts">
-  <rect x="24" y="1293" width="1352" height="158" rx="6" fill="#ffffff" stroke="#d0d7de"/>
-  <rect x="36" y="1307" width="216" height="130" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="50" y="1342" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-scouts">2 · Scouts</text>
-  <text x="50" y="1373" data-type-role="brick-text" font-size="17" fill="#57606a">Step · read-only srt</text>
-  <rect x="50" y="1389" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="1408" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1330" data-type-role="brick-text" font-size="17" fill="#57606a">One question per scout. Each cites file paths and lines.</text>
+  <rect x="24" y="1391" width="1352" height="158" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="36" y="1405" width="216" height="130" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <text x="50" y="1440" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-scouts">2 · Scouts</text>
+  <text x="50" y="1471" data-type-role="brick-text" font-size="17" fill="#57606a">Step · read-only srt</text>
+  <rect x="50" y="1487" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="85" y="1506" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1428" data-type-role="brick-text" font-size="17" fill="#57606a">One question per scout. Each cites file paths and lines.</text>
 <g role="group" aria-label="Verified citations · ready">
-  <rect x="269" y="1348" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="1376" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Verified citations</text>
-  <rect x="757" y="1356" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="1375" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1404" data-type-role="brick-text" font-size="17" fill="#57606a">The host rereads the source. Only verified facts enter</text>
-  <text x="283" y="1428" data-type-role="brick-text" font-size="17" fill="#57606a">the Builder brief.</text>
+  <rect x="269" y="1446" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
+  <text x="283" y="1474" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Verified citations</text>
+  <rect x="757" y="1454" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="792" y="1473" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1502" data-type-role="brick-text" font-size="17" fill="#57606a">The host rereads the source. Only verified facts enter</text>
+  <text x="283" y="1526" data-type-role="brick-text" font-size="17" fill="#57606a">the Builder brief.</text>
 </g>
 <g role="group" aria-label="Prompt specimens · next">
-  <rect x="854" y="1307" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1335" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Prompt specimens</text>
-  <rect x="1277" y="1315" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="1334" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1363" data-type-role="brick-text" font-size="17" fill="#57606a">Replay the launcher prompts on examples when a</text>
-  <text x="868" y="1387" data-type-role="brick-text" font-size="17" fill="#57606a">prompt or its model changes.</text>
+  <rect x="854" y="1405" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="1433" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Prompt specimens</text>
+  <rect x="1277" y="1413" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="1432" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="1461" data-type-role="brick-text" font-size="17" fill="#57606a">Replay the launcher prompts on examples when a</text>
+  <text x="868" y="1485" data-type-role="brick-text" font-size="17" fill="#57606a">prompt or its model changes.</text>
 </g>
 </g>
 <g id="loop-build" role="group" aria-labelledby="phase-build">
-  <rect x="24" y="1477" width="1352" height="215" rx="6" fill="#ffffff" stroke="#d0d7de"/>
-  <rect x="36" y="1491" width="216" height="187" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="50" y="1526" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-build">3 · Build</text>
-  <text x="50" y="1557" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Code · SRT</text>
-  <text x="50" y="1582" data-type-role="brick-text" font-size="17" fill="#57606a">Codex · Docker SBX</text>
-  <rect x="50" y="1598" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="1617" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1514" data-type-role="brick-text" font-size="17" fill="#57606a">Step checks host evidence before Builder writes.</text>
-  <text x="283" y="1538" data-type-role="brick-text" font-size="17" fill="#57606a">Git metadata and the commit belong to the host.</text>
-  <text x="283" y="1566" data-type-role="brick-text" font-size="17" fill="#57606a">The Builder owns the design, implementation and</text>
-  <text x="283" y="1590" data-type-role="brick-text" font-size="17" fill="#57606a">maintenance of the code it changes.</text>
+  <rect x="24" y="1575" width="1352" height="313" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="36" y="1589" width="216" height="187" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <text x="50" y="1624" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-build">3 · Build</text>
+  <text x="50" y="1655" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Code · SRT</text>
+  <text x="50" y="1680" data-type-role="brick-text" font-size="17" fill="#57606a">Codex · Docker SBX</text>
+  <rect x="50" y="1696" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="85" y="1715" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1612" data-type-role="brick-text" font-size="17" fill="#57606a">Step checks host evidence before Builder writes.</text>
+  <text x="283" y="1636" data-type-role="brick-text" font-size="17" fill="#57606a">Git metadata and the commit belong to the host.</text>
+  <text x="283" y="1664" data-type-role="brick-text" font-size="17" fill="#57606a">The Builder owns the design, implementation and</text>
+  <text x="283" y="1688" data-type-role="brick-text" font-size="17" fill="#57606a">maintenance of the code it changes.</text>
 <g id="build-sbx-integration" role="group" aria-label="Docker SBX production Builder · ready">
-  <text x="283" y="1626" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Docker SBX · production Builder</text>
-  <rect x="689" y="1606" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="724" y="1625" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1652" data-type-role="brick-text" font-size="17" fill="#57606a">Astra and Sol run the pinned native Codex client in a VM.</text>
-  <text x="283" y="1676" data-type-role="brick-text" font-size="17" fill="#57606a">The Step proxy meters it; record.json holds the receipt.</text>
+  <text x="283" y="1724" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Docker SBX · production Builder</text>
+  <rect x="689" y="1704" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="724" y="1723" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="1750" data-type-role="brick-text" font-size="17" fill="#57606a">Astra and Sol run the pinned native Codex client in a VM.</text>
+  <text x="283" y="1774" data-type-role="brick-text" font-size="17" fill="#57606a">The Step proxy meters it; record.json holds the receipt.</text>
 </g>
 <g role="group" aria-label="Independent scenarios · next">
-  <rect x="854" y="1491" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1519" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Independent scenarios</text>
-  <rect x="1277" y="1499" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="1518" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1547" data-type-role="brick-text" font-size="17" fill="#57606a">A separate session writes scenarios the Builder</text>
-  <text x="868" y="1571" data-type-role="brick-text" font-size="17" fill="#57606a">can only read.</text>
-</g>
-<g id="build-sbx-trial" role="group" aria-label="Subscription patch trial · next">
   <rect x="854" y="1589" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1617" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Subscription patch trial</text>
+  <text x="868" y="1617" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Independent scenarios</text>
   <rect x="1277" y="1597" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
   <text x="1312" y="1616" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1645" data-type-role="brick-text" font-size="17" fill="#57606a">A patch chosen by the real model, on the subscription.</text>
-  <text x="868" y="1669" data-type-role="brick-text" font-size="17" fill="#57606a">Linux Secret Service unverified; cost unknown.</text>
+  <text x="868" y="1645" data-type-role="brick-text" font-size="17" fill="#57606a">A separate session writes scenarios the Builder</text>
+  <text x="868" y="1669" data-type-role="brick-text" font-size="17" fill="#57606a">can only read.</text>
+</g>
+<g id="build-sbx-trial" role="group" aria-label="Subscription patch trial · next">
+  <rect x="854" y="1687" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="1715" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Subscription patch trial</text>
+  <rect x="1277" y="1695" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="1714" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="1743" data-type-role="brick-text" font-size="17" fill="#57606a">A patch chosen by the real model, on the subscription.</text>
+  <text x="868" y="1767" data-type-role="brick-text" font-size="17" fill="#57606a">Linux Secret Service unverified; cost unknown.</text>
+</g>
+<g role="group" aria-label="Production receipt issuer · next">
+  <rect x="854" y="1785" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="1813" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Production receipt issuer</text>
+  <rect x="1277" y="1793" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="1812" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="1841" data-type-role="brick-text" font-size="17" fill="#57606a">Issue the host evidence a production Step requires;</text>
+  <text x="868" y="1865" data-type-role="brick-text" font-size="17" fill="#57606a">no production issuer exists yet.</text>
 </g>
 </g>
 <g id="loop-checks" role="group" aria-labelledby="phase-checks">
-  <rect x="24" y="1718" width="1352" height="182" rx="6" fill="#ffffff" stroke="#d0d7de"/>
-  <rect x="36" y="1732" width="216" height="154" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="50" y="1767" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-checks">4 · Checks</text>
-  <text x="50" y="1798" data-type-role="brick-text" font-size="17" fill="#57606a">Step · checker srt</text>
-  <rect x="50" y="1814" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="1833" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="50" y="1879" data-type-role="brick-text" font-size="17" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
-  <text x="283" y="1755" data-type-role="brick-text" font-size="17" fill="#57606a">Run the configured commands in order, without a model,</text>
-  <text x="283" y="1779" data-type-role="brick-text" font-size="17" fill="#57606a">network or worktree writes.</text>
+  <rect x="24" y="1914" width="1352" height="182" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="36" y="1928" width="216" height="154" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <text x="50" y="1963" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-checks">4 · Checks</text>
+  <text x="50" y="1994" data-type-role="brick-text" font-size="17" fill="#57606a">Step · checker srt</text>
+  <rect x="50" y="2010" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="85" y="2029" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="50" y="2075" data-type-role="brick-text" font-size="17" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
+  <text x="283" y="1951" data-type-role="brick-text" font-size="17" fill="#57606a">Run the configured commands in order, without a model,</text>
+  <text x="283" y="1975" data-type-role="brick-text" font-size="17" fill="#57606a">network or worktree writes.</text>
 <g role="group" aria-label="Check reports · ready">
-  <rect x="269" y="1797" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="1825" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Check reports</text>
-  <rect x="757" y="1805" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="1824" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1853" data-type-role="brick-text" font-size="17" fill="#57606a">Exit status, duration and output tail reach each review</text>
-  <text x="283" y="1877" data-type-role="brick-text" font-size="17" fill="#57606a">brief. The first failed check stops Step.</text>
+  <rect x="269" y="1993" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
+  <text x="283" y="2021" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Check reports</text>
+  <rect x="757" y="2001" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="792" y="2020" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="2049" data-type-role="brick-text" font-size="17" fill="#57606a">Exit status, duration and output tail reach each review</text>
+  <text x="283" y="2073" data-type-role="brick-text" font-size="17" fill="#57606a">brief. The first failed check stops Step.</text>
 </g>
 <g role="group" aria-label="Cost of review · next">
-  <rect x="854" y="1732" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1760" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Cost of review</text>
-  <rect x="1277" y="1740" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="1759" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1788" data-type-role="brick-text" font-size="17" fill="#57606a">Measure how much the checks save in review cost</text>
-  <text x="868" y="1812" data-type-role="brick-text" font-size="17" fill="#57606a">(pilot HR2).</text>
+  <rect x="854" y="1928" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="1956" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Cost of review</text>
+  <rect x="1277" y="1936" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="1955" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="1984" data-type-role="brick-text" font-size="17" fill="#57606a">Measure how much the checks save in review cost</text>
+  <text x="868" y="2008" data-type-role="brick-text" font-size="17" fill="#57606a">(pilot HR2).</text>
 </g>
 </g>
 <g id="loop-replay" role="group" aria-labelledby="phase-replay">
-  <rect x="24" y="1926" width="1352" height="215" rx="6" fill="#ffffff" stroke="#d0d7de"/>
-  <rect x="36" y="1940" width="216" height="187" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="50" y="1975" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-replay">5 · Replay</text>
-  <text x="50" y="2006" data-type-role="brick-text" font-size="17" fill="#57606a">Host · maintainer</text>
-  <rect x="50" y="2022" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="2041" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="1963" data-type-role="brick-text" font-size="17" fill="#57606a">Inspect the diff. Replay the changes with real srt,</text>
-  <text x="283" y="1987" data-type-role="brick-text" font-size="17" fill="#57606a">PostgreSQL and mutation tools as needed.</text>
+  <rect x="24" y="2122" width="1352" height="215" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="36" y="2136" width="216" height="187" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="50" y="2171" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-replay">5 · Replay</text>
+  <text x="50" y="2202" data-type-role="brick-text" font-size="17" fill="#57606a">Host · maintainer</text>
+  <rect x="50" y="2218" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="85" y="2237" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="2159" data-type-role="brick-text" font-size="17" fill="#57606a">Inspect the diff. Replay the changes with real srt,</text>
+  <text x="283" y="2183" data-type-role="brick-text" font-size="17" fill="#57606a">PostgreSQL and mutation tools as needed.</text>
 <g role="group" aria-label="Mutation as a Step phase · next">
-  <rect x="854" y="1940" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="1968" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Mutation as a Step phase</text>
-  <rect x="1277" y="1948" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="1967" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="1996" data-type-role="brick-text" font-size="17" fill="#57606a">Feed survivors from the manual replay into the</text>
-  <text x="868" y="2020" data-type-role="brick-text" font-size="17" fill="#57606a">next brief.</text>
+  <rect x="854" y="2136" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="2164" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Mutation as a Step phase</text>
+  <rect x="1277" y="2144" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="2163" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2192" data-type-role="brick-text" font-size="17" fill="#57606a">Feed survivors from the manual replay into the</text>
+  <text x="868" y="2216" data-type-role="brick-text" font-size="17" fill="#57606a">next brief.</text>
 </g>
 <g role="group" aria-label="Fresh test inputs · next">
-  <rect x="854" y="2038" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2066" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Fresh test inputs</text>
-  <rect x="1277" y="2046" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2065" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2094" data-type-role="brick-text" font-size="17" fill="#57606a">Automate the independent session that invents and</text>
-  <text x="868" y="2118" data-type-role="brick-text" font-size="17" fill="#57606a">checks new inputs.</text>
+  <rect x="854" y="2234" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="2262" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Fresh test inputs</text>
+  <rect x="1277" y="2242" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="2261" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2290" data-type-role="brick-text" font-size="17" fill="#57606a">Automate the independent session that invents and</text>
+  <text x="868" y="2314" data-type-role="brick-text" font-size="17" fill="#57606a">checks new inputs.</text>
 </g>
 </g>
 <g id="loop-reviews" role="group" aria-labelledby="phase-reviews">
-  <rect x="24" y="2167" width="1352" height="441" rx="6" fill="#ffffff" stroke="#d0d7de"/>
-  <rect x="36" y="2181" width="216" height="413" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="50" y="2216" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-reviews">6 · Reviews</text>
-  <text x="50" y="2247" data-type-role="brick-text" font-size="17" fill="#57606a">Step · read-only srt</text>
-  <rect x="50" y="2263" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="2282" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="50" y="2328" data-type-role="brick-text" font-size="17" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
-  <text x="283" y="2204" data-type-role="brick-text" font-size="17" fill="#57606a">Start independent reviews up to the Step parallel limit.</text>
-  <text x="283" y="2228" data-type-role="brick-text" font-size="17" fill="#57606a">Separate Gemini reviews call Google’s native agent directly.</text>
+  <rect x="24" y="2363" width="1352" height="441" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="36" y="2377" width="216" height="413" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <text x="50" y="2412" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-reviews">6 · Reviews</text>
+  <text x="50" y="2443" data-type-role="brick-text" font-size="17" fill="#57606a">Step · read-only srt</text>
+  <rect x="50" y="2459" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="85" y="2478" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="50" y="2524" data-type-role="brick-text" font-size="17" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
+  <text x="283" y="2400" data-type-role="brick-text" font-size="17" fill="#57606a">Start independent reviews up to the Step parallel limit.</text>
+  <text x="283" y="2424" data-type-role="brick-text" font-size="17" fill="#57606a">Separate Gemini reviews call Google’s native agent directly.</text>
 <g role="group" aria-label="Step verdict · ready">
-  <rect x="269" y="2246" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="2274" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Step verdict</text>
-  <rect x="757" y="2254" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="2273" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="2302" data-type-role="brick-text" font-size="17" fill="#57606a">A verdict per review, a status per criterion.</text>
-  <text x="283" y="2326" data-type-role="brick-text" font-size="17" fill="#57606a">Unmet criteria and blocking findings stop the Step.</text>
+  <rect x="269" y="2442" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
+  <text x="283" y="2470" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Step verdict</text>
+  <rect x="757" y="2450" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="792" y="2469" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="2498" data-type-role="brick-text" font-size="17" fill="#57606a">A verdict per review, a status per criterion.</text>
+  <text x="283" y="2522" data-type-role="brick-text" font-size="17" fill="#57606a">Unmet criteria and blocking findings stop the Step.</text>
 </g>
 <g role="group" aria-label="Host archive · ready">
-  <rect x="269" y="2344" width="570" height="137" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="2372" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Host archive</text>
-  <rect x="757" y="2352" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="2371" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="2400" data-type-role="brick-text" font-size="17" fill="#57606a">The host writes the original briefs, scout questions and</text>
-  <text x="283" y="2424" data-type-role="brick-text" font-size="17" fill="#57606a">Step manifest to steps/&lt;name&gt;/ with record.json. It</text>
-  <text x="283" y="2448" data-type-role="brick-text" font-size="17" fill="#57606a">records hashes, tickets, costs and verdicts. The</text>
-  <text x="283" y="2472" data-type-role="brick-text" font-size="17" fill="#57606a">Builder cannot edit this archive.</text>
+  <rect x="269" y="2540" width="570" height="137" rx="6" fill="#ffffff" stroke="#1a7f37"/>
+  <text x="283" y="2568" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Host archive</text>
+  <rect x="757" y="2548" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="792" y="2567" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="2596" data-type-role="brick-text" font-size="17" fill="#57606a">The host writes the original briefs, scout questions and</text>
+  <text x="283" y="2620" data-type-role="brick-text" font-size="17" fill="#57606a">Step manifest to steps/&lt;name&gt;/ with record.json. It</text>
+  <text x="283" y="2644" data-type-role="brick-text" font-size="17" fill="#57606a">records hashes, tickets, costs and verdicts. The</text>
+  <text x="283" y="2668" data-type-role="brick-text" font-size="17" fill="#57606a">Builder cannot edit this archive.</text>
 </g>
-  <text x="283" y="2513" data-type-role="brick-text" font-size="17" fill="#57606a">The host reads the intake once. Reports, measures,</text>
-  <text x="283" y="2537" data-type-role="brick-text" font-size="17" fill="#57606a">briefs and verdicts stay in</text>
-  <text x="283" y="2561" data-type-role="brick-text" font-size="17" fill="#57606a">state/steps/&lt;run-id&gt;/&lt;name&gt;/. Raw streams go to</text>
-  <text x="283" y="2585" data-type-role="brick-text" font-size="17" fill="#57606a">run/&lt;run-id&gt;/tmp/steps/&lt;name&gt;/.</text>
+  <text x="283" y="2709" data-type-role="brick-text" font-size="17" fill="#57606a">The host reads the intake once. Reports, measures,</text>
+  <text x="283" y="2733" data-type-role="brick-text" font-size="17" fill="#57606a">briefs and verdicts stay in</text>
+  <text x="283" y="2757" data-type-role="brick-text" font-size="17" fill="#57606a">state/steps/&lt;run-id&gt;/&lt;name&gt;/. Raw streams go to</text>
+  <text x="283" y="2781" data-type-role="brick-text" font-size="17" fill="#57606a">run/&lt;run-id&gt;/tmp/steps/&lt;name&gt;/.</text>
 <g role="group" aria-label="Review by dimension · next">
-  <rect x="854" y="2181" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2209" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Review by dimension</text>
-  <rect x="1277" y="2189" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2208" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2237" data-type-role="brick-text" font-size="17" fill="#57606a">Use one rubric per dimension and link each</text>
-  <text x="868" y="2261" data-type-role="brick-text" font-size="17" fill="#57606a">finding to its failing scenario.</text>
-</g>
-<g role="group" aria-label="Builder claims · next">
-  <rect x="854" y="2279" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2307" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Builder claims</text>
-  <rect x="1277" y="2287" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2306" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2335" data-type-role="brick-text" font-size="17" fill="#57606a">Give the Builder’s declared claims to the</text>
-  <text x="868" y="2359" data-type-role="brick-text" font-size="17" fill="#57606a">reviewers for verification.</text>
-</g>
-<g role="group" aria-label="Automatic refusal brief · next">
   <rect x="854" y="2377" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2405" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Automatic refusal brief</text>
+  <text x="868" y="2405" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Review by dimension</text>
   <rect x="1277" y="2385" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
   <text x="1312" y="2404" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2433" data-type-role="brick-text" font-size="17" fill="#57606a">Generate the next brief from a request for</text>
-  <text x="868" y="2457" data-type-role="brick-text" font-size="17" fill="#57606a">changes; today the orchestrator writes it.</text>
+  <text x="868" y="2433" data-type-role="brick-text" font-size="17" fill="#57606a">Use one rubric per dimension and link each</text>
+  <text x="868" y="2457" data-type-role="brick-text" font-size="17" fill="#57606a">finding to its failing scenario.</text>
+</g>
+<g role="group" aria-label="Builder claims · next">
+  <rect x="854" y="2475" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="2503" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Builder claims</text>
+  <rect x="1277" y="2483" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="2502" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2531" data-type-role="brick-text" font-size="17" fill="#57606a">Give the Builder’s declared claims to the</text>
+  <text x="868" y="2555" data-type-role="brick-text" font-size="17" fill="#57606a">reviewers for verification.</text>
+</g>
+<g role="group" aria-label="Automatic refusal brief · next">
+  <rect x="854" y="2573" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="2601" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Automatic refusal brief</text>
+  <rect x="1277" y="2581" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="2600" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2629" data-type-role="brick-text" font-size="17" fill="#57606a">Generate the next brief from a request for</text>
+  <text x="868" y="2653" data-type-role="brick-text" font-size="17" fill="#57606a">changes; today the orchestrator writes it.</text>
 </g>
 </g>
 <g id="loop-gate" role="group" aria-labelledby="phase-gate">
-  <rect x="24" y="2634" width="1352" height="206" rx="6" fill="#ffffff" stroke="#d0d7de"/>
-  <rect x="36" y="2648" width="216" height="178" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="50" y="2683" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-gate">7 · Gate</text>
-  <text x="50" y="2714" data-type-role="brick-text" font-size="17" fill="#57606a">Host · Linux / macOS</text>
-  <rect x="50" y="2730" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="2749" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="50" y="2795" data-type-role="brick-text" font-size="17" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
-  <text x="283" y="2671" data-type-role="brick-text" font-size="17" fill="#57606a">Linux checks scenario identities and mutants on changed lines of</text>
-  <text x="283" y="2695" data-type-role="brick-text" font-size="17" fill="#57606a">whole-file inventories. Source reads refuse links and invalid UTF-8.</text>
-  <text x="283" y="2719" data-type-role="brick-text" font-size="17" fill="#57606a">macOS runs sandbox scenarios. Gate reads the Step archive.</text>
-<g role="group" aria-label="Sharded Linux CI · ready">
-  <rect x="269" y="2737" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="2765" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Sharded Linux CI</text>
-  <rect x="757" y="2745" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="2764" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="2793" data-type-role="brick-text" font-size="17" fill="#57606a">Two scenario shards and sixteen mutation lanes run with</text>
-  <text x="283" y="2817" data-type-role="brick-text" font-size="17" fill="#57606a">independent replay.</text>
+  <rect x="24" y="2830" width="1352" height="304" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="36" y="2844" width="216" height="178" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="50" y="2879" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-gate">7 · Gate</text>
+  <text x="50" y="2910" data-type-role="brick-text" font-size="17" fill="#57606a">Host · Linux / macOS</text>
+  <rect x="50" y="2926" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="85" y="2945" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="50" y="2991" data-type-role="brick-text" font-size="17" fill="#cf222e" font-weight="600">Refusal → 1 · Brief</text>
+  <text x="283" y="2867" data-type-role="brick-text" font-size="17" fill="#57606a">Linux checks scenario identities and changed-line mutants.</text>
+  <text x="283" y="2891" data-type-role="brick-text" font-size="17" fill="#57606a">macOS runs the sandbox scenarios. Gate reads the Step archive.</text>
+  <text x="283" y="2915" data-type-role="brick-text" font-size="17" fill="#57606a">Base: the parent’s main push, or its static count if absent.</text>
+<g role="group" aria-label="Sharded Linux CI from two entry workflows · ready">
+  <rect x="269" y="2933" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
+  <text x="283" y="2961" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Sharded Linux CI from two entry workflows</text>
+  <rect x="757" y="2941" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="792" y="2960" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="2989" data-type-role="brick-text" font-size="17" fill="#57606a">Two shards and lanes planned from the commit; the judge derives</text>
+  <text x="283" y="3013" data-type-role="brick-text" font-size="17" fill="#57606a">the plan again. A new PR commit cancels the run it supersedes.</text>
 </g>
 <g role="group" aria-label="End-to-end verification · next">
-  <rect x="854" y="2648" width="505" height="65" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2676" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">End-to-end verification</text>
-  <rect x="1277" y="2656" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2675" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2704" data-type-role="brick-text" font-size="17" fill="#57606a">Replay the full loop three times on two subjects.</text>
+  <rect x="854" y="2844" width="505" height="65" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="2872" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">End-to-end verification</text>
+  <rect x="1277" y="2852" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="2871" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2900" data-type-role="brick-text" font-size="17" fill="#57606a">Replay the full loop three times on two subjects.</text>
+</g>
+<g role="group" aria-label="Run selection for Deliver · next">
+  <rect x="854" y="2933" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="2961" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Run selection for Deliver</text>
+  <rect x="1277" y="2941" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="2960" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2989" data-type-role="brick-text" font-size="17" fill="#57606a">Bind the run Deliver reads to its workflow, the push</text>
+  <text x="868" y="3013" data-type-role="brick-text" font-size="17" fill="#57606a">event, the trial branch and the SHA together.</text>
+</g>
+<g role="group" aria-label="Suite duration · next">
+  <rect x="854" y="3031" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="3059" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Suite duration</text>
+  <rect x="1277" y="3039" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="3058" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="3087" data-type-role="brick-text" font-size="17" fill="#57606a">Measure where the time goes, alone and under contention;</text>
+  <text x="868" y="3111" data-type-role="brick-text" font-size="17" fill="#57606a">run in parallel what shares no port and no file.</text>
 </g>
 </g>
 <g id="loop-delivery" role="group" aria-labelledby="phase-delivery">
-  <rect x="24" y="2866" width="1352" height="313" rx="6" fill="#ffffff" stroke="#d0d7de"/>
-  <rect x="36" y="2880" width="216" height="285" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="50" y="2915" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-delivery">8 · Delivery</text>
-  <text x="50" y="2946" data-type-role="brick-text" font-size="17" fill="#57606a">Host · Deliver</text>
-  <rect x="50" y="2962" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="85" y="2981" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="283" y="2903" data-type-role="brick-text" font-size="17" fill="#57606a">The host commits the accepted work and its archive.</text>
-  <text x="283" y="2927" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver was written to push the same commit to the</text>
-  <text x="283" y="2951" data-type-role="brick-text" font-size="17" fill="#57606a">work branch, then main. main takes pull requests only.</text>
+  <rect x="24" y="3160" width="1352" height="313" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="36" y="3174" width="216" height="285" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="50" y="3209" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-delivery">8 · Delivery</text>
+  <text x="50" y="3240" data-type-role="brick-text" font-size="17" fill="#57606a">Host · Deliver</text>
+  <rect x="50" y="3256" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="85" y="3275" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="283" y="3197" data-type-role="brick-text" font-size="17" fill="#57606a">The host commits the accepted work and its archive.</text>
+  <text x="283" y="3221" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver was written to push the same commit to the</text>
+  <text x="283" y="3245" data-type-role="brick-text" font-size="17" fill="#57606a">work branch, then main. main takes pull requests only.</text>
 <g role="group" aria-label="Same-commit CI · ready">
-  <rect x="269" y="2969" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="283" y="2997" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Same-commit CI</text>
-  <rect x="757" y="2977" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="2996" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="3025" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver requires the Linux and macOS jobs for the</text>
-  <text x="283" y="3049" data-type-role="brick-text" font-size="17" fill="#57606a">candidate SHA.</text>
+  <rect x="269" y="3263" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
+  <text x="283" y="3291" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Same-commit CI</text>
+  <rect x="757" y="3271" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="792" y="3290" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="3319" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver checks Linux and macOS for one SHA and reserves</text>
+  <text x="283" y="3343" data-type-role="brick-text" font-size="17" fill="#57606a">one prefix per family. Linux checks all attempts and artifacts.</text>
 </g>
 <g role="group" aria-label="Target pull request · next">
-  <rect x="269" y="3067" width="570" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="283" y="3095" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Target pull request</text>
-  <rect x="757" y="3075" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="792" y="3094" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="283" y="3123" data-type-role="brick-text" font-size="17" fill="#57606a">Open a pull request on the target repository,</text>
-  <text x="283" y="3147" data-type-role="brick-text" font-size="17" fill="#57606a">its body rendered from record.json.</text>
+  <rect x="269" y="3361" width="570" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="283" y="3389" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Target pull request</text>
+  <rect x="757" y="3369" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="792" y="3388" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="283" y="3417" data-type-role="brick-text" font-size="17" fill="#57606a">Open a pull request on the target repository,</text>
+  <text x="283" y="3441" data-type-role="brick-text" font-size="17" fill="#57606a">its body rendered from record.json.</text>
 </g>
 <g role="group" aria-label="Delivery gate · next">
-  <rect x="854" y="2880" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2908" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Delivery gate</text>
-  <rect x="1277" y="2888" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2907" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2936" data-type-role="brick-text" font-size="17" fill="#57606a">Owed: one required check for both reviewers'</text>
-  <text x="868" y="2960" data-type-role="brick-text" font-size="17" fill="#57606a">verdicts; no administrator token in sessions.</text>
+  <rect x="854" y="3174" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="3202" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Delivery gate</text>
+  <rect x="1277" y="3182" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="3201" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="3230" data-type-role="brick-text" font-size="17" fill="#57606a">Owed: one required check for both reviewers'</text>
+  <text x="868" y="3254" data-type-role="brick-text" font-size="17" fill="#57606a">verdicts; no administrator token in sessions.</text>
 </g>
 <g role="group" aria-label="Commit each pass · next">
-  <rect x="854" y="2978" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="3006" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Commit each pass</text>
-  <rect x="1277" y="2986" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="3005" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="3034" data-type-role="brick-text" font-size="17" fill="#57606a">Make each pass reproducible from its own</text>
-  <text x="868" y="3058" data-type-role="brick-text" font-size="17" fill="#57606a">work-branch commit.</text>
+  <rect x="854" y="3272" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="3300" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Commit each pass</text>
+  <rect x="1277" y="3280" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="3299" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="3328" data-type-role="brick-text" font-size="17" fill="#57606a">Make each pass reproducible from its own</text>
+  <text x="868" y="3352" data-type-role="brick-text" font-size="17" fill="#57606a">work-branch commit.</text>
 </g>
 <g role="group" aria-label="Accepted Step cost · next">
-  <rect x="854" y="3076" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="3104" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Accepted Step cost</text>
-  <rect x="1277" y="3084" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="3103" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="3132" data-type-role="brick-text" font-size="17" fill="#57606a">Measure the share of cached prompt input and the</text>
-  <text x="868" y="3156" data-type-role="brick-text" font-size="17" fill="#57606a">total cost per accepted Step.</text>
+  <rect x="854" y="3370" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="3398" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Accepted Step cost</text>
+  <rect x="1277" y="3378" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="3397" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="3426" data-type-role="brick-text" font-size="17" fill="#57606a">Measure the share of cached prompt input and the</text>
+  <text x="868" y="3450" data-type-role="brick-text" font-size="17" fill="#57606a">total cost per accepted Step.</text>
 </g>
 </g>
-  <path data-from="loop-brief" data-to="loop-scouts" d="M144 1267 V1290" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
-  <path data-from="loop-scouts" data-to="loop-build" d="M144 1451 V1474" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
-  <path data-from="loop-build" data-to="loop-checks" d="M144 1692 V1715" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
-  <path data-from="loop-checks" data-to="loop-replay" d="M144 1900 V1923" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
-  <path data-from="loop-replay" data-to="loop-reviews" d="M144 2141 V2164" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
-  <path data-from="loop-reviews" data-to="loop-gate" d="M144 2608 V2631" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
-  <path data-from="loop-gate" data-to="loop-delivery" d="M144 2840 V2863" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
+  <path data-from="loop-brief" data-to="loop-scouts" d="M144 1365 V1388" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
+  <path data-from="loop-scouts" data-to="loop-build" d="M144 1549 V1572" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
+  <path data-from="loop-build" data-to="loop-checks" d="M144 1888 V1911" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
+  <path data-from="loop-checks" data-to="loop-replay" d="M144 2096 V2119" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
+  <path data-from="loop-replay" data-to="loop-reviews" d="M144 2337 V2360" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
+  <path data-from="loop-reviews" data-to="loop-gate" d="M144 2804 V2827" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
+  <path data-from="loop-gate" data-to="loop-delivery" d="M144 3134 V3157" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
 </g>
-  <g transform="translate(0 1582.5)">
+  <g transform="translate(0 1876.5)">
   <g id="runtime-isolation" role="group" aria-labelledby="isolation-title">
     <line x1="24" y1="1626.5" x2="1376" y2="1626.5" stroke="#d0d7de"/>
     <text x="24" y="1658" id="isolation-title" data-type-role="section-title" font-size="25" font-weight="600" fill="#1f2328">3 · Runtime isolation</text>
@@ -492,7 +524,7 @@
     <text x="611" y="1991" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
     <text x="53" y="2015" data-type-role="brick-text" font-size="17" fill="#57606a">The host owns Git metadata. Host Git takes one fixed option set.</text>
     <text x="53" y="2036" data-type-role="brick-text" font-size="17" fill="#57606a">Git paths reach the guard as bytes; it honors recorded regular ignore files.</text>
-    <text x="53" y="2057" data-type-role="brick-text" font-size="17" fill="#57606a">Replay sets up test repositories with an independent Git client.</text>
+    <text x="53" y="2057" data-type-role="brick-text" font-size="17" fill="#57606a">Nested repositories are refused first; lease and Deliver compare bytes.</text>
   </g>
   <g id="sbx-account-broker" role="group" aria-labelledby="sbx-broker-title">
     <rect x="40" y="2084" width="616" height="132" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
@@ -598,214 +630,226 @@
     <text x="1054" y="2455" data-type-role="brick-text" font-size="17" fill="#57606a">when the Step ends.</text>
   </g>
   </g>  </g>
-  <line x1="24" y1="4104.5" x2="1376" y2="4104.5" stroke="#d0d7de"/>
-  <text x="24" y="4138.5" data-type-role="section-title" font-size="25" font-weight="600" fill="#1f2328">4 · What checks a step before it is delivered</text>
-  <text x="24" y="4166.5" data-type-role="brick-text" font-size="17" fill="#57606a">five checks before the gate; under each, what it gave on one piece of work: the delivery command, 18 November 2026 (journal, §89 to §95)</text>
-  <rect x="24" y="4196.5" width="245" height="136" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="36" y="4226.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">1 · Scenarios</text>
-  <text x="36" y="4252.5" data-type-role="brick-text" font-size="17" fill="#57606a">every test is a Gherkin</text>
-  <text x="36" y="4274.5" data-type-role="brick-text" font-size="17" fill="#57606a">scenario, written with the</text>
-  <text x="36" y="4296.5" data-type-role="brick-text" font-size="17" fill="#57606a">code; it must fail without the</text>
-  <text x="36" y="4318.5" data-type-role="brick-text" font-size="17" fill="#57606a">behaviour it names</text>
-  <rect x="195" y="4184.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="227" y="4202.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="282" y="4196.5" width="245" height="136" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="294" y="4226.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">2 · Mutation</text>
-  <text x="294" y="4252.5" data-type-role="brick-text" font-size="17" fill="#57606a">each changed line is broken</text>
-  <text x="294" y="4274.5" data-type-role="brick-text" font-size="17" fill="#57606a">on purpose: a scenario</text>
-  <text x="294" y="4296.5" data-type-role="brick-text" font-size="17" fill="#57606a">must turn red; a line nothing</text>
-  <text x="294" y="4318.5" data-type-role="brick-text" font-size="17" fill="#57606a">proves is removed</text>
-  <rect x="453" y="4184.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="485" y="4202.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="540" y="4196.5" width="300" height="136" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="552" y="4226.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">3 · Independent review</text>
-  <text x="552" y="4252.5" data-type-role="brick-text" font-size="17" fill="#57606a">a fresh session reads the change</text>
-  <text x="552" y="4274.5" data-type-role="brick-text" font-size="17" fill="#57606a">against the design and cannot</text>
-  <text x="552" y="4296.5" data-type-role="brick-text" font-size="17" fill="#57606a">write: a verdict, and what it could</text>
-  <text x="552" y="4318.5" data-type-role="brick-text" font-size="17" fill="#57606a">not check</text>
-  <rect x="766" y="4184.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="798" y="4202.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="853" y="4196.5" width="265" height="136" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="865" y="4226.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">4 · Fresh inputs</text>
-  <text x="865" y="4252.5" data-type-role="brick-text" font-size="17" fill="#57606a">a fresh session invents inputs</text>
-  <text x="865" y="4274.5" data-type-role="brick-text" font-size="17" fill="#57606a">the scenarios do not use;</text>
-  <text x="865" y="4296.5" data-type-role="brick-text" font-size="17" fill="#57606a">played by hand, not yet a</text>
-  <text x="865" y="4318.5" data-type-role="brick-text" font-size="17" fill="#57606a">phase (section 2)</text>
-  <rect x="1044" y="4184.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1076" y="4202.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="1131" y="4196.5" width="245" height="136" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="1143" y="4226.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">5 · Measure</text>
-  <text x="1143" y="4252.5" data-type-role="brick-text" font-size="17" fill="#57606a">what is claimed of an</text>
-  <text x="1143" y="4274.5" data-type-role="brick-text" font-size="17" fill="#57606a">outside tool is measured</text>
-  <text x="1143" y="4296.5" data-type-role="brick-text" font-size="17" fill="#57606a">before the real thing, and</text>
-  <text x="1143" y="4318.5" data-type-role="brick-text" font-size="17" fill="#57606a">what was read is recorded</text>
-  <rect x="1302" y="4184.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1334" y="4202.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="24" y="4340.5" width="245" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
-  <text x="146.5" y="4361.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">436 scenarios, none on the</text>
-  <text x="146.5" y="4383.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">network</text>
-  <rect x="282" y="4340.5" width="245" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
-  <text x="404.5" y="4361.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">none of 891 mutants</text>
-  <text x="404.5" y="4383.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">survived at the gate</text>
-  <rect x="540" y="4340.5" width="300" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
-  <text x="690" y="4361.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">5 reviews; 2 defects in a resume</text>
-  <rect x="853" y="4340.5" width="265" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
-  <text x="985.5" y="4361.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#cf222e" text-anchor="middle">not applied; on the next, 3</text>
-  <text x="985.5" y="4383.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#cf222e" text-anchor="middle">defects (§99)</text>
-  <rect x="1131" y="4340.5" width="245" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
-  <text x="1253.5" y="4361.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">2 answers of the forge,</text>
-  <text x="1253.5" y="4383.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">before delivery</text>
-  <line x1="404.5" y1="4398.5" x2="404.5" y2="4420.5" stroke="#cf222e" stroke-width="1.5"/>
-  <line x1="690" y1="4398.5" x2="690" y2="4420.5" stroke="#cf222e" stroke-width="1.5"/>
-  <line x1="985.5" y1="4398.5" x2="985.5" y2="4420.5" stroke="#cf222e" stroke-width="1.5"/>
-  <line x1="1253.5" y1="4398.5" x2="1253.5" y2="4420.5" stroke="#cf222e" stroke-width="1.5"/>
-  <line x1="1253.5" y1="4420.5" x2="146.5" y2="4420.5" stroke="#cf222e" stroke-width="1.5"/>
-  <polyline points="146.5,4420.5 146.5,4400.5" fill="none" stroke="#cf222e" stroke-width="1.5" marker-end="url(#r)"/>
-  <rect x="419.034" y="4407.5" width="561.931" height="26" rx="13" fill="#ffffff" stroke="#cf222e"/>
-  <text x="700" y="4425.5" data-type-role="legend" font-size="17" fill="#cf222e" text-anchor="middle">a finding goes back to the code, and the checks run again from the first</text>
-  <rect x="24" y="4464.5" width="940" height="114" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="36" y="4494.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">The gate (1a): npm run gate on the host, then CI on Linux and macOS</text>
-  <text x="36" y="4520.5" data-type-role="brick-text" font-size="17" fill="#57606a">Linux splits the full suite into two shards and checks changed-line mutants in sixteen lanes. Survived or uncovered</text>
-  <text x="36" y="4542.5" data-type-role="brick-text" font-size="17" fill="#57606a">mutants require recorded debt. Linux independently replays Killed, Timeout, RuntimeError, Survived and Ignored;</text>
-  <text x="36" y="4564.5" data-type-role="brick-text" font-size="17" fill="#57606a">macOS runs the sandbox scenarios. Linux installs host packages from signed Ubuntu and PostgreSQL archives.</text>
-  <rect x="890" y="4452.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="922" y="4470.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="994" y="4464.5" width="382" height="114" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="1006" y="4494.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Commit and delivery</text>
-  <text x="1006" y="4520.5" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver checks the saved Linux receipt and CI</text>
-  <text x="1006" y="4542.5" data-type-role="brick-text" font-size="17" fill="#57606a">for the same commit, then was to push each</text>
-  <text x="1006" y="4564.5" data-type-role="brick-text" font-size="17" fill="#57606a">branch. main takes pull requests only</text>
-  <rect x="1302" y="4452.5" width="64" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1334" y="4470.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
-  <polyline points="964,4521.5 992,4521.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="24" y1="4398.5" x2="1376" y2="4398.5" stroke="#d0d7de"/>
+  <text x="24" y="4432.5" data-type-role="section-title" font-size="25" font-weight="600" fill="#1f2328">4 · What checks a step before it is delivered</text>
+  <text x="24" y="4460.5" data-type-role="brick-text" font-size="17" fill="#57606a">five checks before the gate; under each, what it gave on one piece of work: the delivery command, 18 November 2026 (journal, §89 to §95)</text>
+  <rect x="24" y="4490.5" width="245" height="136" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="36" y="4520.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">1 · Scenarios</text>
+  <text x="36" y="4546.5" data-type-role="brick-text" font-size="17" fill="#57606a">every test is a Gherkin</text>
+  <text x="36" y="4568.5" data-type-role="brick-text" font-size="17" fill="#57606a">scenario, written with the</text>
+  <text x="36" y="4590.5" data-type-role="brick-text" font-size="17" fill="#57606a">code; it must fail without the</text>
+  <text x="36" y="4612.5" data-type-role="brick-text" font-size="17" fill="#57606a">behaviour it names</text>
+  <rect x="195" y="4478.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="227" y="4496.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="282" y="4490.5" width="245" height="136" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="294" y="4520.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">2 · Mutation</text>
+  <text x="294" y="4546.5" data-type-role="brick-text" font-size="17" fill="#57606a">each changed line is broken</text>
+  <text x="294" y="4568.5" data-type-role="brick-text" font-size="17" fill="#57606a">on purpose: a scenario</text>
+  <text x="294" y="4590.5" data-type-role="brick-text" font-size="17" fill="#57606a">must turn red; a line nothing</text>
+  <text x="294" y="4612.5" data-type-role="brick-text" font-size="17" fill="#57606a">proves is removed</text>
+  <rect x="453" y="4478.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="485" y="4496.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="540" y="4490.5" width="300" height="136" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <text x="552" y="4520.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">3 · Independent review</text>
+  <text x="552" y="4546.5" data-type-role="brick-text" font-size="17" fill="#57606a">a fresh session reads the change</text>
+  <text x="552" y="4568.5" data-type-role="brick-text" font-size="17" fill="#57606a">against the design and cannot</text>
+  <text x="552" y="4590.5" data-type-role="brick-text" font-size="17" fill="#57606a">write: a verdict, and what it could</text>
+  <text x="552" y="4612.5" data-type-role="brick-text" font-size="17" fill="#57606a">not check</text>
+  <rect x="766" y="4478.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="798" y="4496.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="853" y="4490.5" width="265" height="136" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <text x="865" y="4520.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">4 · Fresh inputs</text>
+  <text x="865" y="4546.5" data-type-role="brick-text" font-size="17" fill="#57606a">a fresh session invents inputs</text>
+  <text x="865" y="4568.5" data-type-role="brick-text" font-size="17" fill="#57606a">the scenarios do not use;</text>
+  <text x="865" y="4590.5" data-type-role="brick-text" font-size="17" fill="#57606a">played by hand, not yet a</text>
+  <text x="865" y="4612.5" data-type-role="brick-text" font-size="17" fill="#57606a">phase (section 2)</text>
+  <rect x="1044" y="4478.5" width="64" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1076" y="4496.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
+  <rect x="1131" y="4490.5" width="245" height="136" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="1143" y="4520.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">5 · Measure</text>
+  <text x="1143" y="4546.5" data-type-role="brick-text" font-size="17" fill="#57606a">what is claimed of an</text>
+  <text x="1143" y="4568.5" data-type-role="brick-text" font-size="17" fill="#57606a">outside tool is measured</text>
+  <text x="1143" y="4590.5" data-type-role="brick-text" font-size="17" fill="#57606a">before the real thing, and</text>
+  <text x="1143" y="4612.5" data-type-role="brick-text" font-size="17" fill="#57606a">what was read is recorded</text>
+  <rect x="1302" y="4478.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1334" y="4496.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="24" y="4634.5" width="245" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="146.5" y="4655.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">436 scenarios, none on the</text>
+  <text x="146.5" y="4677.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">network</text>
+  <rect x="282" y="4634.5" width="245" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="404.5" y="4655.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">none of 891 mutants</text>
+  <text x="404.5" y="4677.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">survived at the gate</text>
+  <rect x="540" y="4634.5" width="300" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="690" y="4655.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">5 reviews; 2 defects in a resume</text>
+  <rect x="853" y="4634.5" width="265" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="985.5" y="4655.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#cf222e" text-anchor="middle">not applied; on the next, 3</text>
+  <text x="985.5" y="4677.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#cf222e" text-anchor="middle">defects (§99)</text>
+  <rect x="1131" y="4634.5" width="245" height="58" rx="4" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="1253.5" y="4655.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">2 answers of the forge,</text>
+  <text x="1253.5" y="4677.5" data-type-role="brick-text" font-size="17" font-weight="600" fill="#1f2328" text-anchor="middle">before delivery</text>
+  <line x1="404.5" y1="4692.5" x2="404.5" y2="4714.5" stroke="#cf222e" stroke-width="1.5"/>
+  <line x1="690" y1="4692.5" x2="690" y2="4714.5" stroke="#cf222e" stroke-width="1.5"/>
+  <line x1="985.5" y1="4692.5" x2="985.5" y2="4714.5" stroke="#cf222e" stroke-width="1.5"/>
+  <line x1="1253.5" y1="4692.5" x2="1253.5" y2="4714.5" stroke="#cf222e" stroke-width="1.5"/>
+  <line x1="1253.5" y1="4714.5" x2="146.5" y2="4714.5" stroke="#cf222e" stroke-width="1.5"/>
+  <polyline points="146.5,4714.5 146.5,4694.5" fill="none" stroke="#cf222e" stroke-width="1.5" marker-end="url(#r)"/>
+  <rect x="419.034" y="4701.5" width="561.931" height="26" rx="13" fill="#ffffff" stroke="#cf222e"/>
+  <text x="700" y="4719.5" data-type-role="legend" font-size="17" fill="#cf222e" text-anchor="middle">a finding goes back to the code, and the checks run again from the first</text>
+  <rect x="24" y="4758.5" width="940" height="158" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="36" y="4788.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">The gate (1a): npm run gate on the host, then CI on Linux and macOS</text>
+  <text x="36" y="4814.5" data-type-role="brick-text" font-size="17" fill="#57606a">Two entries: gate.yml for pull requests, where a new commit cancels the superseded run, and gate-push.yml for</text>
+  <text x="36" y="4836.5" data-type-role="brick-text" font-size="17" fill="#57606a">pushes, never cancelled. A plan job sizes one to sixteen mutation lanes from the commit; the judge derives the</text>
+  <text x="36" y="4858.5" data-type-role="brick-text" font-size="17" fill="#57606a">plan again. A survivor needs recorded debt; Linux replays every verdict; macOS runs the sandbox scenarios.</text>
+  <text x="36" y="4880.5" data-type-role="brick-text" font-size="17" fill="#57606a">On the host it judges the merge GitHub builds; a missing, conflicting or unintegrated destination is refused. Source</text>
+  <text x="36" y="4902.5" data-type-role="brick-text" font-size="17" fill="#57606a">directories are walked on disk; links, invalid UTF-8 and Stryker directives without their justification are refused.</text>
+  <rect x="890" y="4746.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="922" y="4764.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="994" y="4758.5" width="382" height="158" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="1006" y="4788.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Commit and delivery</text>
+  <text x="1006" y="4814.5" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver checks the saved Linux receipt and CI</text>
+  <text x="1006" y="4836.5" data-type-role="brick-text" font-size="17" fill="#57606a">for the same commit, then was to push each</text>
+  <text x="1006" y="4858.5" data-type-role="brick-text" font-size="17" fill="#57606a">branch. main takes pull requests only</text>
+  <rect x="1302" y="4746.5" width="64" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1334" y="4764.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
+  <polyline points="964,4815.5 992,4815.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
   <g role="group" aria-label="The Claude workflows of CI · ready, with the subscription token · next">
-  <rect x="24" y="4596.5" width="1352" height="136" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="36" y="4626.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">The Claude workflows of CI: claude.yml, claude-review.yml, claude-security-review.yml</text>
-  <text x="36" y="4652.5" data-type-role="brick-text" font-size="17" fill="#57606a">On ubuntu-24.04, each job installs its managed settings, then proves bubblewrap: signed Ubuntu packages, the AppArmor</text>
-  <text x="36" y="4674.5" data-type-role="brick-text" font-size="17" fill="#57606a">restriction on user namespaces lowered, one namespace created. The action starts only when both steps succeeded, and</text>
-  <text x="36" y="4696.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Code scrubs the environment of its subprocesses. Every job of every workflow names its image, never a -latest label.</text>
-  <text x="36" y="4718.5" data-type-role="brick-text" font-size="17" fill="#cf222e">The subscription token is a repository secret: a same-repository pull request that rewrites a workflow receives it. Next: files of main only.</text>
-  <rect x="1228" y="4584.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1260" y="4602.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="1302" y="4584.5" width="64" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1334" y="4602.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
+  <rect x="24" y="4934.5" width="1352" height="180" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="36" y="4964.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">The Claude workflows of CI: claude.yml, claude-review.yml, claude-security-review.yml</text>
+  <text x="36" y="4990.5" data-type-role="brick-text" font-size="17" fill="#57606a">On ubuntu-24.04, each job installs its managed settings, then proves bubblewrap: signed Ubuntu packages, the AppArmor</text>
+  <text x="36" y="5012.5" data-type-role="brick-text" font-size="17" fill="#57606a">restriction on user namespaces lowered, one namespace created. The action starts only when both steps succeeded, and</text>
+  <text x="36" y="5034.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Code scrubs the environment of its subprocesses. Every job of every workflow names its image, never a -latest label.</text>
+  <text x="36" y="5056.5" data-type-role="brick-text" font-size="17" fill="#57606a">claude-review runs action v1.0.290 in its official mode, without a shell; a comment-guard hook refuses mentions, a misplaced</text>
+  <text x="36" y="5078.5" data-type-role="brick-text" font-size="17" fill="#57606a">verdict and credentials, and the verdict closes its tracking comment. The security review is advisory; a job without a model posts it.</text>
+  <text x="36" y="5100.5" data-type-role="brick-text" font-size="17" fill="#cf222e">The subscription token is a repository secret: a same-repository pull request that rewrites a workflow receives it. Next: files of main only.</text>
+  <rect x="1228" y="4922.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1260" y="4940.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="1302" y="4922.5" width="64" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1334" y="4940.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
   </g>
-  <line x1="24" y1="4768.5" x2="1376" y2="4768.5" stroke="#d0d7de"/>
-  <text x="24" y="4802.5" data-type-role="section-title" font-size="25" font-weight="600" fill="#1f2328">5 · Facts from the literature, and what the platform holds of Anthropic</text>
-  <text x="24" y="4830.5" data-type-role="brick-text" font-size="17" fill="#57606a">tools/evidence (npm run evidence -- ask | verify) · tools/watch (npm run watch -- check | read; every Monday in CI)</text>
-  <text x="24" y="4868.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">The evidence desk (S.1): a fact enters the loop only once verified</text>
-  <rect x="24" y="4884.5" width="400" height="370" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="38" y="4912.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Host</text>
-  <rect x="500" y="4884.5" width="400" height="370" rx="8" fill="#ffffff" stroke="#8c959f" stroke-dasharray="5 4"/>
-  <text x="514" y="4912.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Desk · nothing trusted</text>
-  <rect x="976" y="4884.5" width="400" height="370" rx="8" fill="#fff8e1" stroke="#bf8700"/>
-  <text x="990" y="4912.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Librarian's sandbox</text>
-  <rect x="36" y="4930.5" width="376" height="70" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="48" y="4960.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Orchestrator</text>
-  <text x="48" y="4986.5" data-type-role="brick-text" font-size="17" fill="#57606a">asks a question, no code and no secret</text>
-  <rect x="338" y="4918.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="370" y="4936.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="36" y="5028.5" width="376" height="70" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="48" y="5058.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Ledger</text>
-  <text x="48" y="5084.5" data-type-role="brick-text" font-size="17" fill="#57606a">the verified records, written by the host alone</text>
-  <rect x="338" y="5016.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="370" y="5034.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="36" y="5126.5" width="376" height="114" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="48" y="5156.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Verifier · code, not a model</text>
-  <text x="48" y="5182.5" data-type-role="brick-text" font-size="17" fill="#57606a">Registry title matches; no retraction listed.</text>
-  <text x="48" y="5204.5" data-type-role="brick-text" font-size="17" fill="#57606a">Passage matches supplied text after</text>
-  <text x="48" y="5226.5" data-type-role="brick-text" font-size="17" fill="#57606a">normalizing Unicode and spaces.</text>
-  <rect x="338" y="5114.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="370" y="5132.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="512" y="4930.5" width="376" height="70" rx="6" fill="#ffffff" stroke="#8c959f"/>
-  <text x="524" y="4960.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">out/ · the host writes</text>
-  <text x="524" y="4986.5" data-type-role="brick-text" font-size="17" fill="#57606a">the question; the refusals with their reasons</text>
-  <rect x="512" y="5014.5" width="376" height="92" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="524" y="5044.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">in/ · the librarian</text>
-  <text x="524" y="5070.5" data-type-role="brick-text" font-size="17" fill="#57606a">the answer: claims, DOIs, passages, the full</text>
-  <text x="524" y="5092.5" data-type-role="brick-text" font-size="17" fill="#57606a">texts</text>
-  <rect x="512" y="5120.5" width="376" height="70" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="524" y="5150.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">S.3</text>
-  <text x="524" y="5176.5" data-type-role="brick-text" font-size="17" fill="#57606a">full texts fetched by the host, not by a session</text>
-  <rect x="824" y="5108.5" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="851" y="5126.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
-  <rect x="988" y="4930.5" width="376" height="158" rx="6" fill="#ffffff" stroke="#bf8700"/>
-  <text x="1000" y="4960.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Librarian (S, trial)</text>
-  <text x="1000" y="4986.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Science in its own sandbox, through</text>
-  <text x="1000" y="5008.5" data-type-role="brick-text" font-size="17" fill="#57606a">a Remote connector; sees the desk only,</text>
-  <text x="1000" y="5030.5" data-type-role="brick-text" font-size="17" fill="#57606a">never the repository nor the ledger; answers</text>
-  <text x="1000" y="5052.5" data-type-role="brick-text" font-size="17" fill="#57606a">from the literature with a DOI and a passage</text>
-  <text x="1000" y="5074.5" data-type-role="brick-text" font-size="17" fill="#57606a">word for word per claim</text>
-  <rect x="1290" y="4918.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1322" y="4936.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="988" y="5102.5" width="376" height="92" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="1000" y="5132.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">S.4</text>
-  <text x="1000" y="5158.5" data-type-role="brick-text" font-size="17" fill="#57606a">the desk as a module of the platform, started</text>
-  <text x="1000" y="5180.5" data-type-role="brick-text" font-size="17" fill="#57606a">by the gateway</text>
-  <rect x="1300" y="5090.5" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1327" y="5108.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
-  <polyline points="412,4958.5 511,4958.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <polyline points="888,4958.5 987,4958.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <polyline points="988,5042.5 889,5042.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <polyline points="512,5042.5 462,5042.5 462,5154.5 413,5154.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <polyline points="224,5126.5 224,5100.5" fill="none" stroke="#1a7f37" stroke-width="1.5" marker-end="url(#g)"/>
-  <rect x="24" y="5284.5" width="400" height="70" rx="6" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="36" y="5314.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">doi.org · the DOI registry</text>
-  <text x="36" y="5340.5" data-type-role="brick-text" font-size="17" fill="#57606a">checked by the verifier, every agency</text>
-  <polyline points="224,5254.5 224,5282.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <line x1="24" y1="5388.5" x2="1376" y2="5388.5" stroke="#d0d7de"/>
-  <text x="24" y="5422.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">The watch of Anthropic (1b.9): a source that moved is seen, read and decided</text>
-  <rect x="24" y="5440.5" width="440" height="420" rx="8" fill="#fff8e1" stroke="#bf8700"/>
-  <text x="38" y="5468.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Anthropic · public, untrusted</text>
-  <rect x="36" y="5486.5" width="416" height="70" rx="6" fill="#ffffff" stroke="#8c959f"/>
-  <text x="48" y="5516.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">2 pinned packages</text>
-  <text x="48" y="5542.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Agent SDK, sandbox runtime</text>
-  <rect x="36" y="5568.5" width="416" height="70" rx="6" fill="#ffffff" stroke="#8c959f"/>
-  <text x="48" y="5598.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">2 changelogs</text>
-  <text x="48" y="5624.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Code, Claude Agent SDK</text>
-  <rect x="36" y="5650.5" width="416" height="92" rx="6" fill="#ffffff" stroke="#8c959f"/>
-  <text x="48" y="5680.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">2 documentation indexes</text>
-  <text x="48" y="5706.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Code documentation; Claude platform</text>
-  <text x="48" y="5728.5" data-type-role="brick-text" font-size="17" fill="#57606a">documentation</text>
-  <rect x="36" y="5754.5" width="416" height="92" rx="6" fill="#ffffff" stroke="#8c959f"/>
-  <text x="48" y="5784.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">22 pages</text>
-  <text x="48" y="5810.5" data-type-role="brick-text" font-size="17" fill="#57606a">headless, CLI, settings, Agent SDK, Messages</text>
-  <text x="48" y="5832.5" data-type-role="brick-text" font-size="17" fill="#57606a">API, errors, streaming, models</text>
-  <rect x="500" y="5440.5" width="420" height="158" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="512" y="5470.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Check · code, not a model</text>
-  <text x="512" y="5496.5" data-type-role="brick-text" font-size="17" fill="#57606a">reads HTTPS, four hosts in a closed list, a time and</text>
-  <text x="512" y="5518.5" data-type-role="brick-text" font-size="17" fill="#57606a">a size limit per source; compares the pins, the</text>
-  <text x="512" y="5540.5" data-type-role="brick-text" font-size="17" fill="#57606a">versions, the hash of a page, the list of an index;</text>
-  <text x="512" y="5562.5" data-type-role="brick-text" font-size="17" fill="#57606a">says up to date, behind or unreadable, never the</text>
-  <text x="512" y="5584.5" data-type-role="brick-text" font-size="17" fill="#57606a">text it read</text>
-  <rect x="846" y="5428.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="878" y="5446.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="500" y="5626.5" width="420" height="92" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="512" y="5656.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Readers in parallel (O.3e)</text>
-  <text x="512" y="5682.5" data-type-role="brick-text" font-size="17" fill="#57606a">a small model extracts what changed, as</text>
-  <text x="512" y="5704.5" data-type-role="brick-text" font-size="17" fill="#57606a">quotations the host checks</text>
-  <rect x="856" y="5614.5" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="883" y="5632.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
-  <rect x="956" y="5440.5" width="420" height="114" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="968" y="5470.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Register and record</text>
-  <text x="968" y="5496.5" data-type-role="brick-text" font-size="17" fill="#57606a">each source, the files that rely on it and what was</text>
-  <text x="968" y="5518.5" data-type-role="brick-text" font-size="17" fill="#57606a">read of it; the decision taken for each change; the</text>
-  <text x="968" y="5540.5" data-type-role="brick-text" font-size="17" fill="#57606a">two pins moved one at a time (1b.8)</text>
-  <rect x="1302" y="5428.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1334" y="5446.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
-  <rect x="956" y="5582.5" width="420" height="114" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="968" y="5612.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">First reading, inventory</text>
-  <text x="968" y="5638.5" data-type-role="brick-text" font-size="17" fill="#57606a">the 22 pages and the two indexes, never read yet;</text>
-  <text x="968" y="5660.5" data-type-role="brick-text" font-size="17" fill="#57606a">what Anthropic offers and the platform does not</text>
-  <text x="968" y="5682.5" data-type-role="brick-text" font-size="17" fill="#57606a">use; the SDLC playbook enters the register</text>
-  <rect x="1312" y="5570.5" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1339" y="5588.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
-  <polyline points="500,5468.5 466,5468.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <polyline points="956,5468.5 922,5468.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
-  <rect x="24" y="5892.5" width="1352" height="92" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="36" y="5922.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">When a source moved · the maintainer, never the command</text>
-  <text x="36" y="5948.5" data-type-role="brick-text" font-size="17" fill="#57606a">1 · red: the weekly workflow, or the command by hand · 2 · read the difference, not the page · 3 · classify: mandatory, pertinent or does not apply, with its reason · 4 · decide; a</text>
-  <text x="36" y="5970.5" data-type-role="brick-text" font-size="17" fill="#57606a">pin moves alone, with the gate as its proof · 5 · record the decision and the reading</text>
-  <rect x="1302" y="5880.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1334" y="5898.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <g role="group" aria-label="main takes pull requests only · ready">
+  <rect x="24" y="5132.5" width="1352" height="92" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="36" y="5162.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">main takes pull requests only: docs/design/ruleset-main.json and pipeline-after-merge.yml</text>
+  <text x="36" y="5188.5" data-type-role="brick-text" font-size="17" fill="#57606a">The ruleset requires a pull request and the checks gate-linux and gate-macos, with no bypass actor. The resolver merges a pull</text>
+  <text x="36" y="5210.5" data-type-role="brick-text" font-size="17" fill="#57606a">request when the gate of its head is green and the Claude review of that head approves; the security review advises only.</text>
+  <rect x="1302" y="5120.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1334" y="5138.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  </g>
+  <line x1="24" y1="5260.5" x2="1376" y2="5260.5" stroke="#d0d7de"/>
+  <text x="24" y="5294.5" data-type-role="section-title" font-size="25" font-weight="600" fill="#1f2328">5 · Facts from the literature, and what the platform holds of Anthropic</text>
+  <text x="24" y="5322.5" data-type-role="brick-text" font-size="17" fill="#57606a">tools/evidence (npm run evidence -- ask | verify) · tools/watch (npm run watch -- check | read; every Monday in CI)</text>
+  <text x="24" y="5360.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">The evidence desk (S.1): a fact enters the loop only once verified</text>
+  <rect x="24" y="5376.5" width="400" height="370" rx="8" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="38" y="5404.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Host</text>
+  <rect x="500" y="5376.5" width="400" height="370" rx="8" fill="#ffffff" stroke="#8c959f" stroke-dasharray="5 4"/>
+  <text x="514" y="5404.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Desk · nothing trusted</text>
+  <rect x="976" y="5376.5" width="400" height="370" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+  <text x="990" y="5404.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Librarian's sandbox</text>
+  <rect x="36" y="5422.5" width="376" height="70" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="48" y="5452.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Orchestrator</text>
+  <text x="48" y="5478.5" data-type-role="brick-text" font-size="17" fill="#57606a">asks a question, no code and no secret</text>
+  <rect x="338" y="5410.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="370" y="5428.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="36" y="5520.5" width="376" height="70" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="48" y="5550.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Ledger</text>
+  <text x="48" y="5576.5" data-type-role="brick-text" font-size="17" fill="#57606a">the verified records, written by the host alone</text>
+  <rect x="338" y="5508.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="370" y="5526.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="36" y="5618.5" width="376" height="114" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="48" y="5648.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Verifier · code, not a model</text>
+  <text x="48" y="5674.5" data-type-role="brick-text" font-size="17" fill="#57606a">Registry title matches; no retraction listed.</text>
+  <text x="48" y="5696.5" data-type-role="brick-text" font-size="17" fill="#57606a">Passage matches supplied text after</text>
+  <text x="48" y="5718.5" data-type-role="brick-text" font-size="17" fill="#57606a">normalizing Unicode and spaces.</text>
+  <rect x="338" y="5606.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="370" y="5624.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="512" y="5422.5" width="376" height="70" rx="6" fill="#ffffff" stroke="#8c959f"/>
+  <text x="524" y="5452.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">out/ · the host writes</text>
+  <text x="524" y="5478.5" data-type-role="brick-text" font-size="17" fill="#57606a">the question; the refusals with their reasons</text>
+  <rect x="512" y="5506.5" width="376" height="92" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <text x="524" y="5536.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">in/ · the librarian</text>
+  <text x="524" y="5562.5" data-type-role="brick-text" font-size="17" fill="#57606a">the answer: claims, DOIs, passages, the full</text>
+  <text x="524" y="5584.5" data-type-role="brick-text" font-size="17" fill="#57606a">texts</text>
+  <rect x="512" y="5612.5" width="376" height="70" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="524" y="5642.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">S.3</text>
+  <text x="524" y="5668.5" data-type-role="brick-text" font-size="17" fill="#57606a">full texts fetched by the host, not by a session</text>
+  <rect x="824" y="5600.5" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="851" y="5618.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
+  <rect x="988" y="5422.5" width="376" height="158" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <text x="1000" y="5452.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Librarian (S, trial)</text>
+  <text x="1000" y="5478.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Science in its own sandbox, through</text>
+  <text x="1000" y="5500.5" data-type-role="brick-text" font-size="17" fill="#57606a">a Remote connector; sees the desk only,</text>
+  <text x="1000" y="5522.5" data-type-role="brick-text" font-size="17" fill="#57606a">never the repository nor the ledger; answers</text>
+  <text x="1000" y="5544.5" data-type-role="brick-text" font-size="17" fill="#57606a">from the literature with a DOI and a passage</text>
+  <text x="1000" y="5566.5" data-type-role="brick-text" font-size="17" fill="#57606a">word for word per claim</text>
+  <rect x="1290" y="5410.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1322" y="5428.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="988" y="5594.5" width="376" height="92" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="1000" y="5624.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">S.4</text>
+  <text x="1000" y="5650.5" data-type-role="brick-text" font-size="17" fill="#57606a">the desk as a module of the platform, started</text>
+  <text x="1000" y="5672.5" data-type-role="brick-text" font-size="17" fill="#57606a">by the gateway</text>
+  <rect x="1300" y="5582.5" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1327" y="5600.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
+  <polyline points="412,5450.5 511,5450.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <polyline points="888,5450.5 987,5450.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <polyline points="988,5534.5 889,5534.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <polyline points="512,5534.5 462,5534.5 462,5646.5 413,5646.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <polyline points="224,5618.5 224,5592.5" fill="none" stroke="#1a7f37" stroke-width="1.5" marker-end="url(#g)"/>
+  <rect x="24" y="5776.5" width="400" height="70" rx="6" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="36" y="5806.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">doi.org · the DOI registry</text>
+  <text x="36" y="5832.5" data-type-role="brick-text" font-size="17" fill="#57606a">checked by the verifier, every agency</text>
+  <polyline points="224,5746.5 224,5774.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="24" y1="5880.5" x2="1376" y2="5880.5" stroke="#d0d7de"/>
+  <text x="24" y="5914.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">The watch of Anthropic (1b.9): a source that moved is seen, read and decided</text>
+  <rect x="24" y="5932.5" width="440" height="420" rx="8" fill="#fff8e1" stroke="#bf8700"/>
+  <text x="38" y="5960.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Anthropic · public, untrusted</text>
+  <rect x="36" y="5978.5" width="416" height="70" rx="6" fill="#ffffff" stroke="#8c959f"/>
+  <text x="48" y="6008.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">2 pinned packages</text>
+  <text x="48" y="6034.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Agent SDK, sandbox runtime</text>
+  <rect x="36" y="6060.5" width="416" height="70" rx="6" fill="#ffffff" stroke="#8c959f"/>
+  <text x="48" y="6090.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">2 changelogs</text>
+  <text x="48" y="6116.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Code, Claude Agent SDK</text>
+  <rect x="36" y="6142.5" width="416" height="92" rx="6" fill="#ffffff" stroke="#8c959f"/>
+  <text x="48" y="6172.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">2 documentation indexes</text>
+  <text x="48" y="6198.5" data-type-role="brick-text" font-size="17" fill="#57606a">Claude Code documentation; Claude platform</text>
+  <text x="48" y="6220.5" data-type-role="brick-text" font-size="17" fill="#57606a">documentation</text>
+  <rect x="36" y="6246.5" width="416" height="92" rx="6" fill="#ffffff" stroke="#8c959f"/>
+  <text x="48" y="6276.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">25 pages</text>
+  <text x="48" y="6302.5" data-type-role="brick-text" font-size="17" fill="#57606a">headless, CLI, settings, Agent SDK, Messages</text>
+  <text x="48" y="6324.5" data-type-role="brick-text" font-size="17" fill="#57606a">API, errors, streaming, models, security review</text>
+  <rect x="500" y="5932.5" width="420" height="158" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="512" y="5962.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Check · code, not a model</text>
+  <text x="512" y="5988.5" data-type-role="brick-text" font-size="17" fill="#57606a">reads HTTPS, four hosts in a closed list, a time and</text>
+  <text x="512" y="6010.5" data-type-role="brick-text" font-size="17" fill="#57606a">a size limit per source; compares the pins, the</text>
+  <text x="512" y="6032.5" data-type-role="brick-text" font-size="17" fill="#57606a">versions, the hash of a page, the list of an index;</text>
+  <text x="512" y="6054.5" data-type-role="brick-text" font-size="17" fill="#57606a">says up to date, behind or unreadable, never the</text>
+  <text x="512" y="6076.5" data-type-role="brick-text" font-size="17" fill="#57606a">text it read</text>
+  <rect x="846" y="5920.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="878" y="5938.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="500" y="6118.5" width="420" height="92" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="512" y="6148.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Readers in parallel (O.3e)</text>
+  <text x="512" y="6174.5" data-type-role="brick-text" font-size="17" fill="#57606a">a small model extracts what changed, as</text>
+  <text x="512" y="6196.5" data-type-role="brick-text" font-size="17" fill="#57606a">quotations the host checks</text>
+  <rect x="856" y="6106.5" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="883" y="6124.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
+  <rect x="956" y="5932.5" width="420" height="114" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="968" y="5962.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Register and record</text>
+  <text x="968" y="5988.5" data-type-role="brick-text" font-size="17" fill="#57606a">each source, the files that rely on it and what was</text>
+  <text x="968" y="6010.5" data-type-role="brick-text" font-size="17" fill="#57606a">read of it; the decision taken for each change; the</text>
+  <text x="968" y="6032.5" data-type-role="brick-text" font-size="17" fill="#57606a">two pins moved one at a time (1b.8)</text>
+  <rect x="1302" y="5920.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1334" y="5938.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <rect x="956" y="6074.5" width="420" height="114" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="968" y="6104.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">First reading, inventory</text>
+  <text x="968" y="6130.5" data-type-role="brick-text" font-size="17" fill="#57606a">the 22 pages and the two indexes, never read yet;</text>
+  <text x="968" y="6152.5" data-type-role="brick-text" font-size="17" fill="#57606a">what Anthropic offers and the platform does not</text>
+  <text x="968" y="6174.5" data-type-role="brick-text" font-size="17" fill="#57606a">use; the SDLC playbook enters the register</text>
+  <rect x="1312" y="6062.5" width="54" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1339" y="6080.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
+  <polyline points="500,5960.5 466,5960.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <polyline points="956,5960.5 922,5960.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="24" y="6384.5" width="1352" height="92" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="36" y="6414.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">When a source moved · the maintainer, never the command</text>
+  <text x="36" y="6440.5" data-type-role="brick-text" font-size="17" fill="#57606a">1 · red: the weekly workflow, or the command by hand · 2 · read the difference, not the page · 3 · classify: mandatory, pertinent or does not apply, with its reason · 4 · decide; a</text>
+  <text x="36" y="6462.5" data-type-role="brick-text" font-size="17" fill="#57606a">pin moves alone, with the gate as its proof · 5 · record the decision and the reading</text>
+  <rect x="1302" y="6372.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1334" y="6390.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
 </svg>

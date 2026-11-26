@@ -69,7 +69,9 @@ Given(
     // What the gate leaves in the worktree is not a change of the tree.
     writeFileSync(join(git.work, '.gitignore'), 'reports/\n');
     git.commit(commit, parent);
-    const gh = ghForge(this);
+    // The runs of the forge carry the display name the committed file asks for: the push entry of the gate.
+    const { workflow } = JSON.parse(readFileSync(COMMITTED, 'utf8')) as { workflow: string };
+    const gh = ghForge(this, workflow);
     gh.hasRun(git.hashOf(commit), {
       id: 42,
       completed: true,
@@ -78,7 +80,9 @@ Given(
         'gate-macos',
         'gate-linux-cucumber-1',
         'gate-linux-cucumber-2',
-        ...Array.from({ length: 16 }, (_, i) => i + 1).flatMap((lane) => [
+        'gate-linux-plan',
+        // The lanes this run planned: the delivery takes however many the run holds.
+        ...Array.from({ length: 3 }, (_, i) => i + 1).flatMap((lane) => [
           'gate-linux-lane-' + lane + ' / mutation',
           'gate-linux-lane-' + lane + ' / replay',
         ]),
@@ -430,19 +434,75 @@ Given('the delivery command has its required producer only in the preceding atte
   gh.hasRun(git.hashOf('h1'), { id: 42, completed: true, attempt: 3, jobs });
   gh.answers('attempt', '42/2', {
     stdout: JSON.stringify([
-      { jobs: [{ name: 'producer', conclusion: 'success', runner_name: 'runner', steps: [] }] },
+      {
+        total_count: 1,
+        jobs: [{ id: 31, name: 'producer', conclusion: 'success', runner_name: 'runner', steps: [] }],
+      },
     ]),
   });
   gh.answers('attempt', '42/1', { exit: 89 });
 });
 
-Then('the delivery command only read the third and second job attempts, in order', function () {
+Given(
+  'the {word} delivery command has a {word} latest pair with an older {word} lane',
+  function (groups: string, pair: string, outcome: string) {
+    const { git, gh, config } = commandOf(this);
+    const settings = JSON.parse(readFileSync(config, 'utf8'));
+    const planned = {
+      'gate-linux': {
+        producers: ['plan'],
+        plannedProducers: { prefix: 'lane-', suffixes: ['-mutation', '-replay'] },
+        admissionStep: 'Require all producers',
+      },
+    };
+    const fixed = { 'gate-macos': { producers: ['mac-preflight'], admissionStep: 'Check macOS' } };
+    const names = ['gate-linux', 'gate-macos', 'plan', 'lane-1-replay'];
+    const configurations = {
+      'planned-only': planned,
+      'fixed-first': { ...fixed, ...planned },
+      'planned-first': { ...planned, ...fixed },
+    };
+    assert.ok(Object.hasOwn(configurations, groups), groups);
+    settings.jobDependencies = configurations[groups as keyof typeof configurations];
+    if (Object.hasOwn(settings.jobDependencies, 'gate-macos')) names.push('mac-preflight');
+    writeFileSync(config, JSON.stringify(settings));
+    if (pair === 'complete') names.push('lane-1-mutation');
+    const jobs = names.map((name) => ({
+      name,
+      conclusion: 'success' as const,
+      hadRunner: true,
+      failedStep: false,
+    }));
+    gh.hasRun(git.hashOf('h1'), { id: 42, completed: true, attempt: 2, jobs });
+    const prior = ['lane-1-mutation', 'lane-2-mutation', 'lane-2-replay'].map((name, index) => ({
+      id: index + 1,
+      name,
+      conclusion: name === 'lane-2-replay' ? outcome : 'success',
+      runner_name: 'runner',
+      steps: [],
+    }));
+    gh.answers('attempt', '42/1', { stdout: JSON.stringify([{ total_count: prior.length, jobs: prior }]) });
+  },
+);
+
+Given('the older delivery attempt returns only one already seen job of three', function () {
+  commandOf(this).gh.answers('attempt', '42/1', {
+    stdout: JSON.stringify([
+      {
+        total_count: 3,
+        jobs: [{ id: 91, name: 'lane-1-mutation', runner_name: 'runner', conclusion: 'success' }],
+      },
+    ]),
+  });
+});
+
+Then('the delivery command read only job attempts {string} in order', function (attempts: string) {
   const calls = commandOf(this)
     .gh.asked()
     .filter((line) => line.includes('/attempts/'));
   assert.deepEqual(
     calls.map((line) => /\/attempts\/(\d+)\/jobs/.exec(line)?.[1]),
-    ['3', '2'],
+    attempts.split(', '),
   );
 });
 

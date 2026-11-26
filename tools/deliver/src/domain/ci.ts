@@ -1,8 +1,29 @@
 // What a run of the workflow says of the required jobs.
-import type { DeliverConfig } from './config.js';
+import type { DeliverConfig, JobDependency } from './config.js';
 import type { CiJob, CiRun } from './ports.js';
 
 export type CiState = 'missing' | 'waiting' | 'green' | 'no-runner' | 'failed';
+
+/**
+ * GitHub returns one job per lane and suffix. Check the complete names: a suffix may
+ * end in another suffix, and a suffix may start with a digit of the lane number.
+ */
+function plannedProducers(
+  jobs: readonly CiJob[],
+  family: JobDependency['plannedProducers'],
+): string[] | undefined {
+  if (family === undefined) return [];
+  const names = jobs.map(({ name }) => name).filter((name) => name.startsWith(family.prefix));
+  const count = names.length / family.suffixes.length;
+  if (!Number.isInteger(count)) return undefined;
+  const unmatched = new Set(names);
+  for (let lane = 1; lane <= count; lane++) {
+    for (const suffix of family.suffixes) {
+      if (!unmatched.delete(family.prefix + lane + suffix)) return undefined;
+    }
+  }
+  return names;
+}
 
 /** A dependent job can run solely to report that GitHub never assigned its producer a runner. */
 export function ciState(
@@ -22,8 +43,13 @@ export function ciState(
     if (job === undefined) return 'failed';
     const group = Object.hasOwn(dependencies, name) ? dependencies[name] : undefined;
     if (group !== undefined) {
+      const planned = plannedProducers(run.jobs, group.plannedProducers);
+      if (planned === undefined) return 'failed';
+      // A green aggregate judged at least the lane of the canary: a run that shows none is not the gate.
+      if (group.plannedProducers !== undefined && planned.length === 0 && job.conclusion === 'success')
+        return 'failed';
       let producerDidNotSucceed = false;
-      for (const producer of group.producers) {
+      for (const producer of [...group.producers, ...planned]) {
         const upstream = uniqueJob(producer);
         if (upstream === undefined || upstream.failedStep) return 'failed';
         producerDidNotSucceed ||= upstream.conclusion !== 'success';

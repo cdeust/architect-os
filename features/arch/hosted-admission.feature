@@ -31,6 +31,74 @@ Feature: Hosted runtime admission
       | lane       |
       | aggregate  |
 
+  Scenario Outline: the base lookup distinguishes an unavailable count from a failed retrieval for <situation>
+    Then the Gate fetches its Linux base for "<situation>" with outcome "<outcome>"
+
+    Examples:
+      | situation          | outcome  |
+      | current            | restored |
+      | legacy             | restored |
+      | root               | fallback |
+      | no run             | fallback |
+      | missing            | fallback |
+      | expired            | fallback |
+      | API error          | error    |
+      | malformed          | error    |
+      | truncated          | error    |
+      | invalid id         | error    |
+      | unrelated invalid id | error  |
+      | inconsistent total | error    |
+      | duplicate page     | error    |
+      | missing path       | error    |
+      | empty path         | error    |
+      | wrong event        | error    |
+      | wrong branch       | error    |
+      | wrong sha          | error    |
+      | artifact API error | error    |
+      | download error     | error    |
+
+  Scenario Outline: the judge downloads the producers of its own plan and refuses a run that holds another set: <situation>
+    Then the Gate downloads the producers of the plan of the judge alone, for "<situation>"
+
+    Examples:
+      | situation                                                |
+      | the plan the run followed                                |
+      | a run that started fewer lanes, the plan being its lanes |
+      | a plan of fewer lanes than the run started               |
+      | a plan of more lanes than the run started                |
+      | an artifact of a lane outside the plan, without its job  |
+      | a job of a lane outside the plan, without its artifact   |
+      | a lane job under a name no plan gives                    |
+      | a lane artifact under a name no plan gives               |
+      | no plan                                                  |
+      | an empty plan                                            |
+      | a plan that skips a lane                                 |
+      | a plan that does not start at the first lane             |
+      | a plan that is no list                                   |
+      | a plan longer than a matrix                              |
+
+  Scenario Outline: the judge checks the entire REST collection before fetching evidence
+    Then the judge sees "<situation>" for "<source>" and "<outcome>" its evidence
+
+    Examples:
+      | source          | situation                             | outcome   |
+      | historical jobs | complete pages                        | downloads |
+      | current jobs    | complete pages                        | downloads |
+      | run artifacts   | complete pages                        | downloads |
+      | historical jobs | an omitted outside-plan entry         | refuses   |
+      | current jobs    | an omitted outside-plan entry         | refuses   |
+      | run artifacts   | an omitted outside-plan entry         | refuses   |
+      | historical jobs | a different total on the second page  | refuses   |
+      | historical jobs | a repeated ID across pages            | refuses   |
+      | historical jobs | a fractional ID on an unrelated entry | refuses   |
+      | historical jobs | a zero ID on an unrelated entry       | refuses   |
+      | historical jobs | no pages                              | refuses   |
+      | run artifacts   | a repeated ID across pages            | refuses   |
+      | historical jobs | a missing total                       | refuses   |
+
+  Scenario: the plan job gives its matrix the lanes of the plan, and nothing that is not a list of lanes
+    Then the plan job announces the lanes "[1,2,3]" to its matrix and refuses "[] | [0] | [01] | [1, 2] | [1,2,] | [1000] | 1 | [a] | [1]]"
+
   Scenario Outline: partial reruns bind the downloaded evidence to its physical producer
     Then the Gate resolves the producer history for "<history>"
 

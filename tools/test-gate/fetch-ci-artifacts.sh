@@ -10,6 +10,17 @@ case "$head" in
   ''|*[!0-9a-f]*) exit 1 ;;
 esac
 test "${#head}" -eq 40
+# Each REST page declares the size of the entire collection. Repeated IDs can mask a missing row.
+complete_rows() {
+  jq -ce --arg key "$1" '
+    if type != "array" or length == 0 or any(.[]; (.[$key] | type) != "array")
+    then error("invalid pages for " + $key) end |
+    [.[] | .[$key][]] as $rows |
+    if any(.[]; .total_count != ($rows | length)) or
+       any($rows[].id; type != "number" or . <= 0 or floor != .) or
+       ([$rows[].id] | unique | length) != ($rows | length)
+    then error("incomplete or invalid " + $key) else $rows end'
+}
 # Attempt-scoped pages distinguish a real execution from a successful job copied by a partial rerun.
 # Fetch each set of pages and its boundary once, before the parallel lot downloads.
 jobs=$(
@@ -22,8 +33,9 @@ jobs=$(
         select(.run_attempt == $n and .id == $run and .head_sha == $head) | .run_started_at | fromdateiso8601') || exit 1
     fi
     pages=$(gh api --paginate --slurp "$repository/attempts/$n/jobs?per_page=100") || exit 1
-    printf '%s\n' "$pages" | jq -ce --argjson n "$n" --argjson start "$start" '
-      {attempt:$n, start:$start, jobs:[.[].jobs[] |
+    rows=$(printf '%s\n' "$pages" | complete_rows jobs) || exit 1
+    printf '%s\n' "$rows" | jq -ce --argjson n "$n" --argjson start "$start" '
+      {attempt:$n, start:$start, jobs:[.[] |
         if has("run_attempt") and .run_attempt != $n then error("producer attempt differs")
         else .run_attempt = $n end]}' || exit 1
     n=$((n + 1))
@@ -32,8 +44,9 @@ jobs=$(
 jobs=$(printf '%s\n' "$jobs" | jq -cse '
   if length == 1 or ([.[].start] as $s | $s == ($s | sort | unique)) then .
   else error("ambiguous attempt boundaries") end')
-artifacts=$(gh api --paginate --slurp "$repository/artifacts?per_page=100")
-artifact_names=$(printf '%s\n' "$artifacts" | jq -c '[.[].artifacts[].name]')
+pages=$(gh api --paginate --slurp "$repository/artifacts?per_page=100")
+artifacts=$(printf '%s\n' "$pages" | complete_rows artifacts)
+artifact_names=$(printf '%s\n' "$artifacts" | jq -c '[.[].name]')
 job_origin() {
   printf '%s\n' "$jobs" | jq -er --arg name "$1" --arg prefix "$2" --arg suffix "$3" --arg head "$head" \
     --argjson artifacts "$artifact_names" --argjson run "$GITHUB_RUN_ID" '
@@ -42,7 +55,7 @@ job_origin() {
         [.steps[] | {number, name, status, conclusion, started_at, completed_at}]];
       . as $attempts | [.[].jobs[] | select(.name == $name)] as $rows
       | if ($rows | length) == 0 or
-          ($rows | any(.run_id != $run or .head_sha != $head or (.id | type != "number" or . <= 0))) or
+          ($rows | any(.run_id != $run or .head_sha != $head)) or
           ($rows | group_by(.run_attempt) | any(length != 1)) or
           any($attempts[]; .attempt as $n |
             ($rows | all(.run_attempt != $n)) and
@@ -71,9 +84,8 @@ job_origin() {
 }
 artifact_origin() {
   printf '%s\n' "$artifacts" | jq -er --arg name "$1" '
-    [.[].artifacts[] | select(.name == $name)] as $rows
-    | if ($rows | length) == 1 and $rows[0].expired == false and
-         ($rows[0].id | type == "number" and . > 0)
+    [.[] | select(.name == $name)] as $rows
+    | if ($rows | length) == 1 and $rows[0].expired == false
       then $rows[0].id
       else error("artifact absent or ambiguous: " + $name)
       end'
@@ -114,9 +126,11 @@ download_mutation() {
   target="${ARCHITECT_OS_RUN_DIR:?}/reports/mutation-shards/$lane"
   download_artifact "$artifact" "$target" mutation/head mutation/native.json mutation-inventory.json
 }
+# A lane is named by the plan of the checkout that asks for it: a number without a leading zero, three digits at most
+# (a matrix of GitHub Actions holds 256 jobs). Whether the plan holds it is decided by hosted-gate, never here.
 valid_lane() {
   case "$1" in
-    [1-9]|1[0-6]) return 0 ;;
+    [1-9]|[1-9][0-9]|[1-9][0-9][0-9]) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -126,6 +140,23 @@ if [ "$#" -eq 2 ] && [ "$1" = mutation ]; then
   exit 0
 fi
 test "$#" -eq 0
+# The judge downloads the producers of the plan it derived from its own checkout (`hosted-gate lanes`, the step before
+# this one), never a list a producer or the plan job gave: the lanes 1 to n, and a run that holds a lane job or a lane
+# artifact of any other name is refused whole.
+plan_file=$(node "$entry/tools/test-gate/report-files.mjs" path reports/mutation-lanes.json)
+lanes=$(jq -er 'if type == "array" and length >= 1 and length <= 256 and . == [range(1; length + 1)]
+  then length else error("plan absent or invalid") end' "$plan_file")
+printf '%s\n' "$jobs" | jq -e --argjson lanes "$lanes" '
+  [range(1; $lanes + 1) | "gate-linux-lane-\(.) / mutation", "gate-linux-lane-\(.) / replay"] as $planned
+  | [.[].jobs[].name] as $names
+  | if ($planned | all(. as $name | $names | index($name) != null)) | not then error("planned producer absent")
+    elif ($names | any(startswith("gate-linux-lane-") and (. as $name | $planned | index($name) == null)))
+    then error("producer outside the plan") else true end' > /dev/null
+printf '%s\n' "$artifact_names" | jq -e --argjson lanes "$lanes" '
+  [.[] | select(test("^gate-(mutation|replay)-linux-"))
+    | select((capture("^gate-(mutation|replay)-linux-[1-9][0-9]*-(?<lane>[1-9][0-9]*)$") // {lane: "0"})
+        | (.lane | tonumber) as $lane | $lane < 1 or $lane > $lanes)]
+  | if length == 0 then true else error("artifact outside the plan") end' > /dev/null
 for part in 1 2; do
   binding=$(job_origin "gate-linux-cucumber-$part" gate-cucumber-linux- "-$part")
   attempt=${binding%% *}
@@ -152,7 +183,7 @@ wait_downloads() {
   done
   pids=
 }
-for part in $(seq 1 16); do
+for part in $(seq 1 "$lanes"); do
   download_replay "$part" &
   pids="$pids $!"
   if [ "$((part % 5))" -eq 0 ]; then

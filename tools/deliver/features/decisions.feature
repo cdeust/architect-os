@@ -115,6 +115,47 @@ Feature: The decisions of the delivery command (pure: the trial branch, the stat
     Scenario: a real failure of the independent check stops the rerun
       Then the completed gate with producers "a" and jobs "linux=failure/runner/Require all producers, a=cancelled/norunner, macos=failure/runner/failed-step" is "failed"
 
+  Rule: the lanes a run planned are producers of its aggregate, taken from the run and never counted by the delivery
+
+    Scenario Outline: the aggregate "linux" with the planned family lane-<n>:m and lane-<n>:r, <case>
+      Then the completed gate with producers "a", the planned family "lane-" of ":m, :r" and jobs "linux=<aggregate>, a=success/runner, macos=success/runner<lanes>" is "<state>"
+
+      Examples:
+        | case                                   | aggregate                            | lanes                                                                                              | state     |
+        | one lane, green                        | success/runner                       | , lane-1:m=success/runner, lane-1:r=success/runner                                                 | green     |
+        | three lanes, green                     | success/runner                       | , lane-2:r=success/runner, lane-1:m=success/runner, lane-3:m=success/runner, lane-1:r=success/runner, lane-2:m=success/runner, lane-3:r=success/runner | green |
+        | no lane under a green aggregate        | success/runner                       |                                                                                                    | failed    |
+        | no lane, the aggregate got no runner   | cancelled/norunner                   |                                                                                                    | no-runner |
+        | no lane, the aggregate red on its own  | failure/runner/failed-step           |                                                                                                    | failed    |
+        | a lane that failed, aggregate green    | success/runner                       | , lane-1:m=failure/runner/failed-step, lane-1:r=skipped/norunner                                   | failed    |
+        | a lane cancelled, aggregate green      | success/runner                       | , lane-1:m=cancelled/norunner, lane-1:r=skipped/norunner                                           | failed    |
+        | a lane that never got a runner         | failure/runner/Require all producers | , lane-1:m=cancelled/norunner, lane-1:r=skipped/norunner                                           | no-runner |
+        | the second lane never got a runner     | failure/runner/Require all producers | , lane-1:m=success/runner, lane-1:r=success/runner, lane-2:m=success/runner, lane-2:r=cancelled/norunner | no-runner |
+        | a lane that failed a step              | failure/runner/Require all producers | , lane-1:m=failure/runner/failed-step, lane-1:r=skipped/norunner                                   | failed    |
+        | every lane green, the aggregate red    | failure/runner/Require all producers | , lane-1:m=success/runner, lane-1:r=success/runner                                                 | failed    |
+        | a lane without its second job          | success/runner                       | , lane-1:m=success/runner                                                                          | failed    |
+        | a lane job listed twice                | success/runner                       | , lane-1:m=success/runner, lane-1:r=success/runner, lane-1:r=success/runner                        | failed    |
+        | a gap in the lanes                     | success/runner                       | , lane-1:m=success/runner, lane-1:r=success/runner, lane-3:m=success/runner, lane-3:r=success/runner | failed  |
+        | lanes that do not start at the first   | success/runner                       | , lane-2:m=success/runner, lane-2:r=success/runner                                                 | failed    |
+        | a lane with a leading zero             | success/runner                       | , lane-01:m=success/runner, lane-01:r=success/runner                                               | failed    |
+        | a family job without a lane            | success/runner                       | , lane-1:m=success/runner, lane-1:r=success/runner, lane-:m=success/runner                         | failed    |
+        | a family job with another suffix       | success/runner                       | , lane-1:m=success/runner, lane-1:r=success/runner, lane-1:x=success/runner                        | failed    |
+        | a suffix that is not at the end        | success/runner                       | , lane-1:m=success/runner, lane-1:r=success/runner, lane-1:m:x=success/runner                      | failed    |
+        | a job outside the family               | success/runner                       | , lane-1:m=success/runner, lane-1:r=success/runner, xlane-9:m=failure/runner/failed-step           | green     |
+
+    Scenario Outline: suffixes that overlap use the complete job names
+      Then the completed gate with producers "a", the planned family "p-" of "<suffixes>" and jobs "linux=success/runner, a=success/runner, macos=success/runner, <members>" is "<state>"
+
+      Examples:
+        | suffixes | members                                      | state |
+        | x, 1x    | p-1x=success/runner, p-11x=success/runner    | green |
+        | 1x, x    | p-11x=success/runner, p-1x=success/runner    | green |
+        | -1x, x   | p-1x=success/runner, p-1-1x=success/runner   | green |
+        | x, 1x    | p-1x=success/runner, p-111x=success/runner   | failed |
+
+    Scenario: without a planned family, jobs named like lanes are not producers
+      Then the completed gate with producers "a" and jobs "linux=success/runner, a=success/runner, macos=success/runner, lane-1:m=failure/runner/failed-step" is "green"
+
   Rule: the plan of what to publish is the parent and the branches left, or a refusal
 
     Scenario: every branch is at the parent

@@ -65,6 +65,22 @@ Then(
   },
 );
 
+Then(
+  'the completed gate with producers {string}, the planned family {string} of {string} and jobs {string} is {string}',
+  function (producerNames: string, prefix: string, suffixes: string, jobs: string, state: string) {
+    assert.equal(
+      ciState(parseRun('completed', jobs), ['linux', 'macos'], {
+        linux: {
+          producers: producerNames.split(', '),
+          plannedProducers: { prefix, suffixes: suffixes.split(', ') },
+          admissionStep: 'Require all producers',
+        },
+      }),
+      state,
+    );
+  },
+);
+
 /** `feat/gate-1a=p0, main=p0`. */
 const remotes = (text: string): { branch: string; head: string }[] =>
   text.split(', ').map((spec) => {

@@ -391,6 +391,28 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | in-memory |
         | gh        |
 
+    Scenario Outline: a run whose failed jobs ran again gives the newest execution of each job, asked for <asked>
+      Given a delivery forge of the <adapter> adapter
+      And the delivery forge holds for the commit "0000000000000000000000000000000000000021" the run 31, whose attempts executed the jobs '[[{"name":"gate-linux-lane-1","conclusion":"failure","hadRunner":true,"failedStep":true},{"name":"gate-linux-lane-2","conclusion":"success","hadRunner":true,"failedStep":false}],[{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false}]]'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021", asked for '<names>', the run 31 at attempt 2 with the jobs '<jobs>'
+
+      Examples:
+        | adapter   | asked                     | names                   | jobs |
+        | in-memory | every job                 | all                     | [{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false},{"name":"gate-linux-lane-2","conclusion":"success","hadRunner":true,"failedStep":false}] |
+        | gh        | every job                 | all                     | [{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false},{"name":"gate-linux-lane-2","conclusion":"success","hadRunner":true,"failedStep":false}] |
+        | in-memory | the job of the last attempt | ["gate-linux-lane-1"] | [{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false}] |
+        | gh        | the job of the last attempt | ["gate-linux-lane-1"] | [{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false}] |
+
+    Scenario Outline: a run whose failed jobs ran again, asked for no job, gives the newest execution of every job
+      Given a delivery forge of the <adapter> adapter
+      And the delivery forge holds for the commit "0000000000000000000000000000000000000022" the run 32, whose attempts executed the jobs '[[{"name":"gate-linux-lane-1","conclusion":"failure","hadRunner":true,"failedStep":true},{"name":"gate-linux-lane-2","conclusion":"success","hadRunner":true,"failedStep":false}],[{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false}]]'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000022", asked for no job, the run 32 at attempt 2 with the jobs '[{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false},{"name":"gate-linux-lane-2","conclusion":"success","hadRunner":true,"failedStep":false}]'
+
+      Examples:
+        | adapter   |
+        | in-memory |
+        | gh        |
+
     Scenario Outline: a rerun is recorded, and the run is then not completed, without jobs
       Given a delivery forge of the <adapter> adapter
       And the delivery forge holds for the commit "0000000000000000000000000000000000000003" the run 9, completed "yes", with the jobs '[{"name":"gate-macos","conclusion":"cancelled","hadRunner":false,"failedStep":false}]'
@@ -635,7 +657,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       Given a delivery forge of the gh adapter
       And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
       And the gh forge answers the run of "7" with '{"id":7,"head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}'
-      And the gh forge answers the attempt of "7/2" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"failure"}]}]'
+      And the gh forge answers the attempt of "7/2" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"failure","id":21}],"total_count":1}]'
       Then the effective jobs of the gh run for "linux" have the state "failed"
 
     Scenario: lack of a proven attempt stops delivery before a rerun request
@@ -653,8 +675,8 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
     Scenario Outline: a partial rerun uses the newest execution of each job across all pages
       Given a delivery forge of the gh adapter
       And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}]}'
-      And the gh forge answers the attempt of "7/2" with '[{"jobs":[]},{"jobs":[{"name":"linux","runner_name":"runner","conclusion":"<latest>"}]}]'
-      And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"linux","runner_name":"runner","conclusion":"<old>"},{"name":"macos","runner_name":"runner","conclusion":"success"}]}]'
+      And the gh forge answers the attempt of "7/2" with '[{"jobs":[],"total_count":1},{"jobs":[{"name":"linux","runner_name":"runner","conclusion":"<latest>","id":21}],"total_count":1}]'
+      And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"linux","runner_name":"runner","conclusion":"<old>","id":11},{"name":"macos","runner_name":"runner","conclusion":"success","id":12}],"total_count":2}]'
       Then the effective jobs of the gh run for "linux, macos" have the state "<state>"
 
       Examples:
@@ -662,11 +684,28 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | success | failure | green  |
         | failure | success | failed |
 
+    Scenario Outline: an attempt job list with <defect> stops delivery before a verdict
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":1}]}'
+      And the gh forge answers the attempt of "7/1" with '<pages>'
+      When I ask the gh forge for a delivery decision
+      Then the gh forge failed with "the forge did not answer: jobs"
+
+      Examples:
+        | defect                    | pages |
+        | no page                   | [] |
+        | no total                  | [{"jobs":[]}] |
+        | a missing job ID          | [{"total_count":1,"jobs":[{"name":"linux","runner_name":"r","conclusion":"success"}]}] |
+        | a zero ID                 | [{"total_count":1,"jobs":[{"id":0,"name":"linux","runner_name":"r","conclusion":"success"}]}] |
+        | a fractional ID           | [{"total_count":1,"jobs":[{"id":1.5,"name":"linux","runner_name":"r","conclusion":"success"}]}] |
+        | inconsistent page totals  | [{"total_count":1,"jobs":[{"id":1,"name":"linux","runner_name":"r","conclusion":"success"}]},{"total_count":2,"jobs":[]}] |
+        | a repeated ID across pages | [{"total_count":2,"jobs":[{"id":1,"name":"linux","runner_name":"r","conclusion":"success"}]},{"total_count":2,"jobs":[{"id":1,"name":"macos","runner_name":"r","conclusion":"success"}]}] |
+
     Scenario: an empty current attempt cannot inherit successful jobs from an earlier execution
       Given a delivery forge of the gh adapter
       And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}]}'
-      And the gh forge answers the attempt of "7/2" with '[{"jobs":[]}]'
-      And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success"}]}]'
+      And the gh forge answers the attempt of "7/2" with '[{"jobs":[],"total_count":0}]'
+      And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success","id":11}],"total_count":1}]'
       Then the gh run for "linux" is:
         """
         {"id":7,"completed":true,"attempt":2,"jobs":[]}
@@ -680,7 +719,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
     Scenario: a complete current attempt makes no request for an older attempt
       Given a delivery forge of the gh adapter
       And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}]}'
-      And the gh forge answers the attempt of "7/2" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success"}]}]'
+      And the gh forge answers the attempt of "7/2" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success","id":21}],"total_count":1}]'
       Then the gh run for "linux" is:
         """
         {"id":7,"completed":true,"attempt":2,"jobs":[{"name":"linux","conclusion":"success","hadRunner":true,"failedStep":false}]}
@@ -694,15 +733,15 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
     Scenario: an empty historical attempt does not stop the search for another required job
       Given a delivery forge of the gh adapter
       And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":3}]}'
-      And the gh forge answers the attempt of "7/3" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success"}]}]'
-      And the gh forge answers the attempt of "7/2" with '[{"jobs":[]}]'
-      And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"macos","runner_name":"r","conclusion":"success"}]}]'
+      And the gh forge answers the attempt of "7/3" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success","id":31}],"total_count":1}]'
+      And the gh forge answers the attempt of "7/2" with '[{"jobs":[],"total_count":0}]'
+      And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"macos","runner_name":"r","conclusion":"success","id":11}],"total_count":1}]'
       Then the effective jobs of the gh run for "linux, macos" have the state "green"
 
     Scenario: a completed attempt can also be read without a job filter
       Given a delivery forge of the gh adapter
       And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":1}]}'
-      And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success"}]}]'
+      And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success","id":11}],"total_count":1}]'
       Then the unfiltered gh run is:
         """
         {"id":7,"completed":true,"attempt":1,"jobs":[{"name":"linux","conclusion":"success","hadRunner":true,"failedStep":false}]}

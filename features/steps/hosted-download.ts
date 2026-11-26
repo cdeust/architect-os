@@ -27,10 +27,13 @@ const base = 'Base of the count (artifact of the last green main run)';
 const fetch = 'Fetch reports from the effective producer jobs';
 const mutation = 'Fetch the mutation report';
 const token = '${{ github.token }}';
+// The two entries of the gate (pull requests, pushes) carry the same jobs; the lane workflow is called by both.
+const ENTRIES = ['gate.yml', 'gate-push.yml'];
 function downloads(file: string, doc: Gate) {
   assert.ok(!doc.env?.['GH_TOKEN']);
-  const expected: Record<string, string[]> =
-    file === 'gate.yml' ? { 'gate-linux': [fetch, base], 'gate-macos': [base] } : { replay: [mutation] };
+  const expected: Record<string, string[]> = ENTRIES.includes(file)
+    ? { 'gate-linux': [fetch, base], 'gate-macos': [base] }
+    : { replay: [mutation] };
   for (const [job, { env, steps = [] }] of Object.entries(doc.jobs)) {
     assert.ok(!env?.['GH_TOKEN']);
     const allowed = expected[job] ?? [];
@@ -42,9 +45,11 @@ function downloads(file: string, doc: Gate) {
     for (const step of authenticated) {
       assert.equal(step.env?.['GH_TOKEN'], token);
       if (step.name === base) {
-        const lines = step.run?.trimEnd().split('\n') ?? [];
-        assert.equal(lines[0], "sh tools/runtime/gate-job.sh -- sh -e <<'BASE'");
-        assert.equal(lines.indexOf('BASE'), lines.length - 1);
+        assert.equal(
+          step.run,
+          'sh tools/runtime/gate-job.sh -- sh tools/test-gate/fetch-gate-base.sh ' +
+            job.slice('gate-'.length),
+        );
       } else {
         const args = step.name === mutation ? ' mutation "$AOS_LANE"' : '';
         assert.equal(
@@ -59,7 +64,7 @@ function actual(file: string): Gate {
   return parse(readFileSync(join(ROOT, '.github/workflows', file), 'utf8'));
 }
 Then('every Gate download keeps its token scoped to an admitted retrieval step', function () {
-  for (const file of ['gate.yml', 'gate-lane.yml']) {
+  for (const file of [...ENTRIES, 'gate-lane.yml']) {
     const doc = actual(file);
     downloads(file, doc);
     for (const job of Object.values(doc.jobs))
@@ -78,30 +83,72 @@ Then('every Gate download keeps its token scoped to an admitted retrieval step',
 });
 
 const head = 'a'.repeat(40);
-function providerFixture(dir: string) {
+export function providerFixture(dir: string) {
   const bin = join(dir, 'bin');
   mkdirSync(bin);
-  writeFileSync(join(bin, 'git'), '#!/bin/sh\nprintf "%s\\n" "$FIXTURE_HEAD"\n', { mode: 0o700 });
+  const git = [
+    '#!/bin/sh',
+    'case "$1" in',
+    '  show) if [ "$BASE_CASE" != root ]; then echo "$FIXTURE_HEAD"; fi ;;',
+    '  ls-tree) [ "$#" = 5 ] && [ "$2" = --name-only ] && [ "$3" = "$FIXTURE_HEAD" ] &&',
+    '    [ "$4" = -- ] && [ "$5" = .github/workflows/gate-push.yml ] || exit 1',
+    '    if [ "$BASE_CASE" != legacy ]; then echo ".github/workflows/gate-push.yml"; fi ;;',
+    '  *) echo "$FIXTURE_HEAD" ;;',
+    'esac',
+  ];
+  writeFileSync(join(bin, 'git'), git.join('\n') + '\n', { mode: 0o700 });
   const provider = [
     "import fs from 'node:fs';",
     'const [cmd,...args]=process.argv.slice(2),env=process.env;',
     "if(env.GH_TOKEN!=='fixture-read-token') process.exit(42);",
     "fs.appendFileSync(env.CALLS,JSON.stringify([cmd,...args])+'\\n');",
-    "if(cmd==='run'){fs.writeFileSync(args[args.indexOf('-D')+1]+'/downloaded',args[args.indexOf('-n')+1]);process.exit(0);}",
+    "if(cmd==='run'){",
+    "  if(args[0]!=='download'||args[1]!=='33')process.exit(41);",
+    "  fs.writeFileSync(args[args.indexOf('-D')+1]+'/gate-base.json',args[args.indexOf('-n')+1]);",
+    "  process.exit(env.BASE_CASE==='download error'?1:0);",
+    '}',
     "if(cmd!=='api')process.exit(43);",
+    "if(args.includes('--slurp') && (args.includes('--jq') || args.includes('-q')))process.exit(46);",
     "const endpoint=args.find(value=>value.startsWith('repos/'));",
     'const reply=value=>process.stdout.write(JSON.stringify(value));',
+    'const list=(collection,rows,scope)=>{',
+    "  if(!args.includes('--paginate')||!args.includes('--slurp'))process.exit(45);",
+    "  const custom=fs.existsSync(env.PAGES)?JSON.parse(fs.readFileSync(env.PAGES,'utf8')):{};",
+    '  reply(custom[scope] ?? [{total_count:rows.length,[collection]:rows}]);',
+    '};',
     "if(endpoint.endsWith('/runs/51'))process.stdout.write(env.FIXTURE_HEAD);",
-    "else if(endpoint.includes('workflows/gate.yml/runs?')&&endpoint.includes('head_sha='+env.FIXTURE_HEAD))process.stdout.write('33');",
+    "else if(endpoint==='repos/fixture/repo/actions/runs?branch=main&event=push&status=success&head_sha='+env.FIXTURE_HEAD+'&per_page=100'){",
+    "  if(!args.includes('--paginate')||!args.includes('--slurp'))process.exit(45);",
+    "  if(env.BASE_CASE==='API error'){reply({message:'API failed'});process.exit(1);}",
+    "  if(env.BASE_CASE==='malformed'){reply([{message:'no collection'}]);process.exit(0);}",
+    "  const legacy=env.BASE_CASE==='legacy',row={event:'push',status:'completed',conclusion:'success',head_sha:env.FIXTURE_HEAD,head_branch:'main',head_repository:{full_name:'fixture/repo'}};",
+    "  const runs=['gate.yml','gate-push.yml'].map((file,i)=>({...row,path:'.github/workflows/'+file,id:(legacy?i===0:i===1)?33:77}));",
+    "  if(env.BASE_CASE==='invalid id')runs[1].id='invalid';",
+    "  if(env.BASE_CASE==='unrelated invalid id')runs[0].id=0;",
+    "  if(env.BASE_CASE==='missing path')delete runs[1].path;",
+    "  if(env.BASE_CASE==='empty path')runs[1].path='';",
+    "  if(env.BASE_CASE==='duplicate page')runs[1]=runs[0];",
+    "  if(env.BASE_CASE==='wrong event')runs[1].event='pull_request';",
+    "  if(env.BASE_CASE==='wrong branch')runs[1].head_branch='trial';",
+    "  if(env.BASE_CASE==='wrong sha')runs[1].head_sha='b'.repeat(40);",
+    "  if(env.BASE_CASE==='no run')runs.pop();",
+    "  reply([{total_count:runs.length,workflow_runs:[runs[0]]},{total_count:env.BASE_CASE==='inconsistent total'?runs.length+1:runs.length,workflow_runs:env.BASE_CASE==='truncated'?[]:runs.slice(1)}]);",
+    '}',
+    "else if(endpoint.startsWith('repos/fixture/repo/actions/runs/33/artifacts?name=gate-base-')){",
+    "  if(env.BASE_CASE==='artifact API error')process.exit(1);",
+    "  const name=new URLSearchParams(endpoint.split('?')[1]).get('name');",
+    "  const artifacts=env.BASE_CASE==='missing'?[]:[{name,expired:env.BASE_CASE==='expired'}];",
+    '  reply({total_count:artifacts.length,artifacts});',
+    '}',
     "else if(endpoint.includes('/runs/51/attempts/')){",
     "  const n=Number(endpoint.split('/attempts/')[1].split('/')[0]);",
     "  if(endpoint.includes('/jobs?')){",
     "    const jobs=JSON.parse(fs.readFileSync(env.JOBS,'utf8')).filter(j=>j.run_attempt===n);",
     "    if(env.OMIT_ATTEMPT==='yes')for(const job of jobs)delete job.run_attempt;",
-    '    reply([{jobs}]);',
+    "    list('jobs',jobs,'attempt-'+n);",
     "  }else reply({id:51,run_attempt:n,head_sha:env.FIXTURE_HEAD,run_started_at:new Date(Date.UTC(2026,10,22,n)).toISOString().replace('.000','')});",
     '}',
-    "else if(endpoint.includes('/runs/51/artifacts?'))reply([{artifacts:JSON.parse(fs.readFileSync(env.ARTIFACTS,'utf8'))}]);",
+    "else if(endpoint.includes('/runs/51/artifacts?'))list('artifacts',JSON.parse(fs.readFileSync(env.ARTIFACTS,'utf8')),'artifacts');",
     "else if(endpoint.endsWith('/zip'))process.stdout.write(fs.readFileSync(env.ARCHIVE));",
     'else process.exit(44);',
   ].join('\n');
@@ -166,6 +213,7 @@ function providerFixture(dir: string) {
     PATH: bin + ':' + dirname(process.execPath) + ':/usr/bin:/bin',
     CALLS: join(dir, 'calls'),
     JOBS: jobsFile,
+    PAGES: join(dir, 'pages.json'),
     ARTIFACTS: artifactsFile,
     ARCHIVE: archive,
     FIXTURE_HEAD: head,
@@ -192,7 +240,11 @@ Then(
       // Keep the checkout executable and script fixed while reports belong to the disposable cwd.
       const command = step.run
         .replace('tools/runtime/gate-job.sh', '"$JOB_WRAPPER"')
-        .replace('tools/test-gate/fetch-ci-artifacts.sh', '"$FETCH_SCRIPT"');
+        .replace('tools/test-gate/fetch-ci-artifacts.sh', '"$FETCH_SCRIPT"')
+        .replace(
+          'tools/test-gate/fetch-gate-base.sh',
+          '"$GITHUB_WORKSPACE/tools/test-gate/fetch-gate-base.sh"',
+        );
       const runner = {
         ...env,
         LAUNCHER: join(ROOT, 'aos'),
@@ -311,6 +363,15 @@ Then(
         assert.notEqual(shell(command, { ...scoped, ARCHIVE: incomplete }).status, 0);
         assert.ok(!existsSync(join(reports, 'mutation-shards/3')));
       }
+      if (kind === 'aggregate') {
+        // The judge derived its plan in the step before: the sixteen lanes this fixture run holds.
+        const plan = JSON.stringify(Array.from({ length: 16 }, (_, i) => i + 1));
+        const refusedWithoutPlan = shell(command, scoped);
+        assert.notEqual(refusedWithoutPlan.status, 0);
+        assert.ok(!readFileSync(env.CALLS, 'utf8').includes('/zip'));
+        rmSync(env.CALLS);
+        writeFileSync(join(reports, 'mutation-lanes.json'), plan + '\n');
+      }
       const accepted = shell(command, scoped);
       if (kind === 'aggregate') {
         const calls = readFileSync(env.CALLS, 'utf8')
@@ -326,7 +387,7 @@ Then(
       assert.equal(accepted.status, 0, accepted.stderr);
       if (kind.endsWith(' base')) {
         assert.equal(
-          readFileSync(join(reports, 'base/downloaded'), 'utf8'),
+          readFileSync(join(reports, 'base/gate-base.json'), 'utf8'),
           'gate-base-' + kind.split(' ')[0],
         );
       } else {
@@ -517,3 +578,37 @@ Then('the Gate resolves the producer history for {string}', function (history: s
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+Then(
+  'the Gate fetches its Linux base for {string} with outcome {string}',
+  function (situation: string, outcome: string) {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'aos-base-')));
+    try {
+      const env = providerFixture(dir);
+      const root = join(dir, 'runtime');
+      mkdirSync(root);
+      writeFileSync(
+        join(root, '.architect-os-runtime-root'),
+        'architect-os-runtime-root/v2\nenvironment=hosted-runner\n',
+      );
+      const admitted = this.admitFixture(root);
+      const result = spawnSync('/bin/sh', [join(ROOT, 'tools/test-gate/fetch-gate-base.sh'), 'linux'], {
+        cwd: dir,
+        encoding: 'utf8',
+        env: { ...admitted, ...env, BASE_CASE: situation },
+      });
+      const path = join(admitted.ARCHITECT_OS_RUN_DIR!, 'reports/base/gate-base.json');
+      if (outcome === 'error') assert.notEqual(result.status, 0);
+      else assert.equal(result.status, 0, result.stderr);
+      assert.equal(existsSync(path), outcome === 'restored');
+      if (outcome === 'restored') assert.equal(readFileSync(path, 'utf8'), 'gate-base-linux');
+      if (outcome === 'fallback')
+        assert.match(result.stdout, /base: (no first parent|no green main push|.*absent or expired)/);
+      const calls = existsSync(env.CALLS) ? readFileSync(env.CALLS, 'utf8') : '';
+      assert.equal(calls.includes('"download"'), outcome === 'restored' || situation === 'download error');
+      if (situation === 'root') assert.equal(calls, '');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);

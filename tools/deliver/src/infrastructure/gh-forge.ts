@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { effectiveJobs } from '../domain/attempts.js';
 import type { CiJob, CiRun, Forge, RuleSuite } from '../domain/ports.js';
 import { closedEnvironment, runToEnd, type HostEnvironment } from './host-process.js';
 
@@ -83,7 +84,7 @@ export class GhForge implements Forge {
     private readonly host: HostEnvironment,
   ) {}
 
-  run(hash: string, workflow: string, jobNames?: readonly string[]): CiRun | undefined {
+  run(hash: string, workflow: string, jobNames?: readonly string[] | 'all'): CiRun | undefined {
     const { workflow_runs } = this.read(
       'runs',
       [`repos/${this.repository}/actions/runs?head_sha=${hash}&per_page=100`],
@@ -110,7 +111,7 @@ export class GhForge implements Forge {
         : first;
     const jobs =
       version.run_attempt !== undefined && version.status === 'completed'
-        ? this.effectiveJobs(runPath, version.run_attempt, jobNames)
+        ? this.effectiveJobs(runPath, version.run_attempt, jobNames === 'all' ? undefined : jobNames)
         : this.read('jobs', [`${runPath}/jobs?per_page=100`], z.object({ jobs: z.array(jobSchema()) })).jobs;
     return {
       id: version.id,
@@ -136,23 +137,26 @@ export class GhForge implements Forge {
 
   /** The attempt-specific endpoint binds every row to its attempt, even when the row omits run_attempt. */
   private effectiveJobs(path: string, current: number, names?: readonly string[]): ForgeJob[] {
-    const effective: ForgeJob[] = [];
-    const seen = new Set<string>();
-    for (let attempt = current; attempt >= 1; attempt--) {
-      const pages = this.read(
-        'jobs',
-        ['--paginate', '--slurp', `${path}/attempts/${attempt}/jobs?per_page=100`],
-        z.array(z.object({ jobs: z.array(jobSchema()) })),
-      );
-      const rows = pages.flatMap((page) => page.jobs);
-      if (attempt === current && rows.length === 0) return [];
-      // Take the newest execution of each name. Preserve ties from the same attempt for ciState to reject.
-      const fresh = rows.filter((row) => !seen.has(row.name));
-      effective.push(...fresh);
-      for (const row of fresh) seen.add(row.name);
-      if (names?.every((name) => seen.has(name))) break;
-    }
-    return effective;
+    return effectiveJobs(current, (attempt) => this.attemptJobs(path, attempt), names);
+  }
+
+  /** The jobs of one attempt, every page read; pages whose count or ids do not add up are refused. */
+  private attemptJobs(path: string, attempt: number): ForgeJob[] {
+    const pages = this.read(
+      'jobs',
+      ['--paginate', '--slurp', `${path}/attempts/${attempt}/jobs?per_page=100`],
+      z
+        .array(z.object({ total_count: z.number(), jobs: z.array(jobSchema().extend({ id: idSchema() })) }))
+        .min(1),
+    );
+    const rows = pages.flatMap((page) => page.jobs);
+    // Every page states the total for this attempt. Repeated IDs can hide an omitted execution at the same count.
+    if (
+      pages.some((page) => page.total_count !== rows.length) ||
+      new Set(rows.map((row) => row.id)).size !== rows.length
+    )
+      throw new Error(failure('jobs'));
+    return rows;
   }
 
   rerunFailed(runId: number): void {
