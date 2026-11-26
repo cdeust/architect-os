@@ -59,20 +59,29 @@ function configSchema(): z.ZodType<DeliverConfig> {
     trialPrefix: refName.refine((value) => /[-/]$/.test(value), 'a prefix ends with - or /'),
     workflow: label,
     requiredJobs: z.array(label).min(1).max(8).refine(different, 'the jobs are all different'),
+    // A job label is data, including the names of JavaScript object properties. Zod's
+    // record parser skips a reserved key; parse own JSON entries and restore them as data properties.
     jobDependencies: z
-      .record(
-        label,
-        z.strictObject({
-          producers: z.array(label).min(1).refine(different, 'the producers are all different'),
-          plannedProducers: z
-            .strictObject({
-              prefix: label,
-              suffixes: z.array(label).min(1).max(4).refine(different, 'the suffixes are all different'),
-            })
-            .optional(),
-          admissionStep: label,
-        }),
+      .custom<Record<string, unknown>>(z.util.isPlainObject)
+      .transform(Object.entries)
+      .pipe(
+        z.array(
+          z.tuple([
+            label,
+            z.strictObject({
+              producers: z.array(label).min(1).refine(different, 'the producers are all different'),
+              plannedProducers: z
+                .strictObject({
+                  prefix: label,
+                  suffixes: z.array(label).min(1).max(4).refine(different, 'the suffixes are all different'),
+                })
+                .optional(),
+              admissionStep: label,
+            }),
+          ]),
+        ),
       )
+      .transform((entries) => Object.fromEntries(entries))
       .optional(),
     appendOnly: z.array(path).max(8),
     gateCommand: z.array(word).min(1).max(16),
@@ -92,21 +101,33 @@ function configSchema(): z.ZodType<DeliverConfig> {
   return object
     .refine(
       ({ requiredJobs, jobDependencies = {} }) => {
-        const groups = Object.entries(jobDependencies);
-        const namedJobs = [...requiredJobs, ...groups.flatMap(([, group]) => group.producers)];
-        return groups.every(
+        return Object.entries(jobDependencies).every(
           ([name, group]) =>
             requiredJobs.includes(name) &&
-            group.producers.every((job) => !Object.hasOwn(jobDependencies, job)) &&
-            namedJobs.every(
-              (job) => group.plannedProducers === undefined || !job.startsWith(group.plannedProducers.prefix),
-            ),
+            group.producers.every((job) => !Object.hasOwn(jobDependencies, job)),
         );
       },
       {
         path: ['jobDependencies'],
-        message:
-          'an aggregate must be required, its producers must be leaf jobs, and no named job belongs to its planned family',
+        message: 'an aggregate must be required and its producers must be leaf jobs',
+      },
+    )
+    .refine(
+      ({ requiredJobs, jobDependencies = {} }) => {
+        const groups = Object.values(jobDependencies);
+        const prefixes = groups.flatMap(({ plannedProducers }) =>
+          plannedProducers ? [plannedProducers.prefix] : [],
+        );
+        const declarations = [...requiredJobs, ...groups.flatMap(({ producers }) => producers), ...prefixes];
+        // Each prefix matches its own declaration. A second match exhibits an intersection
+        // with a fixed job or with another prefix. Explicit fixed dependencies may be shared.
+        return prefixes.every(
+          (prefix) => declarations.filter((name) => name.startsWith(prefix)).length === 1,
+        );
+      },
+      {
+        path: ['jobDependencies'],
+        message: 'planned family prefixes must be disjoint from other families and fixed jobs',
       },
     )
     .refine((config) => config.branches.every((branch) => !branch.startsWith(config.trialPrefix)), {

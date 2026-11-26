@@ -50,12 +50,121 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
       Examples:
         | value | reason |
         | {"gate-linux":{"admissionStep":"Check","producers":["a","a"]}} | the producers are all different |
-        | {"gate-linux":{"admissionStep":"Check","producers":["a","gate-macos"]},"gate-macos":{"admissionStep":"Check","producers":["b"]}} | an aggregate must be required, its producers must be leaf jobs, and no named job belongs to its planned family |
-        | {"gate-linux":{"admissionStep":"Check","producers":["p-a"],"plannedProducers":{"prefix":"p-","suffixes":["x"]}}} | no named job belongs to its planned family |
-        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"gate-m","suffixes":["x"]}}} | no named job belongs to its planned family |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a","gate-macos"]},"gate-macos":{"admissionStep":"Check","producers":["b"]}} | an aggregate must be required and its producers must be leaf jobs |
+        | {"gate-linux":{"admissionStep":"Check","producers":["p-a"],"plannedProducers":{"prefix":"p-","suffixes":["x"]}}} | planned family prefixes must be disjoint from other families and fixed jobs |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"gate-m","suffixes":["x"]}}} | planned family prefixes must be disjoint from other families and fixed jobs |
         | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-","suffixes":["x","x"]}}} | the suffixes are all different |
-        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"lane-","suffixes":["x"]}},"gate-macos":{"admissionStep":"Check","producers":["lane-preflight"]}} | no named job belongs to its planned family |
-        | {"gate-macos":{"admissionStep":"Check","producers":["lane-preflight"]},"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"lane-","suffixes":["x"]}}} | no named job belongs to its planned family |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"lane-","suffixes":["x"]}},"gate-macos":{"admissionStep":"Check","producers":["lane-preflight"]}} | planned family prefixes must be disjoint from other families and fixed jobs |
+        | {"gate-macos":{"admissionStep":"Check","producers":["lane-preflight"]},"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"lane-","suffixes":["x"]}}} | planned family prefixes must be disjoint from other families and fixed jobs |
+
+    Scenario Outline: two planned namespaces may share letters but may never own the same job
+      Given a deliver config of the base form
+      And its Linux and macOS families use "<linux>" and "<macos>" in "<order>" order with a shared preflight
+      When the deliver config is parsed
+      Then the deliver config is refused with a reason holding "planned family prefixes must be disjoint from other families and fixed jobs"
+
+      Examples:
+        | linux      | macos      | order       |
+        | lane-      | lane-fast- | Linux first |
+        | lane-      | lane-fast- | macOS first |
+        | lane-fast- | lane-      | Linux first |
+        | lane-fast- | lane-      | macOS first |
+        | lane-      | lane-      | Linux first |
+        | lane-      | lane-      | macOS first |
+        | matrix-    | matrix-12  | Linux first |
+        | matrix-12  | matrix-    | macOS first |
+        | preflight  | mac-       | Linux first |
+
+    Scenario: two families cannot claim the same fully formed lane name in different aggregates
+      Given a deliver config of the base form
+      And the deliver config field "jobDependencies" is set to '{"gate-linux":{"admissionStep":"Check","producers":["preflight"],"plannedProducers":{"prefix":"lane-","suffixes":[":m"]}},"gate-macos":{"admissionStep":"Check","producers":["preflight"],"plannedProducers":{"prefix":"lane-","suffixes":[":m"]}}}'
+      When the deliver config is parsed
+      Then the deliver config is refused with a reason holding "planned family prefixes must be disjoint from other families and fixed jobs"
+
+    Scenario: overlapping families separated by an unrelated aggregate still conflict
+      Given a deliver config of the base form
+      And the deliver config field "requiredJobs" is set to '["gate-linux","docs","gate-macos"]'
+      And the deliver config field "jobDependencies" is set to '{"gate-linux":{"admissionStep":"Check","producers":["preflight"],"plannedProducers":{"prefix":"lane-","suffixes":[":m"]}},"docs":{"admissionStep":"Check","producers":["spelling"],"plannedProducers":{"prefix":"spell-","suffixes":[":s"]}},"gate-macos":{"admissionStep":"Check","producers":["preflight"],"plannedProducers":{"prefix":"lane-fast-","suffixes":[":r"]}}}'
+      When the deliver config is parsed
+      Then the deliver config is refused with a reason holding "planned family prefixes must be disjoint from other families and fixed jobs"
+
+    Scenario Outline: disjoint families and explicit shared dependencies keep their original outcomes
+      Given a deliver config of the base form
+      And its Linux and macOS families use "lane-linux-" and "lane-mac-" in "<order>" order with a shared preflight
+      When the deliver config is parsed
+      Then the deliver config is accepted
+      And the accepted deliver config judges the names "gate-linux, gate-macos, preflight, lane-linux-1:m, lane-mac-1:r, custom, lane-other-1:r" with "<failed>" failing as "<state>"
+
+      Examples:
+        | order       | failed       | state  |
+        | Linux first | custom       | green  |
+        | macOS first | lane-other-1:r | green  |
+        | Linux first | preflight    | failed |
+        | macOS first | lane-mac-1:r | failed |
+
+    Scenario: fixed-only aggregates can share a declared producer
+      Given a deliver config of the base form
+      And the deliver config field "jobDependencies" is set to '{"gate-linux":{"admissionStep":"Check","producers":["preflight"]},"gate-macos":{"admissionStep":"Check","producers":["preflight","local-mac"]}}'
+      When the deliver config is parsed
+      Then the deliver config is accepted
+      And the accepted deliver config judges the names "gate-linux, gate-macos, preflight, local-mac, custom" with "custom" failing as "green"
+      And the accepted deliver config judges the names "gate-linux, gate-macos, preflight, local-mac, custom" with "preflight" failing as "failed"
+
+    Scenario: a required leaf job can also be an explicitly named upstream
+      Given a deliver config of the base form
+      And the deliver config field "jobDependencies" is set to '{"gate-linux":{"admissionStep":"Check","producers":["gate-macos"],"plannedProducers":{"prefix":"lane-","suffixes":[":m"]}}}'
+      When the deliver config is parsed
+      Then the deliver config is accepted
+      And the accepted deliver config judges the names "gate-linux, gate-macos, lane-1:m, custom" with "custom" failing as "green"
+      And the accepted deliver config judges the names "gate-linux, gate-macos, lane-1:m, custom" with "gate-macos" failing as "failed"
+
+    Scenario Outline: numeric lane text must still produce one distinct full name per slot in the actual run
+      Given a deliver config of the base form
+      And the deliver config field "jobDependencies" is set to '{"gate-linux":{"admissionStep":"Check","producers":["preflight"],"plannedProducers":{"prefix":"custom2-","suffixes":<suffixes>}}}'
+      When the deliver config is parsed
+      Then the deliver config is accepted
+      And the accepted config judges <lanes> numbered lanes with "<observations>" as "<state>"
+
+      Examples:
+        | suffixes     | lanes | observations | state  |
+        | ["x","1x"]   | 10    | all jobs     | green  |
+        | ["x","1x"]   | 11    | all jobs     | failed |
+        | ["1x","x"]   | 11    | all jobs     | failed |
+        | ["x","1x"]   | 11    | unique names | failed |
+        | ["x","-1x"]  | 11    | all jobs     | green  |
+
+    Scenario: the committed Linux and macOS checks ignore an unrelated job but reserve the complete Linux lane prefix
+      When the committed deliver config is loaded
+      Then the deliver config is accepted
+      And the accepted deliver config judges the names "gate-linux, gate-macos, gate-linux-cucumber-1, gate-linux-cucumber-2, gate-linux-plan, gate-linux-lane-1 / mutation, gate-linux-lane-1 / replay, custom" with "custom" failing as "green"
+      And the accepted deliver config judges the names "gate-linux, gate-macos, gate-linux-cucumber-1, gate-linux-cucumber-2, gate-linux-plan, gate-linux-lane-1 / mutation, gate-linux-lane-1 / replay, gate-linux-lane-custom, custom" with "custom" failing as "failed"
+
+    Scenario Outline: dependency records round-trip every declared job label as data
+      Given a deliver config of the base form
+      And the deliver config field "requiredJobs" is set to '["<label>","gate-macos"]'
+      And the deliver config field "jobDependencies" is set to '{"<label>":{"producers":["preflight"],"admissionStep":"Check"}}'
+      When the deliver config is parsed
+      Then the deliver config is accepted
+      And the parsed dependency declarations equal every entry of the input
+
+      Examples:
+        | label        |
+        | custom build |
+        | 12           |
+        | constructor  |
+        | __proto__    |
+
+    Scenario Outline: the dependency record must be a JSON object
+      Given a deliver config of the base form
+      And the deliver config field "jobDependencies" is set to '<value>'
+      When the deliver config is parsed
+      Then the deliver config is refused with a reason holding "jobDependencies"
+
+      Examples:
+        | value   |
+        | null    |
+        | []      |
+        | "build" |
 
     Scenario: the committed aggregate binds the Linux producers and the family of its planned lanes to its admission step
       When the committed deliver config is loaded

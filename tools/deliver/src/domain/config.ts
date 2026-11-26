@@ -13,8 +13,8 @@ export interface DeliverConfig {
   /**
    * Required aggregate jobs, their upstream jobs, and the first step which checks their results. `plannedProducers`
    * names a family of upstream jobs whose number the run itself decides (the mutation lanes of the gate, planned from
-   * the commit): `<prefix><lane><suffix>` for the lanes 1 to n and each suffix. The delivery takes the lanes the run
-   * holds and never decides how many there should be: that is judged by the aggregate, which derives the plan again.
+   * the commit): `<prefix><lane><suffix>` for the lanes 1 to n and each suffix. Its namespace is disjoint from every
+   * fixed name and other family. Delivery takes the lanes present in the run. The aggregate derives their plan again.
    */
   jobDependencies?: Record<string, JobDependency>;
   /** Files that may only grow between the parent and the commit. */

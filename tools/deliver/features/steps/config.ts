@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { ciState } from '../../src/domain/ci.js';
 import type { DeliverConfig } from '../../src/domain/config.js';
 import { parseDeliverConfig } from '../../src/infrastructure/deliver-schema.js';
 import { Given, REPOSITORY, Then, When, type DeliverWorld } from './support.js';
@@ -38,6 +39,70 @@ Given('a deliver config of the base form', function () {
   this.state['deliverConfig'] = { raw: base() } satisfies Scene;
 });
 
+Given(
+  'its Linux and macOS families use {string} and {string} in {string} order with a shared preflight',
+  function (linux: string, macos: string, order: string) {
+    const group = (prefix: string, suffix: string) => ({
+      admissionStep: 'Check',
+      producers: ['preflight'],
+      plannedProducers: { prefix, suffixes: [suffix] },
+    });
+    const linuxGroup = group(linux, ':m');
+    const macGroup = group(macos, ':r');
+    assert.ok(['Linux first', 'macOS first'].includes(order));
+    scene(this).raw['jobDependencies'] =
+      order === 'Linux first'
+        ? { 'gate-linux': linuxGroup, 'gate-macos': macGroup }
+        : { 'gate-macos': macGroup, 'gate-linux': linuxGroup };
+  },
+);
+
+Then(
+  'the accepted deliver config judges the names {string} with {string} failing as {string}',
+  function (names: string, failed: string, expected: string) {
+    const result = parsed(this);
+    assert.ok(result.ok);
+    const jobs = names.split(', ').map((name) => ({
+      name,
+      conclusion: name === failed ? ('failure' as const) : ('success' as const),
+      hadRunner: true,
+      failedStep: name === failed,
+    }));
+    assert.ok(jobs.some((job) => job.name === failed));
+    assert.equal(
+      ciState({ id: 1, completed: true, jobs }, result.config.requiredJobs, result.config.jobDependencies),
+      expected,
+    );
+  },
+);
+
+Then(
+  'the accepted config judges {int} numbered lanes with {string} as {string}',
+  function (count: number, observations: string, expected: string) {
+    const result = parsed(this);
+    assert.ok(result.ok);
+    const group = result.config.jobDependencies?.['gate-linux'];
+    assert.ok(group?.plannedProducers);
+    const { prefix, suffixes } = group.plannedProducers;
+    const names = [...result.config.requiredJobs, ...group.producers];
+    for (let lane = 1; lane <= count; lane++) {
+      for (const suffix of suffixes) names.push(prefix + lane + suffix);
+    }
+    assert.ok(['unique names', 'all jobs'].includes(observations));
+    const rows = observations === 'unique names' ? [...new Set(names)] : names;
+    const jobs = rows.map((name) => ({
+      name,
+      conclusion: 'success' as const,
+      hadRunner: true,
+      failedStep: false,
+    }));
+    assert.equal(
+      ciState({ id: 1, completed: true, jobs }, result.config.requiredJobs, result.config.jobDependencies),
+      expected,
+    );
+  },
+);
+
 Given('the deliver config field {string} is set to {string}', function (field: string, value: string) {
   scene(this).raw[field] = JSON.parse(value);
 });
@@ -68,6 +133,12 @@ When('the committed deliver config is loaded', function () {
   const text = readFileSync(`${REPOSITORY}tools/deliver/deliver.json`, 'utf8');
   this.state['deliverConfig'] = { raw: JSON.parse(text) as Record<string, unknown> } satisfies Scene;
   scene(this).parsed = parseDeliverConfig(scene(this).raw);
+});
+
+Then('the parsed dependency declarations equal every entry of the input', function () {
+  const result = parsed(this);
+  assert.ok(result.ok);
+  assert.deepEqual(result.config.jobDependencies, scene(this).raw['jobDependencies']);
 });
 
 Then('the deliver config is accepted', function () {
