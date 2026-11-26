@@ -152,3 +152,4 @@ Feature: Read a validated Define handoff without answering the gate
     Given an isolated Define plugin whose pinned bundle exits at once
     When the host invokes the Define reader over stdio
     Then the Define reader reports a transport failure
+    And the pinned bundle was started before it exited

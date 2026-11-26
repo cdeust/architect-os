@@ -331,7 +331,10 @@ Given('an isolated Define plugin whose pinned bundle exits at once', function (t
   const root = prepare(this);
   mkdirSync(join(root, 'mcp-server'));
   const bundle = join(root, 'mcp-server', 'index.js');
-  writeFileSync(bundle, 'process.exit(1);\n');
+  writeFileSync(
+    bundle,
+    `require('node:fs').writeFileSync(${JSON.stringify(join(root, 'started'))}, 'started\\n');\nprocess.exit(1);\n`,
+  );
   this.state['defineBundleDigest'] = createHash('sha256').update(readFileSync(bundle)).digest('hex');
 });
 
@@ -575,4 +578,8 @@ Then('the proposal reader refuses with {string}', function (this: DefineWorld, m
     stdout: '',
     stderr: `architect-os proposal: ${message}\n`,
   });
+});
+
+Then('the pinned bundle was started before it exited', function (this: DefineWorld) {
+  assert.equal(readFileSync(join(this.state['defineHostRoot'] as string, 'started'), 'utf8'), 'started\n');
 });
