@@ -46,6 +46,11 @@ Feature: Hosted runtime admission
       | malformed          | error    |
       | truncated          | error    |
       | invalid id         | error    |
+      | unrelated invalid id | error  |
+      | inconsistent total | error    |
+      | duplicate page     | error    |
+      | missing path       | error    |
+      | empty path         | error    |
       | wrong event        | error    |
       | wrong branch       | error    |
       | wrong sha          | error    |

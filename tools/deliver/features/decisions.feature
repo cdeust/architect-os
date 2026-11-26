@@ -143,6 +143,16 @@ Feature: The decisions of the delivery command (pure: the trial branch, the stat
         | a suffix that is not at the end        | success/runner                       | , lane-1:m=success/runner, lane-1:r=success/runner, lane-1:m:x=success/runner                      | failed    |
         | a job outside the family               | success/runner                       | , lane-1:m=success/runner, lane-1:r=success/runner, xlane-9:m=failure/runner/failed-step           | green     |
 
+    Scenario Outline: suffixes that overlap use the complete job names
+      Then the completed gate with producers "a", the planned family "p-" of "<suffixes>" and jobs "linux=success/runner, a=success/runner, macos=success/runner, <members>" is "<state>"
+
+      Examples:
+        | suffixes | members                                      | state |
+        | x, 1x    | p-1x=success/runner, p-11x=success/runner    | green |
+        | 1x, x    | p-11x=success/runner, p-1x=success/runner    | green |
+        | -1x, x   | p-1x=success/runner, p-1-1x=success/runner   | green |
+        | x, 1x    | p-1x=success/runner, p-111x=success/runner   | failed |
+
     Scenario: without a planned family, jobs named like lanes are not producers
       Then the completed gate with producers "a" and jobs "linux=success/runner, a=success/runner, macos=success/runner, lane-1:m=failure/runner/failed-step" is "green"
 

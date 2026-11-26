@@ -72,7 +72,8 @@ export interface Repository {
 }
 
 export interface Forge {
-  run(hash: string, workflow: string, jobNames?: readonly string[]): CiRun | undefined;
+  /** 'all' reads the effective jobs of every numbered attempt when a family has no fixed membership. */
+  run(hash: string, workflow: string, jobNames?: readonly string[] | 'all'): CiRun | undefined;
   rerunFailed(id: number): void;
   /** The evaluation of the push that brought `hash` to `branch`; undefined while there is none (or nobody pushed). */
   ruleSuite(branch: string, hash: string): RuleSuite | undefined;

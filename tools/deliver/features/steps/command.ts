@@ -440,6 +440,38 @@ Given('the delivery command has its required producer only in the preceding atte
   gh.answers('attempt', '42/1', { exit: 89 });
 });
 
+Given(
+  'the delivery command has a {word} latest pair with an older {word} lane',
+  function (pair: string, outcome: string) {
+    const { git, gh, config } = commandOf(this);
+    const settings = JSON.parse(readFileSync(config, 'utf8'));
+    settings.jobDependencies = {
+      'gate-linux': {
+        producers: ['plan'],
+        plannedProducers: { prefix: 'lane-', suffixes: ['-mutation', '-replay'] },
+        admissionStep: 'Require all producers',
+      },
+    };
+    writeFileSync(config, JSON.stringify(settings));
+    const names = ['gate-linux', 'gate-macos', 'plan', 'lane-1-replay'];
+    if (pair === 'complete') names.push('lane-1-mutation');
+    const jobs = names.map((name) => ({
+      name,
+      conclusion: 'success' as const,
+      hadRunner: true,
+      failedStep: false,
+    }));
+    gh.hasRun(git.hashOf('h1'), { id: 42, completed: true, attempt: 2, jobs });
+    const prior = ['lane-1-mutation', 'lane-2-mutation', 'lane-2-replay'].map((name) => ({
+      name,
+      conclusion: name === 'lane-2-replay' ? outcome : 'success',
+      runner_name: 'runner',
+      steps: [],
+    }));
+    gh.answers('attempt', '42/1', { stdout: JSON.stringify([{ jobs: prior }]) });
+  },
+);
+
 Then('the delivery command only read the third and second job attempts, in order', function () {
   const calls = commandOf(this)
     .gh.asked()

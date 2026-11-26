@@ -64,7 +64,7 @@ A run has five fixed jobs (two Cucumber shards, `gate-linux-plan`, `gate-linux`,
 
 The re-derivation guarantees one thing: for a given code of the gate, neither a lane nor the output of the plan job removes a mutant from the judgement. A pull request controls its own tree, the workflows and `tools/test-gate` included; a rewrite of the gate is for the review to refuse (R-6).
 
-The delivery names the three fixed producers of `gate-linux` and a family, `plannedProducers` in `tools/deliver/deliver.json` (`gate-linux-lane-<n>` followed by ` / mutation` or ` / replay`). It takes the lanes the run holds, 1 to n without a gap, and does not derive the plan: the first parent of the local gate is not always that of the hosted run. A job of the family whose name holds no lane number is a failure, never a missing runner.
+The delivery names the three fixed producers of `gate-linux` and a family, `plannedProducers` in `tools/deliver/deliver.json` (`gate-linux-lane-<n>` followed by ` / mutation` or ` / replay`). For a planned family, Deliver reads the effective jobs across every numbered attempt, taking the newest execution of each name. It requires the complete names of the lanes 1 to n without a gap, and does not derive the plan: the first parent of the local gate is not always that of the hosted run. A job of the family whose name holds no lane number is a failure, never a missing runner.
 
 Still to measure: the job name when the plan fails before producing a matrix, and the wall time of an isolated run compared with one under contention.
 

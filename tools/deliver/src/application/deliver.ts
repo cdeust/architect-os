@@ -130,10 +130,10 @@ async function awaitCi(
   forge: Forge,
   clock: Clock,
 ): Promise<Stop | undefined> {
-  const jobNames = [
-    ...config.requiredJobs,
-    ...Object.values(config.jobDependencies ?? {}).flatMap((group) => group.producers),
-  ];
+  const groups = Object.values(config.jobDependencies ?? {});
+  const jobNames = groups.some((group) => group.plannedProducers !== undefined)
+    ? 'all'
+    : [...config.requiredJobs, ...groups.flatMap((group) => group.producers)];
   let requestedAttempt: number | undefined;
   let unnumberedRerunPending = false;
   for (let poll = 1; poll <= config.ciPolls; poll++) {

@@ -3,7 +3,7 @@
 set -eu
 case "$1" in linux|macos) ;; *) exit 2 ;; esac
 artifact=gate-base-$1
-entry=$(CDPATH= cd -P -- "$(dirname -- "$0")/../.." && pwd -P)
+entry=$(CDPATH='' cd -P -- "$(dirname -- "$0")/../.." && pwd -P)
 base=$(node "$entry/tools/test-gate/report-files.mjs" path reports/base)
 if [ -e "$base/gate-base.json" ] || [ -L "$base/gate-base.json" ]; then
   echo "base: destination already contains a count" >&2
@@ -22,13 +22,18 @@ repository="repos/$GITHUB_REPOSITORY/actions"
 pages=$(gh api --paginate --slurp "$repository/runs?branch=main&event=push&status=success&head_sha=$parent&per_page=100")
 run=$(printf '%s\n' "$pages" | jq -er --arg workflow "$workflow" --arg sha "$parent" --arg repo "$GITHUB_REPOSITORY" '
   def id: if type == "number" and (tostring | test("^[1-9][0-9]*$")) then . else error("invalid run id") end;
-  if type != "array" or length == 0 or any(.[]; (.workflow_runs | type) != "array") or
-     (.[0].total_count != ([.[].workflow_runs[]] | length))
-  then error("invalid run list")
-  else [.[].workflow_runs[] | select(.path == $workflow) |
-    if .head_sha == $sha and .head_branch == "main" and .event == "push" and .status == "completed" and
-       .conclusion == "success" and .head_repository.full_name == $repo then (.id | id)
-    else error("run does not match the base query") end] | max // "none" end')
+  if type != "array" or length == 0 or any(.[]; (.workflow_runs | type) != "array")
+  then error("invalid run list") end |
+  [.[].workflow_runs[]] as $runs |
+  if any(.[]; .total_count != ($runs | length)) or
+     ([$runs[].id | id] | unique | length) != ($runs | length) or
+     any($runs[]; (.path | type) != "string" or .path == "")
+  then error("incomplete or invalid run list") end |
+  [$runs[] |
+    if .head_sha != $sha or .head_branch != "main" or .event != "push" or .status != "completed" or
+       .conclusion != "success" or .head_repository.full_name != $repo
+    then error("run does not match the base query") end |
+    select(.path == $workflow) | .id] | max // "none"')
 if [ "$run" = none ]; then echo "base: no green main push of $workflow for $parent"; exit 0; fi
 
 metadata=$(gh api "$repository/runs/$run/artifacts?name=$artifact&per_page=1")

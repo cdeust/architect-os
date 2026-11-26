@@ -83,7 +83,7 @@ export class GhForge implements Forge {
     private readonly host: HostEnvironment,
   ) {}
 
-  run(hash: string, workflow: string, jobNames?: readonly string[]): CiRun | undefined {
+  run(hash: string, workflow: string, jobNames?: readonly string[] | 'all'): CiRun | undefined {
     const { workflow_runs } = this.read(
       'runs',
       [`repos/${this.repository}/actions/runs?head_sha=${hash}&per_page=100`],
@@ -110,7 +110,7 @@ export class GhForge implements Forge {
         : first;
     const jobs =
       version.run_attempt !== undefined && version.status === 'completed'
-        ? this.effectiveJobs(runPath, version.run_attempt, jobNames)
+        ? this.effectiveJobs(runPath, version.run_attempt, jobNames === 'all' ? undefined : jobNames)
         : this.read('jobs', [`${runPath}/jobs?per_page=100`], z.object({ jobs: z.array(jobSchema()) })).jobs;
     return {
       id: version.id,

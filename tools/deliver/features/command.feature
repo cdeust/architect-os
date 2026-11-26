@@ -12,6 +12,17 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Then the delivery command exited 0
       And the delivery command only read the third and second job attempts, in order
 
+    Scenario Outline: delivery reads every effective job of a planned family on a partial rerun
+      Given the delivery command has a <pair> latest pair with an older <result> lane
+      When I run the delivery command with "step --until ci"
+      Then the delivery command exited <exit>
+
+      Examples:
+        | pair     | result  | exit |
+        | split    | success | 0    |
+        | split    | failure | 1    |
+        | complete | failure | 1    |
+
     Scenario: a delivery to its end
       When I run the delivery command with "step"
       Then the delivery command exited 0

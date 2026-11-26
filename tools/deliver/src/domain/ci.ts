@@ -5,27 +5,22 @@ import type { CiJob, CiRun } from './ports.js';
 export type CiState = 'missing' | 'waiting' | 'green' | 'no-runner' | 'failed';
 
 /**
- * The jobs a planned family requires: one job per suffix for lanes 1 through the number of distinct lane labels.
- * A family member with an unknown suffix cannot be assigned to a lane.
+ * GitHub returns one job per lane and suffix. Check the complete names: a suffix may
+ * end in another suffix, and a suffix may start with a digit of the lane number.
  */
 function plannedProducers(
   jobs: readonly CiJob[],
   family: JobDependency['plannedProducers'],
 ): string[] | undefined {
   if (family === undefined) return [];
-  const lanes = new Set<string>();
-  for (const { name } of jobs) {
-    if (!name.startsWith(family.prefix)) continue;
-    const rest = name.slice(family.prefix.length);
-    const suffix = family.suffixes.find((candidate) => rest.endsWith(candidate));
-    if (suffix === undefined) return undefined;
-    lanes.add(rest.slice(0, rest.length - suffix.length));
-  }
-  const names: string[] = [];
-  // ciState requires each generated name exactly once. In particular, the job with the first suffix is always
-  // parsed as its own lane: a gap or a noncanonical label leaves at least one such required job missing.
-  for (let lane = 1; lane <= lanes.size; lane++) {
-    for (const suffix of family.suffixes) names.push(family.prefix + lane + suffix);
+  const names = jobs.map(({ name }) => name).filter((name) => name.startsWith(family.prefix));
+  const count = names.length / family.suffixes.length;
+  if (!Number.isInteger(count)) return undefined;
+  const unmatched = new Set(names);
+  for (let lane = 1; lane <= count; lane++) {
+    for (const suffix of family.suffixes) {
+      if (!unmatched.delete(family.prefix + lane + suffix)) return undefined;
+    }
   }
   return names;
 }
