@@ -88,21 +88,6 @@ jobs:
       - name: Restrict Claude Code to reading the checkout
         if: steps.credential.outputs.present == 'true'
         run: sudo install -D -m 0644 -o root -g root review-config/.github/claude-security-review/managed-settings.json /etc/claude-code/managed-settings.json
-      # With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Claude Code runs its subprocesses in a PID namespace of bubblewrap and
-      # refuses to start on Linux without it (run 45771449067). The action installs it only when
-      # allowed_non_write_users is set, and goes on when that fails (action.yml at 4411a9e9, "Install subprocess
-      # isolation dependencies"): this step does what that one does, and fails instead. Ubuntu 24.04 refuses a user
-      # namespace to an unprivileged program until the sysctl is 0, so the last line creates one: a version printed
-      # proves no namespace (docs/infrastructure.md, "Bubblewrap before the scrub").
-      - name: Prove bubblewrap before the scrub of subprocesses
-        if: steps.credential.outputs.present == 'true'
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends bubblewrap socat
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          bwrap --version
-          bwrap --unshare-user --unshare-pid --ro-bind / / --proc /proc true
       # The diff the reviewer reads, fetched by this trusted step with the job's read token, no model and no
       # other secret: without Bash, Claude cannot run gh. It is the PR diff as GitHub presents it (CLAUDE.md,
       # Conventions). Above MAX_DIFF_BYTES the file keeps its first bytes behind a line that says so, and the
@@ -137,6 +122,22 @@ jobs:
         id: schema
         if: steps.credential.outputs.present == 'true'
         run: echo "json=$(jq -c . review-config/.github/claude-security-review/findings.schema.json)" >> "$GITHUB_OUTPUT"
+      # With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Claude Code refuses to start on Linux without bubblewrap, in which it
+      # runs its Bash subprocesses in a PID namespace (run 45771449067). The action installs it only when
+      # allowed_non_write_users is set, and goes on when that fails (action.yml at 4411a9e9, "Install subprocess
+      # isolation dependencies"): this step does what that one does, and fails instead. Ubuntu 24.04 refuses a user
+      # namespace to an unprivileged program until the sysctl is 0, so the last line creates one: a version printed
+      # proves no namespace. The step just before the action, on its condition, with the default shell
+      # (docs/infrastructure.md, "Bubblewrap before the scrub").
+      - name: Prove bubblewrap before the scrub of subprocesses
+        if: steps.credential.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bubblewrap socat
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --version
+          bwrap --unshare-user --unshare-pid --ro-bind / / --proc /proc true
       - name: Security review
         id: engine
         if: steps.credential.outputs.present == 'true'

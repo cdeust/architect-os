@@ -13,6 +13,9 @@ on:
 jobs:
   claude:
     # Only the owner, members and collaborators can trigger Claude (docs/design/platform-v3-srt.md §9.1 C.4).
+    # For a comment or an issue GitHub runs this file from the default branch. For a review or a review comment it
+    # runs the file of the pull request's merge commit, this condition included: an open defect of main
+    # (docs/infrastructure.md, "Which commit a run takes its files from").
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
@@ -52,12 +55,13 @@ jobs:
           sudo install -D -m 0644 -o root -g root claude-config/.github/claude/managed-settings.json /etc/claude-code/managed-settings.json
           rm -rf claude-config
 
-      # With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Claude Code runs its subprocesses in a PID namespace of bubblewrap and
-      # refuses to start on Linux without it (run 45771449067). The action installs it only when
+      # With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Claude Code refuses to start on Linux without bubblewrap, in which it
+      # runs its Bash subprocesses in a PID namespace (run 45771449067). The action installs it only when
       # allowed_non_write_users is set, and goes on when that fails (action.yml at 4411a9e9, "Install subprocess
       # isolation dependencies"): this step does what that one does, and fails instead. Ubuntu 24.04 refuses a user
       # namespace to an unprivileged program until the sysctl is 0, so the last line creates one: a version printed
-      # proves no namespace (docs/infrastructure.md, "Bubblewrap before the scrub").
+      # proves no namespace. The step just before the action, on its condition, with the default shell
+      # (docs/infrastructure.md, "Bubblewrap before the scrub").
       - name: Prove bubblewrap before the scrub of subprocesses
         run: |
           set -euo pipefail

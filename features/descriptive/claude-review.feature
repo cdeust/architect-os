@@ -105,38 +105,74 @@ Feature: The Claude review
       | ~/.gitconfig               |
       | //home/runner/work/_temp/  |
 
-  Scenario: every workflow that runs the action proves bubblewrap before it starts
+  Scenario: no action starts without a proof of bubblewrap that succeeded
     With the scrub, Claude Code refuses to start on Linux without bubblewrap (run 45771449067 of the security review),
-    and the action installs it only for allowed_non_write_users, in a step that may fail. Each job installs what that
-    step installs, lifts the restriction of user namespaces of Ubuntu 24.04, and creates a namespace, before the action,
-    on the image the proof is written for (docs/infrastructure.md, "Bubblewrap before the scrub").
-    Then every workflow that runs the action proves bubblewrap before it, on a named image:
-      | claude.yml                 |
+    and the action installs it only for allowed_non_write_users, in a step that may fail. The step just before each
+    action installs what that step installs, lifts the restriction of user namespaces of Ubuntu 24.04 and creates a
+    namespace, on the condition of the action and on the image the proof is written for. The workflow files are found
+    in their directory, not listed: the table is what must be found (docs/infrastructure.md, "Bubblewrap before the
+    scrub").
+    Then every action of every workflow file starts just after the proof of bubblewrap, and the files that run one are exactly:
       | claude-review.yml          |
       | claude-security-review.yml |
+      | claude.yml                 |
 
   Scenario Outline: "<file>" <kind> is refused
     Then "<file>" <kind> is rejected by the rule of bubblewrap
 
     Examples:
-      | file                       | kind                                                            |
-      | claude.yml                 | without the proof of bubblewrap                                 |
-      | claude-review.yml          | without the proof of bubblewrap                                 |
-      | claude-security-review.yml | without the proof of bubblewrap                                 |
-      | claude.yml                 | on a floating runner label                                      |
-      | claude-review.yml          | on a floating runner label                                      |
-      | claude-security-review.yml | on a floating runner label                                      |
-      | claude.yml                 | with the proof of bubblewrap after the action                   |
-      | claude-review.yml          | with the proof of bubblewrap after the action                   |
-      | claude-security-review.yml | with the proof of bubblewrap after the action                   |
-      | claude-review.yml          | with a proof of bubblewrap that may fail                        |
-      | claude-security-review.yml | with a proof of bubblewrap on another condition than the action |
-      | claude.yml                 | that installs bubblewrap without proving it                     |
-      | claude-review.yml          | that reads the version of bubblewrap and creates no namespace   |
-      | claude-security-review.yml | that reads the version of bubblewrap and creates no namespace   |
-      | claude-security-review.yml | that leaves user namespaces restricted                          |
-      | claude.yml                 | whose proof of bubblewrap goes on after a failure               |
-      | claude-review.yml          | on an image the proof of bubblewrap is not written for          |
+      | file                       | kind                                                                     |
+      | claude.yml                 | without the proof of bubblewrap                                          |
+      | claude-review.yml          | without the proof of bubblewrap                                          |
+      | claude-security-review.yml | without the proof of bubblewrap                                          |
+      | claude.yml                 | on a floating runner label                                               |
+      | claude-review.yml          | on a floating runner label                                               |
+      | claude-security-review.yml | on a floating runner label                                               |
+      | claude.yml                 | with the proof of bubblewrap after the action                            |
+      | claude-review.yml          | with the proof of bubblewrap after the action                            |
+      | claude-security-review.yml | with the proof of bubblewrap after the action                            |
+      | claude-review.yml          | with a step between the proof of bubblewrap and the action               |
+      | claude-review.yml          | with a proof of bubblewrap that may fail                                 |
+      | claude-security-review.yml | with a proof of bubblewrap on another condition than the action          |
+      | claude.yml                 | that installs bubblewrap without proving it                              |
+      | claude-review.yml          | that reads the version of bubblewrap and creates no namespace            |
+      | claude-security-review.yml | that reads the version of bubblewrap and creates no namespace            |
+      | claude-security-review.yml | that leaves user namespaces restricted                                   |
+      | claude.yml                 | whose proof of bubblewrap goes on after a failure                        |
+      | claude-review.yml          | on an image the proof of bubblewrap is not written for                   |
+      | claude.yml                 | with a second action for an event the proof of bubblewrap does not cover |
+      | claude.yml                 | with the proof of bubblewrap and the action under always()               |
+      | claude-review.yml          | with the proof of bubblewrap and the action under always()               |
+      | claude-security-review.yml | with the proof of bubblewrap and the action under always()               |
+      | claude-security-review.yml | with the proof of bubblewrap and the action under !cancelled()           |
+      | claude-review.yml          | with the proof of bubblewrap and the action under failure()              |
+      | claude.yml                 | with a default shell of the job that only checks the syntax              |
+      | claude-review.yml          | with a default shell of the workflow that only checks the syntax         |
+      | claude-security-review.yml | with a shell on the proof of bubblewrap that only checks its syntax      |
+      | claude.yml                 | with the scrub in the environment of the job                             |
+      | claude-review.yml          | with the scrub in the environment of the workflow                        |
+      | claude-security-review.yml | with a PATH of the job that the proof of bubblewrap would search         |
+      | claude.yml                 | with a BASH_ENV of the workflow that the proof of bubblewrap would read  |
+      | claude-review.yml          | in a container                                                           |
+      | claude-review.yml          | with the action in a second job that proves nothing                      |
+      | claude-security-review.yml | with the base action in a second job that proves nothing                 |
+      | claude.yml                 | with the action written in capitals in a second job that proves nothing  |
+      | claude.yml                 | that calls a workflow of another repository                              |
+      | claude-review.yml          | with a local action before its first step                                |
+      | watch.yml                  | with a scrubbed action added to its first job                            |
+      | watch.yml                  | with a command that sets the scrub without the action                    |
+      | pipeline-after-merge.yml   | with a command that sets the scrub without the action                    |
+
+  Scenario Outline: a copy of "<file>" <kind> is found in the directory and refused
+    A file outside the table is judged like the three: the rule reads the directory.
+    Then a copy of "<file>" <kind> is refused among the workflow files, by its name
+
+    Examples:
+      | file              | kind                                                  |
+      | watch.yml         | with a scrubbed action added to its first job         |
+      | bench-sandbox.yml | with a command that sets the scrub without the action |
+      | mutation-full.yml | with a command that sets the scrub without the action |
+      | claude.yml        | without the proof of bubblewrap                       |
 
   Scenario: the job of the @claude bot reads with its own token
     Its token is in the environment of Claude Code; the bot writes with the token of the Claude app.
