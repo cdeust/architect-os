@@ -77,6 +77,25 @@ Feature: Hosted runtime admission
       | a plan that is no list                                   |
       | a plan longer than a matrix                              |
 
+  Scenario Outline: the judge checks the entire REST collection before fetching evidence
+    Then the judge sees "<situation>" for "<source>" and "<outcome>" its evidence
+
+    Examples:
+      | source          | situation                             | outcome   |
+      | historical jobs | complete pages                        | downloads |
+      | current jobs    | complete pages                        | downloads |
+      | run artifacts   | complete pages                        | downloads |
+      | historical jobs | an omitted outside-plan entry         | refuses   |
+      | current jobs    | an omitted outside-plan entry         | refuses   |
+      | run artifacts   | an omitted outside-plan entry         | refuses   |
+      | historical jobs | a different total on the second page  | refuses   |
+      | historical jobs | a repeated ID across pages            | refuses   |
+      | historical jobs | a fractional ID on an unrelated entry | refuses   |
+      | historical jobs | a zero ID on an unrelated entry       | refuses   |
+      | historical jobs | no pages                              | refuses   |
+      | run artifacts   | a repeated ID across pages            | refuses   |
+      | historical jobs | a missing total                       | refuses   |
+
   Scenario: the plan job gives its matrix the lanes of the plan, and nothing that is not a list of lanes
     Then the plan job announces the lanes "[1,2,3]" to its matrix and refuses "[] | [0] | [01] | [1, 2] | [1,2,] | [1000] | 1 | [a] | [1]]"
 

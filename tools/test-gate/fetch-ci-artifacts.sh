@@ -10,6 +10,17 @@ case "$head" in
   ''|*[!0-9a-f]*) exit 1 ;;
 esac
 test "${#head}" -eq 40
+# Each REST page declares the size of the entire collection. Repeated IDs can mask a missing row.
+complete_rows() {
+  jq -ce --arg key "$1" '
+    if type != "array" or length == 0 or any(.[]; (.[$key] | type) != "array")
+    then error("invalid pages for " + $key) end |
+    [.[] | .[$key][]] as $rows |
+    if any(.[]; .total_count != ($rows | length)) or
+       any($rows[].id; type != "number" or . <= 0 or floor != .) or
+       ([$rows[].id] | unique | length) != ($rows | length)
+    then error("incomplete or invalid " + $key) else $rows end'
+}
 # Attempt-scoped pages distinguish a real execution from a successful job copied by a partial rerun.
 # Fetch each set of pages and its boundary once, before the parallel lot downloads.
 jobs=$(
@@ -22,8 +33,9 @@ jobs=$(
         select(.run_attempt == $n and .id == $run and .head_sha == $head) | .run_started_at | fromdateiso8601') || exit 1
     fi
     pages=$(gh api --paginate --slurp "$repository/attempts/$n/jobs?per_page=100") || exit 1
-    printf '%s\n' "$pages" | jq -ce --argjson n "$n" --argjson start "$start" '
-      {attempt:$n, start:$start, jobs:[.[].jobs[] |
+    rows=$(printf '%s\n' "$pages" | complete_rows jobs) || exit 1
+    printf '%s\n' "$rows" | jq -ce --argjson n "$n" --argjson start "$start" '
+      {attempt:$n, start:$start, jobs:[.[] |
         if has("run_attempt") and .run_attempt != $n then error("producer attempt differs")
         else .run_attempt = $n end]}' || exit 1
     n=$((n + 1))
@@ -32,8 +44,9 @@ jobs=$(
 jobs=$(printf '%s\n' "$jobs" | jq -cse '
   if length == 1 or ([.[].start] as $s | $s == ($s | sort | unique)) then .
   else error("ambiguous attempt boundaries") end')
-artifacts=$(gh api --paginate --slurp "$repository/artifacts?per_page=100")
-artifact_names=$(printf '%s\n' "$artifacts" | jq -c '[.[].artifacts[].name]')
+pages=$(gh api --paginate --slurp "$repository/artifacts?per_page=100")
+artifacts=$(printf '%s\n' "$pages" | complete_rows artifacts)
+artifact_names=$(printf '%s\n' "$artifacts" | jq -c '[.[].name]')
 job_origin() {
   printf '%s\n' "$jobs" | jq -er --arg name "$1" --arg prefix "$2" --arg suffix "$3" --arg head "$head" \
     --argjson artifacts "$artifact_names" --argjson run "$GITHUB_RUN_ID" '
@@ -42,7 +55,7 @@ job_origin() {
         [.steps[] | {number, name, status, conclusion, started_at, completed_at}]];
       . as $attempts | [.[].jobs[] | select(.name == $name)] as $rows
       | if ($rows | length) == 0 or
-          ($rows | any(.run_id != $run or .head_sha != $head or (.id | type != "number" or . <= 0))) or
+          ($rows | any(.run_id != $run or .head_sha != $head)) or
           ($rows | group_by(.run_attempt) | any(length != 1)) or
           any($attempts[]; .attempt as $n |
             ($rows | all(.run_attempt != $n)) and
@@ -71,9 +84,8 @@ job_origin() {
 }
 artifact_origin() {
   printf '%s\n' "$artifacts" | jq -er --arg name "$1" '
-    [.[].artifacts[] | select(.name == $name)] as $rows
-    | if ($rows | length) == 1 and $rows[0].expired == false and
-         ($rows[0].id | type == "number" and . > 0)
+    [.[] | select(.name == $name)] as $rows
+    | if ($rows | length) == 1 and $rows[0].expired == false
       then $rows[0].id
       else error("artifact absent or ambiguous: " + $name)
       end'

@@ -54,6 +54,8 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | {"gate-linux":{"admissionStep":"Check","producers":["p-a"],"plannedProducers":{"prefix":"p-","suffixes":["x"]}}} | no named job belongs to its planned family |
         | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"gate-m","suffixes":["x"]}}} | no named job belongs to its planned family |
         | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-","suffixes":["x","x"]}}} | the suffixes are all different |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"lane-","suffixes":["x"]}},"gate-macos":{"admissionStep":"Check","producers":["lane-preflight"]}} | no named job belongs to its planned family |
+        | {"gate-macos":{"admissionStep":"Check","producers":["lane-preflight"]},"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"lane-","suffixes":["x"]}}} | no named job belongs to its planned family |
 
     Scenario: the committed aggregate binds the Linux producers and the family of its planned lanes to its admission step
       When the committed deliver config is loaded
@@ -70,6 +72,7 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-","suffixes":["x"]}}} |
         | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-","suffixes":["a","b","c","d"]}}} |
         | {"gate-linux":{"admissionStep":"Check","producers":["a-p-"],"plannedProducers":{"prefix":"p-","suffixes":["x"]}}} |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"lane-","suffixes":["x"]}},"gate-macos":{"admissionStep":"Check","producers":["pre-lane-check"]}} |
 
   Rule: a copy at the edge of a rule is accepted
 

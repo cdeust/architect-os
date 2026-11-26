@@ -91,15 +91,18 @@ function configSchema(): z.ZodType<DeliverConfig> {
   });
   return object
     .refine(
-      ({ requiredJobs, jobDependencies = {} }) =>
-        Object.entries(jobDependencies).every(
+      ({ requiredJobs, jobDependencies = {} }) => {
+        const groups = Object.entries(jobDependencies);
+        const namedJobs = [...requiredJobs, ...groups.flatMap(([, group]) => group.producers)];
+        return groups.every(
           ([name, group]) =>
             requiredJobs.includes(name) &&
             group.producers.every((job) => !Object.hasOwn(jobDependencies, job)) &&
-            [...requiredJobs, ...group.producers].every(
+            namedJobs.every(
               (job) => group.plannedProducers === undefined || !job.startsWith(group.plannedProducers.prefix),
             ),
-        ),
+        );
+      },
       {
         path: ['jobDependencies'],
         message:
