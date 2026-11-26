@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { DataOpInput, DataOpName, MemoryItem, Run, RunEvent } from '@architect-os/contracts';
 import { DataError } from '../domain/errors.js';
 import type { DataStore } from '../domain/ports.js';
@@ -116,7 +116,59 @@ export class InMemoryDataStore implements DataStore {
       return { ...ended };
     },
     'tasks.get': ({ task }) => ({ ...this.task('tasks.get', task) }),
+    'steps.reserve': ({ run, step }) => {
+      const key = stepKey(run, step);
+      if (this.steps.has(key)) throw new DataError('INVALID_OPERATION', 'steps.reserve: invalid operation');
+      const state: StoredStep = { run, step, reserved_at: now(), events: [], artifacts: [] };
+      this.steps.set(key, state);
+      return { run, step, reserved_at: state.reserved_at };
+    },
+    'steps.appendEvent': ({ run, step, type, phase }) => {
+      const state = this.step('steps.appendEvent', run, step);
+      const event = { seq: state.events.length, type, phase, at: now() };
+      state.events.push(event);
+      return { run, step, ...event };
+    },
+    'steps.recordArtifact': ({ run, step, kind, name, bytes: encoded }) => {
+      const state = this.step('steps.recordArtifact', run, step);
+      if (state.artifacts.some((a) => a.kind === kind && a.name === name))
+        throw new DataError('INVALID_OPERATION', 'steps.recordArtifact: invalid operation');
+      const bytes = Buffer.from(encoded, 'base64');
+      const artifact: StoredArtifact = {
+        kind,
+        ...(name === undefined ? {} : { name }),
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+        recorded_at: now(),
+        bytes: bytes.toString('base64'),
+      };
+      state.artifacts.push(artifact);
+      const { bytes: _bytes, ...record } = artifact;
+      return { run, step, ...record };
+    },
+    'steps.get': ({ run, step }) => {
+      const state = this.steps.get(stepKey(run, step));
+      if (state === undefined) throw new DataError('NOT_FOUND', 'steps.get: no such record');
+      return {
+        run,
+        step,
+        reserved_at: state.reserved_at,
+        events: state.events.map((event) => ({ ...event })),
+        artifacts: [...state.artifacts]
+          .sort((a, b) => byteOrder(a.kind, b.kind) || byteOrder(a.name, b.name))
+          .map((artifact) => ({ ...artifact })),
+      };
+    },
   };
+
+  /** Nothing of a Step changes once written (migrations/0006_steps.sql on Postgres). */
+  private readonly steps = new Map<string, StoredStep>();
+
+  /** A Step known to the store; an unknown one is the foreign key of its tables on Postgres (23503). */
+  private step(op: string, run: string, step: string): StoredStep {
+    const state = this.steps.get(stepKey(run, step));
+    if (state === undefined) throw new DataError('NOT_FOUND', `${op}: not found`);
+    return state;
+  }
 
   /** Append-only: no handler changes or removes a record (migrations/0004_usage_records.sql on Postgres). */
   private readonly usage: DataOpInput<'usage.append'>[] = [];
@@ -159,6 +211,13 @@ const sortKey = (value: string | undefined): Buffer =>
 
 const byteOrder = (a: string | undefined, b: string | undefined): number =>
   Buffer.compare(sortKey(a), sortKey(b));
+
+/** One key per Step of a run: the JSON of the pair, so that no run and step can make the key of another pair. */
+const stepKey = (run: string, step: string): string => JSON.stringify([run, step]);
+
+type StepState = import('@architect-os/contracts').DataOpOutput<'steps.get'>;
+type StoredArtifact = StepState['artifacts'][number];
+type StoredStep = Omit<StepState, 'artifacts'> & { artifacts: StoredArtifact[] };
 
 /** A task of the registry (TaskRecordSchema of the contracts). */
 type TaskRecord = import('@architect-os/contracts').DataOpOutput<'tasks.get'>;

@@ -52,7 +52,8 @@ import {
   stepRecordSchema,
   type RecordedSession,
 } from './step-record.js';
-import { reserveStepOutputs, type StepOutputs } from './step-outputs.js';
+import { fileStepStore } from './step-store-file.js';
+import type { StepRecorder, StepStore } from './step-store.js';
 import { stepsFolder, type StepsFolder } from './steps-folder.js';
 import { parseTool } from './tool.js';
 import {
@@ -76,9 +77,13 @@ export interface StepDependencies {
   readonly readFile: (path: string) => string | undefined;
   /** Le texte d'un fichier du worktree où l'étape tourne, `undefined` s'il n'en est pas un (fichier ordinaire dans ce worktree). */
   readonly readSource: (path: string) => string | undefined;
+  /** Crée un fichier des flux bruts, qui ne sont pas de l'état de l'étape. */
   readonly writeFile: (path: string, content: string) => void;
-  readonly reserveOutputs: (name: string, intake: string, worktree: string) => StepOutputs;
   readonly appendFile: (path: string, content: Uint8Array) => void;
+  /** L'état retenu de l'étape : tout ce qu'elle garde passe par lui (docs/design/orchestration-fable-5-2.md, §15, A). */
+  readonly store: StepStore;
+  /** Le répertoire des flux bruts d'une étape réservée dans `store`. */
+  readonly streams: (name: string) => string;
   readonly session: StepSession;
   readonly builder: Builder;
   readonly check: StepCheck;
@@ -155,6 +160,12 @@ function readStep(deps: StepDependencies): {
 
 type PlayedSession = Awaited<ReturnType<StepSession>> & { measure: SessionMeasure };
 
+/** Où une étape écrit : son état par le port, ses flux bruts dans leur répertoire. */
+interface StepOutputs {
+  state: StepRecorder;
+  streams: string;
+}
+
 /** Le résultat structuré ne peut servir qu'après la réussite du processus et du flux. */
 function sessionSucceeded(session: PlayedSession): boolean {
   return passed(session) && session.measure.completed;
@@ -164,13 +175,13 @@ function sessionSucceeded(session: PlayedSession): boolean {
 async function play(
   deps: StepDependencies,
   outputs: StepOutputs,
-  prefix: string,
+  session: { role: 'scout' | 'review'; name: string },
   tool: ToolFile,
   config: StepSessionConfig,
   extra: readonly string[],
   brief: string,
 ): Promise<PlayedSession> {
-  const streamFile = join(outputs.streams, `${prefix}.stream.jsonl`);
+  const streamFile = join(outputs.streams, `${session.role}.${session.name}.stream.jsonl`);
   deps.writeFile(streamFile, '');
   const chunks: Buffer[] = [];
   const argv = [...SESSION_ARGUMENTS, '--model', config.model, '--effort', config.effort, ...extra];
@@ -183,7 +194,7 @@ async function play(
     structuredOutput: _structured,
     ...measure
   } = measureSession(Buffer.concat(chunks).toString());
-  deps.writeFile(join(outputs.retained, `${prefix}.measure.json`), json({ ...measure, exitCode, stopped }));
+  outputs.state.record(`${session.role}.measure`, session.name, json({ ...measure, exitCode, stopped }));
   return { measure: { ...measure, report, structuredOutput: _structured }, exitCode, stopped };
 }
 
@@ -202,8 +213,9 @@ async function playCheck(
   const outcome = await deps.check(config.command, config.limitSeconds);
   const durationSeconds = Math.round((deps.now() - before) / 1000);
   const { exitCode, stopped, cut, output } = outcome;
-  deps.writeFile(
-    join(outputs.retained, `check.${config.name}.json`),
+  outputs.state.record(
+    'check',
+    config.name,
     json({ command: config.command, exitCode, stopped, durationSeconds, cut, output }),
   );
   return { name: config.name, command: config.command, exitCode, stopped, durationSeconds, cut, output };
@@ -226,11 +238,10 @@ async function review(
   brief: string,
   acceptance: readonly string[],
 ): Promise<ReviewOutcome> {
-  const prefix = `review.${config.name}`;
   const session = await play(
     deps,
     outputs,
-    prefix,
+    { role: 'review', name: config.name },
     'review.json',
     config,
     ['--json-schema', verdictSchema()],
@@ -239,7 +250,7 @@ async function review(
   const verdict = sessionSucceeded(session)
     ? verdictOf(session.measure.structuredOutput, acceptance, deps.readSource)
     : invalid('la session n’a pas abouti');
-  deps.writeFile(join(outputs.retained, `${prefix}.verdict.json`), json(verdict.file));
+  outputs.state.record('review.verdict', config.name, json(verdict.file));
   return { config, verdict, ...session };
 }
 
@@ -290,11 +301,10 @@ async function scout(
   config: ScoutConfig,
   question: string,
 ): Promise<ScoutOutcome> {
-  const prefix = `scout.${config.name}`;
   const session = await play(
     deps,
     outputs,
-    prefix,
+    { role: 'scout', name: config.name },
     'scout.json',
     config,
     ['--json-schema', factsJsonSchema()],
@@ -303,7 +313,7 @@ async function scout(
   const completed = sessionSucceeded(session);
   const none = { config, ...session, completed, verified: [], rejected: 0, open: 0 };
   const writeInvalid = (why: string): ScoutOutcome => {
-    deps.writeFile(join(outputs.retained, `${prefix}.facts.json`), json({ invalid: why }));
+    outputs.state.record('scout.facts', config.name, json({ invalid: why }));
     return none;
   };
   if (!completed) return writeInvalid('la session n’a pas abouti');
@@ -313,10 +323,7 @@ async function scout(
   const parsed = factsSchemaResult(session.measure.structuredOutput);
   if (typeof parsed === 'string') return writeInvalid(parsed);
   const { verified, rejected } = verifyFacts(parsed.facts, deps.readSource);
-  deps.writeFile(
-    join(outputs.retained, `${prefix}.facts.json`),
-    json({ verified, rejected, open: parsed.open }),
-  );
+  outputs.state.record('scout.facts', config.name, json({ verified, rejected, open: parsed.open }));
   return {
     config,
     ...session,
@@ -458,7 +465,8 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       throw new Refusal('STEP_ADMISSION_REQUIRED');
     }
     deps.steps.prepare();
-    const outputs = deps.reserveOutputs(name, folder, worktree);
+    const state = deps.store.reserve(name, { intake: folder, worktree });
+    const outputs: StepOutputs = { state, streams: deps.streams(name) };
     const scoutOutcomes = await playBounded(step.scouts, step.parallel, (config, index) =>
       scout(deps, outputs, config, questions[index] as string),
     );
@@ -481,7 +489,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       brief,
       scoutOutcomes.flatMap(({ verified }) => verified),
     );
-    deps.writeFile(join(outputs.retained, 'build.brief.md'), forBuild);
+    state.record('build.brief', undefined, forBuild);
     const definition = parseTool(JSON.parse(launcher['code.json']!));
     const stream = join(outputs.streams, 'build.stream.jsonl');
     deps.writeFile(stream, '');
@@ -495,8 +503,9 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     });
     if (build.provider !== (step.build.provider ?? 'anthropic')) throw Error('BUILDER_PROVIDER');
     const { report, structuredOutput: _structured, ...metrics } = build.measure;
-    deps.writeFile(
-      join(outputs.retained, 'build.measure.json'),
+    state.record(
+      'build.measure',
+      undefined,
       json({
         ...metrics,
         costUsd: build.provider === 'openai' ? null : metrics.costUsd,
@@ -504,7 +513,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         stopped: build.stopped,
       }),
     );
-    deps.writeFile(join(outputs.retained, 'build.report.md'), report);
+    state.record('build.report', undefined, report);
     const built = sessionSucceeded(build);
     // Les contrôles, l'un après l'autre ; le premier qui ne passe pas met fin à la phase.
     const played: CheckReport[] = [];
@@ -521,7 +530,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       ...(played.length > 0 ? [renderChecks(played, outputBound())] : []),
     ];
     const forReviews = appended.length === 0 ? brief : `${brief.trimEnd()}\n\n${appended.join('\n')}`;
-    if (built && checked) deps.writeFile(join(outputs.retained, 'review.brief.md'), forReviews);
+    if (built && checked) state.record('review.brief', undefined, forReviews);
     const outcomes =
       built && checked
         ? await playBounded(step.reviews, step.parallel, (config) =>
@@ -766,11 +775,13 @@ export function stepDependencies(proc: CodeProcess, buildSubscription = buildSbx
     return snapshot.dir;
   }
   const launch = codeToolSession((tool) => processDependencies(proc, isatty, tool, admittedRoot()));
+  const store = fileStepStore(proc.env);
   return {
     folderArguments: proc.argv.slice(2),
     readFile: (path) => (existsSync(path) && statSync(path).isFile() ? readText(path) : undefined),
     readSource: sourceReader(cwd),
-    reserveOutputs: (name, intake, worktree) => reserveStepOutputs(proc.env, name, intake, worktree),
+    store,
+    streams: (name) => store.streams(name),
     writeFile: (path, content) => writeFileSync(path, content, { flag: 'wx', mode: 0o600 }),
     appendFile: (path, content) => {
       const descriptor = openSync(path, constants.O_APPEND | constants.O_WRONLY | constants.O_NOFOLLOW);

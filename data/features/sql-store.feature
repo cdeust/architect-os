@@ -3,7 +3,7 @@ Feature: SQL store, statement table and migrations
 
   Scenario: loads the committed table: every contract operation has a statement and its SQL file
     When I load the committed statement table
-    Then the table has 12 distinct operations
+    Then the table has 16 distinct operations
     And every statement of the table has a non-empty text
 
   Scenario Outline: rejects a table with <defect>
@@ -92,7 +92,7 @@ Feature: SQL store, statement table and migrations
 
   Scenario: applies each versioned migration once, in order
     When I migrate twice from the committed migrations directory with an in-memory ledger
-    Then the first migration applies "0001_runs.sql, 0002_memory.sql, 0003_runs_immutable.sql, 0004_usage_records.sql, 0005_tasks.sql"
+    Then the first migration applies "0001_runs.sql, 0002_memory.sql, 0003_runs_immutable.sql, 0004_usage_records.sql, 0005_tasks.sql, 0006_steps.sql"
     And the second migration applies nothing
     And the migration statements include "CREATE EXTENSION IF NOT EXISTS vector"
 
@@ -115,3 +115,24 @@ Feature: SQL store, statement table and migrations
     And the database refuses "DELETE FROM tasks" with SQLSTATE "55000"
     When I execute "tasks.end" with the input '{"task":"t1","ending":"cancelled"}'
     Then the database refuses "UPDATE tasks SET ending = 'completed'" with SQLSTATE "55000"
+
+  @postgres
+  Scenario: nothing of a Step changes once written: UPDATE, DELETE and TRUNCATE of its three tables are refused by the database
+    Given the postgres data store
+    When I execute "steps.reserve" with the input '{"run":"r1","step":"s"}'
+    And I execute "steps.appendEvent" with the input '{"run":"r1","step":"s","type":"phase.started","phase":"build"}'
+    And I execute "steps.recordArtifact" with the input '{"run":"r1","step":"s","kind":"build.brief","bytes":"YnJpZWY="}'
+    Then the database refuses "UPDATE steps SET reserved_at = now()" with SQLSTATE "55000"
+    And the database refuses "DELETE FROM steps" with SQLSTATE "55000"
+    And the database refuses "TRUNCATE steps" with SQLSTATE "0A000"
+    And the database refuses "TRUNCATE steps CASCADE" with SQLSTATE "55000"
+    And the database refuses "UPDATE step_events SET phase = 'checks'" with SQLSTATE "55000"
+    And the database refuses "DELETE FROM step_events" with SQLSTATE "55000"
+    And the database refuses "TRUNCATE step_events" with SQLSTATE "55000"
+    And the database refuses "UPDATE step_artifacts SET content = '\x00'" with SQLSTATE "55000"
+    And the database refuses "DELETE FROM step_artifacts" with SQLSTATE "55000"
+    And the database refuses "TRUNCATE step_artifacts" with SQLSTATE "55000"
+    And the database refuses "INSERT INTO step_artifacts (run, step, kind, name, content) VALUES ('r1', 's', 'check', '', 'x')" with SQLSTATE "23514"
+    And the database refuses "INSERT INTO step_artifacts (run, step, kind, name, content) VALUES ('r1', 's', 'build.report', '', decode(repeat('61', 1048577), 'hex'))" with SQLSTATE "23514"
+    When I execute "steps.get" with the input '{"run":"r1","step":"s"}'
+    Then the answer matches '{"events":[{"seq":0,"phase":"build"}],"artifacts":[{"kind":"build.brief","bytes":"YnJpZWY="}]}'

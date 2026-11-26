@@ -192,3 +192,67 @@ Feature: DataStore contract
     Examples:
       | adapter  |
       | postgres |
+
+  Scenario Outline: reserves a Step once, keeps its events in order and its artifacts once each, with their bytes and SHA-256
+    Given the <adapter> data store
+    When I execute "steps.reserve" with the input '{"run":"run-1","step":"store"}'
+    Then the answer matches '{"run":"run-1","step":"store"}'
+    And the answer holds to the output schema of "steps.reserve"
+    When I execute "steps.reserve" with the input '{"run":"run-1","step":"store"}' and it is refused
+    Then the failure matches '{"code":"INVALID_OPERATION","message":"steps.reserve: invalid operation"}'
+    When I execute "steps.reserve" with the input '{"run":"run-2","step":"store"}'
+    Then the answer matches '{"run":"run-2","step":"store"}'
+    When I execute "steps.appendEvent" with the input '{"run":"run-1","step":"store","type":"phase.started","phase":"build"}'
+    Then the answer matches '{"run":"run-1","step":"store","seq":0,"type":"phase.started","phase":"build"}'
+    And the answer holds to the output schema of "steps.appendEvent"
+    When I execute "steps.appendEvent" with the input '{"run":"run-1","step":"store","type":"phase.ended","phase":"build"}'
+    Then the answer matches '{"seq":1,"type":"phase.ended"}'
+    When I execute "steps.recordArtifact" with the input '{"run":"run-1","step":"store","kind":"build.report","bytes":"aGVsbG8Ad29ybGQ="}'
+    Then the answer matches '{"run":"run-1","step":"store","kind":"build.report","sha256":"b206899bc103669c8e7b36de29d73f95b46795b508aa87d612b2ce84bfb29df2"}'
+    And the answer has no field "name"
+    And the answer holds to the output schema of "steps.recordArtifact"
+    When I execute "steps.recordArtifact" with the input '{"run":"run-1","step":"store","kind":"check","name":"types","bytes":"eyJhIjoxfQo="}'
+    Then the answer matches '{"kind":"check","name":"types","sha256":"e346432021b04179518d9614f3560ccd71354a4ee101ddcb893d6959a9d6301c"}'
+    When I execute "steps.recordArtifact" with the input '{"run":"run-1","step":"store","kind":"review.brief","bytes":"YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYQ=="}'
+    Then the answer matches '{"kind":"review.brief","sha256":"2816597888e4a0d3a36b82b83316ab32680eb8f00f8cd3b904d681246d285a0e"}'
+    When I execute "steps.recordArtifact" with the input '{"run":"run-1","step":"store","kind":"check","name":"alpha","bytes":"eyJhIjoxfQo="}'
+    And I execute "steps.recordArtifact" with the input '{"run":"run-1","step":"store","kind":"review.measure","name":"types","bytes":"eyJhIjoxfQo="}'
+    Then the answer matches '{"kind":"review.measure","name":"types"}'
+    When I execute "steps.recordArtifact" with the input '{"run":"run-1","step":"store","kind":"check","name":"types","bytes":"eyJhIjoxfQo="}' and it is refused
+    Then the failure matches '{"code":"INVALID_OPERATION","message":"steps.recordArtifact: invalid operation"}'
+    When I execute "steps.get" with the input '{"run":"run-1","step":"store"}'
+    Then the answer matches:
+      """
+      {
+        "run": "run-1",
+        "step": "store",
+        "events": [{"seq":0,"type":"phase.started","phase":"build"}, {"seq":1,"type":"phase.ended","phase":"build"}],
+        "artifacts": [
+          {"kind":"build.report","bytes":"aGVsbG8Ad29ybGQ=","sha256":"b206899bc103669c8e7b36de29d73f95b46795b508aa87d612b2ce84bfb29df2"},
+          {"kind":"check","name":"alpha","bytes":"eyJhIjoxfQo=","sha256":"e346432021b04179518d9614f3560ccd71354a4ee101ddcb893d6959a9d6301c"},
+          {"kind":"check","name":"types","bytes":"eyJhIjoxfQo=","sha256":"e346432021b04179518d9614f3560ccd71354a4ee101ddcb893d6959a9d6301c"},
+          {"kind":"review.brief","bytes":"YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYQ==","sha256":"2816597888e4a0d3a36b82b83316ab32680eb8f00f8cd3b904d681246d285a0e"},
+          {"kind":"review.measure","name":"types","bytes":"eyJhIjoxfQo=","sha256":"e346432021b04179518d9614f3560ccd71354a4ee101ddcb893d6959a9d6301c"}
+        ]
+      }
+      """
+    And item 0 of the answer field "artifacts" has no field "name"
+    And the answer holds to the output schema of "steps.get"
+    When I execute "steps.get" with the input '{"run":"run-2","step":"store"}'
+    Then the answer matches '{"run":"run-2","events":[],"artifacts":[]}'
+    When I execute "steps.get" with the input '{"run":"run-3","step":"store"}' and it is refused
+    Then the failure matches '{"code":"NOT_FOUND","message":"steps.get: no such record"}'
+    When I execute "steps.appendEvent" with the input '{"run":"run-3","step":"store","type":"phase.started","phase":"scouts"}' and it is refused
+    Then the failure matches '{"code":"NOT_FOUND","message":"steps.appendEvent: not found"}'
+    When I execute "steps.recordArtifact" with the input '{"run":"run-3","step":"store","kind":"build.brief","bytes":""}' and it is refused
+    Then the failure matches '{"code":"NOT_FOUND","message":"steps.recordArtifact: not found"}'
+
+    @in-memory
+    Examples:
+      | adapter   |
+      | in-memory |
+
+    @postgres
+    Examples:
+      | adapter  |
+      | postgres |

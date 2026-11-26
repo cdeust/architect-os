@@ -13,8 +13,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, join } from 'node:path';
-import type { CodeProcess } from '../../src/code-tool.js';
-import { stepDependencies } from '../../src/step-tool.js';
+import { reserveStepOutputs } from '../../src/step-outputs.js';
 import { Given, Then, stored, type SandboxWorld } from './helpers.js';
 
 function paths(world: SandboxWorld) {
@@ -29,8 +28,7 @@ function paths(world: SandboxWorld) {
   const retained = join(state, 'steps', basename(run)),
     streams = join(tmp, 'steps');
   function allocate(name: string, input = intake, candidate = worktree, environment = env) {
-    const proc = { env: environment, argv: [], cwd: () => worktree } as unknown as CodeProcess;
-    return stepDependencies(proc).reserveOutputs(name, input, candidate);
+    return reserveStepOutputs(environment, name, input, candidate);
   }
   return { allocate, intake, worktree, state, tmp, retained, streams };
 }

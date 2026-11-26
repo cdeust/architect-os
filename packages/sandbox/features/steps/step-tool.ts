@@ -17,7 +17,7 @@ import {
 import os, { tmpdir } from 'node:os';
 import { syncBuiltinESMExports } from 'node:module';
 import fs from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { mock } from 'node:test';
 import { createHash } from 'node:crypto';
 import { PassThrough } from 'node:stream';
@@ -39,6 +39,7 @@ import { stepRecordSchema } from '../../src/step-record.js';
 import { stepsFolder } from '../../src/steps-folder.js';
 import { repoOf } from './runner.js';
 import { parseStepFile } from '../../src/step-file.js';
+import { FileStepStore } from '../../src/step-store-file.js';
 import type { TreeFingerprint } from '../../src/tree-fingerprint.js';
 import {
   codeToolSession,
@@ -449,16 +450,24 @@ const start = (s: Step, args: string): Promise<void> => {
   const stderr = new PassThrough();
   stdout.on('data', (chunk: Buffer) => (s.stdout += chunk.toString()));
   stderr.on('data', (chunk: Buffer) => (s.stderr += chunk.toString()));
+  // The adapter of the files over the folders of the scenario: what the step retains is read back from them.
+  const store = new FileStepStore((_name, place) => {
+    // The trees the state may not overlap are those of the step: its folder and its worktree.
+    assert.deepEqual(
+      { ...place, intake: resolve(place.intake) },
+      { intake: s.folder, worktree: '/the/worktree' },
+    );
+    mkdirSync(s.outputs.retained);
+    mkdirSync(s.outputs.streams);
+    return s.outputs;
+  });
   const deps: StepDependencies = {
     folderArguments: args === '' ? [] : args.split(' ').map((arg) => arg.replace('<folder>', s.folder)),
     readFile: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined),
     readSource: (path) => s.source.get(path),
     writeFile: (path, content) => writeFileSync(path, content),
-    reserveOutputs: () => {
-      mkdirSync(s.outputs.retained);
-      mkdirSync(s.outputs.streams);
-      return s.outputs;
-    },
+    store,
+    streams: (name) => store.streams(name),
     appendFile: (path, content) => writeFileSync(path, content, { flag: 'a' }),
     check: async (command, limitSeconds) => {
       s.checkCalls.push({ command, limitSeconds });
