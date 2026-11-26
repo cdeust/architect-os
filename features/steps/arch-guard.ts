@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { DataTable } from '@cucumber/cucumber';
 import { Given, ROOT, Then, When, stored } from './helpers.js';
@@ -38,12 +38,17 @@ function cruise(): Violation[] {
   return (JSON.parse(stdout) as { summary: { violations: Violation[] } }).summary.violations;
 }
 
-/** Removes every `zz-fixture-*` file under the targets, whatever run left it. */
+/**
+ * Removes every `zz-fixture-*` file under the targets, whatever run left it. A `node_modules` or `dist` directory is
+ * entered under `src/` only, where a fixture puts one, which goes once empty.
+ */
 function removeFixtures(directory: string): void {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
+    const built = entry.name === 'node_modules' || entry.name === 'dist';
     if (entry.isDirectory()) {
-      if (entry.name !== 'node_modules' && entry.name !== 'dist') removeFixtures(path);
+      if (!built || path.includes('/src/')) removeFixtures(path);
+      if (built && path.includes('/src/') && readdirSync(path).length === 0) rmdirSync(path);
     } else if (entry.name.startsWith(FIXTURE_PREFIX)) rmSync(path);
   }
 }

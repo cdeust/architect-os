@@ -9,7 +9,7 @@
       "modules/*/src/**/*.ts",
       "tools/*/src/**/*.ts"
     ],
-    "exclude": ["**/features/**", "**/node_modules/**", "**/dist/**", "**/*.d.ts"]
+    "exclude": ["**/*.d.ts"]
   },
   "features": {
     "include": ["features/**/*.feature", "*/features/**/*.feature", "*/*/features/**/*.feature"],

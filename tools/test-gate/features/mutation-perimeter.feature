@@ -426,6 +426,22 @@ Feature: Gate source files have an unambiguous mutation perimeter
         | leaf.mjs       | no  | a file segment is not a directory: *.mjs root  |
 
 
+    Scenario Outline: "<path>" is a production file of the committed configuration: <is>
+      A source under a directory named like a build output or a dependency, below src/, is still loaded by Node: only the
+      place of a file and its kind decide.
+
+      Then the path "<path>" is a production file of the committed gate configuration: <is>
+
+      Examples:
+        | path                                 | is  |
+        | packages/sandbox/src/node_modules/a.ts | yes |
+        | packages/sandbox/src/features/b.ts   | yes |
+        | packages/sandbox/src/dist/c.ts       | yes |
+        | services/memory/worker/dist/d.ts     | yes |
+        | packages/sandbox/src/types.d.ts      | no  |
+        | packages/sandbox/features/steps/e.ts | no  |
+        | tools/test-gate/dist/src/f.ts        | no  |
+
     Scenario Outline: the directory "<path>" may hold a production file of the committed configuration: <may>
       Then the directory "<path>" may hold a production file of the committed gate configuration: <may>
 
