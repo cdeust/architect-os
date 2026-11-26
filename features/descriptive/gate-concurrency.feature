@@ -8,8 +8,8 @@ Feature: the gate has two entries, and only the runs of a pull request are in a 
   gate-push.yml, which declares no group at all (docs/infrastructure.md, "The two entries of the gate").
 
   The ruleset of main requires the checks gate-linux and gate-macos, and a job of a called workflow reports as
-  `<caller job> / <job>`: both verdict jobs stay jobs of each entry, and the two files carry the same bytes from the
-  line `jobs:` to their end.
+  `<caller job> / <job>`: both verdict jobs stay jobs of each entry. The push entry is written whole from the
+  pull-request entry by `npm run workflow:gate-push`: its own head, then the same bytes from the line `jobs:` to the end.
 
   The scenarios compare the parsed files with literal values and check that keys are absent; they evaluate no
   expression. What they cannot see is a group that another workflow computes at run time: it could only cancel a run of
@@ -104,18 +104,23 @@ Feature: the gate has two entries, and only the runs of a pull request are in a 
         | another workflow declares a group that holds gate- after its first characters                 |
         | another workflow declares no group                                                            |
 
-  Rule: from the line jobs: to their end, the two entries are the same bytes
+  Rule: the push entry is written whole from the pull-request entry, and the committed file is what the command writes
 
-    Scenario Outline: a copy where <fault> is refused, since the two entries would no longer run the same gate
+    Scenario: npm run workflow:gate-push writes gate-push.yml from gate.yml, with its own head and the jobs unchanged
+      Then the command that writes the push entry writes it once from the pull-request entry, then changes nothing
+
+    Scenario Outline: a copy where <fault> is refused, since the push entry would no longer be the one the command writes
       Given a copy of the committed workflows of the gate where <fault>
-      Then that copy of the workflows of the gate is refused: "the jobs of gate.yml and of gate-push.yml differ"
+      Then that copy of the workflows of the gate is refused: "gate-push.yml is not what npm run workflow:gate-push writes from gate.yml"
 
       Examples:
-        | fault                                         |
-        | one byte of the jobs of gate.yml changes      |
-        | one byte of the jobs of gate-push.yml changes |
-        | gate-push.yml ends with one more line         |
-        | gate.yml has one more job                     |
+        | fault                                                                     |
+        | one byte of the jobs of gate.yml changes                                  |
+        | one byte of the jobs of gate-push.yml changes                             |
+        | gate-push.yml ends with one more line                                     |
+        | gate.yml has one more job                                                 |
+        | one character of a comment of the head of gate-push.yml changes           |
+        | gate-push.yml loses the comment that says it is generated                 |
 
   Rule: each reader of a gate run names the entry it reads
 

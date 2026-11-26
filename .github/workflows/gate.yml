@@ -1,8 +1,9 @@
 # The CI gate (docs/design/platform-v3-srt.md §7): plan, Gherkin suite, Stryker on the changed lines, verdict.
 # No secret, no cache. The token is the automatic one, restricted to contents: read and actions: read.
-# The pull-request entry. The push entry is gate-push.yml; from `jobs:` to the end the two files are the same bytes
-# (features/descriptive/gate-concurrency.feature), so that both report the checks gate-linux and gate-macos as jobs
-# of their own run: a job of a called workflow would report as `<caller job> / <job>`.
+# The pull-request entry, and the source of the push entry: gate-push.yml is written whole from this file by
+# `npm run workflow:gate-push` (its own name and trigger, no concurrency key, then the jobs below unchanged), and
+# features/descriptive/gate-concurrency.feature requires it equal. Both entries thus report the checks gate-linux and
+# gate-macos as jobs of their own run: a job of a called workflow would report as `<caller job> / <job>`.
 name: gate
 
 on:

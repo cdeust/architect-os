@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { parse } from 'yaml';
+import { pushEntry, writePushEntry } from '../support/gate-push-entry.js';
 import { Given, ROOT, Then, stored } from './helpers.js';
 import { GATE_ENTRIES } from './workflows.js';
 
@@ -80,14 +81,6 @@ function groupText(concurrency: unknown): string | undefined {
   return undefined;
 }
 
-/** From the line `jobs:` to the end of the file, as bytes. */
-function jobsBytes(gate: Gate, file: string): Buffer {
-  const text = gate.workflows[file] ?? '';
-  const at = text.search(/^jobs:\n/m);
-  assert.ok(at !== -1, `${file} has no line jobs:`);
-  return Buffer.from(text.slice(at), 'utf8');
-}
-
 function assertNoConcurrencyKey(gate: Gate, file: string): void {
   const doc = document(gate, file);
   assert.ok(!('concurrency' in doc), `${file} declares a concurrency key`);
@@ -134,12 +127,6 @@ function assertGateEntries(gate: Gate): void {
     }
   }
 
-  // Both entries report gate-linux and gate-macos as jobs of their own run: the jobs are the same bytes.
-  assert.ok(
-    jobsBytes(gate, PULL_REQUEST_ENTRY).equals(jobsBytes(gate, PUSH_ENTRY)),
-    `the jobs of ${PULL_REQUEST_ENTRY} and of ${PUSH_ENTRY} differ`,
-  );
-
   // The readers that name the gate by file or by display name.
   const push = document(gate, PUSH_ENTRY);
   assert.ok(entry['name'] === 'gate', `${PULL_REQUEST_ENTRY} is not named gate`);
@@ -164,6 +151,19 @@ function assertGateEntries(gate: Gate): void {
   assert.ok(
     (gate.workflows[RESOLVER] ?? '').includes(`run.get("path") == "${WORKFLOWS}/${PULL_REQUEST_ENTRY}"`),
     `${RESOLVER} does not read the pull-request entry`,
+  );
+
+  // Both entries report gate-linux and gate-macos as jobs of their own run: the push entry is written whole from
+  // the pull-request entry (features/support/gate-push-entry.ts), and the committed file is what that writes.
+  let produced: string | undefined;
+  try {
+    produced = pushEntry(gate.workflows[PULL_REQUEST_ENTRY] ?? '');
+  } catch {
+    // A source with no line `jobs:`, or with two, produces nothing: the committed file equals nothing.
+  }
+  assert.ok(
+    produced !== undefined && gate.workflows[PUSH_ENTRY] === produced,
+    `${PUSH_ENTRY} is not what npm run workflow:gate-push writes from ${PULL_REQUEST_ENTRY}`,
   );
 }
 
@@ -342,6 +342,13 @@ const FAULTS: Record<string, (root: string) => void> = {
     text.replace(/fetch-depth: 2\n(?![^]*fetch-depth: 2\n)/, () => 'fetch-depth: 3\n'),
   ),
   'gate-push.yml ends with one more line': edits(PUSH_ENTRY, (text) => text + '\n'),
+  'one character of a comment of the head of gate-push.yml changes': edits(
+    PUSH_ENTRY,
+    swap('# GENERATED', '# Generated'),
+  ),
+  'gate-push.yml loses the comment that says it is generated': edits(PUSH_ENTRY, (text) =>
+    text.slice(text.indexOf('# The CI gate')),
+  ),
   'gate.yml has one more job': edits(PULL_REQUEST_ENTRY, (text) =>
     [text, '  extra:', '    runs-on: ubuntu-24.04', '    steps:', "      - run: 'true'", ''].join('\n'),
   ),
@@ -458,3 +465,42 @@ Then('that copy of the workflows of the gate is refused: {string}', function (re
 Then('that copy of the workflows of the gate is accepted', function () {
   assertGateEntries(stored<Gate>(this, 'gateEntries'));
 });
+
+Then(
+  'the command that writes the push entry writes it once from the pull-request entry, then changes nothing',
+  function () {
+    const root = mkdtempSync(join(tmpdir(), 'aos-gate-push-entry-'));
+    try {
+      const directory = join(root, '.github/workflows');
+      mkdirSync(directory, { recursive: true });
+      const source = readFileSync(join(ROOT, '.github/workflows', PULL_REQUEST_ENTRY), 'utf8');
+      const committed = readFileSync(join(ROOT, '.github/workflows', PUSH_ENTRY), 'utf8');
+      writeFileSync(join(directory, PULL_REQUEST_ENTRY), source);
+      const produced = () => readFileSync(join(directory, PUSH_ENTRY), 'utf8');
+      // No file yet, a stale file, then the file it wrote.
+      assert.equal(writePushEntry(root), true);
+      assert.equal(produced(), committed);
+      writeFileSync(join(directory, PUSH_ENTRY), committed.replace('fetch-depth: 2', 'fetch-depth: 3'));
+      assert.equal(writePushEntry(root), true);
+      assert.equal(produced(), committed);
+      assert.equal(writePushEntry(root), false);
+      assert.deepEqual(readdirSync(directory).sort(), [PUSH_ENTRY, PULL_REQUEST_ENTRY].sort());
+      assert.equal(readFileSync(join(directory, PULL_REQUEST_ENTRY), 'utf8'), source);
+      // What it writes: its own head, no concurrency key, then the jobs of the source, byte for byte.
+      const jobs = source.slice(source.search(/^jobs:\n/m));
+      assert.ok(committed.endsWith(jobs));
+      const head = committed.slice(0, committed.length - jobs.length);
+      assert.match(head, /^# GENERATED from \.github\/workflows\/gate\.yml by `npm run workflow:gate-push`/);
+      assert.ok(!head.includes('concurrency:'));
+      assert.deepEqual(parse(head), {
+        name: 'gate-push',
+        on: { push: { branches: ['main', 'sentinel/gate-1a-*'] } },
+        permissions: { contents: 'read', actions: 'read' },
+      });
+      for (const text of [source.replace(/^jobs:\n/m, ''), source + 'jobs:\n'])
+        assert.throws(() => pushEntry(text), /must hold exactly one line "jobs:"/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);

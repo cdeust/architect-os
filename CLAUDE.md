@@ -16,6 +16,7 @@ LAUNCHER='<absolute path to the trusted launcher checkout>'
 "$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run review # from a worktree: the read-only reviewer session, prompt from the launcher
 "$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run step -- <folder>  # requires a host-issued ARCHITECT_OS_STEP_EVIDENCE receipt before any builder session (packages/sandbox/README.md)
 ./aos -- npm run diagram:isolation   # after a build (npm run typecheck): rewrite docs/diagrams/isolation-profiles.svg whole from packages/sandbox/profiles when it differs (features/arch/isolation-diagram.feature requires the file equal to it)
+./aos -- npm run workflow:gate-push   # after a change to .github/workflows/gate.yml: rewrite .github/workflows/gate-push.yml whole from it when it differs (features/descriptive/gate-concurrency.feature requires the file equal to it)
 ./aos -- npm run evidence -- ask <ledger> <desk> <id> < question.txt  # evidence desk: record a question, publish the skill (tools/evidence/README.md)
 ./aos -- npm run evidence -- verify <ledger> <desk>                   # evidence desk: verify the answers left in the desk; exit 0, 1 (rejected or deferred), 2 (refused) or 3 (unexpected error)
 ./aos -- npm run watch -- check [--keep <dir>]                        # the watch of Anthropic: the register against its sources; exit 0, 1 (a source moved), 2 (register refused) or 3 (a source unreadable)

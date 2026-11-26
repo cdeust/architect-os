@@ -1,8 +1,11 @@
+# GENERATED from .github/workflows/gate.yml by `npm run workflow:gate-push` (features/support/gate-push-entry.ts).
+# Do not edit: change gate.yml, then run the command. features/descriptive/gate-concurrency.feature requires this
+# file to equal what the command writes.
 # The CI gate (docs/design/platform-v3-srt.md §7): plan, Gherkin suite, Stryker on the changed lines, verdict.
 # No secret, no cache. The token is the automatic one, restricted to contents: read and actions: read.
-# The push entry. The pull-request entry is gate.yml; from `jobs:` to the end the two files are the same bytes
-# (features/descriptive/gate-concurrency.feature), so that both report the checks gate-linux and gate-macos as jobs
-# of their own run: a job of a called workflow would report as `<caller job> / <job>`.
+# The push entry. The pull-request entry is gate.yml; the jobs below are its jobs, unchanged, so that both report the
+# checks gate-linux and gate-macos as jobs of their own run: a job of a called workflow would report as
+# `<caller job> / <job>`.
 # No concurrency key, here or on a job: a run on main publishes the base of the count that the next run reads, and a
 # run on a trial branch is the one the delivery waits for. A run in no group cannot be cancelled through a group.
 name: gate-push

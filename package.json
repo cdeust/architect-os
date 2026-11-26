@@ -30,6 +30,7 @@
     "step": "node scripts/require-run.mjs && node --import tsx packages/sandbox/src/step.ts",
     "evidence": "node scripts/require-run.mjs && node --import tsx tools/evidence/src/cli.ts",
     "diagram:isolation": "node scripts/require-run.mjs && node --import tsx features/scripts/isolation-diagram.ts",
+    "workflow:gate-push": "node scripts/require-run.mjs && node --import tsx features/scripts/gate-push-entry.ts",
     "watch": "node scripts/require-run.mjs && node --import tsx tools/watch/src/cli.ts",
     "define": "node scripts/require-run.mjs && node --import tsx tools/define/src/cli.ts",
     "plan": "node scripts/require-run.mjs && node --import tsx tools/plan/src/cli.ts",
