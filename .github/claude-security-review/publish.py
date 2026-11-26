@@ -40,7 +40,11 @@ GH_TIMEOUT_SECONDS = 60
 
 
 class Refused(ValueError):
-    """The output of the reviewer does not satisfy the schema."""
+    """The output of the reviewer does not satisfy the schema.
+
+    Its message is written to the job summary, which GitHub renders: it names a place of the schema (keys the schema
+    declares, indexes) and never a byte of the answer, which is untrusted.
+    """
 
 
 def check(value: Any, schema: dict[str, Any], where: str = "$") -> None:
@@ -65,7 +69,7 @@ def check(value: Any, schema: dict[str, Any], where: str = "$") -> None:
         if schema.get("additionalProperties") is False:
             extra = set(value) - set(properties)
             if extra:
-                raise Refused(f"{where}: unexpected {sorted(extra)}")
+                raise Refused(f"{where}: {len(extra)} unexpected keys")
         for key, inner in value.items():
             if key in properties:
                 check(inner, properties[key], f"{where}.{key}")
@@ -112,9 +116,14 @@ CREDENTIAL = re.compile(r"sk-ant-[A-Za-z0-9_-]{8,}|gh[opsur]_[A-Za-z0-9]{20,}|gi
 RUN_URL = re.compile(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/[0-9]+")
 
 
+def _no_constant(name: str) -> Any:
+    """`NaN`, `Infinity` and `-Infinity`, which `json` accepts and JSON does not."""
+    raise ValueError(name)
+
+
 def parse(raw: str) -> list[dict[str, Any]]:
     try:
-        data = json.loads(raw)
+        data = json.loads(raw, parse_constant=_no_constant)
     except (ValueError, RecursionError) as error:
         raise Refused(f"$: not JSON ({type(error).__name__})") from None
     check(data, json.loads(SCHEMA.read_text(encoding="utf-8")))
@@ -195,7 +204,7 @@ def main(argv: list[str]) -> int:
         try:
             body = render(parse(os.environ.get("FINDINGS", "")), os.environ.get("RUN_URL", ""))
         except Refused as error:
-            summary(f"The output of the review was refused: {error}.")
+            summary(f"The output of the review was refused: `{error}`.")
             return post(REFUSED)
         return post(body)
     sys.stderr.write("usage: publish.py render | post\n")

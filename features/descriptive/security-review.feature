@@ -168,6 +168,20 @@ Feature: The Claude security review
       | with a confidence that is a boolean |
       | with a description too long      |
       | with too many findings           |
+      | with a confidence that is not finite |
+      | with an infinite confidence |
       | holding the shape of a key of Anthropic |
       | holding the shape of a GitHub token |
       | holding the shape of a fine-grained GitHub token |
+
+  Scenario Outline: a refused answer <where> is not published, even in the job summary
+    The reason of a refusal names a place of the schema, never a byte of the answer: the job summary is rendered.
+    Then a refused answer <where> reaches neither the comment nor the job summary
+
+    Examples:
+      | where                            |
+      | with an unknown key              |
+      | with an unknown key in a finding |
+
+  Scenario: the publisher leaves out a run link of GitHub with a suffix
+    Then the publisher leaves out a run link of GitHub followed by anything

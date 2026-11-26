@@ -625,6 +625,10 @@ const ANSWER_BREAKS: Record<string, () => string> = {
   'with a description too long': () =>
     JSON.stringify({ findings: [{ ...FINDING, description: 'x'.repeat(2001) }] }),
   'with too many findings': () => JSON.stringify({ findings: Array.from({ length: 21 }, () => FINDING) }),
+  'with a confidence that is not finite': () =>
+    JSON.stringify({ findings: [{ ...FINDING, confidence: 0.9 }] }).replace('0.9', 'NaN'),
+  'with an infinite confidence': () =>
+    JSON.stringify({ findings: [{ ...FINDING, confidence: 0.9 }] }).replace('0.9', 'Infinity'),
   'holding the shape of a key of Anthropic': () =>
     JSON.stringify({ findings: [{ ...FINDING, description: 'leak sk-ant-oat01-AbCdEfGh123456' }] }),
   'holding the shape of a GitHub token': () =>
@@ -854,4 +858,34 @@ Then('the publisher leaves out a run link that is not a run of GitHub', function
   });
   assert.equal(posted.status, 0);
   assert.ok(!posted.body.includes('example.invalid'), 'a link of another host is posted');
+});
+
+/** A key of the answer the schema does not know, holding a credential shape and a Markdown image. */
+const TRAP = '![x](https://attacker.example/p.png) sk-ant-oat01-AAAAAAAAAAAA';
+
+Then('a refused answer {} reaches neither the comment nor the job summary', function (where: string) {
+  const answers: Record<string, string> = {
+    'with an unknown key': JSON.stringify({ findings: [], [TRAP]: 1 }),
+    'with an unknown key in a finding': JSON.stringify({ findings: [{ ...FINDING, [TRAP]: 1 }] }),
+  };
+  const answer = answers[where];
+  assert.ok(answer !== undefined, `no trapped answer named "${where}"`);
+  const posted = publishPost({ PR: '141', FINDINGS: answer });
+  assert.equal(posted.status, 0);
+  assert.match(posted.summary, /^The output of the review was refused: `\$[^`]*: 1 unexpected keys`\.\n$/);
+  for (const text of [posted.summary, posted.body]) {
+    for (const piece of ['attacker', 'sk-ant', '![']) assert.ok(!text.includes(piece), `published: ${piece}`);
+  }
+  assert.match(posted.body, /failed validation; nothing of it is published/);
+});
+
+Then('the publisher leaves out a run link of GitHub followed by anything', function () {
+  const posted = publishPost({
+    PR: '141',
+    FINDINGS: JSON.stringify({ findings: [] }),
+    RUN_URL: 'https://github.com/owner/repo/actions/runs/42)![x](https://attacker.example/p.png)',
+  });
+  assert.equal(posted.status, 0);
+  assert.ok(!posted.body.includes('attacker'), 'a suffix of the run link is posted');
+  assert.ok(!posted.body.includes('[Run]'), 'a run link that is not exactly a run is posted');
 });
