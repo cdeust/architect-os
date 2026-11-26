@@ -123,18 +123,47 @@ export function writtenTables(sql: string): string[] {
   return [...new Set([...targets].map((m) => String(m[1]).toLowerCase()))];
 }
 
-/** Refuses a table whose SQL for an operation writes other tables than the `writes` that operation declares in DATA_OPS. */
+/**
+ * The tables a statement reads: the source of each FROM and JOIN, comments removed, but the target of a DELETE FROM,
+ * the operand of IS DISTINCT FROM and the names its WITH clauses define; and, when it has a RETURNING clause, the tables
+ * it writes, whose rows it returns.
+ */
+export function readTables(sql: string): string[] {
+  const code = sql.replace(/--[^\n]*/g, '');
+  const defined = new Set(
+    [...code.matchAll(/\b([A-Za-z_]\w*)\s+AS\s*\(/gi)].map((m) => String(m[1]).toLowerCase()),
+  );
+  const sources = [
+    ...code.matchAll(/(?<!\b(?:DELETE|DISTINCT)\s+)\b(?:FROM|JOIN)\s+(?:ONLY\s+)?([A-Za-z_][\w.]*)/gi),
+  ]
+    .map((m) => String(m[1]).toLowerCase())
+    .filter((name) => !defined.has(name));
+  const returned = /\bRETURNING\b/i.test(code) ? writtenTables(code) : [];
+  return [...new Set([...sources, ...returned])];
+}
+
+/** The tables of `actual` against those of `declared`: equal as sets, or the error that names both. */
+function checkAccess(
+  op: DataOpName,
+  verb: 'writes' | 'reads',
+  actual: Set<string>,
+  declared: readonly string[],
+): void {
+  if (actual.size !== declared.length || declared.some((name) => !actual.has(name)))
+    throw new Error(
+      `operation ${op} ${verb} ${JSON.stringify([...actual])} but declares ${JSON.stringify(declared)} in DATA_OPS`,
+    );
+}
+
+/**
+ * Refuses a table whose SQL for an operation writes, or reads, other tables than the `writes`, or the `reads`, that
+ * operation declares in DATA_OPS.
+ */
 function checkWrites(table: StatementTable): StatementTable {
   for (const op of DATA_OP_NAMES) {
-    const written = new Set(
-      table.statements.filter((s) => s.op === op).flatMap((s) => writtenTables(s.text)),
-    );
-    const declared: readonly string[] = DATA_OPS[op].writes;
-    if (written.size !== declared.length || declared.some((name) => !written.has(name))) {
-      throw new Error(
-        `operation ${op} writes ${JSON.stringify([...written])} but declares ${JSON.stringify(declared)} in DATA_OPS`,
-      );
-    }
+    const texts = table.statements.filter((s) => s.op === op).map((s) => s.text);
+    checkAccess(op, 'writes', new Set(texts.flatMap(writtenTables)), DATA_OPS[op].writes);
+    checkAccess(op, 'reads', new Set(texts.flatMap(readTables)), DATA_OPS[op].reads);
   }
   return table;
 }

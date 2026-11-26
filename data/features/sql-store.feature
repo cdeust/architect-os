@@ -19,7 +19,7 @@ Feature: SQL store, statement table and migrations
       | a SQL file that does not exist                 | operations.json | point the first statement at nope.sql  |
       | not JSON                                       | operations.json | replace the content by an opening brace |
 
-  Scenario Outline: rejects a table whose SQL writes other tables than its operation declares: <defect>
+  Scenario Outline: rejects a table whose SQL writes or reads other tables than its operation declares: <defect>
     When I copy the sql directory and rewrite "<file>" as "<rewrite>"
     Then loading the statement table from the copy fails saying <message>
 
@@ -28,6 +28,8 @@ Feature: SQL store, statement table and migrations
       | a statement writing a table it does not declare | runs.get.sql     | append a delete of the runs      | operation runs.get writes ["runs"] but declares [] in DATA_OPS |
       | a declared table its statement does not write   | usage.append.sql | select the 12 parameters instead | operation usage.append writes [] but declares ["usage_records"] in DATA_OPS |
       | a statement writing another table than it declares | usage.append.sql | insert into runs instead | operation usage.append writes ["runs"] but declares ["usage_records"] in DATA_OPS |
+      | a statement reading a table it does not declare | runs.get.sql     | select from the tasks too        | operation runs.get reads ["runs","tasks"] but declares ["runs"] in DATA_OPS |
+      | a declared table its statement does not read    | tasks.open.sql   | return nothing                   | operation tasks.open reads [] but declares ["tasks"] in DATA_OPS |
 
   Scenario Outline: reads the tables a statement writes: <statement>
     Then the statement "<statement>" writes "<tables>"
@@ -53,6 +55,27 @@ Feature: SQL store, statement table and migrations
       | MERGE  INTO runs USING x ON true WHEN MATCHED THEN DO NOTHING | runs                    |
       | UPDATE  runs SET a = 1                                      | runs                      |
       | INSERT INTO runs SELECT 1; INSERT INTO runs SELECT 2        | runs                      |
+
+  Scenario Outline: reads the tables a statement reads: <statement>
+    Then the statement "<statement>" reads "<tables>"
+
+    Examples:
+      | statement                                                                     | tables                 |
+      | SELECT id FROM runs WHERE id = $1                                             | runs                   |
+      | select id from Runs r left join run_events e on e.run_id = r.id               | runs, run_events       |
+      | SELECT 1 FROM ONLY memory.memories                                            | memory.memories        |
+      | INSERT INTO runs (id) VALUES ($1)                                             |                        |
+      | INSERT INTO runs (id) VALUES ($1) RETURNING id                                | runs                   |
+      | INSERT INTO run_events SELECT 1 FROM run_events                               | run_events             |
+      | DELETE FROM runs WHERE id = $1                                                |                        |
+      | DELETE  FROM runs                                                             |                        |
+      | SELECT a IS DISTINCT FROM b                                                   |                        |
+      | WITH taken AS (UPDATE steps SET n = 1 RETURNING n) SELECT n FROM taken        | steps                  |
+      | WITH taken AS(SELECT 1 FROM runs) SELECT 1 FROM taken                         | runs                   |
+      | -- FROM tasks\nSELECT 1                                                       |                        |
+      | SELECT 1 FROM  runs JOIN  tasks ON true                                       | runs, tasks            |
+      | SELECT 1 FROM runs; SELECT 2 FROM runs                                        | runs                   |
+      | UPDATE runs SET a = 1 returning id                                            | runs                   |
 
   Scenario: the usage records are written by usage.append only
     Then only the operation "usage.append" writes the table "usage_records"
@@ -126,6 +149,11 @@ Feature: SQL store, statement table and migrations
     And the database refuses "DELETE FROM steps" with SQLSTATE "55000"
     And the database refuses "TRUNCATE steps" with SQLSTATE "0A000"
     And the database refuses "TRUNCATE steps CASCADE" with SQLSTATE "55000"
+    And the database refuses "UPDATE steps SET next_seq = 0" with SQLSTATE "55000"
+    And the database refuses "UPDATE steps SET next_seq = next_seq + 2" with SQLSTATE "55000"
+    And the database refuses "UPDATE steps SET step = 't', next_seq = next_seq + 1" with SQLSTATE "55000"
+    And the database refuses "UPDATE steps SET run = 'r2', next_seq = next_seq + 1" with SQLSTATE "55000"
+    And the database refuses "UPDATE steps SET reserved_at = now(), next_seq = next_seq + 1" with SQLSTATE "55000"
     And the database refuses "UPDATE step_events SET phase = 'checks'" with SQLSTATE "55000"
     And the database refuses "DELETE FROM step_events" with SQLSTATE "55000"
     And the database refuses "TRUNCATE step_events" with SQLSTATE "55000"
@@ -136,3 +164,12 @@ Feature: SQL store, statement table and migrations
     And the database refuses "INSERT INTO step_artifacts (run, step, kind, name, content) VALUES ('r1', 's', 'build.report', '', decode(repeat('61', 1048577), 'hex'))" with SQLSTATE "23514"
     When I execute "steps.get" with the input '{"run":"r1","step":"s"}'
     Then the answer matches '{"events":[{"seq":0,"phase":"build"}],"artifacts":[{"kind":"build.brief","bytes":"YnJpZWY="}]}'
+
+  @postgres
+  Scenario: two appends to one Step at the same time both succeed, numbered in the order they took the Step
+    Given the postgres data store
+    When I execute "steps.reserve" with the input '{"run":"r1","step":"s"}'
+    And a first append to the Step "s" of the run "r1" holds its transaction open while a second one arrives
+    Then both appends succeeded, numbered 0 and 1 in their order
+    When I execute "steps.get" with the input '{"run":"r1","step":"s"}'
+    Then the answer matches '{"events":[{"seq":0,"type":"phase.started"},{"seq":1,"type":"phase.ended"}]}'

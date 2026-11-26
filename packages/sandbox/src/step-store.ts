@@ -16,7 +16,7 @@ import {
 } from '@architect-os/contracts';
 import { findCredential } from './credential-shapes.js';
 import { ReviewVerdictSchema } from './review-verdict.js';
-import { factsSchema } from './scout-facts.js';
+import { factsSchema, rejections } from './scout-facts.js';
 
 export { STEP_ARTIFACT_MAX_BYTES, type StepArtifactKind, type StepEvent };
 
@@ -107,12 +107,7 @@ const factsFileSchema = () => {
       rejected: z.array(
         z.strictObject({
           fact,
-          reason: z.enum([
-            'chemin refusé',
-            'fichier absent',
-            'ligne absente',
-            'citation absente de la ligne',
-          ]),
+          reason: z.enum(rejections()),
         }),
       ),
       open: z.array(z.string()),

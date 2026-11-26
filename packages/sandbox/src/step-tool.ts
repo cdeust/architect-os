@@ -53,7 +53,14 @@ import {
   type RecordedSession,
 } from './step-record.js';
 import { fileStepStore } from './step-store-file.js';
-import type { StepRecorder, StepStore } from './step-store.js';
+import {
+  artifactFile,
+  StepStoreError,
+  type StepArtifactKind,
+  type StepRecorder,
+  type StepStore,
+} from './step-store.js';
+import { findCredential } from './credential-shapes.js';
 import { stepsFolder, type StepsFolder } from './steps-folder.js';
 import { parseTool } from './tool.js';
 import {
@@ -155,6 +162,20 @@ function readStep(deps: StepDependencies): {
     if (question === undefined || question.trim() === '') throw new Refusal(`${file} absent ou vide`);
     return question;
   });
+  // Un texte de l'étape qui porte une forme de secret est refusé avant toute session : aucune ne sera payée pour une
+  // étape que le port refuserait de garder (docs/design/orchestration-fable-5-2.md, §15, A).
+  const texts: [string, string][] = [
+    ['step.json', raw],
+    ['brief.md', brief],
+    ...step.scouts.map(({ name }, index): [string, string] => [
+      `scout.${name}.md`,
+      questions[index] as string,
+    ]),
+  ];
+  for (const [file, text] of texts) {
+    const shape = findCredential(text);
+    if (shape !== undefined) throw new Refusal(`STEP_INPUT_CREDENTIAL: ${file} contient la forme ${shape}`);
+  }
   return { folder, step, raw, brief, questions };
 }
 
@@ -164,6 +185,28 @@ type PlayedSession = Awaited<ReturnType<StepSession>> & { measure: SessionMeasur
 interface StepOutputs {
   state: StepRecorder;
   streams: string;
+}
+
+/**
+ * Garde un artefact par le port. Un artefact que le port refuse (taille, forme de secret, schéma) n'est pas perdu : son
+ * texte est écrit, tel quel, dans un fichier privé des flux bruts du run, `<fichier>.refused`, puis le refus remonte et
+ * l'étape s'arrête en 2 sans rien publier. Une erreur du système de fichiers n'est pas un refus du port : elle remonte
+ * seule.
+ */
+function retain(
+  deps: StepDependencies,
+  outputs: StepOutputs,
+  kind: StepArtifactKind,
+  name: string | undefined,
+  text: string,
+): void {
+  try {
+    outputs.state.record(kind, name, text);
+  } catch (error) {
+    if (error instanceof StepStoreError)
+      deps.writeFile(join(outputs.streams, `${artifactFile(kind, name)}.refused`), text);
+    throw error;
+  }
 }
 
 /** Le résultat structuré ne peut servir qu'après la réussite du processus et du flux. */
@@ -194,7 +237,7 @@ async function play(
     structuredOutput: _structured,
     ...measure
   } = measureSession(Buffer.concat(chunks).toString());
-  outputs.state.record(`${session.role}.measure`, session.name, json({ ...measure, exitCode, stopped }));
+  retain(deps, outputs, `${session.role}.measure`, session.name, json({ ...measure, exitCode, stopped }));
   return { measure: { ...measure, report, structuredOutput: _structured }, exitCode, stopped };
 }
 
@@ -213,7 +256,9 @@ async function playCheck(
   const outcome = await deps.check(config.command, config.limitSeconds);
   const durationSeconds = Math.round((deps.now() - before) / 1000);
   const { exitCode, stopped, cut, output } = outcome;
-  outputs.state.record(
+  retain(
+    deps,
+    outputs,
     'check',
     config.name,
     json({ command: config.command, exitCode, stopped, durationSeconds, cut, output }),
@@ -250,7 +295,7 @@ async function review(
   const verdict = sessionSucceeded(session)
     ? verdictOf(session.measure.structuredOutput, acceptance, deps.readSource)
     : invalid('la session n’a pas abouti');
-  outputs.state.record('review.verdict', config.name, json(verdict.file));
+  retain(deps, outputs, 'review.verdict', config.name, json(verdict.file));
   return { config, verdict, ...session };
 }
 
@@ -313,7 +358,7 @@ async function scout(
   const completed = sessionSucceeded(session);
   const none = { config, ...session, completed, verified: [], rejected: 0, open: 0 };
   const writeInvalid = (why: string): ScoutOutcome => {
-    outputs.state.record('scout.facts', config.name, json({ invalid: why }));
+    retain(deps, outputs, 'scout.facts', config.name, json({ invalid: why }));
     return none;
   };
   if (!completed) return writeInvalid('la session n’a pas abouti');
@@ -323,7 +368,7 @@ async function scout(
   const parsed = factsSchemaResult(session.measure.structuredOutput);
   if (typeof parsed === 'string') return writeInvalid(parsed);
   const { verified, rejected } = verifyFacts(parsed.facts, deps.readSource);
-  outputs.state.record('scout.facts', config.name, json({ verified, rejected, open: parsed.open }));
+  retain(deps, outputs, 'scout.facts', config.name, json({ verified, rejected, open: parsed.open }));
   return {
     config,
     ...session,
@@ -489,7 +534,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       brief,
       scoutOutcomes.flatMap(({ verified }) => verified),
     );
-    state.record('build.brief', undefined, forBuild);
+    retain(deps, outputs, 'build.brief', undefined, forBuild);
     const definition = parseTool(JSON.parse(launcher['code.json']!));
     const stream = join(outputs.streams, 'build.stream.jsonl');
     deps.writeFile(stream, '');
@@ -503,7 +548,9 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     });
     if (build.provider !== (step.build.provider ?? 'anthropic')) throw Error('BUILDER_PROVIDER');
     const { report, structuredOutput: _structured, ...metrics } = build.measure;
-    state.record(
+    retain(
+      deps,
+      outputs,
       'build.measure',
       undefined,
       json({
@@ -513,7 +560,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         stopped: build.stopped,
       }),
     );
-    state.record('build.report', undefined, report);
+    retain(deps, outputs, 'build.report', undefined, report);
     const built = sessionSucceeded(build);
     // Les contrôles, l'un après l'autre ; le premier qui ne passe pas met fin à la phase.
     const played: CheckReport[] = [];
@@ -530,7 +577,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       ...(played.length > 0 ? [renderChecks(played, outputBound())] : []),
     ];
     const forReviews = appended.length === 0 ? brief : `${brief.trimEnd()}\n\n${appended.join('\n')}`;
-    if (built && checked) state.record('review.brief', undefined, forReviews);
+    if (built && checked) retain(deps, outputs, 'review.brief', undefined, forReviews);
     const outcomes =
       built && checked
         ? await playBounded(step.reviews, step.parallel, (config) =>

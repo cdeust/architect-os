@@ -3,7 +3,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
+import type { AddressInfo } from 'node:net';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { DataOperations } from '../../data/src/application/operations.js';
 import { InMemoryDataStore } from '../../data/src/infrastructure/in-memory.js';
@@ -20,6 +22,7 @@ import {
 } from '../../gateway/src/infrastructure/in-memory-routing.js';
 import type { ModuleHost } from '../../gateway/src/infrastructure/module-host.js';
 import { composeRouting } from '../../gateway/src/main.js';
+import { createCallbackHost } from '../../gateway/src/presentation/callback-host.js';
 import { FakeModuleRunner } from '../../gateway/features/steps/fake-modules.js';
 import type { ArchitectWorld } from '../support/world.js';
 import { Given, Then, When, assertMatches } from './helpers.js';
@@ -290,3 +293,38 @@ async function until(done: () => boolean, what: string): Promise<void> {
   }
   assert.fail(`not within 2 s: ${what}`);
 }
+
+When(
+  'the module calls back the data operation {string} with {string} through the callback host of the gateway with {string}',
+  async function (op: string, args: string, call: string) {
+    const host = createCallbackHost(routing(this).router!);
+    await new Promise<void>((resolve) => host.listen(0, '127.0.0.1', resolve));
+    const url = new URL(`http://127.0.0.1:${(host.address() as AddressInfo).port}/mcp`);
+    const client = new Client({ name: 'e2e-module', version: '0.0.0' });
+    try {
+      await client.connect(
+        new StreamableHTTPClientTransport(url, {
+          requestInit: { headers: { authorization: `Bearer ${call}` } },
+        }),
+      );
+      const result = await client.callTool({ name: op, arguments: JSON.parse(args) });
+      this.state['callback answer'] = {
+        isError: result.isError === true,
+        text: (result.content as { text: string }[])[0]?.text ?? '',
+      };
+    } finally {
+      await client.close();
+      await new Promise<void>((resolve) => host.close(() => resolve()));
+    }
+  },
+);
+
+Then('the callback answers {string}', function (expected: string) {
+  assert.deepEqual(this.state['callback answer'], { isError: false, text: expected });
+});
+
+Then('the callback is refused with {string}', function (expected: string) {
+  const answer = this.state['callback answer'] as { isError: boolean; text: string };
+  assert.equal(answer.isError, true);
+  assert.deepEqual(JSON.parse(answer.text), JSON.parse(expected));
+});

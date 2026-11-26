@@ -243,7 +243,7 @@ Feature: DataStore contract
     When I execute "steps.get" with the input '{"run":"run-3","step":"store"}' and it is refused
     Then the failure matches '{"code":"NOT_FOUND","message":"steps.get: no such record"}'
     When I execute "steps.appendEvent" with the input '{"run":"run-3","step":"store","type":"phase.started","phase":"scouts"}' and it is refused
-    Then the failure matches '{"code":"NOT_FOUND","message":"steps.appendEvent: not found"}'
+    Then the failure matches '{"code":"NOT_FOUND","message":"steps.appendEvent: no such record"}'
     When I execute "steps.recordArtifact" with the input '{"run":"run-3","step":"store","kind":"build.brief","bytes":""}' and it is refused
     Then the failure matches '{"code":"NOT_FOUND","message":"steps.recordArtifact: not found"}'
 

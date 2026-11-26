@@ -1,12 +1,16 @@
 -- 0006: the state of a Step (docs/design/orchestration-fable-5-2.md, §15, step A), as the StepStore port of
 -- packages/sandbox records it: one row per Step of a run, its events in order, its artifacts with their bytes and their
--- SHA-256. Nothing of it changes once written: an UPDATE or a DELETE of a row, and a TRUNCATE of a table, raise 55000
+-- SHA-256. Nothing of it changes once written, but the number of the next event of a Step: an UPDATE or a DELETE of a
+-- row, and a TRUNCATE of a table, raise 55000
 -- (object_not_in_prerequisite_state), which sql/operations.json maps to INVALID_OPERATION. The kinds, phases and names
 -- are those of packages/contracts/src/steps.ts.
 CREATE TABLE steps (
   run         text NOT NULL CHECK (run ~ '^[\x21-\x7e]{1,200}$'),
   step        text NOT NULL CHECK (step ~ '^[a-z][a-z0-9-]{0,31}$'),
   reserved_at timestamptz NOT NULL DEFAULT now(),
+  -- The sequence of the next event of the Step: steps.appendEvent takes it by an UPDATE of this row, which Postgres
+  -- serializes, so two appends at the same time get two numbers in order.
+  next_seq    integer NOT NULL DEFAULT 0 CHECK (next_seq >= 0),
   PRIMARY KEY (run, step)
 );
 
@@ -44,8 +48,16 @@ BEGIN
 END
 $$;
 
+-- A Step may only take the next number of its events, one at a time; nothing else of it changes, and it is not removed.
+CREATE TRIGGER steps_take_their_next_number_only
+  BEFORE UPDATE ON steps
+  FOR EACH ROW WHEN (
+    NEW.run IS DISTINCT FROM OLD.run OR NEW.step IS DISTINCT FROM OLD.step
+    OR NEW.reserved_at IS DISTINCT FROM OLD.reserved_at OR NEW.next_seq IS DISTINCT FROM OLD.next_seq + 1
+  )
+  EXECUTE FUNCTION steps_refuse_change();
 CREATE TRIGGER steps_are_kept
-  BEFORE UPDATE OR DELETE ON steps
+  BEFORE DELETE ON steps
   FOR EACH ROW EXECUTE FUNCTION steps_refuse_change();
 -- Defence in depth: while step_events and step_artifacts reference steps, a TRUNCATE of steps alone is refused first
 -- by their foreign keys (0A000), and with CASCADE by their own triggers; this trigger holds if a reference goes.

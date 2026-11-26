@@ -34,7 +34,10 @@ export const parseFacts = (raw: unknown): Facts => factsSchema().parse(raw);
 export const factsJsonSchema = (): string =>
   JSON.stringify(z.toJSONSchema(factsSchema(), { target: 'draft-07' }));
 
-export type Rejection = 'chemin refusé' | 'fichier absent' | 'ligne absente' | 'citation absente de la ligne';
+/** Les raisons de rejet d'une citation, dans l'ordre où `rejection` les cherche ; le fichier des faits les reprend. */
+export const rejections = () =>
+  ['chemin refusé', 'fichier absent', 'ligne absente', 'citation absente de la ligne'] as const;
+export type Rejection = ReturnType<typeof rejections>[number];
 
 /**
  * Un chemin que l'hôte ne lit pas : absolu, avec une barre oblique inverse, un NUL ou un saut de ligne, ou dont un

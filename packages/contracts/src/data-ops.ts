@@ -157,48 +157,87 @@ export const StepStateSchema = StepRecordSchema.extend({
 });
 
 /**
- * Every operation declares the tables it writes (`writes`), schema-qualified when not in `public`. data/sql is checked
- * against it when the statement table loads (data/src/infrastructure/sql-store.ts), and the gateway refuses at each
- * operation a table outside the `writes_tables` of the calling module (§3, brick 1b.4).
+ * Every operation declares the tables it writes (`writes`) and the tables it reads (`reads`: those of its FROM and JOIN
+ * clauses, and those it writes when it returns their rows), schema-qualified when not in `public`. data/sql is checked
+ * against both when the statement table loads (data/src/infrastructure/sql-store.ts), and the gateway refuses at each
+ * operation of a module a table outside its `writes_tables` (§3, brick 1b.4) or outside its `reads_tables`.
  */
 export const DATA_OPS = {
-  'runs.create': { input: RunsCreateInputSchema, output: RunSchema, writes: ['runs'] },
-  'runs.appendEvent': { input: RunsAppendEventInputSchema, output: RunEventSchema, writes: ['run_events'] },
-  'runs.complete': { input: RunsCompleteInputSchema, output: RunSchema, writes: ['runs'] },
-  'runs.get': { input: RunsGetInputSchema, output: RunSchema, writes: [] },
-  'runs.events': { input: RunsEventsInputSchema, output: z.array(RunEventSchema), writes: [] },
+  'runs.create': { input: RunsCreateInputSchema, output: RunSchema, writes: ['runs'], reads: ['runs'] },
+  'runs.appendEvent': {
+    input: RunsAppendEventInputSchema,
+    output: RunEventSchema,
+    writes: ['run_events'],
+    reads: ['run_events'],
+  },
+  'runs.complete': { input: RunsCompleteInputSchema, output: RunSchema, writes: ['runs'], reads: ['runs'] },
+  'runs.get': { input: RunsGetInputSchema, output: RunSchema, writes: [], reads: ['runs'] },
+  'runs.events': {
+    input: RunsEventsInputSchema,
+    output: z.array(RunEventSchema),
+    writes: [],
+    reads: ['runs', 'run_events'],
+  },
   'memory.insert': {
     input: MemoryInsertInputSchema,
     output: z.object({ id: z.string() }),
     writes: ['memory.memories'],
+    reads: ['memory.memories'],
   },
-  'memory.search': { input: MemorySearchInputSchema, output: z.array(MemoryItemSchema), writes: [] },
+  'memory.search': {
+    input: MemorySearchInputSchema,
+    output: z.array(MemoryItemSchema),
+    writes: [],
+    reads: ['memory.memories'],
+  },
   'usage.append': {
     input: UsageAppendInputSchema,
     output: z.object({ id: z.string() }),
     writes: ['usage_records'],
+    reads: ['usage_records'],
   },
-  'tasks.open': { input: TasksOpenInputSchema, output: TaskRecordSchema, writes: ['tasks'] },
-  'tasks.end': { input: TasksEndInputSchema, output: TaskRecordSchema, writes: ['tasks'] },
-  'tasks.get': { input: TasksGetInputSchema, output: TaskRecordSchema, writes: [] },
-  'steps.reserve': { input: StepsReserveInputSchema, output: StepRecordSchema, writes: ['steps'] },
+  'tasks.open': {
+    input: TasksOpenInputSchema,
+    output: TaskRecordSchema,
+    writes: ['tasks'],
+    reads: ['tasks'],
+  },
+  'tasks.end': { input: TasksEndInputSchema, output: TaskRecordSchema, writes: ['tasks'], reads: ['tasks'] },
+  'tasks.get': { input: TasksGetInputSchema, output: TaskRecordSchema, writes: [], reads: ['tasks'] },
+  'steps.reserve': {
+    input: StepsReserveInputSchema,
+    output: StepRecordSchema,
+    writes: ['steps'],
+    reads: ['steps'],
+  },
   'steps.appendEvent': {
     input: StepsAppendEventInputSchema,
     output: StepEventRecordSchema,
-    writes: ['step_events'],
+    writes: ['steps', 'step_events'],
+    reads: ['steps', 'step_events'],
   },
   'steps.recordArtifact': {
     input: StepsRecordArtifactInputSchema,
     output: StepArtifactRecordSchema,
     writes: ['step_artifacts'],
+    reads: ['step_artifacts'],
   },
-  'steps.get': { input: StepsGetInputSchema, output: StepStateSchema, writes: [] },
+  'steps.get': {
+    input: StepsGetInputSchema,
+    output: StepStateSchema,
+    writes: [],
+    reads: ['steps', 'step_events', 'step_artifacts'],
+  },
   'usage.aggregate': {
     input: UsageAggregateInputSchema,
     output: z.array(UsageAggregateRowSchema),
     writes: [],
+    reads: ['usage_records'],
   },
-} as const satisfies Record<string, { input: z.ZodType; output: z.ZodType; writes: readonly string[] }>;
+} as const satisfies Record<
+  string,
+  { input: z.ZodType; output: z.ZodType; writes: readonly string[]; reads: readonly string[] }
+>;
 export type DataOpName = keyof typeof DATA_OPS;
 export type DataOpInput<Op extends DataOpName> = z.output<(typeof DATA_OPS)[Op]['input']>;
 export type DataOpOutput<Op extends DataOpName> = z.output<(typeof DATA_OPS)[Op]['output']>;

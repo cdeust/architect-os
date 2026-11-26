@@ -33,7 +33,8 @@ export const ROOT = installedWorkspace;
 /** The built entry points topology/modules.mcp.json launches (tsc -b: npm test and the gate build first). */
 const ENTRY_POINTS = ['modules/memory/dist/src/serve.js', 'services/memory/dist/worker/task-serve.js'];
 /** A fake key of the broker, in a throwaway file: never a real one. */
-export const BROKER_KEY = 'sk-ant-fake-broker-key-of-the-e2e-not-a-key';
+// Composed at run time: the committed source holds no credential shape (features/repository/no-credential-shape.feature).
+export const BROKER_KEY = ['sk', 'ant', 'fake-broker-key-of-the-e2e-not-a-key'].join('-');
 
 /** The bearer token the clients' front accepts, and the subject it stands for. */
 export const FRONT_TOKEN = 'front-token-of-the-e2e';

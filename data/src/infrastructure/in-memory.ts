@@ -124,13 +124,14 @@ export class InMemoryDataStore implements DataStore {
       return { run, step, reserved_at: state.reserved_at };
     },
     'steps.appendEvent': ({ run, step, type, phase }) => {
-      const state = this.step('steps.appendEvent', run, step);
+      // On Postgres the UPDATE that takes the number finds no row: nothing is returned (sql/steps.append-event.sql).
+      const state = this.step(run, step, 'steps.appendEvent: no such record');
       const event = { seq: state.events.length, type, phase, at: now() };
       state.events.push(event);
       return { run, step, ...event };
     },
     'steps.recordArtifact': ({ run, step, kind, name, bytes: encoded }) => {
-      const state = this.step('steps.recordArtifact', run, step);
+      const state = this.step(run, step, 'steps.recordArtifact: not found');
       if (state.artifacts.some((a) => a.kind === kind && a.name === name))
         throw new DataError('INVALID_OPERATION', 'steps.recordArtifact: invalid operation');
       const bytes = Buffer.from(encoded, 'base64');
@@ -163,10 +164,10 @@ export class InMemoryDataStore implements DataStore {
   /** Nothing of a Step changes once written (migrations/0006_steps.sql on Postgres). */
   private readonly steps = new Map<string, StoredStep>();
 
-  /** A Step known to the store; an unknown one is the foreign key of its tables on Postgres (23503). */
-  private step(op: string, run: string, step: string): StoredStep {
+  /** A Step known to the store; an unknown one is NOT_FOUND, with the message the SQL store gives for the operation. */
+  private step(run: string, step: string, unknown: string): StoredStep {
     const state = this.steps.get(stepKey(run, step));
-    if (state === undefined) throw new DataError('NOT_FOUND', `${op}: not found`);
+    if (state === undefined) throw new DataError('NOT_FOUND', unknown);
     return state;
   }
 
