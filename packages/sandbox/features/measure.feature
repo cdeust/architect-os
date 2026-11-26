@@ -158,7 +158,7 @@ Feature: the measures of a claude stream-json session
         "permissionDenials": 0,
         "ignoredLines": 0,
         "report": "Verdict given.",
-        "structuredOutput": { "verdict": "accept", "findings": [], "not_checked": [], "criteria": [] }
+        "structuredOutput": { "verdict": "accept", "findings": [], "not_checked": [], "criteria": [], "claims": [] }
       }
       """
 
