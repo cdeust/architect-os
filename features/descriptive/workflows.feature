@@ -154,9 +154,9 @@ Feature: GitHub workflows
     Given the committed workflow "pipeline-after-merge.yml"
     Then a copy whose resolver waits for nothing fails when refused "merge held: Pipeline has not succeeded on this head"
 
-  Scenario: the prompt of claude-review.yml links the review run in every comment that carries the verdict
+  Scenario: the prompt of claude-review.yml ends the tracking comment with the link of the review run, then the verdict
     Given the committed workflow "claude-review.yml"
-    Then its prompt puts the link of the run in every comment that carries the verdict
+    Then its prompt ends the tracking comment with the link of the run, then the verdict
 
   Scenario: a claude-review.yml without the link of the run is rejected
     Given the committed workflow "claude-review.yml"

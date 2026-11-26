@@ -232,7 +232,7 @@ function assertPublish(job: z.infer<typeof ReviewSchema>['jobs']['publish']): vo
 /**
  * The engine `anthropics/claude-code-action`, at the pin of claude-review.yml. Agent mode (a prompt, no
  * `track_progress`): it keeps the checkout of main and fetches nothing of the PR (src/modes/agent/index.ts at
- * 4fa93a88); `track_progress` switches to tag mode, which checks out the PR head (src/modes/tag/index.ts). The job's
+ * 4411a9e9, v1.0.290); `track_progress` switches to tag mode, which checks out the PR head (src/modes/tag/index.ts). The job's
  * own token replaces the OIDC exchange (src/github/token.ts, `OVERRIDE_GITHUB_TOKEN`).
  */
 function assertClaudeCodeAction(engine: Step): void {
@@ -253,6 +253,7 @@ function assertClaudeCodeAction(engine: Step): void {
   const args = String(inputs['claude_args']).trim().split('\n');
   assert.deepEqual(args, [
     '--strict-mcp-config',
+    '--permission-mode default',
     '--allowedTools "Read,Grep,Glob"',
     '--model "claude-opus-5-5"',
     "--json-schema '${{ steps.schema.outputs.json }}'",
@@ -295,7 +296,7 @@ const REVIEW_BREAKS: Record<string, (yaml: string) => string> = {
     at(yaml, '    runs-on: ubuntu-24.04\n', '    runs-on: ubuntu-24.04\n    environment: review\n'),
   'without a timeout': (yaml) => without(yaml, '    timeout-minutes: 30\n'),
   'with an action on a branch': (yaml) =>
-    at(yaml, 'claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed', 'claude-code-action@main'),
+    at(yaml, 'claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c', 'claude-code-action@main'),
   'that checks out the head of the PR': (yaml) =>
     at(yaml, '          ref: main\n', '          ref: ${{ github.event.pull_request.head.sha }}\n'),
   'that keeps the checkout credentials': (yaml) =>
@@ -444,6 +445,7 @@ const ManagedSettingsSchema = z.strictObject({
       .array(z.string())
       .refine((deny) => DENIED.every((tool) => deny.includes(tool)), 'a tool is not denied'),
     disableBypassPermissionsMode: z.literal('disable'),
+    disableAutoMode: z.literal('disable'),
     blockReadsOutsideWorkingDirectories: z.literal(true),
   }),
 });
@@ -606,6 +608,19 @@ Then(
   },
 );
 
+/** Characters that render as nothing (Unicode category Cf), which could cut a credential so that no pattern sees it. */
+const INVISIBLE: Record<string, string> = {
+  'a zero-width space': '\u200b',
+  'a zero-width non-joiner': '\u200c',
+  'a zero-width joiner': '\u200d',
+  'a word joiner': '\u2060',
+  'a byte order mark': '\ufeff',
+  'a soft hyphen': '\u00ad',
+  'a left-to-right mark': '\u200e',
+  'a right-to-left mark': '\u200f',
+  'a right-to-left override': '\u202e',
+};
+
 const ANSWER_BREAKS: Record<string, () => string> = {
   'not JSON': () => '{"findings": [',
   'without findings': () => '{}',
@@ -629,6 +644,22 @@ const ANSWER_BREAKS: Record<string, () => string> = {
     JSON.stringify({ findings: [{ ...FINDING, confidence: 0.9 }] }).replace('0.9', 'NaN'),
   'with an infinite confidence': () =>
     JSON.stringify({ findings: [{ ...FINDING, confidence: 0.9 }] }).replace('0.9', 'Infinity'),
+  ...Object.fromEntries(
+    Object.entries(INVISIBLE).map(([name, char]) => [
+      `holding a key of Anthropic cut by ${name}`,
+      () =>
+        JSON.stringify({
+          findings: [{ ...FINDING, description: `leak sk-${char}ant-oat01-AbCdEfGh123456` }],
+        }),
+    ]),
+  ),
+  ...Object.fromEntries(
+    Object.entries(INVISIBLE).map(([name, char]) => [
+      `holding a GitHub token cut by ${name}`,
+      () =>
+        JSON.stringify({ findings: [{ ...FINDING, recommendation: `ghs_A1b2C3d4E5${char}f6G7h8I9j0K` }] }),
+    ]),
+  ),
   'holding the shape of a key of Anthropic': () =>
     JSON.stringify({ findings: [{ ...FINDING, description: 'leak sk-ant-oat01-AbCdEfGh123456' }] }),
   'holding the shape of a GitHub token': () =>
