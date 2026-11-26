@@ -35,3 +35,39 @@ Feature: .claude descriptive files
     Then the committed .claude/settings.json enables "security-guidance@claude-plugins-official"
     And the committed .claude/settings.json enables "claude-security@claude-plugins-official"
     And a .claude/settings.json that turns "claude-security@claude-plugins-official" off is rejected
+
+  Scenario: .claude/settings.json denies the calls a session is spared
+    Friction, not a control (docs/infrastructure.md, "What a session is spared"): what holds `main` is its ruleset.
+    Then the committed .claude/settings.json denies every call a session is spared
+
+  Scenario Outline: a .claude/settings.json without the denial <rule> is rejected
+    Then a .claude/settings.json without the denial "<rule>" is rejected for it
+
+    Examples:
+      | rule                                     |
+      | Bash(git merge-base *)                   |
+      | Bash(gh pr update-branch *)              |
+      | Bash(gh pr merge *)                      |
+      | Bash(gh * pr merge*)                     |
+      | Bash(gh api */merge -X PUT*)             |
+      | Bash(gh api */merge --method PUT*)       |
+      | Bash(gh api -X PUT */merge*)             |
+      | Bash(gh api --method PUT */merge*)       |
+      | Bash(gh api *mergePullRequest*)          |
+      | mcp__github__merge_pull_request          |
+      | mcp__github__update_pull_request_branch  |
+      | Bash(git push * main)                    |
+      | Bash(git push * main *)                  |
+      | Bash(git push *:main)                    |
+      | Bash(git push *:main *)                  |
+      | Bash(git push *:refs/heads/main)         |
+      | Bash(gh api *rulesets* -X P*)            |
+      | Bash(gh api *rulesets* -X DELETE*)       |
+      | Bash(gh api *rulesets* --method P*)      |
+      | Bash(gh api *rulesets* --method DELETE*) |
+      | Bash(gh api -X P* *rulesets*)            |
+      | Bash(gh api -X DELETE *rulesets*)        |
+      | Bash(gh api --method P* *rulesets*)      |
+      | Bash(gh api --method DELETE *rulesets*)  |
+      | Bash(gh api *rulesets* --input*)         |
+      | Bash(gh api --input* *rulesets*)         |

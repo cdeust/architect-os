@@ -7,6 +7,7 @@ import { parse, stringify } from 'yaml';
 import { z } from 'zod';
 import { ACTIONS, WAITS, WAITS_AFTER_CREDENTIAL, runsTheAction } from './claude-review-workflow.js';
 import { Given, ROOT, Then, stored } from './helpers.js';
+import { committedMainRuleset, requiredChecks } from './ruleset-main.js';
 
 /**
  * The guards of `.github/workflows/claude-security-review.yml` (docs/infrastructure.md, "The Claude security review"),
@@ -418,14 +419,7 @@ Then('neither the merge resolver nor the ruleset of main names the security revi
     'the resolver wakes on the review',
   );
   assert.ok(!/claude-security-review|Claude security review/.test(resolver), 'the resolver reads the review');
-  const ruleset = JSON.parse(readFileSync(join(ROOT, 'docs/design/ruleset-main.json'), 'utf8')) as {
-    rules: { type: string; parameters?: { required_status_checks?: { context: string }[] } }[];
-  };
-  const required = ruleset.rules.flatMap((rule) => rule.parameters?.required_status_checks ?? []);
-  assert.deepEqual(
-    required.map(({ context }) => context),
-    ['gate-linux', 'gate-macos'],
-  );
+  assert.deepEqual(requiredChecks(committedMainRuleset()), ['gate-linux', 'gate-macos']);
 });
 
 Then('the merge resolver reads a verdict only from a comment of claude[bot]', function () {

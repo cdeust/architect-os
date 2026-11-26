@@ -4437,3 +4437,141 @@ Une cinquième classe est revenue jusqu'à la fin : une même affirmation écrit
 **Le reste.** La mutation hebdomadaire de tous les fichiers lançait Stryker sans compilation, alors que sa configuration charge une aide depuis la compilation. Une règle des workflows exige désormais un `tsc -b` avant chaque `stryker run` d'un job. Les documents qui disent qui lance git nomment le garde du checkout, que `git-worktree.ts` lance avec un environnement vide, et le tableau de conception donne `GIT_ATTR_NOSYSTEM`.
 
 **Les mesures.** Le premier lot de Stryker local, sur les lignes changées de `git-worktree.ts` et de `tree-fingerprint.ts`, a donné 58 mutants tués et aucun survivant. Une campagne locale du périmètre entier aurait duré près de cinq heures sous le verrou partagé du poste : elle a été arrêtée, et les seize lanes hébergées en ont tenu lieu. Sur `f5f9c2d7`, la porte hébergée comptait 6 survivants sur 655. Sur `6e4a45e0`, tous les contrôles passent. La campagne locale arrêtée n'a laissé aucun rapport : Stryker n'écrit le sien qu'à la fin.
+
+## 112. `main` n'accepte plus que des pull requests, sans contournement ; la PR 149 est fermée (26 novembre 2026)
+
+**Trois décisions du propriétaire, le 26 novembre 2026.**
+
+1. `main` exige une pull request, et aucun acteur ne contourne son ruleset, le rôle d'administrateur compris.
+2. Une pull request est fusionnée quand la porte est verte et que les deux relecteurs, Claude et Codex, ont approuvé le commit exact.
+3. Le ruleset attendu est décrit par un fichier du dépôt, et un scénario est rouge quand ce fichier est affaibli.
+
+Elles remplacent ce que disaient les sections 16 (le corps du ruleset, avec le contournement du rôle admin), 74 et 76 (le ruleset posé sur `feat/gate-1a` puis répliqué sur `main`), et la décision 4 de la conception (« ruleset sur `main` avec contournement du propriétaire », `docs/design/platform-v3-srt.md`).
+
+**Ce que le propriétaire a fait.** Il a modifié le ruleset de `main` (id 27467434) ce jour-là, à 11 h 51 UTC : les règles `deletion`, `non_fast_forward`, `required_status_checks` (`gate-linux`, `gate-macos`) et `pull_request` (aucune approbation exigée, pas de revue des propriétaires de code, pas d'approbation de la dernière poussée, pas de fil à résoudre), et `bypass_actors: []`. Aucune session n'a modifié de ruleset ni de réglage du dépôt.
+
+**La PR 149 est fermée.** Elle voulait empêcher une session de fusionner ou de pousser sur `main` par un hook `PreToolUse` et un outil `tools/session-guard`, lancés dans la session même qu'ils devaient retenir. Une revue de conception a montré que c'était une friction, contournée d'une douzaine de façons, et qu'elle était décrite comme un contrôle. Ce qui en est repris : ses refus de réglages, réduits et décrits pour ce qu'ils sont. Ce qui n'est pas repris : `tools/session-guard/`, le hook, et tout ce qui touchait à un label d'approbation. Sa branche portait aussi des restes de la PR 144 sans rapport (`packages/sandbox/src/step-tool.ts`, `packages/sandbox/features/profile.feature` et ses steps), laissés de côté.
+
+**Ce qui est livré ici.**
+
+- `docs/design/ruleset-main.json` est le corps qui recrée le ruleset en place. Écrit depuis le ruleset lu, il lui était égal sur ses six clés (`jq -S` des deux, `diff` vide).
+- `features/descriptive/ruleset-main.feature` : le fichier passe par un seul lecteur (`features/steps/ruleset-main.ts`), un schéma strict, et dix-sept copies affaiblies sont refusées, chacune par les mots de son refus. Le scénario de la revue de sécurité qui lisait le fichier passe par ce lecteur.
+- `.claude/settings.json` : vingt et un refus (dix-neuf nouveaux), et `features/integration/session-denials.feature`, qui les donne à un vrai Claude Code devant un modèle scripté.
+- `docs/infrastructure.md`, « How a pull request reaches `main` » : ce que le ruleset tient, le tableau STRIDE, ce qui reste ouvert.
+
+**Recherche.** Témoin : le scénario du ruleset, joué sur l'ancien fichier, est rouge (« an actor may bypass the ruleset » ; 14 des 18 cas échouent) ; sur le nouveau, les 18 passent. La lecture du ruleset sans jeton (`curl https://api.github.com/repos/cdeust/architect-os/rulesets/27467434`) répond 200 avec `id`, `name`, `target`, `source_type`, `source`, `enforcement`, `conditions`, `rules`, `node_id`, `created_at`, `updated_at`, `_links` ; ni `bypass_actors` ni `current_user_can_bypass`, que la même lecture avec le jeton du propriétaire rend (`"bypass_actors":[]`, `"current_user_can_bypass":"never"`). La référence de GitHub le dit : « To prevent leaking sensitive information, the `bypass_actors` property is only returned if the user making the API request has write access to the ruleset ». Les refus des réglages : 23 appels refusés par Claude Code 2.1.326 (le binaire du SDK épinglé), 10 appels voisins exécutés par des doublures de `gh`, de `git` et du serveur MCP ; chacune des 21 règles retirée à son tour rend le scénario rouge. Une règle écrite d'abord, `Bash(git push * main:*)`, ne refusait rien que les autres ne refusent et aurait refusé `git push origin main:autre` : retirée.
+
+**SSDLC.** STRIDE du chemin de publication vers `main` : `docs/infrastructure.md`. En résumé : la poussée hors pull request, la réécriture, la suppression et la fusion sur porte rouge sont des barrières de GitHub ; la modification du ruleset par un administrateur n'est pas empêchée, elle est détectable ; la fusion d'une PR verte sans l'approbation des relecteurs n'est pas refusée par GitHub ; les refus des réglages sont une friction.
+
+**Opérationnel.** Moindre privilège : les sessions tournent avec le jeton d'administrateur du propriétaire. Il leur faut un jeton sans la permission « Administration » du dépôt. C'est au propriétaire.
+
+**Ce qui n'a pas été fait, et pourquoi.** La comparaison automatique du fichier avec le ruleset en place n'est pas construite dans `tools/watch` : le jeton d'un job ne voit pas la liste des contournements, et un jeton qui la voit peut modifier le ruleset. Une comparaison du reste serait verte pendant qu'un contournement est ajouté.
+
+**Ce qui reste ouvert.**
+
+| Ouvert | À qui |
+| --- | --- |
+| Un jeton sans droit d'administration pour les sessions | Le propriétaire |
+| Rien, sur `main`, ne lit un verdict de Codex ; GitHub n'exige aucune revue pour fusionner une PR verte | Le mainteneur (`pipeline-after-merge.yml`), le propriétaire pour le ruleset |
+| Aucun job ne compare le fichier au ruleset en place | Le mainteneur, quand GitHub rendra la liste des contournements à un jeton de lecture |
+| Le ruleset de `feat/gate-1a` (id 27463789) garde le contournement de l'administrateur ; la branche a 121 commits de retard sur `main` | La PR qui retire la publication directe de `tools/deliver` |
+| `npm run deliver` pousse encore `main` directement, ce que la règle `pull_request` refuse. Non observé : aucune poussée n'a été tentée | La même PR |
+| Aucune PR n'a encore été fusionnée sous le nouveau ruleset (dernière fusion : #145, 7 h 19 UTC) | Le mainteneur, à la première fusion par le résolveur |
+| Le scénario des refus n'a été joué que sur macOS | `gate-linux`, à la PR |
+
+## 113. La revue indépendante de la section 112 : six affirmations trop fortes, corrigées (26 novembre 2026)
+
+**La revue.** Une session Codex, qui n'avait rien écrit, a relu le commit `31ea4d44` et rendu « block » : six blocages, trois notes. Chacun a été revérifié avant d'être corrigé. Aucun n'était faux. La section 112 reste telle qu'elle a été écrite ; ce qui suit la corrige.
+
+| Ce que la section 112 ou le commit disait | Ce qui est vrai | Preuve |
+| --- | --- | --- |
+| « La fusion sur porte rouge » est une barrière de GitHub | Le ruleset exige deux noms de contrôle. GitHub tient `skipped` et `neutral` pour satisfaits, et joue `gate.yml` tel que la pull request l'écrit : une PR du dépôt peut réécrire le workflow pour que deux jobs de ces noms réussissent. La barrière ne vaut que contre un contrôle rouge ou absent. Le résolveur refuse un job sauté, pas un job réécrit ; ce qui le voit est la revue du diff (R-6) | docs.github.com, « Troubleshooting required status checks » : « Successful check statuses are success, skipped, and neutral » ; « Events that trigger workflows », `pull_request` : le commit de fusion de la PR |
+| Le résolveur ne fusionne que sur l'approbation de Claude, et le jeton du propriétaire ne peut pas forger un verdict | Une mise à jour mineure de Dependabot, d'un seul commit signé par GitHub, limitée à `uv.lock` et `pyproject.toml`, est fusionnée sans revue (`_is_low_risk` ; ce dépôt n'a aucun des deux fichiers). Le verdict est lu dans le corps actuel d'un commentaire dont l'auteur est `claude[bot]` : qui l'a modifié en dernier n'est pas regardé, et GitHub laisse un compte qui peut écrire modifier un commentaire | `pipeline-after-merge.yml`, `_review_approves` et `_is_low_risk` ; docs.github.com, « Managing disruptive comments » |
+| Le guide du contributeur promettait une revue de Claude à toute PR | Une PR d'un fork n'en reçoit pas (condition du job de `claude-review.yml`) | `CONTRIBUTING.md` corrigé |
+| Le lecteur du ruleset est strict | Il jugeait par présence. Il acceptait `do_not_enforce_on_create: true`, une seconde règle `required_status_checks` à liste vide, un motif à côté de `refs/heads/main`. Il est exact désormais : chaque règle une fois, les deux contrôles et aucun autre, `refs/heads/main` et aucune autre référence | Six copies cassées de plus dans `features/descriptive/ruleset-main.feature` (23 en tout) ; les trois copies de la revue, rejouées, sont refusées |
+| Le scénario des refus tourne partout | Les doublures de `gh` et de `git` portaient le chemin du dossier entre apostrophes dans le texte d'un script : un chemin avec une apostrophe, qu'une racine d'exécution admet, les cassait (`sh -n` sort en 2). Les chemins passent par l'environnement, et le scénario est joué une seconde fois dans un dossier nommé `Owner's trial` | `features/integration/session-denials.feature`, deux lignes d'`Examples` |
+| Le README et le schéma disaient la livraison « ready » | `npm run deliver` finit par une poussée sur `main`, que le ruleset refuse : la commande s'arrête en publication (« push refusé »), après avoir avancé `feat/gate-1a`. Lu dans `tools/deliver/src/application/deliver.ts` ; aucune poussée n'a été tentée. Le README et le schéma le disent, la phase 8 passe à `next`, et la carte « Delivery gate » nomme le contrôle décidé et non construit qui portera les deux verdicts | `features/arch/isolation-diagram.feature` (géométrie et typographie du schéma) |
+| `npm run arch` vert valait pour l'aide partagée `features/support/claude-trial.ts`, qui importe `node:child_process` | `npm run arch` ne parcourt pas `features/` à la racine. Mesuré avec les mêmes règles : 26 violations, toutes de `child-process-only-in-sandbox`, dans 20 fichiers de steps et 6 de support ; 25 existaient sur `main`. Trop pour cette branche : l'exception est écrite dans `CLAUDE.md`, la liste mesurée dans `docs/testing.md` (« Known gaps »), et le garde étendu à `features/` est dû dans sa propre PR | `depcruise --config .dependency-cruiser.cjs --exclude '(^\|/)dist/' features` |
+
+**Les refus des réglages, resserrés.** Ils refusaient deux lectures : `gh api …/pulls/1/merge` (GitHub y répond si la PR est fusionnée) et `gh api -X GET …/rulesets/1`. Les règles nomment maintenant la méthode qui écrit (`PUT` pour la fusion ; `PUT`, `POST`, `PATCH`, `DELETE` ou un corps pour un ruleset). `Bash(gh * --admin*)` est retirée : `--admin` n'est une option que de `gh pr merge`, déjà refusé en entier ; son témoin utilisait `gh pr review`, qui n'a pas cette option. Vingt-six règles ; devant Claude Code 2.1.326, 28 appels refusés, chacun avec la réponse d'un refus et non une autre erreur, et 12 exécutés, dont les deux lectures ; chaque règle retirée à son tour rend le scénario rouge (26 sur 26).
+
+**La surveillance.** La section 112 disait qu'un job de lecture resterait vert pendant qu'un contournement est ajouté. C'est trop dire : une lecture sans jeton rend `updated_at`. Un job pourrait signaler que le ruleset a été modifié depuis une date consignée, et demander la comparaison à qui tient le jeton d'administrateur. Il ne dirait pas ce qui a changé. Non construit ; que toute modification, un contournement compris, déplace `updated_at` n'a pas été essayé, puisqu'il faudrait modifier un ruleset.
+
+**Ce qui reste ouvert, complété.**
+
+| Ouvert | À qui |
+| --- | --- |
+| Un jeton à permissions fines pour les sessions, sans « Administration » ni « Workflows ». La référence de GitHub dit que modifier un fichier sous `.github/workflows` par l'API des contenus demande « Workflows » en écriture ; les pages lues ne disent pas qu'un `git push` d'un tel fichier est refusé à un jeton fin sans cette permission : à essayer avec le jeton, sur une branche | Le propriétaire |
+| Un contrôle exigé qui porte les verdicts des deux relecteurs pour le commit exact, rendu par ce qu'une PR ne peut pas réécrire ; un lecteur de verdict qui refuse un commentaire modifié ; le chemin sans revue de Dependabot | La PR qui fera des deux verdicts un contrôle (le mainteneur) ; le propriétaire pour le ruleset |
+| La livraison ouvre une pull request au lieu de pousser `main` ; le ruleset de `feat/gate-1a` | La PR qui retire la publication directe de `tools/deliver` (le mainteneur) |
+| Un job qui signale un `updated_at` changé | Le mainteneur, dans sa propre PR |
+| `features/` sous le garde d'architecture | Le mainteneur, dans sa propre PR |
+
+## 114. La seconde revue : la politique tenue valeur par valeur, et trois phrases encore fausses (26 novembre 2026)
+
+**La revue.** Une seconde session Codex a relu `1b7cd114`. Elle accepte les invariants du lecteur, l'essai des refus, ce qui est dit du verdict et des forks, et le journal ; elle rend « block » sur cinq points. Chacun a été revérifié ; aucun n'était faux.
+
+| Ce qui était écrit ou construit | Ce qui est vrai, et ce qui est fait | Preuve |
+| --- | --- | --- |
+| Le lecteur du ruleset vérifiait des propriétés. Il acceptait `allowed_merge_methods: ["merge"]`, avec quoi toute fusion du résolveur échouerait, puisqu'il demande `squash` | Décision du mainteneur : le lecteur ne juge plus des propriétés, il tient la politique décidée valeur par valeur. Une clé que le ruleset en place ne porte pas est refusée ; une politique plus stricte (une approbation exigée, une branche à jour) l'est aussi : c'est une décision, prise en changeant le lecteur et le fichier dans la même pull request, et les mots du refus le disent. Les refus nommés restent, pour dire ce qu'une copie affaiblie laisse passer | Trente copies cassées (sept de plus) dans `features/descriptive/ruleset-main.feature` ; le fichier, relu contre le ruleset en place, lui est égal |
+| Un texte qui écrit `"enforcement": "disabled"` puis `"enforcement": "active"` passait : `JSON.parse` garde la dernière clé | Le texte du fichier doit être la forme canonique de ce qu'il donne une fois lu | Deux copies cassées dans leur texte : la clé écrite deux fois, le fichier sur une ligne |
+| Le tableau des menaces disait les contrôles exigés évalués « sur la tête » | GitHub les évalue sur le commit de fusion d'essai de la pull request quand il porte un statut, sur le commit de tête sinon | docs.github.com, « Troubleshooting required status checks », « Conflicts between head commit and test merge commit » |
+| `docs/infrastructure.md` disait que la revue de Claude tourne depuis la branche par défaut | `pipeline-after-merge.yml` tourne depuis la branche par défaut (`workflow_run`). `claude-review.yml` joue le fichier du commit de fusion de la pull request : ses étapes d'avant l'action, dont l'installation des réglages et du garde des commentaires, font ce que ce fichier dit ; seule l'action refuse de continuer quand le fichier diffère de celui de la branche par défaut. La phrase est celle de la branche locale `fix/claude-scrub-bubblewrap`, qui réécrit le même paragraphe | `claude-review.yml`, étapes « Checkout the review files of this run » (`ref: ${{ github.sha }}`) et suivante |
+| La section 113, le README et le guide disaient que la livraison s'arrête à sa poussée sur `main`, après avoir avancé `feat/gate-1a` | Elle s'arrête avant : `feat/gate-1a` est à `721b1861` et `main` à `2b5bd3cd`, et le planificateur exige que les branches en retard soient au même parent. La commande sort dans ses préalables, « les branches distantes diffèrent », avant la branche d'essai et toute poussée ; aucune branche ne bouge. Si les deux branches étaient au même commit, sa dernière phase pousserait `main`, que la règle `pull_request` refuse. Lu dans le code ; la commande n'a pas été jouée | `tools/deliver/src/domain/plan.ts`, `tools/deliver/src/application/deliver.ts` ; `git ls-remote` |
+| La section 113 gardait `features/support/claude-trial.ts`, nouveau fichier qui importe `node:child_process`, en nommant l'exception dans `CLAUDE.md` | Nommer une violation ne la rend pas conforme. Le fichier est supprimé, la phrase retirée de `CLAUDE.md`. `binary`, `run` et `resultOf` restent dans `features/steps/review-restriction.ts`, où `main` les a, exportés ; l'essai des refus les y prend. Sous `features/`, les fichiers qui importent `node:child_process` sont les 26 mêmes que sur `main` | `depcruise` sur `features/` : 26 violations, toutes de `child-process-only-in-sandbox` ; la liste de la branche est celle de `main` |
+
+**Les refus des réglages : les mots, pas la complétude.** Ce sont des frictions ; la liste n'est ni complète ni exacte, et elle est décrite par ce qui a été observé. Deux lignes de plus dans l'essai le montrent : `gh pr merge --help`, qui ne fait que lire, est refusé ; `gh api …/merge --method=PUT` et `gh api …/rulesets -f name=another` (un `POST`), qui écrivent, passent. 29 appels refusés, 14 exécutés, deux fois (dossier simple, dossier avec espace et apostrophe). Les mots « laisse les lectures tranquilles » et « ou un corps » sont retirés.
+
+**La phrase sur le jeton.** Ce qui a été lu montre qu'un jeton sans « Workflows » se voit refuser la modification d'un fichier de workflow par l'API des contenus. Rien de plus : ni un autre transport, ni un autre jeton. La phrase « un changement de workflow revient alors au propriétaire » est retirée.
+
+**Ouvert, inchangé :** le jeton des sessions (le propriétaire) ; le contrôle des deux verdicts et la lecture du verdict (leur PR) ; la livraison par pull request et le ruleset de `feat/gate-1a` (la PR de `tools/deliver`) ; le signal sur `updated_at` ; `features/` sous le garde d'architecture, 26 fichiers.
+
+## 115. La troisième revue : ce que fait la livraison dépend du commit, et deux passages de la conception parlaient encore d'un contournement (26 novembre 2026)
+
+**La revue.** Une troisième session Codex a relu `6e537cec`. Elle accepte le lecteur du ruleset, l'essai des refus et le retour des aides à leur place ; elle rend « block » sur deux défauts de documentation. Revérifiés, ils sont exacts.
+
+**La livraison.** La section 114 écrivait que la commande s'arrête dans ses préalables et qu'aucune branche ne bouge. C'est vrai du commit relu, faux en général. Lu en entier (`tools/deliver/src/domain/plan.ts`, `prerequisites` dans `tools/deliver/src/application/deliver.ts`), avec `feat/gate-1a` à `721b1861`, en retard sur `main` à `2b5bd3cd` :
+
+| Commit donné à la commande | Ce qu'elle fait |
+| --- | --- |
+| Un commit fait après la tête de `main` | Les deux branches sont en retard et ne sont pas au même commit : arrêt dans les préalables, « les branches distantes diffèrent », avant toute poussée |
+| La tête de `main` elle-même | `main` est à jour, `feat/gate-1a` seule est en retard : les préalables passent. La commande pousse sa branche d'essai, puis, sans `--until ci` et sur contrôles verts, `feat/gate-1a` ; jamais `main` |
+| Tout autre commit | Refus dans les préalables : une branche distante n'en est pas un ancêtre |
+| Une fois les deux branches au même commit, un commit fait après | La dernière phase pousse `feat/gate-1a`, puis `main` : cette poussée, hors d'une pull request, est ce que le ruleset refuse |
+
+Lu dans le code ; la commande n'a pas été jouée. Le README, `docs/infrastructure.md`, `CONTRIBUTING.md`, le changelog et le schéma le disent en ces termes ; le schéma dit moins : la commande est écrite pour pousser la branche de travail puis `main`, et `main` n'accepte que des pull requests.
+
+**La conception.** `docs/design/platform-v3-srt.md` disait encore, dans l'analyse des menaces du courtier, que l'orchestrateur a « aujourd'hui » un droit de contournement, et, dans la section de la CI, que le propriétaire peut contourner le ruleset de `main`. Les deux passages disent maintenant ce qui est : aucun acteur de contournement ; un administrateur peut modifier le ruleset, qui n'accorde aucun contournement tant qu'il reste ce qu'il est. La feuille de route de la brique 1a, qui raconte ce que la brique a posé, reçoit la date du retrait. Le dépôt entier a été cherché une fois (`git grep -n -i -E "bypass|contourn|pousse.*main|push.*main|sans pull request"`, journal exclu) : le commentaire de `gate.yml` sur la livraison, une phrase de `orchestration-fable-5-2.md` et une de `exigences-spec.md` sont corrigés ; le reste est de l'histoire datée, la conception de la commande de livraison, qui reste à retirer par sa PR, ou des emplois sans rapport du mot.
+
+**Deux comptes faux de la section 114 et du guide.** La section 114 dit « deux lignes de plus dans l'essai » : il y en a trois (`gh pr merge --help`, `gh api …/merge --method=PUT`, `gh api …/rulesets -f name=another`). `docs/infrastructure.md` comptait quatre formes de `gh pr merge` refusées : il y en a cinq, dont celle avec `-R`. Les totaux, 29 refusés et 14 exécutés, étaient justes.
+
+## 116. La quatrième revue : une phrase de la conception décrivait encore la route de livraison au présent (26 novembre 2026)
+
+**La revue.** Une quatrième session Codex a relu `8990fe61`. Elle accepte la description de la livraison, les passages corrigés de la conception, la modification du commentaire de `gate.yml` et le journal ; elle bloque sur une phrase, avec trois notes. Revérifié : exact.
+
+- **La phrase.** `docs/design/platform-v3-srt.md`, section de la porte de CI, « Où » : un commit « reçoit ses deux contrôles avant d'atteindre `feat/gate-1a` puis `main` ». C'est la route pour laquelle la livraison est écrite, close pour `main` le 26 novembre 2026. La phrase est mise au passé et datée, comme le commentaire de `gate.yml`. Le paragraphe et ses voisins ne décrivent cette route nulle part ailleurs.
+- **La phase.** Le README appelait la publication « la dernière phase ». Elle est la cinquième de six ; la sixième range la branche d'essai (`play`, `tools/deliver/src/application/deliver.ts`). Corrigé au README et dans `docs/infrastructure.md`.
+- **Le cas des branches alignées.** La section 115 et les guides disaient qu'une fois les deux branches au même commit, un commit fait après « atteint » la phase qui pousse `main`. C'est conditionnel : la commande peut s'arrêter avant (`--until ci`, une branche distante qui a bougé, une évaluation du ruleset de `feat/gate-1a` absente ou autre que `pass`), et le commit commun lui-même rend « rien à livrer ». Les guides disent maintenant ce qui ne dépend de rien : la phase de publication est écrite pour pousser `feat/gate-1a` puis `main`, et cette seconde poussée, hors d'une pull request, est ce que le ruleset refuse.
+- **Le skill `ub-mode`.** `.claude/skills/ub-mode/SKILL.md` dit « Push to the main line at the end ». Le fichier n'est pas un texte de ce dépôt : il a été ajouté tel quel, à un commit nommé de son auteur, sous sa licence (commit `82c74a93`, « unchanged, at 3da62bf3… (MIT) »), et `.prettierignore` l'écarte pour qu'il reste à l'octet. Il n'est pas modifié. Ce qui vaut ici est `CONTRIBUTING.md` : une pull request pour tout changement.
+
+## 117. La cinquième revue : lire, et non chercher (26 novembre 2026)
+
+**La revue.** Une cinquième session Codex a relu `13e51b65` et bloque sur une phrase du README : « A commit then reaches the branches by one command », la publication vers les deux branches par une poussée, au présent et sans date. C'est la troisième revue de suite à trouver une phrase de cette sorte.
+
+**Le changement de méthode.** Les corrections des sections 113 à 116 cherchaient des mots (`bypass`, `contourn`, `push.*main`). Une phrase qui dit la même chose avec d'autres mots leur échappait, et celle-ci leur a échappé. Les endroits où le dépôt décrit la livraison ont donc été lus en entier, du début à la fin, par le mainteneur et par des sessions de lecture qui n'écrivent rien et rendent chaque phrase mot pour mot avec sa ligne. Ce que le compte rendu de la passe dit avoir lu, et par qui, est dans son rapport ; ce qui n'a pas été lu en entier y est nommé.
+
+**Ce que la lecture a trouvé, que la recherche n'avait pas trouvé.**
+
+| Où | Ce qui était écrit | Ce qui est écrit |
+| --- | --- | --- |
+| `README.md`, « How a step is tested and verified » | Un commit « atteint les branches par une commande », au présent | La commande a été écrite pour cela et le fait devant des ports scriptés ; depuis le 26 novembre 2026 un commit atteint `main` par une pull request |
+| `README.md`, « The loop on main » | Deliver vérifie les deux jobs « avant de publier » | La même phrase, et : depuis le 26 novembre 2026 un commit atteint `main` par une pull request, non par Deliver |
+| `README.md`, feuille de route, « A pull request on the target repository » | La livraison « pousse » `cdeust/architect-os` sans pull request | Elle « est écrite pour pousser » |
+| `README.md`, démarrage rapide | Le commentaire de la commande : « pushes the trial branch and checks CI » | « written to push the trial branch and check CI », avec renvoi au paragraphe qui dit ce qu'elle fait aujourd'hui |
+| `CLAUDE.md`, bloc des commandes | « trial branch, gate, CI for the hash, both branches » | « a push to both branches (refused on main since 26 November 2026) » |
+| `CLAUDE.md`, tableau des fichiers descriptifs, ligne du ruleset | Lu par « GitHub, once the owner applies it », alors qu'il l'a appliqué | « GitHub, where the owner applied it on 26 November 2026 » |
+| `docs/bricks.md`, brique « Delivery » | Prouvée par deux livraisons réelles ; la porte humaine avant `main` est la décision du propriétaire | Prouvée par deux livraisons réelles, avant le 26 novembre 2026 ; depuis, la commande ne peut plus amener un commit sur `main`, et le retrait de sa publication directe est à la feuille de route |
+| `docs/design/platform-v3-srt.md`, décision 23 | `main` suit `feat/gate-1a` par avance rapide, les deux branches portent les mêmes SHA | La décision datée, et sa clôture le 26 novembre 2026 |
+| `docs/design/orchestration-fable-5-2.md`, conception de la commande de livraison | Aucune date de clôture en tête | Une ligne datée en tête : la route vers `main` que la section décrit est close, son retrait est la prochaine étape |
+
+**Deux fautes de la passe précédente, trouvées par la lecture.** La ligne « The delivery gate » de la feuille de route du README avait perdu sa troisième cellule (« Written in ») quand elle a été réécrite à la section 112 ; elle est rendue. Et le README disait que la phase de publication « finit par » une poussée sur `main` : `main` est la dernière poussée que la phase peut faire, et après une poussée réussie le code lit encore l'évaluation du ruleset ; le README dit « la dernière poussée de sa phase de publication ».

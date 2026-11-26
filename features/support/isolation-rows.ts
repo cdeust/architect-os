@@ -183,7 +183,7 @@ export interface ImageTexts {
 export const TEXTS: ImageTexts = {
   title: 'What each profile opens: the five profiles of the isolation',
   subtitle:
-    'packages/sandbox/profiles, one row per file; produced by npm run diagram:isolation, never edited by hand',
+    'Runtime profiles from packages/sandbox/profiles. Hosted Claude reviews use managed settings and a bubblewrap probe.',
   header:
     'Role; then writes (allowWrite) · closes (denyWrite) · reaches (allowedDomains) · token in (names in env.set)',
   roles: ROLE,
