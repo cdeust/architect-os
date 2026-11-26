@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { hasAdmittedRun } from '@architect-os/sandbox/runtime-context';
 import { ProcessGate } from '../../src/infrastructure/process-gate.js';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DeliveryEntry, Repository, RuleSuite } from '../../src/domain/ports.js';
 import { GitRepository } from '../../src/infrastructure/git-repository.js';
@@ -96,6 +96,21 @@ Then(
     assert.equal(git(bare, 'rev-parse', '--verify', `refs/heads/${branch}`).trim(), hashOf(label));
   },
 );
+
+Given(
+  'the delivery repository replaces the blob of {string} at {string} by its blob at {string}',
+  function (path: string, from: string, to: string) {
+    const { git, work, hashOf } = gitOf(this);
+    const blob = (label: string) => git(work, 'rev-parse', `${hashOf(label)}:${path}`).trim();
+    git(work, 'replace', blob(from), blob(to));
+  },
+);
+
+Given('the git configuration of the host marks {string} as binary', function (pattern: string) {
+  const directory = join(gitOf(this).hostConfiguration, 'git');
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, 'attributes'), `${pattern} binary\n`);
+});
 
 Given('everything in the delivery worktree is committed', function () {
   gitOf(this).commitEverything();
@@ -321,7 +336,9 @@ Given('a linked worktree with an external gitdir is inside the delivery reposito
   git(work, 'push', 'origin', `${head}:refs/heads/external-fixture`);
   const linked = join(work, 'linked');
   git(bare, 'worktree', 'add', '--detach', linked, head);
-  assert.ok(readFileSync(join(linked, '.git'), 'utf8').startsWith(`gitdir: ${bare}/worktrees/`));
+  assert.ok(
+    readFileSync(join(linked, '.git'), 'utf8').startsWith(`gitdir: ${realpathSync(bare)}/worktrees/`),
+  );
 });
 
 Given('the nested delivery marker points to a missing gitdir', function () {
@@ -342,3 +359,31 @@ Given(
     assert.equal(existsSync(join(work, name)), false);
   },
 );
+
+Given(
+  'the delivery repository commits an ignore file that ignores {string}, where a repository is then left',
+  function (directory: string) {
+    const { git, work } = gitOf(this);
+    writeFileSync(join(work, '.gitignore'), `${directory}\n`);
+    git(work, 'add', '.gitignore');
+    git(work, 'commit', '--quiet', '--message', 'ignore');
+    mkdirSync(join(work, directory, 'package'), { recursive: true });
+    writeFileSync(join(work, directory, 'package', '.git'), 'gitdir: /missing-gitdir\n');
+  },
+);
+
+When('a line is added to the ignore file of the delivery repository', function () {
+  const ignore = join(gitOf(this).work, '.gitignore');
+  writeFileSync(ignore, `${readFileSync(ignore, 'utf8')}*.tmp\n`);
+});
+
+When('the ignore file of the delivery repository is given back its recorded bytes', function () {
+  const { git, work } = gitOf(this);
+  writeFileSync(join(work, '.gitignore'), git(work, 'show', 'HEAD:.gitignore'));
+});
+
+When('a marker that no ignore file ignores is left in the delivery worktree', function () {
+  const { work } = gitOf(this);
+  mkdirSync(join(work, 'sub'));
+  writeFileSync(join(work, 'sub', '.git'), 'gitdir: /missing-gitdir\n');
+});

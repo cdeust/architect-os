@@ -49,6 +49,10 @@ function inMemoryRepository(): RepositoryFixture {
     nestRepository() {
       repository.nested = true;
     },
+    // The double holds no file: the tree is the one the port describes, not clean and with no nested repository.
+    changeIgnoreFileOverIgnoredRepository() {
+      repository.touch();
+    },
     hashOf,
   };
 }
@@ -151,6 +155,13 @@ Given(
 When('a repository is left nested in the delivery worktree', function () {
   repo(this).nestRepository();
 });
+
+When(
+  'a tracked ignore file of the delivery worktree changes over an ignored directory that holds a repository',
+  function () {
+    repo(this).changeIgnoreFileOverIgnoredRepository();
+  },
+);
 
 Then('the delivery repository holds no nested repository', function () {
   assert.equal(repo(this).repository.holdsNestedRepository(), false);

@@ -4,6 +4,13 @@ Feature: the gate reads its own repository, whatever the environment it was star
 
   The expectation (head, first parent, diff) is recorded through the gate's own git before GIT_DIR is set; the poison comes after.
 
+  Scenario: preparing and committing a fixture is independent of the Git executable under test
+    Given a fake git first on the PATH of the process, which records the names of its environment
+    And a gate repository
+    And the gate first parent is committed
+    Then the gate repository holds a file ".git/HEAD"
+    And the gate's git received no fixture command
+
   Scenario: a GIT_DIR of the process that names another repository changes neither the head, nor the first parent, nor the diff
     Given a gate repository
     And the gate repository file "notes.txt" reads:
@@ -45,7 +52,7 @@ Feature: the gate reads its own repository, whatever the environment it was star
     Scenario: the five names of the list that the process set are received, and the fixed Git configuration and attributes settings
       Given the process has the variable "GIT_ATTR_NOSYSTEM" set to "0"
       When the gate asks its git for the head
-      Then every call of the fake git of the gate received exactly the names "GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, LANG, LC_ALL, LC_CTYPE, PATH, TMPDIR"
+      Then every call of the fake git of the gate received exactly the names "GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_ALL, LC_CTYPE, PATH, TMPDIR"
       And every call of the fake git of the gate received the two configuration variables set to the empty file and system attributes disabled
 
     Scenario Outline: a name of the list that the process does not set is not received: <name>
@@ -55,15 +62,15 @@ Feature: the gate reads its own repository, whatever the environment it was star
 
       Examples:
         | name     | received                                |
-        | LANG     | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, LC_ALL, LC_CTYPE, PATH, TMPDIR |
-        | LC_ALL   | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, LANG, LC_CTYPE, PATH, TMPDIR   |
-        | LC_CTYPE | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, LANG, LC_ALL, PATH, TMPDIR     |
-        | TMPDIR   | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, LANG, LC_ALL, LC_CTYPE, PATH   |
+        | LANG     | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LC_ALL, LC_CTYPE, PATH, TMPDIR |
+        | LC_ALL   | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_CTYPE, PATH, TMPDIR   |
+        | LC_CTYPE | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_ALL, PATH, TMPDIR     |
+        | TMPDIR   | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_ALL, LC_CTYPE, PATH   |
 
     Scenario Outline: a name outside the list that the process sets is not received: <name>
       Given the process has the variable "<name>" set to "<value>"
       When the gate asks its git for the head
-      Then every call of the fake git of the gate received exactly the names "GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, LANG, LC_ALL, LC_CTYPE, PATH, TMPDIR"
+      Then every call of the fake git of the gate received exactly the names "GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_ALL, LC_CTYPE, PATH, TMPDIR"
 
       Examples:
         | name          | value         |
@@ -73,7 +80,7 @@ Feature: the gate reads its own repository, whatever the environment it was star
 
     Scenario: the call is started with the attributes of the empty tree, no file monitor, no hook and no descent into a nested repository, before the subcommand
       When the gate asks its git for the head
-      Then the fake git of the gate was started once as "--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.quotePath=false -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-list --parents -n 1 HEAD"
+      Then the fake git of the gate was started once as "--no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null -c core.quotePath=false rev-list --parents -n 1 HEAD"
 
   Rule: the gate reads a repository that names a program as its file monitor without that program running
 
@@ -104,6 +111,61 @@ Feature: the gate reads its own repository, whatever the environment it was star
     Scenario: the same witness program, named only by the configuration of the repository, is run by a git started without the options of the gate, so that the scenario above can fail
       When git is asked for the diff with none of the options of the gate
       Then the witness program of the gate has run
+
+  Rule: what the configuration of the repository replaces or adds is not what the gate reads
+
+    A replace object or a graft gives git another object than the one a commit names, and an attributes file named by
+    the configuration (core.attributesFile) gives the files of the tree a filter: none of them moves the diff the gate
+    judges, and the program of such a filter does not run.
+
+    Background:
+      Given a gate repository
+      And the gate repository file "src/leaf.mjs" reads:
+        """
+        export const one = 1;
+        """
+      And the gate first parent is committed
+      And the gate repository file "src/leaf.mjs" reads:
+        """
+        export const two = 2;
+        """
+      And the gate head is committed
+
+    Scenario: a replace object of the tree of the first parent does not hide the change
+      Given the gate repository replaces the tree of its first parent by the tree of its head
+      Then the gate changes against the first parent are:
+        """
+        src/leaf.mjs: 1
+        """
+
+    Scenario: a graft of the head with no parent does not take its first parent away
+      Given the gate repository grafts its head with no parent
+      Then the first parent the gate reads is the parent the head records
+
+    Scenario: a filter named by an attributes file of the configuration does not run, and hides nothing
+      Given the configuration of the gate repository names an attributes file whose filter is a witness program
+      And the gate repository file "src/leaf.mjs" reads:
+        """
+        export const three = 3;
+        """
+      Then the gate changes against the first parent are:
+        """
+        src/leaf.mjs: 1
+        """
+      And the witness program of the gate has not run
+
+    Scenario Outline: a <program> named by the repository does not run while the gate reads the lines of a change
+      Given the configuration of the gate repository names a witness program for its diffs as its "<program>"
+      Then the gate changes against the first parent are:
+        """
+        src/leaf.mjs: 1
+        """
+      And the witness program of the gate has not run
+
+      Examples:
+        | program                                       |
+        | external diff                                 |
+        | text conversion, given by its info attributes |
 
   Rule: the gate enters no repository nested in its tree, and judges no tree that holds one
 
@@ -158,6 +220,42 @@ Feature: the gate reads its own repository, whatever the environment it was star
       Then the witness program of the gate has not run
       When git is asked for the status with none of the options of the gate
       Then the witness program of the gate has run
+
+  Rule: a tracked ignore file that is no longer the recorded one prunes nothing, and the refusal names it
+
+    A session can add a rule to a tracked ignore file to hide a repository, so the rules of a changed file are not
+    applied. A directory the repository ignored and that holds a repository (a dependency, another worktree) is then
+    found, and the gate says which ignore file to restore or commit.
+
+    Background:
+      Given a gate repository
+      And the gate repository file ".gitignore" reads:
+        """
+        deps/
+        """
+      And the gate first parent is committed
+      And the gate repository file "deps/package/.git" reads:
+        """
+        gitdir: /missing-gitdir
+        """
+
+    Scenario: the recorded ignore file prunes the directory, and the gate reads its changes
+      Then the gate reads its changes without a refusal
+
+    Scenario: a line added to the ignore file has the ignored directory searched, and the refusal names the file
+      Given the gate repository file ".gitignore" reads:
+        """
+        deps/
+        *.tmp
+        """
+      Then the gate refuses to read its changes with "dépôt imbriqué dans l'arbre : deps/package/ (écarté par .gitignore, qui n'est plus le fichier enregistré : ses règles ne sont pas appliquées)"
+
+    Scenario: a repository that no ignore file ignores keeps the plain refusal
+      Given the gate repository file "sub/.git" reads:
+        """
+        gitdir: /missing-gitdir
+        """
+      Then the gate refuses to read its changes with "dépôt imbriqué dans l'arbre : sub/"
 
   Scenario: the real gate adapter refuses an invalid-byte untracked name before selection
     Given a gate repository

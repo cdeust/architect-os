@@ -1,13 +1,12 @@
+import { closedGitOptions, hostConfiguredGitEnvironment } from '@architect-os/sandbox/git-closed';
 import { checkoutIsClean, visibleNestedMarker } from '@architect-os/sandbox/git-worktree';
 import type { Repository } from '../domain/ports.js';
 import { closedEnvironment, runToEnd, type HostEnvironment } from './host-process.js';
 
-/** The tree with no entry (SHA-1): the source of attributes of every git call of the delivery. */
-const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-
 /**
  * `Repository` over git, in the delivery worktree: admission checks and fixed argv started without a shell,
- * with a closed environment: the variables of the descriptive file that the host sets, and `GIT_TERMINAL_PROMPT=0`. Nothing git prints is returned or shown: a method
+ * with a closed environment: the variables of the descriptive file that the host sets, those of
+ * packages/sandbox/git-closed.json, and `GIT_TERMINAL_PROMPT=0`. Nothing git prints is returned or shown: a method
  * gives the fact its port names, and a failure the port does not name throws a fixed message with the exit code.
  */
 export class GitRepository implements Repository {
@@ -24,7 +23,10 @@ export class GitRepository implements Repository {
     const head = this.run(['ls-tree', '-r', '-z', 'HEAD']).out;
     if ([index, head].some((list) => list.split('\0').some((entry) => entry.startsWith('160000 '))))
       return true;
-    return visibleNestedMarker(this.worktree, head) !== undefined;
+    // A marker found only because a tracked ignore file is no longer the recorded one is not reported here: that
+    // tree is not clean, and `isClean` refuses it under its true name (the guard refuses the marker there too).
+    const marker = visibleNestedMarker(this.worktree, head);
+    return marker !== undefined && marker.changedIgnoreFile === undefined;
   }
 
   isClean(): boolean {
@@ -86,21 +88,11 @@ export class GitRepository implements Repository {
   private start(args: string[]): { status: number; out: string } {
     const finished = runToEnd(
       this.git,
-      // What a session wrote in the tree decides nothing of what git does for the delivery, which pushes with the
-      // rights of the owner: no file monitor and no hook, the attributes read from the empty tree, and no descent
-      // into a repository nested in the tree, whose own configuration would name programs to start.
-      [
-        `--attr-source=${EMPTY_TREE}`,
-        '-c',
-        'core.fsmonitor=false',
-        '-c',
-        'core.hooksPath=/dev/null',
-        '-c',
-        'diff.ignoreSubmodules=all',
-        ...args,
-      ],
+      // The delivery pushes with the rights of the owner: what precedes its subcommands and its whole environment
+      // come from packages/sandbox/src/git-closed.ts, with the variables it took by the names of deliver.json.
+      [...closedGitOptions(), ...args],
       this.worktree,
-      closedEnvironment(this.host, { GIT_TERMINAL_PROMPT: '0' }),
+      hostConfiguredGitEnvironment(closedEnvironment(this.host, {}), { GIT_TERMINAL_PROMPT: '0' }),
     );
     if (finished === undefined) throw new Error('git could not be run to its end');
     return finished;
