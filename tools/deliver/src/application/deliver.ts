@@ -1,9 +1,12 @@
 // The delivery command (docs/design/orchestration-fable-5-2.md §14, « Étape 1, la commande de livraison »): six phases
 // over the ports, the first that fails ends the run. Everything is bound to the one hash read in phase 1; no phase
-// reads HEAD again. A port that throws is not a reason of the list: the error leaves `deliver` as it is.
+// reads HEAD again. The destination is never pushed: the run ends with a pull request to it, on the work branch, which
+// it opens or finds (docs/design/exigences-spec.md, §4). A port that throws is not a reason of the list: the error
+// leaves `deliver` as it is.
+import { createHash } from 'node:crypto';
 import type { DeliverConfig } from '../domain/config.js';
 import { ciState } from '../domain/ci.js';
-import { planPublication, type RemoteBranch } from '../domain/plan.js';
+import { planPublication } from '../domain/plan.js';
 import type {
   CiRun,
   Clock,
@@ -15,8 +18,13 @@ import type {
   Progress,
   Reason,
   Repository,
-  RuleSuite,
 } from '../domain/ports.js';
+import {
+  pullRequestBody,
+  pullRequestTitle,
+  type ParseRecord,
+  type StepRecordView,
+} from '../domain/pull-request.js';
 import { trialBranch } from '../domain/trial.js';
 
 export interface DeliverOptions {
@@ -31,6 +39,8 @@ export interface DeliverPorts {
   readonly clock: Clock;
   readonly log: DeliveryLog;
   readonly progress: Progress;
+  /** The schema of the Step record, over the text the commit holds. */
+  readonly parseRecord: ParseRecord;
 }
 
 /** A run stopped by a precondition: nothing was done, nothing is logged. */
@@ -47,12 +57,16 @@ interface Stop {
   reason: Reason;
 }
 
-/** What phase 1 found: the branches to push, and where every branch of the file was. */
+/** What phase 1 found: the work branch, where the two remote branches were, and the record of the step. */
 interface Started {
   ok: true;
   entry: DeliveryEntry;
-  publish: string[];
-  remotes: RemoteBranch[];
+  work: string;
+  /** Where the destination and the work branch were (undefined: the remote had no work branch). */
+  remotes: { destination: string; work: string | undefined };
+  /** The work branch is behind the hash, or absent, and is pushed. */
+  push: boolean;
+  record: StepRecordView;
 }
 
 type Start = Started | { ok: false; reason: Reason };
@@ -61,44 +75,73 @@ function refuse(reason: Reason): Start {
   return { ok: false, reason };
 }
 
+/** The branches of the name, or the reason they are refused. */
+function branchesOf(
+  options: DeliverOptions,
+  config: DeliverConfig,
+): { trial: string; work: string } | { reason: Reason } {
+  const trial = trialBranch(config.trialPrefix, options.name);
+  // The name passed the expression of the trial branch: the work branch is the other prefix and the same name.
+  const work = `${config.workPrefix}${options.name}`;
+  if (trial === undefined || trial === work) return { reason: "nom de branche d'essai refusé" };
+  // A push to the destination is what its ruleset refuses outside a pull request: the delivery never asks for one.
+  if (trial === config.destination || work === config.destination) {
+    return { reason: "la destination n'accepte qu'une pull request" };
+  }
+  return { trial, work };
+}
+
+/** The record of the step, as the commit holds it, or the reason it is refused. */
+function recordOf(
+  hash: string,
+  name: string,
+  repository: Repository,
+  parseRecord: ParseRecord,
+): StepRecordView | Reason {
+  const text = repository.committedFile(hash, `steps/${name}/record.json`);
+  if (text === undefined) return "enregistrement d'étape absent";
+  const record = parseRecord(text);
+  // A record of another step, copied in this folder, is not the record of this one.
+  if (record === undefined || record.step !== name) return "enregistrement d'étape refusé";
+  return record;
+}
+
 /** Phase 1. */
-function prerequisites(options: DeliverOptions, config: DeliverConfig, repository: Repository): Start {
+function prerequisites(
+  options: DeliverOptions,
+  config: DeliverConfig,
+  repository: Repository,
+  parseRecord: ParseRecord,
+): Start {
   if (repository.holdsNestedRepository()) return refuse("dépôt imbriqué dans l'arbre");
   if (!repository.isClean()) return refuse('arbre non propre');
   const hash = repository.head();
   if (!/^[0-9a-f]{40}$/.test(hash)) return refuse('empreinte de commit invalide');
+  const branches = branchesOf(options, config);
+  if ('reason' in branches) return refuse(branches.reason);
   repository.fetch();
-  const remotes: RemoteBranch[] = [];
-  for (const branch of config.branches) {
-    const head = repository.remoteHead(branch);
-    if (head === undefined) return refuse('branche distante absente');
-    remotes.push({ branch, head });
-  }
-  for (const remote of remotes) {
-    if (remote.head !== hash && !repository.isAncestor(remote.head, hash)) {
-      return refuse("la branche distante n'est pas un ancêtre du commit");
-    }
-  }
-  const plan = planPublication(hash, remotes);
+  const destination = repository.remoteHead(config.destination);
+  if (destination === undefined) return refuse('branche distante absente');
+  const work = repository.remoteHead(branches.work);
+  const plan = planPublication(hash, destination, work, (ancestor) => repository.isAncestor(ancestor, hash));
   if (!plan.ok) return refuse(plan.reason);
   for (const path of config.appendOnly) {
     if (repository.deletedLines(plan.parent, hash, path) !== 0) {
       return refuse('un fichier en ajout seul a perdu des lignes');
     }
   }
-  const trial = trialBranch(config.trialPrefix, options.name);
-  if (trial === undefined || config.branches.includes(trial)) return refuse("nom de branche d'essai refusé");
+  const record = recordOf(hash, options.name, repository, parseRecord);
+  if (typeof record === 'string') return refuse(record);
   const entry: DeliveryEntry = {
     outcome: 'delivered',
     hash,
-    trial,
+    trial: branches.trial,
     parent: plan.parent,
     ci: { attempts: 0, polls: 0 },
     gate: undefined,
     published: [],
-    ruleSuites: new Map(),
   };
-  return { ok: true, entry, publish: plan.publish, remotes };
+  return { ok: true, entry, work: branches.work, remotes: { destination, work }, push: plan.push, record };
 }
 
 /** Phase 2. */
@@ -139,7 +182,7 @@ async function awaitCi(
   for (let poll = 1; poll <= config.ciPolls; poll++) {
     if (poll > 1) await clock.sleep(config.pollSeconds);
     entry.ci.polls = poll;
-    const run = forge.run(entry.hash, config.workflow, jobNames);
+    const run = forge.run(entry.hash, config.workflow, entry.trial, jobNames);
     if (run !== undefined) {
       entry.ci.run = run.id;
       if (entry.ci.attempts === 0) entry.ci.attempts = 1;
@@ -167,50 +210,50 @@ async function awaitCi(
   return { phase: 'CI', reason: 'CI sans réponse' };
 }
 
-/** The evaluation of the push of the hash to a branch, polled; undefined when none came. */
-async function readRuleSuite(
-  entry: DeliveryEntry,
-  branch: string,
-  config: DeliverConfig,
-  forge: Forge,
-  clock: Clock,
-): Promise<RuleSuite | undefined> {
-  for (let poll = 1; poll <= config.ruleSuitePolls; poll++) {
-    if (poll > 1) await clock.sleep(config.pollSeconds);
-    const suite = forge.ruleSuite(branch, entry.hash);
-    if (suite !== undefined) return suite;
-  }
-  return undefined;
-}
-
 /**
- * Phase 5: every branch of the file, in order; `behind` are the ones pushed, the others are already at the hash. Just
- * before, every branch is read again and must be where phase 1 found it (`remotes`), at the hash or at the parent.
+ * Phase 5. Just before, both branches are read again and must be where phase 1 found them: the destination at the
+ * parent, the work branch at the hash, behind it, or absent. The work branch is pushed when it is behind or absent;
+ * then the pull request from it to the destination is opened, or the open one found.
  */
-async function publish(
+function publish(
   entry: DeliveryEntry,
-  remotes: readonly RemoteBranch[],
-  behind: readonly string[],
+  start: Started,
   config: DeliverConfig,
   ports: DeliverPorts,
-): Promise<Stop | undefined> {
-  const { repository, forge, clock } = ports;
+): Stop | undefined {
+  const { repository, forge } = ports;
   repository.fetch();
-  if (remotes.some((remote) => repository.remoteHead(remote.branch) !== remote.head)) {
+  if (
+    repository.remoteHead(config.destination) !== start.remotes.destination ||
+    repository.remoteHead(start.work) !== start.remotes.work
+  ) {
     return { phase: 'publication', reason: 'une branche distante a bougé' };
   }
-  for (const branch of config.branches) {
-    if (behind.includes(branch)) {
-      if (repository.push(entry.hash, branch) === 'refused') {
-        return { phase: 'publication', reason: 'push refusé' };
-      }
-      entry.published.push(branch);
+  if (start.push) {
+    if (repository.push(entry.hash, start.work) === 'refused') {
+      return { phase: 'publication', reason: 'push refusé' };
     }
-    const suite = await readRuleSuite(entry, branch, config, forge, clock);
-    if (suite === undefined) return { phase: 'publication', reason: 'évaluation du ruleset introuvable' };
-    entry.ruleSuites.set(branch, suite);
-    if (suite !== 'pass') return { phase: 'publication', reason: "le ruleset n'a pas rendu pass" };
+    entry.published.push(start.work);
   }
+  const body = pullRequestBody(start.record, {
+    repository: config.repository,
+    hash: entry.hash,
+    name: start.record.step,
+  });
+  const opened = forge.openPullRequest({
+    head: start.work,
+    base: config.destination,
+    hash: entry.hash,
+    title: pullRequestTitle(config.pullRequestTitle, start.record.step),
+    body,
+  });
+  if (!opened.ok) return { phase: 'publication', reason: opened.reason };
+  entry.pullRequest = {
+    number: opened.number,
+    url: opened.url,
+    created: opened.created,
+    body: createHash('sha256').update(body).digest('hex'),
+  };
   return undefined;
 }
 
@@ -237,7 +280,7 @@ async function play(
     return undefined;
   }
   progress.phase('publication');
-  const refused = await publish(entry, start.remotes, start.publish, config, ports);
+  const refused = publish(entry, start, config, ports);
   if (refused !== undefined) return refused;
   progress.phase('rangement');
   ports.repository.deleteRemoteBranch(entry.trial);
@@ -250,7 +293,7 @@ export async function deliver(
   ports: DeliverPorts,
 ): Promise<Delivery> {
   ports.progress.phase('préalables');
-  const start = prerequisites(options, config, ports.repository);
+  const start = prerequisites(options, config, ports.repository, ports.parseRecord);
   if (!start.ok) return { outcome: 'stopped', phase: 'préalables', reason: start.reason };
   const { entry } = start;
   const stop = await play(entry, start, options, config, ports);

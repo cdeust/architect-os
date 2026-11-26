@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { effectiveJobs } from '../domain/attempts.js';
-import type { CiJob, CiRun, Forge, RuleSuite } from '../domain/ports.js';
+import type { CiJob, CiRun, Forge, PullRequestRequest, PullRequestResult } from '../domain/ports.js';
 import { closedEnvironment, runToEnd, type HostEnvironment } from './host-process.js';
 
 // The schemas are built when a call needs them, inside functions: a schema at module level is evaluated once, when the
@@ -18,6 +18,8 @@ function runsSchema() {
         id: idSchema(),
         name: z.string(),
         head_sha: z.string(),
+        event: z.string(),
+        head_branch: z.string().nullable(),
         status: z.string(),
         run_attempt: idSchema().optional(),
       }),
@@ -52,9 +54,24 @@ function firstStepFailure(steps: ForgeJob['steps']): string | undefined {
     : undefined;
 }
 
-function ruleSuitesSchema() {
-  return z.array(z.object({ after_sha: z.string(), result: z.string() }));
+/** The references of the remote whose name starts with the one asked (`git/matching-refs`). */
+function refsSchema() {
+  return z.array(z.object({ ref: z.string(), object: z.object({ sha: z.string() }) }));
 }
+
+/** A pull request as the forge gives it: the fields the delivery checks, and no other. */
+function pullSchema() {
+  return z.object({
+    number: idSchema(),
+    html_url: z.string(),
+    state: z.string(),
+    draft: z.boolean(),
+    head: z.object({ ref: z.string(), sha: z.string() }),
+    base: z.object({ ref: z.string() }),
+  });
+}
+
+type Pull = z.infer<ReturnType<typeof pullSchema>>;
 
 function conclusionOf(value: string | null): CiJob['conclusion'] {
   switch (value) {
@@ -84,14 +101,23 @@ export class GhForge implements Forge {
     private readonly host: HostEnvironment,
   ) {}
 
-  run(hash: string, workflow: string, jobNames?: readonly string[] | 'all'): CiRun | undefined {
+  run(
+    hash: string,
+    workflow: string,
+    branch: string,
+    jobNames?: readonly string[] | 'all',
+  ): CiRun | undefined {
     const { workflow_runs } = this.read(
       'runs',
       [`repos/${this.repository}/actions/runs?head_sha=${hash}&per_page=100`],
       runsSchema(),
     );
-    const mine = workflow_runs.filter((run) => run.name === workflow && run.head_sha === hash);
-    // The first run of the commit is the one of its trial branch: the smallest id.
+    // A run of the same commit started by a pull request, or by a push to another branch, is not the run of this push.
+    const mine = workflow_runs.filter(
+      (run) =>
+        run.name === workflow && run.head_sha === hash && run.event === 'push' && run.head_branch === branch,
+    );
+    // A push of the same commit to the same branch again starts another run: the first one, the smallest id.
     const first = mine.sort((a, b) => a.id - b.id)[0];
     if (first === undefined) return undefined;
     const runPath = `repos/${this.repository}/actions/runs/${first.id}`;
@@ -168,20 +194,76 @@ export class GhForge implements Forge {
     ]);
   }
 
-  ruleSuite(branch: string, hash: string): RuleSuite | undefined {
-    const ref = encodeURIComponent(`refs/heads/${branch}`);
-    const suites = this.read(
-      'rule suites',
-      [`repos/${this.repository}/rulesets/rule-suites?ref=${ref}&per_page=100`],
-      ruleSuitesSchema(),
+  openPullRequest(request: PullRequestRequest): PullRequestResult {
+    const { head, base, hash } = request;
+    const refs = this.read(
+      'refs',
+      [`repos/${this.repository}/git/matching-refs/heads/${head}`],
+      refsSchema(),
     );
-    const result = suites.find((suite) => suite.after_sha === hash)?.result;
-    return result === 'pass' || result === 'fail' || result === 'bypass' ? result : undefined;
+    const ref = refs.find((found) => found.ref === `refs/heads/${head}`);
+    if (ref === undefined) return { ok: false, reason: 'la forge ne voit pas la branche de travail' };
+    if (ref.object.sha !== hash) {
+      return { ok: false, reason: "la tête de la branche de travail n'est pas le commit livré" };
+    }
+    const owner = this.repository.split('/')[0] as string;
+    const query = [`head=${encodeURIComponent(`${owner}:${head}`)}`, `base=${encodeURIComponent(base)}`];
+    const open = this.read(
+      'pulls',
+      [`repos/${this.repository}/pulls?${query.join('&')}&state=open&per_page=100`],
+      z.array(pullSchema()),
+    )
+      .filter((pull) => pull.state === 'open' && pull.head.ref === head && pull.base.ref === base)
+      .sort((a, b) => a.number - b.number)[0];
+    if (open !== undefined) return this.opened(open, request, false);
+    const created = this.start(
+      'pull request',
+      [
+        '--method',
+        'POST',
+        `repos/${this.repository}/pulls`,
+        // `-f` is a raw field: a value that starts with `@` is a text, never the name of a file to read (`-F`).
+        '-f',
+        `head=${head}`,
+        '-f',
+        `base=${base}`,
+        '-f',
+        `title=${request.title}`,
+        '-f',
+        `body=${request.body}`,
+        '-F',
+        'draft=false',
+      ],
+      true,
+    );
+    if (created.status !== 0) return { ok: false, reason: 'la forge a refusé la pull request' };
+    return this.opened(this.parse('pull request', created.out, pullSchema()), request, true);
+  }
+
+  /** The pull request the forge gave, checked against what was asked. */
+  private opened(pull: Pull, request: PullRequestRequest, created: boolean): PullRequestResult {
+    if (
+      pull.state !== 'open' ||
+      pull.head.ref !== request.head ||
+      pull.base.ref !== request.base ||
+      pull.html_url !== `https://github.com/${this.repository}/pull/${pull.number}`
+    ) {
+      throw new Error(failure('pull request'));
+    }
+    if (pull.draft) return { ok: false, reason: 'une pull request en brouillon est ouverte pour cette tête' };
+    if (pull.head.sha !== request.hash) {
+      return { ok: false, reason: "la tête de la branche de travail n'est pas le commit livré" };
+    }
+    return { ok: true, number: pull.number, url: pull.html_url, created };
   }
 
   /** Runs `api <args>`; its output is read as JSON and checked by `schema`. */
   private read<T>(method: string, args: string[], schema: z.ZodType<T>): T {
-    const { out } = this.start(method, args);
+    return this.parse(method, this.start(method, args).out, schema);
+  }
+
+  /** What a call printed, read as JSON and checked by `schema`. */
+  private parse<T>(method: string, out: string, schema: z.ZodType<T>): T {
     let json: unknown;
     try {
       json = JSON.parse(out);
@@ -193,8 +275,11 @@ export class GhForge implements Forge {
     return parsed.data;
   }
 
-  /** Runs `api <args>`; a program that did not run to its end or exited with a non-zero code throws. */
-  private start(method: string, args: string[]): { out: string } {
+  /**
+   * Runs `api <args>`; a program that did not run to its end throws, and so does one that exited with a non-zero code,
+   * unless `refusable`: its exit code is then given back.
+   */
+  private start(method: string, args: string[], refusable = false): { status: number; out: string } {
     const finished = runToEnd(
       this.program,
       [...this.prefix, 'api', ...args],
@@ -202,7 +287,7 @@ export class GhForge implements Forge {
       closedEnvironment(this.host, {}),
     );
     if (finished === undefined) throw new Error(failure(method));
-    if (finished.status !== 0) throw new Error(failure(method, finished.status));
+    if (finished.status !== 0 && !refusable) throw new Error(failure(method, finished.status));
     return finished;
   }
 }

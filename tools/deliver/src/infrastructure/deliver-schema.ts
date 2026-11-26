@@ -55,7 +55,11 @@ function configSchema(): z.ZodType<DeliverConfig> {
         (value) => value.split('/').every((segment) => segment !== '.' && segment !== '..'),
         'a segment of the repository is neither . nor ..',
       ),
-    branches: z.array(refName).min(1).max(4).refine(different, 'the branches are all different'),
+    destination: refName,
+    workPrefix: refName.refine((value) => /[-/]$/.test(value), 'a prefix ends with - or /'),
+    pullRequestTitle: label
+      .refine((value) => value.split('${name}').length === 2, 'the title holds ${name} once')
+      .refine((value) => !/[@#`]/.test(value), 'the title holds no @, # nor backtick'),
     trialPrefix: refName.refine((value) => /[-/]$/.test(value), 'a prefix ends with - or /'),
     workflow: label,
     requiredJobs: z.array(label).min(1).max(8).refine(different, 'the jobs are all different'),
@@ -96,7 +100,6 @@ function configSchema(): z.ZodType<DeliverConfig> {
     ciAttempts: count(10),
     pollSeconds: count(300),
     ciPolls: count(600),
-    ruleSuitePolls: count(60),
   });
   // Run relationship checks only on a successful parse. During validation of an
   // invalid child, Zod can still hold its intermediate list of dictionary entries.
@@ -133,10 +136,16 @@ function configSchema(): z.ZodType<DeliverConfig> {
         message: 'planned family prefixes must be disjoint from other families and fixed jobs',
       },
     )
-    .refine((config) => config.branches.every((branch) => !branch.startsWith(config.trialPrefix)), {
-      path: ['trialPrefix'],
-      message: 'a trial branch is never a branch to publish',
-    });
+    .refine(
+      ({ trialPrefix, workPrefix }) =>
+        !trialPrefix.startsWith(workPrefix) && !workPrefix.startsWith(trialPrefix),
+      { path: ['workPrefix'], message: 'a work branch is never a trial branch' },
+    )
+    .refine(
+      ({ destination, trialPrefix, workPrefix }) =>
+        !destination.startsWith(trialPrefix) && !destination.startsWith(workPrefix),
+      { path: ['destination'], message: 'the destination is never a trial branch nor a work branch' },
+    );
   return object.pipe(relationships);
 }
 

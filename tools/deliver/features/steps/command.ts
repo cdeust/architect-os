@@ -10,9 +10,12 @@ import {
   runDeliver,
   type DeliverDependencies,
 } from '../../src/main.js';
+import { createHash } from 'node:crypto';
+import { pullRequestBody } from '../../src/domain/pull-request.js';
 import { runToEnd } from '../../src/infrastructure/host-process.js';
+import { stepRecord, stepRecordText } from './record-fixture.js';
 import { committedNames, hostOf, temporaryDirectory } from './fixtures.js';
-import { ghForge, type GhForgeFixture } from './gh-fixture.js';
+import { ghForge, REPO, type GhForgeFixture } from './gh-fixture.js';
 import { gitFixture, type GitFixture } from './git-fixture.js';
 import { REPOSITORY, Given, Then, When, type DeliverWorld } from './support.js';
 
@@ -60,15 +63,14 @@ function writeConfig(command: Command): void {
 }
 
 Given(
-  'a delivery command over a throwaway repository, the commit {string} ahead of both branches at {string}',
+  'a delivery command over a throwaway repository, the commit {string} ahead of the destination at {string}',
   function (commit: string, parent: string) {
     const git = gitFixture(this);
     git.commit(parent, undefined);
-    git.setRemote('feat/gate-1a', parent);
     git.setRemote('main', parent);
     // What the gate leaves in the worktree is not a change of the tree.
     writeFileSync(join(git.work, '.gitignore'), 'reports/\n');
-    git.commit(commit, parent);
+    git.commitWith(commit, parent, { file: { path: 'steps/step/record.json', text: stepRecordText() } });
     // The runs of the forge carry the display name the committed file asks for: the push entry of the gate.
     const { workflow } = JSON.parse(readFileSync(COMMITTED, 'utf8')) as { workflow: string };
     const gh = ghForge(this, workflow);
@@ -88,7 +90,8 @@ Given(
         ]),
       ].map((name) => ({ name, conclusion: 'success', hadRunner: true, failedStep: false })),
     });
-    for (const branch of ['feat/gate-1a', 'main']) gh.evaluated(branch, git.hashOf(commit), 'pass');
+    // What the forge sees of the work branch once the delivery pushed it.
+    gh.hasBranch('deliver/step', git.hashOf(commit));
     const home = temporaryDirectory(this);
     const runtime = gateRuntime(this);
     const runtimeRoot = runtime.root;
@@ -201,9 +204,18 @@ When(
   },
 );
 
-/** The two hashes of the scenario by their names. */
+/** The SHA-256 of the body of the pull request of the commit `h1`. */
+const bodyOf = (command: Command): string =>
+  createHash('sha256')
+    .update(pullRequestBody(stepRecord(), { repository: REPO, hash: command.git.hashOf('h1'), name: 'step' }))
+    .digest('hex');
+
+/** The two hashes of the scenario by their names, and the SHA-256 of the body of its pull request as `BODY`. */
 const named = (command: Command, text: string): string =>
-  ['h1', 'p0'].reduce((shown, label) => shown.replaceAll(command.git.hashOf(label), label), text);
+  ['h1', 'p0'].reduce(
+    (shown, label) => shown.replaceAll(command.git.hashOf(label), label),
+    text.replaceAll(bodyOf(command), 'BODY'),
+  );
 
 Then('the delivery command exited {int}', function (code: number) {
   assert.equal(commandOf(this).code, code);
@@ -235,6 +247,51 @@ Then('the remote of the delivery command has no branch {string}', function (bran
   const { git, bare } = commandOf(this).git;
   assert.equal(git(bare, 'branch', '--list', branch), '');
 });
+
+Then(
+  'the scripted forge of the delivery command was asked for {int} new pull request(s)',
+  function (count: number) {
+    assert.equal(commandOf(this).gh.created().length, count);
+  },
+);
+
+Then('every new pull request the delivery command asked for is asked as no draft', function () {
+  const { gh } = commandOf(this);
+  const argv = gh.createdArguments();
+  assert.ok(argv.length > 0);
+  // Every field of the call: `draft` once, false, as a typed field; the others raw.
+  const fields = argv.flatMap((argument, index) =>
+    ['-f', '-F'].includes(argv[index - 1] ?? '') ? [argument] : [],
+  );
+  assert.deepEqual(
+    fields.filter((field) => field.startsWith('draft=')),
+    ['draft=false'],
+  );
+  assert.equal(argv[argv.indexOf('draft=false') - 1], '-F');
+  assert.deepEqual(
+    fields.map((field) => field.slice(0, field.indexOf('='))),
+    ['head', 'base', 'title', 'body', 'draft'],
+  );
+});
+
+Then(
+  'the delivery command asked for a pull request from {string} to {string} titled {string}, with the body of the record',
+  function (head: string, base: string, title: string) {
+    const command = commandOf(this);
+    const argv = command.gh.createdArguments();
+    const field = (name: string): string | undefined =>
+      argv.find((argument) => argument.startsWith(`${name}=`))?.slice(name.length + 1);
+    assert.deepEqual(
+      [field('head'), field('base'), field('title'), field('body')],
+      [
+        head,
+        base,
+        title,
+        pullRequestBody(stepRecord(), { repository: REPO, hash: command.git.hashOf('h1'), name: 'step' }),
+      ],
+    );
+  },
+);
 
 Then('the log of the delivery command holds {int} lines', function (count: number) {
   const path = join(commandOf(this).runtimeRoot, LOG);

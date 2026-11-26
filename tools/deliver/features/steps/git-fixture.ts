@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { runToEnd } from '../../src/infrastructure/host-process.js';
 import { GitRepository } from '../../src/infrastructure/git-repository.js';
@@ -13,6 +13,10 @@ export interface CommitOptions {
   lines?: { path: string; count: number };
   /** A binary file whose content is not the one of the parent. */
   binary?: string;
+  /** A file of that text, executable when `mode` is 0o755. */
+  file?: { path: string; text: string; mode?: number };
+  /** A symbolic link to that target. */
+  link?: { path: string; target: string };
 }
 
 /** The throwaway repositories of the `git` row: a bare remote, a clone as the delivery worktree. */
@@ -95,6 +99,14 @@ export function gitFixture(world: DeliverWorld): GitFixture {
     if (options.lines !== undefined)
       write(options.lines.path, lines(options.lines.path, options.lines.count));
     if (options.binary !== undefined) write(options.binary, Buffer.from([0, hashes.size]));
+    if (options.file !== undefined) {
+      write(options.file.path, options.file.text);
+      if (options.file.mode !== undefined) chmodSync(join(work, options.file.path), options.file.mode);
+    }
+    if (options.link !== undefined) {
+      mkdirSync(dirname(join(work, options.link.path)), { recursive: true });
+      symlinkSync(options.link.target, join(work, options.link.path));
+    }
     git(work, 'add', '--all');
     git(work, 'commit', '--quiet', '--message', label);
     hashes.set(label, git(work, 'rev-parse', 'HEAD').trim());
@@ -110,6 +122,7 @@ export function gitFixture(world: DeliverWorld): GitFixture {
     git,
     commitWith,
     commit: (label, parent, removal) => commitWith(label, parent, removal === undefined ? {} : { removal }),
+    commitFile: (label, parent, path, text) => commitWith(label, parent, { file: { path, text } }),
     checkout: (label) => void git(work, 'checkout', '--quiet', '--detach', hashOf(label)),
     setRemote: (branch, label) =>
       void git(work, 'push', '--quiet', 'origin', `${hashOf(label)}:refs/heads/${branch}`),

@@ -31,6 +31,10 @@
       "types": "./dist/src/git-closed.d.ts",
       "default": "./src/git-closed.ts"
     },
+    "./step-record": {
+      "types": "./dist/src/step-record.d.ts",
+      "default": "./src/step-record.ts"
+    },
     "./gate-reports": {
       "types": "./dist/src/gate-reports.d.ts",
       "default": "./src/gate-reports.ts"

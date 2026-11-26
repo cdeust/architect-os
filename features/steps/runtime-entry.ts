@@ -968,8 +968,21 @@ const DRIVER = [
 
 const REPO = 'cdeust/architect-os';
 
+/** A record of the step `step` that the schema of packages/sandbox/src/step-record.ts accepts. */
+const STEP_RECORD = JSON.stringify({
+  step: 'step',
+  startedAt: '2026-11-26T10:00:00.000Z',
+  tree: { commit: 'c'.repeat(40), tree: 'd'.repeat(40), clean: true },
+  inputs: { 'brief.md': '1'.repeat(64) },
+  launcher: {},
+  sessions: [],
+  checks: [],
+  reviews: [],
+  outcome: 'passed',
+});
+
 Given(
-  'a throwaway repository for a delivery through the launcher, its commit ahead of both branches, and a scripted forge',
+  'a throwaway repository for a delivery through the launcher, its commit ahead of the destination, and a scripted forge',
   function () {
     const repository = scratch(this, 'delivery repository');
     const bare = join(repository, 'remote.git');
@@ -982,9 +995,11 @@ Given(
     writeFileSync(join(work, 'a.md'), 'a\n');
     fixtureGit(work, 'add', '--all');
     fixtureGit(work, 'commit', '--quiet', '--message', 'p0');
-    for (const branch of ['feat/gate-1a', 'main'])
-      fixtureGit(work, 'push', '--quiet', 'origin', `HEAD:refs/heads/${branch}`);
+    fixtureGit(work, 'push', '--quiet', 'origin', 'HEAD:refs/heads/main');
     writeFileSync(join(work, '.gitignore'), 'reports/\n');
+    // The delivery reads the record of its step from the commit it delivers.
+    mkdirSync(join(work, 'steps/step'), { recursive: true });
+    writeFileSync(join(work, 'steps/step/record.json'), STEP_RECORD);
     fixtureGit(work, 'add', '--all');
     fixtureGit(work, 'commit', '--quiet', '--message', 'h1');
     const hash = fixtureGit(work, 'rev-parse', 'HEAD').trim();
@@ -1027,7 +1042,15 @@ Given(
         ['repos/' + REPO + '/actions/runs?head_sha=' + hash + '&per_page=100']: {
           stdout: JSON.stringify({
             workflow_runs: [
-              { id: 42, name: committed.workflow, head_sha: hash, status: 'completed', run_attempt: 1 },
+              {
+                id: 42,
+                name: committed.workflow,
+                head_sha: hash,
+                event: 'push',
+                head_branch: 'sentinel/gate-1a-step',
+                status: 'completed',
+                run_attempt: 1,
+              },
             ],
           }),
         },

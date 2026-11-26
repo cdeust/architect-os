@@ -23,10 +23,10 @@ Trois formes de décision :
 | P8 | pr:84 : jamais `--admin` | Tenue côté GitHub depuis le 26 novembre 2026 | Le ruleset de `main` n'a plus aucun acteur de contournement (`docs/design/ruleset-main.json`, `bypass_actors: []`) : il n'y a plus de contournement à demander. `--admin` n'est une option que de `gh pr merge`, que `.claude/settings.json` refuse en entier, comme friction | `features/descriptive/ruleset-main.feature` refuse une copie qui rend un contournement. Limite : un administrateur peut modifier le ruleset (§5) |
 | P1 | pr:46 : seule une action approuvée par un humain est exécutée | Tenue par l'hôte, dans la branche `delivery-preflight` | Phase 5 de `tools/deliver` conditionnée à une approbation liée au SHA du commit, impossible à sauter en silence. C'est le mécanisme de `delivery-maintenance.json` de cette branche | Transmise au worker de `delivery-preflight` |
 | P10 | pr:85-87 : un humain relit et fusionne | Comme P1 | `delivery-preflight` | Transmise |
-| P2 | pr:74-75 : pousser vers le distant du dépôt cible | Tenue par l'hôte, troisième PR | `deliver.json` par dépôt cible, et l'opération `openPullRequest` (§4) | À construire après la livraison de `delivery-preflight` |
-| P3 | pr:75-76 : ouvrir une PR | Tenue par l'hôte, troisième PR | Port `Forge`, `openPullRequest` (§4) | Idem |
-| P4 | pr:76-79 : corps de PR (spec, implémentation, vérification, tests, verdict) | Tenue par l'hôte, troisième PR | Corps rendu depuis `record.json`, qui porte désormais le statut par critère (R2) | Idem |
-| P6 | pr:79-80 : lier les fichiers de spec | Tenue par l'hôte, troisième PR | Hachages des entrées de `record.json`, liens vers `steps/<nom>/` dans la PR | Idem |
+| P2 | pr:74-75 : pousser vers le distant du dépôt cible | Tenue par l'hôte, troisième PR | `deliver.json` par dépôt cible, et l'opération `openPullRequest` (§4) | `openPullRequest` construite pour ce dépôt (journal §124, `tools/deliver/features/ports.feature`) ; le `deliver.json` par dépôt cible reste à construire |
+| P3 | pr:75-76 : ouvrir une PR | Tenue par l'hôte, troisième PR | Port `Forge`, `openPullRequest` (§4) | Construite (journal §124) : contrat `Forge` de `tools/deliver/features/ports.feature`, `sequence.feature`, `command.feature` ; non jouée contre GitHub |
+| P4 | pr:76-79 : corps de PR (spec, implémentation, vérification, tests, verdict) | Tenue par l'hôte, troisième PR | Corps rendu depuis `record.json`, qui porte désormais le statut par critère (R2) | Construite (journal §124) : `tools/deliver/features/body.feature` |
+| P6 | pr:79-80 : lier les fichiers de spec | Tenue par l'hôte, troisième PR | Hachages des entrées de `record.json`, liens vers `steps/<nom>/` dans la PR | Construite (journal §124) : `tools/deliver/features/body.feature` |
 
 ## 2. R2 : la revue confronte le diff aux critères du brief
 
@@ -109,7 +109,9 @@ Il faudrait un analyseur statique épinglé (par exemple CodeQL pour TypeScript,
 
 ## 4. Conception de la troisième PR : ouvrir une pull request sur le dépôt cible (P2, P3, P4, P6)
 
-Décision du propriétaire, transmise le 25 novembre 2026 : architect-os ouvre une pull request sur le dépôt cible. Cette PR se construit après la livraison de `delivery-preflight`, qui réécrit `tools/deliver`. Rien de ce qui suit n'est construit.
+Décision du propriétaire, transmise le 25 novembre 2026 : architect-os ouvre une pull request sur le dépôt cible. Cette PR se construit après la livraison de `delivery-preflight`, qui réécrit `tools/deliver`.
+
+**Ce qui est construit (26 novembre 2026, journal §124), pour ce dépôt-ci.** `Forge.openPullRequest` avec son double en mémoire et l'adaptateur du client de la forge (`host-process.ts`, environnement fermé), son contrat à deux lignes par cas ; la phase 5 de `tools/deliver` pousse la branche de travail `deliver/<nom>` et ouvre la PR vers `main`, ou retrouve celle qui est ouverte ; le titre (`pullRequestTitle` de `deliver.json`) et le corps, rendus par le domaine depuis `steps/<nom>/record.json` du commit, lu par l'objet du commit et revalidé par le schéma du relevé. Trois écarts à ce qui suit : une PR déjà ouverte pour la même tête et la même base est rendue (`created: false`) et non refusée, comme le veut la ligne « Déni de service » ; chaque valeur passe dans un bloc de code inerte (`@`, `#`, `:` et les mots qui ferment un ticket coupés d'une espace sans chasse) plutôt que par `JSON.stringify` ; le ticket, le reçu de la porte et le run de CI ne sont pas dans le corps, seulement l'empreinte du commit et le lien vers le relevé. Ce qui reste : l'approbation liée au commit (P1, `delivery-preflight`), avant toute poussée, et un `deliver.json` par dépôt cible pris dans le lanceur (P2). L'appel à GitHub n'a pas été joué.
 
 **Le contrat du port.** `Forge.openPullRequest(request): Result` dans `tools/deliver/src/domain/ports.ts`, avec un double en mémoire et l'adaptateur du client de la forge, qui passe par `host-process.ts` et son environnement fermé.
 

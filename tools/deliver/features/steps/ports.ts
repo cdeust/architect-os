@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import type { CiJob, DeliveryEntry, RuleSuite, Stage } from '../../src/domain/ports.js';
+import type { CiJob, DeliveryEntry, PullRequestResult, Stage } from '../../src/domain/ports.js';
 import { InMemoryClock } from '../../src/infrastructure/in-memory-clock.js';
 import { InMemoryForge } from '../../src/infrastructure/in-memory-forge.js';
 import { InMemoryGate } from '../../src/infrastructure/in-memory-gate.js';
@@ -7,15 +7,17 @@ import { Journal } from '../../src/infrastructure/in-memory-journal.js';
 import { InMemoryLog } from '../../src/infrastructure/in-memory-log.js';
 import { InMemoryProgress } from '../../src/infrastructure/in-memory-progress.js';
 import { InMemoryRepository } from '../../src/infrastructure/in-memory-repository.js';
-import type {
-  ClockFixture,
-  ForgeFixture,
-  GateFixture,
-  LogFixture,
-  ProgressFixture,
-  RepositoryFixture,
+import {
+  DESTINATION,
+  TRIAL,
+  type ClockFixture,
+  type ForgeFixture,
+  type GateFixture,
+  type LogFixture,
+  type ProgressFixture,
+  type RepositoryFixture,
 } from './fixtures.js';
-import { ghForge } from './gh-fixture.js';
+import { ghForge, REPO } from './gh-fixture.js';
 import { gitFixture } from './git-fixture.js';
 import { fileLog, processGate, streamProgress, timerClock } from './process-fixtures.js';
 import { Given, Then, When, type DeliverWorld } from './support.js';
@@ -29,13 +31,18 @@ function inMemoryRepository(): RepositoryFixture {
   const repository = new InMemoryRepository(new Journal(), '0'.repeat(40));
   const hashes = new Map<string, string>();
   const hashOf = (label: string): string => hashes.get(label) as string;
+  const commit: RepositoryFixture['commit'] = (label, parent, removal) => {
+    const hash = (hashes.size + 1).toString(16).padStart(40, '0');
+    hashes.set(label, hash);
+    if (parent !== undefined) repository.link(hashOf(parent), hash);
+    if (removal !== undefined) repository.removes(hash, removal.path, removal.lines);
+  };
   return {
     repository,
-    commit(label, parent, removal) {
-      const hash = (hashes.size + 1).toString(16).padStart(40, '0');
-      hashes.set(label, hash);
-      if (parent !== undefined) repository.link(hashOf(parent), hash);
-      if (removal !== undefined) repository.removes(hash, removal.path, removal.lines);
+    commit,
+    commitFile(label, parent, path, text) {
+      commit(label, parent);
+      repository.files.set(`${hashOf(label)} ${path}`, text);
     },
     checkout(label) {
       repository.hash = hashOf(label);
@@ -59,12 +66,19 @@ function inMemoryRepository(): RepositoryFixture {
 
 function inMemoryForge(): ForgeFixture {
   const journal = new Journal();
-  const forge = new InMemoryForge(journal);
+  const forge = new InMemoryForge(journal, REPO);
   return {
     forge,
-    hasRun: (hash, run) => forge.script(hash, [run]),
-    hasAttempts: (hash, id, attempts) => forge.scriptAttempts(hash, id, attempts),
-    evaluated: (branch, hash, suite) => forge.evaluate(branch, hash, [suite]),
+    hasRun: (hash, run) => forge.script(hash, TRIAL, [run]),
+    hasAttempts: (hash, id, attempts) => forge.scriptAttempts(hash, TRIAL, id, attempts),
+    hasBranch: (branch, hash) => void forge.remote.set(branch, hash),
+    // The double sees only the branches it was given.
+    lacksBranch: () => undefined,
+    hasDraft: (head, hash) => {
+      forge.remote.set(head, hash);
+      forge.openDraft(head, DESTINATION);
+    },
+    refusesPullRequests: () => void (forge.refusing = true),
     reruns: () => journal.calls.filter((call) => call.startsWith('rerun ')),
   };
 }
@@ -206,6 +220,26 @@ Then('the delivery remote head of {string} is the commit {string}', function (br
   assert.equal(repository.remoteHead(branch), hashOf(label));
 });
 
+Given(
+  'the delivery repository holds the commit {string} after {string} that records {string} as the text {string}',
+  function (label: string, parent: string, path: string, text: string) {
+    repo(this).commitFile(label, parent, path, text);
+  },
+);
+
+Then(
+  'the delivery commit {string} records at {string} the text {string}',
+  function (label: string, path: string, text: string) {
+    const { repository, hashOf } = repo(this);
+    assert.equal(repository.committedFile(hashOf(label), path), text);
+  },
+);
+
+Then('the delivery commit {string} records no file at {string}', function (label: string, path: string) {
+  const { repository, hashOf } = repo(this);
+  assert.equal(repository.committedFile(hashOf(label), path), undefined);
+});
+
 Then('the delivery remote head of {string} is undefined', function (branch: string) {
   assert.equal(repo(this).repository.remoteHead(branch), undefined);
 });
@@ -252,11 +286,67 @@ Given(
 );
 
 Given(
-  'the delivery forge evaluated the push of the commit {string} to the branch {string} as {string}',
-  function (hash: string, branch: string, suite: string) {
-    forgeOf(this).evaluated(branch, hash, suite as RuleSuite);
+  'the delivery forge sees the branch {string} at the commit {string}',
+  function (branch: string, hash: string) {
+    forgeOf(this).hasBranch(branch, hash);
   },
 );
+
+Given('the delivery forge does not see the branch {string}', function (branch: string) {
+  forgeOf(this).lacksBranch(branch);
+});
+
+Given(
+  'a pull request from {string} at the commit {string} is open as a draft on the delivery forge',
+  function (head: string, hash: string) {
+    forgeOf(this).hasDraft(head, hash);
+  },
+);
+
+Given(
+  'the delivery forge sees the branch {string} at the commit {string}, and refuses every new pull request',
+  function (branch: string, hash: string) {
+    forgeOf(this).hasBranch(branch, hash);
+    forgeOf(this).refusesPullRequests();
+  },
+);
+
+/** Asks the forge of the scenario for a pull request, and keeps what it answered. */
+function askPull(world: DeliverWorld, head: string, base: string, hash: string): void {
+  const results = (world.state['portPulls'] ?? []) as PullRequestResult[];
+  results.push(
+    forgeOf(world).forge.openPullRequest({
+      head,
+      base,
+      hash,
+      title: 'Deliver the step step',
+      body: '@someone closes #1\n',
+    }),
+  );
+  world.state['portPulls'] = results;
+}
+
+When(
+  'I ask the delivery forge for a pull request from {string} at the commit {string}',
+  function (head: string, hash: string) {
+    askPull(this, head, DESTINATION, hash);
+  },
+);
+
+When(
+  'I ask the delivery forge for a pull request from {string} to {string} at the commit {string}',
+  function (head: string, base: string, hash: string) {
+    askPull(this, head, base, hash);
+  },
+);
+
+Then('the delivery forge refused the pull request because {string}', function (reason: string) {
+  assert.deepEqual(this.state['portPulls'], [{ ok: false, reason }]);
+});
+
+Then('the delivery forge answered the pull requests {string}', function (expected: string) {
+  assert.deepEqual(this.state['portPulls'], JSON.parse(expected));
+});
 
 Given(
   'the delivery forge holds for the commit {string} the run {int}, whose attempts executed the jobs {string}',
@@ -268,7 +358,7 @@ Given(
 Then(
   'the delivery forge gives for the commit {string}, asked for no job, the run {int} at attempt {int} with the jobs {string}',
   function (hash: string, id: number, attempt: number, jobs: string) {
-    assert.deepEqual(forgeOf(this).forge.run(hash, 'gate'), {
+    assert.deepEqual(forgeOf(this).forge.run(hash, 'gate', TRIAL), {
       id,
       completed: true,
       attempt,
@@ -281,7 +371,7 @@ Then(
   'the delivery forge gives for the commit {string}, asked for {string}, the run {int} at attempt {int} with the jobs {string}',
   function (hash: string, asked: string, id: number, attempt: number, jobs: string) {
     const names = asked === 'all' ? 'all' : (JSON.parse(asked) as string[]);
-    assert.deepEqual(forgeOf(this).forge.run(hash, 'gate', names), {
+    assert.deepEqual(forgeOf(this).forge.run(hash, 'gate', TRIAL, names), {
       id,
       completed: true,
       attempt,
@@ -295,13 +385,13 @@ When('I ask the delivery forge to rerun the failed jobs of the run {int}', funct
 });
 
 Then('the delivery forge has no run of the commit {string}', function (hash: string) {
-  assert.equal(forgeOf(this).forge.run(hash, 'gate'), undefined);
+  assert.equal(forgeOf(this).forge.run(hash, 'gate', TRIAL), undefined);
 });
 
 Then(
   'the delivery forge gives for the commit {string} the run {int}, completed {string}, with the jobs {string}',
   function (hash: string, id: number, completed: string, jobs: string) {
-    assert.deepEqual(forgeOf(this).forge.run(hash, 'gate'), {
+    assert.deepEqual(forgeOf(this).forge.run(hash, 'gate', TRIAL), {
       id,
       completed: completed === 'yes',
       jobs: JSON.parse(jobs),
@@ -312,7 +402,7 @@ Then(
 Then(
   'the delivery forge run of the commit {string} is not completed and has no jobs',
   function (hash: string) {
-    const run = forgeOf(this).forge.run(hash, 'gate');
+    const run = forgeOf(this).forge.run(hash, 'gate', TRIAL);
     assert.equal(run?.completed, false);
     assert.deepEqual(run?.jobs, []);
   },
@@ -323,16 +413,9 @@ Then('the delivery forge recorded the rerun of the run {int}', function (id: num
 });
 
 Then(
-  'the delivery forge rule suite of the branch {string} and the commit {string} is nothing',
-  function (branch: string, hash: string) {
-    assert.equal(forgeOf(this).forge.ruleSuite(branch, hash), undefined);
-  },
-);
-
-Then(
-  'the delivery forge rule suite of the branch {string} and the commit {string} is {string}',
-  function (branch: string, hash: string, suite: string) {
-    assert.equal(forgeOf(this).forge.ruleSuite(branch, hash), suite);
+  'the delivery forge has no run of the push of the commit {string} to {string}',
+  function (hash: string, branch: string) {
+    assert.equal(forgeOf(this).forge.run(hash, 'gate', branch), undefined);
   },
 );
 
@@ -398,8 +481,13 @@ const entry = (outcome: DeliveryEntry['outcome'], hash: string): DeliveryEntry =
   parent: '0'.repeat(40),
   ci: { run: 7, attempts: 1, polls: 2 },
   gate: 'ran',
-  published: ['main'],
-  ruleSuites: new Map<string, RuleSuite>([['main', 'pass']]),
+  published: ['deliver/x'],
+  pullRequest: {
+    number: 3,
+    url: 'https://github.com/owner/name/pull/3',
+    created: true,
+    body: 'a'.repeat(64),
+  },
 });
 
 Given('a delivery log of the {word} adapter', function (name: string) {

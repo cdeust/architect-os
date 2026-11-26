@@ -71,6 +71,19 @@ export class GitRepository implements Repository {
     return status === 0 ? 'pushed' : 'refused';
   }
 
+  committedFile(hash: string, path: string): string | undefined {
+    // Every entry of the tree of the commit, `<mode> <type> <object>\t<path>\0`, compared with the path byte for byte:
+    // a path is never given to git as a pathspec, whose magic would read it otherwise.
+    const entry = this.run(['ls-tree', '-r', '-z', '--full-tree', hash])
+      .out.toString()
+      .split('\0')
+      .find((line) => line.slice(line.indexOf('\t') + 1) === path);
+    const [mode, , object] = entry?.slice(0, entry.indexOf('\t')).split(' ') ?? [];
+    // A regular file, executable or not; a link (120000) or a nested repository (160000) is not a file of the commit.
+    if (mode !== '100644' && mode !== '100755') return undefined;
+    return this.run(['cat-file', 'blob', object as string]).out.toString();
+  }
+
   deleteRemoteBranch(branch: string): void {
     this.run(['push', '--quiet', '--recurse-submodules=no', this.remote, `:refs/heads/${branch}`]);
   }

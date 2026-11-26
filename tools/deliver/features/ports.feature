@@ -123,6 +123,21 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | in-memory |
         | git       |
 
+    Scenario Outline: a commit records the text of a file at its path, and nothing at another
+      Given a delivery repository of the <adapter> adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository holds the commit "c2" after "c1" that records "steps/step/record.json" as the text "{\"step\":\"step\"}"
+      Then the delivery commit "c2" records at "steps/step/record.json" the text "{\"step\":\"step\"}"
+      And the delivery commit "c1" records no file at "steps/step/record.json"
+      And the delivery commit "c2" records no file at "steps/other/record.json"
+      And the delivery commit "c2" records no file at "steps/step"
+      And the delivery commit "c2" records no file at "steps/step/record"
+
+      Examples:
+        | adapter   |
+        | in-memory |
+        | git       |
+
     Scenario Outline: a remote branch deleted is absent after a fetch
       Given a delivery repository of the <adapter> adapter
       And the delivery repository holds the commit "c1"
@@ -205,6 +220,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | isAncestor         | git merge-base exited with code 128 |
         | deletedLines       | git diff exited with code 129    |
         | deleteRemoteBranch | git push exited with code 128    |
+        | committedFile      | git ls-tree exited with code 128 |
 
     Scenario Outline: each method is one fixed git command, started with no file monitor, no hook and the terminal prompt switched off
       Given a delivery repository over a git that records what it is asked
@@ -221,6 +237,25 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | deletedLines       | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null diff --numstat --ignore-submodules=all aaa bbb -- docs/a.md |
         | push               | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null push --quiet --recurse-submodules=no origin aaa:refs/heads/main |
         | deleteRemoteBranch | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null push --quiet --recurse-submodules=no origin :refs/heads/main |
+        | committedFile      | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null ls-tree -r -z --full-tree aaa |
+
+    Scenario: what a commit records at a path is read from the commit, whatever the checkout holds, and a link is no file
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository holds the commit "c2" after "c1" that records "steps/step/record.json" as the text "recorded"
+      And the delivery repository holds the commit "c3" after "c2" with a link at "steps/link/record.json" to "../step/record.json"
+      When the delivery worktree file "steps/step/record.json" now holds "changed"
+      Then the delivery commit "c2" records at "steps/step/record.json" the text "recorded"
+      And the delivery commit "c3" records at "steps/step/record.json" the text "recorded"
+      And the delivery commit "c3" records no file at "steps/link/record.json"
+      And the delivery commit "c3" records no file at "step/record.json"
+
+    Scenario: an executable file is a file of the commit, a directory is not
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository holds the commit "c2" after "c1" that records "steps/step/record.json" executable, as the text "executable"
+      Then the delivery commit "c2" records at "steps/step/record.json" the text "executable"
+      And the delivery commit "c2" records no file at "steps"
 
     Scenario: a git executable that does not exist throws a fixed message
       Given a delivery repository over the git executable "/nonexistent/git"
@@ -454,52 +489,111 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | in-memory |
         | gh        |
 
-    Scenario Outline: a rule suite of a push nobody made, and of one evaluated
+    Scenario Outline: a run of the push of the commit to another branch is not the run of the push
       Given a delivery forge of the <adapter> adapter
-      And the delivery forge evaluated the push of the commit "0000000000000000000000000000000000000004" to the branch "main" as "<suite>"
-      Then the delivery forge rule suite of the branch "main" and the commit "0000000000000000000000000000000000000004" is "<suite>"
-      And the delivery forge rule suite of the branch "other" and the commit "0000000000000000000000000000000000000004" is nothing
-      And the delivery forge rule suite of the branch "main" and the commit "0000000000000000000000000000000000000005" is nothing
+      And the delivery forge holds for the commit "0000000000000000000000000000000000000021" the run 7, completed "yes", with the jobs '[]'
+      Then the delivery forge has no run of the push of the commit "0000000000000000000000000000000000000021" to "sentinel/gate-1a-other"
 
       Examples:
-        | adapter   | suite  |
-        | in-memory | pass   |
-        | gh        | pass   |
-        | in-memory | fail   |
-        | gh        | fail   |
-        | in-memory | bypass |
-        | gh        | bypass |
+        | adapter   |
+        | in-memory |
+        | gh        |
+
+    Scenario Outline: a pull request is opened for a head the forge sees at the commit, then found and not doubled
+      Given a delivery forge of the <adapter> adapter
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021"
+      When I ask the delivery forge for a pull request from "deliver/step" at the commit "0000000000000000000000000000000000000021"
+      And I ask the delivery forge for a pull request from "deliver/step" at the commit "0000000000000000000000000000000000000021"
+      Then the delivery forge answered the pull requests '[{"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true},{"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":false}]'
+
+      Examples:
+        | adapter   |
+        | in-memory |
+        | gh        |
+
+    Scenario Outline: no pull request is opened when <case>
+      Given a delivery forge of the <adapter> adapter
+      And <setting>
+      When I ask the delivery forge for a pull request from "deliver/step" at the commit "0000000000000000000000000000000000000021"
+      Then the delivery forge refused the pull request because "<reason>"
+
+      Examples:
+        | adapter   | case                                     | setting                                                                                                    | reason                                                    |
+        | in-memory | the forge does not see the head          | the delivery forge does not see the branch "deliver/step"                                                  | la forge ne voit pas la branche de travail                |
+        | gh        | the forge does not see the head          | the delivery forge does not see the branch "deliver/step"                                                  | la forge ne voit pas la branche de travail                |
+        | in-memory | the head is at another commit            | the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000022"                                      | la tête de la branche de travail n'est pas le commit livré |
+        | gh        | the head is at another commit            | the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000022"                                      | la tête de la branche de travail n'est pas le commit livré |
+        | in-memory | the open pull request is a draft         | a pull request from "deliver/step" at the commit "0000000000000000000000000000000000000021" is open as a draft on the delivery forge            | une pull request en brouillon est ouverte pour cette tête |
+        | gh        | the open pull request is a draft         | a pull request from "deliver/step" at the commit "0000000000000000000000000000000000000021" is open as a draft on the delivery forge            | une pull request en brouillon est ouverte pour cette tête |
+        | in-memory | the forge refuses it                     | the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021", and refuses every new pull request | la forge a refusé la pull request                         |
+        | gh        | the forge refuses it                     | the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021", and refuses every new pull request | la forge a refusé la pull request                         |
+
+    Scenario: the in-memory forge keeps one pull request per head and base
+      Given a delivery forge of the in-memory adapter
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021"
+      And the delivery forge sees the branch "deliver/other" at the commit "0000000000000000000000000000000000000021"
+      When I ask the delivery forge for a pull request from "deliver/step" to "main" at the commit "0000000000000000000000000000000000000021"
+      And I ask the delivery forge for a pull request from "deliver/step" to "release" at the commit "0000000000000000000000000000000000000021"
+      And I ask the delivery forge for a pull request from "deliver/other" to "main" at the commit "0000000000000000000000000000000000000021"
+      And I ask the delivery forge for a pull request from "deliver/step" to "release" at the commit "0000000000000000000000000000000000000021"
+      Then the delivery forge answered the pull requests '[{"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true},{"ok":true,"number":2,"url":"https://github.com/cdeust/architect-os/pull/2","created":true},{"ok":true,"number":3,"url":"https://github.com/cdeust/architect-os/pull/3","created":true},{"ok":true,"number":2,"url":"https://github.com/cdeust/architect-os/pull/2","created":false}]'
+
+    Scenario: a run started by a pull request, and a run of the push to another branch, are not the run of the push
+      Given a delivery forge of the gh adapter
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":1,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"pull_request","head_branch":"sentinel/gate-1a-step","status":"completed"},{"id":2,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"main","status":"completed"},{"id":3,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":null,"status":"completed"},{"id":5,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed"}]}'
+      And the gh forge answers the jobs of "5" with '{"jobs":[]}'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 5, completed "yes", with the jobs '[]'
 
     Scenario: the gh adapter asks the exact arguments of each call
       Given a delivery forge of the gh adapter
       And the delivery forge holds for the commit "0000000000000000000000000000000000000021" the run 7, completed "yes", with the jobs '[]'
-      And the delivery forge evaluated the push of the commit "0000000000000000000000000000000000000021" to the branch "feat/gate-1a" as "pass"
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021"
       When I ask the gh forge for the run
       And I ask the gh forge to rerun the run 7
-      And I ask the gh forge for the rule suite of "feat/gate-1a"
+      And I ask the gh forge for a pull request from "deliver/step"
       Then the gh client was asked:
         """
         api repos/cdeust/architect-os/actions/runs?head_sha=0000000000000000000000000000000000000021&per_page=100
         api repos/cdeust/architect-os/actions/runs/7/jobs?per_page=100
         api --method POST repos/cdeust/architect-os/actions/runs/7/rerun-failed-jobs
-        api repos/cdeust/architect-os/rulesets/rule-suites?ref=refs%2Fheads%2Ffeat%2Fgate-1a&per_page=100
+        api repos/cdeust/architect-os/git/matching-refs/heads/deliver/step
+        api repos/cdeust/architect-os/pulls?head=cdeust%3Adeliver%2Fstep&base=main&state=open&per_page=100
+        api --method POST repos/cdeust/architect-os/pulls -f head=deliver/step -f base=main -f title=Deliver the step step -f body=line one
+        @someone -F draft=false
+        """
+      And the gh client was asked for a new pull request with the arguments, each as JSON:
+        """
+        "api"
+        "--method"
+        "POST"
+        "repos/cdeust/architect-os/pulls"
+        "-f"
+        "head=deliver/step"
+        "-f"
+        "base=main"
+        "-f"
+        "title=Deliver the step step"
+        "-f"
+        "body=line one\n@someone"
+        "-F"
+        "draft=false"
         """
 
     Scenario: two runs of the workflow for the commit: the one of the smaller id, whatever the order
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":8,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed"},{"id":3,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"in_progress"}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":8,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed"},{"id":3,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"in_progress"}]}'
       And the gh forge answers the jobs of "3" with '{"jobs":[]}'
       Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 3, completed "no", with the jobs '[]'
 
     Scenario: a run of another workflow and a run of another commit are not the run of the commit
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":1,"name":"other","head_sha":"0000000000000000000000000000000000000021","status":"completed"},{"id":2,"name":"gate","head_sha":"0000000000000000000000000000000000000022","status":"completed"},{"id":5,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed"}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":1,"name":"other","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed"},{"id":2,"name":"gate","head_sha":"0000000000000000000000000000000000000022","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed"},{"id":5,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed"}]}'
       And the gh forge answers the jobs of "5" with '{"jobs":[]}'
       Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 5, completed "yes", with the jobs '[]'
 
     Scenario: runs of another workflow and of another commit only: no run
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":1,"name":"other","head_sha":"0000000000000000000000000000000000000021","status":"completed"},{"id":2,"name":"gate","head_sha":"0000000000000000000000000000000000000022","status":"completed"}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":1,"name":"other","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed"},{"id":2,"name":"gate","head_sha":"0000000000000000000000000000000000000022","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed"}]}'
       Then the delivery forge has no run of the commit "0000000000000000000000000000000000000021"
 
     Scenario Outline: a job has a runner when its runner name is a string that is not empty
@@ -568,23 +662,14 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
     Scenario: a run that is not completed is not completed, whatever its status says
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":4,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"queued"}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":4,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"queued"}]}'
       And the gh forge answers the jobs of "4" with '{"jobs":[]}'
       Then the delivery forge gives for the commit "0000000000000000000000000000000000000021" the run 4, completed "no", with the jobs '[]'
-
-    Scenario: the first evaluation of the commit counts, and an evaluation of another commit does not
-      Given a delivery forge of the gh adapter
-      And the gh forge answers the suites of "main" with '[{"after_sha":"0000000000000000000000000000000000000022","result":"fail"},{"after_sha":"0000000000000000000000000000000000000021","result":"pass"},{"after_sha":"0000000000000000000000000000000000000021","result":"fail"}]'
-      Then the delivery forge rule suite of the branch "main" and the commit "0000000000000000000000000000000000000021" is "pass"
-
-    Scenario: an evaluation that is not finished is nothing
-      Given a delivery forge of the gh adapter
-      And the gh forge answers the suites of "main" with '[{"after_sha":"0000000000000000000000000000000000000021","result":"queued"}]'
-      Then the delivery forge rule suite of the branch "main" and the commit "0000000000000000000000000000000000000021" is nothing
 
     Scenario Outline: a program that exits non-zero: the fixed message with the exit code, and nothing it printed
       Given a delivery forge of the gh adapter
       And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021"
       And the gh forge answers the <kind> of "<subject>" with the exit code 3 and the output "MARKER-9c2e"
       When I ask the gh forge <call>
       Then the gh forge failed with "the forge did not answer: <label> (exit code 3)"
@@ -595,11 +680,13 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | runs  | 0000000000000000000000000000000000000021  | for the run                   | runs        |
         | jobs  | 7       | for the run                   | jobs        |
         | rerun | 7       | to rerun the run 7            | rerun       |
-        | suites | main   | for the rule suite of "main"  | rule suites |
+        | refs  | deliver/step | for a pull request from "deliver/step" | refs |
+        | pulls | deliver/step | for a pull request from "deliver/step" | pulls |
 
     Scenario Outline: a program that prints what is not JSON: the fixed message, and nothing it printed
       Given a delivery forge of the gh adapter
       And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021"
       And the gh forge answers the <kind> of "<subject>" with "MARKER-9c2e"
       When I ask the gh forge <call>
       Then the gh forge failed with "the forge did not answer: <label>"
@@ -609,11 +696,13 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | kind   | subject | call                 | label       |
         | runs   | 0000000000000000000000000000000000000021  | for the run          | runs        |
         | jobs   | 7       | for the run          | jobs        |
-        | suites | main    | for the rule suite of "main" | rule suites |
+        | refs   | deliver/step | for a pull request from "deliver/step" | refs |
+        | pulls  | deliver/step | for a pull request from "deliver/step" | pulls |
 
     Scenario Outline: a program that prints JSON the schema refuses: the fixed message, and nothing it printed
       Given a delivery forge of the gh adapter
       And the gh forge finds the run 7 of "0000000000000000000000000000000000000021"
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021"
       And the gh forge answers the <kind> of "<subject>" with '<output>'
       When I ask the gh forge <call>
       Then the gh forge failed with "the forge did not answer: <label>"
@@ -622,10 +711,58 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       Examples:
         | kind   | subject | call                 | label       | output                                                                                       |
         | runs   | 0000000000000000000000000000000000000021  | for the run          | runs        | {"marker":"MARKER-9c2e"}                                                                     |
-        | runs   | 0000000000000000000000000000000000000021  | for the run          | runs        | {"workflow_runs":[{"id":0,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"MARKER-9c2e"}]}        |
-        | runs   | 0000000000000000000000000000000000000021  | for the run          | runs        | {"workflow_runs":[{"id":1.5,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"MARKER-9c2e"}]}      |
+        | runs   | 0000000000000000000000000000000000000021  | for the run          | runs        | {"workflow_runs":[{"id":0,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"MARKER-9c2e"}]}        |
+        | runs   | 0000000000000000000000000000000000000021  | for the run          | runs        | {"workflow_runs":[{"id":1.5,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"MARKER-9c2e"}]}      |
         | jobs   | 7       | for the run          | jobs        | {"marker":"MARKER-9c2e"}                                                                     |
-        | suites | main    | for the rule suite of "main" | rule suites | {"marker":"MARKER-9c2e"}                                                                     |
+        | refs   | deliver/step | for a pull request from "deliver/step" | refs | {"marker":"MARKER-9c2e"} |
+        | pulls  | deliver/step | for a pull request from "deliver/step" | pulls | [{"number":"MARKER-9c2e","html_url":"https://github.com/cdeust/architect-os/pull/1","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}}] |
+
+    Scenario Outline: the open pull request the forge lists is the one of the head and the base: <case>
+      Given a delivery forge of the gh adapter
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021"
+      And the gh forge answers the pulls of "deliver/step" with '<listed>'
+      When I ask the gh forge for a pull request from "deliver/step"
+      Then the gh forge answered the pull request '<answer>'
+      And the gh client was asked for <created> new pull request
+
+      Examples:
+        | case                                   | listed | answer | created |
+        | the smaller number of two              | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}},{"number":2,"html_url":"https://github.com/cdeust/architect-os/pull/2","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}}] | {"ok":true,"number":2,"url":"https://github.com/cdeust/architect-os/pull/2","created":false} | no |
+        | another head is not it                 | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/other","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}}] | {"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true} | one |
+        | another base is not it                 | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"feat/x"}}] | {"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true} | one |
+        | a closed one is not it                 | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"closed","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}}] | {"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true} | one |
+
+    Scenario: an open pull request whose head the forge still shows at another commit is not taken, and nothing is opened
+      Given a delivery forge of the gh adapter
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021"
+      And the gh forge answers the pulls of "deliver/step" with '[{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000022"},"base":{"ref":"main"}}]'
+      When I ask the gh forge for a pull request from "deliver/step"
+      Then the gh forge refused the pull request because "la tête de la branche de travail n'est pas le commit livré"
+      And the gh client was asked for no new pull request
+
+    Scenario Outline: a new pull request the forge answers is checked against what was asked: <case>
+      Given a delivery forge of the gh adapter
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021"
+      And the gh forge answers the open of "" with '<created>'
+      When I ask the gh forge for a pull request from "deliver/step"
+      Then <outcome>
+
+      Examples:
+        | case                     | created | outcome |
+        | a draft                  | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":true,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}} | the gh forge refused the pull request because "une pull request en brouillon est ouverte pour cette tête" |
+        | another commit           | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000022"},"base":{"ref":"main"}} | the gh forge refused the pull request because "la tête de la branche de travail n'est pas le commit livré" |
+        | another head             | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/other","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
+        | another base             | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"feat/x"}} | the gh forge failed with "the forge did not answer: pull request" |
+        | one that is not open     | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"closed","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
+        | nothing a schema accepts | {} | the gh forge failed with "the forge did not answer: pull request" |
+        | an address that is not one | {"number":4,"html_url":"https://github.com/cdeust/architect-os/issues/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
+        | a number that is not one | {"number":0,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
+
+    Scenario: a refusal of the forge holds nothing of what the client printed
+      Given a delivery forge of the gh adapter
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021", and refuses every new pull request
+      When I ask the gh forge for a pull request from "deliver/step"
+      Then the gh forge refused the pull request because "la forge a refusé la pull request"
 
     Scenario: a program that cannot be started
       Given a delivery forge over the program "/nonexistent/gh"
@@ -674,7 +811,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
     Scenario Outline: a partial rerun uses the newest execution of each job across all pages
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed","run_attempt":2}]}'
       And the gh forge answers the attempt of "7/2" with '[{"jobs":[],"total_count":1},{"jobs":[{"name":"linux","runner_name":"runner","conclusion":"<latest>","id":21}],"total_count":1}]'
       And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"linux","runner_name":"runner","conclusion":"<old>","id":11},{"name":"macos","runner_name":"runner","conclusion":"success","id":12}],"total_count":2}]'
       Then the effective jobs of the gh run for "linux, macos" have the state "<state>"
@@ -686,7 +823,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
     Scenario Outline: an attempt job list with <defect> stops delivery before a verdict
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":1}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed","run_attempt":1}]}'
       And the gh forge answers the attempt of "7/1" with '<pages>'
       When I ask the gh forge for a delivery decision
       Then the gh forge failed with "the forge did not answer: jobs"
@@ -703,7 +840,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
     Scenario: an empty current attempt cannot inherit successful jobs from an earlier execution
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed","run_attempt":2}]}'
       And the gh forge answers the attempt of "7/2" with '[{"jobs":[],"total_count":0}]'
       And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success","id":11}],"total_count":1}]'
       Then the gh run for "linux" is:
@@ -718,7 +855,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
     Scenario: a complete current attempt makes no request for an older attempt
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed","run_attempt":2}]}'
       And the gh forge answers the attempt of "7/2" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success","id":21}],"total_count":1}]'
       Then the gh run for "linux" is:
         """
@@ -732,7 +869,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
     Scenario: an empty historical attempt does not stop the search for another required job
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":3}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed","run_attempt":3}]}'
       And the gh forge answers the attempt of "7/3" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success","id":31}],"total_count":1}]'
       And the gh forge answers the attempt of "7/2" with '[{"jobs":[],"total_count":0}]'
       And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"macos","runner_name":"r","conclusion":"success","id":11}],"total_count":1}]'
@@ -740,7 +877,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
     Scenario: a completed attempt can also be read without a job filter
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":1}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed","run_attempt":1}]}'
       And the gh forge answers the attempt of "7/1" with '[{"jobs":[{"name":"linux","runner_name":"r","conclusion":"success","id":11}],"total_count":1}]'
       Then the unfiltered gh run is:
         """
@@ -749,7 +886,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
     Scenario: an in-progress unnumbered run uses the live jobs response
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"in_progress"}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"in_progress"}]}'
       And the gh forge answers the jobs of "7" with '{"jobs":[]}'
       Then the gh run for "linux" is:
         """
@@ -763,7 +900,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
     Scenario: an in-progress numbered attempt uses the live jobs response
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"in_progress","run_attempt":2}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"in_progress","run_attempt":2}]}'
       And the gh forge answers the jobs of "7" with '{"jobs":[{"name":"linux","runner_name":"live","conclusion":null}]}'
       Then the gh run for "linux" is:
         """
@@ -777,7 +914,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
     Scenario: an unavailable attempt-specific listing reports the failed operation
       Given a delivery forge of the gh adapter
-      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","status":"completed","run_attempt":2}]}'
+      And the gh forge answers the runs of "0000000000000000000000000000000000000021" with '{"workflow_runs":[{"id":7,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"completed","run_attempt":2}]}'
       And the gh forge answers the attempt of "7/2" with the exit code 1 and the output "fixture attempted listing"
       When I ask the gh forge for a delivery decision
       Then the gh forge failed with "the forge did not answer: jobs (exit code 1)"
@@ -965,13 +1102,12 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       When I append to the delivery log an entry "delivered" of the commit "0000000000000000000000000000000000000007"
       Then the delivery log file holds the line '{"other":"line"}' and then what was appended
 
-    Scenario Outline: the rule suites are an object in the order of the Map
+    Scenario Outline: the pull request of an entry is its last key, and an entry without one has none
       Given a delivery log of the file adapter
-      When I append to the delivery log an entry with the rule suites "<suites>"
+      When I append to the delivery log an entry with the pull request '<pull>'
       Then the delivery log file holds the text '<text>'
 
       Examples:
-        | suites                | text                                                  |
-        | main=pass,10=fail,9=bypass | "ruleSuites":{"main":"pass","10":"fail","9":"bypass"} |
-        | 9=fail,main=pass      | "ruleSuites":{"9":"fail","main":"pass"}              |
-        | none                  | "ruleSuites":{}                                       |
+        | pull                                                                                   | text                                                                                                                   |
+        | none                                                                                   | "published":[]}                                                                                                        |
+        | {"number":3,"url":"https://github.com/owner/name/pull/3","created":false,"body":"b"} | "published":[],"pullRequest":{"number":3,"url":"https://github.com/owner/name/pull/3","created":false,"body":"b"}} |

@@ -2,18 +2,18 @@ Feature: the closed environment of the delivery, under fresh inputs
   The delivery starts git and the client of the forge with the names of the key `environment` of its descriptive file
   that the host sets, then what each adapter adds (GIT_TERMINAL_PROMPT=0 for git); nothing else passes
   (docs/design/orchestration-fable-5-2.md §14, « Un environnement fermé pour git »). The command runs over a throwaway
-  repository with a bare remote and a scripted client of the forge: the commit "h1" is ahead of both branches, at "p0".
+  repository with a bare remote and a scripted client of the forge: the commit "h1" is ahead of the destination, at "p0".
 
   Rule: a variable of git in the process does not make the delivery act on another repository
 
     # expected because: « GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY, GIT_NAMESPACE dans l'environnement : […] la livraison pousse depuis un autre dépôt » is parried by « La liste fermée » (§14)
     Scenario Outline: a <name> of the process: the commit of the worktree is pushed to its own remote, under its own names
-      Given a delivery command over a throwaway repository, the commit "h1" ahead of both branches at "p0"
+      Given a delivery command over a throwaway repository, the commit "h1" ahead of the destination at "p0"
       And the process of the delivery command has the variable "<name>" set to "<value>"
       When I run the delivery command with "step"
       Then the delivery command exited 0
-      And the remote of the delivery command holds "feat/gate-1a" at the commit "h1"
-      And the remote of the delivery command holds "main" at the commit "h1"
+      And the remote of the delivery command holds "deliver/step" at the commit "h1"
+      And the remote of the delivery command holds "main" at the commit "p0"
 
       Examples:
         | name                 | value            |
@@ -25,18 +25,18 @@ Feature: the closed environment of the delivery, under fresh inputs
 
     # expected because: « Une configuration injectée par l'environnement (GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS, GIT_CONFIG_GLOBAL) : une adresse de dépôt réécrite » is parried by « La liste fermée » (§14)
     Scenario: an address to push to injected by GIT_CONFIG_PARAMETERS: the push still reaches its own remote
-      Given a delivery command over a throwaway repository, the commit "h1" ahead of both branches at "p0"
+      Given a delivery command over a throwaway repository, the commit "h1" ahead of the destination at "p0"
       And the process of the delivery command has the variable "GIT_CONFIG_PARAMETERS" set to "'remote.origin.pushurl=/nowhere/remote.git'"
       When I run the delivery command with "step"
       Then the delivery command exited 0
-      And the remote of the delivery command holds "feat/gate-1a" at the commit "h1"
-      And the remote of the delivery command holds "main" at the commit "h1"
+      And the remote of the delivery command holds "deliver/step" at the commit "h1"
+      And the remote of the delivery command holds "main" at the commit "p0"
 
   Rule: the client of the forge receives the names of the list that the process set, and nothing else
 
     # expected because: « L'hôte lance git, et le client de la forge, avec une liste fermée de variables : celles dont le nom est dans la liste sont prises de l'environnement de l'hôte […] ; rien d'autre ne passe » (§14)
     Scenario Outline: a variable that is not in the list and changes what the client of the forge does is not given to it: <name>
-      Given a delivery command over a throwaway repository, the commit "h1" ahead of both branches at "p0"
+      Given a delivery command over a throwaway repository, the commit "h1" ahead of the destination at "p0"
       And the process of the delivery command has the variable "GH_TOKEN" set to "token-1"
       And the process of the delivery command has the variable "<name>" set to "<value>"
       When I run the delivery command with "step --until ci"
@@ -60,7 +60,7 @@ Feature: the closed environment of the delivery, under fresh inputs
 
     # expected because: the list of the delivery holds « ce qu'il faut pour s'identifier auprès de la forge sur un autre poste (SSH_AUTH_SOCK, XDG_CONFIG_HOME, GH_TOKEN, GITHUB_TOKEN) » (§14, table)
     Scenario Outline: a <name> that the process sets is given to the client of the forge
-      Given a delivery command over a throwaway repository, the commit "h1" ahead of both branches at "p0"
+      Given a delivery command over a throwaway repository, the commit "h1" ahead of the destination at "p0"
       And the process of the delivery command has the variable "GH_TOKEN" set to "token-1"
       And the process of the delivery command has the variable "<name>" set to "<value>"
       When I run the delivery command with "step --until ci"
@@ -74,7 +74,7 @@ Feature: the closed environment of the delivery, under fresh inputs
 
     # contract silent: on a name of the list set to the empty string; « The environment of a program: each of host.names that host.env sets » (closedEnvironment, host-process.ts), and a variable set to the empty string is set
     Scenario: a GH_TOKEN set to the empty string is still given to the client of the forge
-      Given a delivery command over a throwaway repository, the commit "h1" ahead of both branches at "p0"
+      Given a delivery command over a throwaway repository, the commit "h1" ahead of the destination at "p0"
       And the process of the delivery command has the variable "GH_TOKEN" set to ""
       When I run the delivery command with "step --until ci"
       Then the delivery command exited 0
@@ -226,7 +226,7 @@ Feature: the closed environment of the delivery, under fresh inputs
 
     # contract silent: on a handover in neither form; the delivery refuses before any act rather than guess
     Scenario Outline: a handover that is <handed> is refused before any act
-      Given a delivery command over a throwaway repository, the commit "h1" ahead of both branches at "p0"
+      Given a delivery command over a throwaway repository, the commit "h1" ahead of the destination at "p0"
       And the process of the delivery command has the variable "ARCHITECT_OS_HOST_XDG_CONFIG_HOME" set to "<handed>"
       When I run the delivery command with "step --until ci"
       Then the delivery command exited 2
@@ -246,7 +246,7 @@ Feature: the closed environment of the delivery, under fresh inputs
 
     # expected because: R1 of the decisions: the run's XDG_CONFIG_HOME must not reach the client of the forge of an admitted delivery
     Scenario: a delivery whose caller of ./aos had no XDG_CONFIG_HOME gives none to the client of the forge, though its process has the run's
-      Given a delivery command over a throwaway repository, the commit "h1" ahead of both branches at "p0"
+      Given a delivery command over a throwaway repository, the commit "h1" ahead of the destination at "p0"
       And the process of the delivery command has the variable "GH_TOKEN" set to "token-1"
       And the process of the delivery command has the variable "ARCHITECT_OS_HOST_XDG_CONFIG_HOME" set to "unset"
       When I run the delivery command with "step --until ci"

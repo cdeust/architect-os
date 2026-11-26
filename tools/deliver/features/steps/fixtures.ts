@@ -11,10 +11,14 @@ import type {
   Gate,
   Progress,
   Repository,
-  RuleSuite,
 } from '../../src/domain/ports.js';
 import type { HostEnvironment } from '../../src/infrastructure/host-process.js';
 import { REPOSITORY, type DeliverWorld } from './support.js';
+
+/** The branch every run of a contract scenario was started by the push to. */
+export const TRIAL = 'sentinel/gate-1a-step';
+/** The base of every pull request of a contract scenario. */
+export const DESTINATION = 'main';
 
 // What a contract scenario needs to put the world of a port in a state (a history, a remote, a verdict), which no port
 // can do. Each adapter comes with a fixture; the contracts of ports.feature run on them.
@@ -24,6 +28,8 @@ export interface RepositoryFixture {
   repository: Repository;
   /** `removal`: the lines the commit removed from a file, relative to its parent. */
   commit(label: string, parent: string | undefined, removal?: { path: string; lines: number }): void;
+  /** A commit that records the text at the path, besides what the commit of `commit` records. */
+  commitFile(label: string, parent: string | undefined, path: string, text: string): void;
   checkout(label: string): void;
   setRemote(branch: string, label: string): void;
   touchWorktree(): void;
@@ -39,10 +45,18 @@ export interface RepositoryFixture {
 
 export interface ForgeFixture {
   forge: Forge;
+  /** The run started by the push of the commit to `TRIAL`. */
   hasRun(hash: string, run: CiRun): void;
-  /** A completed run whose attempts executed these jobs, first attempt first. */
+  /** A completed run of the push to `TRIAL`, whose attempts executed these jobs, first attempt first. */
   hasAttempts(hash: string, id: number, attempts: CiJob[][]): void;
-  evaluated(branch: string, hash: string, suite: RuleSuite): void;
+  /** The forge sees the branch at the commit. */
+  hasBranch(branch: string, hash: string): void;
+  /** The forge does not see the branch, whatever it sees of others. */
+  lacksBranch(branch: string): void;
+  /** The forge sees the head at the commit, and a pull request opened as a draft from it to `DESTINATION`. */
+  hasDraft(head: string, hash: string): void;
+  /** The forge refuses every new pull request. */
+  refusesPullRequests(): void;
   /** The reruns asked, as `rerun <id>`, in order. */
   reruns(): string[];
 }

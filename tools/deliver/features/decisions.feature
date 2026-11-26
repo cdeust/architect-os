@@ -156,36 +156,28 @@ Feature: The decisions of the delivery command (pure: the trial branch, the stat
     Scenario: without a planned family, jobs named like lanes are not producers
       Then the completed gate with producers "a" and jobs "linux=success/runner, a=success/runner, macos=success/runner, lane-1:m=failure/runner/failed-step" is "green"
 
-  Rule: the plan of what to publish is the parent and the branches left, or a refusal
+  Rule: the plan of what to publish is the destination as the parent and whether the work branch is pushed, or a refusal
 
-    Scenario: every branch is at the parent
-      When the publication of "h1" is planned over the remotes "feat/gate-1a=p0, main=p0"
-      Then the plan is the parent "p0" and the branches "feat/gate-1a, main"
+    Scenario Outline: <case>
+      When the publication of "h1" is planned over the destination "<destination>" and the work branch "<work>", the commit descending from "<ancestors>"
+      Then the plan is the parent "<destination>", the work branch <push>
+      And the plan asked the ancestry of "<asked>"
 
-    Scenario: the first branch is already at the hash
-      When the publication of "h1" is planned over the remotes "feat/gate-1a=h1, main=p0"
-      Then the plan is the parent "p0" and the branches "main"
+      Examples:
+        | case                                                        | destination | work   | ancestors | push       | asked  |
+        | no work branch yet: it is pushed                            | p0          | absent | p0        | pushed     | p0     |
+        | a work branch at an ancestor: it is pushed forward          | p0          | w1     | p0, w1    | pushed     | p0, w1 |
+        | a work branch at the destination: it is pushed forward      | p0          | p0     | p0        | pushed     | p0, p0 |
+        | a work branch already at the hash: not pushed, still opened | p0          | h1     | p0        | not-pushed | p0     |
 
-    Scenario: the last branch is already at the hash
-      When the publication of "h1" is planned over the remotes "feat/gate-1a=p0, main=h1"
-      Then the plan is the parent "p0" and the branches "feat/gate-1a"
+    Scenario Outline: <case>
+      When the publication of "h1" is planned over the destination "<destination>" and the work branch "<work>", the commit descending from "<ancestors>"
+      Then the plan is refused as "<reason>"
+      And the plan asked the ancestry of "<asked>"
 
-    Scenario: every branch is at the hash
-      When the publication of "h1" is planned over the remotes "feat/gate-1a=h1, main=h1"
-      Then the plan is refused as "rien à livrer"
-
-    Scenario: the branches are at two different parents
-      When the publication of "h1" is planned over the remotes "feat/gate-1a=p0, main=p1"
-      Then the plan is refused as "les branches distantes diffèrent"
-
-    Scenario: one branch is at the hash and the other two at two different parents
-      When the publication of "h1" is planned over the remotes "a=h1, b=p0, c=p1"
-      Then the plan is refused as "les branches distantes diffèrent"
-
-    Scenario: one branch
-      When the publication of "h1" is planned over the remotes "main=p0"
-      Then the plan is the parent "p0" and the branches "main"
-
-    Scenario: one branch, already at the hash
-      When the publication of "h1" is planned over the remotes "main=h1"
-      Then the plan is refused as "rien à livrer"
+      Examples:
+        | case                                              | destination | work   | ancestors | reason                                              | asked  |
+        | a destination already at the hash                 | h1          | absent | p0        | rien à livrer                                       |        |
+        | a destination at the hash, the work branch behind | h1          | p0     | p0        | rien à livrer                                       |        |
+        | a destination the commit does not descend from    | p9          | absent | p0        | la branche distante n'est pas un ancêtre du commit  | p9     |
+        | a work branch the commit does not descend from    | p0          | w9     | p0        | la branche distante n'est pas un ancêtre du commit  | p0, w9 |

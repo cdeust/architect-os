@@ -5,10 +5,11 @@ import { fileURLToPath } from 'node:url';
 import { deliver } from './application/deliver.js';
 import type { DeliverConfig } from './domain/config.js';
 import { parseDeliverConfig } from './infrastructure/deliver-schema.js';
-import { entryLine, FileLog } from './infrastructure/file-log.js';
+import { FileLog } from './infrastructure/file-log.js';
 import { GhForge } from './infrastructure/gh-forge.js';
 import { GitRepository } from './infrastructure/git-repository.js';
 import { ProcessGate } from './infrastructure/process-gate.js';
+import { parseStepRecord } from './infrastructure/step-record.js';
 import { StreamProgress } from './infrastructure/stream-progress.js';
 import { TimerClock } from './infrastructure/timer-clock.js';
 
@@ -112,9 +113,11 @@ export async function runDeliver(deps: DeliverDependencies): Promise<number> {
       clock: new TimerClock(deps.setTimer),
       log: new FileLog(config.log, deps.env['ARCHITECT_OS_RUNTIME_ROOT']),
       progress: new StreamProgress(deps.stderr),
+      parseRecord: parseStepRecord,
     };
     const result = await deliver(options, config, ports);
-    deps.stdout.write(`${'ruleSuites' in result ? entryLine(result) : JSON.stringify(result)}\n`);
+    // The line the log keeps of a run that got past the preconditions, and the refusal of one that did not.
+    deps.stdout.write(`${JSON.stringify(result)}\n`);
     if (result.outcome !== 'stopped') return 0;
     deps.stderr.write(`stopped at ${result.phase}: ${result.reason}\n`);
     return 1;

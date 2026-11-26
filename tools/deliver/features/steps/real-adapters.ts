@@ -4,7 +4,7 @@ import { ProcessGate } from '../../src/infrastructure/process-gate.js';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { commitDistinctIgnorePaths } from '../../../../packages/sandbox/features/git-fixture.js';
-import type { DeliveryEntry, Repository, RuleSuite } from '../../src/domain/ports.js';
+import type { DeliveryEntry, Repository } from '../../src/domain/ports.js';
 import { GitRepository } from '../../src/infrastructure/git-repository.js';
 import { hostOf, temporaryDirectory } from './fixtures.js';
 import type { GitFixture } from './git-fixture.js';
@@ -131,6 +131,24 @@ When(
   },
 );
 
+Given(
+  'the delivery repository holds the commit {string} after {string} with a link at {string} to {string}',
+  function (label: string, parent: string, path: string, target: string) {
+    gitOf(this).commitWith(label, parent, { link: { path, target } });
+  },
+);
+
+Given(
+  'the delivery repository holds the commit {string} after {string} that records {string} executable, as the text {string}',
+  function (label: string, parent: string, path: string, text: string) {
+    gitOf(this).commitWith(label, parent, { file: { path, text, mode: 0o755 } });
+  },
+);
+
+When('the delivery worktree file {string} now holds {string}', function (path: string, text: string) {
+  writeFileSync(join(gitOf(this).work, path), text);
+});
+
 Then('the witness program of the nested delivery repository has not run', function () {
   assert.equal(gitOf(this).witnessRan(), false);
 });
@@ -150,6 +168,7 @@ const calls: Record<string, (repository: Repository) => unknown> = {
   deletedLines: (repository) => repository.deletedLines('aaa', 'bbb', 'docs/a.md'),
   push: (repository) => repository.push('aaa', 'main'),
   deleteRemoteBranch: (repository) => repository.deleteRemoteBranch('main'),
+  committedFile: (repository) => repository.committedFile('aaa', 'steps/a/record.json'),
 };
 
 const callOf = (name: string): ((repository: Repository) => unknown) => {
@@ -275,23 +294,16 @@ Given('the delivery log file already holds the line {string}', function (line: s
   logOf(this).prepare(`${line}\n`);
 });
 
-When('I append to the delivery log an entry with the rule suites {string}', function (suites: string) {
+When('I append to the delivery log an entry with the pull request {string}', function (pull: string) {
   const entry: DeliveryEntry = {
-    outcome: 'ready',
+    outcome: 'delivered',
     hash: '0'.repeat(40),
     trial: 'sentinel/gate-1a-x',
     parent: '1'.repeat(40),
     ci: { attempts: 1, polls: 1 },
     gate: undefined,
     published: [],
-    ruleSuites: new Map(
-      suites === 'none'
-        ? []
-        : suites.split(',').map((pair) => {
-            const [branch, suite] = pair.split('=');
-            return [branch as string, suite as RuleSuite] as const;
-          }),
-    ),
+    ...(pull === 'none' ? {} : { pullRequest: JSON.parse(pull) as DeliveryEntry['pullRequest'] }),
   };
   logOf(this).log.append(entry);
 });

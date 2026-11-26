@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { ciState } from '../../src/domain/ci.js';
 import { GhForge } from '../../src/infrastructure/gh-forge.js';
 import { REPO, type GhForgeFixture } from './gh-fixture.js';
-import { hostOf, temporaryDirectory } from './fixtures.js';
+import { DESTINATION, TRIAL, hostOf, temporaryDirectory } from './fixtures.js';
 import type { StreamProgressFixture } from './process-fixtures.js';
 import { Given, Then, When, type DeliverWorld } from './support.js';
 
@@ -29,7 +29,9 @@ Given(
 Given('the gh forge finds the run {int} of {string}', function (id: number, hash: string) {
   ghOf(this).answers('runs', hash, {
     stdout: JSON.stringify({
-      workflow_runs: [{ id, name: 'gate', head_sha: hash, status: 'completed' }],
+      workflow_runs: [
+        { id, name: 'gate', head_sha: hash, event: 'push', head_branch: TRIAL, status: 'completed' },
+      ],
     }),
   });
 });
@@ -42,22 +44,22 @@ Then(
   'the effective jobs of the gh run for {string} have the state {string}',
   function (names: string, state: string) {
     const required = names.split(', ');
-    const run = ghOf(this).forge.run(COMMIT, 'gate', required);
+    const run = ghOf(this).forge.run(COMMIT, 'gate', TRIAL, required);
     assert.equal(ciState(run, required), state);
   },
 );
 
 Then('the gh run for {string} is:', function (names: string, text: string) {
-  const run = ghOf(this).forge.run(COMMIT, 'gate', names.split(', '));
+  const run = ghOf(this).forge.run(COMMIT, 'gate', TRIAL, names.split(', '));
   assert.deepEqual(run, JSON.parse(text));
 });
 
 Then('the unfiltered gh run is:', function (text: string) {
-  assert.deepEqual(ghOf(this).forge.run(COMMIT, 'gate'), JSON.parse(text));
+  assert.deepEqual(ghOf(this).forge.run(COMMIT, 'gate', TRIAL), JSON.parse(text));
 });
 
 Then('the gh run reports the first failed user step as {string}', function (name: string) {
-  const job = ghOf(this).forge.run(COMMIT, 'gate')?.jobs[0];
+  const job = ghOf(this).forge.run(COMMIT, 'gate', TRIAL)?.jobs[0];
   assert.ok(job?.failedStep);
   assert.equal(job.firstStepFailure, name || undefined);
 });
@@ -74,16 +76,47 @@ function attempt(world: DeliverWorld, call: () => unknown): void {
 }
 
 When('I ask the gh forge for a delivery decision', function () {
-  attempt(this, () => ghOf(this).forge.run(COMMIT, 'gate', ['linux']));
+  attempt(this, () => ghOf(this).forge.run(COMMIT, 'gate', TRIAL, ['linux']));
 });
 
 When('I ask the gh forge for the run', function () {
-  attempt(this, () => ghOf(this).forge.run(COMMIT, 'gate'));
+  attempt(this, () => ghOf(this).forge.run(COMMIT, 'gate', TRIAL));
 });
 
-When('I ask the gh forge for the rule suite of {string}', function (branch: string) {
-  attempt(this, () => ghOf(this).forge.ruleSuite(branch, COMMIT));
+When('I ask the gh forge for a pull request from {string}', function (head: string) {
+  attempt(this, () => {
+    this.state['ghPull'] = ghOf(this).forge.openPullRequest({
+      head,
+      base: DESTINATION,
+      hash: COMMIT,
+      title: 'Deliver the step step',
+      body: 'line one\n@someone',
+    });
+  });
 });
+
+Then('the gh forge refused the pull request because {string}', function (reason: string) {
+  assert.equal(this.state['portFailure'], undefined);
+  assert.deepEqual(this.state['ghPull'], { ok: false, reason });
+});
+
+Then('the gh forge answered the pull request {string}', function (expected: string) {
+  assert.equal(this.state['portFailure'], undefined);
+  assert.deepEqual(this.state['ghPull'], JSON.parse(expected));
+});
+
+Then(
+  'the gh client was asked for a new pull request with the arguments, each as JSON:',
+  function (expected: string) {
+    const argv = ghOf(this)
+      .createdArguments()
+      .map((argument) => JSON.stringify(argument));
+    assert.deepEqual(
+      argv,
+      expected.split('\n').filter((line) => line !== ''),
+    );
+  },
+);
 
 When('I ask the gh forge to rerun the run {float}', function (id: number) {
   attempt(this, () => ghOf(this).forge.rerunFailed(id));
@@ -98,8 +131,9 @@ Then('the message of the gh forge failure holds nothing of {string}', function (
 });
 
 Then('the gh client was asked:', function (expected: string) {
+  // A call whose argument holds a line break takes as many lines of the text.
   assert.deepEqual(
-    ghOf(this).asked(),
+    ghOf(this).asked().join('\n').split('\n'),
     expected.split('\n').filter((line) => line !== ''),
   );
 });
@@ -116,3 +150,7 @@ Then(
     assert.equal(written.split('\n').length, count + 1);
   },
 );
+
+Then('the gh client was asked for {word} new pull request', function (count: string) {
+  assert.equal(ghOf(this).created().length, count === 'no' ? 0 : 1);
+});

@@ -5,7 +5,7 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
     Scenario: the file committed in this repository is accepted by the schema
       When the committed deliver config is loaded
       Then the deliver config is accepted
-      And the accepted deliver config holds the branches "feat/gate-1a, main" and the required jobs "gate-linux, gate-macos"
+      And the accepted deliver config asks for a pull request to "main" from a branch under "deliver/", titled "Deliver the step ${name}", and requires the jobs "gate-linux, gate-macos"
       And the committed deliver config names the section of its design
       And the committed deliver config says what its environment key is
       And the committed deliver config gives the host variables of git and of the forge client
@@ -205,8 +205,12 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
 
       Examples:
         | field          | value                                                  |
-        | branches       | ["a"]                                                  |
-        | branches       | ["a","b","c","d"]                                      |
+        | destination    | "a"                                                    |
+        | destination    | "release/main"                                         |
+        | workPrefix     | "w-"                                                   |
+        | workPrefix     | "feat/"                                                |
+        | pullRequestTitle | "${name}"                                            |
+        | pullRequestTitle | "${name}: a title of sixty-four characters exactly, no more, and " |
         | remote         | "a"                                                    |
         | remote         | "a.b_c/d-e"                                            |
         | trialPrefix    | "sentinel/"                                            |
@@ -231,8 +235,6 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | pollSeconds    | 300                                                    |
         | ciPolls        | 1                                                      |
         | ciPolls        | 600                                                    |
-        | ruleSuitePolls | 1                                                      |
-        | ruleSuitePolls | 60                                                     |
         | workflow       | "Gate CI (linux)"                                      |
         | environment    | ["PATH"]                                               |
         | environment    | ["GITHUB_TOKEN","SSH_AUTH_SOCK","XDG_CONFIG_HOME","TMPDIR"] |
@@ -267,7 +269,9 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | description    |
         | remote         |
         | repository     |
-        | branches       |
+        | destination    |
+        | workPrefix     |
+        | pullRequestTitle |
         | trialPrefix    |
         | workflow       |
         | requiredJobs   |
@@ -279,7 +283,6 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | ciAttempts     |
         | pollSeconds    |
         | ciPolls        |
-        | ruleSuitePolls |
 
     Scenario Outline: a value that breaks a rule
       Given a deliver config of the base form
@@ -298,13 +301,23 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | remote         | "origin\\n"                     | $.remote                                           |
         | remote         | "--upload-pack=x"              | $.remote                                           |
         | remote         | 1                              | $.remote                                           |
-        | branches       | []                             | $.branches                                         |
-        | branches       | ["a","b","c","d","e"]          | $.branches                                         |
-        | branches       | ["a","a"]                      | $.branches the branches are all different          |
-        | branches       | ["-a"]                         | $.branches.0                                       |
-        | branches       | ["a","b..c"]                   | $.branches.1 a name holds no ..                    |
-        | branches       | ["a b"]                        | $.branches.0                                       |
-        | branches       | "main"                         | $.branches                                         |
+        | destination    | ""                             | $.destination                                      |
+        | destination    | "-main"                        | $.destination                                      |
+        | destination    | "ma..in"                       | $.destination a name holds no ..                   |
+        | destination    | "ma in"                        | $.destination                                      |
+        | destination    | ["main"]                       | $.destination                                      |
+        | workPrefix     | "deliver"                      | $.workPrefix a prefix ends with - or /             |
+        | workPrefix     | ""                             | $.workPrefix                                       |
+        | workPrefix     | "-deliver/"                    | $.workPrefix                                       |
+        | workPrefix     | "de..liver/"                   | $.workPrefix a name holds no ..                    |
+        | pullRequestTitle | "Deliver the step"           | $.pullRequestTitle the title holds ${name} once    |
+        | pullRequestTitle | "${name} and ${name}"        | $.pullRequestTitle the title holds ${name} once    |
+        | pullRequestTitle | "@owner ${name}"             | $.pullRequestTitle the title holds no @, # nor backtick |
+        | pullRequestTitle | "${name} #1"                 | $.pullRequestTitle the title holds no @, # nor backtick |
+        | pullRequestTitle | "`${name}`"                  | $.pullRequestTitle the title holds no @, # nor backtick |
+        | pullRequestTitle | ""                           | $.pullRequestTitle                                 |
+        | pullRequestTitle | 1                            | $.pullRequestTitle                                 |
+        | pullRequestTitle | "${name}: a title of sixty-five characters exactly, no more, and n" | $.pullRequestTitle |
         | trialPrefix    | "sentinel/gate-1a"             | $.trialPrefix a prefix ends with - or /            |
         | trialPrefix    | "-sentinel/"                   | $.trialPrefix                                      |
         | trialPrefix    | "sen..tinel/"                  | $.trialPrefix a name holds no ..                   |
@@ -321,12 +334,17 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | repository     | "../b"                         | $.repository a segment of the repository is neither . nor .. |
         | repository     | "a/."                          | $.repository a segment of the repository is neither . nor .. |
         | repository     | "a/.."                         | $.repository a segment of the repository is neither . nor .. |
-        | branches       | ["a\\n"]                       | $.branches.0                                       |
+        | destination    | "main\\n"                       | $.destination                                      |
+        | pullRequestTitle | "${name}\\n"                   | $.pullRequestTitle                                 |
         | trialPrefix    | "sentinel/\\n"                 | $.trialPrefix                                      |
-        | trialPrefix    | "feat/"                        | $.trialPrefix a trial branch is never a branch to publish |
-        | trialPrefix    | "feat/gate-"                   | $.trialPrefix a trial branch is never a branch to publish |
-        | branches       | ["feat/gate-1a","sentinel/gate-1a-"] | $.trialPrefix a trial branch is never a branch to publish |
-        | branches       | ["feat/gate-1a","sentinel/gate-1a-x"] | $.trialPrefix a trial branch is never a branch to publish |
+        | trialPrefix    | "deliver/"                     | $.workPrefix a work branch is never a trial branch |
+        | trialPrefix    | "deliver/x-"                   | $.workPrefix a work branch is never a trial branch |
+        | workPrefix     | "sentinel/"                    | $.workPrefix a work branch is never a trial branch |
+        | workPrefix     | "sentinel/gate-1a-"            | $.workPrefix a work branch is never a trial branch |
+        | workPrefix     | "sentinel/gate-1a-work/"       | $.workPrefix a work branch is never a trial branch |
+        | workPrefix     | "de-liver"                     | $.workPrefix a prefix ends with - or /             |
+        | destination    | "sentinel/gate-1a-main"        | $.destination the destination is never a trial branch nor a work branch |
+        | destination    | "deliver/main"                 | $.destination the destination is never a trial branch nor a work branch |
         | workflow       | ""                             | $.workflow                                         |
         | workflow       | "ga\u0001te"                   | $.workflow a label is 1 to 64 characters           |
         | workflow       | "ga\u007fte"                   | $.workflow a label is 1 to 64 characters           |
@@ -395,8 +413,6 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | pollSeconds    | 301                            | $.pollSeconds                                      |
         | ciPolls        | 0                              | $.ciPolls                                          |
         | ciPolls        | 601                            | $.ciPolls                                          |
-        | ruleSuitePolls | 0                              | $.ruleSuitePolls                                   |
-        | ruleSuitePolls | 61                             | $.ruleSuitePolls                                   |
 
     Scenario Outline: a label of 65 characters
       Given a deliver config of the base form
@@ -453,6 +469,6 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
     Scenario: two faults
       Given a deliver config of the base form
       And the deliver config field "remote" is set to '"or..gin"'
-      And the deliver config field "branches" is set to '["a","a"]'
+      And the deliver config field "workPrefix" is set to '"deliver"'
       When the deliver config is parsed
-      Then the deliver config is refused with the reason "$.remote a name holds no ..; $.branches the branches are all different"
+      Then the deliver config is refused with the reason "$.remote a name holds no ..; $.workPrefix a prefix ends with - or /"

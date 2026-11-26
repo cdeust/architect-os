@@ -1,7 +1,7 @@
 import { gateRuntime } from './gate-runtime.js';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { DeliveryEntry, RuleSuite } from '../../src/domain/ports.js';
+import type { DeliveryEntry } from '../../src/domain/ports.js';
 import { FileLog } from '../../src/infrastructure/file-log.js';
 import { ProcessGate } from '../../src/infrastructure/process-gate.js';
 import { TimerClock } from '../../src/infrastructure/timer-clock.js';
@@ -102,12 +102,7 @@ export function fileLog(world: DeliverWorld): FileLogFixture {
   mkdirSync(join(home, 'state'), { mode: 0o700 });
   const path = join(home, 'state/deliveries.jsonl');
   const text = (): string => readFileSync(path, 'utf8');
-  const parse = (line: string): DeliveryEntry => {
-    const read = JSON.parse(line) as Omit<DeliveryEntry, 'ruleSuites'> & {
-      ruleSuites: Record<string, RuleSuite>;
-    };
-    return { ...read, ruleSuites: new Map(Object.entries(read.ruleSuites)) };
-  };
+  const parse = (line: string): DeliveryEntry => JSON.parse(line) as DeliveryEntry;
   return {
     log: new FileLog('${state}/deliveries.jsonl', home),
     directory: dirname(path),

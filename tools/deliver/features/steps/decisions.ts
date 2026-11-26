@@ -81,26 +81,35 @@ Then(
   },
 );
 
-/** `feat/gate-1a=p0, main=p0`. */
-const remotes = (text: string): { branch: string; head: string }[] =>
-  text.split(', ').map((spec) => {
-    const [branch, head] = spec.split('=') as [string, string];
-    return { branch, head };
-  });
-
+/**
+ * The plan of `hash` over a destination and a work branch (`absent`: the remote has none), where `ancestors` (`p0, w1`)
+ * are the commits the hash descends from; the commits whose ancestry is asked are kept, in order.
+ */
 When(
-  'the publication of {string} is planned over the remotes {string}',
-  function (hash: string, text: string) {
-    this.state['plan'] = planPublication(hash, remotes(text));
+  'the publication of {string} is planned over the destination {string} and the work branch {string}, the commit descending from {string}',
+  function (hash: string, destination: string, work: string, ancestors: string) {
+    const descending = ancestors === '' ? [] : ancestors.split(', ');
+    const asked: string[] = [];
+    this.state['plan'] = planPublication(
+      hash,
+      destination,
+      work === 'absent' ? undefined : work,
+      (ancestor) => {
+        asked.push(ancestor);
+        return descending.includes(ancestor);
+      },
+    );
+    this.state['planAsked'] = asked;
   },
 );
 
-Then(
-  'the plan is the parent {string} and the branches {string}',
-  function (parent: string, branches: string) {
-    assert.deepEqual(this.state['plan'], { ok: true, parent, publish: branches.split(', ') } satisfies Plan);
-  },
-);
+Then('the plan is the parent {string}, the work branch {word}', function (parent: string, push: string) {
+  assert.deepEqual(this.state['plan'], { ok: true, parent, push: push === 'pushed' } satisfies Plan);
+});
+
+Then('the plan asked the ancestry of {string}', function (asked: string) {
+  assert.deepEqual(this.state['planAsked'], asked === '' ? [] : asked.split(', '));
+});
 
 Then('the plan is refused as {string}', function (reason: string) {
   assert.deepEqual(this.state['plan'], { ok: false, reason });

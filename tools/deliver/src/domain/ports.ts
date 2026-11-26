@@ -14,10 +14,12 @@ export type Reason =
   | 'empreinte de commit invalide'
   | 'branche distante absente'
   | "la branche distante n'est pas un ancêtre du commit"
-  | 'les branches distantes diffèrent'
   | 'rien à livrer'
   | 'un fichier en ajout seul a perdu des lignes'
   | "nom de branche d'essai refusé"
+  | "la destination n'accepte qu'une pull request"
+  | "enregistrement d'étape absent"
+  | "enregistrement d'étape refusé"
   | "push de la branche d'essai refusé"
   | 'porte rouge'
   | 'le verdict de la porte ne nomme pas ce commit'
@@ -26,10 +28,29 @@ export type Reason =
   | 'CI sans réponse'
   | 'une branche distante a bougé'
   | 'push refusé'
-  | "le ruleset n'a pas rendu pass"
-  | 'évaluation du ruleset introuvable';
+  | PullRequestRefusal;
 
-export type RuleSuite = 'pass' | 'fail' | 'bypass';
+/** Why the forge opened no pull request: a closed list (docs/design/exigences-spec.md, §4). */
+export type PullRequestRefusal =
+  | 'la forge ne voit pas la branche de travail'
+  | "la tête de la branche de travail n'est pas le commit livré"
+  | 'une pull request en brouillon est ouverte pour cette tête'
+  | 'la forge a refusé la pull request';
+
+/** What `Forge.openPullRequest` is asked: every value comes from the descriptive file, the commit or the host. */
+export interface PullRequestRequest {
+  /** The branch already pushed, which holds `hash`. */
+  head: string;
+  /** The branch the pull request asks to change: the destination of the descriptive file. */
+  base: string;
+  /** The commit the head must be at; nothing is opened otherwise. */
+  hash: string;
+  title: string;
+  body: string;
+}
+
+export type PullRequestResult =
+  { ok: true; number: number; url: string; created: boolean } | { ok: false; reason: PullRequestRefusal };
 
 export interface CiJob {
   name: string;
@@ -74,15 +95,32 @@ export interface Repository {
   deletedLines(from: string, to: string, path: string): number;
   /** Never forced: `refused` when the remote branch is not an ancestor of `hash`, and then it is left as it was. */
   push(hash: string, branch: string): 'pushed' | 'refused';
+  /**
+   * The text of the regular file at `path` in the tree of the commit `hash`, as that commit records it, whatever the
+   * checkout holds; undefined when the commit has no regular file there.
+   */
+  committedFile(hash: string, path: string): string | undefined;
   deleteRemoteBranch(branch: string): void;
 }
 
 export interface Forge {
-  /** 'all' reads the effective jobs of every numbered attempt when a family has no fixed membership. */
-  run(hash: string, workflow: string, jobNames?: readonly string[] | 'all'): CiRun | undefined;
+  /**
+   * The run of `workflow` started by the push of `hash` to `branch`: no run of another event or of another branch, even
+   * at the same commit. 'all' reads the effective jobs of every numbered attempt when a family has no fixed membership.
+   */
+  run(
+    hash: string,
+    workflow: string,
+    branch: string,
+    jobNames?: readonly string[] | 'all',
+  ): CiRun | undefined;
   rerunFailed(id: number): void;
-  /** The evaluation of the push that brought `hash` to `branch`; undefined while there is none (or nobody pushed). */
-  ruleSuite(branch: string, hash: string): RuleSuite | undefined;
+  /**
+   * Opens a pull request from `head` to `base`, never as a draft, and never merges it. The open pull request of the same
+   * head and base is given back, not doubled (`created` false). Nothing is opened when the forge does not see `head`
+   * at `hash`.
+   */
+  openPullRequest(request: PullRequestRequest): PullRequestResult;
 }
 
 export interface Gate {
@@ -108,8 +146,8 @@ export interface DeliveryEntry {
   gate: 'reused' | 'ran' | undefined;
   /** The branches pushed by this run, in order. */
   published: string[];
-  /** The evaluation read for each branch of the file, pushed by this run or already at the hash. */
-  ruleSuites: Map<string, RuleSuite>;
+  /** The pull request the run opened or found, and the SHA-256 of the body it was asked with. */
+  pullRequest?: { number: number; url: string; created: boolean; body: string };
 }
 
 export interface DeliveryLog {

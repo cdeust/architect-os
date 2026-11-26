@@ -1,8 +1,10 @@
 Feature: npm run deliver, the command as a whole (the real adapters over a throwaway repository with a bare remote, a scripted client of the forge, the fixture gate and a temporary home)
-  The commit "h1" is ahead of both branches, at "p0". The trial branch is "sentinel/gate-1a-step". No scenario reaches the network: the remote is a directory.
+  The commit "h1" is ahead of the destination "main", at "p0", and records steps/step/record.json. The trial branch is
+  "sentinel/gate-1a-step", the work branch "deliver/step". No scenario reaches the network: the remote is a directory,
+  and the client of the forge a script that answers from a file.
 
   Background:
-    Given a delivery command over a throwaway repository, the commit "h1" ahead of both branches at "p0"
+    Given a delivery command over a throwaway repository, the commit "h1" ahead of the destination at "p0"
 
   Rule: a run that goes to its end
 
@@ -36,12 +38,12 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       And the delivery command read only job attempts "2, 1" in order
       And the log of the delivery command holds 0 lines
 
-    Scenario: a delivery to its end
+    Scenario: a delivery to its end: the work branch pushed, a pull request opened to main, and main never pushed
       When I run the delivery command with "step"
       Then the delivery command exited 0
       And the delivery command printed on its standard output:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"ran","published":["deliver/step"],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"BODY"}}
         """
       And the delivery command wrote on its standard error:
         """
@@ -52,22 +54,37 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
         publication
         rangement
         """
-      And the remote of the delivery command holds "feat/gate-1a" at the commit "h1"
-      And the remote of the delivery command holds "main" at the commit "h1"
+      And the remote of the delivery command holds "deliver/step" at the commit "h1"
+      And the remote of the delivery command holds "main" at the commit "p0"
       And the remote of the delivery command has no branch "sentinel/gate-1a-step"
       And the log of the delivery command holds 1 lines
+      And the scripted forge of the delivery command was asked for 1 new pull request
+      And every new pull request the delivery command asked for is asked as no draft
+      And the delivery command asked for a pull request from "deliver/step" to "main" titled "Deliver the step step", with the body of the record
+
+    Scenario: the same delivery again: no second pull request, the one opened is found
+      When I run the delivery command with "step"
+      And I run the delivery command with "step"
+      Then the delivery command exited 0
+      And the delivery command printed on its standard output:
+        """
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"reused","published":[],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":false,"body":"BODY"}}
+        """
+      And the scripted forge of the delivery command was asked for 1 new pull request
+      And the remote of the delivery command holds "main" at the commit "p0"
+      And the log of the delivery command holds 2 lines
 
     Scenario: without INIT_CWD, the working directory is the worktree
       When I run the delivery command with "step" from the worktree, without INIT_CWD
       Then the delivery command exited 0
-      And the remote of the delivery command holds "main" at the commit "h1"
+      And the remote of the delivery command holds "deliver/step" at the commit "h1"
 
-    Scenario Outline: until the CI: the branches are not moved and the trial branch stays
+    Scenario Outline: until the CI: no branch is moved, no pull request is asked, and the trial branch stays
       When I run the delivery command with "<arguments>"
       Then the delivery command exited 0
       And the delivery command printed on its standard output:
         """
-        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"ran","published":[]}
         """
       And the delivery command wrote on its standard error:
         """
@@ -76,8 +93,9 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
         porte
         CI
         """
-      And the remote of the delivery command holds "feat/gate-1a" at the commit "p0"
+      And the remote of the delivery command has no branch "deliver/step"
       And the remote of the delivery command holds "main" at the commit "p0"
+      And the scripted forge of the delivery command was asked for 0 new pull requests
       And the remote of the delivery command holds "sentinel/gate-1a-step" at the commit "h1"
       And the log of the delivery command holds 1 lines
 
@@ -93,9 +111,10 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Then the delivery command exited 0
       And the delivery command printed on its standard output:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"reused","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"reused","published":["deliver/step"],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"BODY"}}
         """
-      And the remote of the delivery command holds "main" at the commit "h1"
+      And the remote of the delivery command holds "deliver/step" at the commit "h1"
+      And the remote of the delivery command holds "main" at the commit "p0"
       And the remote of the delivery command has no branch "sentinel/gate-1a-step"
       And the log of the delivery command holds 2 lines
 
@@ -107,7 +126,7 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Then the delivery command exited 1
       And the delivery command printed on its standard output:
         """
-        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"gate":"ran","published":[],"phase":"porte","reason":"porte rouge","ruleSuites":{}}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"gate":"ran","published":[],"phase":"porte","reason":"porte rouge"}
         """
       And the delivery command wrote on its standard error:
         """
@@ -232,15 +251,15 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Given the process of the delivery command has a GIT_DIR that names another repository
       When I run the delivery command with "step"
       Then the delivery command exited 0
-      And the remote of the delivery command holds "feat/gate-1a" at the commit "h1"
-      And the remote of the delivery command holds "main" at the commit "h1"
+      And the remote of the delivery command holds "deliver/step" at the commit "h1"
+      And the remote of the delivery command holds "main" at the commit "p0"
 
     Scenario: a rewrite of the address of the remote injected by GIT_CONFIG_COUNT: the push still reaches its own remote, and the other receives nothing
       Given the process of the delivery command injects by GIT_CONFIG_COUNT the rewrite of its remote to another remote
       When I run the delivery command with "step"
       Then the delivery command exited 0
-      And the remote of the delivery command holds "feat/gate-1a" at the commit "h1"
-      And the remote of the delivery command holds "main" at the commit "h1"
+      And the remote of the delivery command holds "deliver/step" at the commit "h1"
+      And the remote of the delivery command holds "main" at the commit "p0"
       And the other remote of the delivery command holds no branch
 
     Scenario: a witness program named as GIT_SSH_COMMAND and GIT_ASKPASS is not run by the delivery

@@ -22,6 +22,8 @@ export class InMemoryRepository implements Repository {
   private fetched = new Map<string, string>();
   /** The parents of a commit. */
   private readonly parents = new Map<string, Set<string>>();
+  /** `<hash> <path>` to the text of the regular file the commit records there. */
+  readonly files = new Map<string, string>();
   /** `<hash> <path>` to the lines that commit removed from the file, relative to its parent. */
   private readonly removed = new Map<string, number>();
   private fetches = 0;
@@ -96,6 +98,11 @@ export class InMemoryRepository implements Repository {
       return 'refused';
     this.remotes.set(branch, hash);
     return 'pushed';
+  }
+
+  committedFile(hash: string, path: string): string | undefined {
+    this.journal.record('committedFile', hash, path);
+    return this.files.get(`${hash} ${path}`);
   }
 
   deleteRemoteBranch(branch: string): void {
