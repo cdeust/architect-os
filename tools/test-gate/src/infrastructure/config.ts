@@ -15,6 +15,17 @@ export const GateConfigSchema = z.strictObject({
   production: FileSet,
   features: FileSet,
   jobs: z.record(Glob, z.strictObject({ features: z.array(Glob).min(1), mutation: z.boolean() })),
+  /**
+   * The destination the gate judges the head against, as the local repository knows it: the reference whose commit is
+   * the first parent of the merge GitHub would build (src/domain/destination.ts). A remote-tracking reference only.
+   */
+  destination: z
+    .string()
+    .regex(/^refs\/remotes\/[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+$/)
+    .refine(
+      (value) => !value.includes('..') && !value.endsWith('/') && !value.endsWith('.lock'),
+      'a reference name',
+    ),
   /** The mutation debt registry (rule 6), relative to the repository root. */
   debt: Path,
   /** Rule 7: the module whose mutants have a known status, and the status of every mutant of each function. */

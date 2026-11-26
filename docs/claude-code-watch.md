@@ -15,6 +15,20 @@ The state is the register, not a table here. `./aos -- npm run watch -- check` c
 
 No source leaves the register because its changes led to no decision: it costs one comparison a week, and taking it out would mean reading it whole again the day it matters (the owner's decision, 17 November 2026).
 
+## anthropics/claude-code-action from v1.0.271 to v1.0.290
+
+Read on 26 November 2026: the 40 commits from `4fa93a88` to `4411a9e9` (v1.0.290, Claude Code 2.1.332 and Agent SDK 0.3.332), in the sources they change, for what the three workflows that use the action (`claude.yml`, `claude-review.yml`, `claude-security-review.yml`) rely on. One pin for the three.
+
+| Change                                                                                                                                 | Class               | Decision                                                                                     |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------- |
+| Auto mode by default unless `allowed_bots` or `allowed_non_write_users` is set (#2004, `src/modes/permission-mode.ts`)                 | Pertinent, security | `--permission-mode default` in both reviews, and `disableAutoMode` in their managed settings |
+| With `allowed_bots`, the token is no longer written in the origin URL of `.git/config`, a credential helper reads it (#2005)           | Pertinent, security | Taken with the pin; the managed settings deny `Read(.git/**)` whatever the action writes     |
+| Fork pull requests skipped by default, `allow_fork_prs` (#2092, #2094, #2114)                                                          | Pertinent           | Taken with the pin; the job conditions already keep forks out                                |
+| The base branch's version of the files the workflow's inputs name, of AGENTS.md and of npm and Bun config (#2099, #2059, #2020, #2026) | Pertinent, security | Taken with the pin                                                                           |
+| A session cannot leave programs for later steps; the session stops and the app token is revoked on cancel (#2003, #2112)               | Pertinent, security | Taken with the pin                                                                           |
+| git wrappers (add, commit, push, rm) for tag mode, deny rules kept for them (#2006, #2018, #2033)                                      | Not applicable      | The managed settings of the review deny `Bash`, so no wrapper runs                           |
+| Buffered inline comments posted in the run step (#2122)                                                                                | Pertinent           | Taken with the pin; the comment guard runs before the call that buffers                      |
+
 ## anthropics/claude-code-security-review at 0c6a49f
 
 Read on 25 November 2026, whole, at `0c6a49f1fa56a1d472575da86a94dbc1edb78eda` (the head of `main`; the repository has no release): `action.yml`, `claudecode/github_action_audit.py`, `claude_api_client.py`, `findings_filter.py`, `prompts.py` and its comment script `comment-pr-findings.js`, for what the security review of the platform would run, with which rights, and how it authenticates. Three of its files enter the register (`security-review-action`, `security-review-prompt`, `security-review-filter`); their digests are those of the files read.

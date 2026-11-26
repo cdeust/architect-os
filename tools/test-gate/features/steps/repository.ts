@@ -7,8 +7,8 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -20,7 +20,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { Given as CucumberGiven, Then as CucumberThen, When as CucumberWhen } from '@cucumber/cucumber';
 import { parseRawDiff } from '../../src/domain/diff.js';
-import { mayHoldProduction } from '../../src/domain/layout.js';
+import { isProduction, mayHoldProduction } from '../../src/domain/layout.js';
 import { parseGateConfig, type GateConfig } from '../../src/infrastructure/config.js';
 import { changedFiles, CONFIG_PATH, runGate } from '../../src/infrastructure/gate.js';
 import { git, gitWithOptions, GitRepository } from '../../src/infrastructure/git.js';
@@ -47,6 +47,9 @@ export const DEBT_PATH = 'mutation-debt.json';
  * A disposable git repository laid out like tools/test-gate/fixtures/gate.json expects (specs/, src/, mod/<name>/).
  * Real git, never this repository: commits are made with a fixed identity, no hook, no signature.
  */
+/** The destination reference of the fixture configuration (tools/test-gate/fixtures/gate.json). */
+const DESTINATION = 'refs/remotes/origin/main';
+
 export class GateRepository {
   readonly dir: string;
   output = '';
@@ -121,6 +124,16 @@ export class GateRepository {
       '-m',
       message,
     ]);
+    // The destination the gate judges against, as `git fetch` would leave it. The first parent is the destination;
+    // any other commit is a commit on it, as a pull request of one commit or a delivery: the destination moves to its
+    // first parent, so that each is judged against the one before. A branch commit leaves the destination where it
+    // is (destination.feature).
+    if (message === 'first parent') git(this.dir, ['update-ref', DESTINATION, 'HEAD']);
+    else if (
+      message !== 'branch' &&
+      git(this.dir, ['rev-list', '--parents', '-n', '1', 'HEAD']).trim().includes(' ')
+    )
+      git(this.dir, ['update-ref', DESTINATION, 'HEAD^1']);
   }
 
   /** The configuration of this repository, the layout `changedFiles` takes its production files from. */
@@ -136,10 +149,14 @@ export class GateRepository {
 
   /** `<head>` and `<parent>` in an expected text stand for the SHAs of this repository. */
   tokens(text: string): string {
-    if (!text.includes('<head>') && !text.includes('<parent>')) return text;
+    if (!['<head>', '<parent>', '<destination>'].some((token) => text.includes(token))) return text;
     const parent =
       git(this.dir, ['rev-list', '--parents', '-n', '1', 'HEAD']).trim().split(' ')[1] ?? 'NO-PARENT';
-    return text.replaceAll('<head>', this.rev('HEAD')).replaceAll('<parent>', parent);
+    const destination = text.includes('<destination>') ? this.rev(DESTINATION) : '';
+    return text
+      .replaceAll('<head>', this.rev('HEAD'))
+      .replaceAll('<parent>', parent)
+      .replaceAll('<destination>', destination);
   }
 
   /** An explicit test adapter over this scenario's disposable Git fixture. */
@@ -230,6 +247,10 @@ Given(
 
 Given('the gate first parent is committed', function () {
   repository(this).commit('first parent');
+});
+
+Given('the gate branch is committed', function () {
+  repository(this).commit('branch');
 });
 
 Given('the gate head is committed', function () {
@@ -664,6 +685,11 @@ Then(
   },
 );
 
+Given('the target of the link {string} changes its file {string}', function (link: string, file: string) {
+  const target = realpathSync(repository(this).path(link));
+  writeFileSync(join(target, file), 'export const witness = 2 + 3;\n');
+});
+
 Given('the gate workspace has a directory where the source {string} is expected', function (path: string) {
   mkdirSync(repository(this).path(path), { recursive: true });
 });
@@ -768,6 +794,17 @@ Then(
   'the directory {string} may hold a production file of the gate configuration: {word}',
   function (path: string, may: string) {
     assert.equal(mayHoldProduction(repository(this).layout(), path), may === 'yes');
+  },
+);
+
+Then(
+  'the path {string} is a production file of the committed gate configuration: {word}',
+  function (path: string, is: string) {
+    const config = parseGateConfig(
+      readFileSync(fileURLToPath(new URL('../../gate.json', import.meta.url)), 'utf8'),
+    );
+    assert.ok(!('failure' in config), JSON.stringify(config));
+    assert.equal(isProduction(config, path), is === 'yes');
   },
 );
 

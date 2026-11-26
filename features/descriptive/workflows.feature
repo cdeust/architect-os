@@ -154,9 +154,9 @@ Feature: GitHub workflows
     Given the committed workflow "pipeline-after-merge.yml"
     Then a copy whose resolver waits for nothing fails when refused "merge held: Pipeline has not succeeded on this head"
 
-  Scenario: the prompt of claude-review.yml links the review run in every comment that carries the verdict
+  Scenario: the prompt of claude-review.yml ends the tracking comment with the link of the review run, then the verdict
     Given the committed workflow "claude-review.yml"
-    Then its prompt puts the link of the run in every comment that carries the verdict
+    Then its prompt ends the tracking comment with the link of the run, then the verdict
 
   Scenario: a claude-review.yml without the link of the run is rejected
     Given the committed workflow "claude-review.yml"
@@ -197,3 +197,17 @@ Feature: GitHub workflows
       | a cached setup          |
       | a bare operational Node |
       | an unguarded npx        |
+
+  Scenario Outline: every job of <file> that runs the gate points its destination first at the first parent of its head, the reference of gate.json from env
+    Given the committed workflow "<file>"
+    Then every job that runs the gate points the destination of gate.json before it
+    And a copy of the workflow without-the-fetch is refused
+    And a copy of the workflow with-the-fetch-after-the-gate is refused
+    And a copy of the workflow with-the-branch-written-into-the-command is refused
+    And a copy of the workflow with-another-branch is refused
+    And a copy of the workflow with-the-live-branch-fetched is refused
+
+    Examples:
+      | file          |
+      | gate.yml      |
+      | gate-lane.yml |

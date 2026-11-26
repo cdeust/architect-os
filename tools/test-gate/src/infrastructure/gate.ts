@@ -71,13 +71,10 @@ export function changedFiles(
   const tracked = firstParent === null ? repository.tracked() : [];
   const changed = firstParent === null ? [] : parseRawDiff(repository.changedPaths(firstParent));
   const include = (path: string) => isProduction(layout, path);
-  // Git lists a link as one path: where a directory of sources could be, Node would load through it what is not listed.
-  for (const path of [
-    ...tracked,
-    ...changed.filter(({ deleted }) => !deleted).map(({ path }) => path),
-    ...untracked,
-  ])
-    if (!include(path) && mayHoldProduction(layout, path)) workspace.requireNotLink(path);
+  // Git lists a link as one path, ignores some, and keeps the others of the first parent out of the diff: Node would
+  // load through any of them sources no perimeter holds. The directories that can hold sources are walked on disk.
+  const [link] = workspace.linksWhere((path) => include(path) || mayHoldProduction(layout, path));
+  if (link !== undefined) throw new Error('GATE_SOURCE_LINK : ' + link);
   const source = (path: string) => validateMutationSource(path, workspace.requireSource(path));
   return [
     ...tracked.filter(include).flatMap((path) => {
@@ -87,8 +84,7 @@ export function changedFiles(
     }),
     ...changed
       .filter(({ path }) => include(path))
-      .map(({ path, deleted, link }) => {
-        if (link) throw new Error('GATE_SOURCE_LINK : ' + path);
+      .map(({ path, deleted }) => {
         if (!deleted) source(path);
         return {
           path,
@@ -177,7 +173,7 @@ async function replayCommand(
   let plan: { mode: 1 | 2 | 'collect'; batches: ReturnType<typeof distributeReplayFiles> } | undefined;
   if (mode !== 'all') {
     const repository = new GitRepository(root);
-    const { firstParent } = repository.commits();
+    const { firstParent } = repository.judged(config.destination);
     const changes = changedFiles(repository, workspace, firstParent, config);
     const { perimeter, debt } = mutationScope(config, changes, workspace, repository, firstParent);
     selected = (file, mutant) => file === canary?.file || inPerimeter(perimeter, file, mutant);
@@ -275,7 +271,7 @@ async function gate(
   receipt?: GateReceiptAuthority,
 ) {
   const repository = new GitRepository(root);
-  const { head, firstParent } = repository.commits();
+  const { head, firstParent, destination } = repository.judged(config.destination);
   let scope: MutationScope | null = null;
   // A job with mutation refuses a nested repository when it lists its untracked changes; a job without, here.
   if (job.mutation)
@@ -295,7 +291,7 @@ async function gate(
       scope === null
         ? []
         : mutationFiles(scope.perimeter, canary).map((file) => literalStrykerPattern(root, file));
-    workspace.write(reports.plan, jsonText({ job: job.name, head, firstParent, mutate }));
+    workspace.write(reports.plan, jsonText({ job: job.name, head, firstParent, destination, mutate }));
     out.write(`plan ${job.name} : ${mutate.length} motif(s) à muter -> ${reports.plan}\n`);
     return 0;
   }
@@ -332,6 +328,7 @@ async function gate(
     job: job.name,
     head,
     firstParent,
+    destination,
     staticNow,
     staticParent,
     run,
@@ -421,7 +418,7 @@ export async function runGate(
     if (!job.mutation) return refuse('le job ne prévoit pas de mutation');
     try {
       const repository = new GitRepository(root);
-      const { head, firstParent } = repository.commits();
+      const { head, firstParent, destination } = repository.judged(config.destination);
       const changes = changedFiles(repository, workspace, firstParent, config);
       const { debt, perimeter } = mutationScope(config, changes, workspace, repository, firstParent);
       if ('failure' in debt.current) throw new Error('registre de dette illisible : ' + debt.current.failure);
@@ -441,6 +438,7 @@ export async function runGate(
           text: jsonText({
             head,
             firstParent,
+            destination,
             job: job.name,
             shard,
             lots: planned,
@@ -457,7 +455,7 @@ export async function runGate(
           project || command.name === 'inventory-collect'
             ? expected.planned.map(({ file }) => literalStrykerPattern(root, file))
             : undefined;
-        return projectNative(decoder.decode(bytes), expected.planned, patterns, false);
+        return projectNative(decoder.decode(bytes), expected.planned, patterns);
       };
       if (command.name === 'inventory-collect') {
         const proofs = ([1, 2] as const).map((shard) => {

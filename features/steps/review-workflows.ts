@@ -120,22 +120,25 @@ Then('a copy whose resolver waits for nothing fails when refused {string}', func
   assert.equal(runResolver(broken, refusal).code, 1);
 });
 
-const VERDICT = 'End with exactly one line: "Verdict: approve" or "Verdict: block".';
+const VERDICT = 'End the tracking comment with exactly two lines:';
 const RUN_LINK =
   '"[View job run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"';
+const VERDICT_WORDS = 'then "Verdict: approve" or "Verdict: block"';
 
-/** The prompt gives the link of the run after the instruction of the verdict, for every comment that carries it. */
+/**
+ * The prompt asks for the link of the run, then the verdict, as the last two lines of the tracking comment: the only
+ * comment that may carry a verdict, since the guard of the comments (.github/claude-review/comment-guard.py) refuses
+ * one anywhere else, and the one the resolver reads (ADR-1130).
+ */
 function assertVerdictLinksItsRun(workflow: string): void {
   const verdict = workflow.indexOf(VERDICT);
   assert.notEqual(verdict, -1, 'no verdict instruction in the prompt');
-  assert.ok(workflow.indexOf(RUN_LINK) > verdict, 'no run link after the verdict instruction');
-  assert.ok(
-    workflow.includes('in every comment that carries the verdict line'),
-    'the link is not for every comment',
-  );
+  const link = workflow.indexOf(RUN_LINK, verdict);
+  assert.ok(link > verdict, 'no run link in the verdict instruction');
+  assert.ok(workflow.indexOf(VERDICT_WORDS, link) > link, 'the verdict does not follow the run link');
 }
 
-Then('its prompt puts the link of the run in every comment that carries the verdict', function () {
+Then('its prompt ends the tracking comment with the link of the run, then the verdict', function () {
   assertVerdictLinksItsRun(text(this));
 });
 

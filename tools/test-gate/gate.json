@@ -9,7 +9,7 @@
       "modules/*/src/**/*.ts",
       "tools/*/src/**/*.ts"
     ],
-    "exclude": ["**/features/**", "**/node_modules/**", "**/dist/**", "**/*.d.ts"]
+    "exclude": ["**/*.d.ts"]
   },
   "features": {
     "include": ["features/**/*.feature", "*/features/**/*.feature", "*/*/features/**/*.feature"],
@@ -25,6 +25,7 @@
       "mutation": false
     }
   },
+  "destination": "refs/remotes/origin/main",
   "debt": "tools/test-gate/mutation-debt.json",
   "canary": {
     "file": "tools/test-gate/canary/canary.ts",

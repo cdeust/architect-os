@@ -132,6 +132,15 @@ jobs:
       - name: Provision the job runtime root
         run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
 
+      - name: Point the destination of the gate at the first parent of the commit this event judges
+        # tools/test-gate/src/domain/destination.ts: the gate takes as first parent the reference `destination` of
+        # tools/test-gate/gate.json. In CI the head is the commit GitHub judges (its merge commit for a pull request,
+        # the pushed commit otherwise), so the destination is that commit's first parent, never a fetch of the live
+        # branch, which may have moved since. The reference comes from env, never written into the command.
+        env:
+          AOS_GATE_DESTINATION: refs/remotes/origin/main
+        run: git update-ref "$AOS_GATE_DESTINATION" HEAD^1
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -225,6 +234,15 @@ jobs:
 
       - name: Provision the job runtime root
         run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
+      - name: Point the destination of the gate at the first parent of the commit this event judges
+        # tools/test-gate/src/domain/destination.ts: the gate takes as first parent the reference `destination` of
+        # tools/test-gate/gate.json. In CI the head is the commit GitHub judges (its merge commit for a pull request,
+        # the pushed commit otherwise), so the destination is that commit's first parent, never a fetch of the live
+        # branch, which may have moved since. The reference comes from env, never written into the command.
+        env:
+          AOS_GATE_DESTINATION: refs/remotes/origin/main
+        run: git update-ref "$AOS_GATE_DESTINATION" HEAD^1
 
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

@@ -132,7 +132,8 @@ module.exports = {
     },
   ],
   options: {
-    doNotFollow: { path: 'node_modules' },
+    // The dependencies installed at the root: a directory of that name under a source tree is followed like any other.
+    doNotFollow: { path: '^node_modules/' },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.base.json' },
     exclude: { path: '^(packages/[^/]+|data|gateway|services/[^/]+|modules/[^/]+|tools/[^/]+)/dist/' },

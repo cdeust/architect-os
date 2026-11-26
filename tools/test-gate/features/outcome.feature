@@ -20,6 +20,7 @@ Feature: Test gate, rule 2: one attempt, at least one step, every step PASSED
 
       - tête : <head>
       - premier parent : <parent>
+      - destination : refs/remotes/origin/main à <destination>, 1 commit(s) jugé(s)
       - exécutés : 5
       - statique : 5
       - base : repli, compte statique du premier parent <parent>, aucun run vert de main pour ce SHA (0)

@@ -638,7 +638,7 @@ Then('the aggregate rejects empty proofs, foreign coverage and conflicting sourc
   ] as const) {
     await assert.rejects(combineNative(repo.dir, [proof, other], [], undefined, true), message);
   }
-  assert.throws(() => projectNative('not JSON', [], undefined, false), /JSON invalide/);
+  assert.throws(() => projectNative('not JSON', [], undefined), /JSON invalide/);
 });
 
 Then('the complete native union refuses missing identities and extra bookkeeping rows', async function () {

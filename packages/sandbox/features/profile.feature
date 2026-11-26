@@ -50,6 +50,21 @@ Feature: Builder profile template
       | NO_PROXY |
       | no_proxy |
 
+  Scenario: the builder reads the history of the repository on demand, and cannot write it (I4)
+    When I load the committed builder profile
+    Then the profile lets a session read the history of the repository
+    And the profile denies writing to exactly:
+      | ${repo}/.git                                               |
+      | ${worktree}/.git                                           |
+      | ${worktree}/.claude/settings.json                          |
+      | ${worktree}/.claude/settings.local.json                    |
+      | ${worktree}/steps                                          |
+      | ${config}/settings.json                                    |
+      | /tmp/claude |
+      | /private/tmp/claude |
+      | ${runtime}/cache |
+      | ${runtime}/state |
+
   Scenario: reaches the model only through the host auth proxy, with a session token as API key and its own config dir and deny rules
     When I load the committed builder profile
     Then the profile allows the network domains exactly:

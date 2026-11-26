@@ -24,6 +24,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -96,6 +97,13 @@ def check(value: Any, schema: dict[str, Any], where: str = "$") -> None:
         raise Refused(f"{where}: schema type not supported: {kind}")
 
 
+def visible(text: str) -> str:
+    """The text as it reads: no format character (category Cf: zero-width, joiners, soft hyphen, direction marks),
+    compatibility forms folded (NFKC). A credential cut by a character that renders as nothing is still a credential.
+    """
+    return unicodedata.normalize("NFKC", "".join(c for c in text if unicodedata.category(c) != "Cf"))
+
+
 def span(text: str) -> str:
     """Text a reader cannot act on, as one code span on one line.
 
@@ -105,7 +113,7 @@ def span(text: str) -> str:
     is one span on one line, so a line of the comment that holds it begins with a backtick or with the prefix of the
     field, never with `Verdict:`.
     """
-    flat = " ".join(line.strip() for line in text.splitlines() if line.strip())
+    flat = " ".join(line.strip() for line in visible(text).splitlines() if line.strip())
     return "`" + flat.replace("`", "'").replace("@", "\uff20") + "`"
 
 
@@ -151,6 +159,7 @@ def render(findings: list[dict[str, Any]], run_url: str = "") -> str:
         parts.append(part)
         size += len(part)
     body = "".join(parts)
+    # Every byte of the answer reaches the body through span(), which already removed what renders as nothing.
     if CREDENTIAL.search(body):
         raise Refused("the answer holds the shape of a credential")
     return body

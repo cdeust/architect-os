@@ -37,9 +37,9 @@ export function projectNative(
   text: string,
   lots: readonly Lot[],
   patterns: readonly string[] | undefined,
-  requireStatic: boolean,
 ): NativeProof {
-  const report = requireStatic ? requireNativeMutationReport(text) : parseMutationReport(text);
+  // The projection is what a verdict reads: a caller that needs the static marks requires them of it, once.
+  const report = parseMutationReport(text);
   if ('failure' in report) throw new Error(report.failure);
   const outside = new Set<string>();
   const failure = verifyMutationLots(lots, report, (id) => outside.add(id), patterns);

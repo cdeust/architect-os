@@ -32,7 +32,6 @@ export function decodeExactly(bytes: Uint8Array): string {
 export interface ChangedPath {
   readonly path: string;
   readonly deleted: boolean;
-  readonly link: boolean;
 }
 
 /**
@@ -54,7 +53,7 @@ export function parseRawDiff(text: string): ChangedPath[] {
     if (record === null || path === '') throw new Error('liste des chemins changés illisible');
     if (record[1] === '160000' || record[2] === '160000')
       throw new Error(`dépôt imbriqué dans l'arbre : ${path}`);
-    paths.push({ path, deleted: record[3] === 'D', link: record[2] === '120000' });
+    paths.push({ path, deleted: record[3] === 'D' });
   }
   return paths;
 }

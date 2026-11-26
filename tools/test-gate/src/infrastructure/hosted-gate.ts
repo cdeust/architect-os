@@ -68,7 +68,7 @@ export async function runHostedGate(
     if (canary === undefined || replay === undefined || jobOf(config, 'linux')?.mutation !== true)
       throw new Error('configuration Linux sans canari, mutation ou rejeu');
     const repository = new GitRepository(root);
-    const { head, firstParent } = repository.commits();
+    const { head, firstParent, destination } = repository.judged(config.destination);
     const changes = changedFiles(repository, workspace, firstParent, config);
     const { debt, perimeter } = mutationScope(config, changes, workspace, repository, firstParent);
     if ('failure' in debt.current || (debt.parent !== null && 'failure' in debt.parent))
@@ -79,17 +79,22 @@ export async function runHostedGate(
     const manifest = (number: number) => {
       // The admitted lane indexes the dense result of planHostedSlices. Read both fields before writing.
       const { lots, patterns } = slices[number - 1] as HostedSlice;
-      return { lots, patterns, text: jsonText({ head, firstParent, lane: number, lots, patterns }) };
+      return {
+        lots,
+        patterns,
+        text: jsonText({ head, firstParent, destination, lane: number, lots, patterns }),
+      };
     };
     const proved = (number: number, directory: string) => {
       const { lots, patterns, text } = manifest(number);
       if (!workspace.readBytes(directory + '/' + MANIFEST)?.equals(Buffer.from(text)))
         throw new Error('inventaire différent du périmètre courant pour le lot ' + number);
       const native = read(directory + '/' + NATIVE);
-      const proof = projectNative(native, lots, patterns, true);
-      if (canaryViolations(canary, proof.report).length !== 0)
-        throw new Error('canari de mutation refusé dans le lot ' + number);
+      const proof = projectNative(native, lots, patterns);
+      // The projection must carry its static marks before any of its verdicts, the canary's included, is read.
       const projected = requireNativeMutationReport(jsonText(proof.raw));
+      if (canaryViolations(canary, projected).length !== 0)
+        throw new Error('canari de mutation refusé dans le lot ' + number);
       return {
         proof,
         cases: replayCases(
