@@ -14,5 +14,10 @@
   "environment": {
     "GIT_ATTR_NOSYSTEM": "1",
     "GIT_NO_REPLACE_OBJECTS": "1"
-  }
+  },
+  "machineIndependent": {
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_CONFIG_SYSTEM": "/dev/null"
+  },
+  "host": ["PATH", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR"]
 }

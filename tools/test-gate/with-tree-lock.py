@@ -7,10 +7,12 @@ a different spelling of the checkout cannot create an independent lock.
 
 import contextlib
 import fcntl
+import functools
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import subprocess
 import sys
@@ -18,23 +20,12 @@ import tempfile
 
 DIRECTORY = os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY
 FILE = os.O_NOFOLLOW | os.O_NONBLOCK
-# What a session wrote in the checkout or its repository decides nothing of what git does here:
-# the closed options and variables every git of the host is given, read from the descriptive
-# file of the launcher beside this script (packages/sandbox/git-closed.json).
-with open(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "packages", "sandbox", "git-closed.json"),
-    "rb",
-) as closed_file:
-    CLOSED = json.load(closed_file)
-GIT_ENV = {
-    **CLOSED["environment"],
-    "PATH": "/usr/bin:/bin",
-    "GIT_OPTIONAL_LOCKS": "0",
-    "GIT_CONFIG_NOSYSTEM": "1",
-    "GIT_CONFIG_GLOBAL": "/dev/null",
-    "LC_ALL": "C",
-}
-GIT = ["/usr/bin/git", *CLOSED["options"]]
+# The one descriptive file of what every git of the host is given (packages/sandbox/src/git-closed.ts
+# is its TypeScript reader). It is beside this script: the launcher's when a host adapter starts it,
+# the candidate's when its own gate.sh does, as this script itself is.
+CLOSED_GIT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "packages", "sandbox", "git-closed.json"
+)
 PENDING = "pending.json"
 
 
@@ -60,9 +51,68 @@ def private(st, directory=False):
         raise Refusal("GATE_RECOVERY_UNSAFE")
 
 
+def variables(value):
+    return isinstance(value, dict) and all(
+        re.fullmatch(r"GIT_[A-Z_]+", name) and isinstance(text, str) and text
+        for name, text in value.items()
+    )
+
+
+def precedes_subcommand(options):
+    """Each option is `--name...`, or `-c` followed by its `name=value`."""
+    return all(
+        isinstance(option, str)
+        and (
+            re.match(r"[A-Za-z][A-Za-z0-9.]*=.", option)
+            if at and options[at - 1] == "-c"
+            else at + 1 < len(options) if option == "-c" else re.match(r"--[a-z]", option)
+        )
+        for at, option in enumerate(options)
+    )
+
+
+@functools.cache
+def closed_git():
+    """The argv and the whole environment of every git call here, from the descriptive file,
+    under the rules of its TypeScript reader (`ClosedGitSchema`). A refused file starts no git."""
+    try:
+        with open(CLOSED_GIT, "rb") as file:
+            closed = json.load(file)
+    except (OSError, ValueError):
+        raise Refusal("GATE_CLOSED_GIT_REFUSED")
+    if not isinstance(closed, dict) or set(closed) != {
+        "options", "environment", "machineIndependent", "host"
+    }:
+        raise Refusal("GATE_CLOSED_GIT_REFUSED")
+    options, host = closed["options"], closed["host"]
+    if not (
+        isinstance(options, list) and options and precedes_subcommand(options)
+        and variables(closed["environment"]) and variables(closed["machineIndependent"])
+        and isinstance(host, list) and host
+        and all(
+            isinstance(name, str)
+            and re.fullmatch(r"(?!GIT_|HOME\Z|XDG_CONFIG_HOME\Z)[A-Z][A-Z_]*", name)
+            for name in host
+        )
+        and len(set(host)) == len(host)
+    ):
+        raise Refusal("GATE_CLOSED_GIT_REFUSED")
+    # This script is started with an empty environment or with the Gate's: it takes no name of
+    # the host, fixes where git is found and its locale, and reads no configuration of the machine.
+    environment = {
+        "PATH": "/usr/bin:/bin",
+        "LC_ALL": "C",
+        "GIT_OPTIONAL_LOCKS": "0",
+        **closed["machineIndependent"],
+        **closed["environment"],
+    }
+    return ["/usr/bin/git", *options], environment
+
+
 def git(*args, input=None):
+    argv, environment = closed_git()
     return subprocess.run(
-        [*GIT, *args], input=input, env=GIT_ENV, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+        [*argv, *args], input=input, env=environment, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
     )
 
 
@@ -75,17 +125,23 @@ def checkout():
     return path
 
 
-def nested_marker(tree_fd, tracked_ignores, tracked):
+def nested_marker(tree_fd, trusted, changed, tracked):
     """Walk directories without opening Git markers. check-ignore matches names, it does
-    not enumerate untracked files (Git's builtin/check-ignore.c and dir.c)."""
-    def walk(fd, prefix):
+    not enumerate untracked files (Git's builtin/check-ignore.c and dir.c).
+
+    A rule of a `trusted` ignore file prunes the walk. A rule of a `changed` one (tracked, its
+    bytes no longer the recorded ones) does not: the directory is walked, and a marker found under
+    it comes back with the name of that ignore file, so that the refusal can say why a directory
+    the repository ignores was searched. Such a marker is reported only when the tree holds no
+    other; directories are taken in the order of their names, not in the order of the disk."""
+    def walk(fd, prefix, unignored):
         if prefix:
             try:
                 os.stat(".git", dir_fd=fd, follow_symlinks=False)
             except FileNotFoundError:
                 pass
             else:
-                return prefix
+                return prefix, unignored
         children = [
             os.fsencode(name)
             for name in os.listdir(fd)
@@ -97,7 +153,8 @@ def nested_marker(tree_fd, tracked_ignores, tracked):
             return None
         paths = [prefix + name for name in children]
         pruned = set()
-        if tracked_ignores:
+        searched = {}
+        if trusted or changed:
             # A leading ./ also keeps names beginning with ':' from becoming pathspec magic.
             matched = git(
                 "check-ignore", "--no-index", "-z", "--stdin", "-v",
@@ -106,25 +163,30 @@ def nested_marker(tree_fd, tracked_ignores, tracked):
             if matched.returncode not in (0, 1):
                 raise Refusal("GATE_CHECKOUT_UNREADABLE")
             records = iter(matched.stdout.split(b"\0")[:-1])
-            # Git walks a directory that holds a tracked path whatever ignores it: so does this walk.
-            pruned = {
-                path[2:] for origin, _, pattern, path in zip(records, records, records, records)
-                if origin in tracked_ignores and not pattern.startswith(b"!")
-                and not any(name.startswith(path[2:] + b"/") for name in tracked)
-            }
-        for name, path in zip(children, paths):
+            for origin, _, pattern, path in zip(records, records, records, records):
+                # Git walks a directory that holds a tracked path whatever ignores it: so does this walk.
+                if pattern.startswith(b"!") or any(name.startswith(path[2:] + b"/") for name in tracked):
+                    continue
+                if origin in trusted:
+                    pruned.add(path[2:])
+                elif origin in changed:
+                    searched[path[2:]] = origin
+        explained = None
+        for name, path in sorted(zip(children, paths)):
             if path in pruned:
                 continue
             child = os.open(name, DIRECTORY, dir_fd=fd)
             try:
-                found = walk(child, path + b"/")
-                if found is not None:
-                    return found
+                found = walk(child, path + b"/", searched.get(path, unignored))
             finally:
                 os.close(child)
-        return None
+            # A marker that no changed ignore file explains is the one to report, wherever it is.
+            if found is not None and found[1] is None:
+                return found
+            explained = explained or found
+        return explained
 
-    return walk(tree_fd, b"")
+    return walk(tree_fd, b"", None)
 
 
 def refuse_nested_repository(fd):
@@ -135,8 +197,13 @@ def refuse_nested_repository(fd):
     recorded = index.stdout.split(b"\0") + head.stdout.split(b"\0")
     if any(entry.startswith(b"160000 ") for entry in recorded):
         raise Refusal("GATE_NESTED_REPOSITORY")
-    if visible_marker(fd, head.stdout) is not None:
-        raise Refusal("GATE_NESTED_REPOSITORY")
+    found = visible_marker(fd, head.stdout)
+    if found is not None:
+        raise Refusal(
+            "GATE_NESTED_REPOSITORY" if found[1] is None else
+            "GATE_NESTED_REPOSITORY: under a directory ignored by a tracked .gitignore that is no "
+            "longer the one recorded, so its rules are not applied: commit or restore that file"
+        )
 
 
 def recorded_bytes(fd, name, oid):
@@ -160,16 +227,17 @@ def recorded_bytes(fd, name, oid):
 
 
 def visible_marker(fd, tree):
-    """`tree` lists recorded paths (`ls-tree -r -z` or `ls-files -s -z`): their ignore files and the paths they hold."""
+    """`tree` lists recorded paths (`ls-tree -r -z` or `ls-files -s -z`): their ignore files and the paths they hold.
+    The first marker found and, when only a changed ignore file ignored its directory, the name of that file."""
     entries = [entry.partition(b"\t") for entry in tree.split(b"\0") if entry]
     tracked = [name for _, _, name in entries]
     # A session can rewrite a tracked ignore file: its rules are trusted only with the bytes it was recorded with.
-    ignores = {
-        name for meta, _, name in entries
-        if name.rsplit(b"/", 1)[-1] == b".gitignore"
-        and recorded_bytes(fd, name, next((field for field in meta.split(b" ") if len(field) == 40), b""))
-    }
-    return nested_marker(fd, ignores, tracked)
+    trusted, changed = set(), set()
+    for meta, _, name in entries:
+        if name.rsplit(b"/", 1)[-1] == b".gitignore":
+            oid = next((field for field in meta.split(b" ") if len(field) == 40), b"")
+            (trusted if recorded_bytes(fd, name, oid) else changed).add(name)
+    return nested_marker(fd, trusted, changed, tracked)
 
 
 def lease(tree, existing):
@@ -460,6 +528,7 @@ def clear_receipt(state):
 
 
 def main(args):
+    closed_git()
     # Read-only preflight for the other host adapters. It has no lease or receipt authority.
     if args == ["inspect-clean"]:
         checkout()
@@ -468,7 +537,7 @@ def main(args):
             try:
                 refuse_nested_repository(fd)
             except Refusal as error:
-                if str(error) != "GATE_NESTED_REPOSITORY":
+                if not str(error).startswith("GATE_NESTED_REPOSITORY"):
                     raise
                 sys.exit(1)
             if dirty():
@@ -482,9 +551,10 @@ def main(args):
     if args == ["inspect-markers"]:
         fd = os.open(".", DIRECTORY)
         try:
-            marker = visible_marker(fd, sys.stdin.buffer.read())
-            if marker is not None:
-                sys.stdout.buffer.write(marker)
+            found = visible_marker(fd, sys.stdin.buffer.read())
+            if found is not None:
+                # The marker, then, after a NUL, the changed ignore file that ignored its directory.
+                sys.stdout.buffer.write(b"\0".join(part for part in found if part is not None))
         finally:
             os.close(fd)
         return

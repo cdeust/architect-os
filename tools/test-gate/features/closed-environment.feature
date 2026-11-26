@@ -214,6 +214,42 @@ Feature: the gate reads its own repository, whatever the environment it was star
       When git is asked for the status with none of the options of the gate
       Then the witness program of the gate has run
 
+  Rule: a tracked ignore file that is no longer the recorded one prunes nothing, and the refusal names it
+
+    A session can add a rule to a tracked ignore file to hide a repository, so the rules of a changed file are not
+    applied. A directory the repository ignored and that holds a repository (a dependency, another worktree) is then
+    found, and the gate says which ignore file to restore or commit.
+
+    Background:
+      Given a gate repository
+      And the gate repository file ".gitignore" reads:
+        """
+        deps/
+        """
+      And the gate first parent is committed
+      And the gate repository file "deps/package/.git" reads:
+        """
+        gitdir: /missing-gitdir
+        """
+
+    Scenario: the recorded ignore file prunes the directory, and the gate reads its changes
+      Then the gate reads its changes without a refusal
+
+    Scenario: a line added to the ignore file has the ignored directory searched, and the refusal names the file
+      Given the gate repository file ".gitignore" reads:
+        """
+        deps/
+        *.tmp
+        """
+      Then the gate refuses to read its changes with "dépôt imbriqué dans l'arbre : deps/package/ (écarté par .gitignore, qui n'est plus le fichier enregistré : ses règles ne sont pas appliquées)"
+
+    Scenario: a repository that no ignore file ignores keeps the plain refusal
+      Given the gate repository file "sub/.git" reads:
+        """
+        gitdir: /missing-gitdir
+        """
+      Then the gate refuses to read its changes with "dépôt imbriqué dans l'arbre : sub/"
+
   Scenario: the real gate adapter refuses an invalid-byte untracked name before selection
     Given a gate repository
     And the gate first parent is committed

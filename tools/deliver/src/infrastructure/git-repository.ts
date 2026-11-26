@@ -1,7 +1,7 @@
-import { closedGit } from '@architect-os/sandbox/git-closed';
+import { closedGitOptions, hostConfiguredGitEnvironment } from '@architect-os/sandbox/git-closed';
 import { checkoutIsClean, visibleNestedMarker } from '@architect-os/sandbox/git-worktree';
 import type { Repository } from '../domain/ports.js';
-import { closedEnvironment, runToEnd, type HostEnvironment } from './host-process.js';
+import { runToEnd, type HostEnvironment } from './host-process.js';
 
 /**
  * `Repository` over git, in the delivery worktree: admission checks and fixed argv started without a shell,
@@ -22,7 +22,10 @@ export class GitRepository implements Repository {
     const head = this.run(['ls-tree', '-r', '-z', 'HEAD']).out;
     if ([index, head].some((list) => list.split('\0').some((entry) => entry.startsWith('160000 '))))
       return true;
-    return visibleNestedMarker(this.worktree, head) !== undefined;
+    // A marker found only because a tracked ignore file is no longer the recorded one is not reported here: that
+    // tree is not clean, and `isClean` refuses it under its true name (the guard refuses the marker there too).
+    const marker = visibleNestedMarker(this.worktree, head);
+    return marker !== undefined && marker.changedIgnoreFile === undefined;
   }
 
   isClean(): boolean {
@@ -84,11 +87,11 @@ export class GitRepository implements Repository {
   private start(args: string[]): { status: number; out: string } {
     const finished = runToEnd(
       this.git,
-      // What a session wrote in the tree or its repository decides nothing of what git does for the delivery, which
-      // pushes with the rights of the owner: the closed options and variables of packages/sandbox/git-closed.json.
-      [...closedGit().options, ...args],
+      // The delivery pushes with the rights of the owner: what precedes its subcommands and its whole environment
+      // are those every git of the host is given (packages/sandbox/src/git-closed.ts), with the names of deliver.json.
+      [...closedGitOptions(), ...args],
       this.worktree,
-      closedEnvironment(this.host, { ...closedGit().environment, GIT_TERMINAL_PROMPT: '0' }),
+      hostConfiguredGitEnvironment(this.host, { GIT_TERMINAL_PROMPT: '0' }),
     );
     if (finished === undefined) throw new Error('git could not be run to its end');
     return finished;

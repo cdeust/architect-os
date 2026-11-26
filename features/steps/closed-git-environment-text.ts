@@ -30,24 +30,6 @@ Then('the text gives process.env to a process launch', function () {
   assert.equal(givesWholeEnvironment(stored<string>(this, 'sourceText')), true);
 });
 
-/** A TypeScript caller spreads both parts of closedGit(); the guard spreads both parts of the file it loads. */
-function readsClosedGit(text: string): boolean {
-  const typescript = text.includes('...closedGit().options') && text.includes('...closedGit().environment');
-  const python =
-    text.includes('git-closed.json') &&
-    text.includes('*CLOSED["options"]') &&
-    text.includes('**CLOSED["environment"]');
-  return typescript || python;
-}
-
-Then('the text gives its git the closed options and variables of the launcher', function () {
-  assert.equal(readsClosedGit(stored<string>(this, 'sourceText')), true);
-});
-
-Then('the text does not give its git the closed options and variables of the launcher', function () {
-  assert.equal(readsClosedGit(stored<string>(this, 'sourceText')), false);
-});
-
 /** The guard is started by one spawnSync whose environment is the empty object, and by nothing else. */
 function startsGuardEmpty(text: string): boolean {
   return /spawnSync\('\/usr\/bin\/python3', \['-I', guard, mode\], \{[^}]*?\benv: \{\},/.test(text);
@@ -60,30 +42,3 @@ Then('the guard of the checkout is started with an empty environment', function 
 Then('the guard of the checkout is not started with an empty environment', function () {
   assert.equal(startsGuardEmpty(stored<string>(this, 'sourceText')), false);
 });
-
-/** The names of `const names = [...]`, the list of the variables of the host that a closed environment takes. */
-function closedNames(text: string): string[] {
-  const list = /const names = \[([^\]]*)\]/.exec(text);
-  assert.ok(list !== null, 'the text holds no list of names');
-  return [...(list[1] as string).matchAll(/'([^']*)'/g)].map((name) => name[1] as string);
-}
-
-Then(
-  'the names of the closed environment in the text are those of the committed file {string}',
-  function (file: string) {
-    assert.deepEqual(
-      closedNames(stored<string>(this, 'sourceText')),
-      closedNames(readFileSync(join(ROOT, file), 'utf8')),
-    );
-  },
-);
-
-Then(
-  'the names of the closed environment in the text are not those of the committed file {string}',
-  function (file: string) {
-    assert.notDeepEqual(
-      closedNames(stored<string>(this, 'sourceText')),
-      closedNames(readFileSync(join(ROOT, file), 'utf8')),
-    );
-  },
-);

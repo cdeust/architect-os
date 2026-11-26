@@ -242,6 +242,24 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       Given the nested delivery marker points to a missing gitdir
       Then the delivery repository holds a nested repository
 
+    Scenario: a repository in a directory that the recorded ignore file ignores is not looked for, and one found only because that file changed makes the tree not clean
+      A tracked ignore file that is no longer the recorded one prunes nothing (a session can add a rule to it to hide a
+      repository). The marker then found is not reported as a nested repository: the tree is refused as not clean, which
+      is what the operator has to repair, and the guard that says so refuses the marker as well.
+
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository is at the commit "c1"
+      And the delivery repository commits an ignore file that ignores "deps/", where a repository is then left
+      Then the delivery repository holds no nested repository
+      And the delivery repository is clean
+      When a line is added to the ignore file of the delivery repository
+      Then the delivery repository holds no nested repository
+      And the delivery repository is not clean
+      When the ignore file of the delivery repository is given back its recorded bytes
+      And a marker that no ignore file ignores is left in the delivery worktree
+      Then the delivery repository holds a nested repository
+
     Scenario Outline: delivery finds a gitlink recorded only in the <place>, with no directory to mark it
       Given a delivery repository of the git adapter
       And the delivery repository holds the commit "c1"

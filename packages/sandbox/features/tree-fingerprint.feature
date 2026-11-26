@@ -264,7 +264,56 @@ Feature: the fingerprint of the tree of a worktree
     And the file ".gitignore" of the repository holds "*.log\nsub/\n"
     And the file "sub/.git" of the repository holds "gitdir: /missing-gitdir\n"
     When I try to take the fingerprint of it
-    Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+    Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre, sous un dossier qu'écarte un fichier d'exclusion suivi qui n'est plus celui enregistré : ses règles ne sont pas appliquées"
+
+  Rule: a tracked ignore file that is no longer the recorded one prunes nothing, and the refusal says so
+
+    A session can add a rule to a tracked ignore file to hide a repository, so the rules of a changed file are not
+    applied, whatever was changed in it. A directory the repository ignored and that holds a repository (another
+    worktree, a dependency) is then found: the fingerprint refuses the tree, and its message names the cause, so that
+    the operator restores or commits the file instead of looking for a nested repository.
+
+    Background:
+      Given a throwaway repository with one commit
+      And the file ".gitignore" of the repository holds "ignored/\n"
+      And everything in the repository is committed
+      And the file "ignored/.git" of the repository holds "gitdir: /missing-gitdir\n"
+
+    Scenario: a line added to the ignore file, its recorded rule untouched, has the ignored directory searched
+      Given the file ".gitignore" of the repository holds "ignored/\n*.tmp\n"
+      When I try to take the fingerprint of it
+      Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre, sous un dossier qu'écarte un fichier d'exclusion suivi qui n'est plus celui enregistré : ses règles ne sont pas appliquées"
+      And the guard of the checkout names the marker "ignored/" under the changed ignore file ".gitignore"
+
+    Scenario: the ignore file given back its recorded bytes prunes the directory again
+      Given the file ".gitignore" of the repository holds "ignored/\n*.tmp\n"
+      And the file ".gitignore" of the repository holds "ignored/\n"
+      When I take the fingerprint of the repository
+      Then the fingerprint is clean
+      And the guard of the checkout names no marker of its head
+
+    Scenario: the changed ignore file committed prunes the directory again
+      Given the file ".gitignore" of the repository holds "ignored/\n*.tmp\n"
+      And everything in the repository is committed
+      When I take the fingerprint of the repository
+      Then the fingerprint is clean
+
+    Scenario: a marker that no ignore file ignores keeps the plain refusal, beside a changed ignore file
+      Given the file ".gitignore" of the repository holds "ignored/\n*.tmp\n"
+      And the file "zzz/.git" of the repository holds "gitdir: /missing-gitdir\n"
+      When I try to take the fingerprint of it
+      Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+      And the guard of the checkout names the marker "zzz/" of its head
+
+    Scenario: a marker deeper under the directory a changed ignore file ignored is reported with that file
+      Given the file ".gitignore" of the repository holds "ignored/\n*.tmp\n"
+      And the file "ignored/.git" of the repository is removed
+      And the file "ignored/deep/er/.git" of the repository holds "gitdir: /missing-gitdir\n"
+      Then the guard of the checkout names the marker "ignored/deep/er/" under the changed ignore file ".gitignore"
+
+    Scenario: the guard asked whether the checkout is clean says it is not
+      Given the file ".gitignore" of the repository holds "ignored/\n*.tmp\n"
+      Then the guard of the checkout finds it not clean
 
   Scenario: a committed rule that ignores a directory holding a tracked file does not hide a marker in it
     Git walks a directory that holds a tracked path whatever ignores it: so does the walk for nested markers.
@@ -303,6 +352,28 @@ Feature: the fingerprint of the tree of a worktree
         | a tracked file    | a.txt    | changed\n                 |
         | an untracked file | b.txt    | new\n                     |
         | a nested marker   | sub/.git | gitdir: /missing-gitdir\n |
+
+    Scenario: a replace object of the head commit does not make the guard compare the checkout with another tree
+      Given a throwaway repository with one commit
+      And the repository replaces its head commit by a commit of another tree
+      Then the guard of the checkout finds it clean
+
+    Scenario: the same replace object makes a git with none of the options of the guard read another tree, so that the scenario above can fail
+      Given a throwaway repository with one commit
+      And the repository replaces its head commit by a commit of another tree
+      Then a git with none of the options of the guard lists no file in the head of the repository
+
+    Scenario: a file monitor the configuration of the repository names is not started by the guard
+      Given a throwaway repository with one commit
+      And the configuration of the repository names a witness program as its file monitor
+      Then the guard of the checkout finds it clean
+      And the witness program of the configuration of the repository has not run
+
+    Scenario: the same file monitor is started by a git with none of the options of the guard, so that the scenario above can fail
+      Given a throwaway repository with one commit
+      And the configuration of the repository names a witness program as its file monitor
+      When a git with none of the options of the guard lists the untracked files of the repository
+      Then the witness program of the configuration of the repository has run
 
     Scenario Outline: the guard refuses <place> with its fixed message, whether asked for the cleanliness or the markers
       Given <place>

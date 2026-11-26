@@ -359,3 +359,31 @@ Given(
     assert.equal(existsSync(join(work, name)), false);
   },
 );
+
+Given(
+  'the delivery repository commits an ignore file that ignores {string}, where a repository is then left',
+  function (directory: string) {
+    const { git, work } = gitOf(this);
+    writeFileSync(join(work, '.gitignore'), `${directory}\n`);
+    git(work, 'add', '.gitignore');
+    git(work, 'commit', '--quiet', '--message', 'ignore');
+    mkdirSync(join(work, directory, 'package'), { recursive: true });
+    writeFileSync(join(work, directory, 'package', '.git'), 'gitdir: /missing-gitdir\n');
+  },
+);
+
+When('a line is added to the ignore file of the delivery repository', function () {
+  const ignore = join(gitOf(this).work, '.gitignore');
+  writeFileSync(ignore, `${readFileSync(ignore, 'utf8')}*.tmp\n`);
+});
+
+When('the ignore file of the delivery repository is given back its recorded bytes', function () {
+  const { git, work } = gitOf(this);
+  writeFileSync(join(work, '.gitignore'), git(work, 'show', 'HEAD:.gitignore'));
+});
+
+When('a marker that no ignore file ignores is left in the delivery worktree', function () {
+  const { work } = gitOf(this);
+  mkdirSync(join(work, 'sub'));
+  writeFileSync(join(work, 'sub', '.git'), 'gitdir: /missing-gitdir\n');
+});

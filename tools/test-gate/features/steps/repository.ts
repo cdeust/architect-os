@@ -585,6 +585,12 @@ Given(
   },
 );
 
+Then('the gate reads its changes without a refusal', function () {
+  const repo = repository(this);
+  const read = new GitRepository(repo.dir);
+  changedFiles(read, new Workspace(repo.dir), read.commits().firstParent, repo.layout());
+});
+
 Then('the gate refuses to read its changes with {string}', function (message: string) {
   const repo = repository(this);
   const read = new GitRepository(repo.dir);

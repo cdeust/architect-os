@@ -1,3 +1,4 @@
+import { takenByName } from '@architect-os/sandbox/git-closed';
 import { spawn, spawnSync } from 'node:child_process';
 import { closeSync, constants, fstatSync, ftruncateSync, openSync } from 'node:fs';
 
@@ -27,12 +28,7 @@ export function closedEnvironment(
   host: HostEnvironment,
   added: Readonly<Record<string, string>>,
 ): Record<string, string> {
-  const given: Record<string, string> = {};
-  for (const name of host.names) {
-    const value = Object.hasOwn(host.env, name) ? host.env[name] : undefined;
-    if (value !== undefined) given[name] = value;
-  }
-  return { ...given, ...added };
+  return { ...takenByName(host.names, host.env), ...added };
 }
 
 /**

@@ -228,6 +228,41 @@ assert p.returncode==1 and 'GATE_TREE_BUSY' in p.stderr,p
             marker.write_text("gitdir: /missing-gitdir\n")
             refused = launch(tree, "/usr/bin/true", check=False)
             assert refused.returncode == 1 and "GATE_NESTED_REPOSITORY" in refused.stderr
+        elif mode == "changed ignore file":
+            # A directory the repository ignores holds a repository, as a dependency or another
+            # worktree does. The recorded ignore file prunes it; changed, it prunes nothing, and
+            # the refusal says why the ignored directory was searched.
+            ignore = tree / ".gitignore"
+            ignore.write_text("deps/\n")
+            run(tree, "git", "add", ".gitignore")
+            run(
+                tree,
+                "git",
+                "-c",
+                "user.name=fixture",
+                "-c",
+                "user.email=t@example.invalid",
+                "commit",
+                "-qm",
+                "ignore the dependencies",
+            )
+            (tree / "deps/package").mkdir(parents=True)
+            (tree / "deps/package/.git").write_text("gitdir: /missing-gitdir\n")
+            assert launch(tree, "/usr/bin/true").returncode == 0
+            ignore.write_text("deps/\n*.tmp\n")
+            refused = launch(tree, "/usr/bin/true", check=False)
+            assert refused.returncode == 1 and refused.stderr == (
+                "gate: GATE_NESTED_REPOSITORY: under a directory ignored by a tracked .gitignore "
+                "that is no longer the one recorded, so its rules are not applied: commit or "
+                "restore that file\n"
+            ), refused
+            ignore.write_text("deps/\n")
+            assert launch(tree, "/usr/bin/true").returncode == 0
+            # A repository that no ignore file ignores keeps the bare code.
+            (tree / "sub").mkdir()
+            (tree / "sub/.git").write_text("gitdir: /missing-gitdir\n")
+            refused = launch(tree, "/usr/bin/true", check=False)
+            assert refused.returncode == 1 and refused.stderr == "gate: GATE_NESTED_REPOSITORY\n", refused
         elif mode == "staged addition":
             added = tree / "staged.txt"
             added.write_text("staged only\n")

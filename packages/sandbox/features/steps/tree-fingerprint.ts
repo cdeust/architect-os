@@ -616,3 +616,51 @@ Then('the guard of the checkout refuses to name its markers with {string}', func
 Then('the guard of the checkout names no marker', function () {
   assert.equal(visibleNestedMarker(fp(this).directory, ''), undefined);
 });
+
+Then('the guard of the checkout names no marker of its head', function () {
+  const { directory } = fp(this);
+  assert.equal(visibleNestedMarker(directory, git(directory, 'ls-tree', '-r', '-z', 'HEAD')), undefined);
+});
+
+Then('the guard of the checkout names the marker {string} of its head', function (path: string) {
+  const { directory } = fp(this);
+  assert.deepEqual(visibleNestedMarker(directory, git(directory, 'ls-tree', '-r', '-z', 'HEAD')), { path });
+});
+
+Then(
+  'the guard of the checkout names the marker {string} under the changed ignore file {string}',
+  function (path: string, changedIgnoreFile: string) {
+    const { directory } = fp(this);
+    assert.deepEqual(visibleNestedMarker(directory, git(directory, 'ls-tree', '-r', '-z', 'HEAD')), {
+      path,
+      changedIgnoreFile,
+    });
+  },
+);
+
+Given('the file {string} of the repository is removed', function (file: string) {
+  rmSync(join(fp(this).directory, file));
+});
+
+Then('a git with none of the options of the guard lists no file in the head of the repository', function () {
+  assert.equal(git(fp(this).directory, 'ls-tree', '-r', 'HEAD'), '');
+});
+
+// The file monitor of the configuration: a program git starts when it lists the untracked files (core.fsmonitor).
+Given('the configuration of the repository names a witness program as its file monitor', function () {
+  const witness = join(mkdtempSync(join(ROOT_TMP, 'aos-fp-witness-')), 'witness');
+  this.cleanups.push(() => rmSync(dirname(witness), { recursive: true, force: true }));
+  writeFileSync(witness, `#!/bin/sh\n: > '${witness}.ran'\nexit 1\n`);
+  chmodSync(witness, 0o755);
+  const configuration = join(fp(this).directory, '.git', 'config');
+  writeFileSync(configuration, `${readFileSync(configuration, 'utf8')}[core]\n\tfsmonitor = ${witness}\n`);
+  this.state['fingerprintWitness'] = witness;
+});
+
+When('a git with none of the options of the guard lists the untracked files of the repository', function () {
+  git(fp(this).directory, 'ls-files', '--others', '--exclude-standard');
+});
+
+Then('the witness program of the configuration of the repository has run', function () {
+  assert.equal(witnessRan(this), true);
+});

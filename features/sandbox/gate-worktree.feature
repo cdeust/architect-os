@@ -21,6 +21,7 @@ Feature: A physical checkout has one live Gate and restores only its own interru
       | nested repository     |
       | rewritten bytes       |
       | linked nested worktree |
+      | changed ignore file |
       | staged addition |
       | index mode differs |
       | index unresolved |

@@ -1,35 +1,17 @@
-import { closedGit } from '@architect-os/sandbox/git-closed';
-import { visibleNestedMarker } from '@architect-os/sandbox/git-worktree';
+import { closedGitOptions, machineIndependentGitEnvironment } from '@architect-os/sandbox/git-closed';
+import { visibleNestedMarker, type NestedMarker } from '@architect-os/sandbox/git-worktree';
 import { execFileSync } from 'node:child_process';
 import { destinationMessage, judgedParent, type DestinationFacts } from '../domain/destination.js';
 import type { JudgedDestination } from '../domain/verdict.js';
 import { decodeExactly } from '../domain/diff.js';
 
 /**
- * The environment of every git call of the gate: the variables of the host that git needs, by name, and nothing else.
- * A `GIT_DIR` or a `GIT_CONFIG_COUNT` of the host would make the gate read another repository or a configuration
- * (docs/design/orchestration-fable-5-2.md §14, « Un environnement fermé pour git »). A name that the process does
- * not set is given as `undefined`, which node leaves out of the environment of the child. The global and the system
- * configuration of git are an empty file: with no `HOME` either, the verdict does not depend on the machine.
- */
-function closedEnvironment(): NodeJS.ProcessEnv {
-  const names = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
-  const given: NodeJS.ProcessEnv = {
-    ...closedGit().environment,
-    GIT_CONFIG_GLOBAL: '/dev/null',
-    GIT_CONFIG_SYSTEM: '/dev/null',
-  };
-  for (const name of names) given[name] = process.env[name];
-  return given;
-}
-
-/**
- * The options of every git call of the gate, before the subcommand: the closed options every git of the host is given
- * (packages/sandbox/git-closed.json: what a session wrote in the tree or its repository decides nothing of what git
- * does for the host), and the paths of the diff as they are.
+ * What precedes the subcommand of every git call of the gate, and its whole environment: those every git of the host
+ * is given (packages/sandbox/src/git-closed.ts), for a git that reads no configuration of the machine, so that the
+ * verdict does not depend on it; and the one value the gate adds for itself, the paths of the diff as they are.
  */
 function options(): string[] {
-  return [...closedGit().options, '-c', 'core.quotePath=false'];
+  return closedGitOptions(['core.quotePath=false']);
 }
 
 /** Runs `git` in `cwd` and returns its standard output, through `gitWithOptions` with what the gate always gives: `options()`. */
@@ -46,7 +28,7 @@ export function git(cwd: string, args: readonly string[]): string {
 export function gitWithOptions(cwd: string, before: readonly string[], args: readonly string[]): string {
   return execFileSync('git', [...before, ...args], {
     cwd,
-    env: closedEnvironment(),
+    env: machineIndependentGitEnvironment(),
     encoding: 'utf8',
     maxBuffer: 1 << 30,
   });
@@ -62,7 +44,11 @@ function names(output: string): string[] {
  */
 function gitList(cwd: string, args: readonly string[]): string {
   return decodeExactly(
-    execFileSync('git', [...options(), ...args], { cwd, env: closedEnvironment(), maxBuffer: 1 << 30 }),
+    execFileSync('git', [...options(), ...args], {
+      cwd,
+      env: machineIndependentGitEnvironment(),
+      maxBuffer: 1 << 30,
+    }),
   );
 }
 
@@ -193,15 +179,22 @@ export class GitRepository {
 
   requireNoNested(): void {
     const nested = this.nested();
-    if (nested !== undefined) throw new Error(`dépôt imbriqué dans l'arbre : ${nested}`);
+    if (nested === undefined) return;
+    // A tracked ignore file that is no longer the recorded one prunes nothing: the refusal says so, or a directory the
+    // repository ignored (dependencies, other worktrees) would look like a nested repository for no reason.
+    throw new Error(
+      nested.changedIgnoreFile === undefined
+        ? `dépôt imbriqué dans l'arbre : ${nested.path}`
+        : `dépôt imbriqué dans l'arbre : ${nested.path} (écarté par ${nested.changedIgnoreFile}, qui n'est plus le fichier enregistré : ses règles ne sont pas appliquées)`,
+    );
   }
 
   /** Refuse recorded gitlinks and visible markers before any Git worktree traversal. */
-  nested(): string | undefined {
+  nested(): NestedMarker | undefined {
     const index = gitList(this.root, ['ls-files', '-s', '-z']);
     const head = gitList(this.root, ['ls-tree', '-r', '-z', 'HEAD']);
     const recorded = [...names(index), ...names(head)].find((entry) => entry.startsWith('160000 '));
-    if (recorded !== undefined) return recorded.slice(recorded.indexOf('\t') + 1);
+    if (recorded !== undefined) return { path: recorded.slice(recorded.indexOf('\t') + 1) };
     return visibleNestedMarker(this.root, head);
   }
 
