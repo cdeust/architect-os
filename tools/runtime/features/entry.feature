@@ -103,7 +103,9 @@ Feature: The admission as a command (main.ts: what the shell entry aos reads of 
       | RUNTIME_ROOT_SPACE_LOW      |
       | RUNTIME_HOME_SPACE_LOW      |
       | RUNTIME_SETUP_FAILED        |
-    And the shell entry aos refuses with "USAGE", "RUNTIME_ROOT_REQUIRED", "RUNTIME_NODE_MISSING" and "RUNTIME_NODE_UNSUPPORTED", the first four of that list, in its order
+      | DELIVERY_LAUNCHER_IN_SUBJECT |
+      | DELIVERY_WORKTREE_REQUIRED  |
+    And the shell entry aos refuses with "USAGE", "RUNTIME_ROOT_REQUIRED", "RUNTIME_NODE_MISSING" and "RUNTIME_NODE_UNSUPPORTED", the first four of that list, in its order, then for its delivery verb with "DELIVERY_LAUNCHER_IN_SUBJECT" and "DELIVERY_WORKTREE_REQUIRED", the last two
 
   Scenario: the bootstrap obtains a physical binding and receipt
     Given a runtime command over a scratch root on the host marked "hosted-runner", and the policy text with floors of "1" byte

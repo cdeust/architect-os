@@ -4,7 +4,9 @@
 // them: USAGE, RUNTIME_ROOT_REQUIRED when the setting is absent or empty, then RUNTIME_NODE_MISSING and
 // RUNTIME_NODE_UNSUPPORTED. The rest follow in the order of the admission (src/application/admit.ts), where
 // RUNTIME_ROOT_UNSAFE is decided twice: on the spelling of the setting, before the policy, and on the disk, after
-// RUNTIME_ROOT_UNAVAILABLE, where it is listed.
+// RUNTIME_ROOT_UNAVAILABLE, where it is listed. The last two are decided by `aos` after the admission, for its
+// delivery verb alone, in the order it checks them: the launcher inside the subject, then a subject that is not a
+// worktree root (docs/design/trusted-gate.md, « Step 1 as built »).
 export const REFUSAL_CODES = [
   'USAGE',
   'RUNTIME_ROOT_REQUIRED',
@@ -20,6 +22,8 @@ export const REFUSAL_CODES = [
   'RUNTIME_ROOT_SPACE_LOW',
   'RUNTIME_HOME_SPACE_LOW',
   'RUNTIME_SETUP_FAILED',
+  'DELIVERY_LAUNCHER_IN_SUBJECT',
+  'DELIVERY_WORKTREE_REQUIRED',
 ] as const;
 
 export type RefusalCode = (typeof REFUSAL_CODES)[number];

@@ -249,14 +249,16 @@ Then('the refusal codes of the admission are, in their order of checking:', func
 });
 
 Then(
-  'the shell entry aos refuses with {string}, {string}, {string} and {string}, the first four of that list, in its order',
-  function (first: string, second: string, third: string, fourth: string) {
-    const codes = [first, second, third, fourth];
+  'the shell entry aos refuses with {string}, {string}, {string} and {string}, the first four of that list, in its order, then for its delivery verb with {string} and {string}, the last two',
+  function (first: string, second: string, third: string, fourth: string, fifth: string, sixth: string) {
+    const before = [first, second, third, fourth];
+    const delivery = [fifth, sixth];
     const entry = readFileSync(fileURLToPath(new URL('../../../../aos', import.meta.url)), 'utf8');
     // In the order of their first place in the text of aos, which checks from the top down.
     const refused = [...entry.matchAll(/\brefuse ([A-Z_]+)/g)].map((match) => match[1] as string);
-    assert.deepEqual([...new Set(refused)], codes);
-    assert.deepEqual(REFUSAL_CODES.slice(0, codes.length), codes);
+    assert.deepEqual([...new Set(refused)], [...before, ...delivery]);
+    assert.deepEqual(REFUSAL_CODES.slice(0, before.length), before);
+    assert.deepEqual(REFUSAL_CODES.slice(-delivery.length), delivery);
   },
 );
 
