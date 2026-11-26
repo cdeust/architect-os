@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { z } from 'zod';
-import { conjuncts, runsTheAction } from './claude-review-workflow.js';
+import { INSTALLERS, WAITS_AFTER_CREDENTIAL, runsTheAction } from './claude-review-workflow.js';
 import { Given, ROOT, Then, stored } from './helpers.js';
 
 /**
@@ -160,14 +160,14 @@ export function assertSecurityReview(text: string): void {
   const [secret] = names;
   assert.deepEqual(guard?.env, { PRESENT: `\${{ secrets.${secret} != '' }}` });
 
-  assert.equal(
-    steps[restrict]?.run,
-    `sudo install -D -m 0644 -o root -g root ${CONFIG_PATH}/${SETTINGS} /etc/claude-code/managed-settings.json`,
-  );
+  assert.equal(steps[restrict]?.run, INSTALLERS[REVIEW_DIR]?.run);
   for (const at of [restrict, diff])
     assert.equal(steps[at]?.if, PRESENT, `${steps[at]?.name} waits for the credential`);
-  // The credential first, then the two steps the engine waits for (the rules of claude-review-workflow.ts).
-  assert.equal(conjuncts(steps[engine]?.if)[0], PRESENT, 'the engine waits for the credential');
+  assert.equal(
+    steps[engine]?.if,
+    WAITS_AFTER_CREDENTIAL,
+    'the engine waits for the credential, its settings and its proof',
+  );
 
   const diffStep = steps[diff];
   assert.deepEqual(diffStep?.env, {

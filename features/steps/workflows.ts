@@ -325,10 +325,7 @@ Then('a new workflow file whose job runs on ubuntu-latest is refused by its name
 });
 
 Then('a copy of the workflow whose matrix includes a key that is not its runner is accepted', function () {
-  const copy = text(this).replace(
-    /^( {8}os: \[.+\])$/m,
-    '$1\n        include:\n          - os: macos-26\n            artifact: mac',
-  );
+  const copy = text(this).replace(/^( {8}os: \[.+\])$/m, '$1\n        include:\n          - artifact: bench');
   assert.notEqual(copy, text(this));
   assertNamedImages(copy);
 });
