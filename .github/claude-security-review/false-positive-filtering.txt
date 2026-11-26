@@ -34,5 +34,5 @@ PRECEDENTS -
 6. Command injection in shell scripts is only valid with a concrete path for untrusted input. In a GitHub workflow, an expression of the event inside a run: command, or a secret available to code of the pull request, is such a path.
 7. The gateway listens on the loopback only; an edge in front of it is an example (deploy/edge/) that nothing starts.
 8. A worker holds a task token granted and revoked by the broker, never the API key; the broker reads the key from a 0600 file.
-9. Sandboxed children are started by packages/sandbox under srt or Docker SBX with a profile from packages/sandbox/profiles; a command inside a sandbox is not host execution, but a change that widens what the sandbox may reach is a finding.
+9. Sandboxed children are started by packages/sandbox under srt or in an SBX virtual machine with a profile from packages/sandbox/profiles; a command inside a sandbox is not host execution, but a change that widens what the sandbox may reach is a finding.
 10. SQL lives in data/sql/*.sql and runs through one typed executor with bound parameters; a SQL file is not an injection by itself.
