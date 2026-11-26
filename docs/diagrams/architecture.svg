@@ -491,7 +491,7 @@
     <rect x="577" y="1974" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
     <text x="611" y="1991" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
     <text x="53" y="2015" data-type-role="brick-text" font-size="17" fill="#57606a">The host owns Git metadata. Host Git takes one fixed option set.</text>
-    <text x="53" y="2036" data-type-role="brick-text" font-size="17" fill="#57606a">Git paths reach the guard as bytes; it honors recorded ignore files.</text>
+    <text x="53" y="2036" data-type-role="brick-text" font-size="17" fill="#57606a">Git paths reach the guard as bytes; it honors recorded regular ignore files.</text>
     <text x="53" y="2057" data-type-role="brick-text" font-size="17" fill="#57606a">Replay sets up test repositories with an independent Git client.</text>
   </g>
   <g id="sbx-account-broker" role="group" aria-labelledby="sbx-broker-title">
