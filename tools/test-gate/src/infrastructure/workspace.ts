@@ -103,9 +103,12 @@ export class Workspace {
     return source;
   }
 
-  /** Refuse a link at a path git listed: git walks no link, so its parents are directories of the tree. */
+  /**
+   * Refuse a link at a path git listed: git walks no link, so its parents are directories of the tree. A path of the
+   * index that the checkout no longer holds is no link.
+   */
   requireNotLink(path: string): void {
-    if (lstatSync(resolve(this.physicalRoot, path)).isSymbolicLink())
+    if (lstatSync(resolve(this.physicalRoot, path), { throwIfNoEntry: false })?.isSymbolicLink())
       throw new Error('GATE_SOURCE_LINK : ' + path);
   }
 
