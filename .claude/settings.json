@@ -13,7 +13,26 @@
       "Read(**/*.pem)",
       "Read(**/*.key)",
       "Bash(git merge-base *)",
-      "Bash(gh pr update-branch *)"
+      "Bash(gh pr update-branch *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh * pr merge*)",
+      "Bash(gh * --admin*)",
+      "Bash(gh api */merge)",
+      "Bash(gh api */merge *)",
+      "Bash(gh api *mergePullRequest*)",
+      "mcp__github__merge_pull_request",
+      "mcp__github__update_pull_request_branch",
+      "Bash(git push * main)",
+      "Bash(git push * main *)",
+      "Bash(git push *:main)",
+      "Bash(git push *:main *)",
+      "Bash(git push *:refs/heads/main)",
+      "Bash(gh api *rulesets* -X*)",
+      "Bash(gh api *rulesets* --method*)",
+      "Bash(gh api *rulesets* --input*)",
+      "Bash(gh api -X* *rulesets*)",
+      "Bash(gh api --method* *rulesets*)",
+      "Bash(gh api --input* *rulesets*)"
     ]
   }
 }

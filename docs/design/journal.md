@@ -4437,3 +4437,44 @@ Une cinquième classe est revenue jusqu'à la fin : une même affirmation écrit
 **Le reste.** La mutation hebdomadaire de tous les fichiers lançait Stryker sans compilation, alors que sa configuration charge une aide depuis la compilation. Une règle des workflows exige désormais un `tsc -b` avant chaque `stryker run` d'un job. Les documents qui disent qui lance git nomment le garde du checkout, que `git-worktree.ts` lance avec un environnement vide, et le tableau de conception donne `GIT_ATTR_NOSYSTEM`.
 
 **Les mesures.** Le premier lot de Stryker local, sur les lignes changées de `git-worktree.ts` et de `tree-fingerprint.ts`, a donné 58 mutants tués et aucun survivant. Une campagne locale du périmètre entier aurait duré près de cinq heures sous le verrou partagé du poste : elle a été arrêtée, et les seize lanes hébergées en ont tenu lieu. Sur `f5f9c2d7`, la porte hébergée comptait 6 survivants sur 655. Sur `6e4a45e0`, tous les contrôles passent. La campagne locale arrêtée n'a laissé aucun rapport : Stryker n'écrit le sien qu'à la fin.
+
+## 112. `main` n'accepte plus que des pull requests, sans contournement ; la PR 149 est fermée (26 novembre 2026)
+
+**Trois décisions du propriétaire, le 26 novembre 2026.**
+
+1. `main` exige une pull request, et aucun acteur ne contourne son ruleset, le rôle d'administrateur compris.
+2. Une pull request est fusionnée quand la porte est verte et que les deux relecteurs, Claude et Codex, ont approuvé le commit exact.
+3. Le ruleset attendu est décrit par un fichier du dépôt, et un scénario est rouge quand ce fichier est affaibli.
+
+Elles remplacent ce que disaient les sections 16 (le corps du ruleset, avec le contournement du rôle admin), 74 et 76 (le ruleset posé sur `feat/gate-1a` puis répliqué sur `main`), et la décision 4 de la conception (« ruleset sur `main` avec contournement du propriétaire », `docs/design/platform-v3-srt.md`).
+
+**Ce que le propriétaire a fait.** Il a modifié le ruleset de `main` (id 27467434) ce jour-là, à 11 h 51 UTC : les règles `deletion`, `non_fast_forward`, `required_status_checks` (`gate-linux`, `gate-macos`) et `pull_request` (aucune approbation exigée, pas de revue des propriétaires de code, pas d'approbation de la dernière poussée, pas de fil à résoudre), et `bypass_actors: []`. Aucune session n'a modifié de ruleset ni de réglage du dépôt.
+
+**La PR 149 est fermée.** Elle voulait empêcher une session de fusionner ou de pousser sur `main` par un hook `PreToolUse` et un outil `tools/session-guard`, lancés dans la session même qu'ils devaient retenir. Une revue de conception a montré que c'était une friction, contournée d'une douzaine de façons, et qu'elle était décrite comme un contrôle. Ce qui en est repris : ses refus de réglages, réduits et décrits pour ce qu'ils sont. Ce qui n'est pas repris : `tools/session-guard/`, le hook, et tout ce qui touchait à un label d'approbation. Sa branche portait aussi des restes de la PR 144 sans rapport (`packages/sandbox/src/step-tool.ts`, `packages/sandbox/features/profile.feature` et ses steps), laissés de côté.
+
+**Ce qui est livré ici.**
+
+- `docs/design/ruleset-main.json` est le corps qui recrée le ruleset en place. Écrit depuis le ruleset lu, il lui était égal sur ses six clés (`jq -S` des deux, `diff` vide).
+- `features/descriptive/ruleset-main.feature` : le fichier passe par un seul lecteur (`features/steps/ruleset-main.ts`), un schéma strict, et dix-sept copies affaiblies sont refusées, chacune par les mots de son refus. Le scénario de la revue de sécurité qui lisait le fichier passe par ce lecteur.
+- `.claude/settings.json` : vingt et un refus (dix-neuf nouveaux), et `features/integration/session-denials.feature`, qui les donne à un vrai Claude Code devant un modèle scripté.
+- `docs/infrastructure.md`, « How a pull request reaches `main` » : ce que le ruleset tient, le tableau STRIDE, ce qui reste ouvert.
+
+**Recherche.** Témoin : le scénario du ruleset, joué sur l'ancien fichier, est rouge (« an actor may bypass the ruleset » ; 14 des 18 cas échouent) ; sur le nouveau, les 18 passent. La lecture du ruleset sans jeton (`curl https://api.github.com/repos/cdeust/architect-os/rulesets/27467434`) répond 200 avec `id`, `name`, `target`, `source_type`, `source`, `enforcement`, `conditions`, `rules`, `node_id`, `created_at`, `updated_at`, `_links` ; ni `bypass_actors` ni `current_user_can_bypass`, que la même lecture avec le jeton du propriétaire rend (`"bypass_actors":[]`, `"current_user_can_bypass":"never"`). La référence de GitHub le dit : « To prevent leaking sensitive information, the `bypass_actors` property is only returned if the user making the API request has write access to the ruleset ». Les refus des réglages : 23 appels refusés par Claude Code 2.1.326 (le binaire du SDK épinglé), 10 appels voisins exécutés par des doublures de `gh`, de `git` et du serveur MCP ; chacune des 21 règles retirée à son tour rend le scénario rouge. Une règle écrite d'abord, `Bash(git push * main:*)`, ne refusait rien que les autres ne refusent et aurait refusé `git push origin main:autre` : retirée.
+
+**SSDLC.** STRIDE du chemin de publication vers `main` : `docs/infrastructure.md`. En résumé : la poussée hors pull request, la réécriture, la suppression et la fusion sur porte rouge sont des barrières de GitHub ; la modification du ruleset par un administrateur n'est pas empêchée, elle est détectable ; la fusion d'une PR verte sans l'approbation des relecteurs n'est pas refusée par GitHub ; les refus des réglages sont une friction.
+
+**Opérationnel.** Moindre privilège : les sessions tournent avec le jeton d'administrateur du propriétaire. Il leur faut un jeton sans la permission « Administration » du dépôt. C'est au propriétaire.
+
+**Ce qui n'a pas été fait, et pourquoi.** La comparaison automatique du fichier avec le ruleset en place n'est pas construite dans `tools/watch` : le jeton d'un job ne voit pas la liste des contournements, et un jeton qui la voit peut modifier le ruleset. Une comparaison du reste serait verte pendant qu'un contournement est ajouté.
+
+**Ce qui reste ouvert.**
+
+| Ouvert | À qui |
+| --- | --- |
+| Un jeton sans droit d'administration pour les sessions | Le propriétaire |
+| Rien, sur `main`, ne lit un verdict de Codex ; GitHub n'exige aucune revue pour fusionner une PR verte | Le mainteneur (`pipeline-after-merge.yml`), le propriétaire pour le ruleset |
+| Aucun job ne compare le fichier au ruleset en place | Le mainteneur, quand GitHub rendra la liste des contournements à un jeton de lecture |
+| Le ruleset de `feat/gate-1a` (id 27463789) garde le contournement de l'administrateur ; la branche a 121 commits de retard sur `main` | La PR qui retire la publication directe de `tools/deliver` |
+| `npm run deliver` pousse encore `main` directement, ce que la règle `pull_request` refuse. Non observé : aucune poussée n'a été tentée | La même PR |
+| Aucune PR n'a encore été fusionnée sous le nouveau ruleset (dernière fusion : #145, 7 h 19 UTC) | Le mainteneur, à la première fusion par le résolveur |
+| Le scénario des refus n'a été joué que sur macOS | `gate-linux`, à la PR |

@@ -426,13 +426,13 @@
   <text x="283" y="3123" data-type-role="brick-text" font-size="17" fill="#57606a">Open a pull request on the target repository,</text>
   <text x="283" y="3147" data-type-role="brick-text" font-size="17" fill="#57606a">its body rendered from record.json.</text>
 </g>
-<g role="group" aria-label="Human gate · next">
+<g role="group" aria-label="Delivery gate · next">
   <rect x="854" y="2880" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2908" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Human gate</text>
+  <text x="868" y="2908" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Delivery gate</text>
   <rect x="1277" y="2888" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
   <text x="1312" y="2907" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2936" data-type-role="brick-text" font-size="17" fill="#57606a">Bind the orchestrator to an identity with no</text>
-  <text x="868" y="2960" data-type-role="brick-text" font-size="17" fill="#57606a">bypass and require human approval for main.</text>
+  <text x="868" y="2936" data-type-role="brick-text" font-size="17" fill="#57606a">main takes pull requests, with no bypass. Owed:</text>
+  <text x="868" y="2960" data-type-role="brick-text" font-size="17" fill="#57606a">sessions without the administrator token.</text>
 </g>
 <g role="group" aria-label="Commit each pass · next">
   <rect x="854" y="2978" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
