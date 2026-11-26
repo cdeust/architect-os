@@ -106,16 +106,25 @@ function assertCheckoutWithoutCredentials(text: string): void {
 const RUNNER_IMAGES = ['ubuntu-24.04', 'macos-26'];
 const MATRIX_KEY = /^\$\{\{\s*matrix\.([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}$/;
 
-/** The labels a job can run on: its `runs-on`, or the list of the one matrix key it names. */
+/**
+ * The labels a job can run on: its `runs-on`, or what its matrix gives the one key it names, in the list of that key
+ * and in every entry of `include` that sets it. An `include` that sets other keys adds no label.
+ */
 function runnerLabels(job: Workflow['jobs'][string]): unknown[] {
   const label = job['runs-on'];
   const key = typeof label === 'string' ? MATRIX_KEY.exec(label)?.[1] : undefined;
   if (key === undefined) return [label];
   const matrix = (job.strategy as { matrix?: Record<string, unknown> } | undefined)?.matrix ?? {};
-  assert.ok(!('include' in matrix), 'a matrix `include` can add a label the list does not show');
-  const labels = matrix[key];
-  assert.ok(Array.isArray(labels) && labels.length > 0, `matrix.${key} is not a list of labels`);
-  return labels;
+  const listed = matrix[key] ?? [];
+  const included = matrix['include'] ?? [];
+  assert.ok(Array.isArray(listed) && Array.isArray(included), `matrix.${key} is not a list of labels`);
+  const added = (included as unknown[]).flatMap((entry) =>
+    typeof entry === 'object' && entry !== null && key in entry
+      ? [(entry as Record<string, unknown>)[key]]
+      : [],
+  );
+  assert.ok(listed.length + added.length > 0, `matrix.${key} is not a list of labels`);
+  return [...listed, ...added];
 }
 
 function assertNamedImages(text: string): void {
@@ -288,8 +297,40 @@ Then('every checkout in it has persist-credentials false', function () {
   assertCheckoutWithoutCredentials(text(this));
 });
 
-Then('every job in it runs on an image named with its version', function () {
-  assertNamedImages(text(this));
+/** Every file of the directory, found and not listed: a new workflow is judged without a row anywhere. */
+function assertEveryFileNamesItsImages(files: { file: string; text: string }[]): void {
+  assert.ok(files.length > 0, 'no workflow file');
+  for (const { file, text } of files) {
+    try {
+      assertNamedImages(text);
+    } catch (error) {
+      throw new Error(`${file}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    }
+  }
+}
+
+Then('every job of every workflow file runs on an image named with its version', function () {
+  assertEveryFileNamesItsImages(workflowFiles());
+});
+
+Then('a new workflow file whose job runs on ubuntu-latest is refused by its name', function () {
+  const added = {
+    file: 'eleventh.yml',
+    text: 'on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps: []\n',
+  };
+  assert.throws(
+    () => assertEveryFileNamesItsImages([...workflowFiles(), added]),
+    /^Error: eleventh\.yml: job a runs on "ubuntu-latest", not on an image named with its version/,
+  );
+});
+
+Then('a copy of the workflow whose matrix includes a key that is not its runner is accepted', function () {
+  const copy = text(this).replace(
+    /^( {8}os: \[.+\])$/m,
+    '$1\n        include:\n          - os: macos-26\n            artifact: mac',
+  );
+  assert.notEqual(copy, text(this));
+  assertNamedImages(copy);
 });
 
 /** Each replaces the first runner of the workflow, or the list of its matrix. */
@@ -312,7 +353,7 @@ Then('a copy of the workflow whose job runs {} is rejected', function (kind: str
   assert.ok(breakIt !== undefined, `no broken workflow named "${kind}"`);
   const broken = breakIt(text(this));
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertNamedImages(broken), /not on an image named with its version|a matrix `include`/);
+  assert.throws(() => assertNamedImages(broken), /not on an image named with its version/);
 });
 
 Then('it satisfies the gate workflow rules', function () {

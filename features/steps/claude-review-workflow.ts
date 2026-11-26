@@ -16,7 +16,6 @@ import { Given, ROOT, Then, stored } from './helpers.js';
  */
 const WORKFLOW = '.github/workflows/claude-review.yml';
 const ACTION_PIN = 'anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c';
-const USERS_OF_THE_ACTION = ['claude.yml', 'claude-review.yml', 'claude-security-review.yml'];
 
 const Scalar = z.union([z.string(), z.number(), z.boolean()]);
 const Step = z.strictObject({
@@ -29,6 +28,103 @@ const Step = z.strictObject({
   env: z.record(z.string(), z.string()).optional(),
 });
 type StepT = z.infer<typeof Step>;
+
+/** A workflow as YAML gives it, before any schema: the rules below read keys a schema would not name. */
+export type RawStep = Record<string, unknown>;
+export interface RawJob {
+  [key: string]: unknown;
+  steps?: RawStep[];
+}
+export interface RawWorkflow {
+  [key: string]: unknown;
+  jobs: Record<string, RawJob>;
+}
+
+/**
+ * The one way a rule recognises a step that runs Claude Code: the action, its `base-action` directory and the
+ * repository of the base action, in any capitals, since GitHub reads the owner and the name of an action without
+ * regard to case. The pin, the scrub, the permission mode, the managed settings and bubblewrap all ask this function,
+ * and the rule of the pin then accepts one spelling.
+ */
+const ENGINE = /^anthropics\/claude-code-(base-)?action[/@]/i;
+export const runsTheAction = (step: { uses?: unknown }): boolean =>
+  typeof step.uses === 'string' && ENGINE.test(step.uses);
+
+/** Every step of a workflow that runs the action, with the steps of its job and its place among them. */
+export function actionsOf(doc: RawWorkflow): { id: string; job: RawJob; steps: RawStep[]; at: number }[] {
+  return Object.entries(doc.jobs).flatMap(([id, job]) => {
+    const steps = job.steps ?? [];
+    return steps.flatMap((step, at) => (runsTheAction(step) ? [{ id, job, steps, at }] : []));
+  });
+}
+
+const workflowTexts = (): { file: string; text: string }[] => {
+  const dir = join(ROOT, '.github/workflows');
+  return readdirSync(dir)
+    .sort()
+    .map((file) => ({ file, text: readFileSync(join(dir, file), 'utf8') }));
+};
+
+/**
+ * The operands of the top-level `&&` of a condition. GitHub runs a step only when its whole condition holds, so an
+ * operand at that level is required whatever the others are. A condition with a `||` at that level, or one this
+ * reader cannot follow (a quote or a bracket left open, an expression inside another), is refused: nothing it names
+ * is known to be required. An operand in brackets or inside a function is one operand, and matches no outcome.
+ * Syntax: docs.github.com, "Evaluate expressions in workflows and actions".
+ */
+export function conjuncts(condition: unknown): string[] {
+  assert.equal(typeof condition, 'string', 'the action has no condition, so it waits for no step');
+  let text = (condition as string).trim();
+  const wrapped = /^\$\{\{([\s\S]*)\}\}$/.exec(text);
+  if (wrapped !== null) text = (wrapped[1] as string).trim();
+  assert.ok(!text.includes('${{') && !text.includes('}}'), 'the condition of the action cannot be read');
+  const operands: string[] = [];
+  let depth = 0;
+  let start = 0;
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === "'") quoted = !quoted;
+    else if (quoted) continue;
+    else if (char === '(' || char === '[') depth++;
+    else if (char === ')' || char === ']') depth--;
+    else if (depth === 0 && text.startsWith('||', i)) {
+      assert.fail('the condition of the action has an alternative, so it requires none of its outcomes');
+    } else if (depth === 0 && text.startsWith('&&', i)) {
+      operands.push(text.slice(start, i));
+      start = i + 2;
+      i++;
+    }
+    assert.ok(depth >= 0, 'the condition of the action cannot be read');
+  }
+  assert.ok(!quoted && depth === 0, 'the condition of the action cannot be read');
+  operands.push(text.slice(start));
+  return operands.map((operand) => operand.trim().replace(/\s+/g, ' '));
+}
+
+/**
+ * The step of a job that an action waits for: one step with this id, before the action, with no key but its id, its
+ * name, its command and a condition of its own, and the action's condition requires its outcome to be success.
+ * GitHub then holds the property at run time: skipped, failed or cancelled, the step has another outcome and the
+ * action does not start. `outcome` is the result before `continue-on-error`, which the keys refuse anyway.
+ */
+function awaited(steps: RawStep[], at: number, id: string): RawStep {
+  const found = steps.flatMap((step, index) => (step['id'] === id ? [index] : []));
+  assert.equal(found.length, 1, `the job has no step with the id ${id}`);
+  assert.ok((found[0] as number) < at, `the step ${id} comes after the action`);
+  const step = steps[found[0] as number] as RawStep;
+  assert.deepEqual(
+    Object.keys(step).filter((key) => !['id', 'name', 'run', 'if'].includes(key)),
+    [],
+    `the step ${id} has a key that may hide its failure`,
+  );
+  assert.ok(
+    conjuncts(steps[at]?.['if']).includes(`steps.${id}.outcome == 'success'`),
+    `the action does not require the success of the step ${id}`,
+  );
+  return step;
+}
+
 const ReviewJob = z.strictObject({
   name: z.literal('Claude review'),
   needs: z.literal('budget'),
@@ -153,12 +249,11 @@ Then('the review job holds the guards of the Claude review', function () {
 });
 
 Then('the three workflows that use the action pin it to one commit', function () {
-  for (const file of USERS_OF_THE_ACTION) {
-    const text = readFileSync(join(ROOT, '.github/workflows', file), 'utf8');
-    const pins = [...text.matchAll(/anthropics\/claude-code-action@[0-9a-f]{40}/g)].map((match) => match[0]);
-    assert.ok(pins.length > 0, `${file} does not use the action`);
-    for (const pin of pins) assert.equal(pin, ACTION_PIN, `${file} pins another commit`);
-  }
+  const pins = workflowTexts().flatMap(({ file, text }) =>
+    actionsOf(parse(text) as RawWorkflow).map(({ steps, at }) => ({ file, uses: steps[at]?.['uses'] })),
+  );
+  assert.equal(new Set(pins.map(({ file }) => file)).size, 3, 'the workflow files that run the action');
+  for (const { file, uses } of pins) assert.equal(uses, ACTION_PIN, `${file} pins another commit`);
 });
 
 const at = (yaml: string, find: string, replace: string): string => {
@@ -353,41 +448,36 @@ Then("the review's managed settings {} are rejected", function (kind: string) {
 });
 
 /**
- * Every workflow that runs the action fixes its permission mode and installs managed settings that forbid the auto
- * and bypass modes, before the action starts: a new pin cannot change the mode in silence (from v1.0.290 the action
- * starts a session in auto mode unless `allowed_bots` is set, src/modes/permission-mode.ts).
+ * Every step that runs the action, in any job, is the pinned action, scrubs the environment of its subprocesses,
+ * fixes its permission mode and waits for the step `settings`, which installs managed settings that forbid the auto
+ * and bypass modes: a new pin cannot change the mode in silence (from v1.0.290 the action starts a session in auto
+ * mode unless one of several inputs is set, `defaultsToAutoMode` in src/modes/permission-mode.ts).
  */
 const MODES = ['default', 'acceptEdits'];
-const MANAGED = '/etc/claude-code/managed-settings.json';
+const SETTINGS_STEP = 'settings';
 
 export function assertModeFixed(text: string): void {
-  const doc = parse(text) as { jobs: Record<string, { steps?: StepT[] }> };
-  const jobs = Object.values(doc.jobs).filter((job) =>
-    (job.steps ?? []).some((step) => step.uses?.startsWith('anthropics/claude-code-action@')),
-  );
-  assert.ok(jobs.length > 0, 'no job runs the action');
-  for (const job of jobs) {
-    const steps = job.steps ?? [];
-    const action = steps.findIndex((step) => step.uses?.startsWith('anthropics/claude-code-action@'));
-    // Every action of the job, not the first alone: a second one would start under the defaults of the action.
-    for (const step of steps.filter((each) => each.uses?.startsWith('anthropics/claude-code-action@'))) {
-      const args = String(step.with?.['claude_args'] ?? '');
-      assert.deepEqual(
-        step.env,
-        { CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' },
-        'the environment of the subprocesses is not scrubbed of the credentials',
-      );
-      const modes = [...args.matchAll(/--permission-mode\s+(\S+)/g)].map((match) => match[1]);
-      assert.equal(modes.length, 1, 'the permission mode is not set once');
-      assert.ok(MODES.includes(modes[0] ?? ''), `permission mode ${modes[0]}`);
-    }
-    const install = steps.findIndex((step) => (step.run ?? '').includes(` ${MANAGED}`));
-    assert.ok(install >= 0 && install < action, 'no managed settings installed before the action');
-    const source = (steps[install]?.run ?? '').match(
+  const actions = actionsOf(parse(text) as RawWorkflow);
+  assert.ok(actions.length > 0, 'no job runs the action');
+  for (const { steps, at } of actions) {
+    const action = steps[at] as StepT;
+    assert.equal(action.uses, ACTION_PIN, 'the action has another pin or another spelling');
+    assert.deepEqual(
+      action.env,
+      { CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' },
+      'the environment of the subprocesses is not scrubbed of the credentials',
+    );
+    const args = String(action.with?.['claude_args'] ?? '');
+    const modes = [...args.matchAll(/--permission-mode\s+(\S+)/g)].map((match) => match[1]);
+    assert.equal(modes.length, 1, 'the permission mode is not set once');
+    assert.ok(MODES.includes(modes[0] ?? ''), `permission mode ${modes[0]}`);
+    const installer = awaited(steps, at, SETTINGS_STEP);
+    const install = steps.indexOf(installer);
+    const source = String(installer['run'] ?? '').match(
       / (\S+\/managed-settings\.json) \/etc\/claude-code\/managed-settings\.json/,
     )?.[1];
     assert.ok(source !== undefined, 'the source of the managed settings is not named');
-    const checkout = steps
+    const checkout = (steps as StepT[])
       .slice(0, install)
       .find((step) => source.startsWith(`${String(step.with?.['path'])}/`));
     assert.ok(checkout !== undefined, 'the managed settings come from no checkout of the run');
@@ -458,10 +548,66 @@ const MODE_BREAKS: Record<string, (yaml: string) => string> = {
     yaml.replace(/ (review-config|claude-config)\/(\.github\/\S+\/managed-settings\.json)/, ' $2'),
 };
 
+/** Broken copies of the structure the action waits on, each with the words of its refusal. */
+const MODE_STRUCTURE_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = {
+  'with an action that does not wait for its managed settings': [
+    (doc) => {
+      const [first] = actionsOf(doc);
+      const action = first?.steps[first.at] as RawStep;
+      action['if'] = String(action['if']).replace("steps.settings.outcome == 'success' && ", '');
+    },
+    /does not require the success of the step settings/,
+  ],
+  'with managed settings whose installation may fail': [
+    (doc) => {
+      const installer = actionsOf(doc)[0]?.steps.find((step) => step['id'] === 'settings') as RawStep;
+      installer['continue-on-error'] = true;
+    },
+    /the step settings has a key that may hide its failure/,
+  ],
+  'with managed settings installed after the action': [
+    (doc) => {
+      const [first] = actionsOf(doc);
+      const installer = first?.steps.find((step) => step['id'] === 'settings') as RawStep;
+      (first?.job as RawJob).steps = [
+        ...(first?.steps ?? []).filter((step) => step !== installer),
+        installer,
+      ];
+    },
+    /the step settings comes after the action/,
+  ],
+  'with a second job that runs the action in other capitals, with a proof of bubblewrap and nothing else': [
+    (doc) => {
+      doc.jobs['second'] = {
+        'runs-on': 'ubuntu-24.04',
+        steps: [
+          { id: 'bubblewrap', name: 'Prove', run: BUBBLEWRAP_PROOF },
+          {
+            uses: ACTION_PIN.replace('anthropics/claude-code-action', 'Anthropics/Claude-Code-Action'),
+            if: "steps.bubblewrap.outcome == 'success'",
+          },
+        ],
+      };
+      // The rule of bubblewrap has nothing to say against it: the rule of the permission mode must.
+      assert.ok(assertBubblewrapProven(stringify(doc)) > 1);
+    },
+    /another pin or another spelling/,
+  ],
+};
+
 Then('{string} {} is rejected by the rule of the permission mode', function (file: string, kind: string) {
+  const original = readFileSync(join(ROOT, '.github/workflows', file), 'utf8');
+  const structural = MODE_STRUCTURE_BREAKS[kind];
+  if (structural !== undefined) {
+    const [breakDoc, refusal] = structural;
+    const doc = parse(original) as RawWorkflow;
+    assertModeFixed(stringify(doc));
+    breakDoc(doc);
+    assert.throws(() => assertModeFixed(stringify(doc)), refusal);
+    return;
+  }
   const breakIt = MODE_BREAKS[kind];
   assert.ok(breakIt !== undefined, `no broken workflow named "${kind}"`);
-  const original = readFileSync(join(ROOT, '.github/workflows', file), 'utf8');
   const broken = breakIt(original);
   assert.notEqual(broken, original);
   assert.throws(() => assertModeFixed(broken));
@@ -493,31 +639,25 @@ Then(
 );
 
 /**
- * The rule of bubblewrap. With `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`, Claude Code refuses to start on Linux without
- * bubblewrap, in which it runs its Bash subprocesses in a PID namespace (code.claude.com/docs/en/env-vars, "What the
- * subprocess environment scrub removes"; run 45771449067 of claude-security-review.yml). The action installs it only
- * when `allowed_non_write_users` is set, in a step that may fail (action.yml at 4411a9e9, "Install subprocess isolation
- * dependencies"), so a job that runs the action does what that step does and fails when it cannot: the packages, the
- * sysctl without which Ubuntu 24.04 refuses a user namespace to an unprivileged program, then a namespace really
- * created.
+ * The rule of bubblewrap. Claude Code refuses to start under `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` on Linux without
+ * bubblewrap (run 45771449067 of claude-security-review.yml), and the action installs it only when
+ * `allowed_non_write_users` is set, in a step that may fail (action.yml at 4411a9e9, "Install subprocess isolation
+ * dependencies"). The proof is there so that a review starts, and so that a runner where bubblewrap is missing or
+ * cannot create a namespace stops with that reason before the model is called. It is not what keeps a credential
+ * from a subprocess: that is Claude Code's, under the scrub.
  *
- * The rule is closed, so that no action starts without a proof that succeeded. In every workflow file of the
- * directory, found and not listed: the scrub is set on the step of an action and nowhere else; a job runs one action
- * at most; the step just before it is the proof, with these lines and no key but its name and the condition of the
- * action, which names no status function (`always()`, `failure()`, `cancelled()`, `success()`); nothing of the job or
- * of the workflow reaches the shell of the proof (`defaults`, `env`, `container`); the image is the one the proof is
- * written for; no job calls a workflow of another repository and no step a local action, where an action would hide.
- * What it cannot see: an action of another repository that wraps this one, and what a step before the proof leaves in
- * `GITHUB_PATH` or `GITHUB_ENV`.
+ * The property, that no action starts unless the proof succeeded, is GitHub's to hold at run time: the proof has the
+ * id `bubblewrap` and the condition of every action requires `steps.bubblewrap.outcome == 'success'` (`awaited`).
+ * The rule checks that this structure is there, in every workflow file of the directory, and what would let the proof
+ * succeed without proving: other lines, a `shell`, `defaults`, `env` or `container` of the job or of the workflow,
+ * another image than the one it is written for. The scrub is set on the step of an action and nowhere else; no job
+ * calls a workflow of another repository and no step a local action, where an action would hide. What it cannot
+ * see: an action of another repository that wraps this one, and what an earlier step leaves on the runner
+ * (`GITHUB_PATH`, `GITHUB_ENV`, a package removed again).
  */
 const SCRUB = 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB';
 const SCRUB_IMAGE = 'ubuntu-24.04';
-/**
- * The action, its `base-action` directory, and the repository of the base action, in any case: GitHub reads the
- * owner and the name of an action without regard to case.
- */
-const ENGINE = /^anthropics\/claude-code-(base-)?action[/@]/i;
-const STATUS_FUNCTION = /\b(always|failure|cancelled|success)\s*\(/;
+const PROOF_STEP = 'bubblewrap';
 const BUBBLEWRAP_PROOF = [
   'set -euo pipefail',
   'sudo apt-get update',
@@ -527,26 +667,12 @@ const BUBBLEWRAP_PROOF = [
   'bwrap --unshare-user --unshare-pid --ro-bind / / --proc /proc true',
 ].join('\n');
 
-type RawStep = Record<string, unknown>;
-interface RawJob {
-  [key: string]: unknown;
-  steps?: RawStep[];
-}
-interface RawWorkflow {
-  [key: string]: unknown;
-  jobs: Record<string, RawJob>;
-}
-const runsTheAction = (step: RawStep): boolean =>
-  typeof step['uses'] === 'string' && ENGINE.test(step['uses']);
-const provesBubblewrap = (step: RawStep): boolean =>
-  typeof step['run'] === 'string' && /\b(bwrap|bubblewrap)\b/.test(step['run']);
 const setsTheScrub = (env: unknown): boolean => typeof env === 'object' && env !== null && SCRUB in env;
 
 /** Refuses a workflow where an action could start without a proof that succeeded; the number of its actions. */
 export function assertBubblewrapProven(text: string): number {
   const doc = parse(text) as RawWorkflow;
   assert.ok(!setsTheScrub(doc['env']), 'the scrub is set outside the step of an action');
-  let actions = 0;
   for (const [id, job] of Object.entries(doc.jobs)) {
     assert.ok(!setsTheScrub(job['env']), 'the scrub is set outside the step of an action');
     if (typeof job['uses'] === 'string') {
@@ -554,10 +680,8 @@ export function assertBubblewrapProven(text: string): number {
         job['uses'].startsWith('./.github/workflows/'),
         `job ${id} calls a workflow of another repository, where an action would hide`,
       );
-      continue;
     }
-    const steps = job.steps ?? [];
-    for (const step of steps) {
+    for (const step of job.steps ?? []) {
       assert.ok(
         runsTheAction(step) || !setsTheScrub(step['env']),
         'the scrub is set outside the step of an action',
@@ -567,12 +691,9 @@ export function assertBubblewrapProven(text: string): number {
         `job ${id} uses a local action, where an action would hide`,
       );
     }
-    const found = steps.flatMap((step, at) => (runsTheAction(step) ? [at] : []));
-    if (found.length === 0) continue;
-    actions += found.length;
-    assert.equal(found.length, 1, `job ${id} runs more than one action for one proof`);
-    const at = found[0] as number;
-    const action = steps[at] as RawStep;
+  }
+  const actions = actionsOf(doc);
+  for (const { job, steps, at } of actions) {
     assert.equal(job['runs-on'], SCRUB_IMAGE, 'the job does not run on the image the proof is written for');
     assert.equal(job['container'], undefined, 'the job runs in a container, not on the image');
     assert.equal(doc['env'], undefined, 'an environment of the workflow reaches the proof of bubblewrap');
@@ -584,34 +705,11 @@ export function assertBubblewrapProven(text: string): number {
         'a default of the workflow or of the job reaches the proof',
       );
     }
-    const proofs = steps.flatMap((step, index) => (provesBubblewrap(step) ? [index] : []));
-    assert.equal(proofs.length, 1, 'bubblewrap is not proven once');
-    assert.equal(proofs[0], at - 1, 'the proof of bubblewrap is not the step just before the action');
-    const proof = steps[at - 1] as RawStep;
+    const proof = awaited(steps, at, PROOF_STEP);
     assert.equal(String(proof['run']).trim(), BUBBLEWRAP_PROOF, 'the step is not the proof of bubblewrap');
-    // No `continue-on-error`, `shell`, `env` nor `working-directory`; and the condition of the action, or none.
-    assert.deepEqual(
-      Object.keys(proof)
-        .filter((key) => key !== 'if')
-        .sort(),
-      ['name', 'run'],
-      'the proof of bubblewrap has a key that may hide its failure',
-    );
-    assert.equal(proof['if'], action['if'], 'the proof and the action do not run on the same condition');
-    assert.ok(
-      !STATUS_FUNCTION.test(String(action['if'] ?? '')),
-      'the action can run after a proof that failed',
-    );
   }
-  return actions;
+  return actions.length;
 }
-
-const workflowTexts = (): { file: string; text: string }[] => {
-  const dir = join(ROOT, '.github/workflows');
-  return readdirSync(dir)
-    .sort()
-    .map((file) => ({ file, text: readFileSync(join(dir, file), 'utf8') }));
-};
 
 /** The files that run an action, each judged by the rule of bubblewrap and by the rule of the permission mode. */
 function workflowsOfTheAction(files: { file: string; text: string }[]): string[] {
@@ -631,30 +729,26 @@ function workflowsOfTheAction(files: { file: string; text: string }[]): string[]
 }
 
 Then(
-  'every action of every workflow file starts just after the proof of bubblewrap, and the files that run one are exactly:',
+  'every action of every workflow file waits for the proof of bubblewrap and for its managed settings, and the files that run one are exactly:',
   function (table: { raw(): string[][] }) {
     assert.deepEqual(workflowsOfTheAction(workflowTexts()), table.raw().flat().sort());
   },
 );
 
-const PINNED_ACTION = {
+/** An action as a careless copy would add it: scrubbed, pinned, and waiting for nothing. */
+const BARE_ACTION = {
   uses: ACTION_PIN,
   env: { [SCRUB]: '1' },
   with: { claude_args: '--permission-mode default' },
 };
 
-/** The one job of the committed workflow that runs the action, its proof and its action. */
+/** The first action of the committed workflow, its job, and the two steps it waits for. */
 function proven(doc: RawWorkflow): { job: RawJob; steps: RawStep[]; proof: RawStep; action: RawStep } {
-  const job = Object.values(doc.jobs).find((candidate) => (candidate.steps ?? []).some(runsTheAction));
-  assert.ok(job !== undefined, 'the committed workflow runs no action');
-  const steps = job.steps ?? [];
-  const proof = steps.find(provesBubblewrap);
-  const action = steps.find(runsTheAction);
-  assert.ok(
-    proof !== undefined && action !== undefined,
-    'the committed workflow no longer proves bubblewrap',
-  );
-  return { job, steps, proof, action };
+  const [first] = actionsOf(doc);
+  assert.ok(first !== undefined, 'the committed workflow runs no action');
+  const proof = first.steps.find((step) => step['id'] === PROOF_STEP);
+  assert.ok(proof !== undefined, 'the committed workflow no longer proves bubblewrap');
+  return { job: first.job, steps: first.steps, proof, action: first.steps[first.at] as RawStep };
 }
 const firstJob = (doc: RawWorkflow): RawJob => Object.values(doc.jobs)[0] as RawJob;
 const withoutLine = (doc: RawWorkflow, line: string): void => {
@@ -663,50 +757,74 @@ const withoutLine = (doc: RawWorkflow, line: string): void => {
   assert.ok(run.includes(`${line}\n`), `the committed proof no longer has: ${line}`);
   proof['run'] = run.replace(`${line}\n`, '');
 };
-const underStatus = (doc: RawWorkflow, status: string): void => {
-  const { proof, action } = proven(doc);
-  const condition = action['if'] === undefined ? status : `${status} && ${String(action['if'])}`;
-  proof['if'] = condition;
-  action['if'] = condition;
+const WAITS = `steps.${PROOF_STEP}.outcome == 'success'`;
+const recondition = (doc: RawWorkflow, change: (condition: string) => string): void => {
+  const { action } = proven(doc);
+  const condition = String(action['if']);
+  assert.ok(condition.includes(WAITS), 'the committed action no longer waits for the proof');
+  action['if'] = change(condition);
 };
 
 /** A broken copy, and the words of the refusal it must get: a copy refused for another reason proves nothing. */
 const BUBBLEWRAP_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = {
   'without the proof of bubblewrap': [
     (doc) => {
-      const { job, steps } = proven(doc);
-      job.steps = steps.filter((step) => !provesBubblewrap(step));
+      const { job, steps, proof } = proven(doc);
+      job.steps = steps.filter((step) => step !== proof);
     },
-    /not proven once/,
+    /no step with the id bubblewrap/,
   ],
   'with the proof of bubblewrap after the action': [
     (doc) => {
       const { job, steps, proof } = proven(doc);
       job.steps = [...steps.filter((step) => step !== proof), proof];
     },
-    /not the step just before the action/,
+    /the step bubblewrap comes after the action/,
   ],
-  'with a step between the proof of bubblewrap and the action': [
+  'with an action that does not wait for the proof of bubblewrap': [
+    (doc) => recondition(doc, (condition) => condition.replace(` && ${WAITS}`, '')),
+    /does not require the success of the step bubblewrap/,
+  ],
+  'with an action that has no condition': [
+    (doc) => {
+      delete proven(doc).action['if'];
+    },
+    /has no condition, so it waits for no step/,
+  ],
+  'with an action that waits for the proof of bubblewrap or for anything else': [
+    (doc) => recondition(doc, (condition) => `${condition} || always()`),
+    /has an alternative, so it requires none of its outcomes/,
+  ],
+  'with the wait for the proof of bubblewrap inside brackets that hold an alternative': [
+    (doc) => recondition(doc, (condition) => condition.replace(WAITS, `(${WAITS} || always())`)),
+    /does not require the success of the step bubblewrap/,
+  ],
+  'with the wait for the proof of bubblewrap inside a function': [
+    (doc) => recondition(doc, (condition) => condition.replace(WAITS, `!contains('${WAITS}', 'x')`)),
+    /does not require the success of the step bubblewrap/,
+  ],
+  'with a condition of the action that cannot be read': [
+    (doc) => recondition(doc, (condition) => `${condition} && (always()`),
+    /the condition of the action cannot be read/,
+  ],
+  'with a second action that does not wait for the proof of bubblewrap': [
     (doc) => {
       const { steps, action } = proven(doc);
-      steps.splice(steps.indexOf(action), 0, {
-        name: 'Restrict again',
-        run: 'sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=1',
-      });
+      steps.push({ ...action, id: 'second', if: "github.event_name == 'issue_comment'" });
     },
-    /not the step just before the action/,
+    /does not require the success of the step bubblewrap/,
   ],
   'with a proof of bubblewrap that may fail': [
     (doc) => {
       proven(doc).proof['continue-on-error'] = true;
     },
-    /may hide its failure/,
+    /the step bubblewrap has a key that may hide its failure/,
   ],
   'with a shell on the proof of bubblewrap that only checks its syntax': [
     (doc) => {
       proven(doc).proof['shell'] = 'bash -n {0}';
     },
-    /may hide its failure/,
+    /the step bubblewrap has a key that may hide its failure/,
   ],
   'with a default shell of the job that only checks the syntax': [
     (doc) => {
@@ -720,67 +838,35 @@ const BUBBLEWRAP_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = 
     },
     /a default of the workflow or of the job/,
   ],
-  'with a proof of bubblewrap on another condition than the action': [
-    (doc) => {
-      proven(doc).proof['if'] = "runner.os == 'macOS'";
-    },
-    /same condition/,
-  ],
-  'with the proof of bubblewrap and the action under always()': [
-    (doc) => underStatus(doc, 'always()'),
-    /after a proof that failed/,
-  ],
-  'with the proof of bubblewrap and the action under !cancelled()': [
-    (doc) => underStatus(doc, '!cancelled()'),
-    /after a proof that failed/,
-  ],
-  'with the proof of bubblewrap and the action under failure()': [
-    (doc) => underStatus(doc, 'failure()'),
-    /after a proof that failed/,
-  ],
-  'with a second action for an event the proof of bubblewrap does not cover': [
-    (doc) => {
-      const { steps, proof, action } = proven(doc);
-      proof['if'] = "github.event_name == 'issues'";
-      action['if'] = "github.event_name == 'issues'";
-      steps.push({ ...action, id: 'second', if: "github.event_name == 'issue_comment'" });
-    },
-    /more than one action for one proof/,
-  ],
   'with the action in a second job that proves nothing': [
     (doc) => {
       doc.jobs['second'] = { 'runs-on': SCRUB_IMAGE, steps: [{ ...proven(doc).action }] };
     },
-    /not proven once/,
+    /no step with the id bubblewrap/,
   ],
   'with the base action in a second job that proves nothing': [
     (doc) => {
       doc.jobs['second'] = {
         'runs-on': SCRUB_IMAGE,
-        steps: [{ ...PINNED_ACTION, uses: `anthropics/claude-code-base-action@${'0'.repeat(40)}` }],
+        steps: [{ ...BARE_ACTION, uses: `anthropics/claude-code-base-action@${'0'.repeat(40)}` }],
       };
     },
-    /not proven once/,
+    /no step with the id bubblewrap/,
   ],
   'with the action written in capitals in a second job that proves nothing': [
     (doc) => {
       doc.jobs['second'] = {
         'runs-on': SCRUB_IMAGE,
-        steps: [
-          {
-            ...PINNED_ACTION,
-            uses: ACTION_PIN.replace('anthropics/claude-code-action', 'Anthropics/Claude-Code-Action'),
-          },
-        ],
+        steps: [{ ...BARE_ACTION, uses: ACTION_PIN.toUpperCase() }],
       };
     },
-    /not proven once/,
+    /no step with the id bubblewrap/,
   ],
   'with a scrubbed action added to its first job': [
     (doc) => {
-      (firstJob(doc).steps as RawStep[]).push({ ...PINNED_ACTION });
+      (firstJob(doc).steps as RawStep[]).push({ ...BARE_ACTION });
     },
-    /not proven once/,
+    /no step with the id bubblewrap/,
   ],
   'with a command that sets the scrub without the action': [
     (doc) => {
@@ -866,12 +952,31 @@ const BUBBLEWRAP_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = 
   ],
 };
 
+/** Copies the structure makes harmless: GitHub skips the action whenever the proof did not succeed. */
+const HARMLESS: Record<string, (doc: RawWorkflow) => void> = {
+  'whose proof of bubblewrap runs on a condition the action does not share': (doc) => {
+    proven(doc).proof['if'] = `env.${SCRUB} == '1'`;
+  },
+  'with always() beside the wait for the proof of bubblewrap': (doc) =>
+    recondition(doc, (condition) => `always() && ${condition}`),
+  'with a later step that prints the word bubblewrap': (doc) => {
+    proven(doc).steps.push({ name: 'Say it', run: 'echo "bubblewrap check complete"' });
+  },
+  'with a step between the proof of bubblewrap and the action': (doc) => {
+    const { steps, action } = proven(doc);
+    steps.splice(steps.indexOf(action), 0, { name: 'List', run: 'ls' });
+  },
+};
+
+const parsed = (file: string): RawWorkflow =>
+  parse(readFileSync(join(ROOT, '.github/workflows', file), 'utf8')) as RawWorkflow;
+
 /** The committed file as the rule reads it, parsed and written back, then broken: it passes before, not after. */
 function brokenCopy(file: string, kind: string): { text: string; refusal: RegExp } {
   const broken = BUBBLEWRAP_BREAKS[kind];
   assert.ok(broken !== undefined, `no broken workflow named "${kind}"`);
   const [breakIt, refusal] = broken;
-  const doc = parse(readFileSync(join(ROOT, '.github/workflows', file), 'utf8')) as RawWorkflow;
+  const doc = parsed(file);
   assertBubblewrapProven(stringify(doc));
   breakIt(doc);
   return { text: stringify(doc), refusal };
@@ -880,6 +985,16 @@ function brokenCopy(file: string, kind: string): { text: string; refusal: RegExp
 Then('{string} {} is rejected by the rule of bubblewrap', function (file: string, kind: string) {
   const { text, refusal } = brokenCopy(file, kind);
   assert.throws(() => assertBubblewrapProven(text), refusal);
+});
+
+Then('{string} {} is accepted by the rule of bubblewrap', function (file: string, kind: string) {
+  const change = HARMLESS[kind];
+  assert.ok(change !== undefined, `no copy named "${kind}"`);
+  const doc = parsed(file);
+  const before = stringify(doc);
+  change(doc);
+  assert.notEqual(stringify(doc), before);
+  assert.ok(assertBubblewrapProven(stringify(doc)) > 0);
 });
 
 Then(

@@ -1,6 +1,6 @@
 Feature: GitHub workflows
-  Every workflow pins its actions by commit SHA, installs without lifecycle scripts, checks out without
-  credentials and runs each job on an image named with its version; gate.yml (docs/design/platform-v3-srt.md §7) has the narrow trigger, permission and secret rules of
+  Every workflow pins its actions by commit SHA, installs without lifecycle scripts and checks out without
+  credentials; every workflow file found in the directory runs each job on an image named with its version; gate.yml (docs/design/platform-v3-srt.md §7) has the narrow trigger, permission and secret rules of
   the CI gate; broker-live.yml (T-04R) is the only one that reaches the real upstream: it stores no credential, exchanges the identity token of its run for a short-lived access token, runs on main only, and takes the four identifiers of the owner's rule from the secret store so that the public log of a run masks them. The Examples
   list the committed workflows: a new file in .github/workflows adds its row.
 
@@ -9,7 +9,6 @@ Feature: GitHub workflows
     Then every action it uses is pinned by a commit SHA
     And every npm ci in it has --ignore-scripts
     And every checkout in it has persist-credentials false
-    And every job in it runs on an image named with its version
 
     Examples:
       | file                       |
@@ -98,6 +97,15 @@ Feature: GitHub workflows
   Scenario: a workflow with a checkout that keeps its credentials is rejected
     Given the committed workflow "gate.yml"
     Then a workflow with a checkout that keeps its credentials is rejected
+
+  Scenario: every job of every workflow file runs on an image named with its version
+    The files are found in their directory: a new workflow needs no row here to be judged.
+    Then every job of every workflow file runs on an image named with its version
+    And a new workflow file whose job runs on ubuntu-latest is refused by its name
+
+  Scenario: an include of a matrix that sets no runner adds no label
+    Given the committed workflow "bench-sandbox.yml"
+    Then a copy of the workflow whose matrix includes a key that is not its runner is accepted
 
   Scenario Outline: a workflow whose job runs <kind> is rejected
     A label such as ubuntu-latest moves to another image without a commit of this repository, and what a job finds

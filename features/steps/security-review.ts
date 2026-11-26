@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { z } from 'zod';
+import { conjuncts, runsTheAction } from './claude-review-workflow.js';
 import { Given, ROOT, Then, stored } from './helpers.js';
 
 /**
@@ -163,8 +164,10 @@ export function assertSecurityReview(text: string): void {
     steps[restrict]?.run,
     `sudo install -D -m 0644 -o root -g root ${CONFIG_PATH}/${SETTINGS} /etc/claude-code/managed-settings.json`,
   );
-  for (const at of [restrict, diff, engine])
+  for (const at of [restrict, diff])
     assert.equal(steps[at]?.if, PRESENT, `${steps[at]?.name} waits for the credential`);
+  // The credential first, then the two steps the engine waits for (the rules of claude-review-workflow.ts).
+  assert.equal(conjuncts(steps[engine]?.if)[0], PRESENT, 'the engine waits for the credential');
 
   const diffStep = steps[diff];
   assert.deepEqual(diffStep?.env, {
@@ -205,7 +208,7 @@ export function assertSecurityReview(text: string): void {
     assert.ok(!/\bsecrets\b/.test(value.replace(EXPRESSION, '')), `a secret outside an expression: ${value}`);
   }
 
-  if (reviewer?.uses?.startsWith('anthropics/claude-code-action@') === true) assertClaudeCodeAction(reviewer);
+  if (reviewer !== undefined && runsTheAction(reviewer)) assertClaudeCodeAction(reviewer);
   assertPublish(doc.jobs.publish);
 }
 
@@ -308,8 +311,8 @@ const REVIEW_BREAKS: Record<string, (yaml: string) => string> = {
   'without the credential guard on the engine': (yaml) =>
     at(
       yaml,
-      "        id: engine\n        if: steps.credential.outputs.present == 'true'\n",
-      '        id: engine\n',
+      "        if: steps.credential.outputs.present == 'true' && steps.settings.outcome == 'success' && steps.bubblewrap.outcome == 'success'\n",
+      "        if: steps.settings.outcome == 'success' && steps.bubblewrap.outcome == 'success'\n",
     ),
   'without its skip notice': (yaml) => without(yaml, stepBlock(yaml, 'Say the review was skipped')),
   'without the restriction': (yaml) =>
