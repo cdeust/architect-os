@@ -17,7 +17,15 @@ import {
 } from '../../src/infrastructure/hosted-lots.js';
 import type { Lot } from '../../src/infrastructure/mutation-lot-proof.js';
 import { Workspace } from '../../src/infrastructure/workspace.js';
-import { Given, Then, When, fixtureGit, repository, type GateRepository, type GateWorld } from './repository.js';
+import {
+  Given,
+  Then,
+  When,
+  fixtureGit,
+  repository,
+  type GateRepository,
+  type GateWorld,
+} from './repository.js';
 
 type Mutant = Lot['mutants'][number];
 /** What a hosted command needs of a checkout: where it is, and its report tree. */
