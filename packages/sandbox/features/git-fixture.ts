@@ -7,9 +7,10 @@ export function gitInFixture(directory: string, args: readonly string[]): string
 }
 
 /** The same Git, its output as the bytes Git wrote: a path that is not UTF-8 is not rewritten. */
-export function gitBytesInFixture(directory: string, args: readonly string[]): Buffer {
+export function gitBytesInFixture(directory: string, args: readonly string[], input?: Buffer): Buffer {
   return execFileSync('/usr/bin/git', args, {
     cwd: directory,
+    ...(input === undefined ? {} : { input }),
     stdio: 'pipe',
     env: {
       PATH: process.env['PATH'] ?? '',
