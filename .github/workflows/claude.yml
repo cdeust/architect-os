@@ -13,12 +13,15 @@ on:
 jobs:
   claude:
     # Only the owner, members and collaborators can trigger Claude (docs/design/platform-v3-srt.md §9.1 C.4).
+    # For a comment or an issue GitHub runs this file from the default branch. For a review or a review comment it
+    # runs the file of the pull request's merge commit, this condition included: an open defect of main
+    # (docs/infrastructure.md, "Which commit a run takes its files from").
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The job's own token is in the environment of Claude Code, as DEFAULT_WORKFLOW_TOKEN for the action's CI tools
     # (src/mcp/install-mcp-server.ts at 4411a9e9): it reads and nothing more. The bot writes with the token of the
     # Claude app, which the action gets by OIDC (id-token).
@@ -47,21 +50,43 @@ jobs:
           sparse-checkout: .github/claude
           sparse-checkout-cone-mode: false
       - name: Install the managed settings of the bot
+        id: settings
         run: |
           set -euo pipefail
           sudo install -D -m 0644 -o root -g root claude-config/.github/claude/managed-settings.json /etc/claude-code/managed-settings.json
           rm -rf claude-config
 
+      # Claude Code refuses to start under CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 on Linux without bubblewrap (run
+      # 45771449067), and the action installs it only when allowed_non_write_users is set, in a step that may fail
+      # (action.yml at 4411a9e9, "Install subprocess isolation dependencies"). This step installs what that one
+      # installs and sets the sysctl that one sets: by default Ubuntu 24.04 gives an unprivileged program no user
+      # namespace, and this is the way the action itself allows it. Then it creates a namespace, since a version
+      # printed proves none. A runner where a line fails stops here, with the reason, before the model is called:
+      # the action below runs only when the outcome of this step is success (docs/infrastructure.md, "Bubblewrap
+      # before the scrub").
+      - name: Prove bubblewrap before the scrub of subprocesses
+        id: bubblewrap
+        run: |
+          set -euo pipefail
+          ubuntu=/etc/apt/sources.list.d/ubuntu.sources
+          test -s "$ubuntu"
+          apt=(sudo apt-get -o "Dir::Etc::sourcelist=$ubuntu" -o Dir::Etc::sourceparts=/dev/null)
+          "${apt[@]}" update --error-on=any
+          "${apt[@]}" install -y --no-install-recommends bubblewrap socat
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --version
+          bwrap --unshare-user --unshare-pid --ro-bind / / --proc /proc true
       - name: Run Claude Code
         id: claude
+        if: steps.settings.outcome == 'success' && steps.bubblewrap.outcome == 'success'
         uses: anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c # v1.0.290
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # The mode is set, not left to the action: from v1.0.290 a session starts in auto mode unless
-          # allowed_bots is set (src/modes/permission-mode.ts). acceptEdits lets Claude edit the files of the
-          # checkout, which is what the bot is asked for; the action adds its git wrappers and comment tool.
+          # The mode is set, not left to the action: from v1.0.290 a session starts in auto mode unless one of
+          # several inputs is set (defaultsToAutoMode, src/modes/permission-mode.ts). acceptEdits lets Claude edit
+          # the files of the checkout, which is what the bot is asked for; the action adds its git wrappers and comment tool.
           claude_args: |
             --permission-mode acceptEdits
             --allowedTools "Read,Glob,Grep,Edit,Write"

@@ -1,6 +1,6 @@
 Feature: GitHub workflows
   Every workflow pins its actions by commit SHA, installs without lifecycle scripts and checks out without
-  credentials; gate.yml (docs/design/platform-v3-srt.md §7) has the narrow trigger, permission and secret rules of
+  credentials; every workflow file found in the directory runs each job on an image named with its version; gate.yml (docs/design/platform-v3-srt.md §7) has the narrow trigger, permission and secret rules of
   the CI gate; broker-live.yml (T-04R) is the only one that reaches the real upstream: it stores no credential, exchanges the identity token of its run for a short-lived access token, runs on main only, and takes the four identifiers of the owner's rule from the secret store so that the public log of a run masks them. The Examples
   list the committed workflows: a new file in .github/workflows adds its row.
 
@@ -97,6 +97,34 @@ Feature: GitHub workflows
   Scenario: a workflow with a checkout that keeps its credentials is rejected
     Given the committed workflow "gate.yml"
     Then a workflow with a checkout that keeps its credentials is rejected
+
+  Scenario: every job of every workflow file runs on an image named with its version
+    The files are found in their directory: a new workflow needs no row here to be judged.
+    Then every job of every workflow file runs on an image named with its version
+    And a new workflow file whose job runs on ubuntu-latest is refused by its name
+
+  Scenario: an include of a matrix that sets no runner adds no label
+    Given the committed workflow "bench-sandbox.yml"
+    Then a copy of the workflow whose matrix includes a key that is not its runner is accepted
+
+  Scenario Outline: a workflow whose job runs <kind> is rejected
+    A label such as ubuntu-latest moves to another image without a commit of this repository, and what a job finds
+    installed moves with it (docs/infrastructure.md, "Bubblewrap before the scrub").
+    Given the committed workflow "<file>"
+    Then a copy of the workflow whose job runs <kind> is rejected
+
+    Examples:
+      | file                     | kind                                            |
+      | gate.yml                 | on ubuntu-latest                                |
+      | claude.yml               | on ubuntu-latest                                |
+      | pipeline-after-merge.yml | on ubuntu-latest                                |
+      | gate.yml                 | on macos-latest                                 |
+      | gate.yml                 | on an image this repository does not name       |
+      | gate.yml                 | on a label taken from an input                  |
+      | gate.yml                 | on a list of labels                             |
+      | gate.yml                 | without a runner                                |
+      | bench-sandbox.yml        | with a floating label in its matrix             |
+      | bench-sandbox.yml        | with a label added by the include of its matrix |
 
   Scenario: a gate workflow triggered by pull_request_target is rejected
     Given the committed workflow "gate.yml"
@@ -211,3 +239,21 @@ Feature: GitHub workflows
       | file          |
       | gate.yml      |
       | gate-lane.yml |
+
+  Scenario: Linux host installers run before each real server probe
+    Then the Linux package jobs use their shared host installer
+
+  Scenario: A disabled installer with trailing whitespace fails the host package contract
+    Then a disabled package installer with trailing whitespace is rejected
+
+  Scenario Outline: The host requests postgresql-common before using its package-managed PGDG key
+    Then the <mode> package install with <failure> failure uses only its required archives
+
+    Examples:
+      | mode  | failure        |
+      | gate  | none           |
+      | bench | none           |
+      | gate  | ubuntu-update  |
+      | gate  | ubuntu-install |
+      | gate  | pgdg-update    |
+      | gate  | pgdg-install   |

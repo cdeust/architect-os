@@ -96,6 +96,50 @@ function assertCheckoutWithoutCredentials(text: string): void {
   }
 }
 
+/**
+ * The runner images a job may name: each with its version. A label such as `ubuntu-latest` moves to another image
+ * without a commit of this repository (docs.github.com, "GitHub-hosted runners": the `-latest` labels), and what a
+ * job finds installed moves with it: on 26 November 2026 it gave Ubuntu 26.04 with bubblewrap to two workflows while
+ * the third, on `ubuntu-24.04`, had none (docs/infrastructure.md, "Bubblewrap before the scrub"). A new image is a
+ * line here.
+ */
+const RUNNER_IMAGES = ['ubuntu-24.04', 'macos-26'];
+const MATRIX_KEY = /^\$\{\{\s*matrix\.([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}$/;
+
+/**
+ * The labels a job can run on: its `runs-on`, or what its matrix gives the one key it names, in the list of that key
+ * and in every entry of `include` that sets it. An `include` that sets other keys adds no label.
+ */
+function runnerLabels(job: Workflow['jobs'][string]): unknown[] {
+  const label = job['runs-on'];
+  const key = typeof label === 'string' ? MATRIX_KEY.exec(label)?.[1] : undefined;
+  if (key === undefined) return [label];
+  const matrix = (job.strategy as { matrix?: Record<string, unknown> } | undefined)?.matrix ?? {};
+  const listed = matrix[key] ?? [];
+  const included = matrix['include'] ?? [];
+  assert.ok(Array.isArray(listed) && Array.isArray(included), `matrix.${key} is not a list of labels`);
+  const added = (included as unknown[]).flatMap((entry) =>
+    typeof entry === 'object' && entry !== null && key in entry
+      ? [(entry as Record<string, unknown>)[key]]
+      : [],
+  );
+  assert.ok(listed.length + added.length > 0, `matrix.${key} is not a list of labels`);
+  return [...listed, ...added];
+}
+
+function assertNamedImages(text: string): void {
+  for (const [id, job] of Object.entries(workflow(text).jobs)) {
+    // A job that calls a reusable workflow has no runner of its own: the called file is judged as a workflow.
+    if (job.uses !== undefined) continue;
+    for (const label of runnerLabels(job)) {
+      assert.ok(
+        typeof label === 'string' && RUNNER_IMAGES.includes(label),
+        `job ${id} runs on ${JSON.stringify(label)}, not on an image named with its version`,
+      );
+    }
+  }
+}
+
 function assertGate(text: string): void {
   const doc = workflow(text);
   assert.ok(typeof doc.on === 'object' && !Array.isArray(doc.on), 'on is a mapping');
@@ -251,6 +295,62 @@ Then('every npm ci in it has --ignore-scripts', function () {
 
 Then('every checkout in it has persist-credentials false', function () {
   assertCheckoutWithoutCredentials(text(this));
+});
+
+/** Every file of the directory, found and not listed: a new workflow is judged without a row anywhere. */
+function assertEveryFileNamesItsImages(files: { file: string; text: string }[]): void {
+  assert.ok(files.length > 0, 'no workflow file');
+  for (const { file, text } of files) {
+    try {
+      assertNamedImages(text);
+    } catch (error) {
+      throw new Error(`${file}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    }
+  }
+}
+
+Then('every job of every workflow file runs on an image named with its version', function () {
+  assertEveryFileNamesItsImages(workflowFiles());
+});
+
+Then('a new workflow file whose job runs on ubuntu-latest is refused by its name', function () {
+  const added = {
+    file: 'eleventh.yml',
+    text: 'on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps: []\n',
+  };
+  assert.throws(
+    () => assertEveryFileNamesItsImages([...workflowFiles(), added]),
+    /^Error: eleventh\.yml: job a runs on "ubuntu-latest", not on an image named with its version/,
+  );
+});
+
+Then('a copy of the workflow whose matrix includes a key that is not its runner is accepted', function () {
+  const copy = text(this).replace(/^( {8}os: \[.+\])$/m, '$1\n        include:\n          - artifact: bench');
+  assert.notEqual(copy, text(this));
+  assertNamedImages(copy);
+});
+
+/** Each replaces the first runner of the workflow, or the list of its matrix. */
+const IMAGE_BREAKS: Record<string, (yaml: string) => string> = {
+  'on ubuntu-latest': (yaml) => yaml.replace(/^( {4}runs-on: ).+$/m, '$1ubuntu-latest'),
+  'on macos-latest': (yaml) => yaml.replace(/^( {4}runs-on: ).+$/m, '$1macos-latest'),
+  'on an image this repository does not name': (yaml) =>
+    yaml.replace(/^( {4}runs-on: ).+$/m, '$1ubuntu-22.04'),
+  'on a label taken from an input': (yaml) => yaml.replace(/^( {4}runs-on: ).+$/m, '$1${{ inputs.runner }}'),
+  'on a list of labels': (yaml) => yaml.replace(/^( {4}runs-on: ).+$/m, '$1[self-hosted, linux]'),
+  'without a runner': (yaml) => yaml.replace(/^ {4}runs-on: .+\n/m, ''),
+  'with a floating label in its matrix': (yaml) =>
+    yaml.replace(/^( {8}os: )\[.+\]$/m, '$1[ubuntu-24.04, macos-latest]'),
+  'with a label added by the include of its matrix': (yaml) =>
+    yaml.replace(/^( {8}os: \[.+\])$/m, '$1\n        include:\n          - os: ubuntu-latest'),
+};
+
+Then('a copy of the workflow whose job runs {} is rejected', function (kind: string) {
+  const breakIt = IMAGE_BREAKS[kind];
+  assert.ok(breakIt !== undefined, `no broken workflow named "${kind}"`);
+  const broken = breakIt(text(this));
+  assert.notEqual(broken, text(this));
+  assert.throws(() => assertNamedImages(broken), /not on an image named with its version/);
 });
 
 Then('it satisfies the gate workflow rules', function () {
@@ -759,3 +859,118 @@ Then('a copy of the workflow {word} is refused', function (fault: string) {
   }
   assert.throws(() => assertDestinationPointed(stringify(doc)));
 });
+
+const hostInstaller =
+  '"$GITHUB_WORKSPACE/aos" -- sh "$GITHUB_WORKSPACE/tools/runtime/install-host-packages.sh"';
+
+function assertHostInstall(steps: Workflow['jobs'][string]['steps'], bench: boolean, job: string): void {
+  const lines = steps.flatMap((step) =>
+    (step.run ?? '').split('\n').map((line) => ({ command: line.trim(), condition: step.if })),
+  );
+  const invocation = hostInstaller + (bench ? ' bench' : ' gate');
+  const installers = lines.filter(({ command }) => command === invocation);
+  assert.equal(installers.length, 1, job + ' installer count');
+  assert.equal(
+    installers[0]!.condition,
+    bench ? "runner.os == 'Linux'" : undefined,
+    job + ' installer condition',
+  );
+  const commands = lines.map(({ command }) => command);
+  assert.ok(commands.indexOf(invocation) < commands.indexOf('/usr/lib/postgresql/17/bin/postgres --version'));
+  assert.ok(commands.every((line) => !/\bapt(?:-get)?\b|apt\.postgresql\.org\.sh/.test(line)));
+}
+
+Then('a disabled package installer with trailing whitespace is rejected', function () {
+  const steps = [
+    { if: 'false', run: hostInstaller + ' gate  ' },
+    { run: '/usr/lib/postgresql/17/bin/postgres --version' },
+  ];
+  assert.throws(() => assertHostInstall(steps, false, 'fixture'), /installer condition/);
+});
+
+Then('the Linux package jobs use their shared host installer', function () {
+  for (const [file, jobs] of Object.entries({
+    'gate.yml': ['gate-linux-cucumber'],
+    'gate-lane.yml': ['mutation', 'replay'],
+    'mutation-full.yml': ['mutation-full'],
+    'bench-sandbox.yml': ['bench'],
+  })) {
+    const doc = workflow(readFileSync(join(ROOT, '.github/workflows', file), 'utf8'));
+    for (const id of jobs) {
+      assertHostInstall(doc.jobs[id]?.steps ?? [], file === 'bench-sandbox.yml', file + '/' + id);
+    }
+  }
+});
+
+Then(
+  'the {word} package install with {word} failure uses only its required archives',
+  function (mode: string, failure: string) {
+    const dir = mkdtempSync(join(tmpdir(), 'apt-scope-'));
+    const ubuntu =
+      'Types: deb\nURIs: https://example.invalid/ubuntu\nSuites: noble\nComponents: main universe\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg';
+    const pgdg =
+      'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: noble-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n';
+    try {
+      writeFileSync(join(dir, 'ubuntu'), ubuntu);
+      writeFileSync(
+        join(dir, 'cp'),
+        [
+          '#!/bin/sh',
+          'set -eu',
+          'test "$#" = 2 && test "$1" = /etc/apt/sources.list.d/ubuntu.sources || exit 2',
+          'exec /bin/cp "$FIXTURE/ubuntu" "$2"',
+          '',
+        ].join('\n'),
+        { mode: 0o700 },
+      );
+      writeFileSync(
+        join(dir, 'sudo'),
+        [
+          '#!/bin/sh',
+          'set -eu',
+          'test "$1" = apt-get',
+          'test "$2" = -o',
+          'test "$4" = -o',
+          'test "$3" = Dir::Etc::sourcelist=/dev/null',
+          'parts=${5#Dir::Etc::sourceparts=}',
+          'shift 5',
+          'phase=ubuntu',
+          'if [ -f "$parts/pgdg.sources" ]; then phase=pgdg; fi',
+          'ls -1 "$parts" > "$FIXTURE/$phase-$1.files"',
+          'for source in "$parts"/*.sources; do /bin/cp "$source" "$FIXTURE/$phase-$1-${source##*/}"; done',
+          'echo "$phase $*" >> "$FIXTURE/commands"',
+          'if [ "$FAILURE" = "$phase-$1" ]; then exit 37; fi',
+          '',
+        ].join('\n'),
+        { mode: 0o700 },
+      );
+      const result = spawnSync('/bin/sh', [join(ROOT, 'tools/runtime/install-host-packages.sh'), mode], {
+        env: { PATH: dir + ':/usr/bin:/bin', TMPDIR: dir, FIXTURE: dir, FAILURE: failure },
+        encoding: 'utf8',
+      });
+      const commands = [
+        'ubuntu update --error-on=any',
+        'ubuntu install -y --no-install-recommends bubblewrap socat ripgrep postgresql-common',
+        'pgdg update --error-on=any',
+        'pgdg install -y --no-install-recommends postgresql-17' +
+          (mode === 'gate' ? ' postgresql-17-pgvector' : ''),
+      ];
+      const failed = commands.findIndex((cmd) => cmd.split(' ').slice(0, 2).join('-') === failure);
+      const expected = failed < 0 ? commands : commands.slice(0, failed + 1);
+      assert.equal(result.status, failed < 0 ? 0 : 37, result.stderr);
+      assert.deepEqual(readFileSync(join(dir, 'commands'), 'utf8').trim().split('\n'), expected);
+      for (const line of expected) {
+        const [phase, action] = line.split(' ');
+        const saved = join(dir, phase + '-' + action);
+        const names = readFileSync(saved + '.files', 'utf8')
+          .trim()
+          .split('\n');
+        assert.deepEqual(names, phase === 'ubuntu' ? ['ubuntu.sources'] : ['pgdg.sources', 'ubuntu.sources']);
+        assert.equal(readFileSync(saved + '-ubuntu.sources', 'utf8'), ubuntu);
+        if (phase === 'pgdg') assert.equal(readFileSync(saved + '-pgdg.sources', 'utf8'), pgdg);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
