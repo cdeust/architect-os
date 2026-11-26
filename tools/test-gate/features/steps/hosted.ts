@@ -5,7 +5,6 @@ import { createHash } from 'node:crypto';
 import { cpSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CONFIG_PATH } from '../../src/infrastructure/gate.js';
-import { git } from '../../src/infrastructure/git.js';
 import { HOSTED_COSTS, HOSTED_LANES, planHostedSlices } from '../../src/infrastructure/hosted-lots.js';
 import type { Lot } from '../../src/infrastructure/mutation-lot-proof.js';
 import { requireNativeMutationReport } from '../../src/infrastructure/mutation-report.js';
@@ -15,6 +14,7 @@ import { mutationCatalog } from '../../src/infrastructure/mutation-catalog.js';
 import { fixturePolicy, hosted, plannedLanes, writeHostedPolicy } from './hosted-plan.js';
 import {
   FIXTURES,
+  fixtureGit,
   Given,
   Then,
   When,
@@ -1018,7 +1018,7 @@ Then('receipts of another head are refused, the plan being the same', async func
   const tree = repo.rev('HEAD^{tree}');
   const parent = repo.rev('HEAD^1');
   // The same tree on the same parent under another message: the same perimeter and plan, another commit.
-  git(repo.dir, [
+  fixtureGit(repo.dir, [
     '-c',
     'user.name=gate',
     '-c',

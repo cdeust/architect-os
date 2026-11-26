@@ -2,6 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import {
+  appendFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -14,7 +15,7 @@ import {
 } from 'node:fs';
 import { connect, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { readCapped } from '../../src/capped.js';
 import { SandboxError, type SandboxRunner } from '../../src/port.js';
@@ -158,6 +159,22 @@ interface Attack {
   readonly absentIsFailure?: true;
 }
 
+/** `file` of the git directory of the repository, which exists before the attack; the attack appends a line to it. */
+function gitDirectoryAttack(file: string): Attack {
+  const path = (bait: Bait): string => join(dirname(dirname(bait.hook)), file);
+  const written = (bait: Bait): boolean =>
+    readFileSync(path(bait), 'utf8').includes('written by the session');
+  return {
+    prepare: (bait) => {
+      mkdirSync(dirname(path(bait)), { recursive: true });
+      appendFileSync(path(bait), '');
+    },
+    commands: (bait) => [['sh', '-c', 'printf "# written by the session\\n" >> "$1"', 'sh', path(bait)]],
+    failed: (bait) => assert.equal(written(bait), false, `${path(bait)} was written`),
+    succeeded: (bait) => assert.equal(written(bait), true, `${path(bait)} was not written`),
+  };
+}
+
 const ATTACKS: Record<string, Attack> = {
   'reads the fake secret of the home': {
     commands: (b) => [['cat', b.secret]],
@@ -174,6 +191,10 @@ const ATTACKS: Record<string, Attack> = {
     failed: (b) => assert.equal(existsSync(b.hook), false, `${b.hook} was written`),
     succeeded: (b) => assert.equal(existsSync(b.hook), true, `${b.hook} was not written`),
   },
+  // The two files of the git directory that the closed options of the host's git do not neutralise
+  // (packages/sandbox/src/git-closed.ts): what keeps a session from them is this refusal, nothing else.
+  'adds a line to the configuration of the repository': gitDirectoryAttack('config'),
+  'adds a line to the exclusion file of the repository': gitDirectoryAttack('info/exclude'),
   'reaches example.com, through the proxy of its environment and directly': {
     commands: () => [curl('https://example.com/', 8, false), curl('https://example.com/', 8, true)],
     failed: (_, runs) => runs.forEach(noResponse),

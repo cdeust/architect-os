@@ -23,7 +23,8 @@ import { parseRawDiff } from '../../src/domain/diff.js';
 import { isProduction, mayHoldProduction } from '../../src/domain/layout.js';
 import { parseGateConfig, type GateConfig } from '../../src/infrastructure/config.js';
 import { changedFiles, CONFIG_PATH, runGate } from '../../src/infrastructure/gate.js';
-import { git, gitWithOptions, GitRepository } from '../../src/infrastructure/git.js';
+import { gitInFixture } from '../../../../packages/sandbox/features/git-fixture.js';
+import { GitRepository } from '../../src/infrastructure/git.js';
 
 /** Structural view of the root World (features/support/world.ts); a component cannot import across projects. */
 export interface GateWorld {
@@ -49,6 +50,16 @@ export const DEBT_PATH = 'mutation-debt.json';
  */
 /** The destination reference of the fixture configuration (tools/test-gate/fixtures/gate.json). */
 const DESTINATION = 'refs/remotes/origin/main';
+
+// Use the repository's option list for setup. The code under mutation reads this same file for its own calls.
+const fixtureOptions: string[] = JSON.parse(
+  readFileSync(new URL('../../../../packages/sandbox/git-closed.json', import.meta.url), 'utf8'),
+).options;
+function git(directory: string, args: readonly string[]): string {
+  return gitInFixture(directory, [...fixtureOptions, '-c', 'core.quotePath=false', ...args]);
+}
+
+export { git as fixtureGit };
 
 export class GateRepository {
   readonly dir: string;
@@ -435,6 +446,12 @@ Given('a fake git first on the PATH of the process, which records the names of i
   this.state['gateFakeGit'] = script;
 });
 
+Then("the gate's git received no fixture command", function () {
+  const script = this.state['gateFakeGit'];
+  assert.equal(typeof script, 'string');
+  assert.equal(existsSync(`${script}.argv`), false);
+});
+
 When('the gate asks its git for the head', function () {
   new GitRepository(repository(this).dir).commits();
 });
@@ -455,14 +472,80 @@ Given('the configuration of the gate repository names a witness program as its c
   this.state['gateWitness'] = witness;
 });
 
+Given('the gate repository replaces the tree of its first parent by the tree of its head', function () {
+  const dir = repository(this).dir;
+  git(dir, [
+    'replace',
+    git(dir, ['rev-parse', 'HEAD^1^{tree}']).trim(),
+    git(dir, ['rev-parse', 'HEAD^{tree}']).trim(),
+  ]);
+});
+
+Given('the gate repository grafts its head with no parent', function () {
+  git(repository(this).dir, ['replace', '--graft', 'HEAD']);
+});
+
+Then('the first parent the gate reads is the parent the head records', function () {
+  const dir = repository(this).dir;
+  const recorded = gitInFixture(dir, ['--no-replace-objects', 'rev-parse', 'HEAD^1']).trim();
+  assert.equal(new GitRepository(dir).commits().firstParent, recorded);
+});
+
+// The configuration names an attributes file of the tree that gives every file a filter whose program is the witness.
+Given(
+  'the configuration of the gate repository names an attributes file whose filter is a witness program',
+  function () {
+    const repo = repository(this);
+    const witness = join(mkdtempSync(join(tmpdir(), 'aos-gate-witness-')), 'witness');
+    this.cleanups.push(() => rmSync(dirname(witness), { recursive: true, force: true }));
+    writeFileSync(witness, `#!/bin/sh\n: > '${witness}.ran'\nexec cat\n`);
+    chmodSync(witness, 0o755);
+    writeFileSync(join(dirname(witness), 'attributes'), '* filter=witness\n');
+    const configuration = repo.path('.git/config');
+    writeFileSync(
+      configuration,
+      `${readFileSync(configuration, 'utf8')}[core]\n\tattributesFile = ${join(dirname(witness), 'attributes')}\n` +
+        `[filter "witness"]\n\tclean = ${witness}\n`,
+    );
+    this.state['gateWitness'] = witness;
+  },
+);
+
+// diff.external, or a textconv that .git/info/attributes gives every file (neither the empty tree nor the attributes
+// file of the configuration reaches it): programs git starts for a diff unless told not to.
+Given(
+  'the configuration of the gate repository names a witness program for its diffs as its {string}',
+  function (program: string) {
+    const repo = repository(this);
+    const witness = join(mkdtempSync(join(tmpdir(), 'aos-gate-witness-')), 'witness');
+    this.cleanups.push(() => rmSync(dirname(witness), { recursive: true, force: true }));
+    writeFileSync(witness, `#!/bin/sh\n: > '${witness}.ran'\ncat "$1" 2>/dev/null\n`);
+    chmodSync(witness, 0o755);
+    const configuration = repo.path('.git/config');
+    const section =
+      program === 'external diff'
+        ? `[diff]\n\texternal = ${witness}\n`
+        : `[diff "witness"]\n\ttextconv = ${witness}\n`;
+    if (program !== 'external diff') {
+      mkdirSync(repo.path('.git/info'), { recursive: true });
+      writeFileSync(repo.path('.git/info/attributes'), '* diff=witness\n');
+    }
+    writeFileSync(configuration, `${readFileSync(configuration, 'utf8')}${section}`);
+    this.state['gateWitness'] = witness;
+  },
+);
+
 When('git is asked for the diff with none of the options of the gate', function () {
   const { firstParent } = new GitRepository(repository(this).dir).commits();
   assert.notEqual(firstParent, null, 'the gate repository must have a first parent');
-  gitWithOptions(
-    repository(this).dir,
-    [],
-    ['diff', '--unified=0', '--no-renames', '--no-color', '--no-ext-diff', firstParent ?? ''],
-  );
+  gitInFixture(repository(this).dir, [
+    'diff',
+    '--unified=0',
+    '--no-renames',
+    '--no-color',
+    '--no-ext-diff',
+    firstParent ?? '',
+  ]);
 });
 
 // A repository nested in the tree of the gate (closed-environment.feature): what a session can leave in its worktree.
@@ -478,7 +561,7 @@ Given(
     chmodSync(witness, 0o755);
     const nested = repository(this).path(name);
     mkdirSync(nested, { recursive: true });
-    const inner = (args: string[]) => gitWithOptions(nested, [], args);
+    const inner = (args: string[]) => gitInFixture(nested, args);
     inner(['init', '-q']);
     writeFileSync(join(nested, '.gitattributes'), 'f.txt filter=witness\n');
     writeFileSync(join(nested, 'f.txt'), 'inner\n');
@@ -502,7 +585,7 @@ Given(
 );
 
 When('git is asked for the status with none of the options of the gate', function () {
-  gitWithOptions(repository(this).dir, [], ['status', '--porcelain']);
+  gitInFixture(repository(this).dir, ['status', '--porcelain']);
 });
 
 When('the gate asks its git for the changed paths and for the patch of {string}', function (path: string) {
@@ -521,6 +604,12 @@ Given(
     repo.remove(name);
   },
 );
+
+Then('the gate reads its changes without a refusal', function () {
+  const repo = repository(this);
+  const read = new GitRepository(repo.dir);
+  changedFiles(read, new Workspace(repo.dir), read.commits().firstParent, repo.layout());
+});
 
 Then('the gate refuses to read its changes with {string}', function (message: string) {
   const repo = repository(this);
@@ -883,15 +972,21 @@ Given('a linked worktree with an external gitdir is inside the gate repository',
   external.commit('external metadata');
   const repo = repository(this);
   git(external.dir, ['worktree', 'add', '--detach', repo.path('linked'), 'HEAD']);
-  assert.ok(repo.read('linked/.git').startsWith(`gitdir: ${external.dir}/.git/worktrees/`));
+  assert.ok(repo.read('linked/.git').startsWith(`gitdir: ${realpathSync(external.dir)}/.git/worktrees/`));
 });
 
 When('the fixture Git requests the nested patch without the command line submodule guard', function () {
   const repo = repository(this);
   const parent = repo.rev('HEAD^1');
-  gitWithOptions(
-    repo.dir,
-    ['-c', 'diff.ignoreSubmodules=all'],
-    ['diff', '--unified=0', '--text', '--no-textconv', parent, '--', ':(literal)sub'],
-  );
+  gitInFixture(repo.dir, [
+    '-c',
+    'diff.ignoreSubmodules=all',
+    'diff',
+    '--unified=0',
+    '--text',
+    '--no-textconv',
+    parent,
+    '--',
+    ':(literal)sub',
+  ]);
 });

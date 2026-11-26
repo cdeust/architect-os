@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { git } from '../../src/infrastructure/git.js';
 import type { DataTable } from '@cucumber/cucumber';
-import { DEBT_PATH, FIXTURES, Given, Then, repository, type GateRepository } from './repository.js';
+import {
+  DEBT_PATH,
+  FIXTURES,
+  Given,
+  Then,
+  fixtureGit as git,
+  repository,
+  type GateRepository,
+} from './repository.js';
 
 // Steps of debt.feature: the mutation debt registry of a disposable repository (fixtures/debt/), the code that
 // moves in the mutation report, and the text the report prints of the debt.

@@ -9,13 +9,15 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { checkoutIsClean, visibleNestedMarker } from '../../src/git-worktree.js';
 import { fingerprintTree, type TreeFingerprint } from '../../src/tree-fingerprint.js';
-import { Given, Then, When } from './helpers.js';
+import { gitInFixture } from '../git-fixture.js';
+import { Given, ROOT, Then, When } from './helpers.js';
 
 // Where throwaway directories go, whatever TMPDIR a scenario sets for the fingerprint.
 const ROOT_TMP = tmpdir();
@@ -40,32 +42,16 @@ interface Fingerprinting {
 const fp = (world: { state: Record<string, unknown> }): Fingerprinting =>
   (world.state['fingerprinting'] ??= { directory: '', results: [] }) as Fingerprinting;
 
-/**
- * A git for the scenarios, started with a closed environment: nothing of the environment of the suite, whatever the
- * machine or the job sets. PATH is there to find git. GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM are /dev/null so that no
- * configuration of the machine is read (no HOME is given, so no `~/.gitconfig` and no XDG directory either). LC_ALL=C
- * because the output of `status --porcelain` and of `rev-parse` is read. The identity is given by `-c` below, and no
- * scenario compares a hash between two repositories, so no date is fixed. A scenario that sets GIT_DIR in the process to
- * poison the fingerprint does not reach the helper: it reads the repository it is given.
- */
-export const git = (directory: string, ...args: string[]): string => {
-  const result = spawnSync(
-    'git',
-    ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args],
-    {
-      cwd: directory,
-      encoding: 'utf8',
-      env: {
-        PATH: process.env['PATH'] ?? '',
-        GIT_CONFIG_GLOBAL: '/dev/null',
-        GIT_CONFIG_SYSTEM: '/dev/null',
-        LC_ALL: 'C',
-      },
-    },
-  );
-  assert.equal(result.status, 0, `git ${args.join(' ')} failed: ${result.stderr}`);
-  return result.stdout.trim();
-};
+export const git = (directory: string, ...args: string[]): string =>
+  gitInFixture(directory, [
+    '-c',
+    'user.name=t',
+    '-c',
+    'user.email=t@example.com',
+    '-c',
+    'commit.gpgsign=false',
+    ...args,
+  ]).trim();
 
 const throwaway = (world: { state: Record<string, unknown>; cleanups: (() => void)[] }): string => {
   const directory = mkdtempSync(join(ROOT_TMP, 'aos-fp-'));
@@ -115,6 +101,44 @@ Given(
     this.state['fingerprintWitness'] = witness;
   },
 );
+
+Given('the repository replaces its head commit by a commit of another tree', function () {
+  const { directory } = fp(this);
+  const other = git(directory, 'commit-tree', git(directory, 'mktree', '--missing'), '-m', 'other');
+  git(directory, 'replace', git(directory, 'rev-parse', 'HEAD'), other);
+});
+
+// The configuration names an attributes file outside the tree that gives every file a filter whose program is the witness.
+Given(
+  'the configuration of the repository names an attributes file whose filter is a witness program',
+  function () {
+    const witness = join(mkdtempSync(join(ROOT_TMP, 'aos-fp-witness-')), 'witness');
+    this.cleanups.push(() => rmSync(dirname(witness), { recursive: true, force: true }));
+    writeFileSync(witness, `#!/bin/sh\n: > '${witness}.ran'\nexec cat\n`);
+    chmodSync(witness, 0o755);
+    writeFileSync(join(dirname(witness), 'attributes'), '* filter=witness\n');
+    const configuration = join(fp(this).directory, '.git', 'config');
+    writeFileSync(
+      configuration,
+      `${readFileSync(configuration, 'utf8')}[core]\n\tattributesFile = ${join(dirname(witness), 'attributes')}\n` +
+        `[filter "witness"]\n\tclean = ${witness}\n`,
+    );
+    this.state['fingerprintWitness'] = witness;
+  },
+);
+
+Then('the witness program of the configuration of the repository has not run', function () {
+  assert.equal(witnessRan(this), false);
+});
+
+Given('the file {string} of the repository is committed whatever ignores it', function (file: string) {
+  const { directory } = fp(this);
+  mkdirSync(dirname(join(directory, file)), { recursive: true });
+  writeFileSync(join(directory, file), 'kept\n');
+  git(directory, 'add', '-A');
+  git(directory, 'add', '-f', file);
+  git(directory, 'commit', '-q', '-m', 'kept');
+});
 
 Given('everything in the repository is committed', function () {
   const { directory } = fp(this);
@@ -358,8 +382,8 @@ const names = Object.keys(process.env).filter((name) => name !== '__CF_USER_TEXT
 const configuration = [process.env.GIT_CONFIG_GLOBAL, process.env.GIT_CONFIG_SYSTEM, process.env.GIT_ATTR_NOSYSTEM];
 const line = [args.join(' '), process.env.GIT_INDEX_FILE ?? '', fs.realpathSync(process.cwd()), names, configuration];
 fs.appendFileSync(path.join(__dirname, 'calls.log'), JSON.stringify(line) + '\\n');
-// The seven arguments before the subcommand are the options the fingerprint gives every call.
-if (args.slice(7).join(' ') === read('on')) {
+// The ten arguments before the subcommand are the options the fingerprint gives every call (git-closed.json).
+if (args.slice(10).join(' ') === read('on')) {
   if (read('sleep') !== '') setTimeout(() => {}, Number(read('sleep')) * 1000);
   else {
     process.stdout.write(read('text') + '\\n');
@@ -406,7 +430,7 @@ Given('a fake git with immediate responses before its deliberately silent call',
     [
       '#!/bin/sh',
       'set -eu',
-      'shift 7',
+      'shift 10',
       'IFS= read -r silent < "${0%/*}/on" || [ -n "$silent" ]',
       'printf "%s\\n" "$*" >> "${0%/*}/calls.log"',
       'if [ "$*" = "$silent" ]; then exec /bin/sleep 60; fi',
@@ -477,7 +501,13 @@ Then('the temporary index was in the temporary directory', function () {
   assert.equal(basename(indexes[0] as string), 'index');
 });
 
-const CONFIGURATION = ['GIT_ATTR_NOSYSTEM', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM'];
+const CONFIGURATION = [
+  'GIT_ATTR_NOSYSTEM',
+  'GIT_CONFIG_GLOBAL',
+  'GIT_CONFIG_NOSYSTEM',
+  'GIT_CONFIG_SYSTEM',
+  'GIT_NO_REPLACE_OBJECTS',
+];
 
 Then(
   'each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due',
@@ -530,7 +560,9 @@ Given('a linked worktree from the second repository is nested at {string}', func
   const nested = join(directory, name);
   assert.ok(other);
   git(other, 'worktree', 'add', '--detach', nested, 'HEAD');
-  assert.ok(readFileSync(join(nested, '.git'), 'utf8').startsWith(`gitdir: ${other}/.git/worktrees/`));
+  assert.ok(
+    readFileSync(join(nested, '.git'), 'utf8').startsWith(`gitdir: ${realpathSync(other)}/.git/worktrees/`),
+  );
 });
 
 // --- the guard of the checkout (git-worktree.ts) ------------------------------------------------------------------
@@ -548,6 +580,18 @@ Given('a throwaway repository with a directory it cannot list', function () {
   // Cleanups run in reverse order: the directory is opened again before the repository is removed.
   this.cleanups.push(() => chmodSync(closed, 0o700));
 });
+
+Given('the ignore file of the repository is a symbolic link to {string}', function (target: string) {
+  symlinkSync(target, join(fp(this).directory, '.gitignore'));
+});
+
+Given(
+  'the ignore file of the repository ends with the comment {string} after one MiB of comments',
+  function (tail: string) {
+    const commentLine = '#'.repeat(1023) + '\n';
+    writeFileSync(join(fp(this).directory, '.gitignore'), commentLine.repeat(1024) + '#' + tail);
+  },
+);
 
 Then('the guard of the checkout finds it clean', function () {
   assert.equal(checkoutIsClean(fp(this).directory), true);
@@ -570,4 +614,100 @@ Then('the guard of the checkout refuses to name its markers with {string}', func
 
 Then('the guard of the checkout names no marker', function () {
   assert.equal(visibleNestedMarker(fp(this).directory, ''), undefined);
+});
+
+// Observe the guard's decision at the point where it hands the sets to the directory walk.
+// The real Git entries and the ordinary file suffice; there is no nested repository in the fixture.
+Then(
+  'the guard classifies the ignore file as {string} from both the head and the index',
+  function (classification: string) {
+    const { directory } = fp(this);
+    const script = [
+      'import os, runpy, sys',
+      'from unittest.mock import Mock',
+      'inspect = runpy.run_path(sys.argv[1])["visible_marker"]',
+      'walk = Mock()',
+      'inspect.__globals__["nested_marker"] = walk',
+      'fd = os.open(".", os.O_RDONLY | os.O_DIRECTORY)',
+      'try:',
+      '    inspect(fd, sys.stdin.buffer.read())',
+      'finally:',
+      '    os.close(fd)',
+      '_, trusted, changed, _ = walk.call_args.args',
+      'sources = (("trusted", trusted), ("changed", changed))',
+      'print(" ".join(label for label, paths in sources if b".gitignore" in paths))',
+    ].join('\n');
+    const guard = join(ROOT, 'tools/test-gate/with-tree-lock.py');
+    const head = git(directory, 'ls-tree', '-r', '-z', 'HEAD');
+    const index = git(directory, 'ls-files', '-s', '-z');
+    for (const entries of [head, index]) {
+      const result = spawnSync('/usr/bin/python3', ['-I', '-c', script, guard], {
+        cwd: directory,
+        env: {},
+        input: entries,
+        encoding: 'utf8',
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout.trim(), classification);
+    }
+  },
+);
+
+Then('the guard refuses the recorded markers of its head with {string}', function (message: string) {
+  const { directory } = fp(this);
+  const tree = git(directory, 'ls-tree', '-r', '-z', 'HEAD');
+  assert.throws(() => visibleNestedMarker(directory, tree), { message });
+});
+
+Then('the guard of the checkout names no marker of its index', function () {
+  const { directory } = fp(this);
+  assert.equal(visibleNestedMarker(directory, git(directory, 'ls-files', '-s', '-z')), undefined);
+});
+
+Then('the guard of the checkout names no marker of its head', function () {
+  const { directory } = fp(this);
+  assert.equal(visibleNestedMarker(directory, git(directory, 'ls-tree', '-r', '-z', 'HEAD')), undefined);
+});
+
+Then('the guard of the checkout names the marker {string} of its head', function (path: string) {
+  const { directory } = fp(this);
+  assert.deepEqual(visibleNestedMarker(directory, git(directory, 'ls-tree', '-r', '-z', 'HEAD')), { path });
+});
+
+Then(
+  'the guard of the checkout names the marker {string} under the changed ignore file {string}',
+  function (path: string, changedIgnoreFile: string) {
+    const { directory } = fp(this);
+    assert.deepEqual(visibleNestedMarker(directory, git(directory, 'ls-tree', '-r', '-z', 'HEAD')), {
+      path,
+      changedIgnoreFile,
+    });
+  },
+);
+
+Given('the file {string} of the repository is removed', function (file: string) {
+  rmSync(join(fp(this).directory, file));
+});
+
+Then('a git with none of the options of the guard lists no file in the head of the repository', function () {
+  assert.equal(git(fp(this).directory, 'ls-tree', '-r', 'HEAD'), '');
+});
+
+// The file monitor of the configuration: a program git starts when it lists the untracked files (core.fsmonitor).
+Given('the configuration of the repository names a witness program as its file monitor', function () {
+  const witness = join(mkdtempSync(join(ROOT_TMP, 'aos-fp-witness-')), 'witness');
+  this.cleanups.push(() => rmSync(dirname(witness), { recursive: true, force: true }));
+  writeFileSync(witness, `#!/bin/sh\n: > '${witness}.ran'\nexit 1\n`);
+  chmodSync(witness, 0o755);
+  const configuration = join(fp(this).directory, '.git', 'config');
+  writeFileSync(configuration, `${readFileSync(configuration, 'utf8')}[core]\n\tfsmonitor = ${witness}\n`);
+  this.state['fingerprintWitness'] = witness;
+});
+
+When('a git with none of the options of the guard lists the untracked files of the repository', function () {
+  git(fp(this).directory, 'ls-files', '--others', '--exclude-standard');
+});
+
+Then('the witness program of the configuration of the repository has run', function () {
+  assert.equal(witnessRan(this), true);
 });

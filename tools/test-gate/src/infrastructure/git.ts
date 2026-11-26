@@ -1,65 +1,24 @@
-import { visibleNestedMarker } from '@architect-os/sandbox/git-worktree';
+import { closedGitOptions, machineIndependentGitEnvironment } from '@architect-os/sandbox/git-closed';
+import { visibleNestedMarker, type NestedMarker } from '@architect-os/sandbox/git-worktree';
 import { execFileSync } from 'node:child_process';
 import { destinationMessage, judgedParent, type DestinationFacts } from '../domain/destination.js';
 import type { JudgedDestination } from '../domain/verdict.js';
 import { decodeExactly } from '../domain/diff.js';
 
 /**
- * The environment of every git call of the gate: the variables of the host that git needs, by name, and nothing else.
- * A `GIT_DIR` or a `GIT_CONFIG_COUNT` of the host would make the gate read another repository or a configuration
- * (docs/design/orchestration-fable-5-2.md §14, « Un environnement fermé pour git »). A name that the process does
- * not set is given as `undefined`, which node leaves out of the environment of the child. The global and the system
- * configuration of git are an empty file: with no `HOME` either, the verdict does not depend on the machine.
- */
-function closedEnvironment(): NodeJS.ProcessEnv {
-  const names = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
-  const given: NodeJS.ProcessEnv = {
-    GIT_ATTR_NOSYSTEM: '1',
-    GIT_CONFIG_GLOBAL: '/dev/null',
-    GIT_CONFIG_SYSTEM: '/dev/null',
-  };
-  for (const name of names) given[name] = process.env[name];
-  return given;
-}
-
-/** The tree with no entry (SHA-1): the source of attributes of every git call of the gate. */
-const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-
-/**
- * The options of every git call of the gate, before the subcommand. What a session wrote in the tree decides nothing
- * of what git does for the host (docs/design/orchestration-fable-5-2.md §14, « Un environnement fermé pour git »):
- * no file monitor and no hook, so that git starts no program of its own; the attributes read from the empty tree, so
- * that no `.gitattributes` of the working tree hides a change (`-diff`, `binary`) nor makes git call clean a file whose
- * bytes are not those of the commit (`ident`, `eol`, a filter); no descent into a repository nested in the tree, whose
- * own configuration would name programs (a `filter`) that git would start. The paths of the diff as they are.
+ * What precedes the subcommand of every git call of the gate: what the git of the host is given
+ * (packages/sandbox/src/git-closed.ts), and the one value the gate adds for itself, the paths of the diff as they are.
  */
 function options(): string[] {
-  return [
-    `--attr-source=${EMPTY_TREE}`,
-    ...[
-      'core.quotePath=false',
-      'core.fsmonitor=false',
-      'core.hooksPath=/dev/null',
-      'diff.ignoreSubmodules=all',
-    ].flatMap((option) => ['-c', option]),
-  ];
+  return closedGitOptions(['core.quotePath=false']);
 }
 
-/** Runs `git` in `cwd` and returns its standard output, through `gitWithOptions` with what the gate always gives: `options()`. */
-export function git(cwd: string, args: readonly string[]): string {
-  return gitWithOptions(cwd, options(), args);
-}
-
-/**
- * `git` with the options given before the subcommand. The only process launch of tools/test-gate: named exception of
- * the rule child-process-only-in-sandbox in .dependency-cruiser.cjs. The gate has no network code and no token.
- * The gate always gives `options()`, through `git`; the scenarios give none, to show that the options are what keeps
- * the program of the configuration from running.
- */
-export function gitWithOptions(cwd: string, before: readonly string[], args: readonly string[]): string {
-  return execFileSync('git', [...before, ...args], {
+// The production adapter supplies the repository policy to every call. Scenario setup uses its own Git process,
+// so replaying a mutation of these process options cannot redirect fixture writes into the checkout under lease.
+function git(cwd: string, args: readonly string[]): string {
+  return execFileSync('git', [...options(), ...args], {
     cwd,
-    env: closedEnvironment(),
+    env: machineIndependentGitEnvironment(),
     encoding: 'utf8',
     maxBuffer: 1 << 30,
   });
@@ -75,7 +34,11 @@ function names(output: string): string[] {
  */
 function gitList(cwd: string, args: readonly string[]): string {
   return decodeExactly(
-    execFileSync('git', [...options(), ...args], { cwd, env: closedEnvironment(), maxBuffer: 1 << 30 }),
+    execFileSync('git', [...options(), ...args], {
+      cwd,
+      env: machineIndependentGitEnvironment(),
+      maxBuffer: 1 << 30,
+    }),
   );
 }
 
@@ -206,15 +169,22 @@ export class GitRepository {
 
   requireNoNested(): void {
     const nested = this.nested();
-    if (nested !== undefined) throw new Error(`dépôt imbriqué dans l'arbre : ${nested}`);
+    if (nested === undefined) return;
+    // A tracked ignore file that is no longer the recorded one prunes nothing: the refusal says so, or a directory the
+    // repository ignored (dependencies, other worktrees) would look like a nested repository for no reason.
+    throw new Error(
+      nested.changedIgnoreFile === undefined
+        ? `dépôt imbriqué dans l'arbre : ${nested.path}`
+        : `dépôt imbriqué dans l'arbre : ${nested.path} (écarté par ${nested.changedIgnoreFile}, qui n'est plus le fichier enregistré : ses règles ne sont pas appliquées)`,
+    );
   }
 
   /** Refuse recorded gitlinks and visible markers before any Git worktree traversal. */
-  nested(): string | undefined {
+  nested(): NestedMarker | undefined {
     const index = gitList(this.root, ['ls-files', '-s', '-z']);
     const head = gitList(this.root, ['ls-tree', '-r', '-z', 'HEAD']);
     const recorded = [...names(index), ...names(head)].find((entry) => entry.startsWith('160000 '));
-    if (recorded !== undefined) return recorded.slice(recorded.indexOf('\t') + 1);
+    if (recorded !== undefined) return { path: recorded.slice(recorded.indexOf('\t') + 1) };
     return visibleNestedMarker(this.root, head);
   }
 

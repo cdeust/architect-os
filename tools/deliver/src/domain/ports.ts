@@ -55,8 +55,14 @@ export interface Repository {
    * The tree holds a repository of its own: recorded by the index or by the head (an entry of mode 160000), or not
    * tracked (git lists it as a directory). Asked before anything else: git would enter it, read its configuration and
    * start the programs it names, with the identity of the delivery.
+   *
+   * One tree is left to `isClean`: the one whose only marker lies in a directory that a tracked ignore file ignores
+   * while that file is no longer the recorded one. Its rules are not applied, so the marker is found, but what the
+   * operator has to repair is the changed file: this method answers false and `isClean` must answer false, which the
+   * contract holds for every adapter. The delivery asks both before any other call.
    */
   holdsNestedRepository(): boolean;
+  /** The index and the bytes of the checkout are those of the commit, nothing is untracked, and no repository is nested. */
   isClean(): boolean;
   /** The full hash of the commit to deliver (40 hexadecimal characters). */
   head(): string;

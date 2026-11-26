@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lanesWorth, type LanePolicy } from '../../src/domain/hosted-lanes.js';
-import { git } from '../../src/infrastructure/git.js';
 import { runHostedGate } from '../../src/infrastructure/hosted-gate.js';
 import {
   HOSTED_COSTS,
@@ -18,7 +17,7 @@ import {
 } from '../../src/infrastructure/hosted-lots.js';
 import type { Lot } from '../../src/infrastructure/mutation-lot-proof.js';
 import { Workspace } from '../../src/infrastructure/workspace.js';
-import { Given, Then, When, repository, type GateRepository, type GateWorld } from './repository.js';
+import { Given, Then, When, fixtureGit, repository, type GateRepository, type GateWorld } from './repository.js';
 
 type Mutant = Lot['mutants'][number];
 /** What a hosted command needs of a checkout: where it is, and its report tree. */
@@ -426,8 +425,8 @@ When(
     this.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
     // The object store and the references of the first, then the tree of its head checked out from them.
     cpSync(repo.path('.git'), join(dir, '.git'), { recursive: true });
-    git(dir, ['checkout', '-q', '-f', 'HEAD']);
-    assert.equal(git(dir, ['rev-parse', 'HEAD']), git(repo.dir, ['rev-parse', 'HEAD']));
+    fixtureGit(dir, ['checkout', '-q', '-f', 'HEAD']);
+    assert.equal(fixtureGit(dir, ['rev-parse', 'HEAD']), fixtureGit(repo.dir, ['rev-parse', 'HEAD']));
     assert.notEqual(dir, repo.dir);
     const other: Checkout = { dir, workspace: () => new Workspace(dir) };
     this.state['second checkout'] = other;

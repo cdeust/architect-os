@@ -6,9 +6,10 @@ import { fileURLToPath } from 'node:url';
 import type { DataTable } from '@cucumber/cucumber';
 import { parse } from 'yaml';
 import { destinationMessage, judgedParent, type DestinationRefusal } from '../../src/domain/destination.js';
-import { git, gitWithOptions, GitRepository } from '../../src/infrastructure/git.js';
+import { gitInFixture } from '../../../../packages/sandbox/features/git-fixture.js';
+import { GitRepository } from '../../src/infrastructure/git.js';
 import { fixtureSource, replaceLine } from './reports.js';
-import { Given, Then, When, repository } from './repository.js';
+import { Given, Then, When, fixtureGit as git, repository } from './repository.js';
 
 // The destination the gate judges against (destination.feature). The fixture repository is a scenario's own: its
 // branches, merges and references are made here, never in a worktree of the repository.
@@ -212,7 +213,7 @@ When('the step of gate.yml that points the destination runs in that checkout', f
     (quoted ?? bare ?? '').replace(/\$([A-Z_]+)/g, (_all, name: string) => step.env?.[name] ?? ''),
   );
   assert.equal(words[0], 'git');
-  gitWithOptions(forge.checkout as string, [], words.slice(1));
+  gitInFixture(forge.checkout as string, words.slice(1));
 });
 
 Then(
