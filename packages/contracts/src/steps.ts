@@ -17,6 +17,7 @@ export const StepArtifactKindSchema = z.enum([
   'build.brief',
   'build.measure',
   'build.report',
+  'build.claims',
   'check',
   'review.brief',
   'review.measure',
@@ -29,6 +30,7 @@ export const UNNAMED_STEP_ARTIFACT_KINDS: readonly StepArtifactKind[] = [
   'build.brief',
   'build.measure',
   'build.report',
+  'build.claims',
   'review.brief',
 ];
 

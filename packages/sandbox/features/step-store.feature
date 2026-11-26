@@ -51,6 +51,10 @@ Feature: The StepStore port: what a Step retains, behind a port
       | in-memory | of facts with an unknown reason         | scout.facts    | files   | facts rejected for "autre"      | STEP_ARTIFACT_INVALID |
       | file      | of facts invalid without a reason       | scout.facts    | files   | the JSON {"invalid":1}          | STEP_ARTIFACT_INVALID |
       | in-memory | of facts invalid without a reason       | scout.facts    | files   | the JSON {"invalid":1}          | STEP_ARTIFACT_INVALID |
+      | file      | of claims that are not claims           | build.claims   |         | the JSON {"claims":[{}]}        | STEP_ARTIFACT_INVALID |
+      | in-memory | of claims that are not claims           | build.claims   |         | the JSON {"claims":[{}]}        | STEP_ARTIFACT_INVALID |
+      | file      | of claims without their identifier      | build.claims   |         | the JSON {"claims":[{"brief_item":"b","instead":"i","evidence":[{"command":"c"}]}]} | STEP_ARTIFACT_INVALID |
+      | in-memory | of claims without their identifier      | build.claims   |         | the JSON {"claims":[{"brief_item":"b","instead":"i","evidence":[{"command":"c"}]}]} | STEP_ARTIFACT_INVALID |
       | file      | of a check with a textual exit code     | check          | types   | a check exiting with "x"        | STEP_ARTIFACT_INVALID |
       | in-memory | of a check with a textual exit code     | check          | types   | a check exiting with "x"        | STEP_ARTIFACT_INVALID |
       | file      | of a verdict of an unknown verdict      | review.verdict | general | the JSON {"verdict":"maybe"}       | STEP_ARTIFACT_INVALID |

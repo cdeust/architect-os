@@ -247,7 +247,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "verdict": "accept",
         "findings": [],
         "not_checked": [],
-        "criteria": []
+        "criteria": [],
+        "claims": []
       }
       """
       And the step stdout is the line:
@@ -301,7 +302,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "not_checked": [
           "gate"
         ],
-        "criteria": []
+        "criteria": [],
+        "claims": []
       }
       """
 
@@ -390,7 +392,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "verdict": "accept",
         "findings": [],
         "not_checked": [],
-        "criteria": []
+        "criteria": [],
+        "claims": []
       }
       """
       And the step file "review.beta.verdict.json" is:
@@ -399,7 +402,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "verdict": "accept",
         "findings": [],
         "not_checked": [],
-        "criteria": []
+        "criteria": [],
+        "claims": []
       }
       """
       And the step file "review.beta.measure.json" is:
@@ -449,7 +453,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "verdict": "accept",
         "findings": [],
         "not_checked": [],
-        "criteria": []
+        "criteria": [],
+        "claims": []
       }
       """
       And the step file "review.beta.verdict.json" is:
@@ -475,7 +480,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "not_checked": [
           "gate"
         ],
-        "criteria": []
+        "criteria": [],
+        "claims": []
       }
       """
       And the step stdout is the line:
@@ -503,7 +509,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "verdict": "accept",
         "findings": [],
         "not_checked": [],
-        "criteria": []
+        "criteria": [],
+        "claims": []
       }
       """
       And the step stdout is the line:
@@ -623,7 +630,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "verdict": "accept",
         "findings": [],
         "not_checked": [],
-        "criteria": []
+        "criteria": [],
+        "claims": []
       }
       """
       And the step folder has no file "review.beta.verdict.json"
@@ -660,7 +668,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "verdict": "accept",
         "findings": [],
         "not_checked": [],
-        "criteria": []
+        "criteria": [],
+        "claims": []
       }
       """
 
@@ -883,7 +892,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         "verdict": "accept",
         "findings": [],
         "not_checked": [],
-        "criteria": []
+        "criteria": [],
+        "claims": []
       }
       """
       And the step stdout is the line:
@@ -983,7 +993,7 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the step file "scout.b.facts.json" is:
       """
       {
-        "invalid": "facts: Invalid input: expected array, received undefined; open: Invalid input: expected array, received undefined; : Unrecognized keys: \"verdict\", \"findings\", \"not_checked\", \"criteria\""
+        "invalid": "facts: Invalid input: expected array, received undefined; open: Invalid input: expected array, received undefined; : Unrecognized keys: \"verdict\", \"findings\", \"not_checked\", \"criteria\", \"claims\""
       }
       """
       And the step file "scout.c.facts.json" is:

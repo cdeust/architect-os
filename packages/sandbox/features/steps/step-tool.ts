@@ -1420,6 +1420,59 @@ Then(
   },
 );
 
+// The departures a build declares (src/build-claims.ts): a report that carries a claims block, and what the record keeps.
+Given('the build session reports:', function (report: string) {
+  const stream = fixture('session.jsonl').trimEnd().split('\n');
+  const result = JSON.parse(stream.pop()!) as Record<string, unknown>;
+  stream.push(JSON.stringify({ ...result, result: report }));
+  step(this).behaviours['code.json'].text = stream.join('\n') + '\n';
+});
+
+const publishedRecord = (s: Step, name: string) =>
+  JSON.parse(s.published.get(name)!['record.json']!) as Record<string, unknown>;
+
+Then('the published record of the step {string} has the claims:', function (name: string, expected: string) {
+  assert.deepEqual(publishedRecord(step(this), name)['claims'], JSON.parse(expected));
+});
+
+Then('the published record of the step {string} has no claims', function (name: string) {
+  assert.equal(Object.hasOwn(publishedRecord(step(this), name), 'claims'), false);
+});
+
+Then(
+  'the published record of the step {string} gives the claims {string}, each with the sha256 of its line in the review brief',
+  function (name: string, ids: string) {
+    const s = step(this);
+    const lines = readFileSync(stepFile(s, 'review.brief.md'), 'utf8')
+      .split('\n```json\n')[1]!
+      .split('\n```\n')[0]!
+      .split('\n');
+    assert.deepEqual(publishedRecord(s, name)['claims'], {
+      valid: true,
+      given: ids.split(' ').map((id, index) => ({
+        id,
+        sha256: createHash('sha256').update(lines[index]!).digest('hex'),
+      })),
+    });
+  },
+);
+
+Then('the step stdout contains {string}', function (text: string) {
+  assert.ok(step(this).stdout.includes(text), `${step(this).stdout} does not contain ${text}`);
+});
+
+Then(
+  'the published record of the step {string} gives the claims {string} with no review',
+  function (name: string, ids: string) {
+    const record = publishedRecord(step(this), name) as { claims: { given: { id: string }[] }; reviews: [] };
+    assert.deepEqual(
+      record.claims.given.map(({ id }) => id),
+      ids.split(' '),
+    );
+    assert.deepEqual(record.reviews, []);
+  },
+);
+
 // --- what the host refuses to keep, and keeps anyway in its streams ---------------------------------------------
 
 /** A text described by a scenario, composed at run time: the committed tree holds no credential shape. */

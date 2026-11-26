@@ -30,14 +30,14 @@ CREATE TABLE step_artifacts (
   run         text NOT NULL,
   step        text NOT NULL,
   kind        text NOT NULL CHECK (kind IN (
-    'scout.measure', 'scout.facts', 'build.brief', 'build.measure', 'build.report',
+    'scout.measure', 'scout.facts', 'build.brief', 'build.measure', 'build.report', 'build.claims',
     'check', 'review.brief', 'review.measure', 'review.verdict'
   )),
   name        text NOT NULL CHECK (name = '' OR name ~ '^[a-z][a-z0-9-]{0,31}$'),
   content     bytea NOT NULL CHECK (octet_length(content) <= 1048576),
   sha256      text NOT NULL GENERATED ALWAYS AS (encode(sha256(content), 'hex')) STORED,
   recorded_at timestamptz NOT NULL DEFAULT now(),
-  CHECK ((name = '') = (kind IN ('build.brief', 'build.measure', 'build.report', 'review.brief'))),
+  CHECK ((name = '') = (kind IN ('build.brief', 'build.measure', 'build.report', 'build.claims', 'review.brief'))),
   PRIMARY KEY (run, step, kind, name),
   FOREIGN KEY (run, step) REFERENCES steps (run, step)
 );

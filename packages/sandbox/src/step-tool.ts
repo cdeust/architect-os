@@ -33,8 +33,10 @@ import {
 import { buildSbxStep } from './sbx-step.js';
 import { ClaudeBuilder, type Builder, type StepSession, type ToolFile } from './builder.js';
 import { measureSession, type SessionMeasure } from './measure.js';
+import { claimLine, claimsBlock, parseClaims, renderClaims, type GivenClaim } from './build-claims.js';
 import {
   blocks,
+  claimsRefusal,
   criteriaRefusal,
   parseReviewVerdict,
   renderAcceptance,
@@ -49,6 +51,7 @@ import {
   observedTokens,
   buildRecord,
   isStepName,
+  sha256,
   stepRecordSchema,
   type RecordedSession,
 } from './step-record.js';
@@ -281,7 +284,7 @@ async function review(
   outputs: StepOutputs,
   config: ReviewConfig,
   brief: string,
-  acceptance: readonly string[],
+  expected: Expected,
 ): Promise<ReviewOutcome> {
   const session = await play(
     deps,
@@ -293,7 +296,7 @@ async function review(
     brief,
   );
   const verdict = sessionSucceeded(session)
-    ? verdictOf(session.measure.structuredOutput, acceptance, deps.readSource)
+    ? verdictOf(session.measure.structuredOutput, expected, deps.readSource)
     : invalid('la session n’a pas abouti');
   retain(deps, outputs, 'review.verdict', config.name, json(verdict.file));
   return { config, verdict, ...session };
@@ -388,10 +391,16 @@ function factsSchemaResult(output: unknown): ReturnType<typeof parseFacts> | str
   }
 }
 
+/** Ce que chaque verdict doit couvrir : les critères de l'étape, et les écarts que la construction a déclarés. */
+interface Expected {
+  readonly acceptance: readonly string[];
+  readonly claims: readonly string[];
+}
+
 /** Le verdict de la revue, ou ce qui l'invalide. */
 function verdictOf(
   output: unknown,
-  acceptance: readonly string[],
+  expected: Expected,
   read: (path: string) => string | undefined,
 ): {
   file: unknown;
@@ -399,6 +408,7 @@ function verdictOf(
   blocks: boolean;
   findings: number;
   criteria: { id: string; status: 'met' | 'unmet' | 'not_established' }[];
+  claims: { id: string; status: 'verified' | 'refuted' | 'not_checked' }[];
 } {
   if (output === undefined) return invalid('la session n’a donné aucune sortie structurée');
   let verdict: ReturnType<typeof parseReviewVerdict>;
@@ -408,7 +418,8 @@ function verdictOf(
     return invalid(issues(error as z.ZodError));
   }
   // Un verdict qui ne rend pas exactement les critères de l'étape, ou qui cite une preuve absente, est invalide.
-  const refused = criteriaRefusal(verdict, acceptance, read);
+  const refused =
+    criteriaRefusal(verdict, expected.acceptance, read) ?? claimsRefusal(verdict, expected.claims, read);
   if (refused !== undefined) return invalid(refused);
   return {
     file: verdict,
@@ -416,11 +427,33 @@ function verdictOf(
     blocks: blocks(verdict),
     findings: verdict.findings.length,
     criteria: verdict.criteria.map(({ id, status }) => ({ id, status })),
+    claims: verdict.claims.map(({ id, status }) => ({ id, status })),
   };
 }
 // Une déclaration, et non une fonction fléchée au niveau du module : un mutant statique rejoue toute la suite.
 function invalid(why: string) {
-  return { file: { invalid: why }, verdict: 'invalid' as const, blocks: true, findings: 0, criteria: [] };
+  return {
+    file: { invalid: why },
+    verdict: 'invalid' as const,
+    blocks: true,
+    findings: 0,
+    criteria: [],
+    claims: [],
+  };
+}
+
+/** Les écarts déclarés dans le rapport de la construction : aucun bloc, un bloc refusé, ou les revendications validées. */
+type Claims =
+  { state: 'absent' } | { state: 'invalid'; reason: string } | { state: 'valid'; claims: GivenClaim[] };
+
+function claimsOf(report: string): Claims {
+  const block = claimsBlock(report);
+  if (block.state !== 'found') return block;
+  try {
+    return { state: 'valid', claims: parseClaims(block.raw) };
+  } catch (error) {
+    return { state: 'invalid', reason: issues(error as z.ZodError) };
+  }
 }
 
 /**
@@ -562,6 +595,19 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     );
     retain(deps, outputs, 'build.report', undefined, report);
     const built = sessionSucceeded(build);
+    // Le rapport d'une session qui n'a pas abouti ne donne rien ; un bloc invalide ne donne aucune revendication.
+    const claims: Claims = built ? claimsOf(report) : { state: 'absent' };
+    if (claims.state !== 'absent')
+      retain(
+        deps,
+        outputs,
+        'build.claims',
+        undefined,
+        json(claims.state === 'invalid' ? { invalid: claims.reason } : { claims: claims.claims }),
+      );
+    const given = claims.state === 'valid' ? claims.claims : [];
+    // Des écarts déclarés qu'aucune revue ne vérifierait : l'étape ne passe pas, et le dit.
+    const unreviewed = given.length > 0 && step.reviews.length === 0;
     // Les contrôles, l'un après l'autre ; le premier qui ne passe pas met fin à la phase.
     const played: CheckReport[] = [];
     if (built) {
@@ -574,6 +620,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     const checked = played.every(passed);
     const appended = [
       ...(step.acceptance ? [renderAcceptance(step.acceptance)] : []),
+      ...(given.length > 0 ? [renderClaims(given)] : []),
       ...(played.length > 0 ? [renderChecks(played, outputBound())] : []),
     ];
     const forReviews = appended.length === 0 ? brief : `${brief.trimEnd()}\n\n${appended.join('\n')}`;
@@ -581,7 +628,10 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     const outcomes =
       built && checked
         ? await playBounded(step.reviews, step.parallel, (config) =>
-            review(deps, outputs, config, forReviews, step.acceptance ?? []),
+            review(deps, outputs, config, forReviews, {
+              acceptance: step.acceptance ?? [],
+              claims: given.map(({ id }) => id),
+            }),
           )
         : [];
     const checks = Object.fromEntries(
@@ -621,6 +671,15 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       tree,
       inputs,
       tickets: step.tickets,
+      // Ni le texte ni la raison d'un refus : l'identifiant de chaque revendication et l'empreinte de la ligne citée.
+      ...(claims.state === 'absent'
+        ? {}
+        : {
+            claims: {
+              valid: claims.state === 'valid',
+              given: given.map((claim) => ({ id: claim.id, sha256: sha256(claimLine(claim)) })),
+            },
+          }),
       launcher,
       sessions: [
         ...scoutOutcomes.map((scout) => recorded('scout', scout.config, scout, scout.config.name)),
@@ -651,8 +710,12 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         verdict: verdict.verdict,
         findings: verdict.findings,
         ...(verdict.criteria.length > 0 ? { criteria: verdict.criteria } : {}),
+        ...(verdict.claims.length > 0 ? { claims: verdict.claims } : {}),
       })),
-      outcome: built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 'passed' : 'refused',
+      outcome:
+        built && checked && !unreviewed && !outcomes.some(({ verdict }) => verdict.blocks)
+          ? 'passed'
+          : 'refused',
     });
     // Relu par son propre schéma : ce que la porte refuserait n'entre pas dans le worktree.
     deps.steps.publish(name, { ...inputs, 'record.json': json(stepRecordSchema().parse(record)) });
@@ -676,7 +739,9 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         build.provider === 'openai' ? null : measures.reduce((sum, measure) => sum + measure.costUsd, 0),
       costByModel: sumByModel(measures.map((measure) => measure.costByModel)),
       record: `steps/${name}/record.json`,
+      ...(unreviewed ? { refusal: 'STEP_CLAIMS_UNREVIEWED' } : {}),
     };
+    if (unreviewed) deps.stderr.write('architect-os step: STEP_CLAIMS_UNREVIEWED\n');
     deps.stdout.write(`${JSON.stringify(summary)}\n`);
     return record.outcome === 'passed' ? 0 : 1;
   } catch (error) {

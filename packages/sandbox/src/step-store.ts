@@ -16,6 +16,7 @@ import {
 } from '@architect-os/contracts';
 import { findCredential } from './credential-shapes.js';
 import { ReviewVerdictSchema } from './review-verdict.js';
+import { buildClaimsSchema } from './build-claims.js';
 import { factsSchema, rejections } from './scout-facts.js';
 
 export { STEP_ARTIFACT_MAX_BYTES, type StepArtifactKind, type StepEvent };
@@ -129,6 +130,13 @@ const checkFileSchema = () =>
 /** Le verdict d'une revue (`review-verdict.ts`), ou ce qui l'invalide. */
 const verdictFileSchema = () => z.union([ReviewVerdictSchema, invalidFileSchema()]);
 
+/** Les écarts que la construction déclare (`build-claims.ts`), chacun avec l'identifiant que l'hôte lui donne ; ou ce qui invalide leur bloc. */
+const claimsFileSchema = () =>
+  z.union([
+    invalidFileSchema(),
+    z.strictObject({ claims: z.array(buildClaimsSchema().shape.claims.element.extend({ id: z.string() })) }),
+  ]);
+
 /** Le schéma du contenu de chaque genre JSON ; un genre absent est un texte (brief, rapport), que rien ne contraint. */
 function contentSchemas(): Partial<Record<StepArtifactKind, () => z.ZodType>> {
   return {
@@ -138,6 +146,7 @@ function contentSchemas(): Partial<Record<StepArtifactKind, () => z.ZodType>> {
     'scout.facts': factsFileSchema,
     check: checkFileSchema,
     'review.verdict': verdictFileSchema,
+    'build.claims': claimsFileSchema,
   };
 }
 
@@ -151,7 +160,8 @@ function refuseCredential(file: string, text: string): void {
 /** Le nom de fichier d'un artefact, celui que `npm run step` écrit depuis O.1. */
 export function artifactFile(kind: StepArtifactKind, name: string | undefined): string {
   const [role, part] = kind.split('.') as [string, string | undefined];
-  if (name === undefined) return part === 'measure' ? `${kind}.json` : `${kind}.md`;
+  // Un genre unique par étape est un fichier JSON quand son contenu a un schéma, un texte Markdown sinon.
+  if (name === undefined) return contentSchemas()[kind] === undefined ? `${kind}.md` : `${kind}.json`;
   return part === undefined ? `${role}.${name}.json` : `${role}.${name}.${part}.json`;
 }
 

@@ -464,6 +464,32 @@ Given('a record of a step that the schema accepts', function () {
   this.state['schemaRecord'] = valid;
 });
 
+// The departures the build declared: the record keeps their identifiers, the hash of each line, and each status.
+Given('a record of a step with two claims that the schema accepts', function () {
+  const valid = validRecord();
+  valid['claims'] = {
+    valid: true,
+    given: [
+      { id: 'CL-1', sha256: DIGEST },
+      { id: 'CL-2', sha256: 'b'.repeat(64) },
+    ],
+  };
+  valid['reviews'] = [
+    {
+      name: 'correctness',
+      verdict: 'request_changes',
+      findings: 0,
+      claims: [
+        { id: 'CL-1', status: 'verified' },
+        { id: 'CL-2', status: 'refuted' },
+      ],
+    },
+  ];
+  valid['outcome'] = 'refused';
+  stepRecordSchema().parse(valid);
+  this.state['schemaRecord'] = valid;
+});
+
 When('its field {string} becomes {}', function (path: string, json: string) {
   setAt(stored<Record<string, unknown>>(this, 'schemaRecord'), path, JSON.parse(json));
 });
@@ -745,4 +771,61 @@ Then('building the Step record snapshots the response list and preserves missing
   assert.deepEqual(record.sessions[0]!.responses, [receipt]);
   delete builder.responses;
   assert.equal(buildRecord(parts).sessions[0]!.responses, undefined);
+});
+
+const giveClaims = (record: Record<string, any>, ids: readonly string[]) => {
+  record['claims'] = { valid: true, given: ids.map((id) => ({ id, sha256: DIGEST })) };
+  record['reviews'][0]['claims'] = ids.map((id) => ({ id, status: 'verified' }));
+};
+
+When('the record gives {int} claims, each with its status', function (count: number) {
+  giveClaims(
+    stored(this, 'schemaRecord'),
+    Array.from({ length: count }, (_, index) => `CL-${index + 1}`),
+  );
+});
+
+When('the record gives the claims {string}, each with its status', function (ids: string) {
+  giveClaims(stored(this, 'schemaRecord'), ids.split(' '));
+});
+
+Given('a record of a step that was refused, which the schema accepts', function () {
+  const valid = { ...validRecord(), outcome: 'refused' };
+  stepRecordSchema().parse(valid);
+  this.state['schemaRecord'] = valid;
+});
+
+Given('a record of a step that passed with two verified claims, which the schema accepts', function () {
+  const valid = validRecord();
+  valid['claims'] = {
+    valid: true,
+    given: [
+      { id: 'CL-1', sha256: DIGEST },
+      { id: 'CL-2', sha256: DIGEST },
+    ],
+  };
+  valid['reviews'] = [
+    {
+      name: 'correctness',
+      verdict: 'accept',
+      findings: 0,
+      criteria: [{ id: 'AC-1', status: 'met' }],
+      claims: [
+        { id: 'CL-1', status: 'verified' },
+        { id: 'CL-2', status: 'verified' },
+      ],
+    },
+    {
+      name: 'security',
+      verdict: 'accept',
+      findings: 0,
+      criteria: [{ id: 'AC-1', status: 'met' }],
+      claims: [
+        { id: 'CL-1', status: 'verified' },
+        { id: 'CL-2', status: 'verified' },
+      ],
+    },
+  ];
+  stepRecordSchema().parse(valid);
+  this.state['schemaRecord'] = valid;
 });

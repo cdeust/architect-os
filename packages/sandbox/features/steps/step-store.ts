@@ -108,6 +108,7 @@ const verdict = {
   findings: [{ level: 'correctness', file: 'a.ts', line: 1, quote: 'q', reason: 'r' }],
   not_checked: ['x'],
   criteria: [{ id: 'AC-1', status: 'met', evidence: [{ file: 'a.ts', line: 1, quote: 'q' }], reason: 'r' }],
+  claims: [],
 };
 /** Credential shapes, made at run time: the source of the suite holds none. */
 const anthropicKey = () => `${['sk', 'ant', 'api03'].join('-')}-${'K'.repeat(24)}`;
@@ -167,6 +168,21 @@ const artifacts = (): [StepArtifactKind, string | undefined, string, string][] =
   ['build.brief', undefined, 'Build the thing.\n', ''],
   ['build.measure', undefined, json(measure()), json(measure({ costUsd: null, exitCode: null }))],
   ['build.report', undefined, '# Report\n\nDone.\n', 'other report'],
+  [
+    'build.claims',
+    undefined,
+    json({
+      claims: [
+        {
+          id: 'CL-1',
+          brief_item: 'the brief',
+          instead: 'what was done',
+          evidence: [{ file: 'src/a.ts', line: 1 }, { command: 'npm test' }],
+        },
+      ],
+    }),
+    json({ invalid: 'bloc de revendications non fermé' }),
+  ],
   ['check', 'types', json(check(0)), json(check(null))],
   ['review.brief', undefined, 'Review it.\n', 'again'],
   ['review.measure', 'general', json(measure()), json(measure({ stopped: true }))],
@@ -317,6 +333,7 @@ Then('every artifact of the Step is a file of mode 0600 named as npm run step na
   assert.equal(lstatSync(directory).mode & 0o777, 0o700);
   assert.deepEqual(readdirSync(directory).sort(), [
     'build.brief.md',
+    'build.claims.json',
     'build.measure.json',
     'build.report.md',
     'check.types.json',
