@@ -59,7 +59,8 @@ Feature: The Claude review
       | that set an environment                      |
 
   Scenario: every workflow that runs the action fixes its permission mode and forbids auto and bypass
-    A new pin of the action cannot change the mode in silence: each sets it once, default or acceptEdits, and installs
+    A new pin of the action cannot change the mode in silence: the arguments of each action are compared whole with
+    the ones written for it (the action keeps the last mode it is given, in either spelling), and each installs
     managed settings that forbid auto and bypass, block reads outside the checkout and deny by name what a credential
     of the runner sits behind, from a sparse checkout of the commit of the run, before the action.
     Then every workflow that runs the action fixes its mode and forbids auto and bypass:
@@ -88,6 +89,16 @@ Feature: The Claude review
       | claude-security-review.yml | without a mode                                |
       | claude-security-review.yml | without its managed settings                  |
       | claude-security-review.yml | with managed settings from the default branch |
+      | claude.yml | with a second permission mode, in the equals spelling, after the canonical one |
+      | claude-review.yml | with a second permission mode, in the equals spelling, after the canonical one |
+      | claude-security-review.yml | with a second permission mode, in the equals spelling, after the canonical one |
+      | claude.yml | with its permission mode in the equals spelling alone |
+      | claude-review.yml | with its permission mode in the equals spelling alone |
+      | claude-security-review.yml | with its permission mode in the equals spelling alone |
+      | claude.yml | with a tool added to its arguments |
+      | claude.yml | with an input the rule does not know |
+      | claude.yml | with another secret as the credential of the action |
+      | claude.yml | with an environment on the installer of the managed settings |
       | claude.yml | with an action that does not wait for its managed settings |
       | claude-review.yml | with an action that does not wait for its managed settings |
       | claude-security-review.yml | with an action that does not wait for its managed settings |

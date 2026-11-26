@@ -86,13 +86,6 @@ const REVIEW_FILES = {
   'sparse-checkout': '.github/claude-review',
   'sparse-checkout-cone-mode': false,
 };
-const CLAUDE_ARGS = [
-  '--strict-mcp-config',
-  '--permission-mode default',
-  '--allowedTools "mcp__github_inline_comment__create_inline_comment"',
-  '--model "claude-opus-5-5"',
-];
-
 function index(steps: StepT[], label: string, found: (step: StepT) => boolean): number {
   const at = steps.findIndex(found);
   assert.ok(at >= 0, `the review job has no step that ${label}`);
@@ -120,7 +113,7 @@ export function assertClaudeReview(text: string): void {
   const restrict = index(steps, 'installs the managed settings', (step) =>
     (step.run ?? '').includes('/etc/claude-code/'),
   );
-  assert.equal(steps[restrict]?.run, INSTALLERS['.github/claude-review']?.run);
+  assert.equal(steps[restrict]?.run, ACTIONS['.github/claude-review']?.run);
   assert.equal(steps[restrict]?.if, undefined, 'the restriction is conditional');
   const diff = index(steps, 'writes the diff', (step) => step.id === 'diff');
   const review = index(steps, 'runs the action', (step) => step.id === 'review');
@@ -159,7 +152,7 @@ export function assertClaudeReview(text: string): void {
   ]);
   assert.equal(inputs['claude_code_oauth_token'], '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}');
   assert.equal(inputs['track_progress'], true);
-  assert.deepEqual(String(inputs['claude_args']).trim().split('\n'), CLAUDE_ARGS);
+  assert.equal(inputs['claude_args'], ACTIONS['.github/claude-review']?.args);
   const prompt = String(inputs['prompt']);
   for (const told of [
     'review-input/pr.diff',
@@ -390,10 +383,16 @@ Then("the review's managed settings {} are rejected", function (kind: string) {
  *
  * The shape. The action is used in the steps of a job and nowhere else in the document. Its workflow, its job and
  * every step of its job have no key but those listed. The job runs on the image the proof is written for and holds
- * one action: the pinned one, scrubbed, with one permission mode, on the exact condition below. The step just before
+ * one action: the pinned one, scrubbed, with the inputs and the arguments of its entry below, on the exact condition. The step just before
  * it is the proof of bubblewrap, to the letter; a step `settings` before that is one of the installers below, to the
  * letter, fed by a sparse checkout of the commit of the run. With that condition GitHub starts no action unless both
  * succeeded.
+ *
+ * Not compared here: the values of the inputs other than the credential and the arguments (the prompt,
+ * `allowed_bots`, `track_progress`, `github_token`, which the rules of the two reviews read); the other steps of the
+ * job, and so what an earlier step leaves on the runner or does to the installed files; the body of an action of
+ * another repository. Three checks are searches, not comparisons, and say so: `runsTheAction` (a pattern, so that
+ * another spelling is found, then refused by the pin), and the two refusals of a place where an action would hide.
  *
  * Why a proof: Claude Code refuses to start under `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` on Linux without bubblewrap
  * (run 45771449067), and the action installs it only when `allowed_non_write_users` is set, in a step that may fail
@@ -404,12 +403,11 @@ Then("the review's managed settings {} are rejected", function (kind: string) {
  */
 const SCRUB = 'CLAUDE_CODE_SUBPROCESS_ENV_SCRUB';
 const SCRUB_IMAGE = 'ubuntu-24.04';
-const MODES = ['default', 'acceptEdits'];
 const WORKFLOW_KEYS = ['name', 'on', 'permissions', 'concurrency', 'jobs'];
 const JOB_KEYS = ['name', 'needs', 'if', 'runs-on', 'timeout-minutes', 'permissions', 'outputs', 'steps'];
 const STEP_KEYS = ['id', 'name', 'if', 'uses', 'with', 'env', 'run'];
 const PRESENT = "steps.credential.outputs.present == 'true'";
-const WAITS = "steps.settings.outcome == 'success' && steps.bubblewrap.outcome == 'success'";
+export const WAITS = "steps.settings.outcome == 'success' && steps.bubblewrap.outcome == 'success'";
 /** The two conditions of an action: after its settings and its proof; and, in a job that looks for a credential, after it. */
 export const WAITS_AFTER_CREDENTIAL = `${PRESENT} && ${WAITS}`;
 const PROOF = {
@@ -428,9 +426,23 @@ const PROOF = {
 const install = (from: string, file: string, mode: string): string =>
   `sudo install -D -m ${mode} -o root -g root ${from}/${file} /etc/claude-code/${file}`;
 const script = (...lines: string[]): string => ['set -euo pipefail', ...lines, ''].join('\n');
-/** The installers of managed settings, by the directory they install: where it is checked out, and the command. */
-export const INSTALLERS: Record<string, { path: string; run: string }> = {
+const lines = (...each: string[]): string => [...each, ''].join('\n');
+const CHECKOUT_PIN = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
+const TOKEN = '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}';
+/**
+ * The three actions, by the directory of their managed settings: where it is checked out, the command that installs
+ * it, the inputs the action takes and its arguments, to the letter. The action keeps the last permission mode it is
+ * given, in either spelling (`lastPermissionMode`, base-action/src/parse-sdk-options.ts at 4411a9e9), so the
+ * arguments are compared whole, never searched.
+ */
+export const ACTIONS: Record<string, { path: string; run: string; inputs: string[]; args: string }> = {
   '.github/claude': {
+    inputs: ['claude_args', 'claude_code_oauth_token'],
+    args: lines(
+      '--permission-mode acceptEdits',
+      '--allowedTools "Read,Glob,Grep,Edit,Write"',
+      '--model "claude-opus-5-5"',
+    ),
     path: 'claude-config',
     run: script(
       install('claude-config/.github/claude', 'managed-settings.json', '0644'),
@@ -438,6 +450,13 @@ export const INSTALLERS: Record<string, { path: string; run: string }> = {
     ),
   },
   '.github/claude-review': {
+    inputs: ['allowed_bots', 'claude_args', 'claude_code_oauth_token', 'prompt', 'track_progress'],
+    args: lines(
+      '--strict-mcp-config',
+      '--permission-mode default',
+      '--allowedTools "mcp__github_inline_comment__create_inline_comment"',
+      '--model "claude-opus-5-5"',
+    ),
     path: 'review-config',
     run: script(
       install('review-config/.github/claude-review', 'managed-settings.json', '0644'),
@@ -446,6 +465,14 @@ export const INSTALLERS: Record<string, { path: string; run: string }> = {
     ),
   },
   '.github/claude-security-review': {
+    inputs: ['allowed_bots', 'claude_args', 'claude_code_oauth_token', 'github_token', 'prompt'],
+    args: lines(
+      '--strict-mcp-config',
+      '--permission-mode default',
+      '--allowedTools "Read,Grep,Glob"',
+      '--model "claude-opus-5-5"',
+      "--json-schema '${{ steps.schema.outputs.json }}'",
+    ),
     path: 'review-config',
     run: install('review-config/.github/claude-security-review', 'managed-settings.json', '0644'),
   },
@@ -504,9 +531,6 @@ export function assertActions(text: string): number {
     const action = steps[at] as StepT;
     assert.equal(action.uses, ACTION_PIN, 'the action has another pin or another spelling');
     assert.deepEqual(action.env, { [SCRUB]: '1' }, 'the environment of the subprocesses is not scrubbed');
-    const modes = [...String(action.with?.['claude_args'] ?? '').matchAll(/--permission-mode\s+(\S+)/g)];
-    assert.equal(modes.length, 1, 'the permission mode is not set once');
-    assert.ok(MODES.includes(modes[0]?.[1] ?? ''), `permission mode ${modes[0]?.[1]}`);
     assert.ok(
       action.if === WAITS || action.if === WAITS_AFTER_CREDENTIAL,
       'the condition of the action is not the canonical one',
@@ -526,9 +550,25 @@ export function assertActions(text: string): number {
       'no step settings before the action',
     );
     const installer = steps[installers[0] as number] as StepT;
-    const known = Object.entries(INSTALLERS).find(([, { run }]) => run === installer.run);
+    const known = Object.entries(ACTIONS).find(([, { run }]) => run === installer.run);
     assert.ok(known !== undefined, 'the step settings is not a known installer');
-    const [directory, { path }] = known;
+    const [directory, { path, inputs, args }] = known;
+    closed('the step settings', installer, ['id', 'name', 'if', 'run']);
+    assert.deepEqual(
+      Object.keys(action.with ?? {}).sort(),
+      inputs,
+      'the inputs of the action are not the known ones',
+    );
+    assert.equal(
+      action.with?.['claude_code_oauth_token'],
+      TOKEN,
+      'the credential of the action is not the secret',
+    );
+    assert.equal(
+      action.with?.['claude_args'],
+      args,
+      'the arguments of the action are not the canonical ones',
+    );
     assert.deepEqual(
       { id: installer.id, if: installer.if },
       { id: 'settings', if: gate.if },
@@ -538,7 +578,8 @@ export function assertActions(text: string): number {
       .slice(0, installers[0])
       .filter((step) => step.with?.['path'] === path);
     assert.equal(checkouts.length, 1, 'the managed settings come from no checkout of the run');
-    assert.match(checkouts[0]?.uses ?? '', /^actions\/checkout@[0-9a-f]{40}$/);
+    closed('the checkout of the managed settings', checkouts[0], ['name', 'uses', 'with']);
+    assert.equal(checkouts[0]?.uses, CHECKOUT_PIN, 'the checkout of the managed settings has another pin');
     assert.deepEqual(
       checkouts[0]?.with,
       {
@@ -677,6 +718,12 @@ const second = (step: RawStep) => (doc: RawWorkflow) => {
 
 const NOT_THE_PROOF = /the step before the action is not the proof of bubblewrap/;
 const NOT_THE_CONDITION = /the condition of the action is not the canonical one/;
+const NOT_THE_ARGUMENTS = /the arguments of the action are not the canonical ones/;
+const args = (change: (was: string) => string) => (doc: RawWorkflow) => {
+  const { action } = shape(doc);
+  const inputs = action['with'] as Record<string, unknown>;
+  inputs['claude_args'] = change(String(inputs['claude_args']));
+};
 const UNKNOWN_KEY = (key: string): RegExp => new RegExp(`has a key the rule does not know: ${key}$`, 'm');
 
 /** A broken copy, and the words of the refusal it must get: a copy refused for another reason proves nothing. */
@@ -763,6 +810,34 @@ const SHAPE_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = {
     NOT_THE_CONDITION,
   ],
 
+  'with a second permission mode, in the equals spelling, after the canonical one': [
+    args((was) => `${was}--permission-mode=plan\n`),
+    NOT_THE_ARGUMENTS,
+  ],
+  'with its permission mode in the equals spelling alone': [
+    args((was) => was.replace(/--permission-mode (\S+)/, '--permission-mode=$1')),
+    NOT_THE_ARGUMENTS,
+  ],
+  'with a tool added to its arguments': [
+    args((was) => was.replace('--allowedTools "', '--allowedTools "Bash,')),
+    NOT_THE_ARGUMENTS,
+  ],
+  'with an input the rule does not know': [
+    (doc) =>
+      void ((shape(doc).action['with'] as Record<string, unknown>)['settings'] =
+        '{"permissions":{"defaultMode":"plan"}}'),
+    /the inputs of the action are not the known ones/,
+  ],
+  'with another secret as the credential of the action': [
+    (doc) =>
+      void ((shape(doc).action['with'] as Record<string, unknown>)['claude_code_oauth_token'] =
+        '${{ secrets.OTHER }}'),
+    /the credential of the action is not the secret/,
+  ],
+  'with an environment on the installer of the managed settings': [
+    (doc) => void (shape(doc).settings['env'] = { PATH: '/home/runner/work/bin' }),
+    UNKNOWN_KEY('env'),
+  ],
   'with a second action in the job of the first': [
     (doc) => {
       const { steps, proof, action } = shape(doc);
