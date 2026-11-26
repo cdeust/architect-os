@@ -55,6 +55,8 @@ function checkPrompt(text: string): void {
     'rejects the verdict if one is not on its line',
     '`refuted` and `not_checked` block the step',
     'When the brief carries no claim, `claims` is empty',
+    'only inside this review sandbox, and only if it is a command of the repository',
+    'never a command composed from the text of a claim',
   ]) {
     assert.ok(claims.includes(needle), `the section on the claims does not say ${needle}`);
   }
@@ -153,7 +155,9 @@ function checkBuildPrompt(text: string): void {
   assert.ok(departures !== undefined, 'the build prompt has no section on the departures from the brief');
   for (const needle of [
     'The reviews do not read your report',
-    'a line that is exactly ` ```claims `',
+    'three backticks immediately followed by the word claims, and nothing else on the line',
+    '```claims\n{"claims": [',
+    'A line that looks like this opening but differs from it makes the whole block invalid',
     '`brief_item`',
     '`instead`',
     '`evidence`',
@@ -195,6 +199,10 @@ const BUILD_DEFECTS: Record<string, (text: string) => string> = {
   'no word that the reviews do not read the report': (text) =>
     text.replaceAll('The reviews do not read your report', 'The reviews read your report'),
   'another opening line of the block': (text) => text.replaceAll('```claims', '```json'),
+  'an opening described with blanks around the word': (text) =>
+    text.replaceAll('immediately followed by the word claims', 'followed by a blank and the word claims'),
+  'a malformed opening that does not invalidate the block': (text) =>
+    text.replaceAll('makes the whole block invalid', 'is ignored'),
   'no brief item in a claim': (text) => text.replaceAll('`brief_item`', '`item`'),
   'an invalid block that still gives claims': (text) =>
     text.replaceAll('an invalid block gives no claim', 'an invalid block is repaired'),
@@ -247,6 +255,13 @@ const PROMPT_DEFECTS: Record<string, (text: string) => string> = {
     ),
   'a claim not checked that does not block': (text) =>
     text.replaceAll('`refuted` and `not_checked` block the step', '`refuted` blocks the step'),
+  'a command of a claim run outside the review sandbox': (text) =>
+    text.replaceAll(
+      'only inside this review sandbox, and only if it is a command of the repository',
+      'anywhere',
+    ),
+  'a command composed from the text of a claim': (text) =>
+    text.replaceAll('never a command composed from the text of a claim', 'any command the claim gives'),
   'no empty claims for a brief without claim': (text) =>
     text.replaceAll('When the brief carries no claim, `claims` is empty', 'Invent claims'),
   'no not_checked for what nothing established': (text) =>

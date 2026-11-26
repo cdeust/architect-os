@@ -161,19 +161,58 @@ export function stepRecordSchema() {
     ),
     outcome: z.enum(['passed', 'refused']),
   });
-  return record.refine(({ claims, reviews }) => {
-    const given = claims?.given ?? [];
-    const ids = JSON.stringify(given.map(({ id }) => id));
-    // Les identifiants sont exactement CL-1, CL-2… dans l'ordre ; un bloc refusé n'en donne aucun ; chaque statut rendu
-    // couvre exactement ceux-là. Cette règle seule dit ce qu'est un identifiant de revendication dans l'enregistrement.
-    return (
-      (claims?.valid !== false || given.length === 0) &&
-      given.every(({ id }, index) => id === `CL-${index + 1}`) &&
-      reviews.every(
-        (review) => review.claims === undefined || JSON.stringify(review.claims.map(({ id }) => id)) === ids,
-      )
-    );
-  });
+  return record.refine(coherent);
+}
+
+/** Les champs que `coherent` lit, typés sans passer par le schéma qui l'appelle. */
+interface Coherence {
+  readonly claims?:
+    { readonly valid: boolean; readonly given: readonly { readonly id: string }[] } | undefined;
+  readonly checks: readonly { readonly passed: boolean }[];
+  readonly reviews: readonly {
+    readonly verdict: 'accept' | 'request_changes' | 'invalid';
+    readonly criteria?: readonly { readonly id: string; readonly status: string }[] | undefined;
+    readonly claims?: readonly { readonly id: string; readonly status: string }[] | undefined;
+  }[];
+  readonly outcome: 'passed' | 'refused';
+}
+
+/** Les identifiants d'une liste de statuts, en une chaîne comparable ; une liste absente est vide. */
+const idsOf = (statuses: readonly { id: string }[] | undefined): string =>
+  JSON.stringify((statuses ?? []).map(({ id }) => id));
+
+/**
+ * Ce que l'enregistrement doit dire de lui-même, que les schémas de ses champs ne voient pas.
+ *
+ * - Les revendications sont exactement CL-1, CL-2… dans l'ordre (cette règle seule dit ce qu'est leur identifiant) ;
+ *   un bloc refusé n'en donne aucune.
+ * - Un verdict invalide ne rend aucun statut. Un verdict valide rend un statut pour chaque revendication donnée, et
+ *   tous les verdicts valides couvrent les mêmes critères : un statut retiré à la main se voit.
+ * - Une étape qui passe n'a que des contrôles passés, des verdicts `accept`, des critères `met` et des revendications
+ *   `verified`, et une revendication donnée n'y passe jamais sans revue.
+ */
+function coherent({ claims, checks, reviews, outcome }: Coherence): boolean {
+  const given = claims?.given ?? [];
+  const judged = reviews.filter((review) => review.verdict !== 'invalid');
+  return (
+    (claims?.valid !== false || given.length === 0) &&
+    given.every(({ id }, index) => id === `CL-${index + 1}`) &&
+    reviews.every(
+      (review) =>
+        review.verdict !== 'invalid' || (review.claims === undefined && review.criteria === undefined),
+    ) &&
+    judged.every((review) => idsOf(review.claims) === idsOf(given)) &&
+    new Set(judged.map((review) => idsOf(review.criteria))).size <= 1 &&
+    (outcome === 'refused' ||
+      (checks.every((check) => check.passed) &&
+        (given.length === 0 || reviews.length > 0) &&
+        reviews.every(
+          (review) =>
+            review.verdict === 'accept' &&
+            (review.criteria ?? []).every(({ status }) => status === 'met') &&
+            (review.claims ?? []).every(({ status }) => status === 'verified'),
+        )))
+  );
 }
 export type StepRecord = z.infer<ReturnType<typeof stepRecordSchema>>;
 

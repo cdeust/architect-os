@@ -15,13 +15,21 @@ Feature: the departures a build declares, extracted and validated by the host
     Examples:
       | case                                     | report                                                                                                  | outcome                                                    |
       | no block                                 | "Done: two files changed."                                                                              | absent                                                     |
-      | an opening line with a trailing blank    | "```claims \n{\"claims\":[]}\n```"                                                                      | absent                                                     |
+      | an opening line with trailing blanks     | "```claims \\t\n{\"claims\":[]}\n``` \n"                                                               | found {"claims":[]}                                        |
+      | an opening line with leading blanks      | "  ```claims\n{\"claims\":[]}\n```"                                                                     | invalid "ligne 1 : ouverture de bloc de revendications malformée" |
+      | four backticks                           | "Done.\n````claims\n{\"claims\":[]}\n````"                                                             | invalid "ligne 2 : ouverture de bloc de revendications malformée" |
+      | a blank before the word                  | "``` claims\n{\"claims\":[]}\n```"                                                                      | invalid "ligne 1 : ouverture de bloc de revendications malformée" |
+      | another case                             | "```Claims\n{\"claims\":[]}\n```"                                                                       | invalid "ligne 1 : ouverture de bloc de revendications malformée" |
+      | another word after it                    | "```claims json\n{\"claims\":[]}\n```"                                                                  | invalid "ligne 1 : ouverture de bloc de revendications malformée" |
+      | a malformed line beside a good block     | "```claims\n{\"claims\":[]}\n```\n```claimsx"                                                          | invalid "ligne 4 : ouverture de bloc de revendications malformée" |
       | an opening line inside another line      | "see ```claims\n{\"claims\":[]}\n```"                                                                   | absent                                                     |
       | one block                                | "Done.\n```claims\n{\"claims\":[]}\n```\nEnd."                                                          | found {"claims":[]}                                        |
       | one block with CRLF line ends            | "Done.\r\n```claims\r\n{\"claims\":[]}\r\n```\r\n"                                                      | found {"claims":[]}                                        |
       | a fence before the block                 | "```\n```claims\n{\"claims\":[]}\n```"                                                                  | found {"claims":[]}                                        |
       | a body on several lines                  | "```claims\n{\n\"claims\": []\n}\n```"                                                                  | found {"claims":[]}                                        |
       | two blocks                               | "```claims\n{\"claims\":[]}\n```\n```claims\n{\"claims\":[]}\n```"                                      | invalid "plusieurs blocs de revendications"                |
+      | a fence line with a word does not close  | "```claims\n{\"claims\":[]}\n```json\n```"                                                             | invalid "bloc de revendications qui n'est pas du JSON"     |
+      | a line ending in a fence does not close  | "```claims\n{\"claims\":[]}\nx```\n```"                                                                | invalid "bloc de revendications qui n'est pas du JSON"     |
       | a block that is not closed               | "```claims\n{\"claims\":[]}"                                                                            | invalid "bloc de revendications non fermé"                 |
       | an empty block                           | "```claims\n```"                                                                                        | invalid "bloc de revendications qui n'est pas du JSON"     |
       | a body that is not JSON                  | "```claims\nclaims: none\n```"                                                                          | invalid "bloc de revendications qui n'est pas du JSON"     |
@@ -90,3 +98,20 @@ Feature: the departures a build declares, extracted and validated by the host
       ```
       """
     And the quoted line of that claim parses back to the claim
+
+  Scenario Outline: an invisible or line-breaking character of a claim is written as an escape: <case>
+    Then the quoted line of a claim whose brief item is "<text>" holds '<line>'
+
+    Examples:
+      | case                          | text              | line                                  |
+      | a next line, U+0085           | a\u0085b          | "brief_item":"a\u0085b"               |
+      | a delete, U+007F              | a\u007fb          | "brief_item":"a\u007fb"               |
+      | a right-to-left override      | a\u202eb          | "brief_item":"a\u202eb"               |
+      | a zero-width space            | a\u200bb          | "brief_item":"a\u200bb"               |
+      | a byte order mark             | a\ufeffb          | "brief_item":"a\ufeffb"               |
+      | a left-to-right mark          | a\u200eb          | "brief_item":"a\u200eb"               |
+      | a tag character, U+E0041      | a\udb40\udc41b    | "brief_item":"a\udb40\udc41b"         |
+      | a line separator              | a\u2028b          | "brief_item":"a\u2028b"               |
+      | a paragraph separator         | a\u2029b          | "brief_item":"a\u2029b"               |
+      | a backtick                    | a`b               | "brief_item":"a\u0060b"               |
+      | a letter outside ASCII stays  | caf\u00e9         | "brief_item":"café"                   |

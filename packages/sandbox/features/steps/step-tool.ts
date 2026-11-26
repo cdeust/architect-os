@@ -1444,3 +1444,19 @@ Then(
     });
   },
 );
+
+Then('the step stdout contains {string}', function (text: string) {
+  assert.ok(step(this).stdout.includes(text), `${step(this).stdout} does not contain ${text}`);
+});
+
+Then(
+  'the published record of the step {string} gives the claims {string} with no review',
+  function (name: string, ids: string) {
+    const record = publishedRecord(step(this), name) as { claims: { given: { id: string }[] }; reviews: [] };
+    assert.deepEqual(
+      record.claims.given.map(({ id }) => id),
+      ids.split(' '),
+    );
+    assert.deepEqual(record.reviews, []);
+  },
+);

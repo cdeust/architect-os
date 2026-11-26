@@ -47,17 +47,26 @@ export type ClaimsBlock =
   { state: 'absent' } | { state: 'invalid'; reason: string } | { state: 'found'; raw: unknown };
 
 /**
- * Le bloc de revendications d'un rapport de construction : une ligne exactement « ```claims », du JSON, puis la
- * première ligne exactement « ``` ». Aucun bloc : `absent`. Deux ouvertures, une ouverture sans fermeture, un corps
- * trop long ou qui n'est pas du JSON : `invalid`, et aucune revendication. Le schéma est appliqué par l'appelant.
+ * Le bloc de revendications d'un rapport de construction : une ligne « ```claims », du JSON, puis la première ligne
+ * « ``` » ; des blancs en fin de ces deux lignes sont admis. Aucun bloc : `absent`. Une ligne qui ressemble à une
+ * ouverture sans en être une (blancs devant, plus de trois accents, espace avant le mot, autre casse, mot suivi d'autre
+ * chose), deux ouvertures, une ouverture sans fermeture, un corps trop long ou qui n'est pas du JSON : `invalid`, et
+ * aucune revendication. Le schéma est appliqué par l'appelant.
  */
 export function claimsBlock(report: string): ClaimsBlock {
   const lines = report.split(/\r?\n/);
-  const opens = lines.flatMap((text, index) => (text === '```claims' ? [index] : []));
+  const opening = (text: string) => /^```claims[ \t]*$/.test(text);
+  const malformed = lines.findIndex((text) => /^\s*`{3,}\s*claims/i.test(text) && !opening(text));
+  if (malformed !== -1)
+    return {
+      state: 'invalid',
+      reason: `ligne ${malformed + 1} : ouverture de bloc de revendications malformée`,
+    };
+  const opens = lines.flatMap((text, index) => (opening(text) ? [index] : []));
   if (opens.length === 0) return { state: 'absent' };
   if (opens.length > 1) return { state: 'invalid', reason: 'plusieurs blocs de revendications' };
   const start = (opens[0] as number) + 1;
-  const end = lines.findIndex((text, index) => index >= start && text === '```');
+  const end = lines.findIndex((text, index) => index >= start && /^```[ \t]*$/.test(text));
   if (end === -1) return { state: 'invalid', reason: 'bloc de revendications non fermé' };
   const body = lines.slice(start, end).join('\n');
   if (Buffer.byteLength(body) > CLAIMS_MAX_BYTES)
@@ -77,14 +86,19 @@ export function parseClaims(raw: unknown): GivenClaim[] {
 }
 
 /**
- * La ligne qui cite une revendication : son JSON sur une seule ligne (`JSON.stringify` échappe les sauts de ligne), où
- * l'accent grave et les séparateurs U+2028 et U+2029 sont échappés à leur tour : le texte ne peut ni fermer le bloc ni
- * commencer une ligne. Le JSON reste valide. L'enregistrement garde l'empreinte de cette ligne.
+ * La ligne qui cite une revendication : son JSON sur une seule ligne (`JSON.stringify` échappe les contrôles C0), où
+ * l'accent grave et tout caractère des catégories Cc, Cf, Zl et Zp (DEL et C1 dont NEL, marques et surcharges
+ * bidirectionnelles, caractères sans chasse, étiquettes, U+2028, U+2029) sont écrits `\uXXXX`, une paire de
+ * substitution pour un caractère hors du plan de base. La ligne ne peut donc ni fermer la clôture, ni commencer une
+ * autre ligne pour un lecteur CommonMark, ni cacher un caractère invisible ; le JSON reste valide et se relit en la
+ * revendication. L'enregistrement garde l'empreinte de cette ligne.
  */
 export function claimLine(claim: GivenClaim): string {
-  return JSON.stringify(claim).replace(
-    /[`\u2028\u2029]/g,
-    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  return JSON.stringify(claim).replace(/[`\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, (char) =>
+    Array.from(
+      { length: char.length },
+      (_, index) => `\\u${char.charCodeAt(index).toString(16).padStart(4, '0')}`,
+    ).join(''),
   );
 }
 

@@ -16,6 +16,8 @@ Feature: the descriptive files of the sessions: the build and review prompts, an
       | no section on the departures   |
       | no word that the reviews do not read the report |
       | another opening line of the block |
+      | an opening described with blanks around the word |
+      | a malformed opening that does not invalidate the block |
       | no brief item in a claim       |
       | an invalid block that still gives claims |
       | a claim taken as a proof       |
@@ -74,6 +76,8 @@ Feature: the descriptive files of the sessions: the build and review prompts, an
       | no lookup of the evidence of a claim by the host |
       | a claim not checked that does not block |
       | no empty claims for a brief without claim |
+      | a command of a claim run outside the review sandbox |
+      | a command composed from the text of a claim |
       | no empty criteria for a brief without criteria |
       | no not_checked for what nothing established |
       | no word on the sandbox of the checks |

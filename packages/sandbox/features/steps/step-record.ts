@@ -485,6 +485,7 @@ Given('a record of a step with two claims that the schema accepts', function () 
       ],
     },
   ];
+  valid['outcome'] = 'refused';
   stepRecordSchema().parse(valid);
   this.state['schemaRecord'] = valid;
 });
@@ -786,4 +787,45 @@ When('the record gives {int} claims, each with its status', function (count: num
 
 When('the record gives the claims {string}, each with its status', function (ids: string) {
   giveClaims(stored(this, 'schemaRecord'), ids.split(' '));
+});
+
+Given('a record of a step that was refused, which the schema accepts', function () {
+  const valid = { ...validRecord(), outcome: 'refused' };
+  stepRecordSchema().parse(valid);
+  this.state['schemaRecord'] = valid;
+});
+
+Given('a record of a step that passed with two verified claims, which the schema accepts', function () {
+  const valid = validRecord();
+  valid['claims'] = {
+    valid: true,
+    given: [
+      { id: 'CL-1', sha256: DIGEST },
+      { id: 'CL-2', sha256: DIGEST },
+    ],
+  };
+  valid['reviews'] = [
+    {
+      name: 'correctness',
+      verdict: 'accept',
+      findings: 0,
+      criteria: [{ id: 'AC-1', status: 'met' }],
+      claims: [
+        { id: 'CL-1', status: 'verified' },
+        { id: 'CL-2', status: 'verified' },
+      ],
+    },
+    {
+      name: 'security',
+      verdict: 'accept',
+      findings: 0,
+      criteria: [{ id: 'AC-1', status: 'met' }],
+      claims: [
+        { id: 'CL-1', status: 'verified' },
+        { id: 'CL-2', status: 'verified' },
+      ],
+    },
+  ];
+  stepRecordSchema().parse(valid);
+  this.state['schemaRecord'] = valid;
 });

@@ -547,6 +547,8 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         json(claims.state === 'invalid' ? { invalid: claims.reason } : { claims: claims.claims }),
       );
     const given = claims.state === 'valid' ? claims.claims : [];
+    // Des écarts déclarés qu'aucune revue ne vérifierait : l'étape ne passe pas, et le dit.
+    const unreviewed = given.length > 0 && step.reviews.length === 0;
     // Les contrôles, l'un après l'autre ; le premier qui ne passe pas met fin à la phase.
     const played: CheckReport[] = [];
     if (built) {
@@ -651,7 +653,10 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         ...(verdict.criteria.length > 0 ? { criteria: verdict.criteria } : {}),
         ...(verdict.claims.length > 0 ? { claims: verdict.claims } : {}),
       })),
-      outcome: built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 'passed' : 'refused',
+      outcome:
+        built && checked && !unreviewed && !outcomes.some(({ verdict }) => verdict.blocks)
+          ? 'passed'
+          : 'refused',
     });
     // Relu par son propre schéma : ce que la porte refuserait n'entre pas dans le worktree.
     deps.steps.publish(name, { ...inputs, 'record.json': json(stepRecordSchema().parse(record)) });
@@ -675,7 +680,9 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         build.provider === 'openai' ? null : measures.reduce((sum, measure) => sum + measure.costUsd, 0),
       costByModel: sumByModel(measures.map((measure) => measure.costByModel)),
       record: `steps/${name}/record.json`,
+      ...(unreviewed ? { refusal: 'STEP_CLAIMS_UNREVIEWED' } : {}),
     };
+    if (unreviewed) deps.stderr.write('architect-os step: STEP_CLAIMS_UNREVIEWED\n');
     deps.stdout.write(`${JSON.stringify(summary)}\n`);
     return record.outcome === 'passed' ? 0 : 1;
   } catch (error) {

@@ -76,7 +76,9 @@ Then('the committed build claims schema is the JSON schema of the claims contrac
 
 When('the host reads the claims block of the report {string}', function (report: string) {
   // Gherkin reads \n in a table cell as a line end; \r is written as is and read here as a carriage return.
-  this.state['claimsOutcome'] = outcome(report.replaceAll('\\r', '\r').replaceAll('\\n', '\n'));
+  this.state['claimsOutcome'] = outcome(
+    report.replaceAll('\\r', '\r').replaceAll('\\t', '\t').replaceAll('\\n', '\n'),
+  );
 });
 
 Then('the claims block is {}', function (expected: string) {
@@ -161,5 +163,20 @@ Then(
     const first = '{"claims":[]}';
     const report = `\`\`\`claims\n${first}\n${' '.repeat(bytes - first.length)}\n\`\`\``;
     assert.equal(outcome(report), `invalid ${JSON.stringify(reason)}`);
+  },
+);
+
+Then(
+  'the quoted line of a claim whose brief item is {string} holds {string}',
+  function (text: string, part: string) {
+    const [given] = parseClaims({
+      claims: [
+        { brief_item: JSON.parse(`"${text}"`) as string, instead: 'i', evidence: [{ command: 'true' }] },
+      ],
+    });
+    const line = claimLine(given!);
+    assert.ok(line.includes(part), `${line} does not hold ${part}`);
+    assert.doesNotMatch(line, /[`\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u);
+    assert.deepEqual(JSON.parse(line), given);
   },
 );
