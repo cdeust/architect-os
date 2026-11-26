@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { hasAdmittedRun } from '@architect-os/sandbox/runtime-context';
 import { ProcessGate } from '../../src/infrastructure/process-gate.js';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DeliveryEntry, Repository, RuleSuite } from '../../src/domain/ports.js';
 import { GitRepository } from '../../src/infrastructure/git-repository.js';
@@ -336,7 +336,9 @@ Given('a linked worktree with an external gitdir is inside the delivery reposito
   git(work, 'push', 'origin', `${head}:refs/heads/external-fixture`);
   const linked = join(work, 'linked');
   git(bare, 'worktree', 'add', '--detach', linked, head);
-  assert.ok(readFileSync(join(linked, '.git'), 'utf8').startsWith(`gitdir: ${bare}/worktrees/`));
+  assert.ok(
+    readFileSync(join(linked, '.git'), 'utf8').startsWith(`gitdir: ${realpathSync(bare)}/worktrees/`),
+  );
 });
 
 Given('the nested delivery marker points to a missing gitdir', function () {

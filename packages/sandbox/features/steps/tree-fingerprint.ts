@@ -573,7 +573,9 @@ Given('a linked worktree from the second repository is nested at {string}', func
   const nested = join(directory, name);
   assert.ok(other);
   git(other, 'worktree', 'add', '--detach', nested, 'HEAD');
-  assert.ok(readFileSync(join(nested, '.git'), 'utf8').startsWith(`gitdir: ${other}/.git/worktrees/`));
+  assert.ok(
+    readFileSync(join(nested, '.git'), 'utf8').startsWith(`gitdir: ${realpathSync(other)}/.git/worktrees/`),
+  );
 });
 
 // --- the guard of the checkout (git-worktree.ts) ------------------------------------------------------------------

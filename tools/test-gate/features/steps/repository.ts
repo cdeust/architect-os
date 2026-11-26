@@ -7,8 +7,9 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -908,7 +909,7 @@ Given('a linked worktree with an external gitdir is inside the gate repository',
   external.commit('external metadata');
   const repo = repository(this);
   git(external.dir, ['worktree', 'add', '--detach', repo.path('linked'), 'HEAD']);
-  assert.ok(repo.read('linked/.git').startsWith(`gitdir: ${external.dir}/.git/worktrees/`));
+  assert.ok(repo.read('linked/.git').startsWith(`gitdir: ${realpathSync(external.dir)}/.git/worktrees/`));
 });
 
 When('the fixture Git requests the nested patch without the command line submodule guard', function () {
