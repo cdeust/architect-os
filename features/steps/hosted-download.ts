@@ -81,7 +81,7 @@ Then('every Gate download keeps its token scoped to an admitted retrieval step',
 });
 
 const head = 'a'.repeat(40);
-function providerFixture(dir: string) {
+export function providerFixture(dir: string) {
   const bin = join(dir, 'bin');
   mkdirSync(bin);
   writeFileSync(join(bin, 'git'), '#!/bin/sh\nprintf "%s\\n" "$FIXTURE_HEAD"\n', { mode: 0o700 });
@@ -313,6 +313,15 @@ Then(
         assert.equal(archive.status, 0);
         assert.notEqual(shell(command, { ...scoped, ARCHIVE: incomplete }).status, 0);
         assert.ok(!existsSync(join(reports, 'mutation-shards/3')));
+      }
+      if (kind === 'aggregate') {
+        // The judge derived its plan in the step before: the sixteen lanes this fixture run holds.
+        const plan = JSON.stringify(Array.from({ length: 16 }, (_, i) => i + 1));
+        const refusedWithoutPlan = shell(command, scoped);
+        assert.notEqual(refusedWithoutPlan.status, 0);
+        assert.ok(!readFileSync(env.CALLS, 'utf8').includes('/zip'));
+        rmSync(env.CALLS);
+        writeFileSync(join(reports, 'mutation-lanes.json'), plan + '\n');
       }
       const accepted = shell(command, scoped);
       if (kind === 'aggregate') {

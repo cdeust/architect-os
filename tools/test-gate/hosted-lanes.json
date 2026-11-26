@@ -1,0 +1,21 @@
+{
+  "description": "Ce que vaut un lot de mutation hébergé et combien peuvent s'ouvrir (docs/design/platform-v3-srt.md §7, « Lots hébergés » ; tools/test-gate/src/domain/hosted-lanes.ts). Le plan ne décide que de la répartition des mutants entre les lots, jamais de ce qui est jugé.",
+  "unit": "milliseconds",
+  "loadTimeMutantMs": 22300,
+  "laneTargetMs": 265500,
+  "maxLanes": 16,
+  "provenance": {
+    "runs": [
+      "https://github.com/cdeust/architect-os/actions/runs/45739094567",
+      "https://github.com/cdeust/architect-os/actions/runs/45744632805",
+      "https://github.com/cdeust/architect-os/actions/runs/45743125948",
+      "https://github.com/cdeust/architect-os/actions/runs/45767197864",
+      "https://github.com/cdeust/architect-os/actions/runs/45770810106",
+      "https://github.com/cdeust/architect-os/actions/runs/45771449037"
+    ],
+    "dryRun": "L'essai à blanc de Stryker (toute la suite, 5007 à 5479 tests), entre « Starting initial test run » et « Initial test run succeeded » dans le journal de chacun des 96 jobs de mutation de ces six runs : médiane 265,5 s, de 235 à 451 s ; par run, médianes de 250, 253,5, 257,5, 262,5, 271 et 274,5 s. Un lot coûte environ 6,6 minutes de job avant son premier mutant (job de mutation 5,3, job de rejeu 1,3).",
+    "loadTime": "Un mutant qu'aucun corps de fonction de son lot n'entoure tourne au chargement du module (« statique ») : Stryker lui fait rejouer la suite, et s'arrête au premier scénario en échec. Rejoué sur les périmètres reconstruits des runs 45771449037, 45770810106 et 45767197864 (84, 217 et 784 mutants actifs, dont 24, 6 et 22 hors de tout corps), pour 724, 719 et 2916 s de mutation mesurées sur l'ensemble des lots : l'ajustement par moindres carrés temps = a × hors corps + b × autres donne a = 22,3 s et b = 3,15 s (écarts 0 %, +11 %, −1 % ; trois points pour deux paramètres, ajustement faible). loadTimeMutantMs est cette moyenne a. Le pire cas, un mutant statique qui survit, est un passage entier de la suite (265,5 s) : à ce coût les trois périmètres auraient ouvert 16, 6 et 16 lots.",
+    "rule": "laneTargetMs est la médiane de l'essai à blanc : avec n lots, chacun porte environ coût / n ; un lot de plus ne vaut l'essai à blanc qu'il ajoute que si coût / (n + 1) atteint laneTargetMs. Nombre de lots : max(1, min(maxLanes, partie entière de coût / laneTargetMs)). Périmètre vide : un lot, celui du canari. Sur les trois runs au périmètre vide, seize lots ont dépensé 74 à 77 minutes de job en essais à blanc pour 16 s de mutation.",
+    "bound": "Seize lots de mutation, deux lots Cucumber et le job macOS font dix-neuf jobs simultanés : sous le plafond de vingt jobs simultanés du forfait Free de GitHub (docs.github.com/en/actions/reference/limits, lu le 26 novembre 2026 ; 40 en Pro, 60 en Team), le plus bas. Seize était aussi le nombre fixe d'avant ; au temps mesuré, le run de 784 mutants (45767197864, 2916 s de mutation) vaut dix lots."
+  }
+}

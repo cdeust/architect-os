@@ -10,8 +10,13 @@ export interface DeliverConfig {
   trialPrefix: string;
   workflow: string;
   requiredJobs: string[];
-  /** Required aggregate jobs, their upstream jobs, and the first step which checks their results. */
-  jobDependencies?: Record<string, { producers: string[]; admissionStep: string }>;
+  /**
+   * Required aggregate jobs, their upstream jobs, and the first step which checks their results. `plannedProducers`
+   * names a family of upstream jobs whose number the run itself decides (the mutation lanes of the gate, planned from
+   * the commit): `<prefix><lane><suffix>` for the lanes 1 to n and each suffix. The delivery takes the lanes the run
+   * holds and never decides how many there should be: that is judged by the aggregate, which derives the plan again.
+   */
+  jobDependencies?: Record<string, JobDependency>;
   /** Files that may only grow between the parent and the commit. */
   appendOnly: string[];
   /** The gate as an argv, started in the delivery worktree. */
@@ -26,6 +31,12 @@ export interface DeliverConfig {
   pollSeconds: number;
   ciPolls: number;
   ruleSuitePolls: number;
+}
+
+export interface JobDependency {
+  producers: string[];
+  plannedProducers?: { prefix: string; suffixes: string[] };
+  admissionStep: string;
 }
 
 /** Checks a parsed JSON value against the schema of the file; the reason is one line naming each fault. */

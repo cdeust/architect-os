@@ -4,8 +4,8 @@
   "earlierNativeReference": "https://github.com/cdeust/architect-os/actions/runs/44913444875/attempts/1",
   "previousReference": "https://github.com/cdeust/architect-os/actions/runs/44909476888/attempts/1",
   "unit": "milliseconds",
-  "observations": "Median native duration plus median independent replay time, with the latest measured component preferred. Canaries are excluded from production weights. Shared controls are charged to their first case.",
-  "fallback": 661,
+  "observations": "Median native duration plus median independent replay time, with the latest measured component preferred. Canaries are excluded from production weights. Shared controls are charged to their first case. The global fallback, 3150, is the mean mutation time of a mutant inside a function body, fitted on the hosted runs 45771449037, 45770810106 and 45767197864 (tools/test-gate/hosted-lanes.json, provenance.loadTime); it was 661, the median of the samples, which made the 784 mutants of run 45767197864 weigh a third of the 2916 s they took.",
+  "fallback": 3150,
   "files": {
     "tools/deliver/src/application/deliver.ts": {
       "fallback": 6741,

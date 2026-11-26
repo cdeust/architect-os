@@ -104,6 +104,35 @@ Feature: GitHub workflows
     Given the committed workflow "gate.yml"
     Then a workflow with a checkout that keeps its credentials is rejected
 
+  Scenario Outline: the lanes of <workflow> are the plan its plan job derives, and its judge derives that plan again
+    Given the committed workflow "<workflow>"
+    Then a gate workflow that starts or judges lanes outside the plan it derives is rejected
+
+    Examples:
+      | workflow      |
+      | gate.yml      |
+      | gate-push.yml |
+
+  Scenario Outline: the Linux verdict of <workflow> is <outcome> at its admission when cucumber is <cucumber>, the plan <plan> and the lanes <lanes>
+    Given the committed workflow "<workflow>"
+    Then its Linux admission step, given the results "<cucumber>", "<plan>" and "<lanes>", exits "<outcome>"
+
+    Examples:
+      | workflow      | cucumber | plan      | lanes     | outcome |
+      | gate.yml      | success  | success   | success   | green   |
+      | gate-push.yml | success  | success   | success   | green   |
+      | gate.yml      | success  | failure   | skipped   | red     |
+      | gate.yml      | success  | cancelled | skipped   | red     |
+      | gate.yml      | success  | skipped   | skipped   | red     |
+      | gate.yml      | success  | cancelled | cancelled | red     |
+      | gate.yml      | success  | success   | skipped   | red     |
+      | gate.yml      | success  | success   | failure   | red     |
+      | gate.yml      | success  | success   | cancelled | red     |
+      | gate.yml      | success  | failure   | success   | red     |
+      | gate.yml      | failure  | success   | success   | red     |
+      | gate.yml      | success  |           |           | red     |
+      | gate-push.yml | success  | cancelled | skipped   | red     |
+
   Scenario: a gate workflow triggered by pull_request_target is rejected
     Given the committed workflow "gate.yml"
     Then a gate workflow triggered by pull_request_target is rejected

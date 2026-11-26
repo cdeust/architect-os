@@ -80,7 +80,9 @@ Given(
         'gate-macos',
         'gate-linux-cucumber-1',
         'gate-linux-cucumber-2',
-        ...Array.from({ length: 16 }, (_, i) => i + 1).flatMap((lane) => [
+        'gate-linux-plan',
+        // The lanes this run planned: the delivery takes however many the run holds.
+        ...Array.from({ length: 3 }, (_, i) => i + 1).flatMap((lane) => [
           'gate-linux-lane-' + lane + ' / mutation',
           'gate-linux-lane-' + lane + ' / replay',
         ]),

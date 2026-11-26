@@ -30,6 +30,16 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | {"gate-linux":{"admissionStep":"Check","producers":["a","a"]}}      |
         | {"gate-linux":{"admissionStep":"Check","producers":[]}}             |
         | {"gate-linux":{"admissionStep":"","producers":["a"]}}               |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"","suffixes":["x"]}}}          |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-","suffixes":[]}}}           |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-","suffixes":["x","x"]}}}    |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-","suffixes":["a","b","c","d","e"]}}} |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-","suffixes":[""]}}}         |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-"}}}                         |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"suffixes":["x"]}}}                      |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-","suffixes":["x"],"extra":1}}} |
+        | {"gate-linux":{"admissionStep":"Check","producers":["p-a"],"plannedProducers":{"prefix":"p-","suffixes":["x"]}}}      |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"gate-","suffixes":["x"]}}}     |
 
     Scenario Outline: a dependency conflict identifies its specific cause
       Given a deliver config of the base form
@@ -40,11 +50,26 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
       Examples:
         | value | reason |
         | {"gate-linux":{"admissionStep":"Check","producers":["a","a"]}} | the producers are all different |
-        | {"gate-linux":{"admissionStep":"Check","producers":["a","gate-macos"]},"gate-macos":{"admissionStep":"Check","producers":["b"]}} | an aggregate must be required and its producers must be leaf jobs |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a","gate-macos"]},"gate-macos":{"admissionStep":"Check","producers":["b"]}} | an aggregate must be required, its producers must be leaf jobs, and no named job belongs to its planned family |
+        | {"gate-linux":{"admissionStep":"Check","producers":["p-a"],"plannedProducers":{"prefix":"p-","suffixes":["x"]}}} | no named job belongs to its planned family |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"gate-m","suffixes":["x"]}}} | no named job belongs to its planned family |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-","suffixes":["x","x"]}}} | the suffixes are all different |
 
-    Scenario: the committed aggregate binds the three Linux producers to its admission step
+    Scenario: the committed aggregate binds the Linux producers and the family of its planned lanes to its admission step
       When the committed deliver config is loaded
-      Then the committed Linux gate requires its two cucumber shards and mutation at "Require all producers"
+      Then the committed Linux gate requires its two cucumber shards, its plan and the lanes the run planned at "Require all producers"
+
+    Scenario Outline: a planned family at the edge of its rule is accepted
+      Given a deliver config of the base form
+      And the deliver config field "jobDependencies" is set to '<value>'
+      When the deliver config is parsed
+      Then the deliver config is accepted
+
+      Examples:
+        | value |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-","suffixes":["x"]}}} |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a"],"plannedProducers":{"prefix":"p-","suffixes":["a","b","c","d"]}}} |
+        | {"gate-linux":{"admissionStep":"Check","producers":["a-p-"],"plannedProducers":{"prefix":"p-","suffixes":["x"]}}} |
 
   Rule: a copy at the edge of a rule is accepted
 

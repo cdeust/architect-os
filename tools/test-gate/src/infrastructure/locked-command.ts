@@ -29,7 +29,7 @@ export function publishCheckedGate(config: GateConfig, workspace: Workspace): vo
 export async function runLocked(mode: 'local' | 'hosted', args: string[]): Promise<number> {
   const root = process.cwd();
   const workspace = new Workspace(root, (path) => gateReportPath(process.env, path), nativeReplacement);
-  if (mode === 'hosted') return runHostedGate(args, root, process.stdout, undefined, workspace);
+  if (mode === 'hosted') return runHostedGate(args, root, process.stdout, workspace);
   return runGate([...process.argv.slice(0, 2), ...args], root, process.env, process.stdout, workspace, {
     discard: clearGateReceipt,
     publish: publishCheckedGate,

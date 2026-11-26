@@ -102,12 +102,69 @@ jobs:
             ${{ steps.exports.outputs.reports }}/cucumber-head
           if-no-files-found: error
 
+  # The lanes follow the work (docs/design/platform-v3-srt.md §7, « Lots hébergés »): this job derives the plan of
+  # the mutation from the commit and gives the lanes to the matrix below, one when the perimeter is empty. Its output
+  # only decides what starts: gate-linux derives the plan again from its own checkout and judges on that one.
+  gate-linux-plan:
+    name: gate-linux-plan
+    runs-on: ubuntu-24.04
+    env:
+      AOS_GATE_JOB: gate-linux-plan
+    timeout-minutes: 30
+    outputs:
+      lanes: ${{ steps.plan.outputs.lanes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Provision the job runtime root
+        run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
+      - name: Point the destination of the gate at the first parent of the commit this event judges
+        # tools/test-gate/src/domain/destination.ts: the gate takes as first parent the reference `destination` of
+        # tools/test-gate/gate.json. In CI the head is the commit GitHub judges (its merge commit for a pull request,
+        # the pushed commit otherwise), so the destination is that commit's first parent, never a fetch of the live
+        # branch, which may have moved since. The reference comes from env, never written into the command.
+        env:
+          AOS_GATE_DESTINATION: refs/remotes/origin/main
+        run: git update-ref "$AOS_GATE_DESTINATION" HEAD^1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Admit the Gate job
+        id: runtime
+        run: ./aos -- node tools/runtime/gate-job.mjs capture
+
+      - name: Install (lockfile, scripts disabled)
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- npm ci --ignore-scripts
+
+      - name: Plan the mutation lanes
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts lanes
+
+      - name: Announce the lanes to the matrix
+        id: plan
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs announce
+
   gate-linux-lane:
     name: gate-linux-lane-${{ matrix.lane }}
+    needs: gate-linux-plan
     strategy:
       fail-fast: false
       matrix:
-        lane: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        lane: ${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}
     uses: ./.github/workflows/gate-lane.yml
     with:
       lane: ${{ matrix.lane }}
@@ -117,15 +174,17 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       AOS_GATE_JOB: gate-linux
-    needs: [gate-linux-cucumber, gate-linux-lane]
+    needs: [gate-linux-cucumber, gate-linux-plan, gate-linux-lane]
     if: ${{ always() }}
     steps:
       - name: Require all producers
         id: admission
         env:
           CUCUMBER_RESULT: ${{ needs.gate-linux-cucumber.result }}
+          PLAN_RESULT: ${{ needs.gate-linux-plan.result }}
           LANES_RESULT: ${{ needs.gate-linux-lane.result }}
-        run: test "$CUCUMBER_RESULT" = success && test "$LANES_RESULT" = success
+        # A plan job that failed or was cancelled leaves the lanes skipped: every result but success is red here.
+        run: test "$CUCUMBER_RESULT" = success && test "$PLAN_RESULT" = success && test "$LANES_RESULT" = success
 
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -160,6 +219,11 @@ jobs:
           AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
         run: sh tools/runtime/gate-job.sh -- npm ci --ignore-scripts
 
+      - name: Derive the mutation plan again from this checkout
+        env:
+          AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
+        run: sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts lanes
+
       - name: Fetch reports from the effective producer jobs
         env:
           AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
@@ -191,7 +255,9 @@ jobs:
       - name: Verify and collect independent replay lots
         env:
           AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
-        run: sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts collect
+          # What the plan job announced, compared with the plan of this job and never read as one. Through env only.
+          AOS_ANNOUNCED_LANES: ${{ needs.gate-linux-plan.outputs.lanes }}
+        run: sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts collect "$AOS_ANNOUNCED_LANES"
 
       - name: Gate
         env:

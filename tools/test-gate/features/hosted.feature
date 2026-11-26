@@ -37,7 +37,7 @@ Feature: Hosted mutation slices retain exhaustive producer and replay proof
     Then hosted planning keeps peers together and preserves a deeply nested file
     And hosted planning balances measured spans and contains only within the same source
 
-  Scenario: the collector accepts distinct receipts for the same canary on each runner
+  Scenario: an empty perimeter is judged on the one receipt of the lane that ran its canary
     Given a gate repository
     And the gate repository holds the fixture specs "green.feature, second.feature"
     And the gate repository can run the fixture suite with cucumber-js
@@ -54,8 +54,8 @@ Feature: Hosted mutation slices retain exhaustive producer and replay proof
       """
     And the gate configuration declares the replay
     And the gate head is committed
-    When the hosted collector receives a canary-only proof from each runner
-    Then the hosted collector preserves all canary-qualified IDs exactly once
+    When the one hosted lane of an empty perimeter completes with the proof of its canary
+    Then the hosted collector judges the empty perimeter on that one receipt
     And the hosted collector rejects an active mutant without static metadata
     And a replaced producer or a missing receipt cannot reuse the hosted verdict
 
@@ -138,6 +138,43 @@ Feature: Hosted mutation slices retain exhaustive producer and replay proof
     And the hosted collector reports both independent divergences on separate lines
     And a replaced producer or a missing receipt cannot reuse the hosted verdict
 
+  Scenario: the judge accepts the receipts of the plan it derived, no more and no fewer, bound to its head
+    Given a gate repository
+    And the gate repository holds the fixture specs "green.feature, second.feature"
+    And the gate repository can run the fixture suite with cucumber-js
+    And the gate mutation fixture declares its independent mutation profile
+    And the gate repository holds "src/math.mjs" of the mutation fixture "survivor"
+    And the gate first parent is committed
+    And the gate repository file "src/nested.mjs" reads:
+      """
+      export function pick(value) {
+        return value && true;
+      }
+      """
+    And the gate repository file "zz/probe.mjs" reads:
+      """
+      export function probe(value) {
+        return !value;
+      }
+      """
+    And the gate configuration declares the canary "zz/probe.mjs" with:
+      """
+      {"probe":"Survived"}
+      """
+    And the gate configuration declares the replay
+    And only the second fixture exercises the nested return value
+    And the gate head is committed
+    When the hosted mutation chains complete independently in "changed lines" mode
+    Then the hosted verdict has all independently replayed mutations
+    And a plan announced with fewer lanes, more lanes, another order, another spelling or nothing is refused
+    And a planned lane without its producer or without its receipt is refused
+    And a receipt for a lane outside the plan is refused
+    And the receipt or the producer of one lane presented for another is refused
+    And lanes whose reports hold no canary are refused, whether they name it or not
+    And receipts of another plan are refused
+    And the hosted verdict has all independently replayed mutations
+    And receipts of another head are refused, the plan being the same
+
   Scenario: a lane report without static metadata is refused for that before the verdict of its canary is read
     Given a gate repository
     And the gate repository holds the fixture specs "green.feature, second.feature"
@@ -155,5 +192,5 @@ Feature: Hosted mutation slices retain exhaustive producer and replay proof
       """
     And the gate configuration declares the replay
     And the gate head is committed
-    When the hosted collector receives a canary-only proof from each runner
+    When the one hosted lane of an empty perimeter completes with the proof of its canary
     Then the hosted collector names the missing static metadata of a lane before the verdict of its canary

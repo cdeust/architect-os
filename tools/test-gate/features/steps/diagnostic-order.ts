@@ -15,7 +15,7 @@ Then(
       const report = JSON.parse(original);
       edit(report.files['zz/probe.mjs'].mutants[0]);
       repo.write(NATIVE, JSON.stringify(report));
-      return command(repo, 'collect');
+      return command(repo, 'collect', '[1]');
     };
     try {
       // The control: with its static metadata kept, a contradicted canary is what the collector names.

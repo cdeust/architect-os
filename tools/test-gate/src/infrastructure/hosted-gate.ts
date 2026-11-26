@@ -9,9 +9,10 @@ import { GitRepository } from './git.js';
 import {
   HOSTED_COSTS,
   HOSTED_LANES,
+  parseLanePolicy,
+  parseMutationCosts,
   planHostedSlices,
   type HostedSlice,
-  type MutationCosts,
 } from './hosted-lots.js';
 import { jsonText, parseJson } from './json.js';
 import { mutationLots } from './mutation-inventory.js';
@@ -33,20 +34,30 @@ const Receipt = z.strictObject({
   record: ReplayRecordSchema,
 });
 
+/**
+ * `hosted-gate lanes`, `inventory|verify|replay <lot>` or `collect <plan annoncé>`, run in `root`. Every command
+ * derives the plan again from the checkout it runs in (the judged commit, its first parent, the two descriptive files
+ * of the tree): a lane takes its slice from it, and `collect`, the judge, requires the receipts of exactly its lanes.
+ * What the plan job announced starts the lanes and is compared with the plan of the judge; it is never read as one.
+ */
 export async function runHostedGate(
   args: readonly string[],
   root: string,
   out: Output,
-  count = HOSTED_LANES,
   workspace = new Workspace(root),
 ): Promise<number> {
   const [command, selected] = args;
   const lane = Number(selected);
-  const validLane = args.length === 2 && /^[1-9][0-9]*$/.test(String(selected)) && lane <= count;
-  const collecting = command === 'collect' && args.length === 1;
+  // A matrix of GitHub Actions holds at most 256 jobs: three digits name any lane a plan can open.
+  const validLane = args.length === 2 && /^[1-9][0-9]{0,2}$/.test(String(selected));
+  const planning = command === 'lanes' && args.length === 1;
+  const collecting = command === 'collect' && args.length === 2;
+  // The lanes of the plan, as `lanes` leaves them for the job that starts them and for the download of the judge.
+  const announcement = 'reports/mutation-lanes.json';
   try {
-    if (!collecting && (!validLane || !LANE_COMMANDS.includes(command)))
-      throw new Error('usage : hosted-gate inventory|verify|replay <lot> | collect');
+    if (!planning && !collecting && (!validLane || !LANE_COMMANDS.includes(command)))
+      throw new Error('usage : hosted-gate lanes | inventory|verify|replay <lot> | collect <plan annoncé>');
+    if (planning) workspace.remove(announcement);
     if (command === 'inventory') workspace.remove('reports/' + MANIFEST);
     if (command === 'replay') {
       workspace.remove(receipt(lane));
@@ -74,8 +85,15 @@ export async function runHostedGate(
     if ('failure' in debt.current || (debt.parent !== null && 'failure' in debt.parent))
       throw new Error('registre de dette illisible');
     const full = await mutationLots(root, perimeter, canary.file, (file) => workspace.readSource(file));
-    const timing = JSON.parse(read(HOSTED_COSTS)) as MutationCosts;
-    const slices = planHostedSlices(full, canary.file, read, timing, count, root);
+    const timing = parseMutationCosts(read(HOSTED_COSTS));
+    if ('failure' in timing) throw new Error(HOSTED_COSTS + ' : ' + timing.failure);
+    const policy = parseLanePolicy(read(HOSTED_LANES));
+    if ('failure' in policy) throw new Error(HOSTED_LANES + ' : ' + policy.failure);
+    const slices = planHostedSlices(full, canary.file, read, timing, policy, root);
+    const planned = slices.map((_, index) => String(index + 1));
+    const lanes = `[${planned.join(',')}]`;
+    if (LANE_COMMANDS.includes(command) && lane > slices.length)
+      throw new Error(`lot ${lane} hors du plan re-dérivé (${slices.length} lot(s))`);
     const manifest = (number: number) => {
       // The admitted lane indexes the dense result of planHostedSlices. Read both fields before writing.
       const { lots, patterns } = slices[number - 1] as HostedSlice;
@@ -106,10 +124,13 @@ export async function runHostedGate(
         manifestHash: sha256(text),
       };
     };
-    if (command === 'inventory') {
-      const planned = manifest(lane);
-      workspace.write('reports/' + MANIFEST, planned.text);
-      out.write(`lot ${lane} : ${planned.lots.length} fichier(s), ${planned.patterns.length} plage(s)\n`);
+    if (planning) {
+      workspace.write(announcement, lanes + '\n');
+      out.write(`plan hébergé : ${slices.length} lot(s) -> ${announcement}\n`);
+    } else if (command === 'inventory') {
+      const slice = manifest(lane);
+      workspace.write('reports/' + MANIFEST, slice.text);
+      out.write(`lot ${lane} : ${slice.lots.length} fichier(s), ${slice.patterns.length} plage(s)\n`);
     } else if (command === 'verify') {
       const { tests } = proved(lane, 'reports');
       await verifyMutationCatalog(root, tests);
@@ -146,10 +167,17 @@ export async function runHostedGate(
         `lot de rejeu ${lane} : ${entries.length} mutant(s), ${entries.filter(({ divergence }) => divergence !== null).length} divergence(s)\n`,
       );
     } else {
+      // The announced plan is given by a job that runs the code it plans for: compared, never echoed nor read.
+      if (selected !== lanes)
+        throw new Error(`plan annoncé différent du plan re-dérivé (${slices.length} lot(s))`);
+      for (const directory of ['reports/mutation-shards', 'reports/replay-shards']) {
+        if (workspace.list(directory).some((name) => !planned.includes(name)))
+          throw new Error('reçu hors du plan re-dérivé dans ' + directory);
+      }
       const producers = [];
       const receipts: ReplayEntry[] = [];
       const errors: string[] = [];
-      for (let number = 1; number <= count; number++) {
+      for (let number = 1; number <= slices.length; number++) {
         const directory = origin(number);
         const { proof, cases, nativeHash, manifestHash } = proved(number, directory);
         producers.push(proof);
@@ -166,7 +194,9 @@ export async function runHostedGate(
       workspace.write(config.reports.mutation, combined);
       if (errors.length !== 0) throw new Error(errors.join('\n'));
       workspace.write(replay.record, jsonText({ report: sha256(combined), mutants: receipts }));
-      out.write(`${count} producteurs vérifiés, ${receipts.length} verdict(s) rejoué(s)\n`);
+      out.write(
+        `plan re-dérivé : ${slices.length} producteur(s) vérifié(s), ${receipts.length} verdict(s) rejoué(s)\n`,
+      );
     }
     return 0;
   } catch (error) {

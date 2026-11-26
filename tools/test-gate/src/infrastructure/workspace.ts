@@ -142,6 +142,16 @@ export class Workspace {
     }
   }
 
+  /** The names a directory holds, none when it does not exist. */
+  list(path: string): string[] {
+    try {
+      return readdirSync(this.path(path));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw error;
+    }
+  }
+
   exists(path: string): boolean {
     return existsSync(this.path(path));
   }

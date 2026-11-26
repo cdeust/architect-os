@@ -31,6 +31,29 @@ Feature: Hosted runtime admission
       | lane       |
       | aggregate  |
 
+  Scenario Outline: the judge downloads the producers of its own plan and refuses a run that holds another set: <situation>
+    Then the Gate downloads the producers of the plan of the judge alone, for "<situation>"
+
+    Examples:
+      | situation                                                |
+      | the plan the run followed                                |
+      | a run that started fewer lanes, the plan being its lanes |
+      | a plan of fewer lanes than the run started               |
+      | a plan of more lanes than the run started                |
+      | an artifact of a lane outside the plan, without its job  |
+      | a job of a lane outside the plan, without its artifact   |
+      | a lane job under a name no plan gives                    |
+      | a lane artifact under a name no plan gives               |
+      | no plan                                                  |
+      | an empty plan                                            |
+      | a plan that skips a lane                                 |
+      | a plan that does not start at the first lane             |
+      | a plan that is no list                                   |
+      | a plan longer than a matrix                              |
+
+  Scenario: the plan job gives its matrix the lanes of the plan, and nothing that is not a list of lanes
+    Then the plan job announces the lanes "[1,2,3]" to its matrix and refuses "[] | [0] | [01] | [1, 2] | [1,2,] | [1000] | 1 | [a] | [1]]"
+
   Scenario Outline: partial reruns bind the downloaded evidence to its physical producer
     Then the Gate resolves the producer history for "<history>"
 

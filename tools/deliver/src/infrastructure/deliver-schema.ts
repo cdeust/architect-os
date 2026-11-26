@@ -64,6 +64,12 @@ function configSchema(): z.ZodType<DeliverConfig> {
         label,
         z.strictObject({
           producers: z.array(label).min(1).refine(different, 'the producers are all different'),
+          plannedProducers: z
+            .strictObject({
+              prefix: label,
+              suffixes: z.array(label).min(1).max(4).refine(different, 'the suffixes are all different'),
+            })
+            .optional(),
           admissionStep: label,
         }),
       )
@@ -89,11 +95,15 @@ function configSchema(): z.ZodType<DeliverConfig> {
         Object.entries(jobDependencies).every(
           ([name, group]) =>
             requiredJobs.includes(name) &&
-            group.producers.every((job) => !Object.hasOwn(jobDependencies, job)),
+            group.producers.every((job) => !Object.hasOwn(jobDependencies, job)) &&
+            [...requiredJobs, ...group.producers].every(
+              (job) => group.plannedProducers === undefined || !job.startsWith(group.plannedProducers.prefix),
+            ),
         ),
       {
         path: ['jobDependencies'],
-        message: 'an aggregate must be required and its producers must be leaf jobs',
+        message:
+          'an aggregate must be required, its producers must be leaf jobs, and no named job belongs to its planned family',
       },
     )
     .refine((config) => config.branches.every((branch) => !branch.startsWith(config.trialPrefix)), {

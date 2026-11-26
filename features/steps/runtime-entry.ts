@@ -1001,11 +1001,18 @@ Given(
     const committed = JSON.parse(readFileSync(join(ROOT, 'tools/deliver/deliver.json'), 'utf8')) as {
       workflow: string;
       requiredJobs: string[];
-      jobDependencies?: Record<string, { producers: string[] }>;
+      jobDependencies?: Record<
+        string,
+        { producers: string[]; plannedProducers?: { prefix: string; suffixes: string[] } }
+      >;
     };
     const required = new Set([
       ...committed.requiredJobs,
-      ...Object.values(committed.jobDependencies ?? {}).flatMap(({ producers }) => producers),
+      ...Object.values(committed.jobDependencies ?? {}).flatMap(({ producers, plannedProducers }) => [
+        ...producers,
+        // The one lane a run always plans, the canary's.
+        ...(plannedProducers?.suffixes ?? []).map((suffix) => plannedProducers?.prefix + '1' + suffix),
+      ]),
     ]);
     const jobs = [...required].map((name) => ({
       name,

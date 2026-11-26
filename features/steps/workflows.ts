@@ -46,6 +46,7 @@ const WorkflowSchema = z.object({
         permissions: z.unknown().optional(),
         secrets: z.unknown().optional(),
         strategy: z.unknown().optional(),
+        outputs: z.record(z.string(), z.string()).optional(),
         uses: z.string().optional(),
         with: z.record(z.string(), z.unknown()).optional(),
         'runs-on': z.unknown().optional(),
@@ -133,17 +134,46 @@ function assertGate(text: string, file: string): void {
     'gate-linux',
     'gate-linux-cucumber',
     'gate-linux-lane',
+    'gate-linux-plan',
     'gate-macos',
   ]);
-  assert.deepEqual(doc.jobs['gate-linux']?.needs, ['gate-linux-cucumber', 'gate-linux-lane']);
+  const judge = doc.jobs['gate-linux'];
+  assert.deepEqual(judge?.needs, ['gate-linux-cucumber', 'gate-linux-plan', 'gate-linux-lane']);
+  // The plan job announces the lanes; nothing may skip it, and nothing may let it fail unseen.
+  const plan = doc.jobs['gate-linux-plan'];
+  const announced = '${{ needs.gate-linux-plan.outputs.lanes }}';
+  assert.equal(plan?.if, undefined);
+  assert.equal(plan?.needs, undefined);
+  assert.equal(plan?.['runs-on'], 'ubuntu-24.04');
+  assert.deepEqual(plan?.outputs, { lanes: '${{ steps.plan.outputs.lanes }}' });
+  assert.ok(!text.includes('continue-on-error'), `${file} must not let a job or a step fail unseen`);
+  const planSteps = plan?.steps ?? [];
+  assert.equal(planSteps.at(-1)?.id, 'plan');
+  assert.equal(
+    planSteps.at(-2)?.run,
+    'sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts lanes',
+  );
+  assert.equal(
+    planSteps.at(-1)?.run,
+    'sh tools/runtime/gate-job.sh -- node tools/test-gate/report-files.mjs announce',
+  );
+  for (const step of planSteps) assert.equal(step.if, undefined);
+  assert.equal(planSteps.filter(({ id }) => id === 'plan').length, 1);
+  // No expression is written into a command: what a job announces reaches a step through its environment.
+  for (const job of Object.values(doc.jobs))
+    for (const { run } of job.steps)
+      assert.ok(!(run ?? '').includes('${{'), `${file}: expression in a command`);
   assert.deepEqual(doc.jobs['gate-linux-cucumber']?.strategy, {
     'fail-fast': false,
     matrix: { shard: [1, 2] },
   });
   const lane = doc.jobs['gate-linux-lane'];
+  // The lanes are the plan, never a list of the workflow: no lane starts that the plan does not hold.
+  assert.equal(lane?.needs, 'gate-linux-plan');
+  assert.equal(lane?.if, undefined);
   assert.deepEqual(lane?.strategy, {
     'fail-fast': false,
-    matrix: { lane: Array.from({ length: 16 }, (_, i) => i + 1) },
+    matrix: { lane: '${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}' },
   });
   assert.equal(lane?.uses, './.github/workflows/gate-lane.yml');
   assert.deepEqual(lane?.with, { lane: '${{ matrix.lane }}' });
@@ -151,6 +181,32 @@ function assertGate(text: string, file: string): void {
   const linuxSteps = doc.jobs['gate-linux']?.steps ?? [];
   assert.equal(linuxSteps[0]?.id, 'admission');
   assert.equal(linuxSteps[0]?.name, 'Require all producers');
+  assert.deepEqual(linuxSteps[0]?.env, {
+    CUCUMBER_RESULT: '${{ needs.gate-linux-cucumber.result }}',
+    PLAN_RESULT: '${{ needs.gate-linux-plan.result }}',
+    LANES_RESULT: '${{ needs.gate-linux-lane.result }}',
+  });
+  assert.equal(
+    linuxSteps[0]?.run,
+    'test "$CUCUMBER_RESULT" = success && test "$PLAN_RESULT" = success && test "$LANES_RESULT" = success',
+  );
+  assert.equal(linuxSteps[0]?.if, undefined);
+  // The judge derives the plan from its own checkout before it downloads, and judges on that plan alone.
+  const hosted = 'sh tools/runtime/gate-job.sh -- node --import tsx tools/test-gate/src/hosted.ts ';
+  const at = (name: string) => linuxSteps.findIndex((step) => step.name === name);
+  const derive = at('Derive the mutation plan again from this checkout');
+  const fetch = at('Fetch reports from the effective producer jobs');
+  const collect = at('Verify and collect independent replay lots');
+  const verdict = at('Gate');
+  assert.ok(
+    0 < derive && derive < fetch && fetch < collect && collect < verdict,
+    `${file}: order of the judge`,
+  );
+  assert.equal(linuxSteps[derive]?.run, hosted + 'lanes');
+  assert.equal(linuxSteps[collect]?.run, hosted + 'collect "$AOS_ANNOUNCED_LANES"');
+  assert.equal(linuxSteps[collect]?.env?.['AOS_ANNOUNCED_LANES'], announced);
+  for (const index of [derive, fetch, collect, verdict]) assert.equal(linuxSteps[index]?.if, undefined);
+  assert.equal(linuxSteps.filter(({ run }) => (run ?? '').startsWith(hosted)).length, 2);
   assert.equal(
     linuxSteps.find(({ name }) => name === 'Upload reports')?.if,
     '$' + "{{ always() && steps.admission.outcome == 'success' && steps.exports.outcome == 'success' }}",
@@ -299,6 +355,72 @@ Then('Gate jobs reject explicit secrets and permissions', function () {
     assert.throws(() => verify(edited));
   }
 });
+
+Then('a gate workflow that starts or judges lanes outside the plan it derives is rejected', function () {
+  const original = text(this);
+  const file = stored<Loaded>(this, 'workflow').path.split('/').at(-1) as string;
+  assertGate(original, file);
+  const edits: [string, string][] = [
+    ['lane: ${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}', 'lane: [1, 2, 3]'],
+    ['lane: ${{ fromJSON(needs.gate-linux-plan.outputs.lanes) }}', "lane: ${{ fromJSON('[1]') }}"],
+    ['    needs: gate-linux-plan\n', ''],
+    [
+      'needs: [gate-linux-cucumber, gate-linux-plan, gate-linux-lane]',
+      'needs: [gate-linux-cucumber, gate-linux-lane]',
+    ],
+    [' && test "$PLAN_RESULT" = success', ''],
+    [' && test "$LANES_RESULT" = success', ''],
+    ['test "$PLAN_RESULT" = success', 'test "$PLAN_RESULT" != failure'],
+    ['PLAN_RESULT: ${{ needs.gate-linux-plan.result }}', 'PLAN_RESULT: success'],
+    [
+      'LANES_RESULT: ${{ needs.gate-linux-lane.result }}',
+      'LANES_RESULT: ${{ needs.gate-linux-plan.result }}',
+    ],
+    ['hosted.ts collect "$AOS_ANNOUNCED_LANES"', 'hosted.ts collect'],
+    [
+      'hosted.ts collect "$AOS_ANNOUNCED_LANES"',
+      'hosted.ts collect "${{ needs.gate-linux-plan.outputs.lanes }}"',
+    ],
+    ['AOS_ANNOUNCED_LANES: ${{ needs.gate-linux-plan.outputs.lanes }}', "AOS_ANNOUNCED_LANES: '[1]'"],
+    ['      lanes: ${{ steps.plan.outputs.lanes }}', "      lanes: '[1]'"],
+    ['node tools/test-gate/report-files.mjs announce', 'echo "lanes=[1]" >> "$GITHUB_OUTPUT"'],
+    ['    if: ${{ always() }}', "    if: ${{ needs.gate-linux-plan.result == 'success' }}"],
+    ['    name: gate-linux-plan\n', '    name: gate-linux-plan\n    continue-on-error: true\n'],
+    ['    name: gate-linux-plan\n', "    name: gate-linux-plan\n    if: github.event_name == 'push'\n"],
+    [
+      '      - name: Derive the mutation plan again from this checkout\n',
+      '      - name: Take the announced plan\n',
+    ],
+  ];
+  for (const [from, to] of edits) {
+    const edited = original.replace(from, to);
+    assert.notEqual(edited, original, from);
+    assert.throws(() => assertGate(edited, file), from + ' -> ' + to);
+  }
+  // The judge that derives its plan after the download would download what a producer announced.
+  const derive = original.slice(
+    original.indexOf('      - name: Derive the mutation plan again from this checkout'),
+    original.indexOf('      - name: Fetch reports from the effective producer jobs'),
+  );
+  const moved = original
+    .replace(derive, '')
+    .replace('      - name: Bind the Gate plan', derive + '      - name: Bind the Gate plan');
+  assert.notEqual(moved, original);
+  assert.throws(() => assertGate(moved, file));
+});
+
+Then(
+  'its Linux admission step, given the results {string}, {string} and {string}, exits {string}',
+  function (cucumber: string, plan: string, lanes: string, outcome: string) {
+    const step = workflow(text(this)).jobs['gate-linux']?.steps[0];
+    assert.equal(step?.id, 'admission');
+    const result = spawnSync('/bin/sh', ['-e', '-c', step?.run as string], {
+      env: { PATH: '/usr/bin:/bin', CUCUMBER_RESULT: cucumber, PLAN_RESULT: plan, LANES_RESULT: lanes },
+      encoding: 'utf8',
+    });
+    assert.equal(result.status === 0 ? 'green' : 'red', outcome, result.stderr);
+  },
+);
 
 Then('it satisfies the live workflow rules', function () {
   assertLive(text(this));
