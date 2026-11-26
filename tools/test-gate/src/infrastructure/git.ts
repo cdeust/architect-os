@@ -1,5 +1,7 @@
 import { visibleNestedMarker } from '@architect-os/sandbox/git-worktree';
 import { execFileSync } from 'node:child_process';
+import { destinationMessage, judgedParent, type DestinationFacts } from '../domain/destination.js';
+import type { JudgedDestination } from '../domain/verdict.js';
 import { decodeExactly } from '../domain/diff.js';
 
 /**
@@ -82,6 +84,72 @@ export class GitRepository {
   constructor(private readonly root: string) {}
 
   /** HEAD and its first parent (`HEAD^1`), null for a root commit. */
+  /**
+   * What `judgedParent` needs to choose the first parent: the head, its first parent, the commit the destination
+   * reference names (absent when `rev-parse` does not resolve it), the commits on each side, the tree of the head, and
+   * on demand the tree `merge-tree --write-tree` builds for the merge of the destination and the head (`conflict` when
+   * it exits 1). No reference is written and the working tree is not touched.
+   */
+  destinationFacts(reference: string): DestinationFacts {
+    const { head, firstParent } = this.commits();
+    let destination: string | undefined;
+    try {
+      destination = git(this.root, [
+        'rev-parse',
+        '--verify',
+        '--quiet',
+        '--end-of-options',
+        `${reference}^{commit}`,
+      ]).trim();
+    } catch {
+      destination = undefined;
+    }
+    const counts =
+      destination === undefined || destination === head || destination === firstParent
+        ? ['0', '0']
+        : git(this.root, ['rev-list', '--left-right', '--count', `${destination}...${head}`])
+            .trim()
+            .split(/\s+/);
+    const headTree = git(this.root, ['rev-parse', '--verify', `${head}^{tree}`]).trim();
+    return {
+      head,
+      parent: firstParent,
+      destination,
+      behind: Number(counts[0]),
+      ahead: Number(counts[1]),
+      headTree,
+      merged: () => {
+        try {
+          return git(this.root, [
+            'merge-tree',
+            '--write-tree',
+            '--no-messages',
+            destination as string,
+            head,
+          ]).split('\n', 1)[0] as string;
+        } catch (error) {
+          if ((error as { status?: number }).status === 1) return 'conflict';
+          throw error;
+        }
+      },
+    };
+  }
+
+  /**
+   * The head and the first parent the gate judges it against (src/domain/destination.ts), with the destination taken;
+   * a destination that does not let the gate judge the merge GitHub would build throws its named refusal.
+   */
+  judged(reference: string): { head: string; firstParent: string | null; destination: JudgedDestination } {
+    const facts = this.destinationFacts(reference);
+    const judged = judgedParent(facts);
+    if ('refusal' in judged) throw new Error(destinationMessage(judged.refusal, reference));
+    return {
+      head: facts.head,
+      firstParent: judged.firstParent,
+      destination: { reference, commit: judged.destination, commits: judged.commits },
+    };
+  }
+
   commits(): { head: string; firstParent: string | null } {
     const [head, firstParent] = git(this.root, ['rev-list', '--parents', '-n', '1', 'HEAD'])
       .trim()

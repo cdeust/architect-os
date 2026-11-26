@@ -699,3 +699,66 @@ Then('the hosted install leaves the lifecycle witness untouched', function () {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// The destination the gate judges against (tools/test-gate/src/domain/destination.ts): every job that runs the gate
+// fetches it first, into the one reference gate.json names, with the branch from env, never written into the command.
+const RUNS_GATE = /tools\/test-gate\/src\/(main|hosted)\.ts|npm run gate\b/;
+const FETCH =
+  /^git fetch --quiet --no-tags --depth=2 origin "\+refs\/heads\/\$AOS_GATE_DESTINATION:refs\/remotes\/origin\/\$AOS_GATE_DESTINATION"$/;
+
+export function assertDestinationFetched(source: string): void {
+  const gate = JSON.parse(readFileSync(join(ROOT, 'tools/test-gate/gate.json'), 'utf8')) as {
+    destination: string;
+  };
+  let jobs = 0;
+  for (const [id, job] of Object.entries(workflow(source).jobs)) {
+    const at = job.steps.findIndex((step) => RUNS_GATE.test(step.run ?? ''));
+    if (at === -1) continue;
+    jobs += 1;
+    const fetch = job.steps.findIndex((step) => FETCH.test(step.run ?? ''));
+    assert.ok(fetch !== -1 && fetch < at, id + ': the gate runs without its destination fetched before it');
+    const branch = job.steps[fetch]!.env?.['AOS_GATE_DESTINATION'];
+    assert.ok(
+      branch !== undefined && /^[A-Za-z0-9._/-]+$/.test(branch),
+      id + ': the branch of the destination',
+    );
+    assert.equal(`refs/remotes/origin/${branch}`, gate.destination, id + ': not the reference of gate.json');
+  }
+  assert.ok(jobs > 0, 'no job runs the gate');
+}
+
+Then('every job that runs the gate fetches the destination of gate.json before it', function () {
+  assertDestinationFetched(text(this));
+});
+
+Then('a copy of the workflow {word} is refused', function (fault: string) {
+  const doc = parse(text(this)) as {
+    jobs: Record<string, { steps?: { name?: string; run?: string; env?: Record<string, string> }[] }>;
+  };
+  const job = Object.values(doc.jobs).find((candidate) =>
+    (candidate.steps ?? []).some((step) => RUNS_GATE.test(step.run ?? '')),
+  );
+  assert.ok(job?.steps);
+  const at = job.steps.findIndex((step) => FETCH.test(step.run ?? ''));
+  assert.ok(at !== -1);
+  const fetch = job.steps[at]!;
+  switch (fault) {
+    case 'without-the-fetch':
+      job.steps.splice(at, 1);
+      break;
+    case 'with-the-fetch-after-the-gate':
+      job.steps.splice(at, 1);
+      job.steps.push(fetch);
+      break;
+    case 'with-the-branch-written-into-the-command':
+      fetch.run =
+        'git fetch --quiet --no-tags --depth=2 origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/main"';
+      break;
+    case 'with-another-branch':
+      fetch.env = { AOS_GATE_DESTINATION: 'feat/gate-1a' };
+      break;
+    default:
+      assert.fail(fault);
+  }
+  assert.throws(() => assertDestinationFetched(stringify(doc)));
+});

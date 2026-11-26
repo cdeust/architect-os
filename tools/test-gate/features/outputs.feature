@@ -22,7 +22,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
       """
     And the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs"] }
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "destination": { "reference": "refs/remotes/origin/main", "commit": "<destination>", "commits": 1 }, "mutate": ["src/math.mjs"] }
       """
 
   Scenario: an added .feature plans no mutation
@@ -34,7 +34,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": [] }
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "destination": { "reference": "refs/remotes/origin/main", "commit": "<destination>", "commits": 1 }, "mutate": [] }
       """
 
   Scenario: the macos job plans no mutation
@@ -48,7 +48,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
       """
     And the gate plan is:
       """
-      { "job": "macos", "head": "<head>", "firstParent": "<parent>", "mutate": [] }
+      { "job": "macos", "head": "<head>", "firstParent": "<parent>", "destination": { "reference": "refs/remotes/origin/main", "commit": "<destination>", "commits": 1 }, "mutate": [] }
       """
 
   Scenario: a root commit plans every production file it holds
@@ -57,7 +57,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": null, "mutate": ["src/math.mjs"] }
+      { "job": "linux", "head": "<head>", "firstParent": null, "destination": { "reference": "refs/remotes/origin/main", "commit": null, "commits": 1 }, "mutate": ["src/math.mjs"] }
       """
 
   Scenario: a green check writes the base of the next run, the step summary and prints the report
@@ -127,7 +127,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": null, "mutate": ["src/math.mjs"] }
+      { "job": "linux", "head": "<head>", "firstParent": null, "destination": { "reference": "refs/remotes/origin/main", "commit": null, "commits": 1 }, "mutate": ["src/math.mjs"] }
       """
 
   Scenario Outline: the canary is planned in every job with mutation, once, among the sorted files: <canary>
@@ -142,7 +142,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": <mutate> }
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "destination": { "reference": "refs/remotes/origin/main", "commit": "<destination>", "commits": 1 }, "mutate": <mutate> }
       """
 
     Examples:
@@ -160,7 +160,7 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "macos" job
     Then the gate plan is:
       """
-      { "job": "macos", "head": "<head>", "firstParent": null, "mutate": [] }
+      { "job": "macos", "head": "<head>", "firstParent": null, "destination": { "reference": "refs/remotes/origin/main", "commit": null, "commits": 1 }, "mutate": [] }
       """
 
   Scenario: disjoint changed lines still select one whole file
@@ -181,5 +181,5 @@ Feature: Test gate outputs: the plan, the report, the step summary and the base 
     When the gate plans the "linux" job
     Then the gate plan is:
       """
-      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "mutate": ["src/math.mjs"] }
+      { "job": "linux", "head": "<head>", "firstParent": "<parent>", "destination": { "reference": "refs/remotes/origin/main", "commit": "<destination>", "commits": 1 }, "mutate": ["src/math.mjs"] }
       """

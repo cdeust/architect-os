@@ -132,6 +132,15 @@ jobs:
       - name: Provision the job runtime root
         run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
 
+      - name: Fetch the destination the gate judges against
+        # tools/test-gate/src/domain/destination.ts: the gate takes as first parent the destination as this checkout
+        # knows it, the reference `destination` of tools/test-gate/gate.json. On GitHub's merge commit it is the first
+        # parent; on a push to main, the head. Depth 2: a fetch of depth 1 of a commit the checkout holds would make it
+        # its shallow boundary and take its parent away. The branch comes from env, never written into the command.
+        env:
+          AOS_GATE_DESTINATION: main
+        run: git fetch --quiet --no-tags --depth=2 origin "+refs/heads/$AOS_GATE_DESTINATION:refs/remotes/origin/$AOS_GATE_DESTINATION"
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -225,6 +234,15 @@ jobs:
 
       - name: Provision the job runtime root
         run: sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"
+
+      - name: Fetch the destination the gate judges against
+        # tools/test-gate/src/domain/destination.ts: the gate takes as first parent the destination as this checkout
+        # knows it, the reference `destination` of tools/test-gate/gate.json. On GitHub's merge commit it is the first
+        # parent; on a push to main, the head. Depth 2: a fetch of depth 1 of a commit the checkout holds would make it
+        # its shallow boundary and take its parent away. The branch comes from env, never written into the command.
+        env:
+          AOS_GATE_DESTINATION: main
+        run: git fetch --quiet --no-tags --depth=2 origin "+refs/heads/$AOS_GATE_DESTINATION:refs/remotes/origin/$AOS_GATE_DESTINATION"
 
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
