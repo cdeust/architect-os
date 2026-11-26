@@ -15,6 +15,19 @@ The state is the register, not a table here. `./aos -- npm run watch -- check` c
 
 No source leaves the register because its changes led to no decision: it costs one comparison a week, and taking it out would mean reading it whole again the day it matters (the owner's decision, 17 November 2026).
 
+## anthropics/claude-code-security-review at 0c6a49f
+
+Read on 25 November 2026, whole, at `0c6a49f1fa56a1d472575da86a94dbc1edb78eda` (the head of `main`; the repository has no release): `action.yml`, `claudecode/github_action_audit.py`, `claude_api_client.py`, `findings_filter.py`, `prompts.py` and its comment script `comment-pr-findings.js`, for what the security review of the platform would run, with which rights, and how it authenticates. Three of its files enter the register (`security-review-action`, `security-review-prompt`, `security-review-filter`); their digests are those of the files read.
+
+| Entry                                                                               | Class               | Decision                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claude-api-key` is the only credential; the scan step exits 1 without it           | Pertinent           | Not the engine: the owner's tools run on the subscription. The engine is `anthropics/claude-code-action` at the pin of `claude-review.yml` (docs/infrastructure.md, "The Claude security review") |
+| Default model `claude-opus-4-1-20250805`, retired on 5 August 2026                  | Mandatory           | A reason it is not the engine; to look at again when it moves                                                                                                                                     |
+| `validate_api_access()` calls `claude-3-5-haiku-20241022`, retired 19 February 2026 | Mandatory           | Its false-positive filter turns itself off: a reason it is not the engine                                                                                                                         |
+| `npm install -g @anthropic-ai/claude-code` (latest), pip `>=`, Node 18              | Pertinent, security | Its SHA fixes none of them: a reason it is not the engine                                                                                                                                         |
+| The audit prompt and the default filter                                             | Pertinent           | Taken, adapted, in `.github/claude-security-review/scan-instructions.txt` and `false-positive-filtering.txt`, with the MIT notice and the provenance                                              |
+| Not hardened against prompt injection; trusted pull requests only (README)          | Pertinent, security | The review runs on the trust rule of `claude-review.yml` and under managed settings that refuse every tool that runs, writes or reaches a host                                                    |
+
 ## Claude Code 2.1.326 and the Agent SDK from 0.3.313 to 0.3.326
 
 Read on 17 November 2026: the 367 entries of Claude Code 2.1.326, by the terms that touch a headless run, the Agent SDK, the sandbox, credentials, the API and the defaults; and every entry of the changelog of the Agent SDK from 0.3.313 to 0.3.326, which had never been read as such. The meaning of each option was taken from the definitions of the installed package (`sdk.d.ts`), not from the changelog line. Each change is classified as the section above says.
