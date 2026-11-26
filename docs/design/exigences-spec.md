@@ -88,6 +88,12 @@ Spec donnait à l'exécutant un résumé d'impact tiré d'un graphe de code. arc
 
 L'hypothèse n'est pas soutenue. Rendre les éclaireurs obligatoires ajouterait un coût sans effet montré. Ils restent facultatifs, à la main de la politique.
 
+### 3.1 bis I4, l'historique lu par le constructeur
+
+Le profil `builder` ne refuse la lecture de rien dans l'historique : `objects`, `refs`, `packed-refs`, `HEAD` et `worktrees`, sous `.git` du dépôt et du worktree. Un scénario refuse une copie du profil qui le ferait, à ce niveau, au-dessus ou en dessous (`profile.feature`). Sous le vrai srt, `git log` y tourne (`features/sandbox/srt-runner.feature`).
+
+Ce que cela laisse lisible : `.git/config`. git le lit pour tout dépôt, donc le refuser casserait l'historique même. Un identifiant de la forge écrit dans ce fichier (un `extraheader`, un jeton dans une URL) serait lisible par la session de construction. C'est un défaut antérieur à cette décision. La règle qui le contient : aucun identifiant dans `.git/config` d'un dépôt cible ; la livraison donne le sien à git et au client de la forge par l'environnement fermé de l'hôte (`tools/deliver/deliver.json`, clé `environment`), jamais par un fichier du dépôt.
+
 ### 3.2 T1b, des tests écrits par un autre
 
 La mutation des lignes changées prouve que les tests échouent quand le code change : c'est la force des tests. Elle ne prouve pas leur conformité à la spec : un constructeur peut figer sa propre lecture fausse dans des tests qui tuent tous les mutants. La compensation tient donc en deux pièces :

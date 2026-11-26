@@ -707,15 +707,16 @@ export const toolDependencies =
     processDependencies(proc, isatty, tool);
 
 /**
- * La lecture d'un fichier du worktree où l'étape tourne : le chemin est résolu depuis `cwd`, et rien n'est lu si le
- * chemin réel du fichier (liens suivis) n'est pas un fichier ordinaire sous le chemin réel de `cwd`.
- */
-/**
  * Au plus 1 Mio par fichier cité : un fait d'éclaireur ou une preuve de critère (R2) cite une ligne de code, et un
  * fichier plus grand, que le constructeur a pu écrire, ne coûte pas sa taille à l'hôte à chaque citation.
  */
 export const SOURCE_MAX_BYTES = 1_048_576;
 
+/**
+ * La lecture d'un fichier du worktree où l'étape tourne : le chemin est résolu depuis `cwd`, et rien n'est lu si le
+ * chemin réel du fichier (liens suivis) n'est pas un fichier ordinaire d'au plus `SOURCE_MAX_BYTES` octets sous le
+ * chemin réel de `cwd`.
+ */
 const sourceReader =
   (cwd: string) =>
   (path: string): string | undefined => {

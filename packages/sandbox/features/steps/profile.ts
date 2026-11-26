@@ -237,15 +237,17 @@ Then('the resolved network domains are exactly {string}', function (domains: str
 });
 
 // I4 (docs/design/exigences-spec.md): the build reads the history of the repository itself, on demand.
-Then('the profile lets a session read the history of the repository', function () {
-  const { srt, files } = template(this);
-  // Only what `git log` reads: the objects, the references and HEAD. A denial of `.git/config`, which can hold a
-  // credential of the forge, stays possible.
-  const history = ['objects', 'refs', 'HEAD'].flatMap((part) => [
+function historyReadable(world: SandboxWorld): void {
+  const { srt, files } = template(world);
+  // What `git log` reads: the objects, the references, packed or not, HEAD, and the folders of linked worktrees. A
+  // denial anywhere above, on or below one of them is refused; `.git/config`, which can hold a credential of the
+  // forge, is not in the list.
+  const history = ['objects', 'refs', 'packed-refs', 'HEAD', 'worktrees'].flatMap((part) => [
     `\${repo}/.git/${part}`,
     `\${worktree}/.git/${part}`,
   ]);
-  const covers = (denied: string, path: string) => path === denied || path.startsWith(`${denied}/`);
+  const covers = (denied: string, path: string) =>
+    path === denied || path.startsWith(`${denied}/`) || denied.startsWith(`${path}/`);
   assert.deepEqual(
     srt.filesystem.denyRead.filter((denied: string) => history.some((path) => covers(denied, path))),
     [],
@@ -258,4 +260,19 @@ Then('the profile lets a session read the history of the repository', function (
     ['Bash(git push *)', 'Bash(git config *)'],
     'a git command other than push and config is refused',
   );
+}
+
+Then('the profile lets a session read the history of the repository', function () {
+  historyReadable(this);
 });
+
+Then(
+  'a builder profile that denies reading {string} does not let a session read the history',
+  function (path: string) {
+    const original = template(this);
+    const filesystem = { ...original.srt.filesystem, denyRead: [...original.srt.filesystem.denyRead, path] };
+    this.state['template'] = { ...original, srt: { ...original.srt, filesystem } };
+    assert.throws(() => historyReadable(this), /history of the repository is denied/);
+    this.state['template'] = original;
+  },
+);
