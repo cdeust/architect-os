@@ -140,9 +140,9 @@
       <rect x="702" y="713" width="324" height="160" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
       <text id="gateway-orchestration-title" x="715" y="742" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Step orchestration</text>
       <text x="715" y="771" data-type-role="brick-text" font-size="17" fill="#57606a">An orchestrator module drives the</text>
-      <text x="715" y="794" data-type-role="brick-text" font-size="17" fill="#57606a">Step; a native workbench child holds</text>
-      <text x="715" y="817" data-type-role="brick-text" font-size="17" fill="#57606a">host Git behind closed operations;</text>
-      <text x="715" y="840" data-type-role="brick-text" font-size="17" fill="#57606a">Step state goes to data tables.</text>
+      <text x="715" y="794" data-type-role="brick-text" font-size="17" fill="#57606a">Step; sessions are agent tools paid</text>
+      <text x="715" y="817" data-type-role="brick-text" font-size="17" fill="#57606a">by the broker; a workbench child holds</text>
+      <text x="715" y="840" data-type-role="brick-text" font-size="17" fill="#57606a">host Git; Step state goes to data.</text>
       <rect x="956" y="721" width="59" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
       <text x="985.5" y="738" data-type-role="badge" font-size="17" text-anchor="middle" font-weight="600" fill="#0969da">next</text>
     </g>
