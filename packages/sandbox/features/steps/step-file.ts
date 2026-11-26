@@ -378,3 +378,26 @@ Then('the Step file binds the provider, model and effort of a subscription build
       assert.throws(() => parseStepFile({ ...raw, scouts: [review] }));
     }
 });
+
+const twoTickets = () => [
+  { id: 'TICKET-002', story_points: 8, depends_on: ['TICKET-001'], acceptance_ids: ['AC-002'] },
+  { id: 'TICKET-001', story_points: 3, depends_on: [], acceptance_ids: ['AC-001'] },
+];
+
+When('I parse the step file example with two tickets', function () {
+  this.state['step'] = parseStepFile({ ...example(), tickets: twoTickets() });
+});
+
+Then('the step tickets are {string} in that order', function (ids: string) {
+  const step = stored<StepFile>(this, 'step');
+  assert.deepEqual(step.tickets, twoTickets());
+  assert.deepEqual(
+    step.tickets?.map(({ id }) => id),
+    ids.split(', '),
+  );
+});
+
+When('I make a broken copy of the step file example whose tickets depend on each other', function () {
+  const [second, first] = twoTickets();
+  this.state['broken'] = { ...example(), tickets: [second, { ...first!, depends_on: ['TICKET-002'] }] };
+});

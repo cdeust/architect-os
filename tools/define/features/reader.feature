@@ -147,3 +147,8 @@ Feature: Read a validated Define handoff without answering the gate
     Given an isolated directory without a Define launcher
     When the host invokes the Define reader over stdio
     Then the Define reader reports a transport failure
+
+  Scenario: A pinned bundle that starts and exits leaves no planning data
+    Given an isolated Define plugin whose pinned bundle exits at once
+    When the host invokes the Define reader over stdio
+    Then the Define reader reports a transport failure

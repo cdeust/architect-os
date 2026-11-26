@@ -327,6 +327,14 @@ Then('the ticket schema names the refusal for {string}', function (this: DefineW
   );
 });
 
+Given('an isolated Define plugin whose pinned bundle exits at once', function (this: DefineWorld) {
+  const root = prepare(this);
+  mkdirSync(join(root, 'mcp-server'));
+  const bundle = join(root, 'mcp-server', 'index.js');
+  writeFileSync(bundle, 'process.exit(1);\n');
+  this.state['defineBundleDigest'] = createHash('sha256').update(readFileSync(bundle)).digest('hex');
+});
+
 Given('an isolated directory without a Define launcher', function (this: DefineWorld) {
   prepare(this);
 });
