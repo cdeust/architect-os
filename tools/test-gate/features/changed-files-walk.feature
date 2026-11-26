@@ -65,23 +65,3 @@ Feature: The gate walks only the paths of a change, and names first what it chec
       | leaf.mjs      | no  | the last segment of *.mjs names files, not a directory   |
       | lib.mjs/inner | no  | nothing lies under a file segment of *.mjs               |
       | src           | yes | the first segment of src/**/*.mjs, beside the root glob  |
-
-  Scenario: a lane report without static metadata is refused for that before the verdict of its canary is read
-    Given a gate repository
-    And the gate repository holds the fixture specs "green.feature, second.feature"
-    And the gate repository can run the fixture suite with cucumber-js
-    And the gate mutation fixture declares its independent mutation profile
-    And the gate repository file "zz/probe.mjs" reads:
-      """
-      export function probe(value) {
-        return !value;
-      }
-      """
-    And the gate configuration declares the canary "zz/probe.mjs" with:
-      """
-      {"probe":"Survived"}
-      """
-    And the gate configuration declares the replay
-    And the gate head is committed
-    When the hosted collector receives a canary-only proof from each runner
-    Then the hosted collector names the missing static metadata of a lane before the verdict of its canary

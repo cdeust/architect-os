@@ -86,10 +86,11 @@ export async function runHostedGate(
       if (!workspace.readBytes(directory + '/' + MANIFEST)?.equals(Buffer.from(text)))
         throw new Error('inventaire différent du périmètre courant pour le lot ' + number);
       const native = read(directory + '/' + NATIVE);
-      const proof = projectNative(native, lots, patterns, true);
-      if (canaryViolations(canary, proof.report).length !== 0)
-        throw new Error('canari de mutation refusé dans le lot ' + number);
+      const proof = projectNative(native, lots, patterns);
+      // The projection must carry its static marks before any of its verdicts, the canary's included, is read.
       const projected = requireNativeMutationReport(jsonText(proof.raw));
+      if (canaryViolations(canary, projected).length !== 0)
+        throw new Error('canari de mutation refusé dans le lot ' + number);
       return {
         proof,
         cases: replayCases(

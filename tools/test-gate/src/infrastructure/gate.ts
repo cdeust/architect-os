@@ -455,7 +455,7 @@ export async function runGate(
           project || command.name === 'inventory-collect'
             ? expected.planned.map(({ file }) => literalStrykerPattern(root, file))
             : undefined;
-        return projectNative(decoder.decode(bytes), expected.planned, patterns, false);
+        return projectNative(decoder.decode(bytes), expected.planned, patterns);
       };
       if (command.name === 'inventory-collect') {
         const proofs = ([1, 2] as const).map((shard) => {
