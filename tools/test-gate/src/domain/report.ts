@@ -66,6 +66,7 @@ export function renderReport(verdict: Verdict): string {
     '',
     `- tête : ${verdict.head}`,
     `- premier parent : ${verdict.firstParent ?? 'aucun'}`,
+    `- destination : ${verdict.destination.reference} à ${verdict.destination.commit ?? 'aucune'}, ${verdict.destination.commits} commit(s) jugé(s)`,
     `- exécutés : ${verdict.executed.length}`,
     `- statique : ${verdict.staticCount}`,
     `- ${baseLine(verdict)}`,
