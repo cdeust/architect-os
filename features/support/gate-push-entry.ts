@@ -27,8 +27,9 @@ on:
     branches:
       - main
       # The delivery (CONTRIBUTING.md, the maintainer's line): a commit is pushed to a trial branch first, where
-      # this gate gives it the two checks the rulesets of feat/gate-1a and of main require; it then reaches both
-      # branches as it is. feat/gate-1a is not listed: it would run the same commit a second time.
+      # this gate gives it the two checks the rulesets of feat/gate-1a and of main require; it then reached both
+      # branches as it is, by a push, until main took pull requests only (26 November 2026, docs/infrastructure.md,
+      # "How a pull request reaches main"). feat/gate-1a is not listed: it would run the same commit a second time.
       - sentinel/gate-1a-*
 
 permissions:

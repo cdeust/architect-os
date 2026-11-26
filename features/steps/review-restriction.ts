@@ -63,7 +63,7 @@ interface Trial {
 }
 
 /** AOS_TRIAL_CLAUDE runs the trial with another Claude Code, such as the one the action pins. */
-function binary(): string {
+export function binary(): string {
   const other = process.env['AOS_TRIAL_CLAUDE'];
   if (other !== undefined && other !== '') return other;
   const require = createRequire(join(ROOT, 'services/memory/package.json'));
@@ -101,7 +101,7 @@ function attempts(checkout: string, dir: string, review: string): [string, Model
   ];
 }
 
-function run(
+export function run(
   executable: string,
   args: string[],
   env: Record<string, string>,
@@ -344,7 +344,7 @@ Then('no credential of the runner reached the model, through any of those reads'
 });
 
 /** The tool result Claude Code sent back for the call of turn `index`: it arrives in the next request. */
-function resultOf(requests: ModelRequest[], toolCalls: number): { text: string; isError: boolean }[] {
+export function resultOf(requests: ModelRequest[], toolCalls: number): { text: string; isError: boolean }[] {
   const asked = requests.filter((request) => request.path === '/v1/messages');
   return Array.from({ length: toolCalls }, (_, index) => {
     const next = asked[index + 1];
