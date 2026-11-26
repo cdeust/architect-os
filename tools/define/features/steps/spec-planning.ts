@@ -33,7 +33,7 @@ function harness(change: string) {
   let acknowledged = 0;
   let pause = true;
   const config = specPlanningConfig.parse({
-    bundle_sha256: 'a'.repeat(64),
+    producer_sha256: 'a'.repeat(64),
     feature_description: 'A synthetic request',
     plan_step: 'delivery',
     drafter: account(author, change === 'quota' ? 1 : 2),

@@ -1,0 +1,95 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  pinnedTreeDigest,
+  readPinnedTree,
+  stagePinnedTree,
+  type PinnedTreeRule,
+} from '@architect-os/sandbox/pinned-tree';
+
+export const PRODUCER_ENTRY = 'mcp-server/index.js';
+export const PRODUCER_SKILL_CONFIG = 'packages/skill/skill-config.json';
+/** Bounds on what one launch reads into memory: the installed producer is about 900 files and 20 MB. */
+export const PRODUCER_MAX_FILES = 20_000;
+export const PRODUCER_MAX_BYTES = 256 * 1024 * 1024;
+
+export interface ProducerLimits {
+  readonly files: number;
+  readonly bytes: number;
+}
+
+const LIMITS: ProducerLimits = { files: PRODUCER_MAX_FILES, bytes: PRODUCER_MAX_BYTES };
+
+/**
+ * What the host pins of the producer: every file the server can load or read relative to its own root. The bundle
+ * and the dependencies installed beside it (`mcp-server/`, the native module included), and the skill files the
+ * server reads from its plugin root (`packages/skill/`). npm writes links into `mcp-server/node_modules/.bin` for
+ * commands; Node never resolves a module through them, so that one directory is neither pinned nor copied.
+ */
+const rule = (limits: ProducerLimits): PinnedTreeRule => ({
+  include: ['mcp-server', 'packages/skill'],
+  skip: ['mcp-server/node_modules/.bin'],
+  required: [PRODUCER_ENTRY, PRODUCER_SKILL_CONFIG],
+  maxFiles: limits.files,
+  maxBytes: limits.bytes,
+});
+
+/** The refusals of the pinned tree, named for the producer: `PINNED_TREE_LINK` is `SPEC_PRODUCER_LINK`. */
+function read(root: string, limits: ProducerLimits) {
+  try {
+    return readPinnedTree(root, rule(limits));
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('PINNED_TREE_'))
+      throw Error(error.message.replace('PINNED_TREE_', 'SPEC_PRODUCER_'));
+    throw error;
+  }
+}
+
+/** The digest of the producer installed under `root`, for the operator to pin once it is provisioned. */
+export function producerDigest(root: string, limits: ProducerLimits = LIMITS): string {
+  return pinnedTreeDigest(read(root, limits));
+}
+
+export interface StagedProducer {
+  /** The private copy of the host that holds the pinned bytes and nothing else. */
+  readonly root: string;
+  readonly entry: string;
+  readonly skillConfig: string;
+  dispose(): void;
+}
+
+/**
+ * Copy the pinned producer to a private directory of the host, from the bytes that were hashed. What the host
+ * launches is that copy: a change to the plugin root after the check reaches nothing that runs.
+ */
+export function stageProducer(
+  root: string,
+  expected: string,
+  parent: string = tmpdir(),
+  limits: ProducerLimits = LIMITS,
+): StagedProducer {
+  const files = read(root, limits);
+  if (pinnedTreeDigest(files) !== expected) throw Error('SPEC_PRODUCER_MISMATCH');
+  const staged = stagePinnedTree(files, parent, 'aos-producer-');
+  return {
+    root: staged.root,
+    entry: join(staged.root, PRODUCER_ENTRY),
+    skillConfig: join(staged.root, PRODUCER_SKILL_CONFIG),
+    dispose: staged.dispose,
+  };
+}
+
+/**
+ * The Node arguments that run the copy under the permission model (node --help: --permission, --allow-fs-read,
+ * --allow-fs-write, --allow-addons). The server reads only its copy and the given directories, writes only the
+ * writable ones, may load the native module of its copy, and gets no child process, worker, network or inspector.
+ */
+export function producerArguments(staged: StagedProducer, writable: readonly string[]) {
+  return [
+    '--permission',
+    `--allow-fs-read=${staged.root}`,
+    ...writable.flatMap((path) => [`--allow-fs-read=${path}`, `--allow-fs-write=${path}`]),
+    '--allow-addons',
+    staged.entry,
+  ];
+}

@@ -78,7 +78,7 @@ const authority = z.strictObject({
 });
 export const specPlanningConfig = z
   .strictObject({
-    bundle_sha256: digest,
+    producer_sha256: digest,
     feature_description: z.string().trim().min(1),
     plan_step: z.string().regex(/^[a-z][a-z0-9-]{0,31}$/),
     prd_context: z

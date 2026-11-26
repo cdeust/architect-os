@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { createServer, type Server } from 'node:net';
 import {
   existsSync,
+  readdirSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -12,13 +14,14 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { After, Given, Then, When } from '@cucumber/cucumber';
 import { parseDefinePlanningReply } from '@architect-os/contracts';
 import type { DefineSource } from '../../src/domain/source.js';
 import { runDefine } from '../../src/main.js';
 import { runProposal } from '../../src/proposal.js';
-import { prdGenSource } from '../../src/infrastructure/prd-gen.js';
+import { prdGenSource, readProjection } from '../../src/infrastructure/prd-gen.js';
+import { expectedDigest, producerFiles, writeProducer, type ProducerFiles } from './producer-fixture.js';
 import { readDefine } from '../../src/application/read-define.js';
 
 interface DefineWorld {
@@ -161,50 +164,78 @@ function changed(which: string): Reply {
 }
 
 function prepare(world: DefineWorld): string {
-  const root = mkdtempSync(join(tmpdir(), 'define-host-'));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'define-host-')));
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'define-home-')));
+  mkdirSync(join(home, '.prd-gen'));
   world.state['defineHostRoot'] = root;
+  world.state['defineHome'] = home;
   return root;
 }
 
 After<DefineWorld>(function () {
-  const root = this.state['defineHostRoot'];
-  if (typeof root === 'string') rmSync(root, { recursive: true });
+  for (const key of ['defineHostRoot', 'defineHome']) {
+    const path = this.state[key];
+    if (typeof path === 'string') rmSync(path, { recursive: true, force: true });
+  }
+  (this.state['defineSocket'] as Server | undefined)?.close();
 });
 
+const homeOf = (world: DefineWorld) => world.state['defineHome'] as string;
+const journalOf = (world: DefineWorld) => join(homeOf(world), '.prd-gen', 'requests.ndjson');
+/** The readers of these scenarios run with the scenario's home, never the user's. */
+const source = (world: DefineWorld) => (node: string, root: string, sha256: string) =>
+  prdGenSource(node, root, sha256, homeOf(world));
+const read =
+  (world: DefineWorld): typeof readProjection =>
+  (node, root, sha256, args) =>
+    readProjection(node, root, sha256, args, homeOf(world));
+
 /**
- * A fixture producer at `<root>/mcp-server/index.js`, the path the host pins. The digest the operator would give is
- * kept in the world; the request log lives at the plugin root, outside the hashed bundle.
+ * A fixture producer, built by the shared builder. Its server is CommonJS. It writes its journal under the home the
+ * host gives, the one place it may write, at a path fixed in its source, since it runs from a private copy. Its first
+ * row says what it could see: its own file, the module beside it, a file at the plugin root outside the pinned set,
+ * and the permissions of its process.
  */
-function plugin(world: DefineWorld, reply: Reply, plan?: Reply): string {
+function plugin(world: DefineWorld, reply: Reply, plan?: Reply, extra: ProducerFiles = {}): string {
   const root = prepare(world);
-  mkdirSync(join(root, 'mcp-server'));
-  writeFileSync(join(root, 'mcp-server', 'package.json'), '{"type":"module"}\n');
-  const bundle = join(root, 'mcp-server', 'index.js');
-  writeFileSync(
-    bundle,
-    `
-import { appendFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { createInterface } from 'node:readline';
-import { fileURLToPath } from 'node:url';
-const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const record = join(root, 'requests.ndjson');
-appendFileSync(record, JSON.stringify({ argv: process.argv.slice(1), skill: process.env.PRD_GEN_SKILL_CONFIG }) + '\\n');
-for await (const line of createInterface({ input: process.stdin })) {
-  const request = JSON.parse(line);
-  if (request.id === undefined) continue;
-  appendFileSync(record, JSON.stringify({ method: request.method, params: request.params }) + '\\n');
-  const result = request.method === 'initialize'
-    ? { protocolVersion: request.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'prd-gen', version: '0.9.0' } }
-    : request.params?.arguments?.format === 'verified_plan_v1'
-      ? ${JSON.stringify(plan ?? { isError: true, content: [] })}
-      : ${JSON.stringify(reply)};
-  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) + '\\n');
-}
-appendFileSync(record, JSON.stringify({ closed: true }) + '\\n');
-`,
-  );
-  world.state['defineBundleDigest'] = createHash('sha256').update(readFileSync(bundle)).digest('hex');
+  writeFileSync(join(root, 'outside.txt'), 'not pinned\n');
+  const server = `
+const { appendFileSync, readFileSync } = require('node:fs');
+const { createInterface } = require('node:readline');
+const record = ${JSON.stringify(journalOf(world))};
+const attempt = (read) => { try { return read(); } catch (error) { return error.code; } };
+appendFileSync(record, JSON.stringify({
+  file: __filename,
+  skill: process.env.PRD_GEN_SKILL_CONFIG,
+  home: process.env.HOME,
+  lib: attempt(() => require('./lib.js')),
+  outside: attempt(() => readFileSync(${JSON.stringify(join(root, 'outside.txt'))}, 'utf8')),
+  child: process.permission.has('child'),
+  worker: process.permission.has('worker'),
+  net: process.permission.has('net'),
+  rootWrite: process.permission.has('fs.write', ${JSON.stringify(root)}),
+  homeWrite: process.permission.has('fs.write', ${JSON.stringify(homeOf(world))}),
+  addon: process.permission.has('addon'),
+}) + '\\n');
+appendFileSync(record, JSON.stringify({ reread: attempt(() => readFileSync(record, 'utf8').length > 0) }) + '\\n');
+(async () => {
+  for await (const line of createInterface({ input: process.stdin })) {
+    const request = JSON.parse(line);
+    if (request.id === undefined) continue;
+    appendFileSync(record, JSON.stringify({ method: request.method, params: request.params }) + '\\n');
+    const result = request.method === 'initialize'
+      ? { protocolVersion: request.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'prd-gen', version: '0.9.0' } }
+      : request.params?.arguments?.format === 'verified_plan_v1'
+        ? ${JSON.stringify(plan ?? { isError: true, content: [] })}
+        : ${JSON.stringify(reply)};
+    process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) + '\\n');
+  }
+  appendFileSync(record, JSON.stringify({ closed: true }) + '\\n');
+})();
+`;
+  const files = producerFiles(server, { 'mcp-server/lib.js': 'module.exports = "pinned";\n', ...extra });
+  writeProducer(root, files);
+  world.state['defineBundleDigest'] = expectedDigest(files);
   return root;
 }
 
@@ -246,12 +277,15 @@ When('the host reads the matching verified proposal over stdio', async function 
   writeFileSync(path, define.stdout);
   const output: string[] = [];
   const diagnostics: string[] = [];
-  const code = await runProposal({
-    argv: [process.execPath, 'plan:proposal', runId, root, pinned(this), 'delivery', path],
-    execPath: process.execPath,
-    stdout: { write: (text) => output.push(text) },
-    stderr: { write: (text) => diagnostics.push(text) },
-  });
+  const code = await runProposal(
+    {
+      argv: [process.execPath, 'plan:proposal', runId, root, pinned(this), 'delivery', path],
+      execPath: process.execPath,
+      stdout: { write: (text) => output.push(text) },
+      stderr: { write: (text) => diagnostics.push(text) },
+    },
+    read(this),
+  );
   assert.deepEqual({ code, diagnostics }, { code: 0, diagnostics: [] });
   this.state['verifiedProposalOutput'] = output.join('');
 });
@@ -329,13 +363,11 @@ Then('the ticket schema names the refusal for {string}', function (this: DefineW
 
 Given('an isolated Define plugin whose pinned bundle exits at once', function (this: DefineWorld) {
   const root = prepare(this);
-  mkdirSync(join(root, 'mcp-server'));
-  const bundle = join(root, 'mcp-server', 'index.js');
-  writeFileSync(
-    bundle,
-    `require('node:fs').writeFileSync(${JSON.stringify(join(root, 'started'))}, 'started\\n');\nprocess.exit(1);\n`,
+  const files = producerFiles(
+    `require('node:fs').writeFileSync(${JSON.stringify(join(homeOf(this), '.prd-gen', 'started'))}, 'started\\n');\nprocess.exit(1);\n`,
   );
-  this.state['defineBundleDigest'] = createHash('sha256').update(readFileSync(bundle)).digest('hex');
+  writeProducer(root, files);
+  this.state['defineBundleDigest'] = expectedDigest(files);
 });
 
 Given('an isolated directory without a Define launcher', function (this: DefineWorld) {
@@ -380,7 +412,11 @@ async function invoke(
 }
 
 When('the host invokes the Define reader over stdio', async function (this: DefineWorld) {
-  await invoke(this, [runId, this.state['defineHostRoot'] as string, pinned(this) ?? 'b'.repeat(64)]);
+  await invoke(
+    this,
+    [runId, this.state['defineHostRoot'] as string, pinned(this) ?? 'b'.repeat(64)],
+    source(this),
+  );
 });
 
 When('the host reads the Define reply', async function (this: DefineWorld) {
@@ -420,19 +456,16 @@ Then('the Define reader writes the exact delivery tickets', function (this: Defi
 
 Then('the plugin received only the versioned read for the requested run', function (this: DefineWorld) {
   const root = this.state['defineHostRoot'] as string;
-  const rows = readFileSync(join(root, 'requests.ndjson'), 'utf8')
+  const rows = readFileSync(journalOf(this), 'utf8')
     .trim()
     .split('\n')
     .map((row) => JSON.parse(row) as unknown);
-  const real = realpathSync(root);
-  assert.deepEqual(rows[0], {
-    argv: [join(real, 'mcp-server', 'index.js')],
-    skill: join(real, 'packages', 'skill', 'skill-config.json'),
-  });
-  const init = rows[1] as { method: string; params: { clientInfo: unknown } };
+  assertConfined(this, root, rows[0]);
+  assert.deepEqual(rows[1], { reread: true });
+  const init = rows[2] as { method: string; params: { clientInfo: unknown } };
   assert.equal(init.method, 'initialize');
   assert.deepEqual(init.params.clientInfo, { name: 'architect-os-define', version: '0.1.0' });
-  assert.deepEqual(rows.slice(2, -1), [
+  assert.deepEqual(rows.slice(3, -1), [
     {
       method: 'tools/call',
       params: {
@@ -488,7 +521,7 @@ Given(
     this.state['defineSource'] =
       adapter === 'memory'
         ? new InMemoryDefineSource(answer)
-        : prdGenSource(process.execPath, plugin(this, answer), pinned(this));
+        : prdGenSource(process.execPath, plugin(this, answer), pinned(this), homeOf(this));
   },
 );
 
@@ -503,12 +536,11 @@ Then(
     if (this.state['defineAdapter'] === 'memory') {
       assert.deepEqual(source.requested, [runId]);
     } else {
-      const root = this.state['defineHostRoot'] as string;
-      const rows = readFileSync(join(root, 'requests.ndjson'), 'utf8')
+      const rows = readFileSync(journalOf(this), 'utf8')
         .trim()
         .split('\n')
         .map((row) => JSON.parse(row) as unknown);
-      assert.deepEqual(rows[2], {
+      assert.deepEqual(rows[3], {
         method: 'tools/call',
         params: {
           name: 'get_pipeline_state',
@@ -542,16 +574,81 @@ Then('the Define reader preserves the two links to the criterion', function (thi
 Given('the operator pins {string} for that Define plugin', function (this: DefineWorld, change: string) {
   const root = this.state['defineHostRoot'] as string;
   const bundle = join(root, 'mcp-server', 'index.js');
-  if (change === 'another digest') this.state['defineBundleDigest'] = '0'.repeat(64);
-  else if (change === 'a symlinked bundle') {
-    renameSync(bundle, join(root, 'mcp-server', 'other.js'));
-    symlinkSync(join(root, 'mcp-server', 'other.js'), bundle);
-  } else if (change === 'a changed bundle') writeFileSync(bundle, readFileSync(bundle, 'utf8') + '\n');
-  else throw new Error(change);
+  this.state['copiesBefore'] = stagedCopies();
+  const append = (path: string, text: string) =>
+    writeFileSync(join(root, path), readFileSync(join(root, path), 'utf8') + text);
+  const link = (path: string) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    symlinkSync(join(root, 'outside.txt'), join(root, path));
+  };
+  switch (change) {
+    case 'another digest':
+      this.state['defineBundleDigest'] = '0'.repeat(64);
+      break;
+    case 'a changed bundle':
+      append('mcp-server/index.js', '\n');
+      break;
+    case 'a substituted module':
+      writeFileSync(join(root, 'mcp-server', 'lib.js'), 'module.exports = "substituted";\n');
+      break;
+    case 'a changed skill configuration':
+      writeFileSync(join(root, 'packages', 'skill', 'skill-config.json'), '{"fixture":false}\n');
+      break;
+    case 'a flipped package type':
+      writeFileSync(join(root, 'mcp-server', 'package.json'), '{"type":"module"}\n');
+      break;
+    case 'an added dependency':
+      writeFileSync(join(root, 'mcp-server', 'extra.js'), '\n');
+      break;
+    case 'a symlinked bundle':
+      renameSync(bundle, join(root, 'mcp-server', 'other.js'));
+      symlinkSync(join(root, 'mcp-server', 'other.js'), bundle);
+      break;
+    case 'a link among the dependencies':
+      link('mcp-server/node_modules/dependency/index.js');
+      break;
+    case 'a link in the skill':
+      link('packages/skill/SKILL.md');
+      break;
+    case 'a linked server directory':
+      renameSync(join(root, 'mcp-server'), join(root, 'server-elsewhere'));
+      symlinkSync(join(root, 'server-elsewhere'), join(root, 'mcp-server'));
+      break;
+    case 'a socket in the tree': {
+      const socket = createServer();
+      socket.listen(join(root, 'mcp-server', 's'));
+      this.state['defineSocket'] = socket;
+      return new Promise<void>((done) => socket.once('listening', () => done()));
+    }
+    case 'a newline in a name':
+      writeFileSync(join(root, 'packages', 'skill', 'a\nb'), '\n');
+      break;
+    case 'a backslash in a name':
+      writeFileSync(join(root, 'packages', 'skill', 'a\\b'), '\n');
+      break;
+    case 'no skill configuration':
+      rmSync(join(root, 'packages', 'skill', 'skill-config.json'));
+      break;
+    case 'no bundle':
+      rmSync(bundle);
+      break;
+    case 'no skill directory':
+      rmSync(join(root, 'packages'), { recursive: true });
+      break;
+    default:
+      throw new Error(change);
+  }
+});
+
+Given("npm has written a command link among the producer's dependencies", function (this: DefineWorld) {
+  const root = this.state['defineHostRoot'] as string;
+  mkdirSync(join(root, 'mcp-server', 'node_modules', '.bin'), { recursive: true });
+  symlinkSync(join(root, 'outside.txt'), join(root, 'mcp-server', 'node_modules', '.bin', 'tool'));
 });
 
 Then('the Define plugin was never started', function (this: DefineWorld) {
-  assert.equal(existsSync(join(this.state['defineHostRoot'] as string, 'requests.ndjson')), false);
+  assert.equal(existsSync(journalOf(this)), false);
+  assert.deepEqual(stagedCopies(), this.state['copiesBefore']);
 });
 
 When(
@@ -562,12 +659,15 @@ When(
     writeFileSync(path, `${JSON.stringify(ticketed())}\n`);
     const output: string[] = [];
     const diagnostics: string[] = [];
-    const code = await runProposal({
-      argv: [process.execPath, 'plan:proposal', runId, root, pinned(this), 'delivery', path],
-      execPath: process.execPath,
-      stdout: { write: (text) => output.push(text) },
-      stderr: { write: (text) => diagnostics.push(text) },
-    });
+    const code = await runProposal(
+      {
+        argv: [process.execPath, 'plan:proposal', runId, root, pinned(this), 'delivery', path],
+        execPath: process.execPath,
+        stdout: { write: (text) => output.push(text) },
+        stderr: { write: (text) => diagnostics.push(text) },
+      },
+      read(this),
+    );
     this.state['proposalRefusal'] = { code, stdout: output.join(''), stderr: diagnostics.join('') };
   },
 );
@@ -581,5 +681,37 @@ Then('the proposal reader refuses with {string}', function (this: DefineWorld, m
 });
 
 Then('the pinned bundle was started before it exited', function (this: DefineWorld) {
-  assert.equal(readFileSync(join(this.state['defineHostRoot'] as string, 'started'), 'utf8'), 'started\n');
+  assert.equal(readFileSync(join(homeOf(this), '.prd-gen', 'started'), 'utf8'), 'started\n');
 });
+
+/** The private copies the host made under this process's temporary directory. */
+function stagedCopies(): string[] {
+  return readdirSync(tmpdir()).filter((name) => name.startsWith('aos-producer-'));
+}
+
+/** The first row of the fixture: the server ran from a private copy, with the pinned module, and saw nothing else. */
+function assertConfined(world: DefineWorld, root: string, row: unknown): void {
+  const seen = row as Record<string, unknown>;
+  const file = seen['file'] as string;
+  const copy = dirname(dirname(file));
+  assert.equal(basename(copy).startsWith('aos-producer-'), true);
+  assert.equal(dirname(copy), realpathSync(tmpdir()));
+  assert.equal(file.startsWith(root), false);
+  assert.equal(existsSync(copy), false);
+  assert.deepEqual(
+    { ...seen, file: undefined },
+    {
+      file: undefined,
+      skill: join(copy, 'packages', 'skill', 'skill-config.json'),
+      home: homeOf(world),
+      lib: 'pinned',
+      outside: 'ERR_ACCESS_DENIED',
+      child: false,
+      worker: false,
+      net: false,
+      rootWrite: false,
+      homeWrite: false,
+      addon: true,
+    },
+  );
+}

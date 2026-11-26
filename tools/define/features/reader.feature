@@ -113,7 +113,7 @@ Feature: Read a validated Define handoff without answering the gate
   Scenario Outline: Invalid arguments do not start the plugin
     Given the Define invocation has "<missing>"
     When the host reads the Define reply
-    Then the Define reader refuses with "usage: define <run_id> <prd-gen-plugin-root> <bundle-sha256>"
+    Then the Define reader refuses with "usage: define <run_id> <prd-gen-plugin-root> <producer-sha256>"
     And it never opens a Define source
 
     Examples:
@@ -128,25 +128,45 @@ Feature: Read a validated Define handoff without answering the gate
       | a long bundle digest       |
       | an extra operand           |
 
-  Scenario Outline: Only the bundle the operator pinned is started for a read
+  Scenario Outline: Only the producer the operator pinned is started for a read
     Given an isolated Define plugin that returns delivery tickets
-    And the operator pins "<bundle>" for that Define plugin
+    And the operator pins "<change>" for that Define plugin
     When the host invokes the Define reader over stdio
-    Then the Define reader refuses with "SPEC_BUNDLE_MISMATCH"
+    Then the Define reader refuses with "<error>"
     When the host reads the verified proposal over stdio expecting a refusal
-    Then the proposal reader refuses with "SPEC_BUNDLE_MISMATCH"
+    Then the proposal reader refuses with "<error>"
     And the Define plugin was never started
 
     Examples:
-      | bundle             |
-      | another digest     |
-      | a symlinked bundle |
-      | a changed bundle   |
+      | change                        | error                    |
+      | another digest                | SPEC_PRODUCER_MISMATCH   |
+      | a changed bundle              | SPEC_PRODUCER_MISMATCH   |
+      | a substituted module          | SPEC_PRODUCER_MISMATCH   |
+      | a changed skill configuration | SPEC_PRODUCER_MISMATCH   |
+      | a flipped package type        | SPEC_PRODUCER_MISMATCH   |
+      | an added dependency           | SPEC_PRODUCER_MISMATCH   |
+      | a symlinked bundle            | SPEC_PRODUCER_LINK       |
+      | a link among the dependencies | SPEC_PRODUCER_LINK       |
+      | a link in the skill           | SPEC_PRODUCER_LINK       |
+      | a linked server directory     | SPEC_PRODUCER_LINK       |
+      | a socket in the tree          | SPEC_PRODUCER_FILE       |
+      | a newline in a name           | SPEC_PRODUCER_PATH       |
+      | a backslash in a name         | SPEC_PRODUCER_PATH       |
+      | no skill configuration        | SPEC_PRODUCER_INCOMPLETE |
+      | no bundle                     | SPEC_PRODUCER_INCOMPLETE |
+      | no skill directory            | SPEC_PRODUCER_INCOMPLETE |
 
-  Scenario: A plugin that cannot be started leaves no planning data
+  Scenario: The command links npm writes for dependencies are neither pinned nor copied
+    Given an isolated Define plugin that returns delivery tickets
+    And npm has written a command link among the producer's dependencies
+    When the host invokes the Define reader over stdio
+    Then the Define reader writes the exact delivery tickets
+    And the plugin received only the versioned read for the requested run
+
+  Scenario: A plugin root without a producer is refused before anything starts
     Given an isolated directory without a Define launcher
     When the host invokes the Define reader over stdio
-    Then the Define reader reports a transport failure
+    Then the Define reader refuses with "SPEC_PRODUCER_INCOMPLETE"
 
   Scenario: A pinned bundle that starts and exits leaves no planning data
     Given an isolated Define plugin whose pinned bundle exits at once

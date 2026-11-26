@@ -1,4 +1,5 @@
-const { appendFileSync } = require('node:fs');
+const { appendFileSync, readFileSync } = require('node:fs');
+const { dirname, join } = require('node:path');
 const { createInterface } = require('node:readline');
 
 async function serve() {
@@ -62,6 +63,16 @@ async function serve() {
             drafter: process.env.PRD_GEN_PLAN_DRAFTER,
             reviewer: process.env.PRD_GEN_PLAN_REVIEWER,
             panel: process.env.PRD_GEN_PLAN_PANEL_REVIEWER,
+            file: __filename,
+            outside: (() => {
+              try {
+                return readFileSync(join(dirname(process.env.HOME), 'outside.txt'), 'utf8');
+              } catch (error) {
+                return error.code;
+              }
+            })(),
+            child: process.permission.has('child'),
+            net: process.permission.has('net'),
           };
       }
       const text = { type: 'text', text: JSON.stringify(body) };

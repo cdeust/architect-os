@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
-  copyFileSync,
   writeFileSync,
   existsSync,
   mkdirSync,
@@ -13,7 +12,8 @@ import {
   symlinkSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
+import { expectedDigest, producerFiles, writeProducer } from './producer-fixture.js';
 import { Then } from '@cucumber/cucumber';
 import { specPlanningConfig } from '@architect-os/contracts';
 import { withPlanningSpec } from '../../src/infrastructure/prd-gen.js';
@@ -25,9 +25,12 @@ function plugin() {
   const temporary = join(root, 'temporary');
   mkdirSync(home);
   mkdirSync(temporary);
-  mkdirSync(join(root, 'mcp-server'));
+  const files = producerFiles(
+    readFileSync(new URL('../fixtures/planning-server.cjs', import.meta.url), 'utf8'),
+  );
+  writeProducer(root, files);
+  writeFileSync(join(root, 'outside.txt'), 'not pinned\n');
   const bundle = join(root, 'mcp-server/index.js');
-  copyFileSync(new URL('../fixtures/planning-server.cjs', import.meta.url), bundle);
   const account = (provider: string, model: string) => ({
     route: { provider, model },
     account: provider,
@@ -35,7 +38,7 @@ function plugin() {
     billing: 'subscription',
   });
   const config = specPlanningConfig.parse({
-    bundle_sha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+    producer_sha256: expectedDigest(files),
     feature_description: 'Test a native planning turn',
     plan_step: 'delivery',
     drafter: account('openai', 'fixture-author'),
@@ -53,6 +56,7 @@ function plugin() {
 
 Then('the pinned planning server sees the intended request {string}', async (panel: string) => {
   const p = plugin();
+  const copies: string[] = [];
   try {
     if (panel === 'with panel')
       p.config.panel_reviewer = {
@@ -62,7 +66,12 @@ Then('the pinned planning server sees the intended request {string}', async (pan
     await withPlanningSpec(process.execPath, p.root, p.home, p.temporary, p.config, async (call) => {
       for (const sequence of [1, 2]) {
         const args = { sequence };
-        assert.deepEqual(JSON.parse(await call('inspect', args)), {
+        const answer = JSON.parse(await call('inspect', args)) as { file: string };
+        const staged = dirname(dirname(answer.file));
+        assert.equal(basename(staged).startsWith('aos-producer-'), true);
+        assert.equal(dirname(staged), realpathSync(tmpdir()));
+        copies.push(staged);
+        assert.deepEqual(answer, {
           client: { name: 'architect-os-planning', version: '0.1.0' },
           method: 'tools/call',
           name: 'inspect',
@@ -71,7 +80,11 @@ Then('the pinned planning server sees the intended request {string}', async (pan
           home: p.home,
           profile: p.home,
           tmp: [p.temporary, p.temporary, p.temporary],
-          skill: join(p.root, 'packages/skill/skill-config.json'),
+          skill: join(staged, 'packages/skill/skill-config.json'),
+          file: join(staged, 'mcp-server/index.js'),
+          outside: 'ERR_ACCESS_DENIED',
+          child: false,
+          net: false,
           drafter: 'openai/fixture-author',
           reviewer: 'google/fixture-reviewer',
           ...(panel === 'with panel' ? { panel: 'anthropic/fixture-panel' } : {}),
@@ -79,6 +92,8 @@ Then('the pinned planning server sees the intended request {string}', async (pan
       }
     });
     assert.equal(readFileSync(join(p.home, 'transport-closed'), 'utf8'), 'closed\n');
+    assert.equal(copies[0], copies[1]);
+    assert.equal(existsSync(copies[0]!), false);
   } finally {
     p.dispose();
   }
@@ -100,7 +115,9 @@ Then('the planning transport refuses the {string} response', async (reply: strin
 Then('the planning transport refuses a {string} bundle before running it', async (bundle: string) => {
   const p = plugin();
   try {
-    if (bundle === 'substituted') p.config.bundle_sha256 = '0'.repeat(64);
+    if (bundle === 'substituted') p.config.producer_sha256 = '0'.repeat(64);
+    else if (bundle === 'reconfigured')
+      writeFileSync(join(p.root, 'packages/skill/skill-config.json'), '{}\n');
     else {
       renameSync(p.bundle, join(p.root, 'other.js'));
       symlinkSync(join(p.root, 'other.js'), p.bundle);
@@ -109,7 +126,7 @@ Then('the planning transport refuses a {string} bundle before running it', async
       withPlanningSpec(process.execPath, p.root, p.home, p.temporary, p.config, (call) =>
         call('inspect', {}),
       ),
-      { message: 'SPEC_BUNDLE_MISMATCH' },
+      { message: bundle === 'linked' ? 'SPEC_PRODUCER_LINK' : 'SPEC_PRODUCER_MISMATCH' },
     );
     assert.equal(
       await withPlanningSpec(process.execPath, p.root, p.home, p.temporary, p.config, async () => 'offline'),
@@ -182,18 +199,18 @@ Then(
 Then('the planning transport starts a pinned bundle that exits and reports no tool answer', async () => {
   const p = plugin();
   try {
-    writeFileSync(
-      p.bundle,
-      `require('node:fs').writeFileSync(${JSON.stringify(join(p.root, 'started'))}, 'started\\n');\nprocess.exit(1);\n`,
+    const files = producerFiles(
+      `require('node:fs').writeFileSync(${JSON.stringify(join(p.home, 'started'))}, 'started\\n');\nprocess.exit(1);\n`,
     );
-    p.config.bundle_sha256 = createHash('sha256').update(readFileSync(p.bundle)).digest('hex');
+    writeProducer(p.root, files);
+    p.config.producer_sha256 = expectedDigest(files);
     await assert.rejects(
       withPlanningSpec(process.execPath, p.root, p.home, p.temporary, p.config, (call) =>
         call('inspect', {}),
       ),
-      (error: unknown) => error instanceof Error && !error.message.startsWith('SPEC_'),
+      { message: 'SPEC_TRANSPORT_FAILED' },
     );
-    assert.equal(readFileSync(join(p.root, 'started'), 'utf8'), 'started\n');
+    assert.equal(readFileSync(join(p.home, 'started'), 'utf8'), 'started\n');
   } finally {
     p.dispose();
   }

@@ -34,7 +34,7 @@ function page(action: unknown, offset = 0, count = 1, total = 1, next_offset: nu
 }
 function fixture() {
   const config = specPlanningConfig.parse({
-    bundle_sha256: 'a'.repeat(64),
+    producer_sha256: 'a'.repeat(64),
     feature_description: 'Bind evidence',
     plan_step: 'audit',
     drafter: account(author),

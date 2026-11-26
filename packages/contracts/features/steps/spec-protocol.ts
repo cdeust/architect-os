@@ -126,7 +126,7 @@ Then('a Spec journal receipt rejects model {string}', function (model: string) {
 });
 
 const config = {
-  bundle_sha256: digest,
+  producer_sha256: digest,
   feature_description: '  Plan delivery.  ',
   plan_step: 'draft-2',
   drafter: { route, account: 'drafter', billing: 'subscription', quota: 2 },

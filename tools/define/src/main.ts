@@ -21,14 +21,14 @@ export async function runDefine(
     return code;
   };
   if (!runId || !root || !isBundleDigest(sha256) || extra.length)
-    return refuse('usage: define <run_id> <prd-gen-plugin-root> <bundle-sha256>', 2);
+    return refuse('usage: define <run_id> <prd-gen-plugin-root> <producer-sha256>', 2);
   try {
     const result = await readDefine(runId, source(proc.execPath, resolve(root), sha256));
     if ('error' in result) return refuse(result.error, 2);
     proc.stdout.write(`${JSON.stringify(result)}\n`);
     return 0;
   } catch (error) {
-    if (error instanceof Error && error.message === 'SPEC_BUNDLE_MISMATCH') return refuse(error.message, 2);
+    if (error instanceof Error && error.message.startsWith('SPEC_PRODUCER_')) return refuse(error.message, 2);
     return refuse('DEFINE_TRANSPORT_FAILED', 3);
   }
 }

@@ -49,6 +49,7 @@
     "baseline:analyze": "node scripts/require-run.mjs && node --import tsx baseline/analyze.ts",
     "baseline:overhead-analyze": "node scripts/require-run.mjs && node --import tsx baseline/overhead-analyze.ts",
     "plan:proposal": "node scripts/require-run.mjs && node --import tsx tools/define/src/proposal-cli.ts",
+    "producer:digest": "node scripts/require-run.mjs && node --import tsx tools/define/src/digest-cli.ts",
     "baseline:planning": "node scripts/require-run.mjs && node baseline/planning.mjs"
   },
   "devDependencies": {

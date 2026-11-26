@@ -132,7 +132,7 @@ Then('the verified proposal with {string} yields {string}', async function (chan
       assert.equal(node, 'trusted-node');
       assert.equal(plugin, resolve('fixture-plugin'));
       assert.equal(sha256, DIGEST);
-      if (change === 'bundle') throw new Error('SPEC_BUNDLE_MISMATCH');
+      if (change === 'bundle') throw new Error('SPEC_PRODUCER_MISMATCH');
       assert.deepEqual(args, { run_id: run, format: 'verified_plan_v1', plan_step: step });
       if (change === 'transport') throw new Error();
       return {
@@ -148,9 +148,9 @@ Then('the verified proposal with {string} yields {string}', async function (chan
     assert.equal(
       err,
       invalidArgs
-        ? 'usage: plan:proposal <run_id> <prd-gen-plugin-root> <bundle-sha256> <step> <define-file>\n'
+        ? 'usage: plan:proposal <run_id> <prd-gen-plugin-root> <producer-sha256> <step> <define-file>\n'
         : bundle
-          ? 'architect-os proposal: SPEC_BUNDLE_MISMATCH\n'
+          ? 'architect-os proposal: SPEC_PRODUCER_MISMATCH\n'
           : transport
             ? 'architect-os proposal: PLAN_TRANSPORT_FAILED\n'
             : outcome === 'accept'

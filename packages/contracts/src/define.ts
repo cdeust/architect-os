@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { acceptanceIdSchema, ticketsSchema } from './tickets.js';
 
-// Producer c5fc803ae0cd5b154c60fdbc8843698be3042d0b, packages/core/src/domain/define-handoff.ts.
+// The producer's side of this contract is ai-architect-mcp-spec packages/core/src/domain/define-handoff.ts; both
+// sides follow SPEC-PLUG-PRODUCER.md, which a change of either side updates.
 export function defineHandoffSchema() {
   const requirementId = z.string().regex(/^(?:FR|NFR)-\d{1,9}$/);
   const acceptanceId = acceptanceIdSchema();

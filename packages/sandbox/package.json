@@ -27,6 +27,10 @@
       "types": "./dist/src/git-worktree.d.ts",
       "default": "./src/git-worktree.ts"
     },
+    "./pinned-tree": {
+      "types": "./dist/src/pinned-tree.d.ts",
+      "default": "./src/pinned-tree.ts"
+    },
     "./gate-reports": {
       "types": "./dist/src/gate-reports.d.ts",
       "default": "./src/gate-reports.ts"

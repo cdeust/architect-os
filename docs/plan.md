@@ -1,10 +1,10 @@
 # Prepare and approve one Step input bundle
 
-After installing the pinned dependencies and running `./aos -- npm run typecheck`, select a trusted installed producer bundle and a saved run whose specification has passed the readiness check at the producer's pending implementation gate. For a compatible producer, save the accepted JSON output of [Define](define.md) and the verified proposal for the same run and Step. Keep the exact file bytes, including the trailing newline.
+After installing the pinned dependencies and running `./aos -- npm run typecheck`, select an installed producer, pin it with `./aos -- npm run --silent producer:digest -- "$PLUGIN_ROOT"` ([Define](define.md)), and a saved run whose specification has passed the readiness check at the producer's pending implementation gate. For a compatible producer, save the accepted JSON output of [Define](define.md) and the verified proposal for the same run and Step. Keep the exact file bytes, including the trailing newline.
 
 ```sh
-./aos -- npm run --silent define -- "$RUN_ID" "$PLUGIN_ROOT" "$BUNDLE_SHA256" > define.json
-./aos -- npm run --silent plan:proposal -- "$RUN_ID" "$PLUGIN_ROOT" "$BUNDLE_SHA256" delivery define.json > proposal.json
+./aos -- npm run --silent define -- "$RUN_ID" "$PLUGIN_ROOT" "$PRODUCER_SHA256" > define.json
+./aos -- npm run --silent plan:proposal -- "$RUN_ID" "$PLUGIN_ROOT" "$PRODUCER_SHA256" delivery define.json > proposal.json
 ```
 
 The reader requests `get_pipeline_state(format: "verified_plan_v1", plan_step: "delivery")`. It checks the run, Step name, and the producer's SHA-256 values for the saved Define, proposal and binding. A refused projection exits with empty stdout. These digests check consistency with the operator-selected producer. The operator can also supply a proposal using the schema below. Prepare the preview with:
@@ -60,8 +60,8 @@ Use a fresh receipt filename for every attempt. These wrappers run the same comm
 
 ```sh
 set -e
-./aos -- npm run --silent baseline:planning -- 01.jsonl define "$RUN_ID" "$PLUGIN_ROOT" "$BUNDLE_SHA256" > define.json
-./aos -- npm run --silent baseline:planning -- 02.jsonl proposal "$RUN_ID" "$PLUGIN_ROOT" "$BUNDLE_SHA256" delivery define.json > proposal.json
+./aos -- npm run --silent baseline:planning -- 01.jsonl define "$RUN_ID" "$PLUGIN_ROOT" "$PRODUCER_SHA256" > define.json
+./aos -- npm run --silent baseline:planning -- 02.jsonl proposal "$RUN_ID" "$PLUGIN_ROOT" "$PRODUCER_SHA256" delivery define.json > proposal.json
 ./aos -- npm run --silent baseline:planning -- 03.jsonl prepare define.json proposal.json policy.json > preview.json
 # After an independent decision on the preview:
 ./aos -- npm run --silent baseline:planning -- 04.jsonl materialize define.json proposal.json policy.json decision.json "$INTAKE/delivery"

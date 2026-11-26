@@ -18,13 +18,14 @@ Feature: Host the pinned planning server over MCP stdio
       | empty    |
       | image    |
 
-  Scenario Outline: Only the verified physical bundle can start
+  Scenario Outline: Only the pinned producer can start
     Then the planning transport refuses a "<bundle>" bundle before running it
 
     Examples:
       | bundle     |
-      | substituted |
-      | linked     |
+      | substituted  |
+      | linked       |
+      | reconfigured |
 
   Scenario: A pinned planning bundle that starts and exits is a transport failure
     Then the planning transport starts a pinned bundle that exits and reports no tool answer
