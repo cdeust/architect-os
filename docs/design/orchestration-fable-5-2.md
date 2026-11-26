@@ -1087,3 +1087,65 @@ Le rejeu de Step, avec un serveur de réponses et un service d’identité simul
 - Recherche : les sources sont nommées avec ce qui en a été lu ; la vérification de bout en bout et son résultat constant sont écrits avant tout essai ; ce qui vient d'un tiers rapporté par un autre est dit tel.
 - SSDLC : l'écart de séparation des tâches à la livraison est nommé ; chaque étape construite aura ses menaces avant son code ; la menace de fuite du juge externe est posée.
 - Opérationnel : les règles de portabilité sont écrites, avec les deux écarts d'aujourd'hui ; IRB sans objet.
+
+## 15. O.2 : la boucle par la gateway (conçue le 26 novembre 2026, rien de construit)
+
+Le §14 nomme deux écarts à fermer avant l'on-premise : l'état d'une étape est un dossier du poste, hors de tout adaptateur ; l'orchestrateur est le mainteneur, dans une session, hors de tout port. Cette section décide la forme qui les ferme, et l'ordre dans lequel elle se construit. Elle ne construit rien.
+
+### Trois piliers
+
+- Recherche : l'état présent est relevé dans le code de `main` à `33ca3690` (ci-dessous, avec ses fichiers) ; la durée des étapes vient des 75 `steps/<nom>/record.json` publiés ; aucune API d'un SDK n'est ajoutée : le module et l'enfant natif parlent MCP sur stdio par l'infrastructure que la gateway, `data` et `broker` emploient déjà.
+- SSDLC : les menaces sont posées avant le code (STRIDE, plus bas) ; chaque brique arrive avec ses ports, leurs contrats, une règle de `.dependency-cruiser.cjs` quand elle ajoute une frontière, et 0 mutant survivant sur ses lignes.
+- Opérationnel : aucune donnée humaine, IRB sans objet ; aucun secret nouveau ; la piste d'audit reste écrite par la gateway et le registre par `data`.
+
+### Ce qui existe
+
+- `npm run step` (`packages/sandbox/src/step-tool.ts:433-635`) joue les éclaireurs, la construction, les contrôles et les revues, puis publie `steps/<nom>/` (`steps-folder.ts:43-53`). Ses effets sont des fermetures injectées (`StepDependencies`, `step-tool.ts:72-101`) dont l'implémentation appelle `node:fs` directement (`:759-808`). Il retient son état sous `$ARCHITECT_OS_RUNTIME_ROOT/state/steps/<run-id>/<nom>/` (`step-outputs.ts:22-71`) : mesures, faits vérifiés, rapports, contrôles, verdicts. Le seul port qu'il emploie est `SandboxRunner` (et `Builder` pour la construction).
+- Le reçu d'admission (`ARCHITECT_OS_STEP_EVIDENCE`, `step-admission.ts:240-262`) n'a pas d'émetteur de production : seuls les scénarios en écrivent un.
+- La gateway route un outil vers un module (MCP sur stdio, en sandbox, profil `module`) ou vers un worker (une sandbox par tâche, profil `worker`, dont le répertoire de travail est jetable : `process-options.ts:31`). Elle lance `data` et `broker` en enfants natifs (`gateway/src/main.ts:263-267`), chacun détenteur d'un seul privilège (l'URL de la base, la clé d'API) derrière une table fermée d'opérations typées.
+- `data` n'a aucune table d'étape : ses migrations tiennent `runs`, `run_events`, `usage_records`, `tasks` et `memory` (`data/migrations/0001` à `0005`).
+- Le profil client `owner` (`topology/clients.json`) borne une tâche à 30 minutes, 200 appels et une profondeur de 4. La somme des durées de session d'une étape publiée, lue dans les champs de durée de son `record.json`, va jusqu'à 4 013 s (`steps/runtime-1a-2/record.json`) ; neuf des 75 étapes dépassent 1 500 s. Les sessions parallèles y sont additionnées : c'est un majorant de la durée murale, pas une mesure de celle-ci.
+
+### Décisions
+
+1. **L'orchestrateur est un module, jamais du code de la gateway.** `modules/orchestrator`, en sandbox, MCP sur stdio, `writes_tables` limité aux tables d'étape. Son domaine est l'automate que `runStep` déroule aujourd'hui : lire et refuser avant toute session, éclaireurs, construction, contrôles, revues, enregistrement. La gateway reste ce qu'elle est : authentification, catalogue, routage, quotas, audit.
+2. **Les opérations de l'hôte passent par un enfant natif à table fermée, `workbench`.** Même forme que `data` et `broker` : un seul privilège (git et le système de fichiers de l'hôte sur les worktrees admis), une table d'opérations typées dans `@architect-os/contracts` (`WORKBENCH_OPS`, le pendant de `DATA_OPS`), aucun argument libre, aucune commande composée. Il lance ses processus par `SandboxRunner` et git par `git-closed.ts` : il n'ajoute pas d'exception à `node:child_process`. Table de départ : `worktree.lease` et `worktree.release` (un worktree jetable fait depuis la tête courante, à `<dépôt>/.claude/worktrees/<nom>/`), `worktree.fingerprint`, `session.play` (éclaireur, construction, revue, par le lanceur gelé d'aujourd'hui, srt ou SBX), `checks.run` (sous le profil `checker`), `step.publish` (écrit `steps/<nom>/`, seul à pouvoir le faire). L'orchestrateur l'appelle par `calls_allowed`, comme `memory-agent` appelle `memory`.
+3. **L'état vit dans `data` ; le dépôt garde l'enregistrement publié.** Une migration `0006_steps` : `steps` (une ligne par étape, son nom, sa politique hachée, son reçu), `step_passes`, `step_events` (en ajout seul, déclencheurs sur le modèle de `0003_runs_immutable` et `0005_tasks`), `step_artifacts` (faits, rapports, contrôles, verdicts, avec leur SHA-256). Des opérations `steps.*` dans `DATA_OPS`, leur SQL, leur gestionnaire en mémoire. `steps/<nom>/record.json` reste dans le dépôt : la porte le lit, et c'est la preuve rejouable par un tiers sans base.
+4. **Les schémas d'étape passent dans `@architect-os/contracts`.** `stepFileSchema`, `stepRecordSchema`, `ReviewVerdictSchema` et `ticketsSchema` sont des schémas sans logique : ils déménagent de `packages/sandbox`, pour que le module, `workbench` et `data` les partagent sans import entre composants. Les fonctions pures (`verifyFacts`, `passed`, `buildRecord`) restent avec qui les emploie : l'orchestrateur.
+5. **Une étape a son profil client.** `topology/clients.json` gagne un profil `step` aux bornes mesurées (durée d'au moins 90 minutes, puisque la plus longue étape publiée a cumulé 67 minutes de sessions ; appels et profondeur comptés sur l'automate), fichier descriptif tenu par son scénario de chargement.
+6. **`workbench` émet le reçu d'admission.** L'hôte détient déjà ce que le reçu atteste (empreinte, entrées, lanceur, revues de Plan) ; une opération `receipt.issue` le rend émetteur de production, ce qui ferme aussi la brique « Production receipt issuer ».
+
+### Ce que la v1 déplace, et ce qu'elle ne déplace pas
+
+La v1 déplace la boucle mécanique de `npm run step` : mêmes phases, mêmes refus, mêmes sessions, mêmes contrôles, même enregistrement. Elle ne retire aucun geste de jugement au mainteneur. Restent à sa main jusqu'à ce que leur brique soit construite : le brief qui suit un refus (« Automatic refusal brief »), le rejeu sur l'hôte et la mutation (« Mutation as a Step phase »), le commit (« Commit each pass »), la porte et la livraison (« Target pull request », « Delivery gate »). Ces briques écriront leur état par les opérations `steps.*`, et non dans un dossier du poste.
+
+Les éclaireurs, la construction et les revues restent joués par `workbench` avec le lanceur d'aujourd'hui. En faire des outils agents servis par des workers (§12, « Suite, O.2 ») demande d'abord qu'un worker reçoive un worktree loué au lieu d'un répertoire jetable, et que le chemin SBX de Codex ait son équivalent : c'est l'étape D ci-dessous, pas la v1.
+
+### Menaces (STRIDE)
+
+| Menace | Où | Réponse |
+|---|---|---|
+| Usurpation | Un client qui lance une étape ; un processus qui se fait passer pour la gateway auprès de `workbench` | Le profil `step` de `clients.json` ; `workbench` ne parle que sur le stdio que la gateway lui ouvre, comme `data` et `broker` |
+| Falsification | Un texte de brief, de rapport ou de verdict écrit par un modèle qui tente de diriger l'orchestrateur | L'orchestrateur ne choisit jamais une opération d'après un texte de session : chaque sortie est validée par son schéma et rangée comme donnée ; les commandes de contrôle viennent de la politique de l'étape, hachée dans le reçu |
+| Falsification | Un argument de `workbench` qui sort de son worktree (chemin, nom de branche, argv) | Arguments typés et bornés par `WORKBENCH_OPS` ; un chemin n'est jamais un argument, seulement l'identifiant d'un bail que `workbench` résout ; noms validés comme ceux de `deliver.json` |
+| Répudiation | Qui a lancé quelle étape, avec quelle politique | Audit de la gateway sur chaque appel ; `step_events` en ajout seul ; le reçu et la politique hachés dans `steps` |
+| Divulgation | L'identifiant du modèle ; l'état d'une autre étape | Le module ne reçoit aucun secret ni aucune route vers Postgres ; le proxy d'authentification et le broker restent seuls détenteurs ; `writes_tables` et les opérations `steps.*` bornent ce qu'il lit et écrit |
+| Déni de service | Une étape sans fin, une boucle de relances | Bornes du profil `step`, échéance par appel, au plus deux relances (§4) ; `workbench` libère le bail à l'échec |
+| Élévation de privilège | Le module obtient git ou le système de fichiers de l'hôte | Il n'a que les outils de `workbench`, aucun argv libre ; un nouvel outil de `workbench` est une ligne de `WORKBENCH_OPS` avec son contrat, relue comme une règle de la porte (R-6) |
+
+### Ordre de construction
+
+| Étape | Contenu | Ce qu'elle ferme |
+|---|---|---|
+| A | Un port `StepStore` dans `npm run step` : adaptateurs fichiers (le comportement d'aujourd'hui), en mémoire, et `data` ; contrat par adaptateur ; migration `0006_steps` et opérations `steps.*` | « État d'une étape : hors de tout adaptateur » |
+| B | L'enfant natif `workbench` et `WORKBENCH_OPS`, avec `receipt.issue` ; `npm run step` passe par lui | « Production receipt issuer » ; plus aucun effet de l'hôte hors d'un port |
+| C | `modules/orchestrator`, l'outil client `step_run` au catalogue, le profil `step` ; `npm run step` devient un client de la gateway | « Qui orchestre : hors de tout port » ; la brique « Step orchestration » passe à `ready` |
+| D | Éclaireurs et revues en outils agents servis par des workers sur un worktree loué en lecture ; la construction ensuite, srt puis SBX | « Suite, O.2 » du §12 |
+
+Chaque étape est une pull request, relue par une session qui ne l'a pas écrite, avec son diagramme. Les briques de la boucle qui écrivent de l'état (refus, affirmations de construction, mutation, entrées inventées, réflexion) se construisent après A, sur `StepStore`.
+
+### Ce qui reste ouvert, et où cela se décide
+
+- La forme exacte des tables `steps.*` et de leurs opérations : à l'étape A, avec ses scénarios.
+- Le chemin SBX dans un worker : à l'étape D, mesuré avant d'être choisi.
+- Les bornes chiffrées du profil `step` (appels, profondeur) : à l'étape C, comptées sur l'automate et non estimées.

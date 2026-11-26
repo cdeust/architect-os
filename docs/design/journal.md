@@ -4719,3 +4719,12 @@ Les scénarios de configuration, décisions, architecture et commande de Deliver
 Le juge du run 45860606154 a compté 5 936 scénarios, le nombre annoncé, et jugé 287 mutants du périmètre : 275 tués, 12 erreurs d’exécution, aucun survivant ni divergence au rejeu. La règle 2 a échoué sur les trois essais du lanceur Deliver. Leur forge de test émettait des jobs sans identifiant et sans total ; le lecteur refusait cette réponse avant de livrer. Avec des identifiants distincts et le total exact dans la forge, les trois essais et leurs 36 étapes passent. Le contrôle de la page en production est conservé.
 
 La revue de `be0b6ba3` a aussi trouvé qu’une erreur de forme dans un groupe au nom numérique pouvait exposer au contrôle des relations les paires intermédiaires de Zod. Les deux exemples échouaient avec une exception. Le lecteur applique maintenant les relations entre champs une fois le dictionnaire entier validé. Les deux exemples donnent le refus de configuration documenté ; les 357 scénarios de configuration, décision et commande passent. [Juge Linux](https://github.com/cdeust/architect-os/actions/runs/45860606154/job/140064491649)
+
+## 122. O.2 conçu : un module orchestrateur, un enfant natif `workbench`, l'état d'une étape dans `data` (26 novembre 2026)
+
+**Recherche.** L'état présent a été relevé dans le code de `main` à `33ca3690` : ce que `npm run step` lit et écrit, ce qui passe par un port (seulement `SandboxRunner` et `Builder`), ce que la gateway, `data` et `broker` offrent. Les 75 enregistrements d'étape publiés donnent la durée : jusqu'à 4 013 s de sessions cumulées, au-delà des 30 minutes du profil `owner`.
+
+**SSDLC.** La conception (orchestration, §15) suit la forme déjà prouvée de `data` et `broker` : un enfant natif détient un seul privilège derrière une table fermée d'opérations typées. Les menaces sont posées avant le code, dont la plus propre à ce point : un texte écrit par un modèle qui tenterait de diriger l'orchestrateur ; aucune opération n'est choisie d'après un texte de session.
+
+**Opérations.** Rien n'est construit. L'ordre est A (`StepStore` et les tables `steps`), B (`workbench`, avec l'émission du reçu), C (le module et l'outil `step_run`), D (les sessions en outils agents). La v1 déplace la boucle mécanique et ne retire au mainteneur aucun geste de jugement : ce que chaque brique de la boucle retire, elle le retire quand elle est construite. IRB sans objet.
+
