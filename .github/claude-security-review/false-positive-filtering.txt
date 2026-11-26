@@ -1,0 +1,38 @@
+PROVENANCE: adapted from claudecode/claude_api_client.py (_generate_single_finding_prompt, the default filtering section) of anthropics/claude-code-security-review at commit 0c6a49f1fa56a1d472575da86a94dbc1edb78eda. Changes: the filter is applied by you to each finding before you post it, instead of by a second API call; the exclusions that contradict this repository are removed (workflow input sanitization, secrets on disk); the precedents of architect-os are added.
+Copyright (c) 2025 Anthropic. MIT License: the notice at the head of scan-instructions.txt applies to this file.
+
+Before posting a finding, decide whether it is a false positive. Post it only if it passes every rule below and you would give it a confidence of 8 or more out of 10.
+
+HARD EXCLUSIONS - do not post findings matching these patterns:
+1. Denial of Service (DOS) vulnerabilities or resource exhaustion attacks.
+2. Rate limiting concerns or service overload scenarios (services do not need to implement rate limiting).
+3. Memory consumption or CPU exhaustion issues.
+4. Lack of input validation on non-security-critical fields without proven security impact.
+5. A lack of hardening measures. Code is not expected to implement all security best practices, just to avoid obvious vulnerabilities.
+6. Race conditions or timing attacks that are theoretical rather than practical issues.
+7. Vulnerabilities related to outdated third-party libraries (they are watched separately: npm audit in watch.yml).
+8. Files that are only tests or only used to run tests: fake credentials in fixtures and scenarios (features/, */features/, bench/) are made to look like tokens to prove a refusal or a redaction.
+9. Log spoofing concerns. Outputting unsanitized user input to logs is not a vulnerability.
+10. SSRF vulnerabilities that only control the path. SSRF is only a concern if it can control the host or protocol.
+11. Including user-controlled content in AI system prompts is not, by itself, a vulnerability.
+12. Issues that cause the code to crash but are not a vulnerability.
+13. Records written by the host and committed with the code (steps/<name>/, baseline/results/): data, never executed.
+14. Documentation (docs/, *.md), unless it gives a command that leaks a secret or weakens an isolation when followed as written.
+
+SIGNAL QUALITY CRITERIA - for the remaining findings, assess:
+1. Is there a concrete, exploitable vulnerability with a clear attack path?
+2. Does this represent a real security risk rather than a theoretical best practice?
+3. Are there specific code locations and reproduction steps?
+4. Would this finding be actionable for a security team?
+
+PRECEDENTS -
+1. Logging high value secrets in plaintext is a vulnerability. Otherwise, do not report theoretical exposures of secrets. Logging request headers is assumed to be dangerous since they likely contain credentials.
+2. UUIDs can be assumed to be unguessable.
+3. Environment variables and CLI flags of the host are trusted values. An attack that relies on controlling them is invalid, except where this repository passes them into a sandbox: what reaches a sandbox is a closed list, and a wider list is a finding.
+4. Resource management issues such as memory or file descriptor leaks are not valid.
+5. Only include MEDIUM findings if they are obvious and concrete issues.
+6. Command injection in shell scripts is only valid with a concrete path for untrusted input. In a GitHub workflow, an expression of the event inside a run: command, or a secret available to code of the pull request, is such a path.
+7. The gateway listens on the loopback only; an edge in front of it is an example (deploy/edge/) that nothing starts.
+8. A worker holds a task token granted and revoked by the broker, never the API key; the broker reads the key from a 0600 file.
+9. Sandboxed children are started by packages/sandbox under srt or in an SBX virtual machine with a profile from packages/sandbox/profiles; a command inside a sandbox is not host execution, but a change that widens what the sandbox may reach is a finding.
+10. SQL lives in data/sql/*.sql and runs through one typed executor with bound parameters; a SQL file is not an injection by itself.

@@ -11,15 +11,16 @@ Feature: GitHub workflows
     And every checkout in it has persist-credentials false
 
     Examples:
-      | file                     |
-      | bench-sandbox.yml        |
-      | broker-live.yml          |
-      | claude-review.yml        |
-      | claude.yml               |
-      | gate.yml                 |
-      | gate-lane.yml            |
-      | mutation-full.yml        |
-      | pipeline-after-merge.yml |
+      | file                       |
+      | bench-sandbox.yml          |
+      | broker-live.yml            |
+      | claude-review.yml          |
+      | claude-security-review.yml |
+      | claude.yml                 |
+      | gate.yml                   |
+      | gate-lane.yml              |
+      | mutation-full.yml          |
+      | pipeline-after-merge.yml   |
       | watch.yml                |
 
   Scenario: the native lane preserves separate runner jobs and permissions
