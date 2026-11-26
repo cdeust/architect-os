@@ -9,13 +9,15 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { checkoutIsClean, visibleNestedMarker } from '../../src/git-worktree.js';
 import { fingerprintTree, type TreeFingerprint } from '../../src/tree-fingerprint.js';
-import { Given, Then, When } from './helpers.js';
+import { gitInFixture } from '../git-fixture.js';
+import { Given, ROOT, Then, When } from './helpers.js';
 
 // Where throwaway directories go, whatever TMPDIR a scenario sets for the fingerprint.
 const ROOT_TMP = tmpdir();
@@ -40,32 +42,16 @@ interface Fingerprinting {
 const fp = (world: { state: Record<string, unknown> }): Fingerprinting =>
   (world.state['fingerprinting'] ??= { directory: '', results: [] }) as Fingerprinting;
 
-/**
- * A git for the scenarios, started with a closed environment: nothing of the environment of the suite, whatever the
- * machine or the job sets. PATH is there to find git. GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM are /dev/null so that no
- * configuration of the machine is read (no HOME is given, so no `~/.gitconfig` and no XDG directory either). LC_ALL=C
- * because the output of `status --porcelain` and of `rev-parse` is read. The identity is given by `-c` below, and no
- * scenario compares a hash between two repositories, so no date is fixed. A scenario that sets GIT_DIR in the process to
- * poison the fingerprint does not reach the helper: it reads the repository it is given.
- */
-export const git = (directory: string, ...args: string[]): string => {
-  const result = spawnSync(
-    'git',
-    ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args],
-    {
-      cwd: directory,
-      encoding: 'utf8',
-      env: {
-        PATH: process.env['PATH'] ?? '',
-        GIT_CONFIG_GLOBAL: '/dev/null',
-        GIT_CONFIG_SYSTEM: '/dev/null',
-        LC_ALL: 'C',
-      },
-    },
-  );
-  assert.equal(result.status, 0, `git ${args.join(' ')} failed: ${result.stderr}`);
-  return result.stdout.trim();
-};
+export const git = (directory: string, ...args: string[]): string =>
+  gitInFixture(directory, [
+    '-c',
+    'user.name=t',
+    '-c',
+    'user.email=t@example.com',
+    '-c',
+    'commit.gpgsign=false',
+    ...args,
+  ]).trim();
 
 const throwaway = (world: { state: Record<string, unknown>; cleanups: (() => void)[] }): string => {
   const directory = mkdtempSync(join(ROOT_TMP, 'aos-fp-'));
@@ -595,6 +581,18 @@ Given('a throwaway repository with a directory it cannot list', function () {
   this.cleanups.push(() => chmodSync(closed, 0o700));
 });
 
+Given('the ignore file of the repository is a symbolic link to {string}', function (target: string) {
+  symlinkSync(target, join(fp(this).directory, '.gitignore'));
+});
+
+Given(
+  'the ignore file of the repository ends with the comment {string} after one MiB of comments',
+  function (tail: string) {
+    const commentLine = '#'.repeat(1023) + '\n';
+    writeFileSync(join(fp(this).directory, '.gitignore'), commentLine.repeat(1024) + '#' + tail);
+  },
+);
+
 Then('the guard of the checkout finds it clean', function () {
   assert.equal(checkoutIsClean(fp(this).directory), true);
 });
@@ -616,6 +614,54 @@ Then('the guard of the checkout refuses to name its markers with {string}', func
 
 Then('the guard of the checkout names no marker', function () {
   assert.equal(visibleNestedMarker(fp(this).directory, ''), undefined);
+});
+
+// Observe the guard's decision at the point where it hands the sets to the directory walk.
+// The real Git entries and the ordinary file suffice; there is no nested repository in the fixture.
+Then(
+  'the guard classifies the ignore file as {string} from both the head and the index',
+  function (classification: string) {
+    const { directory } = fp(this);
+    const script = [
+      'import os, runpy, sys',
+      'from unittest.mock import Mock',
+      'inspect = runpy.run_path(sys.argv[1])["visible_marker"]',
+      'walk = Mock()',
+      'inspect.__globals__["nested_marker"] = walk',
+      'fd = os.open(".", os.O_RDONLY | os.O_DIRECTORY)',
+      'try:',
+      '    inspect(fd, sys.stdin.buffer.read())',
+      'finally:',
+      '    os.close(fd)',
+      '_, trusted, changed, _ = walk.call_args.args',
+      'sources = (("trusted", trusted), ("changed", changed))',
+      'print(" ".join(label for label, paths in sources if b".gitignore" in paths))',
+    ].join('\n');
+    const guard = join(ROOT, 'tools/test-gate/with-tree-lock.py');
+    const head = git(directory, 'ls-tree', '-r', '-z', 'HEAD');
+    const index = git(directory, 'ls-files', '-s', '-z');
+    for (const entries of [head, index]) {
+      const result = spawnSync('/usr/bin/python3', ['-I', '-c', script, guard], {
+        cwd: directory,
+        env: {},
+        input: entries,
+        encoding: 'utf8',
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout.trim(), classification);
+    }
+  },
+);
+
+Then('the guard refuses the recorded markers of its head with {string}', function (message: string) {
+  const { directory } = fp(this);
+  const tree = git(directory, 'ls-tree', '-r', '-z', 'HEAD');
+  assert.throws(() => visibleNestedMarker(directory, tree), { message });
+});
+
+Then('the guard of the checkout names no marker of its index', function () {
+  const { directory } = fp(this);
+  assert.equal(visibleNestedMarker(directory, git(directory, 'ls-files', '-s', '-z')), undefined);
 });
 
 Then('the guard of the checkout names no marker of its head', function () {

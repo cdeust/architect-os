@@ -4,6 +4,13 @@ Feature: the gate reads its own repository, whatever the environment it was star
 
   The expectation (head, first parent, diff) is recorded through the gate's own git before GIT_DIR is set; the poison comes after.
 
+  Scenario: preparing and committing a fixture is independent of the Git executable under test
+    Given a fake git first on the PATH of the process, which records the names of its environment
+    And a gate repository
+    And the gate first parent is committed
+    Then the gate repository holds a file ".git/HEAD"
+    And the gate's git received no fixture command
+
   Scenario: a GIT_DIR of the process that names another repository changes neither the head, nor the first parent, nor the diff
     Given a gate repository
     And the gate repository file "notes.txt" reads:

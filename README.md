@@ -56,6 +56,8 @@ The [Linux workflow](.github/workflows/gate.yml) splits the functional Cucumber 
 
 The native inventory starts from changed production lines and includes native mutant spans that intersect them. The canary and files required to verify retirement of mutation debt have explicit whole-file scopes. A distribution of exact spans keeps nested groups apart on each runner. The verifier recalculates the inventory, checks the producer and receipt against the checkout and effective attempt, and ties the final replay record to the combined report by SHA-256. A static or hybrid mutant can still require the full mutation profile.
 
+When checking a worktree, the host trusts an ignore file only when its recorded Git mode is regular and its bytes match. The Python guard hashes regular files in blocks. During mutation replay, gate scenarios use an independent Git client to prepare their disposable repositories.
+
 ### The evidence desk
 
 The loop does not take facts from the open web. It asks a question; a librarian answers from the published literature; a verifier on the host, plain code and not a model, accepts the answer or sends it back with named reasons. The contract does not say who the librarian is. Today it is Claude Science, in a session the owner starts once, which takes the questions as they arrive through a custom Remote connector. Design and threat model: [`docs/design/evidence-desk.md`](docs/design/evidence-desk.md).

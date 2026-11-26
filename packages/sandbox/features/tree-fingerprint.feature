@@ -338,6 +338,46 @@ Feature: the fingerprint of the tree of a worktree
     The delivery asks it whether its checkout is clean, and the fingerprint, the gate and the delivery ask it for the
     first nested marker, before any git call would walk the tree (packages/sandbox/src/git-worktree.ts).
 
+    Scenario: a directory in place of a tracked ignore file refuses both inspections
+      Given a throwaway repository with one commit
+      And the file ".gitignore" of the repository is removed
+      And the file ".gitignore/note" of the repository holds "ordinary file"
+      Then the guard of the checkout refuses to say whether it is clean with "GATE_CHECKOUT_UNREADABLE"
+      And the guard refuses the recorded markers of its head with "GATE_CHECKOUT_UNREADABLE"
+
+    Scenario: a committed directory named .gitignore can hold ordinary tracked files
+      Given a throwaway repository with one commit
+      And the file ".gitignore" of the repository is removed
+      And the file ".gitignore/note" of the repository holds "ordinary file"
+      And everything in the repository is committed
+      Then the guard of the checkout finds it clean
+      And the guard of the checkout names no marker of its head
+      And the guard of the checkout names no marker of its index
+
+    Scenario: the bytes of a recorded symlink are its target name, whatever later replaces it
+      Given a throwaway repository with one commit
+      And the file ".gitignore" of the repository is removed
+      And the ignore file of the repository is a symbolic link to "a.txt"
+      And everything in the repository is committed
+      Then the guard of the checkout finds it clean
+      When the file ".gitignore" of the repository is removed
+      And the file ".gitignore" of the repository holds "a.txt"
+      Then the guard classifies the ignore file as "changed" from both the head and the index
+      And the guard of the checkout finds it not clean
+      When the file ".gitignore" of the repository is removed
+      And the file ".gitignore/note" of the repository holds "ordinary file"
+      Then the guard of the checkout names no marker of its head
+      And the guard of the checkout names no marker of its index
+
+    Scenario: the guard compares the last byte of a large ordinary ignore file
+      Given a throwaway repository with one commit
+      And the ignore file of the repository ends with the comment "a" after one MiB of comments
+      And everything in the repository is committed
+      Then the guard classifies the ignore file as "trusted" from both the head and the index
+      And the guard of the checkout finds it clean
+      When the ignore file of the repository ends with the comment "b" after one MiB of comments
+      Then the guard of the checkout finds it not clean
+
     Scenario: a checkout that holds the bytes of its commit is clean
       Given a throwaway repository with one commit
       Then the guard of the checkout finds it clean

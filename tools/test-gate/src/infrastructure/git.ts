@@ -13,22 +13,10 @@ function options(): string[] {
   return closedGitOptions(['core.quotePath=false']);
 }
 
-/** Runs `git` in `cwd` and returns its standard output, through `gitWithOptions` with what the gate always gives: `options()`. */
-export function git(cwd: string, args: readonly string[]): string {
-  return gitWithOptions(cwd, options(), args);
-}
-
-/**
- * `git` with the options given before the subcommand, and the environment of a git that reads no configuration of the
- * machine, so that the verdict does not depend on it. With `gitList` below, the launches of git of tools/test-gate:
- * this file is a named exception of the rule child-process-only-in-sandbox in .dependency-cruiser.cjs. The gate has no
- * network code and no token. Production gives `options()`, through `git` and `gitList`, and nothing else. The function
- * is exported for the scenarios alone, which the same rule keeps from starting a process themselves: they give other
- * options, or none, to build what a session would leave and to show that the options are what keeps the program of a
- * configuration from running.
- */
-export function gitWithOptions(cwd: string, before: readonly string[], args: readonly string[]): string {
-  return execFileSync('git', [...before, ...args], {
+// The production adapter supplies the repository policy to every call. Scenario setup uses its own Git process,
+// so replaying a mutation of these process options cannot redirect fixture writes into the checkout under lease.
+function git(cwd: string, args: readonly string[]): string {
+  return execFileSync('git', [...options(), ...args], {
     cwd,
     env: machineIndependentGitEnvironment(),
     encoding: 'utf8',

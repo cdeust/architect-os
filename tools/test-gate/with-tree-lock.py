@@ -9,6 +9,7 @@ import contextlib
 import fcntl
 import functools
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -152,6 +153,16 @@ def nested_marker(tree_fd, trusted, changed, tracked):
                 pass
             else:
                 return prefix, unignored
+        # Git consults each directory's ignore file when it matches names. Refuse
+        # special files before that call. A directory named .gitignore can hold
+        # ordinary tracked children; Git handles that and symlinks itself.
+        try:
+            mode = os.stat(".gitignore", dir_fd=fd, follow_symlinks=False).st_mode
+        except FileNotFoundError:
+            pass
+        else:
+            if not (stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode)):
+                raise Refusal("GATE_CHECKOUT_UNREADABLE")
         children = [
             os.fsencode(name)
             for name in os.listdir(fd)
@@ -216,6 +227,25 @@ def refuse_nested_repository(fd):
         )
 
 
+def regular_blob_matches(fd, oid, executable=None):
+    """Hash the Git blob in bounded reads, using the size and mode of the open file."""
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode):
+        raise Refusal("GATE_CHECKOUT_UNREADABLE")
+    if executable is not None and bool(st.st_mode & stat.S_IXUSR) != executable:
+        return False
+    remaining = st.st_size
+    blob = hashlib.sha1(b"blob %d\0" % remaining, usedforsecurity=False)
+    while remaining:
+        block = os.read(fd, min(remaining, io.DEFAULT_BUFFER_SIZE))
+        if not block:
+            return False
+        blob.update(block)
+        remaining -= len(block)
+    # Check EOF once. The hash never follows a growing file beyond that byte.
+    return not os.read(fd, 1) and blob.hexdigest().encode() == oid
+
+
 def recorded_bytes(fd, name, oid):
     """Whether the file `name` under `fd` holds the blob `oid`, read without following a link."""
     names = name.split(b"/")
@@ -225,15 +255,32 @@ def recorded_bytes(fd, name, oid):
             nxt = os.open(part, DIRECTORY, dir_fd=current)
             os.close(current)
             current = nxt
+        mode = os.stat(names[-1], dir_fd=current, follow_symlinks=False).st_mode
+        if stat.S_ISLNK(mode):
+            return False
+        if not stat.S_ISREG(mode):
+            raise Refusal("GATE_CHECKOUT_UNREADABLE")
         file = os.open(names[-1], os.O_RDONLY | FILE, dir_fd=current)
-        with os.fdopen(file, "rb") as stream:
-            data = stream.read()
+        try:
+            return regular_blob_matches(file, oid)
+        finally:
+            os.close(file)
     except OSError:
         return False
     finally:
         os.close(current)
-    blob = hashlib.sha1(b"blob %d\0" % len(data) + data, usedforsecurity=False)
-    return blob.hexdigest().encode() == oid
+
+
+def regular_ignore_oid(meta):
+    """ls-tree reports mode/type/oid; ls-files reports mode/oid/stage."""
+    fields = meta.split(b" ")
+    if len(fields) != 3 or fields[0] not in (b"100644", b"100755"):
+        return None
+    if fields[1] == b"blob":
+        return fields[2]
+    if fields[2] == b"0":
+        return fields[1]
+    return None
 
 
 def visible_marker(fd, tree):
@@ -245,8 +292,9 @@ def visible_marker(fd, tree):
     trusted, changed = set(), set()
     for meta, _, name in entries:
         if name.rsplit(b"/", 1)[-1] == b".gitignore":
-            oid = next((field for field in meta.split(b" ") if len(field) == 40), b"")
-            (trusted if recorded_bytes(fd, name, oid) else changed).add(name)
+            oid = regular_ignore_oid(meta)
+            matches = oid is not None and recorded_bytes(fd, name, oid)
+            (trusted if matches else changed).add(name)
     return nested_marker(fd, trusted, changed, tracked)
 
 
@@ -508,14 +556,13 @@ def dirty():
             if mode == b"120000" and stat.S_ISLNK(st.st_mode):
                 data = os.readlink(name)
             elif mode in (b"100644", b"100755") and stat.S_ISREG(st.st_mode):
-                if bool(st.st_mode & 0o100) != (mode == b"100755"):
-                    return True
                 fd = os.open(name, os.O_RDONLY | FILE)
                 try:
-                    with os.fdopen(fd, "rb", closefd=False) as source:
-                        data = source.read()
+                    if not regular_blob_matches(fd, oid, executable=mode == b"100755"):
+                        return True
                 finally:
                     os.close(fd)
+                continue
             else:
                 return True
         except OSError:
