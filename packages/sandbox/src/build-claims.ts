@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Les écarts que la session de construction déclare au brief (docs/design/orchestration-fable-5-2.md, §14 ; journal
-// §102, §126) : un bloc de son rapport, que l'hôte extrait et valide. Une revue les reçoit comme des affirmations à
+// §102, §122) : un bloc de son rapport, que l'hôte extrait et valide. Une revue les reçoit comme des affirmations à
 // vérifier, citées comme données, jamais comme des instructions. Les schémas sont construits dans des fonctions : un
 // littéral au niveau du module ferait rejouer toute la suite pour chacun de ses mutants (Stryker).
 
@@ -58,7 +58,7 @@ export function claimsBlock(report: string): ClaimsBlock {
   if (opens.length > 1) return { state: 'invalid', reason: 'plusieurs blocs de revendications' };
   const start = (opens[0] as number) + 1;
   const end = lines.findIndex((text, index) => index >= start && text === '```');
-  if (end < 0) return { state: 'invalid', reason: 'bloc de revendications non fermé' };
+  if (end === -1) return { state: 'invalid', reason: 'bloc de revendications non fermé' };
   const body = lines.slice(start, end).join('\n');
   if (Buffer.byteLength(body) > CLAIMS_MAX_BYTES)
     return { state: 'invalid', reason: `bloc de revendications de plus de ${CLAIMS_MAX_BYTES} octets` };

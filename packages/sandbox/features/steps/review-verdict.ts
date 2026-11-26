@@ -208,3 +208,22 @@ Then(
     );
   },
 );
+
+Then(
+  'a verdict whose second claim cites a line the host does not find is refused with: {string}',
+  function (reason: string) {
+    const files = new Map([['src/a.ts', 'line\n'.repeat(11) + 'x = 1\n']]);
+    const verdict = valid();
+    verdict['claims'][0]['status'] = 'verified';
+    verdict['claims'].push({
+      id: 'CL-2',
+      status: 'refuted',
+      evidence: [{ file: 'src/a.ts', line: 12, quote: 'y = 2' }],
+      reason: 'r',
+    });
+    assert.equal(
+      claimsRefusal(parseReviewVerdict(verdict), ['CL-1', 'CL-2'], (path) => files.get(path)) ?? 'none',
+      reason,
+    );
+  },
+);

@@ -30,6 +30,9 @@ Feature: the departures a build declares, extracted and validated by the host
     Then a claims block whose body has 65536 bytes is found
     And a claims block whose body has 65537 bytes is invalid "bloc de revendications de plus de 65536 octets"
 
+  Scenario: the line ends inside the body count in its size
+    Then a claims block on two lines of 65536 bytes with its line end is invalid "bloc de revendications de plus de 65536 octets"
+
   Scenario: valid claims are numbered by the host in the order of the block
     When the host validates the claims:
       """

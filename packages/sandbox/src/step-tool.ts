@@ -544,7 +544,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     if (claims.state !== 'absent')
       deps.writeFile(
         join(outputs.retained, 'build.claims.json'),
-        json(claims.state === 'valid' ? { claims: claims.claims } : { invalid: claims.reason }),
+        json(claims.state === 'invalid' ? { invalid: claims.reason } : { claims: claims.claims }),
       );
     const given = claims.state === 'valid' ? claims.claims : [];
     // Les contrôles, l'un après l'autre ; le premier qui ne passe pas met fin à la phase.

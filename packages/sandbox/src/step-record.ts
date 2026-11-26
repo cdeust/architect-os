@@ -15,9 +15,6 @@ function stepName(): RegExp {
 function modelName(): RegExp {
   return /^[a-z0-9][a-z0-9.-]{0,63}$/;
 }
-function claimId(): RegExp {
-  return /^CL-\d{1,9}$/;
-}
 
 /** Le nom d'une étape est le nom de son dossier : il entre dans un chemin du dépôt. */
 export function isStepName(name: string): boolean {
@@ -70,7 +67,7 @@ export function stepRecordSchema() {
     claims: z
       .strictObject({
         valid: z.boolean(),
-        given: z.array(z.strictObject({ id: z.string().regex(claimId()), sha256: digest() })).max(20),
+        given: z.array(z.strictObject({ id: z.string(), sha256: digest() })).max(20),
       })
       .optional(),
     admission_sha256: digest().optional(),
@@ -154,7 +151,7 @@ export function stepRecordSchema() {
         claims: z
           .array(
             z.strictObject({
-              id: z.string().regex(claimId()),
+              id: z.string(),
               status: z.enum(['verified', 'refuted', 'not_checked']),
             }),
           )
@@ -164,21 +161,19 @@ export function stepRecordSchema() {
     ),
     outcome: z.enum(['passed', 'refused']),
   });
-  return record.refine(
-    ({ claims, reviews }) => {
-      const ids = JSON.stringify((claims?.given ?? []).map(({ id }) => id));
-      // Un bloc refusé ne donne rien ; les identifiants sont CL-1, CL-2… ; chaque statut rendu couvre exactement ceux-là.
-      return (
-        (claims?.valid !== false || claims.given.length === 0) &&
-        (claims?.given ?? []).every(({ id }, index) => id === `CL-${index + 1}`) &&
-        reviews.every(
-          (review) =>
-            review.claims === undefined || JSON.stringify(review.claims.map(({ id }) => id)) === ids,
-        )
-      );
-    },
-    { message: 'revendications incohérentes' },
-  );
+  return record.refine(({ claims, reviews }) => {
+    const given = claims?.given ?? [];
+    const ids = JSON.stringify(given.map(({ id }) => id));
+    // Les identifiants sont exactement CL-1, CL-2… dans l'ordre ; un bloc refusé n'en donne aucun ; chaque statut rendu
+    // couvre exactement ceux-là. Cette règle seule dit ce qu'est un identifiant de revendication dans l'enregistrement.
+    return (
+      (claims?.valid !== false || given.length === 0) &&
+      given.every(({ id }, index) => id === `CL-${index + 1}`) &&
+      reviews.every(
+        (review) => review.claims === undefined || JSON.stringify(review.claims.map(({ id }) => id)) === ids,
+      )
+    );
+  });
 }
 export type StepRecord = z.infer<ReturnType<typeof stepRecordSchema>>;
 

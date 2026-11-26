@@ -1,6 +1,6 @@
 Feature: the departures a build declares reach the reviews as claims to verify, and their statuses reach the record
   A review does not read the report of the build session, so that nothing a session says is taken on trust (journal
-  §102, §126). The build declares its departures from the brief in one block of its report; the host validates the
+  §102, §122). The build declares its departures from the brief in one block of its report; the host validates the
   block, gives each claim an identifier, and appends the claims to the review brief as statements to verify, quoted one
   JSON line each. Every verdict gives one status per claim, in order; the host refuses one that leaves a claim out or
   cites a line it does not find. A claim that is not verified blocks the Step. The record keeps the identifier of each

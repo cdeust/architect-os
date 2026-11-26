@@ -153,3 +153,13 @@ Then('the quoted line of that claim parses back to the claim', function () {
   assert.deepEqual(JSON.parse(claimLine(given)), given);
   assert.equal(claimLine(given).split(/[\n\r\u2028\u2029`]/).length, 1);
 });
+
+Then(
+  'a claims block on two lines of {int} bytes with its line end is invalid {string}',
+  function (bytes: number, reason: string) {
+    // Two lines whose bytes, with the line end between them, are one more than `bytes`.
+    const first = '{"claims":[]}';
+    const report = `\`\`\`claims\n${first}\n${' '.repeat(bytes - first.length)}\n\`\`\``;
+    assert.equal(outcome(report), `invalid ${JSON.stringify(reason)}`);
+  },
+);

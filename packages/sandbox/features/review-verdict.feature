@@ -109,6 +109,9 @@ Feature: the review verdict contract
       | a claim not checked citing a lost file | not_checked | [{"file":"src/b.ts","line":1,"quote":"x"}]                   | CL-1 : preuve refusée (fichier absent)               |
       | a second proof that is wrong          | verified    | [{"file":"src/a.ts","line":12,"quote":"x"},{"file":"src/a.ts","line":11,"quote":"x = 1"}] | CL-1 : preuve refusée (citation absente de la ligne) |
 
+  Scenario: the host checks the proofs of every claim, not only of the first
+    Then a verdict whose second claim cites a line the host does not find is refused with: "CL-2 : preuve refusée (citation absente de la ligne)"
+
   Scenario Outline: the host checks the criteria of a verdict against the Step: <case>
     Then the criteria of the valid verdict against "<ids>" are refused with: <reason>
 
