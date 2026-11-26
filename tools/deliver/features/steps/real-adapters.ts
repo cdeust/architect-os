@@ -69,13 +69,6 @@ Given('the delivery repository holds an empty root commit', function () {
 });
 
 Given(
-  'the delivery repository holds the commit {string} after {string} with the file {string} of {int} lines',
-  function (label: string, parent: string, path: string, count: number) {
-    gitOf(this).commitWith(label, parent, { lines: { path, count } });
-  },
-);
-
-Given(
   'the delivery repository holds the commit {string} after {string} with the binary file {string}',
   function (label: string, parent: string, path: string) {
     gitOf(this).commitWith(label, parent, { binary: path });
@@ -112,12 +105,6 @@ Given(
   },
 );
 
-Given('the git configuration of the host marks {string} as binary', function (pattern: string) {
-  const directory = join(gitOf(this).hostConfiguration, 'git');
-  mkdirSync(directory, { recursive: true });
-  writeFileSync(join(directory, 'attributes'), `${pattern} binary\n`);
-});
-
 Given('everything in the delivery worktree is committed', function () {
   gitOf(this).commitEverything();
 });
@@ -145,6 +132,14 @@ Given(
   },
 );
 
+Then(
+  'the delivery commit {string} records at {string} the bytes its checkout holds',
+  function (label: string, path: string) {
+    const { repository, hashOf, work } = gitOf(this);
+    assert.deepEqual(repository.committedFile(hashOf(label), path), readFileSync(join(work, path)));
+  },
+);
+
 When('the delivery worktree file {string} now holds {string}', function (path: string, text: string) {
   writeFileSync(join(gitOf(this).work, path), text);
 });
@@ -165,7 +160,6 @@ const calls: Record<string, (repository: Repository) => unknown> = {
   fetch: (repository) => repository.fetch(),
   remoteHead: (repository) => repository.remoteHead('main'),
   isAncestor: (repository) => repository.isAncestor('aaa', 'bbb'),
-  deletedLines: (repository) => repository.deletedLines('aaa', 'bbb', 'docs/a.md'),
   push: (repository) => repository.push('aaa', 'main'),
   deleteRemoteBranch: (repository) => repository.deleteRemoteBranch('main'),
   committedFile: (repository) => repository.committedFile('aaa', 'steps/a/record.json'),

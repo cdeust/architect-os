@@ -29,7 +29,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         publication
         rangement
         """
-      And the delivery calls named "isClean, head, remoteHead, isAncestor, committedFile, verdict, gate, deletedLines" are:
+      And the delivery calls named "isClean, head, remoteHead, isAncestor, committedFile, verdict, gate" are:
         """
         isClean
         head
@@ -38,7 +38,8 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         verdict
         gate
         verdict
-        deletedLines p0 h1 docs/design/journal.md
+        committedFile p0 docs/design/journal.md
+        committedFile h1 docs/design/journal.md
         remoteHead deliver/step
         """
       And the delivery calls named "verdict, gate, ci" are:
@@ -187,8 +188,9 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
     Scenario: no append-only file to watch
       Given the delivery append-only files are ""
       When I deliver "step" until "end"
-      Then the delivery calls named "deletedLines" are:
+      Then the delivery calls named "committedFile" are:
         """
+        committedFile h1 steps/step/record.json
         """
       And the delivery outcome is "delivered"
 
@@ -288,6 +290,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       Examples:
         | case                        | record                                         |
         | not JSON                    | the text "not JSON"                            |
+        | not UTF-8                   | the text "{bytes}"                             |
         | JSON its schema refuses     | the text "{\"step\":\"step\"}"                 |
         | the record of another step  | the record of the step "other"                 |
 
@@ -388,20 +391,36 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
 
   Rule: the gate
 
-    Scenario: the append-only files grew since the destination the gate judged: the run goes on
+    Scenario: the append-only file at the base is read from the destination the gate judged, not from a branch
       Given the delivery history holds "p1" as an ancestor of "h1"
       And the receipt of the delivery gate names the destination "p1"
       When I deliver "step" until "end"
       Then the delivery outcome is "delivered"
-      And the delivery calls named "deletedLines" are:
+      And the delivery calls named "committedFile" are:
         """
-        deletedLines p1 h1 docs/design/journal.md
+        committedFile h1 steps/step/record.json
+        committedFile p1 docs/design/journal.md
+        committedFile h1 docs/design/journal.md
         """
 
-    Scenario: an append-only file that lost a line since the destination the gate judged: stopped after the gate, nothing published
-      Given the delivery file "docs/design/journal.md" lost 1 lines
+    Scenario Outline: an append-only file whose bytes at the base are the first bytes at the commit: <case>
+      Given the delivery file "docs/design/journal.md" holds "<base>" at "p0"
+      And the delivery file "docs/design/journal.md" holds "<commit>" at "h1"
       When I deliver "step" until "end"
-      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a perdu des lignes"
+      Then the delivery outcome is "delivered"
+
+      Examples:
+        | case                      | base         | commit                 |
+        | unchanged                 | a{lf}b{lf}   | a{lf}b{lf}             |
+        | a line appended           | a{lf}b{lf}   | a{lf}b{lf}c{lf}        |
+        | the last line completed   | a{lf}b       | a{lf}bc{lf}            |
+        | a file new at the commit  | none         | a{lf}                  |
+
+    Scenario Outline: an append-only file changed before its end is refused after the gate, nothing published: <case>
+      Given the delivery file "docs/design/journal.md" holds "<base>" at "p0"
+      And the delivery file "docs/design/journal.md" holds "<commit>" at "h1"
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin"
       And the delivery acts are:
         """
         fetch
@@ -409,41 +428,53 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         gate
         log stopped
         """
-      And the delivery result is:
-        """
-        {"outcome":"stopped","phase":"porte","reason":"un fichier en ajout seul a perdu des lignes","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":0,"polls":0},"gate":"ran","published":[],"base":"p0"}
-        """
       And the delivery log holds exactly the result
+
+      Examples:
+        | case                                | base         | commit             |
+        | a line inserted in the middle       | a{lf}c{lf}   | a{lf}b{lf}c{lf}    |
+        | a line rewritten                    | a{lf}b{lf}   | a{lf}B{lf}         |
+        | the trailing line break removed     | a{lf}b{lf}   | a{lf}b             |
+        | a line removed at the end           | a{lf}b{lf}   | a{lf}              |
+        | a line inserted first               | a{lf}        | z{lf}a{lf}         |
+        | the file deleted                    | a{lf}        | none               |
 
     Scenario: a reused verdict gives the base of the append-only files too
       Given the delivery gate verdict already names "h1"
-      And the delivery file "docs/design/journal.md" lost 1 lines
+      And the delivery file "docs/design/journal.md" holds "a{lf}c{lf}" at "p0"
+      And the delivery file "docs/design/journal.md" holds "a{lf}b{lf}c{lf}" at "h1"
       When I deliver "step" until "end"
-      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a perdu des lignes"
-      And the delivery calls named "gate, deletedLines" are:
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin"
+      And the delivery result is:
         """
-        deletedLines p0 h1 docs/design/journal.md
+        {"outcome":"stopped","phase":"porte","reason":"un fichier en ajout seul a changé ailleurs qu'à sa fin","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":0,"polls":0},"gate":"reused","published":[],"base":"p0"}
         """
 
-    Scenario: the first append-only file lost lines: the second is not read
+    Scenario: the first append-only file changed: the second is not read
       Given the delivery append-only files are "a.md, b.md"
-      And the delivery file "a.md" lost 2 lines
+      And the delivery file "a.md" holds "x{lf}" at "p0"
+      And the delivery file "a.md" holds "y{lf}" at "h1"
       When I deliver "step" until "end"
-      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a perdu des lignes"
-      And the delivery calls named "deletedLines" are:
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin"
+      And the delivery calls named "committedFile" are:
         """
-        deletedLines p0 h1 a.md
+        committedFile h1 steps/step/record.json
+        committedFile p0 a.md
+        committedFile h1 a.md
         """
 
-    Scenario: the second append-only file lost lines
+    Scenario: the second append-only file changed
       Given the delivery append-only files are "a.md, b.md"
-      And the delivery file "b.md" lost 5 lines
+      And the delivery file "b.md" holds "x{lf}" at "p0"
       When I deliver "step" until "end"
-      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a perdu des lignes"
-      And the delivery calls named "deletedLines" are:
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin"
+      And the delivery calls named "committedFile" are:
         """
-        deletedLines p0 h1 a.md
-        deletedLines p0 h1 b.md
+        committedFile h1 steps/step/record.json
+        committedFile p0 a.md
+        committedFile h1 a.md
+        committedFile p0 b.md
+        committedFile h1 b.md
         """
 
     Scenario Outline: a receipt of the gate that names no destination: stopped, <verdict>
@@ -451,8 +482,9 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       And the receipt of the delivery gate names no destination
       When I deliver "step" until "end"
       Then the delivery stopped at the phase "porte" because "le verdict de la porte ne nomme pas de destination"
-      And the delivery calls named "deletedLines, push" are:
+      And the delivery calls named "committedFile, push" are:
         """
+        committedFile h1 steps/step/record.json
         push h1 sentinel/gate-1a-step
         """
       And the delivery log holds exactly the result

@@ -26,8 +26,7 @@ export const DESTINATION = 'main';
 /** Commits are named by the scenario; their hashes are the adapter's. */
 export interface RepositoryFixture {
   repository: Repository;
-  /** `removal`: the lines the commit removed from a file, relative to its parent. */
-  commit(label: string, parent: string | undefined, removal?: { path: string; lines: number }): void;
+  commit(label: string, parent: string | undefined): void;
   /** A commit that records the text at the path, besides what the commit of `commit` records. */
   commitFile(label: string, parent: string | undefined, path: string, text: string): void;
   checkout(label: string): void;

@@ -53,13 +53,6 @@ export class GitRepository implements Repository {
     return this.run(['merge-base', '--is-ancestor', ancestor, descendant], 1).status === 0;
   }
 
-  deletedLines(from: string, to: string, path: string): number {
-    const { out } = this.run(['diff', '--numstat', '--ignore-submodules=all', from, to, '--', path]);
-    if (out.length === 0) return 0;
-    const deleted = out.toString().split('\t')[1];
-    return deleted === '-' ? 1 : Number(deleted);
-  }
-
   push(hash: string, branch: string): 'pushed' | 'refused' {
     const { status } = this.start([
       'push',
@@ -71,17 +64,18 @@ export class GitRepository implements Repository {
     return status === 0 ? 'pushed' : 'refused';
   }
 
-  committedFile(hash: string, path: string): string | undefined {
+  committedFile(hash: string, path: string): Uint8Array | undefined {
     // Every entry of the tree of the commit, `<mode> <type> <object>\t<path>\0`, compared with the path byte for byte:
     // a path is never given to git as a pathspec, whose magic would read it otherwise.
     const entry = this.run(['ls-tree', '-r', '-z', '--full-tree', hash])
       .out.toString()
       .split('\0')
       .find((line) => line.slice(line.indexOf('\t') + 1) === path);
-    const [mode, , object] = entry?.slice(0, entry.indexOf('\t')).split(' ') ?? [];
+    if (entry === undefined) return undefined;
+    const [mode, , object] = entry.slice(0, entry.indexOf('\t')).split(' ');
     // A regular file, executable or not; a link (120000) or a nested repository (160000) is not a file of the commit.
     if (mode !== '100644' && mode !== '100755') return undefined;
-    return this.run(['cat-file', 'blob', object as string]).out.toString();
+    return this.run(['cat-file', 'blob', object as string]).out;
   }
 
   deleteRemoteBranch(branch: string): void {

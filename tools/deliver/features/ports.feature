@@ -102,27 +102,6 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | in-memory |
         | git       |
 
-    Scenario Outline: the lines removed from a file between two commits
-      Given a delivery repository of the <adapter> adapter
-      And the delivery repository holds the commit "c1"
-      And the delivery repository holds the commit "c2" after "c1"
-      And the delivery repository holds the commit "c3" after "c2" that removed 1 lines from "a.md"
-      And the delivery repository holds the commit "c4" after "c3" that removed 2 lines from "a.md"
-      And the delivery repository holds the commit "c5" after "c4" that removed 4 lines from "b.md"
-      Then the delivery repository counts 0 deleted lines in "a.md" from "c1" to "c2"
-      And the delivery repository counts 1 deleted lines in "a.md" from "c2" to "c3"
-      And the delivery repository counts 2 deleted lines in "a.md" from "c3" to "c4"
-      And the delivery repository counts 3 deleted lines in "a.md" from "c2" to "c4"
-      And the delivery repository counts 3 deleted lines in "a.md" from "c2" to "c5"
-      And the delivery repository counts 4 deleted lines in "b.md" from "c2" to "c5"
-      And the delivery repository counts 0 deleted lines in "a.md" from "c4" to "c4"
-      And the delivery repository counts 0 deleted lines in "b.md" from "c1" to "c3"
-
-      Examples:
-        | adapter   |
-        | in-memory |
-        | git       |
-
     Scenario Outline: a commit records the text of a file at its path, and nothing at another
       Given a delivery repository of the <adapter> adapter
       And the delivery repository holds the commit "c1"
@@ -185,20 +164,13 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       When an untracked file is added to the delivery worktree
       Then the delivery repository is not clean
 
-    Scenario: the lines removed from a path with a space
+    Scenario: a path with a space, and bytes that are not UTF-8, are read as the commit records them
       Given a delivery repository of the git adapter
       And the delivery repository holds the commit "c1"
-      And the delivery repository holds the commit "c2" after "c1" with the file "docs/my notes.md" of 5 lines
-      And the delivery repository holds the commit "c3" after "c2" with the file "docs/my notes.md" of 2 lines
-      Then the delivery repository counts 0 deleted lines in "docs/my notes.md" from "c1" to "c2"
-      And the delivery repository counts 3 deleted lines in "docs/my notes.md" from "c2" to "c3"
-
-    Scenario: a binary file that changed counts one line
-      Given a delivery repository of the git adapter
-      And the delivery repository holds the commit "c1"
-      And the delivery repository holds the commit "c2" after "c1" with the binary file "img.bin"
+      And the delivery repository holds the commit "c2" after "c1" that records "docs/my notes.md" as the text "a note"
       And the delivery repository holds the commit "c3" after "c2" with the binary file "img.bin"
-      Then the delivery repository counts 1 deleted lines in "img.bin" from "c2" to "c3"
+      Then the delivery commit "c2" records at "docs/my notes.md" the text "a note"
+      And the delivery commit "c3" records at "img.bin" the bytes its checkout holds
 
     Scenario: a remote that cannot be reached makes a delete and a fetch throw, with the exit code of git
       Given a delivery repository of the git adapter
@@ -218,7 +190,6 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | fetch              | git fetch exited with code 128   |
         | remoteHead         | git rev-parse exited with code 128 |
         | isAncestor         | git merge-base exited with code 128 |
-        | deletedLines       | git diff exited with code 129    |
         | deleteRemoteBranch | git push exited with code 128    |
         | committedFile      | git ls-tree exited with code 128 |
 
@@ -234,7 +205,6 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | fetch              | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null fetch --quiet --prune --recurse-submodules=no origin |
         | remoteHead         | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null rev-parse --verify --quiet refs/remotes/origin/main^{commit} |
         | isAncestor         | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null merge-base --is-ancestor aaa bbb |
-        | deletedLines       | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null diff --numstat --ignore-submodules=all aaa bbb -- docs/a.md |
         | push               | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null push --quiet --recurse-submodules=no origin aaa:refs/heads/main |
         | deleteRemoteBranch | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null push --quiet --recurse-submodules=no origin :refs/heads/main |
         | committedFile      | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null ls-tree -r -z --full-tree aaa |
@@ -350,21 +320,17 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       And the delivery repository holds an empty root commit
       Then the delivery repository holds no nested repository
 
-  Rule: what the repository replaces and what the machine adds are not what the delivery counts
+  Rule: what the repository replaces is not what the delivery reads
 
     Background:
       Given a delivery repository of the git adapter
       And the delivery repository holds the commit "c1"
 
-    Scenario: a replace object of the blob of a file does not hide its deleted lines
-      Given the delivery repository holds the commit "c2" after "c1" that removed 2 lines from "a.md"
-      And the delivery repository replaces the blob of "a.md" at "c1" by its blob at "c2"
-      Then the delivery repository counts 2 deleted lines in "a.md" from "c1" to "c2"
-
-    Scenario: an attributes file of the machine that marks a file binary does not change the count of its deleted lines
-      Given the delivery repository holds the commit "c2" after "c1" that removed 2 lines from "a.md"
-      And the git configuration of the host marks "*.md" as binary
-      Then the delivery repository counts 2 deleted lines in "a.md" from "c1" to "c2"
+    Scenario: a replace object of the blob of a file does not change what the commit records
+      Given the delivery repository holds the commit "c2" after "c1" that records "a.md" as the text "recorded"
+      And the delivery repository holds the commit "c3" after "c2" that records "a.md" as the text "replacing"
+      And the delivery repository replaces the blob of "a.md" at "c2" by its blob at "c3"
+      Then the delivery commit "c2" records at "a.md" the text "recorded"
 
   Rule: git enters no repository nested in the tree, whatever the tree says of it
 
@@ -757,6 +723,20 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | nothing a schema accepts | {} | the gh forge failed with "the forge did not answer: pull request" |
         | an address that is not one | {"number":4,"html_url":"https://github.com/cdeust/architect-os/issues/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
         | a number that is not one | {"number":0,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
+
+    Scenario: a head the forge shows at another commit: no new pull request is asked
+      Given a delivery forge of the gh adapter
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000022"
+      When I ask the gh forge for a pull request from "deliver/step"
+      Then the gh forge refused the pull request because "la tête de la branche de travail n'est pas le commit livré"
+      And the gh client was asked for no new pull request
+
+    Scenario: a client ended by a signal while it opens a pull request: the fixed message of the call
+      Given a delivery forge of the gh adapter
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021"
+      And the gh client is ended by a signal when it is asked for a new pull request
+      When I ask the gh forge for a pull request from "deliver/step"
+      Then the gh forge failed with "the forge did not answer: pull request"
 
     Scenario: a refusal of the forge holds nothing of what the client printed
       Given a delivery forge of the gh adapter

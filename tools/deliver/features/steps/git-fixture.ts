@@ -8,9 +8,6 @@ import type { DeliverWorld } from './support.js';
 
 /** What a commit of the fixture writes, besides the file that names it. */
 export interface CommitOptions {
-  removal?: { path: string; lines: number };
-  /** A text file of that many lines. */
-  lines?: { path: string; count: number };
   /** A binary file whose content is not the one of the parent. */
   binary?: string;
   /** A file of that text, executable when `mode` is 0o755. */
@@ -92,12 +89,6 @@ export function gitFixture(world: DeliverWorld): GitFixture {
       write('b.md', lines('b', 10));
     } else git(work, 'checkout', '--quiet', '--detach', hashOf(parent));
     write(`${label}.txt`, `${label}\n`);
-    if (options.removal !== undefined) {
-      const kept = readFileSync(join(work, options.removal.path), 'utf8').split('\n').slice(0, -1);
-      write(options.removal.path, kept.slice(0, kept.length - options.removal.lines).join('\n') + '\n');
-    }
-    if (options.lines !== undefined)
-      write(options.lines.path, lines(options.lines.path, options.lines.count));
     if (options.binary !== undefined) write(options.binary, Buffer.from([0, hashes.size]));
     if (options.file !== undefined) {
       write(options.file.path, options.file.text);
@@ -121,7 +112,7 @@ export function gitFixture(world: DeliverWorld): GitFixture {
     bare,
     git,
     commitWith,
-    commit: (label, parent, removal) => commitWith(label, parent, removal === undefined ? {} : { removal }),
+    commit: (label, parent) => commitWith(label, parent, {}),
     commitFile: (label, parent, path, text) => commitWith(label, parent, { file: { path, text } }),
     checkout: (label) => void git(work, 'checkout', '--quiet', '--detach', hashOf(label)),
     setRemote: (branch, label) =>

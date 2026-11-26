@@ -1,3 +1,4 @@
+import { onlyAppended } from '../../src/domain/append-only.js';
 import assert from 'node:assert/strict';
 import { ciState } from '../../src/domain/ci.js';
 import { planPublication, type Plan } from '../../src/domain/plan.js';
@@ -106,3 +107,13 @@ Then('the plan asked the ancestry of {string}', function (asked: string) {
 Then('the plan is refused as {string}', function (reason: string) {
   assert.deepEqual(this.state['plan'], { ok: false, reason });
 });
+
+Then(
+  'the bytes {string} at the base and {string} at the commit are only appended: {word}',
+  function (before: string, after: string, expected: string) {
+    // `{lf}` is a line break; `none`: the file is absent.
+    const bytes = (text: string) =>
+      text === 'none' ? undefined : Buffer.from(text.replaceAll('{lf}', '\n'));
+    assert.equal(onlyAppended(bytes(before), bytes(after)), expected === 'yes');
+  },
+);

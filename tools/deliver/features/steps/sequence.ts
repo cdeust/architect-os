@@ -126,7 +126,7 @@ Given(
     const repository = new InMemoryRepository(journal, hex(commit));
     repository.link(hex(parent), hex(commit));
     repository.remotes.set('main', hex(parent));
-    repository.files.set(`${hex(commit)} ${RECORD}`, stepRecordText());
+    repository.files.set(`${hex(commit)} ${RECORD}`, Buffer.from(stepRecordText()));
     const forge = new InMemoryForge(journal, 'cdeust/architect-os', repository.remotes);
     forge.script(hex(commit), TRIAL, [ciRun('green')]);
     const gate = new InMemoryGate(journal);
@@ -215,10 +215,15 @@ Given('the receipt of the delivery gate names the destination {string}', functio
     if (verdict !== undefined) verdict.destination = hex(hash);
 });
 
-Given('the delivery file {string} lost {int} lines', function (path: string, lines: number) {
-  const { repository, commit } = scene(this);
-  repository.removes(commit, path, lines);
-});
+Given(
+  'the delivery file {string} holds {string} at {string}',
+  function (path: string, text: string, hash: string) {
+    // `{lf}` is a line break; `none`: the commit records no such file.
+    const { files } = scene(this).repository;
+    if (text === 'none') files.delete(`${hex(hash)} ${path}`);
+    else files.set(`${hex(hash)} ${path}`, Buffer.from(text.replaceAll('{lf}', '\n')));
+  },
+);
 
 Given('the delivery append-only files are {string}', function (paths: string) {
   scene(this).config.appendOnly = paths === '' ? [] : paths.split(', ');
@@ -253,14 +258,18 @@ Given('the delivery commit records no record of the step', function () {
 
 Given('the delivery commit records as the record of the step the text {string}', function (text: string) {
   const { repository, commit } = scene(this);
-  repository.files.set(`${commit} ${RECORD}`, text);
+  // `{bytes}`: two bytes that are not UTF-8.
+  repository.files.set(
+    `${commit} ${RECORD}`,
+    text === '{bytes}' ? Buffer.from([0xff, 0xfe]) : Buffer.from(text),
+  );
 });
 
 Given(
   'the delivery commit records as the record of the step the record of the step {string}',
   function (step: string) {
     const { repository, commit } = scene(this);
-    repository.files.set(`${commit} ${RECORD}`, stepRecordText(step));
+    repository.files.set(`${commit} ${RECORD}`, Buffer.from(stepRecordText(step)));
   },
 );
 
@@ -284,7 +293,7 @@ Given(
   function (commit: string, parent: string) {
     const { repository, forge, gate } = scene(this);
     repository.link(hex(parent), hex(commit));
-    repository.files.set(`${hex(commit)} ${RECORD}`, stepRecordText());
+    repository.files.set(`${hex(commit)} ${RECORD}`, Buffer.from(stepRecordText()));
     repository.hash = hex(commit);
     forge.script(hex(commit), TRIAL, [ciRun('green')]);
     gate.afterRun = { hash: hex(commit), destination: scene(this).parent };

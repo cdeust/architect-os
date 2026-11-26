@@ -2,6 +2,7 @@
 //   node fake-gh.mjs <answers file> api <arguments...>
 // The answers file is a JSON object: the arguments after `api`, joined by a space, to
 //   { "exit": <code, 0 when absent>, "stdout": <text>, "then": <answers that replace the same keys once this one is given> }.
+// An answer with `"signal": true` ends the client on a signal, as a client killed would end.
 // A key that is not there is looked for without its query string, then, for a call that starts with `--method POST`, as
 // those three arguments alone (its fields hold a whole body). A POST nobody planned is accepted and answers `{}`; any
 // other call that nobody planned exits 1 and prints nothing. Each argv received (after the answers file) is appended,
@@ -23,6 +24,7 @@ const key = args.slice(1).join(' ');
 const post = args[1] === '--method' && args[2] === 'POST' ? answers[args.slice(1, 4).join(' ')] : undefined;
 const planned = answers[key] ?? answers[key.split('?')[0]] ?? post;
 const answer = planned ?? (args.includes('POST') ? { stdout: '{}' } : { exit: 1 });
+if (answer.signal) process.kill(process.pid, 'SIGKILL');
 process.stdout.write(answer.stdout ?? '');
 if (answer.then !== undefined) writeFileSync(file, JSON.stringify({ ...answers, ...answer.then }));
 process.exitCode = answer.exit ?? 0;

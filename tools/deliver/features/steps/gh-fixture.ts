@@ -11,6 +11,7 @@ export const REPO = 'cdeust/architect-os';
 /** What the scripted client answers to one call (see `fixtures/fake-gh.mjs`). */
 interface Answer {
   exit?: number;
+  signal?: boolean;
   stdout?: string;
   then?: Record<string, Answer>;
 }

@@ -5,6 +5,7 @@
 // leaves `deliver` as it is.
 import { createHash } from 'node:crypto';
 import type { DeliverConfig } from '../domain/config.js';
+import { onlyAppended } from '../domain/append-only.js';
 import { ciState } from '../domain/ci.js';
 import { planPublication } from '../domain/plan.js';
 import type {
@@ -98,8 +99,14 @@ function recordOf(
   repository: Repository,
   parseRecord: ParseRecord,
 ): StepRecordView | Reason {
-  const text = repository.committedFile(hash, `steps/${name}/record.json`);
-  if (text === undefined) return "enregistrement d'étape absent";
+  const bytes = repository.committedFile(hash, `steps/${name}/record.json`);
+  if (bytes === undefined) return "enregistrement d'étape absent";
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return "enregistrement d'étape refusé";
+  }
   const record = parseRecord(text);
   // A record of another step, copied in this folder, is not the record of this one.
   if (record === undefined || record.step !== name) return "enregistrement d'étape refusé";
@@ -169,8 +176,8 @@ async function playGate(
     return { phase: 'porte', reason: 'le verdict de la porte ne nomme pas de destination' };
   entry.base = base;
   for (const path of config.appendOnly) {
-    if (repository.deletedLines(base, entry.hash, path) !== 0) {
-      return { phase: 'porte', reason: 'un fichier en ajout seul a perdu des lignes' };
+    if (!onlyAppended(repository.committedFile(base, path), repository.committedFile(entry.hash, path))) {
+      return { phase: 'porte', reason: "un fichier en ajout seul a changé ailleurs qu'à sa fin" };
     }
   }
   return undefined;

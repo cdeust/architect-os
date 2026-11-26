@@ -31,18 +31,17 @@ function inMemoryRepository(): RepositoryFixture {
   const repository = new InMemoryRepository(new Journal(), '0'.repeat(40));
   const hashes = new Map<string, string>();
   const hashOf = (label: string): string => hashes.get(label) as string;
-  const commit: RepositoryFixture['commit'] = (label, parent, removal) => {
+  const commit: RepositoryFixture['commit'] = (label, parent) => {
     const hash = (hashes.size + 1).toString(16).padStart(40, '0');
     hashes.set(label, hash);
     if (parent !== undefined) repository.link(hashOf(parent), hash);
-    if (removal !== undefined) repository.removes(hash, removal.path, removal.lines);
   };
   return {
     repository,
     commit,
     commitFile(label, parent, path, text) {
       commit(label, parent);
-      repository.files.set(`${hashOf(label)} ${path}`, text);
+      repository.files.set(`${hashOf(label)} ${path}`, Buffer.from(text));
     },
     checkout(label) {
       repository.hash = hashOf(label);
@@ -152,13 +151,6 @@ Given(
   },
 );
 
-Given(
-  'the delivery repository holds the commit {string} after {string} that removed {int} lines from {string}',
-  function (label: string, parent: string, lines: number, path: string) {
-    repo(this).commit(label, parent, { path, lines });
-  },
-);
-
 Given('the delivery repository is at the commit {string}', function (label: string) {
   repo(this).checkout(label);
 });
@@ -234,7 +226,7 @@ Then(
   'the delivery commit {string} records at {string} the text {string}',
   function (label: string, path: string, text: string) {
     const { repository, hashOf } = repo(this);
-    assert.equal(repository.committedFile(hashOf(label), path), text);
+    assert.deepEqual(Buffer.from(repository.committedFile(hashOf(label), path) ?? []), Buffer.from(text));
   },
 );
 
@@ -264,14 +256,6 @@ Then(
   function (ancestor: string, descendant: string) {
     const { repository, hashOf } = repo(this);
     assert.equal(repository.isAncestor(hashOf(ancestor), hashOf(descendant)), false);
-  },
-);
-
-Then(
-  'the delivery repository counts {int} deleted lines in {string} from {string} to {string}',
-  function (count: number, path: string, from: string, to: string) {
-    const { repository, hashOf } = repo(this);
-    assert.equal(repository.deletedLines(hashOf(from), hashOf(to), path), count);
   },
 );
 

@@ -173,3 +173,24 @@ Feature: The decisions of the delivery command (pure: the trial branch, the stat
       When the publication of "h1" is planned over the work branch "w9", the commit descending from "w1"
       Then the plan is refused as "la branche distante n'est pas un ancêtre du commit"
       And the plan asked the ancestry of "w9"
+
+  Rule: an append-only file keeps, as its first bytes, every byte it had at the base
+
+    Scenario Outline: "<base>" at the base, "<commit>" at the commit: <case>
+      Then the bytes "<base>" at the base and "<commit>" at the commit are only appended: <appended>
+
+      Examples:
+        | case                              | base       | commit          | appended |
+        | unchanged                         | a{lf}b{lf} | a{lf}b{lf}      | yes      |
+        | a line appended                   | a{lf}      | a{lf}b{lf}      | yes      |
+        | the last line completed           | a{lf}b     | a{lf}bc{lf}     | yes      |
+        | absent at the base                | none       | a{lf}           | yes      |
+        | absent at both                    | none       | none            | yes      |
+        | empty at the base                 |            | a{lf}           | yes      |
+        | a line inserted in the middle     | a{lf}c{lf} | a{lf}b{lf}c{lf} | no       |
+        | a line inserted first             | a{lf}      | b{lf}a{lf}      | no       |
+        | a line rewritten                  | a{lf}b{lf} | a{lf}c{lf}      | no       |
+        | the last byte rewritten           | a{lf}b     | a{lf}c          | no       |
+        | the trailing line break removed   | a{lf}b{lf} | a{lf}b          | no       |
+        | emptied                           | a{lf}      |                 | no       |
+        | deleted                           | a{lf}      | none            | no       |

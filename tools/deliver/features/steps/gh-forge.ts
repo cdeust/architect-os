@@ -19,6 +19,10 @@ Given(
   },
 );
 
+Given('the gh client is ended by a signal when it is asked for a new pull request', function () {
+  ghOf(this).answers('open', '', { signal: true });
+});
+
 Given(
   'the gh forge answers the {word} of {string} with the exit code {int} and the output {string}',
   function (kind: string, subject: string, code: number, output: string) {

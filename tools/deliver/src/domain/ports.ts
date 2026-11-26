@@ -13,7 +13,7 @@ export type Reason =
   | 'arbre non propre'
   | 'empreinte de commit invalide'
   | "la branche distante n'est pas un ancêtre du commit"
-  | 'un fichier en ajout seul a perdu des lignes'
+  | "un fichier en ajout seul a changé ailleurs qu'à sa fin"
   | "nom de branche d'essai refusé"
   | "la destination n'accepte qu'une pull request"
   | "enregistrement d'étape absent"
@@ -90,15 +90,13 @@ export interface Repository {
   /** The hash of the branch on the remote, as last fetched. */
   remoteHead(branch: string): string | undefined;
   isAncestor(ancestor: string, descendant: string): boolean;
-  /** The lines removed from that file between the two commits. */
-  deletedLines(from: string, to: string, path: string): number;
   /** Never forced: `refused` when the remote branch is not an ancestor of `hash`, and then it is left as it was. */
   push(hash: string, branch: string): 'pushed' | 'refused';
   /**
-   * The text of the regular file at `path` in the tree of the commit `hash`, as that commit records it, whatever the
+   * The bytes of the regular file at `path` in the tree of the commit `hash`, as that commit records it, whatever the
    * checkout holds; undefined when the commit has no regular file there.
    */
-  committedFile(hash: string, path: string): string | undefined;
+  committedFile(hash: string, path: string): Uint8Array | undefined;
   deleteRemoteBranch(branch: string): void;
 }
 
