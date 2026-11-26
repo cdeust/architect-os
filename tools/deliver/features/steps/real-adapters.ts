@@ -111,7 +111,7 @@ When(
 );
 
 Then('the witness program of the nested delivery repository has not run', function () {
-  assert.equal(gitOf(this).witnessRan(), false);
+  assert.equal(gitOf(this).witnessRan(), false, gitOf(this).witnessReport());
 });
 
 Then('the witness program of the nested delivery repository has run', function () {
