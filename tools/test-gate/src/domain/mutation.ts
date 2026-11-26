@@ -122,9 +122,8 @@ export function refusedDirectives(source: string): readonly { line: number; text
     const start = source.slice(0, match.index).split('\n').length;
     const end = start + (match[0].split('\n').length - 1);
     const spanned = lines.slice(start - 1, end).map((line) => line.trim());
-    return start === end && justifiedMutators(spanned[0] as string) !== null
-      ? []
-      : [{ line: start, text: spanned.join(' ') }];
+    // A justification is one `//` line: a directive whose comment spans lines is never one.
+    return justifiedMutators(spanned.join(' ')) !== null ? [] : [{ line: start, text: spanned.join(' ') }];
   });
 }
 

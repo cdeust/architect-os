@@ -376,6 +376,24 @@ Feature: Gate source files have an unambiguous mutation perimeter
         porte de test : GATE_SOURCE_LINK : mod/one
         """
 
+    Scenario: a production file of the root that is a link the tree ignores is refused
+      Given a gate repository
+      And the gate configuration takes the production files of the root as well
+      And the gate first parent is committed
+      And the gate repository file ".gitignore" reads:
+        """
+        reports/
+        leaf.mjs
+        """
+      And the gate repository replaces "leaf.mjs" with a file link to a disposable sibling
+      And the gate head is committed
+      When the gate plans the "linux" job
+      Then the gate exits with 1
+      And the gate output is:
+        """
+        porte de test : GATE_SOURCE_LINK : leaf.mjs
+        """
+
     Scenario: an ignored production file that is a link is refused
       Given a gate repository
       And the gate first parent is committed
