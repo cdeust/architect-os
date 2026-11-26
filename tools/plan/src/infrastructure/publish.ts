@@ -17,7 +17,7 @@ export function publishStepInputs(
   if (!isAbsolute(path) || basename(path) !== step) throw new Error('PLAN_DESTINATION_INVALID');
   const parent = realpathSync(dirname(path));
   if (insideCheckout(parent)) throw new Error('PLAN_DESTINATION_RESERVED');
-  const destination = join(parent, step);
+  const destination = join(parent, basename(path));
   // Claim a fresh destination. A pre-existing directory or symlink is never touched.
   mkdirSync(destination, { mode: 0o700 });
   try {

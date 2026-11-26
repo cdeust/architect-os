@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
   copyFileSync,
+  writeFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -177,3 +178,23 @@ Then(
     }
   },
 );
+
+Then('the planning transport starts a pinned bundle that exits and reports no tool answer', async () => {
+  const p = plugin();
+  try {
+    writeFileSync(
+      p.bundle,
+      `require('node:fs').writeFileSync(${JSON.stringify(join(p.root, 'started'))}, 'started\\n');\nprocess.exit(1);\n`,
+    );
+    p.config.bundle_sha256 = createHash('sha256').update(readFileSync(p.bundle)).digest('hex');
+    await assert.rejects(
+      withPlanningSpec(process.execPath, p.root, p.home, p.temporary, p.config, (call) =>
+        call('inspect', {}),
+      ),
+      (error: unknown) => error instanceof Error && !error.message.startsWith('SPEC_'),
+    );
+    assert.equal(readFileSync(join(p.root, 'started'), 'utf8'), 'started\n');
+  } finally {
+    p.dispose();
+  }
+});

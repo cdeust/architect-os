@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { isDeepStrictEqual } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
@@ -71,15 +72,13 @@ function folderDefect(steps: string, name: string, files: ReadonlySet<string> | 
   );
   const present = new Set(entries.map((entry) => entry.name));
   if (!present.has('step.json')) return `${name}: step.json is missing`;
-  let scouts: string[];
+  let step: StepFile;
   try {
-    scouts = parseStepFile(JSON.parse(readFileSync(join(folder, 'step.json'), 'utf8'))).scouts.map(
-      (scout) => `scout.${scout.name}.md`,
-    );
+    step = parseStepFile(JSON.parse(readFileSync(join(folder, 'step.json'), 'utf8')));
   } catch {
     return `${name}: step.json is refused`;
   }
-  const inputs = ['brief.md', 'step.json', ...scouts];
+  const inputs = ['brief.md', 'step.json', ...step.scouts.map(({ name }) => `scout.${name}.md`)];
   const expected = [...inputs, 'record.json'];
   const missing = expected.find((file) => !present.has(file));
   if (missing !== undefined) return `${name}: ${missing} is missing`;
@@ -110,6 +109,8 @@ function folderDefect(steps: string, name: string, files: ReadonlySet<string> | 
       return `${name}: ${file} is not the file the record hashed`;
     }
   }
+  if (!isDeepStrictEqual(record.tickets, step.tickets))
+    return `${name}: record.tickets differs from step.json`;
   return null;
 }
 
@@ -146,19 +147,23 @@ const STEP_FILE: Pick<StepFile, 'build' | 'scouts'> = {
 };
 const INPUTS = {
   'brief.md': 'Build the thing.\n',
-  'step.json': `${JSON.stringify(STEP_FILE, null, 2)}\n`,
   'scout.files.md': 'Where is the thing?\n',
 };
 
 /** A folder `steps/<name>` as the host writes it. */
-function writeValid(steps: string, name: string): void {
+function writeValid(steps: string, name: string, tickets?: StepFile['tickets']): void {
   const folder = join(steps, name);
   mkdirSync(folder, { recursive: true });
+  const inputs = {
+    ...INPUTS,
+    'step.json': `${JSON.stringify({ ...STEP_FILE, tickets }, null, 2)}\n`,
+  };
   const record = buildRecord({
     step: name,
     startedAt: new Date('2026-11-18T09:30:00.000Z'),
     tree: { commit: 'a'.repeat(40), tree: 'b'.repeat(40), clean: true },
-    inputs: INPUTS,
+    inputs,
+    tickets,
     launcher: { 'code.json': '{}' },
     sessions: [
       {
@@ -177,12 +182,21 @@ function writeValid(steps: string, name: string): void {
     outcome: 'passed',
   });
   for (const [file, text] of Object.entries({
-    ...INPUTS,
+    ...inputs,
     'record.json': `${JSON.stringify(record, null, 2)}\n`,
   })) {
     writeFileSync(join(folder, file), text);
   }
 }
+
+Given('a copy of steps\\/ holding a ticketed step folder {string}', function (name: string) {
+  const steps = mkdtempSync(join(tmpdir(), 'aos-ticket-archive-'));
+  this.cleanups.push(() => rmSync(steps, { recursive: true }));
+  this.state['stepsFolder'] = { steps } satisfies Steps;
+  writeValid(steps, name, [
+    { id: 'TICKET-001', story_points: 5, depends_on: [], acceptance_ids: ['AC-001'] },
+  ]);
+});
 
 Given('the committed folder steps\\/ of the repository', function () {
   this.state['stepsFolder'] = {
@@ -328,6 +342,11 @@ const BROKEN: Record<string, (steps: string) => void> = {
     writeFileSync(join(steps, 'demo', 'step.json'), '{"build":1}\n'),
   'a record whose step is another name': (steps) => withRecord(steps, (parsed) => (parsed['step'] = 'other')),
   'a record with an unknown field': (steps) => withRecord(steps, (parsed) => (parsed['extra'] = 1)),
+  'a different recorded estimate': (steps) =>
+    withRecord(steps, (parsed) => (parsed['tickets'][0].story_points = 8)),
+  'tickets removed from the record': (steps) => withRecord(steps, (parsed) => delete parsed['tickets']),
+  'a cycle in the recorded tickets': (steps) =>
+    withRecord(steps, (parsed) => (parsed['tickets'][0].depends_on = ['TICKET-001'])),
   'a record that is not JSON': (steps) => writeFileSync(record(steps), '{nope'),
   'a record without the hash of the brief': (steps) =>
     withRecord(steps, (parsed) => delete parsed['inputs']['brief.md']),

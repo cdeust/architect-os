@@ -137,6 +137,51 @@ function scout(item: Scenario) {
   policy.scout_questions = { history: 'Where is the CI-only stop enforced?\n' };
   json(item.policy, policy);
 }
+
+Given('the saved Define handoff contains ticket estimates', function (this: World) {
+  const item = scenario(this);
+  const define = load(item.define);
+  define.handoff.tickets = [
+    { id: 'TICKET-001', story_points: 5, depends_on: [], acceptance_ids: ['AC-001'] },
+    { id: 'TICKET-002', story_points: 13, depends_on: ['TICKET-001'], acceptance_ids: ['AC-002'] },
+  ];
+  json(item.define, define);
+});
+
+Given('the Plan reads the saved Define and verified proposal CLI output', function (this: World) {
+  const item = scenario(this);
+  const result = this.state['defineResult'] as TextResult & { stdout: string };
+  assert.equal(result.code, 0);
+  writeFileSync(item.define, result.stdout);
+  writeFileSync(item.proposal, this.state['verifiedProposalOutput'] as string);
+});
+
+Then(
+  'the approved Step inputs contain the tickets and the operator build configuration',
+  function (this: World) {
+    const item = scenario(this);
+    assert.equal(item.result?.code, 0);
+    const files = item.preview!.files;
+    const expected = load(item.define).handoff.tickets;
+    assert.ok(files['step.json']!.endsWith('\n'));
+    assert.deepEqual(JSON.parse(files['step.json']!), {
+      build: { model: 'operator-build', effort: 'medium', limitSeconds: 60 },
+      scouts: [],
+      checks: [],
+      reviews: [],
+      parallel: 2,
+      tickets: expected,
+    });
+    assert.deepEqual(JSON.parse(files['brief.md']!.split('```')[1]!.slice(4)).tickets, expected);
+  },
+);
+
+When('the ticket estimate changes after approval', function (this: World) {
+  const item = scenario(this);
+  const define = load(item.define);
+  define.handoff.tickets[0].story_points = 8;
+  json(item.define, define);
+});
 Given('the Plan policy includes a named scout', function (this: World) {
   scout(scenario(this));
 });
@@ -147,6 +192,19 @@ Given('the Plan input is changed to {string}', function (this: World, change: st
   const proposal = load(item.proposal);
   const policy = load(item.policy);
   switch (change) {
+    case 'invalid handoff tickets':
+      define.handoff.tickets = [
+        { id: 'TICKET-001', story_points: 5, depends_on: ['TICKET-001'], acceptance_ids: ['AC-001'] },
+      ];
+      break;
+    case 'proposal tickets':
+      proposal.tickets = [];
+      break;
+    case 'policy tickets':
+      policy.step.tickets = [
+        { id: 'TICKET-001', story_points: 5, depends_on: [], acceptance_ids: ['AC-001'] },
+      ];
+      break;
     case 'invalid utf8': {
       const text = readFileSync(item.proposal, 'utf8');
       const at = text.indexOf('Deliver');
@@ -359,7 +417,8 @@ Then('the materialized files match the preview and its manifest', function (this
     folder,
   });
   assert.equal(preview.manifest.version, 1);
-  assert.equal(preview.manifest.run_id, 'run_delivery_demo');
+  const handoff = load(define).handoff;
+  assert.equal(preview.manifest.run_id, handoff.run_id);
   assert.deepEqual(preview.manifest.source_sha256, {
     define: hash(readFileSync(define, 'utf8')),
     proposal: hash(readFileSync(proposal, 'utf8')),
@@ -372,10 +431,11 @@ Then('the materialized files match the preview and its manifest', function (this
   }
   const brief = preview.files['brief.md']!;
   const payload = {
-    run_id: 'run_delivery_demo',
+    run_id: handoff.run_id,
     ...load(proposal),
-    requirements: load(define).handoff.requirements,
-    acceptance: load(define).handoff.acceptance,
+    requirements: handoff.requirements,
+    acceptance: handoff.acceptance,
+    tickets: handoff.tickets,
   };
   assert.equal(
     brief,

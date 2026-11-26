@@ -1,5 +1,14 @@
 # Orchestration delivery queue
 
+## Spec ticket estimates through Step
+
+- [x] Trace the producer checkpoint and the Define, Plan and Step entrypoints.
+- [x] Demonstrate the missing ticket contract with an offline replay.
+- [x] Validate optional tickets at Define and preserve them through Plan and Step.
+- [x] Record producer obligations and replay evidence, then commit locally.
+
+The designated producer rejects both planning projections. The offline fixture supplies both reads and passes through approval, materialization and Step recording. The [journal](../JOURNAL-SPEC-PLUG.md) records the replay; the gate verdict of the PR head carries the changed-line mutation counts. Both reads start only the bundle pinned by its SHA-256.
+
 ## Native outcome of an orchestration round
 
 - [x] Reproduce a false passing Step on a failed native build and review.

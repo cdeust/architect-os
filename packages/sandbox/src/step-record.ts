@@ -3,6 +3,7 @@
 // noms pris du fichier descriptif, des valeurs de listes fermées et des empreintes.
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { ticketsSchema } from '@architect-os/contracts';
 import { codexModelSchema, type StepFile } from './step-file.js';
 import type { TreeFingerprint } from './tree-fingerprint.js';
 
@@ -59,6 +60,7 @@ export function stepRecordSchema() {
     startedAt: z.iso.datetime(),
     tree: z.strictObject({ commit: commit(), tree: commit(), clean: z.boolean() }),
     inputs: keyed(/^(brief\.md|step\.json|scout\.[a-z][a-z0-9-]{0,31}\.md)$/, digest()),
+    tickets: ticketsSchema().optional(),
     admission_sha256: digest().optional(),
     launcher: keyed(/^(?!.*\.\.)[a-z0-9][a-z0-9./-]*$/, digest()),
     sessions: z.array(
@@ -172,6 +174,7 @@ export interface RecordParts {
   tree: TreeFingerprint;
   /** Le texte lu au départ de chaque fichier d'entrée, par nom de fichier. */
   inputs: Readonly<Record<string, string>>;
+  tickets?: StepFile['tickets'];
   /** Le texte de chaque fichier du lanceur, par chemin relatif à `packages/sandbox`. */
   launcher: Readonly<Record<string, string>>;
   sessions: readonly RecordedSession[];
@@ -191,6 +194,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
     tree: parts.tree,
     ...(parts.admission_sha256 ? { admission_sha256: parts.admission_sha256 } : {}),
     inputs: digests(parts.inputs),
+    ...(parts.tickets ? { tickets: parts.tickets } : {}),
     launcher: digests(parts.launcher),
     sessions: parts.sessions.map((session) => ({
       role: session.role,

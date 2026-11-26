@@ -1,0 +1,33 @@
+# Connect the Spec producer to architect-os
+
+The named producer checkout was at `cda82f896517bf70e8a355cde876b9a65428093a`. Its bundled `mcp-server/index.js` had SHA-256 `d05fe8d1aa17de978107f6d6748b85174ecc9cd83d86c3c3d6e16ab241d22b22`. An offline MCP stdio probe of that bundle listed `full`, `summary`, `grounding`, `validation`, and `action` for `get_pipeline_state`. Both versioned planning reads returned input-validation error `-32602` before checkpoint lookup. The older packaged-producer receipts in [Define](docs/define.md) and [Plan](docs/plan.md) refer to other revisions.
+
+The consumer starts the producer's `mcp-server/index.js` directly with Node, for the Define and proposal reads as for the planning host, and only when the file is not a symbolic link and its SHA-256 equals the digest the operator gives on the command line (`define <run_id> <root> <bundle-sha256>`, `plan:proposal <run_id> <root> <bundle-sha256> <step> <define-file>`); otherwise it refuses with `SPEC_BUNDLE_MISMATCH` before starting anything. It never runs `bin/ensure-deps.mjs`, so the bundle's runtime dependencies must already be provisioned, and the shipped bundle must serve both projections when started that way.
+
+The producer host calls `start_pipeline`, executes each returned action and advances by `submit_action_result`. It can recover the pending action with `get_pipeline_state(format: "action")`. At the export stage the host acknowledges the writes of `01-prd.md` and `07-jira-tickets.md`. The implementation gate also handles `10-verification-report.md` and waits for a human decision. Keep the `run_id` from the pipeline and the persisted checkpoint. The Markdown deliverables are for the operator and the versioned reads come from the checkpoint.
+
+## Producer changes
+
+1. In `packages/meta-prompting/src/jira-prompts.ts`, change `buildJiraPrompt` to request machine-readable tickets with `id`, `title`, `description`, `acceptance_ids`, `story_points`, `depends_on` and the existing source and phase data. In `packages/orchestration/src/handlers/jira-generation.ts`, change the result branch of `handleJiraGeneration` to parse and validate that structured result before marking the section passed. Persist the validated ticket metadata on the checkpoint and render the same tickets to the Markdown section. Keep `handleFileExport` in `packages/orchestration/src/handlers/file-export.ts` rendering the deliverable `07-jira-tickets.md`. Handle invalid generated data as a producer failure. For legacy checkpoints with only Markdown, keep `tickets` absent. A required ticketed handoff should refuse an invalid or failed Jira result rather than publish it as a legacy one.
+2. In `packages/mcp-server/src/pipeline-tools.ts`, extend the `getPipelineState` tool schema and dispatch before the generic state projections. Restore `define_handoff_v1` with a read-only branch using the persisted run. Project only after the specification has been written and passed its deterministic readiness checks. The normal read point is the unanswered `implementation_gate` managed by `handleImplementationGate` in `packages/orchestration/src/handlers/implementation-gate.ts`. To support a read after `PRD only` or another terminal transition, persist the exact passed snapshot before advancing and serve that snapshot. A terminal flag alone is insufficient. Preserve coverage and IDs from the validated requirements and acceptance sections. The exact envelope and key order agree with the consumer's serializer:
+
+   ```json
+   {
+     "handoff": {
+       "version": 1,
+       "run_id": "run_example_a",
+       "requirements": [{ "id": "FR-001", "text": "Retain the evidence." }],
+       "acceptance": [{ "id": "AC-001", "text": "Read the saved evidence.", "requirement_ids": ["FR-001"] }],
+       "tickets": [
+         { "id": "TICKET-001", "story_points": 3, "depends_on": [], "acceptance_ids": ["AC-001"] },
+         { "id": "TICKET-002", "story_points": 8, "depends_on": ["TICKET-001"], "acceptance_ids": ["AC-001"] }
+       ]
+     }
+   }
+   ```
+
+   Ticket IDs run from `TICKET-001` to `TICKET-999`; `TICKET-000` is refused. Each ticket references at least one existing criterion. Both reference arrays use distinct IDs. Every prerequisite names a ticket in this handoff and the graph is acyclic. Points are positive safe integers in the Fibonacci sequence. The current Jira prompt specifies Fibonacci without an upper estimate. Keep titles, descriptions and other Jira prose in the producer's deliverable. A single Plan covers all handoff criteria and retains the complete ticket graph.
+
+3. In the same `getPipelineState` handler, restore `verified_plan_v1` with `plan_step` and a read-only lookup of the producer's verified proposal for that run and Step. Return `{ "verified_plan": { "version": 1, "run_id": ..., "define_sha256": ..., "proposal_sha256": ..., "plan_sha256": ..., "proposal": ... } }`. The proposal has exactly `step`, `objective`, `verification`, `acceptance_ids` in that order, with canonical trimmed strings and all Define criteria exactly once. Hash lowercase SHA-256 over UTF-8 `JSON.stringify(value) + "\n"` for each of the Define envelope, the plain proposal, and the binding object in order `version`, `run_id`, `define_sha256`, `proposal_sha256`. The Define digest includes tickets. Use one deterministic serializer for the Define projection and Plan binding, and verify the digest against the bytes written by the real architect-os reader. Return an MCP error if the passed snapshot or verified proposal is unavailable. Rebuild and ship the bundle selected by `.mcp.json`. Replay the two projections over stdio after restarting the producer, including a legacy checkpoint, invalid ticket graphs, a refused spec and a changed estimate.
+
+The existing independent-review producer and host path is separate. Current architect-os can preview a paired review receipt and requires specimen evidence before it can materialize that path. The plain verified projection described above uses the operator-approved Plan path. Architecture and replay evidence are in [Plan](docs/plan.md) and the [journal entry](JOURNAL-SPEC-PLUG.md).
