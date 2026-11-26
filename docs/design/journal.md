@@ -4525,3 +4525,22 @@ Elles remplacent ce que disaient les sections 16 (le corps du ruleset, avec le c
 **La phrase sur le jeton.** Ce qui a été lu montre qu'un jeton sans « Workflows » se voit refuser la modification d'un fichier de workflow par l'API des contenus. Rien de plus : ni un autre transport, ni un autre jeton. La phrase « un changement de workflow revient alors au propriétaire » est retirée.
 
 **Ouvert, inchangé :** le jeton des sessions (le propriétaire) ; le contrôle des deux verdicts et la lecture du verdict (leur PR) ; la livraison par pull request et le ruleset de `feat/gate-1a` (la PR de `tools/deliver`) ; le signal sur `updated_at` ; `features/` sous le garde d'architecture, 26 fichiers.
+
+## 115. La troisième revue : ce que fait la livraison dépend du commit, et deux passages de la conception parlaient encore d'un contournement (26 novembre 2026)
+
+**La revue.** Une troisième session Codex a relu `6e537cec`. Elle accepte le lecteur du ruleset, l'essai des refus et le retour des aides à leur place ; elle rend « block » sur deux défauts de documentation. Revérifiés, ils sont exacts.
+
+**La livraison.** La section 114 écrivait que la commande s'arrête dans ses préalables et qu'aucune branche ne bouge. C'est vrai du commit relu, faux en général. Lu en entier (`tools/deliver/src/domain/plan.ts`, `prerequisites` dans `tools/deliver/src/application/deliver.ts`), avec `feat/gate-1a` à `721b1861`, en retard sur `main` à `2b5bd3cd` :
+
+| Commit donné à la commande | Ce qu'elle fait |
+| --- | --- |
+| Un commit fait après la tête de `main` | Les deux branches sont en retard et ne sont pas au même commit : arrêt dans les préalables, « les branches distantes diffèrent », avant toute poussée |
+| La tête de `main` elle-même | `main` est à jour, `feat/gate-1a` seule est en retard : les préalables passent. La commande pousse sa branche d'essai, puis, sans `--until ci` et sur contrôles verts, `feat/gate-1a` ; jamais `main` |
+| Tout autre commit | Refus dans les préalables : une branche distante n'en est pas un ancêtre |
+| Une fois les deux branches au même commit, un commit fait après | La dernière phase pousse `feat/gate-1a`, puis `main` : cette poussée, hors d'une pull request, est ce que le ruleset refuse |
+
+Lu dans le code ; la commande n'a pas été jouée. Le README, `docs/infrastructure.md`, `CONTRIBUTING.md`, le changelog et le schéma le disent en ces termes ; le schéma dit moins : la commande est écrite pour pousser la branche de travail puis `main`, et `main` n'accepte que des pull requests.
+
+**La conception.** `docs/design/platform-v3-srt.md` disait encore, dans l'analyse des menaces du courtier, que l'orchestrateur a « aujourd'hui » un droit de contournement, et, dans la section de la CI, que le propriétaire peut contourner le ruleset de `main`. Les deux passages disent maintenant ce qui est : aucun acteur de contournement ; un administrateur peut modifier le ruleset, qui n'accorde aucun contournement tant qu'il reste ce qu'il est. La feuille de route de la brique 1a, qui raconte ce que la brique a posé, reçoit la date du retrait. Le dépôt entier a été cherché une fois (`git grep -n -i -E "bypass|contourn|pousse.*main|push.*main|sans pull request"`, journal exclu) : le commentaire de `gate.yml` sur la livraison, une phrase de `orchestration-fable-5-2.md` et une de `exigences-spec.md` sont corrigés ; le reste est de l'histoire datée, la conception de la commande de livraison, qui reste à retirer par sa PR, ou des emplois sans rapport du mot.
+
+**Deux comptes faux de la section 114 et du guide.** La section 114 dit « deux lignes de plus dans l'essai » : il y en a trois (`gh pr merge --help`, `gh api …/merge --method=PUT`, `gh api …/rulesets -f name=another`). `docs/infrastructure.md` comptait quatre formes de `gh pr merge` refusées : il y en a cinq, dont celle avec `-R`. Les totaux, 29 refusés et 14 exécutés, étaient justes.
