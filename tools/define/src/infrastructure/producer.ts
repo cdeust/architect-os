@@ -81,15 +81,16 @@ export function stageProducer(
 
 /**
  * The Node arguments that run the copy under the permission model (node --help: --permission, --allow-fs-read,
- * --allow-fs-write, --allow-addons). The server reads only its copy and the given directories, writes only the
- * writable ones, may load the native module of its copy, and gets no child process, worker, network or inspector.
+ * --allow-fs-write). The server reads only its copy and the given directories and writes only the writable ones. It
+ * gets no child process, worker, network, inspector, and no native addon: an addon runs outside the model, and a
+ * writable directory would let the server write one and load it. The producer then runs without its sqlite caches.
+ * No writable directory may hold the copy: the caller stages it elsewhere.
  */
 export function producerArguments(staged: StagedProducer, writable: readonly string[]) {
   return [
     '--permission',
     `--allow-fs-read=${staged.root}`,
     ...writable.flatMap((path) => [`--allow-fs-read=${path}`, `--allow-fs-write=${path}`]),
-    '--allow-addons',
     staged.entry,
   ];
 }

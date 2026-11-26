@@ -37,6 +37,7 @@ Feature: a tree the host pins, then runs from a private copy of the bytes it has
     Then the staged tree holds exactly the pinned bytes, files 0400 and directories 0700
     And the umask of the host is restored
     And disposing of the staged tree removes it
+    And disposing of it again is harmless
 
   Scenario: a copy that cannot be completed leaves nothing behind
     When the host stages files whose paths collide

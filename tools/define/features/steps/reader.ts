@@ -216,6 +216,7 @@ appendFileSync(record, JSON.stringify({
   rootWrite: process.permission.has('fs.write', ${JSON.stringify(root)}),
   homeWrite: process.permission.has('fs.write', ${JSON.stringify(homeOf(world))}),
   addon: process.permission.has('addon'),
+  copyWrite: process.permission.has('fs.write', __filename),
 }) + '\\n');
 appendFileSync(record, JSON.stringify({ reread: attempt(() => readFileSync(record, 'utf8').length > 0) }) + '\\n');
 (async () => {
@@ -711,7 +712,8 @@ function assertConfined(world: DefineWorld, root: string, row: unknown): void {
       net: false,
       rootWrite: false,
       homeWrite: false,
-      addon: true,
+      addon: false,
+      copyWrite: false,
     },
   );
 }

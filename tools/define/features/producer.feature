@@ -10,6 +10,9 @@ Feature: Pin and stage the producer the operator installed
     Given a provisioned fixture producer with a command link among its dependencies
     Then the host digest equals the listing computed from the pinned files
 
+  Scenario: A plugin root that does not exist keeps its own error
+    Then staging a plugin root that does not exist fails with "ENOENT", not a producer refusal
+
   Scenario: A stage with another digest copies nothing
     Given a provisioned fixture producer with a command link among its dependencies
     Then staging it with another digest is refused with "SPEC_PRODUCER_MISMATCH" and copies nothing

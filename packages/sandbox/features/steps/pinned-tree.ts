@@ -192,6 +192,11 @@ Then('disposing of the staged tree removes it', function () {
   const state = tree(this);
   state.staged!.dispose();
   assert.equal(existsSync(state.staged!.root), false);
+});
+
+Then('disposing of it again is harmless', function () {
+  const state = tree(this);
+  assert.doesNotThrow(() => state.staged!.dispose());
   state.staged = undefined;
 });
 

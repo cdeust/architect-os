@@ -191,3 +191,14 @@ Then('the command prints the listing digest and exits 0', function (this: Produc
 Then('the command prints nothing and refuses with {string}', function (this: ProducerWorld, message: string) {
   assert.deepEqual(this.state['digestResult'], { code: 2, stdout: '', stderr: `${message}\n` });
 });
+
+Then(
+  'staging a plugin root that does not exist fails with {string}, not a producer refusal',
+  function (code: string) {
+    const missing = join(realpathSync(tmpdir()), 'no-such-plugin-root');
+    assert.throws(
+      () => stageProducer(missing, '0'.repeat(64)),
+      (error: NodeJS.ErrnoException) => error.code === code && !error.message.startsWith('SPEC_'),
+    );
+  },
+);

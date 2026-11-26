@@ -58,26 +58,30 @@ export function readPinnedTree(root: string, rule: PinnedTreeRule): PinnedFile[]
   const skipped = new Set(rule.skip);
   const files: PinnedFile[] = [];
   let total = 0;
+  // A directory, or the bytes of a regular file read through the descriptor that judged it.
+  const entry = (absolute: string): 'directory' | Buffer => {
+    const descriptor = open(absolute);
+    try {
+      const stat = fstatSync(descriptor);
+      if (stat.isDirectory()) return 'directory';
+      if (!stat.isFile()) throw Error('PINNED_TREE_FILE');
+      return readFileSync(descriptor);
+    } finally {
+      closeSync(descriptor);
+    }
+  };
   const walk = (path: string) => {
     if (skipped.has(path)) return;
     if (/[\\\n]/.test(path)) throw Error('PINNED_TREE_PATH');
     const absolute = join(base, path);
-    const descriptor = open(absolute);
-    let directory = false;
-    try {
-      const entry = fstatSync(descriptor);
-      directory = entry.isDirectory();
-      if (!directory) {
-        if (!entry.isFile()) throw Error('PINNED_TREE_FILE');
-        const bytes = readFileSync(descriptor);
-        total += bytes.length;
-        files.push({ path, bytes });
-        if (files.length > rule.maxFiles || total > rule.maxBytes) throw Error('PINNED_TREE_TOO_LARGE');
-      }
-    } finally {
-      closeSync(descriptor);
+    const bytes = entry(absolute);
+    if (bytes === 'directory') {
+      for (const name of readdirSync(absolute)) walk(`${path}/${name}`);
+      return;
     }
-    if (directory) for (const name of readdirSync(absolute)) walk(`${path}/${name}`);
+    total += bytes.length;
+    files.push({ path, bytes });
+    if (files.length > rule.maxFiles || total > rule.maxBytes) throw Error('PINNED_TREE_TOO_LARGE');
   };
   for (const top of rule.include) walk(top);
   const paths = new Set(files.map(({ path }) => path));

@@ -39,6 +39,7 @@ Feature: Repository commands require admission before their payload begins
       | tools/plan/src/cli.ts                |
       | tools/define/src/cli.ts              |
       | tools/define/src/proposal-cli.ts     |
+      | tools/define/src/digest-cli.ts       |
       | tools/test-gate/src/main.ts          |
       | tools/test-gate/src/hosted.ts        |
       | features/scripts/isolation-diagram.ts |

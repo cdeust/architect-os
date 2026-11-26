@@ -73,6 +73,8 @@ async function serve() {
             })(),
             child: process.permission.has('child'),
             net: process.permission.has('net'),
+            addon: process.permission.has('addon'),
+            copyWrite: process.permission.has('fs.write', __filename),
           };
       }
       const text = { type: 'text', text: JSON.stringify(body) };

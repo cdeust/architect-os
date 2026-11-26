@@ -1,3 +1,4 @@
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { SpecPlanningConfig, SpecRoute } from '@architect-os/contracts';
 import { join } from 'node:path';
@@ -66,21 +67,24 @@ export async function withPlanningSpec<T>(
 ): Promise<T> {
   let transport: StdioClientTransport | undefined;
   let staged: ReturnType<typeof stageProducer> | undefined;
+  let scratch: string | undefined;
   const client = new Client({ name: 'architect-os-planning', version: '0.1.0' });
   try {
     return await use(async (name, args) => {
       if (!transport) {
-        staged = stageProducer(root, config.producer_sha256);
+        staged = stageProducer(root, config.producer_sha256, temporary);
+        // The child's own temporary directory, beside the copy: the copy itself stays out of what it may write.
+        scratch = realpathSync(mkdtempSync(join(temporary, 'aos-producer-tmp-')));
         transport = new StdioClientTransport({
           command: node,
-          args: producerArguments(staged, [home, temporary]),
+          args: producerArguments(staged, [home, scratch]),
           cwd: home,
           env: {
             HOME: home,
             USERPROFILE: home,
-            TMPDIR: temporary,
-            TMP: temporary,
-            TEMP: temporary,
+            TMPDIR: scratch,
+            TMP: scratch,
+            TEMP: scratch,
             PRD_GEN_SKILL_CONFIG: staged.skillConfig,
             PRD_GEN_PLAN_DRAFTER: routeEnv(config.drafter.route),
             PRD_GEN_PLAN_REVIEWER: routeEnv(config.reviewer.route),
@@ -112,5 +116,6 @@ export async function withPlanningSpec<T>(
   } finally {
     await transport?.close();
     staged?.dispose();
+    if (scratch) rmSync(scratch, { recursive: true, force: true });
   }
 }

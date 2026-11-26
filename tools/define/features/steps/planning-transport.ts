@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   writeFileSync,
   existsSync,
+  readdirSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -66,11 +67,14 @@ Then('the pinned planning server sees the intended request {string}', async (pan
     await withPlanningSpec(process.execPath, p.root, p.home, p.temporary, p.config, async (call) => {
       for (const sequence of [1, 2]) {
         const args = { sequence };
-        const answer = JSON.parse(await call('inspect', args)) as { file: string };
+        const answer = JSON.parse(await call('inspect', args)) as { file: string; tmp: string[] };
         const staged = dirname(dirname(answer.file));
+        const scratch = answer.tmp[0]!;
         assert.equal(basename(staged).startsWith('aos-producer-'), true);
-        assert.equal(dirname(staged), realpathSync(tmpdir()));
-        copies.push(staged);
+        assert.equal(dirname(staged), p.temporary);
+        assert.equal(basename(scratch).startsWith('aos-producer-tmp-'), true);
+        assert.equal(dirname(scratch), p.temporary);
+        copies.push(staged, scratch);
         assert.deepEqual(answer, {
           client: { name: 'architect-os-planning', version: '0.1.0' },
           method: 'tools/call',
@@ -79,12 +83,14 @@ Then('the pinned planning server sees the intended request {string}', async (pan
           cwd: p.home,
           home: p.home,
           profile: p.home,
-          tmp: [p.temporary, p.temporary, p.temporary],
+          tmp: [scratch, scratch, scratch],
           skill: join(staged, 'packages/skill/skill-config.json'),
           file: join(staged, 'mcp-server/index.js'),
           outside: 'ERR_ACCESS_DENIED',
           child: false,
           net: false,
+          addon: false,
+          copyWrite: false,
           drafter: 'openai/fixture-author',
           reviewer: 'google/fixture-reviewer',
           ...(panel === 'with panel' ? { panel: 'anthropic/fixture-panel' } : {}),
@@ -92,8 +98,8 @@ Then('the pinned planning server sees the intended request {string}', async (pan
       }
     });
     assert.equal(readFileSync(join(p.home, 'transport-closed'), 'utf8'), 'closed\n');
-    assert.equal(copies[0], copies[1]);
-    assert.equal(existsSync(copies[0]!), false);
+    assert.deepEqual(copies.slice(0, 2), copies.slice(2));
+    assert.deepEqual(readdirSync(p.temporary), []);
   } finally {
     p.dispose();
   }
