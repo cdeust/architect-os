@@ -433,6 +433,45 @@ Given('the configuration of the gate repository names a witness program as its c
   this.state['gateWitness'] = witness;
 });
 
+Given('the gate repository replaces the tree of its first parent by the tree of its head', function () {
+  const dir = repository(this).dir;
+  git(dir, [
+    'replace',
+    git(dir, ['rev-parse', 'HEAD^1^{tree}']).trim(),
+    git(dir, ['rev-parse', 'HEAD^{tree}']).trim(),
+  ]);
+});
+
+Given('the gate repository grafts its head with no parent', function () {
+  git(repository(this).dir, ['replace', '--graft', 'HEAD']);
+});
+
+Then('the first parent the gate reads is the parent the head records', function () {
+  const dir = repository(this).dir;
+  const recorded = gitWithOptions(dir, ['--no-replace-objects'], ['rev-parse', 'HEAD^1']).trim();
+  assert.equal(new GitRepository(dir).commits().firstParent, recorded);
+});
+
+// The configuration names an attributes file of the tree that gives every file a filter whose program is the witness.
+Given(
+  'the configuration of the gate repository names an attributes file whose filter is a witness program',
+  function () {
+    const repo = repository(this);
+    const witness = join(mkdtempSync(join(tmpdir(), 'aos-gate-witness-')), 'witness');
+    this.cleanups.push(() => rmSync(dirname(witness), { recursive: true, force: true }));
+    writeFileSync(witness, `#!/bin/sh\n: > '${witness}.ran'\nexec cat\n`);
+    chmodSync(witness, 0o755);
+    writeFileSync(join(dirname(witness), 'attributes'), '* filter=witness\n');
+    const configuration = repo.path('.git/config');
+    writeFileSync(
+      configuration,
+      `${readFileSync(configuration, 'utf8')}[core]\n\tattributesFile = ${join(dirname(witness), 'attributes')}\n` +
+        `[filter "witness"]\n\tclean = ${witness}\n`,
+    );
+    this.state['gateWitness'] = witness;
+  },
+);
+
 When('git is asked for the diff with none of the options of the gate', function () {
   const { firstParent } = new GitRepository(repository(this).dir).commits();
   assert.notEqual(firstParent, null, 'the gate repository must have a first parent');

@@ -1,0 +1,18 @@
+{
+  "options": [
+    "--no-replace-objects",
+    "--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "diff.ignoreSubmodules=all",
+    "-c",
+    "core.attributesFile=/dev/null"
+  ],
+  "environment": {
+    "GIT_ATTR_NOSYSTEM": "1",
+    "GIT_NO_REPLACE_OBJECTS": "1"
+  }
+}

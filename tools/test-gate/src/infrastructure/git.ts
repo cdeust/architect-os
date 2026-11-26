@@ -1,3 +1,4 @@
+import { closedGit } from '@architect-os/sandbox/git-closed';
 import { visibleNestedMarker } from '@architect-os/sandbox/git-worktree';
 import { execFileSync } from 'node:child_process';
 import { decodeExactly } from '../domain/diff.js';
@@ -12,7 +13,7 @@ import { decodeExactly } from '../domain/diff.js';
 function closedEnvironment(): NodeJS.ProcessEnv {
   const names = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
   const given: NodeJS.ProcessEnv = {
-    GIT_ATTR_NOSYSTEM: '1',
+    ...closedGit().environment,
     GIT_CONFIG_GLOBAL: '/dev/null',
     GIT_CONFIG_SYSTEM: '/dev/null',
   };
@@ -20,27 +21,13 @@ function closedEnvironment(): NodeJS.ProcessEnv {
   return given;
 }
 
-/** The tree with no entry (SHA-1): the source of attributes of every git call of the gate. */
-const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-
 /**
- * The options of every git call of the gate, before the subcommand. What a session wrote in the tree decides nothing
- * of what git does for the host (docs/design/orchestration-fable-5-2.md §14, « Un environnement fermé pour git »):
- * no file monitor and no hook, so that git starts no program of its own; the attributes read from the empty tree, so
- * that no `.gitattributes` of the working tree hides a change (`-diff`, `binary`) nor makes git call clean a file whose
- * bytes are not those of the commit (`ident`, `eol`, a filter); no descent into a repository nested in the tree, whose
- * own configuration would name programs (a `filter`) that git would start. The paths of the diff as they are.
+ * The options of every git call of the gate, before the subcommand: the closed options every git of the host is given
+ * (packages/sandbox/git-closed.json: what a session wrote in the tree or its repository decides nothing of what git
+ * does for the host), and the paths of the diff as they are.
  */
 function options(): string[] {
-  return [
-    `--attr-source=${EMPTY_TREE}`,
-    ...[
-      'core.quotePath=false',
-      'core.fsmonitor=false',
-      'core.hooksPath=/dev/null',
-      'diff.ignoreSubmodules=all',
-    ].flatMap((option) => ['-c', option]),
-  ];
+  return [...closedGit().options, '-c', 'core.quotePath=false'];
 }
 
 /** Runs `git` in `cwd` and returns its standard output, through `gitWithOptions` with what the gate always gives: `options()`. */

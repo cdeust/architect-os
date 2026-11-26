@@ -1,9 +1,7 @@
+import { closedGit } from '@architect-os/sandbox/git-closed';
 import { checkoutIsClean, visibleNestedMarker } from '@architect-os/sandbox/git-worktree';
 import type { Repository } from '../domain/ports.js';
 import { closedEnvironment, runToEnd, type HostEnvironment } from './host-process.js';
-
-/** The tree with no entry (SHA-1): the source of attributes of every git call of the delivery. */
-const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
 /**
  * `Repository` over git, in the delivery worktree: admission checks and fixed argv started without a shell,
@@ -86,21 +84,11 @@ export class GitRepository implements Repository {
   private start(args: string[]): { status: number; out: string } {
     const finished = runToEnd(
       this.git,
-      // What a session wrote in the tree decides nothing of what git does for the delivery, which pushes with the
-      // rights of the owner: no file monitor and no hook, the attributes read from the empty tree, and no descent
-      // into a repository nested in the tree, whose own configuration would name programs to start.
-      [
-        `--attr-source=${EMPTY_TREE}`,
-        '-c',
-        'core.fsmonitor=false',
-        '-c',
-        'core.hooksPath=/dev/null',
-        '-c',
-        'diff.ignoreSubmodules=all',
-        ...args,
-      ],
+      // What a session wrote in the tree or its repository decides nothing of what git does for the delivery, which
+      // pushes with the rights of the owner: the closed options and variables of packages/sandbox/git-closed.json.
+      [...closedGit().options, ...args],
       this.worktree,
-      closedEnvironment(this.host, { GIT_TERMINAL_PROMPT: '0' }),
+      closedEnvironment(this.host, { ...closedGit().environment, GIT_TERMINAL_PROMPT: '0' }),
     );
     if (finished === undefined) throw new Error('git could not be run to its end');
     return finished;

@@ -97,6 +97,21 @@ Then(
   },
 );
 
+Given(
+  'the delivery repository replaces the blob of {string} at {string} by its blob at {string}',
+  function (path: string, from: string, to: string) {
+    const { git, work, hashOf } = gitOf(this);
+    const blob = (label: string) => git(work, 'rev-parse', `${hashOf(label)}:${path}`).trim();
+    git(work, 'replace', blob(from), blob(to));
+  },
+);
+
+Given('the git configuration of the host marks {string} as binary', function (pattern: string) {
+  const directory = join(gitOf(this).hostConfiguration, 'git');
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, 'attributes'), `${pattern} binary\n`);
+});
+
 Given('everything in the delivery worktree is committed', function () {
   gitOf(this).commitEverything();
 });

@@ -30,8 +30,35 @@ Then('the text gives process.env to a process launch', function () {
   assert.equal(givesWholeEnvironment(stored<string>(this, 'sourceText')), true);
 });
 
-Then('the closed Git environment in the text sets GIT_ATTR_NOSYSTEM to 1', function () {
-  assert.match(stored<string>(this, 'sourceText'), /\bGIT_ATTR_NOSYSTEM"?\s*:\s*['"]1['"]/);
+/** A TypeScript caller spreads both parts of closedGit(); the guard spreads both parts of the file it loads. */
+function readsClosedGit(text: string): boolean {
+  const typescript = text.includes('...closedGit().options') && text.includes('...closedGit().environment');
+  const python =
+    text.includes('git-closed.json') &&
+    text.includes('*CLOSED["options"]') &&
+    text.includes('**CLOSED["environment"]');
+  return typescript || python;
+}
+
+Then('the text gives its git the closed options and variables of the launcher', function () {
+  assert.equal(readsClosedGit(stored<string>(this, 'sourceText')), true);
+});
+
+Then('the text does not give its git the closed options and variables of the launcher', function () {
+  assert.equal(readsClosedGit(stored<string>(this, 'sourceText')), false);
+});
+
+/** The guard is started by one spawnSync whose environment is the empty object, and by nothing else. */
+function startsGuardEmpty(text: string): boolean {
+  return /spawnSync\('\/usr\/bin\/python3', \['-I', guard, mode\], \{[^}]*?\benv: \{\},/.test(text);
+}
+
+Then('the guard of the checkout is started with an empty environment', function () {
+  assert.equal(startsGuardEmpty(stored<string>(this, 'sourceText')), true);
+});
+
+Then('the guard of the checkout is not started with an empty environment', function () {
+  assert.equal(startsGuardEmpty(stored<string>(this, 'sourceText')), false);
 });
 
 /** The names of `const names = [...]`, the list of the variables of the host that a closed environment takes. */

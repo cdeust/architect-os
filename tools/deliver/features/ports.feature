@@ -214,13 +214,13 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
       Examples:
         | method             | argv                                                           |
-        | head               | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse --verify HEAD^{commit} |
-        | fetch              | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all fetch --quiet --prune --recurse-submodules=no origin |
-        | remoteHead         | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse --verify --quiet refs/remotes/origin/main^{commit} |
-        | isAncestor         | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all merge-base --is-ancestor aaa bbb |
-        | deletedLines       | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all diff --numstat --ignore-submodules=all aaa bbb -- docs/a.md |
-        | push               | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all push --quiet --recurse-submodules=no origin aaa:refs/heads/main |
-        | deleteRemoteBranch | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all push --quiet --recurse-submodules=no origin :refs/heads/main |
+        | head               | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null rev-parse --verify HEAD^{commit} |
+        | fetch              | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null fetch --quiet --prune --recurse-submodules=no origin |
+        | remoteHead         | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null rev-parse --verify --quiet refs/remotes/origin/main^{commit} |
+        | isAncestor         | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null merge-base --is-ancestor aaa bbb |
+        | deletedLines       | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null diff --numstat --ignore-submodules=all aaa bbb -- docs/a.md |
+        | push               | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null push --quiet --recurse-submodules=no origin aaa:refs/heads/main |
+        | deleteRemoteBranch | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null push --quiet --recurse-submodules=no origin :refs/heads/main |
 
     Scenario: a git executable that does not exist throws a fixed message
       Given a delivery repository over the git executable "/nonexistent/git"
@@ -253,6 +253,22 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | place |
         | index |
         | head  |
+
+  Rule: what the repository replaces and what the machine adds are not what the delivery counts
+
+    Background:
+      Given a delivery repository of the git adapter
+      And the delivery repository holds the commit "c1"
+
+    Scenario: a replace object of the blob of a file does not hide its deleted lines
+      Given the delivery repository holds the commit "c2" after "c1" that removed 2 lines from "a.md"
+      And the delivery repository replaces the blob of "a.md" at "c1" by its blob at "c2"
+      Then the delivery repository counts 2 deleted lines in "a.md" from "c1" to "c2"
+
+    Scenario: an attributes file of the machine that marks a file binary does not change the count of its deleted lines
+      Given the delivery repository holds the commit "c2" after "c1" that removed 2 lines from "a.md"
+      And the git configuration of the host marks "*.md" as binary
+      Then the delivery repository counts 2 deleted lines in "a.md" from "c1" to "c2"
 
   Rule: git enters no repository nested in the tree, whatever the tree says of it
 

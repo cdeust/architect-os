@@ -18,30 +18,23 @@ import tempfile
 
 DIRECTORY = os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY
 FILE = os.O_NOFOLLOW | os.O_NONBLOCK
+# What a session wrote in the checkout or its repository decides nothing of what git does here:
+# the closed options and variables every git of the host is given, read from the descriptive
+# file of the launcher beside this script (packages/sandbox/git-closed.json).
+with open(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "packages", "sandbox", "git-closed.json"),
+    "rb",
+) as closed_file:
+    CLOSED = json.load(closed_file)
 GIT_ENV = {
     "PATH": "/usr/bin:/bin",
     "GIT_OPTIONAL_LOCKS": "0",
-    "GIT_ATTR_NOSYSTEM": "1",
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "LC_ALL": "C",
+    **CLOSED["environment"],
 }
-# What a session wrote in the checkout decides nothing of what git does here: attributes are
-# read from the empty tree (no `.gitattributes` makes git call clean a file whose bytes are
-# not the commit's), git starts no monitor and no hook, and it enters no nested repository,
-# whose own configuration would name programs to start.
-EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-GIT = [
-    "/usr/bin/git",
-    "--no-replace-objects",
-    "--attr-source=" + EMPTY_TREE,
-    "-c",
-    "core.fsmonitor=false",
-    "-c",
-    "core.hooksPath=/dev/null",
-    "-c",
-    "diff.ignoreSubmodules=all",
-]
+GIT = ["/usr/bin/git", *CLOSED["options"]]
 PENDING = "pending.json"
 
 

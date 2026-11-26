@@ -30,6 +30,8 @@ export interface GitFixture extends RepositoryFixture {
   commitEverything(): void;
   /** The witness program of the nested repository has run since it was left, or since the last commit of everything. */
   witnessRan(): boolean;
+  /** The XDG_CONFIG_HOME given to the adapter as the host's: where the git of the machine reads its attributes. */
+  hostConfiguration: string;
 }
 
 const lines = (name: string, count: number): string =>
@@ -98,8 +100,10 @@ export function gitFixture(world: DeliverWorld): GitFixture {
     hashes.set(label, git(work, 'rev-parse', 'HEAD').trim());
   };
 
+  const host = hostOf(world);
   return {
-    repository: new GitRepository(work, 'origin', 'git', hostOf(world)),
+    repository: new GitRepository(work, 'origin', 'git', host),
+    hostConfiguration: host.env['XDG_CONFIG_HOME'] as string,
     root,
     work,
     bare,

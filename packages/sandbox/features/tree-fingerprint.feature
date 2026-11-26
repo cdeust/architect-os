@@ -83,12 +83,12 @@ Feature: the fingerprint of the tree of a worktree
     And a throwaway directory
     When I take the fingerprint of the directory
     Then the fake git was called, in this order, with:
-      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse HEAD        | no index  |
-      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all read-tree HEAD        | the index |
-      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all ls-files -s -z        | the index |
-      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all add -A                | the index |
-      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all write-tree            | the index |
-      | --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all rev-parse HEAD^{tree} | no index  |
+      | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null rev-parse HEAD        | no index  |
+      | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null read-tree HEAD        | the index |
+      | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null ls-files -s -z        | the index |
+      | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null add -A                | the index |
+      | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null write-tree            | the index |
+      | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null rev-parse HEAD^{tree} | no index  |
     And the fake git ran in the directory
     And the temporary index was in the temporary directory
     And the temporary directory is empty
@@ -126,6 +126,22 @@ Feature: the fingerprint of the tree of a worktree
       | rev-parse HEAD      | the text "ccccccccccccccccccccccccccccccccccccccc" and the exit code 0 |
       | rev-parse HEAD      | the text "ccccccccccccccccccccccccccccccccccccccccc" and the exit code 0 |
       | rev-parse HEAD      | the text "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC" and the exit code 0 |
+
+  Rule: what the configuration of the repository replaces or adds is not what the fingerprint reads
+
+    Scenario: a replace object of the head commit does not make the clean tree look changed
+      Given a throwaway repository with one commit
+      And the repository replaces its head commit by a commit of another tree
+      When I take the fingerprint of the repository
+      Then the fingerprint is clean
+
+    Scenario: a filter named by an attributes file of the configuration does not run
+      Given a throwaway repository with one commit
+      And the configuration of the repository names an attributes file whose filter is a witness program
+      And the file "a.txt" of the repository holds "changed\n"
+      When I take the fingerprint of the repository
+      Then the fingerprint is not clean
+      And the witness program of the configuration of the repository has not run
 
   Rule: what a session wrote in the tree decides nothing of what git does for the fingerprint
 

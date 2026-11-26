@@ -116,6 +116,35 @@ Given(
   },
 );
 
+Given('the repository replaces its head commit by a commit of another tree', function () {
+  const { directory } = fp(this);
+  const other = git(directory, 'commit-tree', git(directory, 'mktree', '--missing'), '-m', 'other');
+  git(directory, 'replace', git(directory, 'rev-parse', 'HEAD'), other);
+});
+
+// The configuration names an attributes file outside the tree that gives every file a filter whose program is the witness.
+Given(
+  'the configuration of the repository names an attributes file whose filter is a witness program',
+  function () {
+    const witness = join(mkdtempSync(join(ROOT_TMP, 'aos-fp-witness-')), 'witness');
+    this.cleanups.push(() => rmSync(dirname(witness), { recursive: true, force: true }));
+    writeFileSync(witness, `#!/bin/sh\n: > '${witness}.ran'\nexec cat\n`);
+    chmodSync(witness, 0o755);
+    writeFileSync(join(dirname(witness), 'attributes'), '* filter=witness\n');
+    const configuration = join(fp(this).directory, '.git', 'config');
+    writeFileSync(
+      configuration,
+      `${readFileSync(configuration, 'utf8')}[core]\n\tattributesFile = ${join(dirname(witness), 'attributes')}\n` +
+        `[filter "witness"]\n\tclean = ${witness}\n`,
+    );
+    this.state['fingerprintWitness'] = witness;
+  },
+);
+
+Then('the witness program of the configuration of the repository has not run', function () {
+  assert.equal(witnessRan(this), false);
+});
+
 Given('everything in the repository is committed', function () {
   const { directory } = fp(this);
   git(directory, 'add', '-A');
@@ -358,8 +387,8 @@ const names = Object.keys(process.env).filter((name) => name !== '__CF_USER_TEXT
 const configuration = [process.env.GIT_CONFIG_GLOBAL, process.env.GIT_CONFIG_SYSTEM, process.env.GIT_ATTR_NOSYSTEM];
 const line = [args.join(' '), process.env.GIT_INDEX_FILE ?? '', fs.realpathSync(process.cwd()), names, configuration];
 fs.appendFileSync(path.join(__dirname, 'calls.log'), JSON.stringify(line) + '\\n');
-// The seven arguments before the subcommand are the options the fingerprint gives every call.
-if (args.slice(7).join(' ') === read('on')) {
+// The ten arguments before the subcommand are the options the fingerprint gives every call (git-closed.json).
+if (args.slice(10).join(' ') === read('on')) {
   if (read('sleep') !== '') setTimeout(() => {}, Number(read('sleep')) * 1000);
   else {
     process.stdout.write(read('text') + '\\n');
@@ -406,7 +435,7 @@ Given('a fake git with immediate responses before its deliberately silent call',
     [
       '#!/bin/sh',
       'set -eu',
-      'shift 7',
+      'shift 10',
       'IFS= read -r silent < "${0%/*}/on" || [ -n "$silent" ]',
       'printf "%s\\n" "$*" >> "${0%/*}/calls.log"',
       'if [ "$*" = "$silent" ]; then exec /bin/sleep 60; fi',
@@ -477,7 +506,12 @@ Then('the temporary index was in the temporary directory', function () {
   assert.equal(basename(indexes[0] as string), 'index');
 });
 
-const CONFIGURATION = ['GIT_ATTR_NOSYSTEM', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM'];
+const CONFIGURATION = [
+  'GIT_ATTR_NOSYSTEM',
+  'GIT_CONFIG_GLOBAL',
+  'GIT_CONFIG_SYSTEM',
+  'GIT_NO_REPLACE_OBJECTS',
+];
 
 Then(
   'each call of the fake git received exactly the names of the list that the process had, the two configuration variables set to the empty file, system attributes disabled, and GIT_INDEX_FILE where it is due',

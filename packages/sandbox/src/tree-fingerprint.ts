@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { closedGit } from './git-closed.js';
 import { visibleNestedMarker } from './git-worktree.js';
 
 export interface TreeFingerprint {
@@ -31,7 +32,7 @@ export interface TreeFingerprint {
 function closedEnvironment(): NodeJS.ProcessEnv {
   const names = ['PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
   const given: NodeJS.ProcessEnv = {
-    GIT_ATTR_NOSYSTEM: '1',
+    ...closedGit().environment,
     GIT_CONFIG_GLOBAL: '/dev/null',
     GIT_CONFIG_SYSTEM: '/dev/null',
   };
@@ -42,9 +43,6 @@ function closedEnvironment(): NodeJS.ProcessEnv {
 function hash(): RegExp {
   return /^[0-9a-f]{40}$/;
 }
-
-/** L'arbre sans entrée (SHA-1) : la source des attributs de chaque appel git de l'empreinte. */
-const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
 /**
  * Un appel git, borné dans le temps. Il échoue (message fixe, qui nomme l'appel et ne porte rien de ce que git a
@@ -57,12 +55,9 @@ function git(
   timeoutMs: number,
   hashed: boolean,
 ): string {
-  // Ce qu'une session a écrit dans l'arbre ne décide de rien de ce que git fait pour l'hôte : ni moniteur ni hook,
-  // les attributs lus dans l'arbre vide (aucun `.gitattributes` ne fait entrer dans l'empreinte autre chose que les
-  // octets du fichier), aucune descente dans un dépôt imbriqué, dont la configuration nommerait des programmes.
-  const options = ['core.fsmonitor=false', 'core.hooksPath=/dev/null', 'diff.ignoreSubmodules=all'];
-  const before = [`--attr-source=${EMPTY_TREE}`, ...options.flatMap((option) => ['-c', option])];
-  const result = spawnSync('git', [...before, ...call], {
+  // Ce qu'une session a écrit dans l'arbre ou son dépôt ne décide de rien de ce que git fait pour l'hôte : les options
+  // fermées de packages/sandbox/git-closed.json, les mêmes pour chaque git que l'hôte lance.
+  const result = spawnSync('git', [...closedGit().options, ...call], {
     cwd: worktree,
     env,
     encoding: 'utf8',
