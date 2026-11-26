@@ -114,6 +114,13 @@ export function gitFixture(world: DeliverWorld): GitFixture {
     setRemote: (branch, label) =>
       void git(work, 'push', '--quiet', 'origin', `${hashOf(label)}:refs/heads/${branch}`),
     touchWorktree: () => write('a.md', lines('a', 11)),
+    changeIgnoreFileOverIgnoredRepository() {
+      write('.gitignore', 'deps/\n');
+      git(work, 'add', '.gitignore');
+      git(work, 'commit', '--quiet', '--message', 'ignore the dependencies');
+      write('deps/package/.git', 'gitdir: /missing-gitdir\n');
+      write('.gitignore', 'deps/\n*.tmp\n');
+    },
     // What a session can leave in its worktree: a repository whose own configuration names a witness program as the
     // `clean` filter of a file left racy, and as the program of its fetches; and a `.gitmodules` that asks git to look
     // into it whatever the configuration says, and to fetch inside it.

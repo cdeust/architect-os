@@ -518,6 +518,7 @@ Then('the temporary index was in the temporary directory', function () {
 const CONFIGURATION = [
   'GIT_ATTR_NOSYSTEM',
   'GIT_CONFIG_GLOBAL',
+  'GIT_CONFIG_NOSYSTEM',
   'GIT_CONFIG_SYSTEM',
   'GIT_NO_REPLACE_OBJECTS',
 ];

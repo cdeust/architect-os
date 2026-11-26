@@ -45,7 +45,7 @@ Feature: the gate reads its own repository, whatever the environment it was star
     Scenario: the five names of the list that the process set are received, and the fixed Git configuration and attributes settings
       Given the process has the variable "GIT_ATTR_NOSYSTEM" set to "0"
       When the gate asks its git for the head
-      Then every call of the fake git of the gate received exactly the names "GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_ALL, LC_CTYPE, PATH, TMPDIR"
+      Then every call of the fake git of the gate received exactly the names "GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_ALL, LC_CTYPE, PATH, TMPDIR"
       And every call of the fake git of the gate received the two configuration variables set to the empty file and system attributes disabled
 
     Scenario Outline: a name of the list that the process does not set is not received: <name>
@@ -55,15 +55,15 @@ Feature: the gate reads its own repository, whatever the environment it was star
 
       Examples:
         | name     | received                                |
-        | LANG     | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LC_ALL, LC_CTYPE, PATH, TMPDIR |
-        | LC_ALL   | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_CTYPE, PATH, TMPDIR   |
-        | LC_CTYPE | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_ALL, PATH, TMPDIR     |
-        | TMPDIR   | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_ALL, LC_CTYPE, PATH   |
+        | LANG     | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LC_ALL, LC_CTYPE, PATH, TMPDIR |
+        | LC_ALL   | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_CTYPE, PATH, TMPDIR   |
+        | LC_CTYPE | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_ALL, PATH, TMPDIR     |
+        | TMPDIR   | GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_ALL, LC_CTYPE, PATH   |
 
     Scenario Outline: a name outside the list that the process sets is not received: <name>
       Given the process has the variable "<name>" set to "<value>"
       When the gate asks its git for the head
-      Then every call of the fake git of the gate received exactly the names "GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_ALL, LC_CTYPE, PATH, TMPDIR"
+      Then every call of the fake git of the gate received exactly the names "GIT_ATTR_NOSYSTEM, GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM, GIT_CONFIG_SYSTEM, GIT_NO_REPLACE_OBJECTS, LANG, LC_ALL, LC_CTYPE, PATH, TMPDIR"
 
       Examples:
         | name          | value         |

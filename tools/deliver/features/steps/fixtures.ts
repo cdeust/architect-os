@@ -28,6 +28,11 @@ export interface RepositoryFixture {
   touchWorktree(): void;
   /** Leaves in the tree a repository of its own, as a session can. */
   nestRepository(): void;
+  /**
+   * Leaves a repository in a directory that a tracked ignore file ignores, then changes that file without committing
+   * it: its rules are no longer applied, and the marker is found.
+   */
+  changeIgnoreFileOverIgnoredRepository(): void;
   hashOf(label: string): string;
 }
 

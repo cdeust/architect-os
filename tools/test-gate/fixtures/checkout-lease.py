@@ -263,6 +263,24 @@ assert p.returncode==1 and 'GATE_TREE_BUSY' in p.stderr,p
             (tree / "sub/.git").write_text("gitdir: /missing-gitdir\n")
             refused = launch(tree, "/usr/bin/true", check=False)
             assert refused.returncode == 1 and refused.stderr == "gate: GATE_NESTED_REPOSITORY\n", refused
+        elif mode == "host configuration":
+            # The configuration of the account excludes a file. The guard's git does not read it:
+            # the untracked file is seen and the checkout is not clean. The control is a git given
+            # the same account and none of the guard's variables, which lists nothing.
+            account = home / "account"
+            account.mkdir()
+            (account / "excluded").write_text("left-by-a-session.txt\n")
+            (account / ".gitconfig").write_text(f"[core]\n\texcludesFile = {account / 'excluded'}\n")
+            env = {"HOME": str(account), "PATH": os.environ["PATH"]}
+            inspect = [python, "-I", guard, "inspect-clean"]
+            assert sp.run(inspect, cwd=tree, env=env).returncode == 0
+            (tree / "left-by-a-session.txt").write_text("untracked\n")
+            listed = sp.run(
+                ["git", "ls-files", "--others", "--exclude-standard"],
+                cwd=tree, env=env, check=True, stdout=sp.PIPE, text=True,
+            )
+            assert listed.stdout == "", listed
+            assert sp.run(inspect, cwd=tree, env=env).returncode == 1
         elif mode == "staged addition":
             added = tree / "staged.txt"
             added.write_text("staged only\n")

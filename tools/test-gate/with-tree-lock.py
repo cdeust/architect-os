@@ -51,9 +51,21 @@ def private(st, directory=False):
         raise Refusal("GATE_RECOVERY_UNSAFE")
 
 
-def variables(value):
+# The rules of the descriptive file, the same as its TypeScript reader's (packages/sandbox/src/git-closed.ts):
+# each is one pattern over printable ASCII, matched whole.
+OPTION = re.compile(r"--[a-z][!-~]*")
+CONFIGURATION = re.compile(r"[A-Za-z][A-Za-z0-9.]*=[!-~]+")
+VARIABLE = re.compile(r"GIT_[A-Z_]+")
+VALUE = re.compile(r"[!-~]+")
+HOST = re.compile(r"(?!GIT_|HOME\Z|XDG_CONFIG_HOME\Z)[A-Z][A-Z_]*")
+# What this script sets itself. It is started with an empty environment or with the Gate's: it
+# takes no name of the host, and fixes where git is found, its locale and its locks.
+OWN = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "GIT_OPTIONAL_LOCKS": "0"}
+
+
+def are_variables(value):
     return isinstance(value, dict) and all(
-        re.fullmatch(r"GIT_[A-Z_]+", name) and isinstance(text, str) and text
+        VARIABLE.fullmatch(name) and isinstance(text, str) and VALUE.fullmatch(text)
         for name, text in value.items()
     )
 
@@ -63,50 +75,48 @@ def precedes_subcommand(options):
     return all(
         isinstance(option, str)
         and (
-            re.match(r"[A-Za-z][A-Za-z0-9.]*=.", option)
+            CONFIGURATION.fullmatch(option)
             if at and options[at - 1] == "-c"
-            else at + 1 < len(options) if option == "-c" else re.match(r"--[a-z]", option)
+            else at + 1 < len(options) if option == "-c" else OPTION.fullmatch(option)
         )
         for at, option in enumerate(options)
     )
 
 
+def not_json(constant):
+    raise ValueError(constant)
+
+
 @functools.cache
 def closed_git():
-    """The argv and the whole environment of every git call here, from the descriptive file,
-    under the rules of its TypeScript reader (`ClosedGitSchema`). A refused file starts no git."""
+    """The argv and the whole environment of every git call here, from the descriptive file. A
+    refused file starts no git, whatever the verb: a checkout is then recovered by the launcher of
+    a sound tree, not by this copy."""
     try:
         with open(CLOSED_GIT, "rb") as file:
-            closed = json.load(file)
-    except (OSError, ValueError):
+            # UTF-8 alone, and JSON alone: no NaN nor Infinity, which Python would read.
+            closed = json.loads(file.read().decode("utf-8"), parse_constant=not_json)
+    except (OSError, ValueError, RecursionError):
         raise Refusal("GATE_CLOSED_GIT_REFUSED")
     if not isinstance(closed, dict) or set(closed) != {
         "options", "environment", "machineIndependent", "host"
     }:
         raise Refusal("GATE_CLOSED_GIT_REFUSED")
     options, host = closed["options"], closed["host"]
+    # `host` is checked though this script takes no name of the host: one file, one set of rules.
     if not (
         isinstance(options, list) and options and precedes_subcommand(options)
-        and variables(closed["environment"]) and variables(closed["machineIndependent"])
+        and are_variables(closed["environment"]) and are_variables(closed["machineIndependent"])
         and isinstance(host, list) and host
-        and all(
-            isinstance(name, str)
-            and re.fullmatch(r"(?!GIT_|HOME\Z|XDG_CONFIG_HOME\Z)[A-Z][A-Z_]*", name)
-            for name in host
-        )
+        and all(isinstance(name, str) and HOST.fullmatch(name) for name in host)
         and len(set(host)) == len(host)
     ):
         raise Refusal("GATE_CLOSED_GIT_REFUSED")
-    # This script is started with an empty environment or with the Gate's: it takes no name of
-    # the host, fixes where git is found and its locale, and reads no configuration of the machine.
-    environment = {
-        "PATH": "/usr/bin:/bin",
-        "LC_ALL": "C",
-        "GIT_OPTIONAL_LOCKS": "0",
-        **closed["machineIndependent"],
-        **closed["environment"],
-    }
-    return ["/usr/bin/git", *options], environment
+    given = {**closed["machineIndependent"], **closed["environment"]}
+    # A variable this script sets is its own to decide: a file that names it too is refused.
+    if any(name in given for name in OWN):
+        raise Refusal("GATE_CLOSED_GIT_REFUSED")
+    return ["/usr/bin/git", *options], {**given, **OWN}
 
 
 def git(*args, input=None):
@@ -620,7 +630,7 @@ def main(args):
 if __name__ == "__main__":
     try:
         main(sys.argv[1:])
-    except (Refusal, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+    except (Refusal, OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError) as error:
         print(
             "gate:",
             str(error) if isinstance(error, Refusal) else "GATE_RECOVERY_UNAVAILABLE",

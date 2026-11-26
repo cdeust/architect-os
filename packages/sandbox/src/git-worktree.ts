@@ -47,10 +47,14 @@ export function visibleNestedMarker(
   timeout?: number,
 ): NestedMarker | undefined {
   // The guard prints the marker and, after a NUL, the changed ignore file that ignored its directory.
-  const [path, changedIgnoreFile] = inspect(root, 'inspect-markers', [0], committed, timeout).stdout.split(
-    '\0',
-  );
-  if (path === '' || path === undefined) return undefined;
+  const [path = '', changedIgnoreFile] = inspect(
+    root,
+    'inspect-markers',
+    [0],
+    committed,
+    timeout,
+  ).stdout.split('\0');
+  if (path === '') return undefined;
   return changedIgnoreFile === undefined ? { path } : { path, changedIgnoreFile };
 }
 

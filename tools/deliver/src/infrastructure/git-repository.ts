@@ -1,11 +1,12 @@
 import { closedGitOptions, hostConfiguredGitEnvironment } from '@architect-os/sandbox/git-closed';
 import { checkoutIsClean, visibleNestedMarker } from '@architect-os/sandbox/git-worktree';
 import type { Repository } from '../domain/ports.js';
-import { runToEnd, type HostEnvironment } from './host-process.js';
+import { closedEnvironment, runToEnd, type HostEnvironment } from './host-process.js';
 
 /**
  * `Repository` over git, in the delivery worktree: admission checks and fixed argv started without a shell,
- * with a closed environment: the variables of the descriptive file that the host sets, and `GIT_TERMINAL_PROMPT=0`. Nothing git prints is returned or shown: a method
+ * with a closed environment: the variables of the descriptive file that the host sets, those of
+ * packages/sandbox/git-closed.json, and `GIT_TERMINAL_PROMPT=0`. Nothing git prints is returned or shown: a method
  * gives the fact its port names, and a failure the port does not name throws a fixed message with the exit code.
  */
 export class GitRepository implements Repository {
@@ -88,10 +89,10 @@ export class GitRepository implements Repository {
     const finished = runToEnd(
       this.git,
       // The delivery pushes with the rights of the owner: what precedes its subcommands and its whole environment
-      // are those every git of the host is given (packages/sandbox/src/git-closed.ts), with the names of deliver.json.
+      // come from packages/sandbox/src/git-closed.ts, with the variables it took by the names of deliver.json.
       [...closedGitOptions(), ...args],
       this.worktree,
-      hostConfiguredGitEnvironment(this.host, { GIT_TERMINAL_PROMPT: '0' }),
+      hostConfiguredGitEnvironment(closedEnvironment(this.host, {}), { GIT_TERMINAL_PROMPT: '0' }),
     );
     if (finished === undefined) throw new Error('git could not be run to its end');
     return finished;

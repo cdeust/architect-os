@@ -6,9 +6,8 @@ import type { JudgedDestination } from '../domain/verdict.js';
 import { decodeExactly } from '../domain/diff.js';
 
 /**
- * What precedes the subcommand of every git call of the gate, and its whole environment: those every git of the host
- * is given (packages/sandbox/src/git-closed.ts), for a git that reads no configuration of the machine, so that the
- * verdict does not depend on it; and the one value the gate adds for itself, the paths of the diff as they are.
+ * What precedes the subcommand of every git call of the gate: what the git of the host is given
+ * (packages/sandbox/src/git-closed.ts), and the one value the gate adds for itself, the paths of the diff as they are.
  */
 function options(): string[] {
   return closedGitOptions(['core.quotePath=false']);
@@ -20,10 +19,13 @@ export function git(cwd: string, args: readonly string[]): string {
 }
 
 /**
- * `git` with the options given before the subcommand. The only process launch of tools/test-gate: named exception of
- * the rule child-process-only-in-sandbox in .dependency-cruiser.cjs. The gate has no network code and no token.
- * The gate always gives `options()`, through `git`; the scenarios give none, to show that the options are what keeps
- * the program of the configuration from running.
+ * `git` with the options given before the subcommand, and the environment of a git that reads no configuration of the
+ * machine, so that the verdict does not depend on it. With `gitList` below, the launches of git of tools/test-gate:
+ * this file is a named exception of the rule child-process-only-in-sandbox in .dependency-cruiser.cjs. The gate has no
+ * network code and no token. Production gives `options()`, through `git` and `gitList`, and nothing else. The function
+ * is exported for the scenarios alone, which the same rule keeps from starting a process themselves: they give other
+ * options, or none, to build what a session would leave and to show that the options are what keeps the program of a
+ * configuration from running.
  */
 export function gitWithOptions(cwd: string, before: readonly string[], args: readonly string[]): string {
   return execFileSync('git', [...before, ...args], {

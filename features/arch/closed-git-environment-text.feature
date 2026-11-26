@@ -33,10 +33,10 @@ Feature: no production file that starts git gives process.env to a launch (docs/
 
       Examples:
         | file                                               | closed                                   | open                                     |
-        | packages/sandbox/src/git-closed.ts                 | ...own,                                  | ...process.env,                          |
+        | packages/sandbox/src/git-closed.ts                 | { ...given, ...own }                     | { ...process.env, ...own }               |
         | packages/sandbox/src/tree-fingerprint.ts           | env: environment,                        | env: { ...process.env, ...environment }, |
         | tools/test-gate/src/infrastructure/git.ts          | env: machineIndependentGitEnvironment(), | env: process.env,                        |
-        | tools/deliver/src/infrastructure/git-repository.ts | hostConfiguredGitEnvironment(this.host,  | Object.assign({}, process.env,           |
+        | tools/deliver/src/infrastructure/git-repository.ts | closedEnvironment(this.host, {})         | Object.assign({}, process.env)           |
         | tools/deliver/src/infrastructure/host-process.ts   | env: environment,                        | env: { ...process.env, ...environment }, |
         | packages/sandbox/src/git-worktree.ts               | env: {},                                 | env: process.env,                        |
 

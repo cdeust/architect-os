@@ -242,6 +242,22 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       Given the nested delivery marker points to a missing gitdir
       Then the delivery repository holds a nested repository
 
+    Scenario Outline: a tree whose only nested marker lies in a directory that a changed tracked ignore file ignores is left to the question of cleanliness
+      The port says it (src/domain/ports.ts, `holdsNestedRepository`): what the operator has to repair is the changed
+      file, so the tree is not clean, and it holds no nested repository for this method.
+
+      Given a delivery repository of the <adapter> adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository is at the commit "c1"
+      When a tracked ignore file of the delivery worktree changes over an ignored directory that holds a repository
+      Then the delivery repository holds no nested repository
+      And the delivery repository is not clean
+
+      Examples:
+        | adapter   |
+        | in-memory |
+        | git       |
+
     Scenario: a repository in a directory that the recorded ignore file ignores is not looked for, and one found only because that file changed makes the tree not clean
       A tracked ignore file that is no longer the recorded one prunes nothing (a session can add a rule to it to hide a
       repository). The marker then found is not reported as a nested repository: the tree is refused as not clean, which
