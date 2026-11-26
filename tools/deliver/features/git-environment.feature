@@ -10,7 +10,7 @@ Feature: what the git of the delivery receives, and the programs it does not sta
       Given the host of the delivery repository sets "PATH=/bin,HOME=/home/x,LANG=C,GH_TOKEN=t,GITHUB_TOKEN=u,NODE_OPTIONS=--no-warnings,GIT_DIR=/nowhere,GIT_EXEC_PATH=/nowhere"
       And a delivery repository over a git that records the names of its environment
       When I call "<method>" on the delivery repository
-      Then every call of the git of the delivery received exactly the names "GH_TOKEN, GITHUB_TOKEN, GIT_TERMINAL_PROMPT, HOME, LANG, PATH"
+      Then every call of the git of the delivery received exactly the names "GH_TOKEN, GITHUB_TOKEN, GIT_ATTR_NOSYSTEM, GIT_NO_REPLACE_OBJECTS, GIT_TERMINAL_PROMPT, HOME, LANG, PATH"
 
       Examples:
         | method             |
@@ -26,13 +26,13 @@ Feature: what the git of the delivery receives, and the programs it does not sta
       Given the host of the delivery repository sets "GH_TOKEN=t"
       And a delivery repository over a git that records the names of its environment
       When I call "head" on the delivery repository
-      Then every call of the git of the delivery received exactly the names "GH_TOKEN, GIT_TERMINAL_PROMPT"
+      Then every call of the git of the delivery received exactly the names "GH_TOKEN, GIT_ATTR_NOSYSTEM, GIT_NO_REPLACE_OBJECTS, GIT_TERMINAL_PROMPT"
 
     Scenario: a name of the list that the host sets empty is received, empty
       Given the host of the delivery repository sets "GH_TOKEN="
       And a delivery repository over a git that records the names of its environment
       When I call "head" on the delivery repository
-      Then every call of the git of the delivery received exactly the names "GH_TOKEN, GIT_TERMINAL_PROMPT"
+      Then every call of the git of the delivery received exactly the names "GH_TOKEN, GIT_ATTR_NOSYSTEM, GIT_NO_REPLACE_OBJECTS, GIT_TERMINAL_PROMPT"
 
   Rule: a hook of the repository is not run by the delivery
 

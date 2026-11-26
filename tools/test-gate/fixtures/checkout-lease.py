@@ -323,6 +323,7 @@ assert p.returncode==1 and 'GATE_RECEIPT_TREE_CHANGED' in p.stderr,p
                 ".nvmrc",
                 "tools/runtime/node-locations",
                 "tools/test-gate/with-tree-lock.py",
+                "packages/sandbox/git-closed.json",
                 "packages/sandbox/src/runtime-context.ts",
             )
             for name in names:
