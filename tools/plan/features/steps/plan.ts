@@ -766,6 +766,9 @@ Given('the routed Plan input is changed to {string}', function (this: World, cha
     case 'only OpenAI admitted':
       policy.step.routing.providers = ['openai'];
       break;
+    case 'the same provider admitted twice':
+      policy.step.routing.providers = ['anthropic', 'anthropic'];
+      break;
     case 'Google admitted':
       policy.step.routing.providers = ['anthropic', 'google'];
       break;

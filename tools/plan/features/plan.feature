@@ -274,5 +274,6 @@ Feature: Prepare and explicitly approve one step from Define v1
       | a designated ticket no producer numbers | PLAN_INPUT_INVALID |
       | only OpenAI admitted           | ROUTING_NO_ADMITTED_BUILDER |
       | Google admitted                | PLAN_INPUT_INVALID          |
+      | the same provider admitted twice | PLAN_INPUT_INVALID        |
       | a scout without its question   | PLAN_INPUT_INVALID          |
       | a broken routing table         | PLAN_INPUT_INVALID          |

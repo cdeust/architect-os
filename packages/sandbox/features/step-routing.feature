@@ -107,6 +107,8 @@ Feature: a routed Step plays its ladder, one band at a time, on objective signal
       And the published record field "sessions.1.pass" is 2
       And the published record field "outcome" is "waiting"
       And the published record is accepted by the schema
+      And a copy of the published record whose passes are "out of order" is refused by the schema with "ROUTING_PASS_ORDER"
+      And a copy of the published record whose passes are "numbered from 2" is refused by the schema with "ROUTING_PASS_ORDER"
 
     Scenario: a build stopped by its limit promotes to the next band
       Given a step folder

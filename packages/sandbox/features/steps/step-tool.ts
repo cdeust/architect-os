@@ -1590,3 +1590,22 @@ Then('the retained verdict {string} is invalid because {string}', function (file
   const verdict = JSON.parse(readFileSync(join(step(this).outputs.retained, file), 'utf8'));
   assert.deepEqual(verdict, { invalid: why });
 });
+
+Then(
+  'a copy of the published record whose passes are {string} is refused by the schema with {string}',
+  function (defect: string, reason: string) {
+    const published = step(this).published.get('demo');
+    assert.ok(published);
+    const record = JSON.parse(published['record.json']!);
+    const passes = record.routing.passes as { pass: number }[];
+    if (defect === 'out of order') [passes[0]!.pass, passes[1]!.pass] = [passes[1]!.pass, passes[0]!.pass];
+    else if (defect === 'numbered from 2') for (const entry of passes) entry.pass += 1;
+    else throw new Error(`unknown defect ${defect}`);
+    const parsed = stepRecordSchema().safeParse(record);
+    assert.equal(parsed.success, false);
+    assert.ok(
+      parsed.error!.issues.some((issue) => issue.message === reason),
+      JSON.stringify(parsed.error!.issues),
+    );
+  },
+);
