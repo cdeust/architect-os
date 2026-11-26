@@ -46,7 +46,10 @@ async function serve() {
         }
         case 'submit_action_result':
           submission = args.result;
-          appendFileSync('submitted.ndjson', JSON.stringify(submission) + '\n');
+          appendFileSync(
+            join(process.env.HOME, '.prd-gen', 'submitted.ndjson'),
+            JSON.stringify(submission) + '\n',
+          );
           body = { run_id };
           break;
         default:
@@ -75,6 +78,7 @@ async function serve() {
             net: process.permission.has('net'),
             addon: process.permission.has('addon'),
             copyWrite: process.permission.has('fs.write', __filename),
+            hostWrite: process.permission.has('fs.write', join(process.env.HOME, '.host.json')),
           };
       }
       const text = { type: 'text', text: JSON.stringify(body) };
@@ -86,7 +90,7 @@ async function serve() {
     }
     process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
   }
-  appendFileSync('transport-closed', 'closed\n');
+  appendFileSync(join(process.env.HOME, '.prd-gen', 'transport-closed'), 'closed\n');
 }
 
 serve().catch(() => {

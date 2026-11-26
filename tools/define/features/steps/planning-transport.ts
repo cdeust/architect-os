@@ -91,13 +91,14 @@ Then('the pinned planning server sees the intended request {string}', async (pan
           net: false,
           addon: false,
           copyWrite: false,
+          hostWrite: false,
           drafter: 'openai/fixture-author',
           reviewer: 'google/fixture-reviewer',
           ...(panel === 'with panel' ? { panel: 'anthropic/fixture-panel' } : {}),
         });
       }
     });
-    assert.equal(readFileSync(join(p.home, 'transport-closed'), 'utf8'), 'closed\n');
+    assert.equal(readFileSync(join(p.home, '.prd-gen', 'transport-closed'), 'utf8'), 'closed\n');
     assert.deepEqual(copies.slice(0, 2), copies.slice(2));
     assert.deepEqual(readdirSync(p.temporary), []);
   } finally {
@@ -112,7 +113,7 @@ Then('the planning transport refuses the {string} response', async (reply: strin
       withPlanningSpec(process.execPath, p.root, p.home, p.temporary, p.config, (call) => call(reply, {})),
       { message: 'SPEC_TOOL_REFUSED: ' + reply },
     );
-    assert.equal(readFileSync(join(p.home, 'transport-closed'), 'utf8'), 'closed\n');
+    assert.equal(readFileSync(join(p.home, '.prd-gen', 'transport-closed'), 'utf8'), 'closed\n');
   } finally {
     p.dispose();
   }
@@ -188,7 +189,7 @@ Then(
         });
       });
       assert.deepEqual(calls, ['authorize', 'invoke']);
-      const result = JSON.parse(readFileSync(join(directory, 'submitted.ndjson'), 'utf8'));
+      const result = JSON.parse(readFileSync(join(directory, '.prd-gen', 'submitted.ndjson'), 'utf8'));
       assert.deepEqual(result.responses, [
         { invocation_id: 'first', raw_text: 'checked', model_receipt: p.config.drafter.route },
       ]);
@@ -206,7 +207,7 @@ Then('the planning transport starts a pinned bundle that exits and reports no to
   const p = plugin();
   try {
     const files = producerFiles(
-      `require('node:fs').writeFileSync(${JSON.stringify(join(p.home, 'started'))}, 'started\\n');\nprocess.exit(1);\n`,
+      `require('node:fs').writeFileSync(${JSON.stringify(join(p.home, '.prd-gen', 'started'))}, 'started\\n');\nprocess.exit(1);\n`,
     );
     writeProducer(p.root, files);
     p.config.producer_sha256 = expectedDigest(files);
@@ -216,7 +217,7 @@ Then('the planning transport starts a pinned bundle that exits and reports no to
       ),
       { message: 'SPEC_TRANSPORT_FAILED' },
     );
-    assert.equal(readFileSync(join(p.home, 'started'), 'utf8'), 'started\n');
+    assert.equal(readFileSync(join(p.home, '.prd-gen', 'started'), 'utf8'), 'started\n');
   } finally {
     p.dispose();
   }

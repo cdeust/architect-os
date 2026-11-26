@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { SpecPlanningConfig, SpecRoute } from '@architect-os/contracts';
 import { join } from 'node:path';
@@ -7,6 +7,17 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { DefineSource } from '../domain/source.js';
 import { producerArguments, stageProducer } from './producer.js';
+
+/**
+ * The producer's data directory, `~/.prd-gen` of the given home, the one place of that home it may write: the host
+ * creates it (0700), since the permission model lets the server create nothing above it. The planning journal keeps
+ * the host's own state and artifacts beside it, out of the server's reach.
+ */
+function dataDirectory(home: string): string {
+  const path = join(home, '.prd-gen');
+  mkdirSync(path, { recursive: true, mode: 0o700 });
+  return path;
+}
 
 /**
  * Only read projections from the operator's pinned producer (`producer.ts`): a private copy of the pinned files,
@@ -26,7 +37,7 @@ export async function readProjection(
   try {
     const transport = new StdioClientTransport({
       command: node,
-      args: producerArguments(staged, [join(home, '.prd-gen')]),
+      args: producerArguments(staged, [dataDirectory(home)]),
       env: { HOME: home, PRD_GEN_SKILL_CONFIG: staged.skillConfig },
       stderr: 'ignore',
     });
@@ -77,7 +88,7 @@ export async function withPlanningSpec<T>(
         scratch = realpathSync(mkdtempSync(join(temporary, 'aos-producer-tmp-')));
         transport = new StdioClientTransport({
           command: node,
-          args: producerArguments(staged, [home, scratch]),
+          args: producerArguments(staged, [dataDirectory(home), scratch]),
           cwd: home,
           env: {
             HOME: home,

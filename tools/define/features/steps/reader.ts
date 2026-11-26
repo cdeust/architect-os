@@ -10,6 +10,7 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -165,8 +166,8 @@ function changed(which: string): Reply {
 
 function prepare(world: DefineWorld): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'define-host-')));
+  // No data directory yet: the host creates it before it starts the server.
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'define-home-')));
-  mkdirSync(join(home, '.prd-gen'));
   world.state['defineHostRoot'] = root;
   world.state['defineHome'] = home;
   return root;
@@ -414,11 +415,17 @@ async function invoke(
 }
 
 When('the host invokes the Define reader over stdio', async function (this: DefineWorld) {
-  await invoke(
-    this,
-    [runId, this.state['defineHostRoot'] as string, pinned(this) ?? 'b'.repeat(64)],
-    source(this),
-  );
+  // A permissive umask: the modes the host writes must not depend on the one it inherits.
+  const previous = process.umask(0o022);
+  try {
+    await invoke(
+      this,
+      [runId, this.state['defineHostRoot'] as string, pinned(this) ?? 'b'.repeat(64)],
+      source(this),
+    );
+  } finally {
+    process.umask(previous);
+  }
 });
 
 When('the host reads the Define reply', async function (this: DefineWorld) {
@@ -700,6 +707,7 @@ function assertConfined(world: DefineWorld, root: string, row: unknown): void {
   assert.equal(dirname(copy), realpathSync(tmpdir()));
   assert.equal(file.startsWith(root), false);
   assert.equal(existsSync(copy), false);
+  assert.equal(statSync(join(homeOf(world), '.prd-gen')).mode & 0o777, 0o700);
   assert.deepEqual(
     { ...seen, file: undefined },
     {
