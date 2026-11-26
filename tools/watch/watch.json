@@ -98,9 +98,12 @@
       "mechanisms": [
         "packages/sandbox/profiles/builder.json",
         "packages/sandbox/profiles/reviewer.json",
-        "packages/sandbox/profiles/worker.json"
+        "packages/sandbox/profiles/worker.json",
+        ".github/workflows/claude.yml",
+        ".github/workflows/claude-review.yml",
+        ".github/workflows/claude-security-review.yml"
       ],
-      "relies": "The variables a profile sets: `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_TMPDIR`, `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, `DISABLE_AUTOUPDATER`, `DISABLE_TELEMETRY`."
+      "relies": "The variables a profile sets: `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_TMPDIR`, `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, `DISABLE_AUTOUPDATER`, `DISABLE_TELEMETRY`. For the three Claude workflows: what `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` removes, and that on Linux it runs subprocesses in a PID namespace, for which each job proves bubblewrap before the action."
     },
     {
       "id": "authentication",

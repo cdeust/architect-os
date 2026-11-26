@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- The three workflows that run `anthropics/claude-code-action` prove bubblewrap before it: with `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`, Claude Code does not start on Linux without it, and the action installs it only for `allowed_non_write_users`. The security review failed on `ubuntu-24.04` (run 45771449067), while the two others passed on what `ubuntu-latest` gave that day. Each job now installs `bubblewrap` and `socat`, lifts the restriction of user namespaces, creates a namespace, and runs on `ubuntu-24.04`; no job of any workflow names a `-latest` image (`docs/infrastructure.md`, "Bubblewrap before the scrub").
+
 ### Changed
 
 - `claude-review.yml` and `scripts/ci_review_budget.py` are now Cortex's files, byte for byte (Cortex #980): the review workflow authorizes the pinned action's fetch only on a private repository and names no reviewer count, and the budget script counts only reviews run under the review contract (ADR-1129) and refuses a `GITHUB_OUTPUT` outside `RUNNER_TEMP`. `test_ci_review_budget.py` is Cortex's test.

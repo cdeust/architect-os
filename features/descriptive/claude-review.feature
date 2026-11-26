@@ -105,6 +105,39 @@ Feature: The Claude review
       | ~/.gitconfig               |
       | //home/runner/work/_temp/  |
 
+  Scenario: every workflow that runs the action proves bubblewrap before it starts
+    With the scrub, Claude Code refuses to start on Linux without bubblewrap (run 45771449067 of the security review),
+    and the action installs it only for allowed_non_write_users, in a step that may fail. Each job installs what that
+    step installs, lifts the restriction of user namespaces of Ubuntu 24.04, and creates a namespace, before the action,
+    on the image the proof is written for (docs/infrastructure.md, "Bubblewrap before the scrub").
+    Then every workflow that runs the action proves bubblewrap before it, on a named image:
+      | claude.yml                 |
+      | claude-review.yml          |
+      | claude-security-review.yml |
+
+  Scenario Outline: "<file>" <kind> is refused
+    Then "<file>" <kind> is rejected by the rule of bubblewrap
+
+    Examples:
+      | file                       | kind                                                            |
+      | claude.yml                 | without the proof of bubblewrap                                 |
+      | claude-review.yml          | without the proof of bubblewrap                                 |
+      | claude-security-review.yml | without the proof of bubblewrap                                 |
+      | claude.yml                 | on a floating runner label                                      |
+      | claude-review.yml          | on a floating runner label                                      |
+      | claude-security-review.yml | on a floating runner label                                      |
+      | claude.yml                 | with the proof of bubblewrap after the action                   |
+      | claude-review.yml          | with the proof of bubblewrap after the action                   |
+      | claude-security-review.yml | with the proof of bubblewrap after the action                   |
+      | claude-review.yml          | with a proof of bubblewrap that may fail                        |
+      | claude-security-review.yml | with a proof of bubblewrap on another condition than the action |
+      | claude.yml                 | that installs bubblewrap without proving it                     |
+      | claude-review.yml          | that reads the version of bubblewrap and creates no namespace   |
+      | claude-security-review.yml | that reads the version of bubblewrap and creates no namespace   |
+      | claude-security-review.yml | that leaves user namespaces restricted                          |
+      | claude.yml                 | whose proof of bubblewrap goes on after a failure               |
+      | claude-review.yml          | on an image the proof of bubblewrap is not written for          |
+
   Scenario: the job of the @claude bot reads with its own token
     Its token is in the environment of Claude Code; the bot writes with the token of the Claude app.
     Then the job of the @claude bot reads with its own token and writes with the token of the Claude app

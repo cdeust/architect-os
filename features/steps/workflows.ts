@@ -96,6 +96,41 @@ function assertCheckoutWithoutCredentials(text: string): void {
   }
 }
 
+/**
+ * The runner images a job may name: each with its version. A label such as `ubuntu-latest` moves to another image
+ * without a commit of this repository (docs.github.com, "GitHub-hosted runners": the `-latest` labels), and what a
+ * job finds installed moves with it: on 26 November 2026 it gave Ubuntu 26.04 with bubblewrap to two workflows while
+ * the third, on `ubuntu-24.04`, had none (docs/infrastructure.md, "Bubblewrap before the scrub"). A new image is a
+ * line here.
+ */
+const RUNNER_IMAGES = ['ubuntu-24.04', 'macos-26'];
+const MATRIX_KEY = /^\$\{\{\s*matrix\.([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}$/;
+
+/** The labels a job can run on: its `runs-on`, or the list of the one matrix key it names. */
+function runnerLabels(job: Workflow['jobs'][string]): unknown[] {
+  const label = job['runs-on'];
+  const key = typeof label === 'string' ? MATRIX_KEY.exec(label)?.[1] : undefined;
+  if (key === undefined) return [label];
+  const matrix = (job.strategy as { matrix?: Record<string, unknown> } | undefined)?.matrix ?? {};
+  assert.ok(!('include' in matrix), 'a matrix `include` can add a label the list does not show');
+  const labels = matrix[key];
+  assert.ok(Array.isArray(labels) && labels.length > 0, `matrix.${key} is not a list of labels`);
+  return labels;
+}
+
+function assertNamedImages(text: string): void {
+  for (const [id, job] of Object.entries(workflow(text).jobs)) {
+    // A job that calls a reusable workflow has no runner of its own: the called file is judged as a workflow.
+    if (job.uses !== undefined) continue;
+    for (const label of runnerLabels(job)) {
+      assert.ok(
+        typeof label === 'string' && RUNNER_IMAGES.includes(label),
+        `job ${id} runs on ${JSON.stringify(label)}, not on an image named with its version`,
+      );
+    }
+  }
+}
+
 function assertGate(text: string): void {
   const doc = workflow(text);
   assert.ok(typeof doc.on === 'object' && !Array.isArray(doc.on), 'on is a mapping');
@@ -251,6 +286,33 @@ Then('every npm ci in it has --ignore-scripts', function () {
 
 Then('every checkout in it has persist-credentials false', function () {
   assertCheckoutWithoutCredentials(text(this));
+});
+
+Then('every job in it runs on an image named with its version', function () {
+  assertNamedImages(text(this));
+});
+
+/** Each replaces the first runner of the workflow, or the list of its matrix. */
+const IMAGE_BREAKS: Record<string, (yaml: string) => string> = {
+  'on ubuntu-latest': (yaml) => yaml.replace(/^( {4}runs-on: ).+$/m, '$1ubuntu-latest'),
+  'on macos-latest': (yaml) => yaml.replace(/^( {4}runs-on: ).+$/m, '$1macos-latest'),
+  'on an image this repository does not name': (yaml) =>
+    yaml.replace(/^( {4}runs-on: ).+$/m, '$1ubuntu-22.04'),
+  'on a label taken from an input': (yaml) => yaml.replace(/^( {4}runs-on: ).+$/m, '$1${{ inputs.runner }}'),
+  'on a list of labels': (yaml) => yaml.replace(/^( {4}runs-on: ).+$/m, '$1[self-hosted, linux]'),
+  'without a runner': (yaml) => yaml.replace(/^ {4}runs-on: .+\n/m, ''),
+  'with a floating label in its matrix': (yaml) =>
+    yaml.replace(/^( {8}os: )\[.+\]$/m, '$1[ubuntu-24.04, macos-latest]'),
+  'with a label added by the include of its matrix': (yaml) =>
+    yaml.replace(/^( {8}os: \[.+\])$/m, '$1\n        include:\n          - os: ubuntu-latest'),
+};
+
+Then('a copy of the workflow whose job runs {} is rejected', function (kind: string) {
+  const breakIt = IMAGE_BREAKS[kind];
+  assert.ok(breakIt !== undefined, `no broken workflow named "${kind}"`);
+  const broken = breakIt(text(this));
+  assert.notEqual(broken, text(this));
+  assert.throws(() => assertNamedImages(broken), /not on an image named with its version|a matrix `include`/);
 });
 
 Then('it satisfies the gate workflow rules', function () {

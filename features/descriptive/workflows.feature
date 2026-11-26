@@ -1,6 +1,6 @@
 Feature: GitHub workflows
-  Every workflow pins its actions by commit SHA, installs without lifecycle scripts and checks out without
-  credentials; gate.yml (docs/design/platform-v3-srt.md §7) has the narrow trigger, permission and secret rules of
+  Every workflow pins its actions by commit SHA, installs without lifecycle scripts, checks out without
+  credentials and runs each job on an image named with its version; gate.yml (docs/design/platform-v3-srt.md §7) has the narrow trigger, permission and secret rules of
   the CI gate; broker-live.yml (T-04R) is the only one that reaches the real upstream: it stores no credential, exchanges the identity token of its run for a short-lived access token, runs on main only, and takes the four identifiers of the owner's rule from the secret store so that the public log of a run masks them. The Examples
   list the committed workflows: a new file in .github/workflows adds its row.
 
@@ -9,6 +9,7 @@ Feature: GitHub workflows
     Then every action it uses is pinned by a commit SHA
     And every npm ci in it has --ignore-scripts
     And every checkout in it has persist-credentials false
+    And every job in it runs on an image named with its version
 
     Examples:
       | file                       |
@@ -97,6 +98,25 @@ Feature: GitHub workflows
   Scenario: a workflow with a checkout that keeps its credentials is rejected
     Given the committed workflow "gate.yml"
     Then a workflow with a checkout that keeps its credentials is rejected
+
+  Scenario Outline: a workflow whose job runs <kind> is rejected
+    A label such as ubuntu-latest moves to another image without a commit of this repository, and what a job finds
+    installed moves with it (docs/infrastructure.md, "Bubblewrap before the scrub").
+    Given the committed workflow "<file>"
+    Then a copy of the workflow whose job runs <kind> is rejected
+
+    Examples:
+      | file                     | kind                                            |
+      | gate.yml                 | on ubuntu-latest                                |
+      | claude.yml               | on ubuntu-latest                                |
+      | pipeline-after-merge.yml | on ubuntu-latest                                |
+      | gate.yml                 | on macos-latest                                 |
+      | gate.yml                 | on an image this repository does not name       |
+      | gate.yml                 | on a label taken from an input                  |
+      | gate.yml                 | on a list of labels                             |
+      | gate.yml                 | without a runner                                |
+      | bench-sandbox.yml        | with a floating label in its matrix             |
+      | bench-sandbox.yml        | with a label added by the include of its matrix |
 
   Scenario: a gate workflow triggered by pull_request_target is rejected
     Given the committed workflow "gate.yml"

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parse } from 'yaml';
+import { parse, stringify } from 'yaml';
 import { z } from 'zod';
 import { Given, ROOT, Then, stored } from './helpers.js';
 
@@ -488,6 +488,163 @@ Then(
     }
   },
 );
+
+/**
+ * The rule of bubblewrap. With `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`, Claude Code refuses to start on Linux without
+ * bubblewrap, in which it runs its subprocesses in a PID namespace (code.claude.com/docs/en/env-vars, "What the
+ * subprocess environment scrub removes"; run 45771449067 of claude-security-review.yml). The action installs it only
+ * when `allowed_non_write_users` is set, in a step that may fail (action.yml at 4411a9e9, "Install subprocess isolation
+ * dependencies"), so every job that runs the action does what that step does, before the action, and fails when it
+ * cannot: the packages, the sysctl without which Ubuntu 24.04 refuses a user namespace to an unprivileged program,
+ * then a namespace really created. The image is named, since the proof is written for one.
+ */
+const SCRUB_IMAGE = 'ubuntu-24.04';
+const BUBBLEWRAP_PROOF = [
+  'set -euo pipefail',
+  'sudo apt-get update',
+  'sudo apt-get install -y --no-install-recommends bubblewrap socat',
+  'sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0',
+  'bwrap --version',
+  'bwrap --unshare-user --unshare-pid --ro-bind / / --proc /proc true',
+].join('\n');
+
+type RawStep = Record<string, unknown>;
+interface RawJob {
+  'runs-on'?: unknown;
+  steps?: RawStep[];
+}
+const runsTheAction = (step: RawStep): boolean =>
+  typeof step['uses'] === 'string' && step['uses'].startsWith('anthropics/claude-code-action@');
+const provesBubblewrap = (step: RawStep): boolean =>
+  typeof step['run'] === 'string' && /\b(bwrap|bubblewrap)\b/.test(step['run']);
+
+/** The jobs of a parsed workflow that run the action. */
+function jobsOfTheAction(doc: { jobs: Record<string, RawJob> }): RawJob[] {
+  return Object.values(doc.jobs).filter((job) => (job.steps ?? []).some(runsTheAction));
+}
+
+export function assertBubblewrapProven(text: string): void {
+  const jobs = jobsOfTheAction(parse(text) as { jobs: Record<string, RawJob> });
+  assert.ok(jobs.length > 0, 'no job runs the action');
+  for (const job of jobs) {
+    assert.equal(job['runs-on'], SCRUB_IMAGE, 'the job does not run on the image the proof is written for');
+    const steps = job.steps ?? [];
+    const action = steps.findIndex(runsTheAction);
+    const proofs = steps.flatMap((step, at) => (provesBubblewrap(step) ? [at] : []));
+    assert.equal(proofs.length, 1, 'bubblewrap is not proven once');
+    const proof = steps[proofs[0] as number] as RawStep;
+    assert.ok((proofs[0] as number) < action, 'bubblewrap is proven after the action started');
+    assert.equal(String(proof['run']).trim(), BUBBLEWRAP_PROOF, 'the step is not the proof of bubblewrap');
+    // No `continue-on-error`, `shell`, `env` nor `working-directory`; and the condition of the action, or none.
+    assert.deepEqual(
+      Object.keys(proof)
+        .filter((key) => key !== 'if')
+        .sort(),
+      ['name', 'run'],
+      'the proof of bubblewrap has a key that may hide its failure',
+    );
+    assert.equal(
+      proof['if'],
+      steps[action]?.['if'],
+      'the proof and the action do not run on the same condition',
+    );
+  }
+}
+
+Then(
+  'every workflow that runs the action proves bubblewrap before it, on a named image:',
+  function (table: { raw(): string[][] }) {
+    for (const [file] of table.raw()) {
+      assertBubblewrapProven(readFileSync(join(ROOT, '.github/workflows', String(file)), 'utf8'));
+    }
+  },
+);
+
+const proofOf = (job: RawJob): RawStep => {
+  const proof = (job.steps ?? []).find(provesBubblewrap);
+  assert.ok(proof !== undefined, 'the committed workflow no longer proves bubblewrap');
+  return proof;
+};
+const withoutLine = (job: RawJob, line: string): void => {
+  const proof = proofOf(job);
+  const run = String(proof['run']);
+  assert.ok(run.includes(`${line}\n`), `the committed proof no longer has: ${line}`);
+  proof['run'] = run.replace(`${line}\n`, '');
+};
+
+/** A broken copy, and the words of the refusal it must get: a copy refused for another reason proves nothing. */
+const BUBBLEWRAP_BREAKS: Record<string, [(job: RawJob) => void, RegExp]> = {
+  'without the proof of bubblewrap': [
+    (job) => {
+      job.steps = (job.steps ?? []).filter((step) => !provesBubblewrap(step));
+    },
+    /not proven once/,
+  ],
+  'with the proof of bubblewrap after the action': [
+    (job) => {
+      const proof = proofOf(job);
+      job.steps = [...(job.steps ?? []).filter((step) => step !== proof), proof];
+    },
+    /after the action started/,
+  ],
+  'with a proof of bubblewrap that may fail': [
+    (job) => {
+      proofOf(job)['continue-on-error'] = true;
+    },
+    /may hide its failure/,
+  ],
+  'with a proof of bubblewrap on another condition than the action': [
+    (job) => {
+      proofOf(job)['if'] = "runner.os == 'macOS'";
+    },
+    /same condition/,
+  ],
+  'that installs bubblewrap without proving it': [
+    (job) => {
+      const proof = proofOf(job);
+      proof['run'] = String(proof['run']).split('\nbwrap ')[0] + '\n';
+    },
+    /not the proof of bubblewrap/,
+  ],
+  'that reads the version of bubblewrap and creates no namespace': [
+    (job) => {
+      proofOf(job)['run'] = String(proofOf(job)['run']).replace(/\nbwrap --unshare-user[^\n]*\n?$/, '\n');
+    },
+    /not the proof of bubblewrap/,
+  ],
+  'that leaves user namespaces restricted': [
+    (job) => withoutLine(job, 'sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0'),
+    /not the proof of bubblewrap/,
+  ],
+  'whose proof of bubblewrap goes on after a failure': [
+    (job) => withoutLine(job, 'set -euo pipefail'),
+    /not the proof of bubblewrap/,
+  ],
+  'on a floating runner label': [
+    (job) => {
+      job['runs-on'] = 'ubuntu-latest';
+    },
+    /image the proof is written for/,
+  ],
+  'on an image the proof of bubblewrap is not written for': [
+    (job) => {
+      job['runs-on'] = 'ubuntu-26.04';
+    },
+    /image the proof is written for/,
+  ],
+};
+
+Then('{string} {} is rejected by the rule of bubblewrap', function (file: string, kind: string) {
+  const broken = BUBBLEWRAP_BREAKS[kind];
+  assert.ok(broken !== undefined, `no broken workflow named "${kind}"`);
+  const [breakIt, refusal] = broken;
+  const original = readFileSync(join(ROOT, '.github/workflows', file), 'utf8');
+  const doc = parse(original) as { jobs: Record<string, RawJob> };
+  // The copy as the rule reads it: parsed and written back, it still passes before it is broken.
+  assertBubblewrapProven(stringify(doc));
+  for (const job of jobsOfTheAction(doc)) breakIt(job);
+  assert.throws(() => assertBubblewrapProven(stringify(doc)), refusal);
+});
 
 Then(
   'the job of the @claude bot reads with its own token and writes with the token of the Claude app',

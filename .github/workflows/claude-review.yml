@@ -28,7 +28,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
       && !github.event.pull_request.draft
       && github.actor != 'dependabot[bot]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5 # source: operational cap; the step is a few API calls.
     permissions:
       contents: read
@@ -68,7 +68,7 @@ jobs:
       && !github.event.pull_request.draft
       && github.actor != 'dependabot[bot]'
       && needs.budget.outputs.skip != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: write
@@ -117,6 +117,20 @@ jobs:
           sudo install -D -m 0644 -o root -g root review-config/.github/claude-review/managed-settings.json /etc/claude-code/managed-settings.json
           sudo install -D -m 0755 -o root -g root review-config/.github/claude-review/comment-guard.py /etc/claude-code/comment-guard.py
           rm -rf review-config
+      # With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Claude Code runs its subprocesses in a PID namespace of bubblewrap and
+      # refuses to start on Linux without it (run 45771449067). The action installs it only when
+      # allowed_non_write_users is set, and goes on when that fails (action.yml at 4411a9e9, "Install subprocess
+      # isolation dependencies"): this step does what that one does, and fails instead. Ubuntu 24.04 refuses a user
+      # namespace to an unprivileged program until the sysctl is 0, so the last line creates one: a version printed
+      # proves no namespace (docs/infrastructure.md, "Bubblewrap before the scrub").
+      - name: Prove bubblewrap before the scrub of subprocesses
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bubblewrap socat
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --version
+          bwrap --unshare-user --unshare-pid --ro-bind / / --proc /proc true
       # The diff the reviewer reads, fetched by this trusted step with the job's read token: without Bash, Claude
       # cannot run gh. pr.diff is the PR diff as GitHub presents it (CLAUDE.md, Conventions); since.diff, on a
       # later review, the change from the commit the previous review read to this head. Each is bounded to
