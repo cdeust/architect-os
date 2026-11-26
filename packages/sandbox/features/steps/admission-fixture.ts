@@ -38,6 +38,11 @@ export function admittedFixture(
   ];
   const expected = { verdict: 'pass', findings: [] };
   const caseInput = { id: 'trace-a-local-receipt', input_sha256: hash('Replay a saved receipt'), expected };
+  // A review prompt is proven on a case with a status for each acceptance criterion (R2).
+  const reviewCase = {
+    ...caseInput,
+    expected: { ...expected, criteria: [{ id: 'AC-001', status: 'met' }] },
+  };
   const manifest = approvedManifest ?? {
     version: 1,
     run_id: 'fixture-run',
@@ -75,8 +80,15 @@ export function admittedFixture(
       },
       prompt_sha256: hash(subject.launcher[prompt]!),
       oracle_sha256: hash('The receipt is named and correctly attributed'),
-      cases_sha256: hash(JSON.stringify([caseInput])),
-      results: [{ ...caseInput, observed: expected }],
+      ...(role.startsWith('review:')
+        ? {
+            cases_sha256: hash(JSON.stringify([reviewCase])),
+            results: [{ ...reviewCase, observed: reviewCase.expected }],
+          }
+        : {
+            cases_sha256: hash(JSON.stringify([caseInput])),
+            results: [{ ...caseInput, observed: expected }],
+          }),
     })),
   };
   return { version: 1, approved_sha256: hash(JSON.stringify(payload)), payload };

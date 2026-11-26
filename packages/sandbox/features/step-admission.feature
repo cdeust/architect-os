@@ -121,6 +121,30 @@ Feature: The Step admission receipt binds the approved work and its launcher
       | different model route |
       | different prompt      |
 
+  Scenario: A review prompt proof replays a status for each acceptance criterion
+    Then Step admission accepts a review specimen whose criteria statuses replay
+
+  Scenario: A review prompt proof may hold cases without criteria beside the one that attests them
+    Then Step admission accepts a review specimen with "a case without criteria beside it"
+
+  Scenario Outline: A criterion of a specimen is named by an acceptance identifier, whole: <id>
+    Then Step admission does not parse a review specimen with "the criterion id <id>"
+
+    Examples:
+      | id       |
+      | xAC-001  |
+      | AC-001x  |
+      | AC-      |
+
+  Scenario Outline: A review prompt proof that does not attest the criteria is refused: <discrepancy>
+    Then Step admission refuses a review specimen with "<discrepancy>"
+
+    Examples:
+      | discrepancy                |
+      | different criterion status |
+      | missing observed criteria  |
+      | no case with criteria      |
+
   Scenario Outline: Keep each layer of the approved receipt bound to its subject
     Then Step admission rejects receipt discrepancy "<discrepancy>"
 

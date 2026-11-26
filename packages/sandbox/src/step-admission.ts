@@ -23,7 +23,21 @@ const independence = z
     ({ drafter, reviewer }) => drafter.provider !== reviewer.provider && drafter.model !== reviewer.model,
   );
 
-const outcome = z.strictObject({ verdict: z.enum(['pass', 'refuse']), findings: z.array(z.string()) });
+// `criteria` : le statut attendu, puis observé, de chaque critère d'acceptation du spécimen (R2). Facultatif pour les
+// rôles qui ne rendent pas de critères ; une preuve de prompt de revue en exige au moins un cas (`attestsCriteria`).
+const outcome = z.strictObject({
+  verdict: z.enum(['pass', 'refuse']),
+  findings: z.array(z.string()),
+  criteria: z
+    .array(
+      z.strictObject({
+        id: z.string().regex(/^AC-\d{1,9}$/),
+        status: z.enum(['met', 'unmet', 'not_established']),
+      }),
+    )
+    .min(1)
+    .optional(),
+});
 const specimen = z.strictObject({
   id: z.string().min(1),
   input_sha256: sha,
@@ -113,9 +127,15 @@ function successfulReplays(proof: z.infer<typeof promptProof>) {
     proof.results.every(
       ({ expected, observed }) =>
         expected.verdict === observed.verdict &&
-        JSON.stringify(expected.findings) === JSON.stringify(observed.findings),
+        JSON.stringify(expected.findings) === JSON.stringify(observed.findings) &&
+        JSON.stringify(expected.criteria) === JSON.stringify(observed.criteria),
     )
   );
+}
+
+/** Une preuve du prompt de revue a au moins un cas qui attend un statut par critère : sans lui, rien ne montre que le prompt rend ces statuts. */
+function attestsCriteria(role: string, proof: z.infer<typeof promptProof>) {
+  return !role.startsWith('review:') || proof.results.some(({ expected }) => expected.criteria !== undefined);
 }
 
 type AdmissionPayload = z.infer<typeof payload>;
@@ -195,7 +215,8 @@ export function requireStepAdmission(value: unknown, subject: StepAdmissionSubje
         (route.role === 'build' ? (subject.step.build.provider ?? 'anthropic') : 'anthropic') ||
       evaluated.model.model !== route.model ||
       evaluated.prompt_sha256 !== route.prompt_sha256 ||
-      !successfulReplays(evaluated)
+      !successfulReplays(evaluated) ||
+      !attestsCriteria(route.role, evaluated)
     ) {
       throw new Error('STEP_ADMISSION_SPECIMENS_REQUIRED');
     }
