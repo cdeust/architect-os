@@ -138,7 +138,6 @@ Feature: The Claude review
       | ~/.config/gh/**            |
       | ~/.git-credentials         |
       | ~/.gitconfig               |
-      | //home/runner/work/_temp/** |
       | //home/runner/work/_temp/  |
 
   Scenario: every action is in the one shape the rule accepts
