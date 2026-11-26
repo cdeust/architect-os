@@ -34,6 +34,7 @@ function checkPrompt(text: string): void {
     'rejects the verdict if one is not on its line',
     '`unmet` and `not_established` block the step',
     'never `met` because a check passed',
+    'When the brief carries no criterion, `criteria` is empty',
   ]) {
     assert.ok(criteria.includes(needle), `the section on the criteria does not say ${needle}`);
   }
@@ -147,6 +148,11 @@ const PROMPT_DEFECTS: Record<string, (text: string) => string> = {
     text.replaceAll('`unmet` and `not_established` block the step', '`unmet` blocks the step'),
   'a criterion met because a check passed': (text) =>
     text.replaceAll('never `met` because a check passed', 'often `met` because a check passed'),
+  'no empty criteria for a brief without criteria': (text) =>
+    text.replaceAll(
+      'When the brief carries no criterion, `criteria` is empty',
+      'Invent criteria when the brief has none',
+    ),
   'a verdict rule that ignores the criteria': (text) =>
     text.replaceAll('or one criterion that is not `met`', ''),
   'no not_checked for what nothing established': (text) =>

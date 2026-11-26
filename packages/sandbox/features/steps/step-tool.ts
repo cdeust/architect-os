@@ -1068,6 +1068,9 @@ Given('a worktree folder with a file, a directory, a link inside and links outsi
   // A file this process may not read is not a source.
   writeFileSync(join(worktree, 'locked.txt'), 'secret\n');
   chmodSync(join(worktree, 'locked.txt'), 0o000);
+  // A file up to the bound is a source; one byte more is not (R2: a review may cite up to ten proofs per criterion).
+  writeFileSync(join(worktree, 'at-bound.txt'), 'x'.repeat(1_048_576));
+  writeFileSync(join(worktree, 'past-bound.txt'), 'x'.repeat(1_048_577));
   // The worktree reached through a link: its real path is what a file is compared with.
   symlinkSync(worktree, join(root, 'worktree-link'));
   this.state['worktree'] = worktree;
@@ -1394,5 +1397,13 @@ Given(
       [check],
       ids.split(' '),
     );
+  },
+);
+
+Then(
+  'the step dependencies read the source {string} whole, of {int} bytes',
+  function (path: string, size: number) {
+    const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+    assert.equal(deps.readSource(path)?.length, size);
   },
 );

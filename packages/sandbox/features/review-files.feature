@@ -60,6 +60,7 @@ Feature: the descriptive files of the sessions: the build and review prompts, an
       | a criterion not established that does not block |
       | a criterion met because a check passed |
       | a verdict rule that ignores the criteria |
+      | no empty criteria for a brief without criteria |
       | no not_checked for what nothing established |
       | no word on the sandbox of the checks |
 

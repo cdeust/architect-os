@@ -710,12 +710,19 @@ export const toolDependencies =
  * La lecture d'un fichier du worktree où l'étape tourne : le chemin est résolu depuis `cwd`, et rien n'est lu si le
  * chemin réel du fichier (liens suivis) n'est pas un fichier ordinaire sous le chemin réel de `cwd`.
  */
+/**
+ * Au plus 1 Mio par fichier cité : un fait d'éclaireur ou une preuve de critère (R2) cite une ligne de code, et un
+ * fichier plus grand, que le constructeur a pu écrire, ne coûte pas sa taille à l'hôte à chaque citation.
+ */
+export const SOURCE_MAX_BYTES = 1_048_576;
+
 const sourceReader =
   (cwd: string) =>
   (path: string): string | undefined => {
     try {
       const real = realpathSync(resolve(cwd, path));
-      if (real.startsWith(realpathSync(cwd) + sep) && statSync(real).isFile())
+      const stats = statSync(real);
+      if (real.startsWith(realpathSync(cwd) + sep) && stats.isFile() && stats.size <= SOURCE_MAX_BYTES)
         return readFileSync(real, 'utf8');
     } catch {
       // Absent, ou illisible pour ce processus : ce n'est pas un fichier du worktree à citer.

@@ -1448,6 +1448,8 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
       And the step dependencies read the source "missing.txt" as undefined
       And the step dependencies read the source "../outside.txt" as undefined
       And the step dependencies read the source "../worktree-sibling/s.txt" as undefined
+      And the step dependencies read the source "at-bound.txt" whole, of 1048576 bytes
+      And the step dependencies read the source "past-bound.txt" as undefined
       And the step dependencies read the source "/etc/hosts" as undefined
 
       Examples:

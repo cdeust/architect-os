@@ -239,11 +239,17 @@ Then('the resolved network domains are exactly {string}', function (domains: str
 // I4 (docs/design/exigences-spec.md): the build reads the history of the repository itself, on demand.
 Then('the profile lets a session read the history of the repository', function () {
   const { srt, files } = template(this);
-  const underGit = (path: string) => path.split('/').some((segment) => segment === '.git');
+  // Only what `git log` reads: the objects, the references and HEAD. A denial of `.git/config`, which can hold a
+  // credential of the forge, stays possible.
+  const history = ['objects', 'refs', 'HEAD'].flatMap((part) => [
+    `\${repo}/.git/${part}`,
+    `\${worktree}/.git/${part}`,
+  ]);
+  const covers = (denied: string, path: string) => path === denied || path.startsWith(`${denied}/`);
   assert.deepEqual(
-    srt.filesystem.denyRead.filter((path: string) => underGit(path) || path.startsWith('${repo}')),
+    srt.filesystem.denyRead.filter((denied: string) => history.some((path) => covers(denied, path))),
     [],
-    'a read of the repository or of its .git is denied',
+    'a read of the history of the repository is denied',
   );
   const settings = files['${config}/settings.json'] as { permissions: { deny: string[] } };
   const denied = settings.permissions.deny;
