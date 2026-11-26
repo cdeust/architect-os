@@ -1,4 +1,5 @@
-import type { CiRun, Forge, RuleSuite } from '../domain/ports.js';
+import { effectiveJobs } from '../domain/attempts.js';
+import type { CiJob, CiRun, Forge, RuleSuite } from '../domain/ports.js';
 import type { Journal } from './in-memory-journal.js';
 
 /** The answer at a turn: the last one is repeated once the list is spent. */
@@ -24,6 +25,7 @@ export class InMemoryForge implements Forge {
   private readonly suiteTurns = new Map<string, number>();
   private readonly given = new Map<string, CiRun>();
   private readonly replayed = new Map<string, CiRun>();
+  private readonly attempts = new Map<string, { id: number; attempts: readonly (readonly CiJob[])[] }>();
 
   /**
    * With `remote` (the branches of an in-memory `Repository`), an evaluation exists only for a push that left the
@@ -39,13 +41,35 @@ export class InMemoryForge implements Forge {
     this.runs.set(hash, runs);
   }
 
+  /**
+   * A completed run of `attempts.length` attempts, the jobs each attempt executed, first attempt first. Asked with job
+   * names, `run` gives the effective jobs of that run, as the forge reads them attempt by attempt.
+   */
+  scriptAttempts(hash: string, id: number, attempts: readonly (readonly CiJob[])[]): void {
+    this.attempts.set(hash, { id, attempts });
+  }
+
   /** What `ruleSuite` answers for a branch and a commit, in turn. */
   evaluate(branch: string, hash: string, suites: (RuleSuite | undefined)[]): void {
     this.suites.set(`${branch} ${hash}`, suites);
   }
 
-  run(hash: string, workflow: string): CiRun | undefined {
+  run(hash: string, workflow: string, jobNames?: readonly string[] | 'all'): CiRun | undefined {
     this.journal.record('ci', hash, workflow);
+    const recorded = this.attempts.get(hash);
+    if (recorded !== undefined && jobNames !== undefined) {
+      const current = recorded.attempts.length;
+      return {
+        id: recorded.id,
+        completed: true,
+        attempt: current,
+        jobs: effectiveJobs(
+          current,
+          (attempt) => recorded.attempts[attempt - 1] ?? [],
+          jobNames === 'all' ? undefined : jobNames,
+        ),
+      };
+    }
     const replayed = this.replayed.get(hash);
     if (replayed !== undefined) {
       this.replayed.delete(hash);

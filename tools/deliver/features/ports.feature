@@ -364,6 +364,18 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | in-memory |
         | gh        |
 
+    Scenario Outline: a run whose failed jobs ran again gives the newest execution of each job, asked for <asked>
+      Given a delivery forge of the <adapter> adapter
+      And the delivery forge holds for the commit "0000000000000000000000000000000000000021" the run 31, whose attempts executed the jobs '[[{"name":"gate-linux-lane-1","conclusion":"failure","hadRunner":true,"failedStep":true},{"name":"gate-linux-lane-2","conclusion":"success","hadRunner":true,"failedStep":false}],[{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false}]]'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000021", asked for '<names>', the run 31 at attempt 2 with the jobs '<jobs>'
+
+      Examples:
+        | adapter   | asked                     | names                   | jobs |
+        | in-memory | every job                 | all                     | [{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false},{"name":"gate-linux-lane-2","conclusion":"success","hadRunner":true,"failedStep":false}] |
+        | gh        | every job                 | all                     | [{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false},{"name":"gate-linux-lane-2","conclusion":"success","hadRunner":true,"failedStep":false}] |
+        | in-memory | the job of the last attempt | ["gate-linux-lane-1"] | [{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false}] |
+        | gh        | the job of the last attempt | ["gate-linux-lane-1"] | [{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false}] |
+
     Scenario Outline: a rerun is recorded, and the run is then not completed, without jobs
       Given a delivery forge of the <adapter> adapter
       And the delivery forge holds for the commit "0000000000000000000000000000000000000003" the run 9, completed "yes", with the jobs '[{"name":"gate-macos","conclusion":"cancelled","hadRunner":false,"failedStep":false}]'

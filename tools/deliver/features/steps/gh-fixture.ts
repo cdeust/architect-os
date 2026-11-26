@@ -116,6 +116,20 @@ export function ghForge(world: DeliverWorld, workflow = 'gate'): GhForgeFixture 
         },
       });
     },
+    hasAttempts(hash: string, id: number, attempts: CiJob[][]) {
+      answers('runs', hash, { stdout: runsText(workflow, hash, id, 'completed') });
+      answers('run', String(id), {
+        stdout: JSON.stringify({ id, head_sha: hash, status: 'completed', run_attempt: attempts.length }),
+      });
+      let next = 1;
+      attempts.forEach((jobs, index) => {
+        answers('attempt', `${id}/${index + 1}`, {
+          stdout: JSON.stringify([
+            { total_count: jobs.length, jobs: jobs.map((job) => ({ ...jobText(job), id: next++ })) },
+          ]),
+        });
+      });
+    },
     evaluated(branch: string, hash: string, suite: RuleSuite) {
       answers('suites', branch, { stdout: JSON.stringify([{ after_sha: hash, result: suite }]) });
     },

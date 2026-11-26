@@ -63,6 +63,7 @@ function inMemoryForge(): ForgeFixture {
   return {
     forge,
     hasRun: (hash, run) => forge.script(hash, [run]),
+    hasAttempts: (hash, id, attempts) => forge.scriptAttempts(hash, id, attempts),
     evaluated: (branch, hash, suite) => forge.evaluate(branch, hash, [suite]),
     reruns: () => journal.calls.filter((call) => call.startsWith('rerun ')),
   };
@@ -254,6 +255,26 @@ Given(
   'the delivery forge evaluated the push of the commit {string} to the branch {string} as {string}',
   function (hash: string, branch: string, suite: string) {
     forgeOf(this).evaluated(branch, hash, suite as RuleSuite);
+  },
+);
+
+Given(
+  'the delivery forge holds for the commit {string} the run {int}, whose attempts executed the jobs {string}',
+  function (hash: string, id: number, attempts: string) {
+    forgeOf(this).hasAttempts(hash, id, JSON.parse(attempts) as CiJob[][]);
+  },
+);
+
+Then(
+  'the delivery forge gives for the commit {string}, asked for {string}, the run {int} at attempt {int} with the jobs {string}',
+  function (hash: string, asked: string, id: number, attempt: number, jobs: string) {
+    const names = asked === 'all' ? 'all' : (JSON.parse(asked) as string[]);
+    assert.deepEqual(forgeOf(this).forge.run(hash, 'gate', names), {
+      id,
+      completed: true,
+      attempt,
+      jobs: JSON.parse(jobs),
+    });
   },
 );
 

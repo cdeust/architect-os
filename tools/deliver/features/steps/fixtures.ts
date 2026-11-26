@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
+  CiJob,
   CiRun,
   Clock,
   DeliveryEntry,
@@ -39,6 +40,8 @@ export interface RepositoryFixture {
 export interface ForgeFixture {
   forge: Forge;
   hasRun(hash: string, run: CiRun): void;
+  /** A completed run whose attempts executed these jobs, first attempt first. */
+  hasAttempts(hash: string, id: number, attempts: CiJob[][]): void;
   evaluated(branch: string, hash: string, suite: RuleSuite): void;
   /** The reruns asked, as `rerun <id>`, in order. */
   reruns(): string[];
