@@ -405,11 +405,11 @@
   <rect x="36" y="2880" width="216" height="285" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
   <text x="50" y="2915" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-delivery">8 · Delivery</text>
   <text x="50" y="2946" data-type-role="brick-text" font-size="17" fill="#57606a">Host · Deliver</text>
-  <rect x="50" y="2962" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="2981" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <rect x="50" y="2962" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="85" y="2981" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
   <text x="283" y="2903" data-type-role="brick-text" font-size="17" fill="#57606a">The host commits the accepted work and its archive.</text>
-  <text x="283" y="2927" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver publishes the same commit to the work branch and</text>
-  <text x="283" y="2951" data-type-role="brick-text" font-size="17" fill="#57606a">then main, checking each ruleset.</text>
+  <text x="283" y="2927" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver pushes the same commit to the work branch. Its</text>
+  <text x="283" y="2951" data-type-role="brick-text" font-size="17" fill="#57606a">push to main is refused: main takes pull requests only.</text>
 <g role="group" aria-label="Same-commit CI · ready">
   <rect x="269" y="2969" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
   <text x="283" y="2997" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Same-commit CI</text>
@@ -431,8 +431,8 @@
   <text x="868" y="2908" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Delivery gate</text>
   <rect x="1277" y="2888" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
   <text x="1312" y="2907" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2936" data-type-role="brick-text" font-size="17" fill="#57606a">main takes pull requests, with no bypass. Owed:</text>
-  <text x="868" y="2960" data-type-role="brick-text" font-size="17" fill="#57606a">sessions without the administrator token.</text>
+  <text x="868" y="2936" data-type-role="brick-text" font-size="17" fill="#57606a">Owed: one required check for both reviewers'</text>
+  <text x="868" y="2960" data-type-role="brick-text" font-size="17" fill="#57606a">verdicts; no administrator token in sessions.</text>
 </g>
 <g role="group" aria-label="Commit each pass · next">
   <rect x="854" y="2978" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
@@ -673,10 +673,10 @@
   <rect x="994" y="4464.5" width="382" height="114" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
   <text x="1006" y="4494.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Commit and delivery</text>
   <text x="1006" y="4520.5" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver checks the saved Linux receipt and CI</text>
-  <text x="1006" y="4542.5" data-type-role="brick-text" font-size="17" fill="#57606a">for the same commit, then pushes each</text>
-  <text x="1006" y="4564.5" data-type-role="brick-text" font-size="17" fill="#57606a">branch and reads its ruleset result</text>
-  <rect x="1302" y="4452.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1334" y="4470.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
+  <text x="1006" y="4542.5" data-type-role="brick-text" font-size="17" fill="#57606a">for the same commit, then pushes the work</text>
+  <text x="1006" y="4564.5" data-type-role="brick-text" font-size="17" fill="#57606a">branch. Its push to main is now refused</text>
+  <rect x="1302" y="4452.5" width="64" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1334" y="4470.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
   <polyline points="964,4521.5 992,4521.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
   <line x1="24" y1="4614.5" x2="1376" y2="4614.5" stroke="#d0d7de"/>
   <text x="24" y="4648.5" data-type-role="section-title" font-size="25" font-weight="600" fill="#1f2328">5 · Facts from the literature, and what the platform holds of Anthropic</text>

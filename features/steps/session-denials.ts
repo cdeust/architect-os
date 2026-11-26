@@ -43,16 +43,19 @@ const lines = (file: string): string[] =>
   existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter(Boolean) : [];
 
 When(
-  'a real Claude Code under the denials of .claude\\/settings.json is asked by a scripted model for these calls',
+  'a real Claude Code under the denials of .claude\\/settings.json, in a folder named {string}, is asked by a scripted model for these calls',
   { timeout: 180_000 },
-  async function (table: DataTable) {
+  async function (folder: string, table: DataTable) {
     const asked = table.hashes().map((row) => {
       const outcome = row['outcome'];
       assert.ok(outcome === 'refused' || outcome === 'ran', `no outcome named "${outcome}"`);
       return { call: row['call'] ?? '', outcome } satisfies Asked;
     });
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'aos-sd-')));
-    this.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+    const parent = realpathSync(mkdtempSync(join(tmpdir(), 'aos-sd-')));
+    this.cleanups.push(() => rmSync(parent, { recursive: true, force: true }));
+    // A runtime root may hold a space or an apostrophe (tools/runtime/src/domain/root.ts): so may every path below.
+    const dir = join(parent, folder);
+    mkdirSync(dir);
     const checkout = join(dir, 'checkout');
     const bin = join(dir, 'bin');
     const home = join(dir, 'home');
@@ -60,13 +63,14 @@ When(
     for (const made of [checkout, bin, home, config]) mkdirSync(made);
     const commands = join(dir, 'commands.txt');
     const calls = join(dir, 'calls.jsonl');
+    // Fixed texts: the paths reach them as values of the environment, never as text of a script.
     for (const program of ['gh', 'git']) {
-      writeFileSync(join(bin, program), `#!/bin/sh\nprintf '%s\\n' "${program} $*" >> '${commands}'\n`);
+      writeFileSync(join(bin, program), `#!/bin/sh\nprintf '%s\\n' "${program} $*" >> "$TRIAL_COMMANDS"\n`);
       chmodSync(join(bin, program), 0o755);
     }
     // Run before each Bash command (code.claude.com/docs/en/env-vars, CLAUDE_ENV_FILE): the stand-ins come first for
     // the commands of the model, whatever the profile of the shell does to PATH.
-    writeFileSync(join(dir, 'env.sh'), `export PATH='${bin}':"$PATH"\n`);
+    writeFileSync(join(dir, 'env.sh'), 'export PATH="$TRIAL_BIN:$PATH"\n');
     const { permissions } = JSON.parse(readFileSync(join(ROOT, '.claude/settings.json'), 'utf8')) as {
       permissions: { deny: string[] };
     };
@@ -116,6 +120,8 @@ When(
         HOME: home,
         CLAUDE_CONFIG_DIR: config,
         CLAUDE_ENV_FILE: join(dir, 'env.sh'),
+        TRIAL_BIN: bin,
+        TRIAL_COMMANDS: commands,
         // Were a real gh ever started, it would find no account and no host.
         GH_CONFIG_DIR: config,
         GH_HOST: 'github.invalid',
@@ -143,6 +149,16 @@ Then('Claude Code refused each call marked refused and ran each call marked ran'
   trial.asked.forEach(({ call, outcome }, index) => {
     const result = trial.results[index]!;
     assert.equal(result.isError, outcome === 'refused', `${call}: ${result.text}`);
+    // A denied command is answered as denied; a denied tool is withdrawn from the session, and `get_me`, served by
+    // the same stand-in, shows that the server was there. Another error is not a refusal of the settings.
+    if (outcome === 'refused')
+      assert.match(
+        result.text,
+        call.startsWith(MCP_PREFIX)
+          ? /No such tool available/
+          : /^Permission to use Bash .* has been denied/s,
+        call,
+      );
   });
 });
 

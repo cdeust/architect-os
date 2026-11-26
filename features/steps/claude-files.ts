@@ -112,7 +112,7 @@ Then('a .claude\\/settings.json that turns {string} off is rejected', function (
 /**
  * The calls a session of this repository is spared (docs/infrastructure.md, "What a session is spared"): a merge and
  * an edit of a ruleset, which belong to the merge resolver and to the owner, a push to `main` and a bypass, which the
- * ruleset of `main` refuses, and the two comparisons with `main` that CLAUDE.md forbids. Friction, not a control: a
+ * ruleset of `main` refuses (`--admin` is an option of `gh pr merge` alone), and the two comparisons with `main` that CLAUDE.md forbids. Friction, not a control: a
  * rule matches the text of a command (code.claude.com/docs/en/permissions, "What a Bash rule doesn't match": a deny
  * rule "isn't a security boundary around the program"). features/integration/session-denials.feature shows what a
  * real Claude Code does with them.
@@ -122,9 +122,10 @@ const SESSION_DENIALS = [
   'Bash(gh pr update-branch *)',
   'Bash(gh pr merge *)',
   'Bash(gh * pr merge*)',
-  'Bash(gh * --admin*)',
-  'Bash(gh api */merge)',
-  'Bash(gh api */merge *)',
+  'Bash(gh api */merge -X PUT*)',
+  'Bash(gh api */merge --method PUT*)',
+  'Bash(gh api -X PUT */merge*)',
+  'Bash(gh api --method PUT */merge*)',
   'Bash(gh api *mergePullRequest*)',
   'mcp__github__merge_pull_request',
   'mcp__github__update_pull_request_branch',
@@ -133,11 +134,15 @@ const SESSION_DENIALS = [
   'Bash(git push *:main)',
   'Bash(git push *:main *)',
   'Bash(git push *:refs/heads/main)',
-  'Bash(gh api *rulesets* -X*)',
-  'Bash(gh api *rulesets* --method*)',
+  'Bash(gh api *rulesets* -X P*)',
+  'Bash(gh api *rulesets* -X DELETE*)',
+  'Bash(gh api *rulesets* --method P*)',
+  'Bash(gh api *rulesets* --method DELETE*)',
+  'Bash(gh api -X P* *rulesets*)',
+  'Bash(gh api -X DELETE *rulesets*)',
+  'Bash(gh api --method P* *rulesets*)',
+  'Bash(gh api --method DELETE *rulesets*)',
   'Bash(gh api *rulesets* --input*)',
-  'Bash(gh api -X* *rulesets*)',
-  'Bash(gh api --method* *rulesets*)',
   'Bash(gh api --input* *rulesets*)',
 ];
 const DenialsSchema = z.object({ permissions: z.object({ deny: z.array(z.string()) }) });
@@ -152,7 +157,7 @@ Then('the committed .claude\\/settings.json denies every call a session is spare
 });
 
 Then('a .claude\\/settings.json without the denial {string} is rejected for it', function (rule: string) {
-  assert.ok(SESSION_DENIALS.includes(rule), `${rule} is not a denial of the guard`);
+  assert.ok(SESSION_DENIALS.includes(rule), `${rule} is not one of the session denials`);
   const settings = DenialsSchema.parse(committedSettings());
   const deny = settings.permissions.deny.filter((kept) => kept !== rule);
   assert.notEqual(deny.length, settings.permissions.deny.length, `${rule} is not in the committed file`);
