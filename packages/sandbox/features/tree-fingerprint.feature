@@ -338,6 +338,16 @@ Feature: the fingerprint of the tree of a worktree
     The delivery asks it whether its checkout is clean, and the fingerprint, the gate and the delivery ask it for the
     first nested marker, before any git call would walk the tree (packages/sandbox/src/git-worktree.ts).
 
+    Scenario: the fingerprint and the native guard preserve the bytes of tracked ignore paths
+      One directory has the literal U+FFFD name. Its sibling has the single byte FF on Linux and an ordinary
+      name on macOS. Each committed ignore file excludes its own cache with an ordinary marker.
+
+      Given a throwaway repository with one commit
+      And the fingerprint repository commits the two distinct pathname ignore files
+      When I take the fingerprint of the repository
+      Then the fingerprint is clean
+      And the guard of the checkout finds it clean
+
     Scenario: a directory in place of a tracked ignore file refuses both inspections
       Given a throwaway repository with one commit
       And the file ".gitignore" of the repository is removed

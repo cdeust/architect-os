@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 /** Git for setting up disposable scenario repositories, independent of the adapters being mutated. */
 export function gitInFixture(directory: string, args: readonly string[]): string {
@@ -15,4 +16,35 @@ export function gitInFixture(directory: string, args: readonly string[]): string
       LC_ALL: 'C',
     },
   });
+}
+
+/** Two independent ignore files. On Linux, lossy UTF-8 would give both parent directories the same name. */
+export function commitDistinctIgnorePaths(directory: string): void {
+  const prefix = Buffer.from(directory + '/');
+  const opaque = process.platform === 'linux' ? Buffer.from([0xff]) : Buffer.from('ordinary');
+  const paths = [
+    { name: opaque, ignored: 'cache-a' },
+    { name: Buffer.from('\uFFFD'), ignored: 'cache-b' },
+  ];
+  for (const { name, ignored } of paths) {
+    const path = Buffer.concat([prefix, name]);
+    mkdirSync(path);
+    writeFileSync(Buffer.concat([path, Buffer.from('/.gitignore')]), ignored + '/\n');
+    const cache = Buffer.concat([path, Buffer.from('/' + ignored)]);
+    mkdirSync(cache);
+    // A plain marker suffices: no repository program is installed or executed.
+    writeFileSync(Buffer.concat([cache, Buffer.from('/.git')]), 'fixture\n');
+  }
+  gitInFixture(directory, ['add', '-A']);
+  gitInFixture(directory, [
+    '-c',
+    'user.name=fixture',
+    '-c',
+    'user.email=fixture@example.invalid',
+    '-c',
+    'commit.gpgsign=false',
+    'commit',
+    '-qm',
+    'two distinct pathnames',
+  ]);
 }

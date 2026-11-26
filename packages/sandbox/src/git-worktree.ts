@@ -14,7 +14,7 @@ function inspect(
   root: string,
   mode: 'inspect-clean' | 'inspect-markers',
   accepted: readonly (number | null)[],
-  input?: string,
+  input?: string | Buffer,
   timeout = 60_000,
 ) {
   const result = spawnSync('/usr/bin/python3', ['-I', guard, mode], {
@@ -40,10 +40,16 @@ export interface NestedMarker {
   readonly changedIgnoreFile?: string;
 }
 
+/** A Git link has mode 160000 at the start of a NUL-delimited record. Inspect bytes, including the separator. */
+export function containsGitlink(list: Buffer): boolean {
+  const mode = '160000 ';
+  return list.indexOf(mode) === 0 || list.includes('\0' + mode);
+}
+
 /** The first visible nested .git marker, without opening it or asking Git to classify it. */
 export function visibleNestedMarker(
   root: string,
-  committed: string,
+  committed: string | Buffer,
   timeout?: number,
 ): NestedMarker | undefined {
   // The guard prints the marker and, after a NUL, the changed ignore file that ignored its directory.
