@@ -4553,3 +4553,25 @@ Lu dans le code ; la commande n'a pas été jouée. Le README, `docs/infrastruct
 - **La phase.** Le README appelait la publication « la dernière phase ». Elle est la cinquième de six ; la sixième range la branche d'essai (`play`, `tools/deliver/src/application/deliver.ts`). Corrigé au README et dans `docs/infrastructure.md`.
 - **Le cas des branches alignées.** La section 115 et les guides disaient qu'une fois les deux branches au même commit, un commit fait après « atteint » la phase qui pousse `main`. C'est conditionnel : la commande peut s'arrêter avant (`--until ci`, une branche distante qui a bougé, une évaluation du ruleset de `feat/gate-1a` absente ou autre que `pass`), et le commit commun lui-même rend « rien à livrer ». Les guides disent maintenant ce qui ne dépend de rien : la phase de publication est écrite pour pousser `feat/gate-1a` puis `main`, et cette seconde poussée, hors d'une pull request, est ce que le ruleset refuse.
 - **Le skill `ub-mode`.** `.claude/skills/ub-mode/SKILL.md` dit « Push to the main line at the end ». Le fichier n'est pas un texte de ce dépôt : il a été ajouté tel quel, à un commit nommé de son auteur, sous sa licence (commit `82c74a93`, « unchanged, at 3da62bf3… (MIT) »), et `.prettierignore` l'écarte pour qu'il reste à l'octet. Il n'est pas modifié. Ce qui vaut ici est `CONTRIBUTING.md` : une pull request pour tout changement.
+
+## 117. La cinquième revue : lire, et non chercher (26 novembre 2026)
+
+**La revue.** Une cinquième session Codex a relu `13e51b65` et bloque sur une phrase du README : « A commit then reaches the branches by one command », la publication vers les deux branches par une poussée, au présent et sans date. C'est la troisième revue de suite à trouver une phrase de cette sorte.
+
+**Le changement de méthode.** Les corrections des sections 113 à 116 cherchaient des mots (`bypass`, `contourn`, `push.*main`). Une phrase qui dit la même chose avec d'autres mots leur échappait, et celle-ci leur a échappé. Les endroits où le dépôt décrit la livraison ont donc été lus en entier, du début à la fin, par le mainteneur et par des sessions de lecture qui n'écrivent rien et rendent chaque phrase mot pour mot avec sa ligne. Ce que le compte rendu de la passe dit avoir lu, et par qui, est dans son rapport ; ce qui n'a pas été lu en entier y est nommé.
+
+**Ce que la lecture a trouvé, que la recherche n'avait pas trouvé.**
+
+| Où | Ce qui était écrit | Ce qui est écrit |
+| --- | --- | --- |
+| `README.md`, « How a step is tested and verified » | Un commit « atteint les branches par une commande », au présent | La commande a été écrite pour cela et le fait devant des ports scriptés ; depuis le 26 novembre 2026 un commit atteint `main` par une pull request |
+| `README.md`, « The loop on main » | Deliver vérifie les deux jobs « avant de publier » | La même phrase, et : depuis le 26 novembre 2026 un commit atteint `main` par une pull request, non par Deliver |
+| `README.md`, feuille de route, « A pull request on the target repository » | La livraison « pousse » `cdeust/architect-os` sans pull request | Elle « est écrite pour pousser » |
+| `README.md`, démarrage rapide | Le commentaire de la commande : « pushes the trial branch and checks CI » | « written to push the trial branch and check CI », avec renvoi au paragraphe qui dit ce qu'elle fait aujourd'hui |
+| `CLAUDE.md`, bloc des commandes | « trial branch, gate, CI for the hash, both branches » | « a push to both branches (refused on main since 26 November 2026) » |
+| `CLAUDE.md`, tableau des fichiers descriptifs, ligne du ruleset | Lu par « GitHub, once the owner applies it », alors qu'il l'a appliqué | « GitHub, where the owner applied it on 26 November 2026 » |
+| `docs/bricks.md`, brique « Delivery » | Prouvée par deux livraisons réelles ; la porte humaine avant `main` est la décision du propriétaire | Prouvée par deux livraisons réelles, avant le 26 novembre 2026 ; depuis, la commande ne peut plus amener un commit sur `main`, et le retrait de sa publication directe est à la feuille de route |
+| `docs/design/platform-v3-srt.md`, décision 23 | `main` suit `feat/gate-1a` par avance rapide, les deux branches portent les mêmes SHA | La décision datée, et sa clôture le 26 novembre 2026 |
+| `docs/design/orchestration-fable-5-2.md`, conception de la commande de livraison | Aucune date de clôture en tête | Une ligne datée en tête : la route vers `main` que la section décrit est close, son retrait est la prochaine étape |
+
+**Deux fautes de la passe précédente, trouvées par la lecture.** La ligne « The delivery gate » de la feuille de route du README avait perdu sa troisième cellule (« Written in ») quand elle a été réécrite à la section 112 ; elle est rendue. Et le README disait que la phase de publication « finit par » une poussée sur `main` : `main` est la dernière poussée que la phase peut faire, et après une poussée réussie le code lit encore l'évaluation du ruleset ; le README dit « la dernière poussée de sa phase de publication ».

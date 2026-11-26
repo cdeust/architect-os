@@ -682,6 +682,8 @@ Les pilotes du §13 (HR2 à HR4) gardent leur place : ils mesurent des pièces q
 
 ### Étape 1, la commande de livraison : conception (17 novembre 2026, avant le code)
 
+**Depuis le 26 novembre 2026**, la route vers `main` que cette section décrit est close : `main` n'accepte plus que des pull requests, sans contournement (journal §112). La section reste la conception de la commande telle qu'elle est écrite ; son retrait de la publication directe, au profit d'une pull request, est la prochaine étape (`docs/infrastructure.md`, « What stays open »).
+
 **Ce qu'elle remplace.** Une suite que le mainteneur tape à la main à chaque commit, une vingtaine de fois le 17 novembre : amener le commit dans l'arbre de livraison, pousser une branche d'essai, jouer la porte, attendre la CI du commit, relancer un job resté sans runner, vérifier que les deux branches n'ont pas bougé, pousser, lire l'évaluation du ruleset, nettoyer. Une faute de frappe y pousse un autre commit que celui qui a été vérifié, avec un droit de contournement.
 
 **Ce qu'elle est.** `npm run deliver -- <nom>`, jouée depuis l'arbre de livraison sur un commit déjà fait. Six phases ; la première qui échoue arrête tout et dit laquelle. Aucun modèle.
