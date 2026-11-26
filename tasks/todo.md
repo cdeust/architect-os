@@ -178,6 +178,6 @@ The hosted gate later judged these lines (journal section 111):
 ## PR 151 — archives APT des runners (26 novembre 2026)
 
 - [x] Relier le 403 de l’image Ubuntu à la commande du premier fragment Cucumber.
-- [x] Isoler l’archive Ubuntu pour le sandbox et ajouter PGDG, signé par la clé du paquet Ubuntu, pour les jobs PostgreSQL.
-- [x] Exécuter les tests de préparation, des trois revues et des schémas. Voir le [journal, section 118](../docs/design/journal.md#118-les-paquets-du-runner-ne-dépendent-que-de-leurs-archives-26-novembre-2026).
+- [x] Isoler l’archive Ubuntu pour le sandbox et ajouter PGDG, signé par la clé gérée par le paquet `postgresql-common` présent sur le runner, pour les jobs PostgreSQL.
+- [x] Exécuter les tests de préparation, des trois revues et des schémas. Voir le [journal, section 119](../docs/design/journal.md#119-les-paquets-du-runner-ne-dépendent-que-de-leurs-archives-26-novembre-2026).
 - [ ] Confirmer le téléchargement et les signatures sur le prochain runner GitHub, puis obtenir la revue indépendante de ce commit.

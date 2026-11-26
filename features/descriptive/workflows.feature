@@ -243,7 +243,10 @@ Feature: GitHub workflows
   Scenario: Linux host installers run before each real server probe
     Then the Linux package jobs use their shared host installer
 
-  Scenario Outline: Ubuntu installs the tools and key before the signed PGDG index is used
+  Scenario: A disabled installer with trailing whitespace fails the host package contract
+    Then a disabled package installer with trailing whitespace is rejected
+
+  Scenario Outline: The host requests postgresql-common before using its package-managed PGDG key
     Then the <mode> package install with <failure> failure uses only its required archives
 
     Examples:

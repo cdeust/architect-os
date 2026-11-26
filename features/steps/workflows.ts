@@ -860,9 +860,35 @@ Then('a copy of the workflow {word} is refused', function (fault: string) {
   assert.throws(() => assertDestinationPointed(stringify(doc)));
 });
 
+const hostInstaller =
+  '"$GITHUB_WORKSPACE/aos" -- sh "$GITHUB_WORKSPACE/tools/runtime/install-host-packages.sh"';
+
+function assertHostInstall(steps: Workflow['jobs'][string]['steps'], bench: boolean, job: string): void {
+  const lines = steps.flatMap((step) =>
+    (step.run ?? '').split('\n').map((line) => ({ command: line.trim(), condition: step.if })),
+  );
+  const invocation = hostInstaller + (bench ? ' bench' : ' gate');
+  const installers = lines.filter(({ command }) => command === invocation);
+  assert.equal(installers.length, 1, job + ' installer count');
+  assert.equal(
+    installers[0]!.condition,
+    bench ? "runner.os == 'Linux'" : undefined,
+    job + ' installer condition',
+  );
+  const commands = lines.map(({ command }) => command);
+  assert.ok(commands.indexOf(invocation) < commands.indexOf('/usr/lib/postgresql/17/bin/postgres --version'));
+  assert.ok(commands.every((line) => !/\bapt(?:-get)?\b|apt\.postgresql\.org\.sh/.test(line)));
+}
+
+Then('a disabled package installer with trailing whitespace is rejected', function () {
+  const steps = [
+    { if: 'false', run: hostInstaller + ' gate  ' },
+    { run: '/usr/lib/postgresql/17/bin/postgres --version' },
+  ];
+  assert.throws(() => assertHostInstall(steps, false, 'fixture'), /installer condition/);
+});
+
 Then('the Linux package jobs use their shared host installer', function () {
-  const installer =
-    '"$GITHUB_WORKSPACE/aos" -- sh "$GITHUB_WORKSPACE/tools/runtime/install-host-packages.sh"';
   for (const [file, jobs] of Object.entries({
     'gate.yml': ['gate-linux-cucumber'],
     'gate-lane.yml': ['mutation', 'replay'],
@@ -871,17 +897,7 @@ Then('the Linux package jobs use their shared host installer', function () {
   })) {
     const doc = workflow(readFileSync(join(ROOT, '.github/workflows', file), 'utf8'));
     for (const id of jobs) {
-      const steps = doc.jobs[id]?.steps ?? [];
-      const commands = steps.flatMap(({ run }) => (run ?? '').trimEnd().split('\n'));
-      const isBench = file === 'bench-sandbox.yml';
-      const invocation = installer + (isBench ? ' bench' : ' gate');
-      assert.equal(commands.filter((line) => line === invocation).length, 1, file + '/' + id);
-      const installStep = steps.find(({ run }) => run?.split('\n').includes(invocation));
-      assert.equal(installStep?.if, isBench ? "runner.os == 'Linux'" : undefined, file + '/' + id);
-      assert.ok(
-        commands.indexOf(invocation) < commands.indexOf('/usr/lib/postgresql/17/bin/postgres --version'),
-      );
-      assert.ok(commands.every((line) => !/\bapt(?:-get)?\b|apt\.postgresql\.org\.sh/.test(line)));
+      assertHostInstall(doc.jobs[id]?.steps ?? [], file === 'bench-sandbox.yml', file + '/' + id);
     }
   }
 });
