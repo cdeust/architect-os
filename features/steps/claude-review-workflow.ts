@@ -1084,6 +1084,45 @@ Then(
   },
 );
 
+const KEY_REFUSALS: [RegExp, RegExp][] = [
+  [/^checkout\.(name|uses)$/, /the checkout of the managed settings has another name or another pin/],
+  [/^checkout\.with(\.path)?$/, /the managed settings come from no checkout of the run/],
+  [
+    /^checkout\.with\./,
+    /the checkout of the managed settings is not the sparse checkout of the commit of the run/,
+  ],
+  [/^settings\.id$/, /no step settings before the action/],
+  [/^settings\.run$/, NOT_THE_INSTALLER],
+  [/^settings\.(name|if)$/, /the step settings does not have the name written for this file/],
+  [/^proof\./, NOT_THE_PROOF],
+  [/^action\.(id|name)$/, /the action does not have the id and the name written for this file/],
+  [/^action\.if$/, NOT_THE_CONDITION],
+  [/^action\.env\./, /the environment of the subprocesses is not scrubbed/],
+  [/^action\.with(\.|$)/, NOT_THE_INPUTS],
+];
+
+/** The assertion a change to this key must reach. Only a nonempty replacement prompt may pass. */
+function refusalForKey(key: string, replacement?: unknown): RegExp | undefined {
+  const missingScrub = /the scrub is set outside the step of an action/;
+  if (key === 'action.uses') {
+    return runsTheAction({ uses: replacement })
+      ? /the action has another pin or another spelling/
+      : missingScrub;
+  }
+  if (key === 'action.env' || (key === `action.env.${SCRUB}` && replacement === undefined))
+    return missingScrub;
+  if (key === 'action.with.prompt' && replacement !== undefined) {
+    return typeof replacement === 'string' && replacement !== ''
+      ? undefined
+      : /the prompt of the action is not a text/;
+  }
+  const refusal = KEY_REFUSALS.find(([path]) => path.test(key))?.[1];
+  assert.ok(refusal, `no refusal specified for ${key}`);
+  return refusal;
+}
+
+type KeyChange = { what: string; text: string; refusal: RegExp | undefined };
+
 /**
  * A property over a committed file, in place of one more list of cases: every change of one key of the four steps
  * the rule holds to the letter (the checkout of the managed settings, their installer, the proof, the action), and of
@@ -1092,7 +1131,7 @@ Then(
  * step, to the job and to the workflow. A replacement equal to the committed value is no change and is left out. One exception, the documented
  * one: a prompt replaced by another text that is not empty.
  */
-function changesOfOneKey(file: string): { what: string; text: string; allowed: boolean }[] {
+function changesOfOneKey(file: string): KeyChange[] {
   const original = parse(readFileSync(join(ROOT, '.github/workflows', file), 'utf8')) as RawWorkflow;
   const path = ACTIONS[file]?.path;
   const places = (doc: RawWorkflow): Record<string, Record<string, unknown>> => {
@@ -1101,22 +1140,22 @@ function changesOfOneKey(file: string): { what: string; text: string; allowed: b
     assert.ok(checkout !== undefined, 'the committed workflow no longer checks out its settings');
     return { checkout, settings, proof, action, job, workflow: doc };
   };
-  const out: { what: string; text: string; allowed: boolean }[] = [];
-  const change = (what: string, apply: (doc: RawWorkflow) => void, allowed = false): void => {
+  const out: KeyChange[] = [];
+  const change = (what: string, apply: (doc: RawWorkflow) => void, refusal: RegExp | undefined): void => {
     const doc = structuredClone(original);
     apply(doc);
-    out.push({ what, text: stringify(doc), allowed });
+    out.push({ what, text: stringify(doc), refusal });
   };
   const values = (was: unknown): unknown[] =>
     [false, '', 'x', ...(typeof was === 'string' ? [`${was}x`] : [])].filter((value) => value !== was);
   for (const place of ['checkout', 'settings', 'proof', 'action']) {
-    change(`${place}: an unknown key`, (doc) => void ((places(doc)[place] as RawStep)['zz'] = 'x'));
     for (const [key, was] of Object.entries(places(original)[place] as RawStep)) {
       const inner = typeof was === 'object' && was !== null ? Object.entries(was) : [];
       if (typeof was === 'object' && was !== null) {
         change(
           `${place}.${key}: an unknown key`,
           (doc) => void (((places(doc)[place] as RawStep)[key] as RawStep)['zz'] = 'x'),
+          refusalForKey(`${place}.${key}.zz`, 'x'),
         );
       }
       const holders: [string, (doc: RawWorkflow) => Record<string, unknown>, string, unknown][] = [
@@ -1131,20 +1170,23 @@ function changesOfOneKey(file: string): { what: string; text: string; allowed: b
         ),
       ];
       for (const [label, holder, name, value] of holders) {
-        change(`${label} deleted`, (doc) => void delete holder(doc)[name]);
+        change(`${label} deleted`, (doc) => void delete holder(doc)[name], refusalForKey(label));
         for (const other of values(value)) {
-          const anotherPrompt = label === 'action.with.prompt' && typeof other === 'string' && other !== '';
           change(
             `${label} = ${JSON.stringify(other)}`,
             (doc) => void (holder(doc)[name] = other),
-            anotherPrompt,
+            refusalForKey(label, other),
           );
         }
       }
     }
   }
-  for (const place of ['job', 'workflow']) {
-    change(`${place}: an unknown key`, (doc) => void ((places(doc)[place] as RawStep)['zz'] = 'x'));
+  for (const place of ['checkout', 'settings', 'proof', 'action', 'job', 'workflow']) {
+    change(
+      `${place}: an unknown key`,
+      (doc) => void ((places(doc)[place] as RawStep)['zz'] = 'x'),
+      UNKNOWN_KEY('zz'),
+    );
   }
   return out;
 }
@@ -1153,22 +1195,21 @@ Then(
   'each of the {int} changes of one key of the four steps of {string} is refused, but {int} that give its prompt another text',
   function (count: number, file: string, exceptions: number) {
     const changes = changesOfOneKey(file);
-    const accepted = (text: string): boolean => {
+    assertActions(file, readFileSync(join(ROOT, '.github/workflows', file), 'utf8'));
+    for (const { what, text, refusal } of changes) {
+      const variant = `${file}: ${what}`;
+      assert.doesNotThrow(() => parse(text), variant);
       try {
         assertActions(file, text);
-        return true;
-      } catch {
-        return false;
+      } catch (error) {
+        if (error instanceof assert.AssertionError && refusal?.test(error.message.split('\n')[0] ?? ''))
+          continue;
+        throw new Error(`${variant}: ${String(error)}`, { cause: error });
       }
-    };
-    assert.ok(accepted(readFileSync(join(ROOT, '.github/workflows', file), 'utf8')), 'the committed file');
+      assert.equal(refusal, undefined, `${variant} was accepted`);
+    }
     assert.deepEqual(
-      changes.filter(({ text, allowed }) => accepted(text) !== allowed).map(({ what }) => what),
-      [],
-      'changes the rule accepts and should refuse, or refuses and should accept',
-    );
-    assert.deepEqual(
-      [changes.length, changes.filter(({ allowed }) => allowed).length],
+      [changes.length, changes.filter(({ refusal }) => refusal === undefined).length],
       [count, exceptions],
       'the number of changes tried, and of those that give the prompt another text',
     );

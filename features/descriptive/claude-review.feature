@@ -59,7 +59,7 @@ Feature: The Claude review
       | that set an environment                      |
 
   Scenario: every workflow that runs the action fixes its permission mode and forbids auto and bypass
-    A new pin of the action cannot change the mode in silence: the inputs of each action but its prompt are compared whole with
+    A new pin of the action cannot change the mode in silence because all input keys and values, except the nonempty text of a prompt, are compared with
     the ones written for its file, chosen by the name of the file (the action keeps the last mode it is given, in either spelling), and each installs
     managed settings that forbid auto and bypass, block reads outside the checkout and deny by name what a credential
     of the runner sits behind, from a sparse checkout of the commit of the run, before the action.
