@@ -48,8 +48,8 @@ export function keyOf(kind: string, subject: string): string {
   return key(subject);
 }
 
-const runsText = (hash: string, id: number, status: string): string =>
-  JSON.stringify({ workflow_runs: [{ id, name: 'gate', head_sha: hash, status }] });
+const runsText = (workflow: string, hash: string, id: number, status: string): string =>
+  JSON.stringify({ workflow_runs: [{ id, name: workflow, head_sha: hash, status }] });
 
 const jobText = (job: CiJob) => ({
   name: job.name,
@@ -60,7 +60,11 @@ const jobText = (job: CiJob) => ({
     : [{ conclusion: 'success' }],
 });
 
-export function ghForge(world: DeliverWorld): GhForgeFixture {
+/**
+ * `workflow` is the display name the runs of this forge carry. The scenarios of the port ask for `gate`, their own
+ * name; the command reads its name from the committed descriptive file and gives it here.
+ */
+export function ghForge(world: DeliverWorld, workflow = 'gate'): GhForgeFixture {
   const file = join(temporaryDirectory(world), 'answers.json');
   const planned: Record<string, Answer> = {
     [`repos/${REPO}/actions/runs`]: { stdout: JSON.stringify({ workflow_runs: [] }) },
@@ -86,7 +90,9 @@ export function ghForge(world: DeliverWorld): GhForgeFixture {
     environments,
     hasRun(hash: string, run: CiRun) {
       const key = keyOf('runs', hash);
-      answers('runs', hash, { stdout: runsText(hash, run.id, run.completed ? 'completed' : 'in_progress') });
+      answers('runs', hash, {
+        stdout: runsText(workflow, hash, run.id, run.completed ? 'completed' : 'in_progress'),
+      });
       answers('jobs', String(run.id), { stdout: JSON.stringify({ jobs: run.jobs.map(jobText) }) });
       answers('run', String(run.id), {
         stdout: JSON.stringify({
@@ -103,7 +109,7 @@ export function ghForge(world: DeliverWorld): GhForgeFixture {
       answers('rerun', String(run.id), {
         stdout: '{}',
         then: {
-          [key]: { stdout: runsText(hash, run.id, 'in_progress') },
+          [key]: { stdout: runsText(workflow, hash, run.id, 'in_progress') },
           [keyOf('jobs', String(run.id))]: { stdout: JSON.stringify({ jobs: [] }) },
         },
       });

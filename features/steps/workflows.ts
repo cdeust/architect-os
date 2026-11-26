@@ -12,6 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { isDeepStrictEqual } from 'node:util';
 import { basename, dirname, join } from 'node:path';
 import { parse, stringify } from 'yaml';
 import { z } from 'zod';
@@ -96,13 +97,38 @@ function assertCheckoutWithoutCredentials(text: string): void {
   }
 }
 
-function assertGate(text: string): void {
+/**
+ * The two entries of the gate, and the triggers of each (docs/infrastructure.md, "The two entries of the gate").
+ * gate.yml is the pull-request entry: `pull_request` alone, without a filter, so that every run of it has the number
+ * of a pull request. gate-push.yml is the push entry: `main` and the trial branches of the delivery, nothing else.
+ */
+export const GATE_ENTRIES: Record<string, (on: Record<string, unknown>, file: string) => void> = {
+  'gate.yml': (on, file) => {
+    assert.ok(
+      isDeepStrictEqual(Object.keys(on), ['pull_request']),
+      `${file} is triggered by pull_request alone`,
+    );
+    assert.ok(
+      on['pull_request'] === null || isDeepStrictEqual(on['pull_request'], {}),
+      `the pull_request trigger of ${file} has no filter`,
+    );
+  },
+  'gate-push.yml': (on, file) => {
+    assert.ok(
+      isDeepStrictEqual(on, { push: { branches: ['main', 'sentinel/gate-1a-*'] } }),
+      `${file} is triggered by a push to main or to a trial branch alone`,
+    );
+  },
+};
+
+function assertGate(text: string, file: string): void {
   const doc = workflow(text);
   assert.ok(typeof doc.on === 'object' && !Array.isArray(doc.on), 'on is a mapping');
-  assert.ok('pull_request' in doc.on, 'gate.yml has the pull_request trigger');
-  assert.ok(!('pull_request_target' in doc.on), 'gate.yml must not use pull_request_target');
+  const triggers = GATE_ENTRIES[file];
+  assert.ok(triggers !== undefined, `${file} is not an entry of the gate`);
+  triggers(doc.on, file);
   assert.deepEqual(doc.permissions, { contents: 'read', actions: 'read' });
-  assert.ok(!text.includes('secrets.'), 'gate.yml must not use a secret');
+  assert.ok(!text.includes('secrets.'), `${file} must not use a secret`);
   assert.deepEqual(Object.keys(doc.jobs).sort(), [
     'gate-linux',
     'gate-linux-cucumber',
@@ -142,7 +168,7 @@ function assertGate(text: string): void {
     );
   }
   for (const step of Object.values(doc.jobs).flatMap((job) => job.steps)) {
-    assert.ok(!('cache' in (step.with ?? {})), 'gate.yml must not use a cache');
+    assert.ok(!('cache' in (step.with ?? {})), `${file} must not use a cache`);
     if (step.uses?.startsWith('actions/checkout@') === true) {
       assert.equal(step.with?.['fetch-depth'], 2, 'checkout with fetch-depth: 2');
     }
@@ -241,6 +267,10 @@ Given('the committed workflow {string}', function (name: string) {
 
 const text = (world: Parameters<typeof stored>[0]): string => stored<Loaded>(world, 'workflow').text;
 
+/** The file name of the loaded workflow: what tells one entry of the gate from the other. */
+const file = (world: Parameters<typeof stored>[0]): string =>
+  basename(stored<Loaded>(world, 'workflow').path);
+
 Then('every action it uses is pinned by a commit SHA', function () {
   assertPinned(text(this));
 });
@@ -254,12 +284,15 @@ Then('every checkout in it has persist-credentials false', function () {
 });
 
 Then('it satisfies the gate workflow rules', function () {
-  assertGate(text(this));
+  assertGate(text(this), file(this));
 });
 
 Then('Gate jobs reject explicit secrets and permissions', function () {
   const original = text(this);
-  const verify = original.includes('workflow_call:') ? assertGateLane : assertGate;
+  const entry = file(this);
+  const verify = original.includes('workflow_call:')
+    ? assertGateLane
+    : (source: string) => assertGate(source, entry);
   for (const setting of ['secrets: inherit', 'permissions: write-all']) {
     const edited = original.replace(/^(    name: .+)$/m, '$1\n    ' + setting);
     assert.notEqual(edited, original);
@@ -366,13 +399,36 @@ Then('a workflow with a checkout that keeps its credentials is rejected', functi
 Then('a gate workflow triggered by pull_request_target is rejected', function () {
   const broken = text(this).replace(/^ {2}pull_request:$/m, '  pull_request_target:');
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertGate(broken));
+  assert.throws(() => assertGate(broken, file(this)));
+});
+
+const PUSH_ENTRY_BREAKS: Record<string, (yaml: string) => string> = {
+  'triggered by pull_request too': (yaml) => yaml.replace(/^on:\n/m, 'on:\n  pull_request:\n'),
+  'triggered by pull_request_target': (yaml) => yaml.replace(/^on:\n/m, 'on:\n  pull_request_target:\n'),
+  'triggered by workflow_dispatch too': (yaml) => yaml.replace(/^on:\n/m, 'on:\n  workflow_dispatch:\n'),
+  'pushed from every branch': (yaml) => yaml.replace(/^ {2}push:\n(?: {4,}.*\n)+/m, '  push:\n'),
+  'pushed from another branch': (yaml) => yaml.replace('      - main\n', '      - main\n      - feat/x\n'),
+  'without the trial branches of the delivery': (yaml) => yaml.replace('      - sentinel/gate-1a-*\n', ''),
+  'without main': (yaml) => yaml.replace('      - main\n', ''),
+};
+
+Then('a push entry of the gate {} is rejected', function (kind: string) {
+  const breakIt = PUSH_ENTRY_BREAKS[kind];
+  assert.ok(breakIt !== undefined, `no broken push entry named "${kind}"`);
+  const broken = breakIt(text(this));
+  assert.notEqual(broken, text(this));
+  // The broken copy still loads as a workflow: it is refused by the rule of the entry, not by its syntax.
+  workflow(broken);
+  assert.throws(
+    () => assertGate(broken, file(this)),
+    /is triggered by a push to main or to a trial branch alone/,
+  );
 });
 
 Then('a gate workflow that uses a secret is rejected', function () {
   const broken = text(this).replace('${{ github.token }}', '${{ secrets.GITHUB_TOKEN }}');
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertGate(broken));
+  assert.throws(() => assertGate(broken, file(this)));
 });
 
 Then('a gate workflow with a cache is rejected', function () {
@@ -381,13 +437,13 @@ Then('a gate workflow with a cache is rejected', function () {
     'node-version-file: .nvmrc\n          cache: npm',
   );
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertGate(broken));
+  assert.throws(() => assertGate(broken, file(this)));
 });
 
 Then('a gate workflow with broader permissions is rejected', function () {
   const broken = text(this).replace('  actions: read\n', '  actions: write\n');
   assert.notEqual(broken, text(this));
-  assert.throws(() => assertGate(broken));
+  assert.throws(() => assertGate(broken, file(this)));
 });
 
 const provision = 'sh "$GITHUB_WORKSPACE/tools/runtime/provision-hosted.sh"';
@@ -405,7 +461,7 @@ function assertHostedAdmission(source: string, file: string): void {
       list.every((step) => !step.uses?.startsWith('actions/cache@') && !('cache' in (step.with ?? {}))),
     );
     if (file !== 'bench-sandbox.yml') assert.equal(list[setup]?.with?.['package-manager-cache'], false, id);
-    const isGate = ['gate.yml', 'gate-lane.yml', 'mutation-full.yml'].includes(file);
+    const isGate = ['gate.yml', 'gate-push.yml', 'gate-lane.yml', 'mutation-full.yml'].includes(file);
     const capture = './aos -- node tools/runtime/gate-job.mjs capture';
     const entry = isGate
       ? 'sh tools/runtime/gate-job.sh -- '

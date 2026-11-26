@@ -999,6 +999,7 @@ Given(
     writeFileSync(join(scripts, 'deliver.mjs'), DRIVER);
     writeFileSync(identity, `fixture-identity-${basename(scripts).replaceAll(' ', '-')}`);
     const committed = JSON.parse(readFileSync(join(ROOT, 'tools/deliver/deliver.json'), 'utf8')) as {
+      workflow: string;
       requiredJobs: string[];
       jobDependencies?: Record<string, { producers: string[] }>;
     };
@@ -1017,7 +1018,9 @@ Given(
       JSON.stringify({
         ['repos/' + REPO + '/actions/runs?head_sha=' + hash + '&per_page=100']: {
           stdout: JSON.stringify({
-            workflow_runs: [{ id: 42, name: 'gate', head_sha: hash, status: 'completed', run_attempt: 1 }],
+            workflow_runs: [
+              { id: 42, name: committed.workflow, head_sha: hash, status: 'completed', run_attempt: 1 },
+            ],
           }),
         },
         ['--paginate --slurp repos/' + REPO + '/actions/runs/42/attempts/1/jobs?per_page=100']: {

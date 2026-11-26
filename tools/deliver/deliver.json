@@ -4,7 +4,7 @@
   "repository": "cdeust/architect-os",
   "branches": ["feat/gate-1a", "main"],
   "trialPrefix": "sentinel/gate-1a-",
-  "workflow": "gate",
+  "workflow": "gate-push",
   "requiredJobs": ["gate-linux", "gate-macos"],
   "jobDependencies": {
     "gate-linux": {

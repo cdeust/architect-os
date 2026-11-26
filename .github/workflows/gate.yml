@@ -1,16 +1,19 @@
 # The CI gate (docs/design/platform-v3-srt.md §7): plan, Gherkin suite, Stryker on the changed lines, verdict.
 # No secret, no cache. The token is the automatic one, restricted to contents: read and actions: read.
+# The pull-request entry. The push entry is gate-push.yml; from `jobs:` to the end the two files are the same bytes
+# (features/descriptive/gate-concurrency.feature), so that both report the checks gate-linux and gate-macos as jobs
+# of their own run: a job of a called workflow would report as `<caller job> / <job>`.
 name: gate
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
-      # The delivery (CONTRIBUTING.md, the maintainer's line): a commit is pushed to a trial branch first, where
-      # this gate gives it the two checks the rulesets of feat/gate-1a and of main require; it then reaches both
-      # branches as it is. feat/gate-1a is not listed: it would run the same commit a second time.
-      - sentinel/gate-1a-*
+
+# One group per pull request, and a new commit cancels the run of the commit it supersedes. The only trigger is
+# pull_request, so the number always exists. A push run is in no group (gate-push.yml declares none): cancel-in-progress
+# false would not keep a later run that names its group from cancelling it.
+concurrency:
+  group: gate-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -168,13 +171,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           sh tools/runtime/gate-job.sh -- sh -e <<'BASE'
-          # docs/design/platform-v3-srt.md §7.2: the run of gate.yml on main whose head_sha is the first parent.
+          # docs/design/platform-v3-srt.md §7.2: the run of gate-push.yml on main whose head_sha is the first parent.
           # Nothing found, expired or no first parent: download nothing, the gate applies its written fallback and says so.
           base=$(node "$GITHUB_WORKSPACE/tools/test-gate/report-files.mjs" path reports/base)
           mkdir -p "$base"
           parent=$(git rev-parse --verify --quiet HEAD^1 || true)
           if [ -z "$parent" ]; then echo "base: no first parent"; exit 0; fi
-          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/gate.yml/runs?branch=main&status=success&head_sha=$parent&per_page=1" --jq '.workflow_runs[0].id // empty' || true)
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/gate-push.yml/runs?branch=main&status=success&head_sha=$parent&per_page=1" --jq '.workflow_runs[0].id // empty' || true)
           if [ -z "$run_id" ]; then echo "base: no green main run for $parent"; exit 0; fi
           gh run download "$run_id" -n gate-base-linux -D "$base" -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-linux of run $run_id not downloadable"
           BASE
@@ -275,13 +278,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           sh tools/runtime/gate-job.sh -- sh -e <<'BASE'
-          # docs/design/platform-v3-srt.md §7.2: the run of gate.yml on main whose head_sha is the first parent.
+          # docs/design/platform-v3-srt.md §7.2: the run of gate-push.yml on main whose head_sha is the first parent.
           # Nothing found, expired or no first parent: download nothing, the gate applies its written fallback and says so.
           base=$(node "$GITHUB_WORKSPACE/tools/test-gate/report-files.mjs" path reports/base)
           mkdir -p "$base"
           parent=$(git rev-parse --verify --quiet HEAD^1 || true)
           if [ -z "$parent" ]; then echo "base: no first parent"; exit 0; fi
-          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/gate.yml/runs?branch=main&status=success&head_sha=$parent&per_page=1" --jq '.workflow_runs[0].id // empty' || true)
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/gate-push.yml/runs?branch=main&status=success&head_sha=$parent&per_page=1" --jq '.workflow_runs[0].id // empty' || true)
           if [ -z "$run_id" ]; then echo "base: no green main run for $parent"; exit 0; fi
           gh run download "$run_id" -n gate-base-macos -D "$base" -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-macos of run $run_id not downloadable"
           BASE

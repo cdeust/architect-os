@@ -1,7 +1,7 @@
 Feature: GitHub workflows
   Every workflow pins its actions by commit SHA, installs without lifecycle scripts and checks out without
-  credentials; gate.yml (docs/design/platform-v3-srt.md §7) has the narrow trigger, permission and secret rules of
-  the CI gate; broker-live.yml (T-04R) is the only one that reaches the real upstream: it stores no credential, exchanges the identity token of its run for a short-lived access token, runs on main only, and takes the four identifiers of the owner's rule from the secret store so that the public log of a run masks them. The Examples
+  credentials; the two entries of the gate, gate.yml for pull requests and gate-push.yml for pushes
+  (docs/design/platform-v3-srt.md §7), have the narrow trigger, permission and secret rules of the CI gate; broker-live.yml (T-04R) is the only one that reaches the real upstream: it stores no credential, exchanges the identity token of its run for a short-lived access token, runs on main only, and takes the four identifiers of the owner's rule from the secret store so that the public log of a run masks them. The Examples
   list the committed workflows: a new file in .github/workflows adds its row.
 
   Scenario Outline: workflow <file> pins its actions, installs without scripts and checks out without credentials
@@ -18,6 +18,7 @@ Feature: GitHub workflows
       | claude-security-review.yml |
       | claude.yml                 |
       | gate.yml                   |
+      | gate-push.yml              |
       | gate-lane.yml              |
       | mutation-full.yml          |
       | pipeline-after-merge.yml   |
@@ -30,6 +31,11 @@ Feature: GitHub workflows
 
   Scenario: gate.yml follows the rules of the CI gate
     Given the committed workflow "gate.yml"
+    Then it satisfies the gate workflow rules
+    And Gate jobs reject explicit secrets and permissions
+
+  Scenario: gate-push.yml, the push entry, follows the rules of the CI gate
+    Given the committed workflow "gate-push.yml"
     Then it satisfies the gate workflow rules
     And Gate jobs reject explicit secrets and permissions
 
@@ -114,6 +120,29 @@ Feature: GitHub workflows
     Given the committed workflow "gate.yml"
     Then a gate workflow with broader permissions is rejected
 
+  Scenario: a copy of the push entry of the gate with an unpinned action, an npm ci that runs scripts, a checkout that keeps its credentials, a secret, a cache or broader permissions is rejected
+    Given the committed workflow "gate-push.yml"
+    Then a workflow with an unpinned action is rejected
+    And a workflow with an npm ci without --ignore-scripts is rejected
+    And a workflow with a checkout that keeps its credentials is rejected
+    And a gate workflow that uses a secret is rejected
+    And a gate workflow with a cache is rejected
+    And a gate workflow with broader permissions is rejected
+
+  Scenario Outline: a push entry of the gate <kind> is rejected
+    Given the committed workflow "gate-push.yml"
+    Then a push entry of the gate <kind> is rejected
+
+    Examples:
+      | kind                                       |
+      | triggered by pull_request too              |
+      | triggered by pull_request_target           |
+      | triggered by workflow_dispatch too         |
+      | pushed from every branch                   |
+      | pushed from another branch                 |
+      | without the trial branches of the delivery |
+      | without main                               |
+
   Scenario Outline: a merge that waits ends the resolver of pipeline-after-merge.yml green: <refusal>
     Given the committed workflow "pipeline-after-merge.yml"
     When its resolver is refused "<refusal>"
@@ -169,6 +198,7 @@ Feature: GitHub workflows
     Examples:
       | file              |
       | gate.yml          |
+      | gate-push.yml     |
       | gate-lane.yml     |
       | mutation-full.yml |
       | broker-live.yml   |
@@ -210,4 +240,5 @@ Feature: GitHub workflows
     Examples:
       | file          |
       | gate.yml      |
+      | gate-push.yml |
       | gate-lane.yml |

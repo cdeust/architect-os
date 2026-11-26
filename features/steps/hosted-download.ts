@@ -27,10 +27,13 @@ const base = 'Base of the count (artifact of the last green main run)';
 const fetch = 'Fetch reports from the effective producer jobs';
 const mutation = 'Fetch the mutation report';
 const token = '${{ github.token }}';
+// The two entries of the gate (pull requests, pushes) carry the same jobs; the lane workflow is called by both.
+const ENTRIES = ['gate.yml', 'gate-push.yml'];
 function downloads(file: string, doc: Gate) {
   assert.ok(!doc.env?.['GH_TOKEN']);
-  const expected: Record<string, string[]> =
-    file === 'gate.yml' ? { 'gate-linux': [fetch, base], 'gate-macos': [base] } : { replay: [mutation] };
+  const expected: Record<string, string[]> = ENTRIES.includes(file)
+    ? { 'gate-linux': [fetch, base], 'gate-macos': [base] }
+    : { replay: [mutation] };
   for (const [job, { env, steps = [] }] of Object.entries(doc.jobs)) {
     assert.ok(!env?.['GH_TOKEN']);
     const allowed = expected[job] ?? [];
@@ -59,7 +62,7 @@ function actual(file: string): Gate {
   return parse(readFileSync(join(ROOT, '.github/workflows', file), 'utf8'));
 }
 Then('every Gate download keeps its token scoped to an admitted retrieval step', function () {
-  for (const file of ['gate.yml', 'gate-lane.yml']) {
+  for (const file of [...ENTRIES, 'gate-lane.yml']) {
     const doc = actual(file);
     downloads(file, doc);
     for (const job of Object.values(doc.jobs))
@@ -92,7 +95,7 @@ function providerFixture(dir: string) {
     "const endpoint=args.find(value=>value.startsWith('repos/'));",
     'const reply=value=>process.stdout.write(JSON.stringify(value));',
     "if(endpoint.endsWith('/runs/51'))process.stdout.write(env.FIXTURE_HEAD);",
-    "else if(endpoint.includes('workflows/gate.yml/runs?')&&endpoint.includes('head_sha='+env.FIXTURE_HEAD))process.stdout.write('33');",
+    "else if(endpoint.includes('workflows/gate-push.yml/runs?')&&endpoint.includes('head_sha='+env.FIXTURE_HEAD))process.stdout.write('33');",
     "else if(endpoint.includes('/runs/51/attempts/')){",
     "  const n=Number(endpoint.split('/attempts/')[1].split('/')[0]);",
     "  if(endpoint.includes('/jobs?')){",

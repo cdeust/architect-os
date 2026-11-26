@@ -69,7 +69,9 @@ Given(
     // What the gate leaves in the worktree is not a change of the tree.
     writeFileSync(join(git.work, '.gitignore'), 'reports/\n');
     git.commit(commit, parent);
-    const gh = ghForge(this);
+    // The runs of the forge carry the display name the committed file asks for: the push entry of the gate.
+    const { workflow } = JSON.parse(readFileSync(COMMITTED, 'utf8')) as { workflow: string };
+    const gh = ghForge(this, workflow);
     gh.hasRun(git.hashOf(commit), {
       id: 42,
       completed: true,
