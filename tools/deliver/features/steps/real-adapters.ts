@@ -58,7 +58,7 @@ Then('a legacy checkout verdict cannot satisfy the delivery Gate', function () {
     mkdirSync(join(parent, 'reports'), { mode: 0o700 });
     writeFileSync(join(parent, 'reports/gate-base.json'), JSON.stringify({ sha: '1'.repeat(40) }));
   }
-  assert.equal(gate.verdictHash(), undefined);
+  assert.equal(gate.verdict(), undefined);
 });
 
 // Repository over git
@@ -299,7 +299,6 @@ When('I append to the delivery log an entry with the pull request {string}', fun
     outcome: 'delivered',
     hash: '0'.repeat(40),
     trial: 'sentinel/gate-1a-x',
-    parent: '1'.repeat(40),
     ci: { attempts: 1, polls: 1 },
     gate: undefined,
     published: [],

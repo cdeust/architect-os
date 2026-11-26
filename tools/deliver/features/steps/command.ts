@@ -42,6 +42,8 @@ interface Command {
   hookWitness?: string;
   /** The exit code the gate ends with; 0 leaves a verdict naming the commit. */
   gateCode: number;
+  /** The receipt of the gate names the destination `p0`. */
+  gateDestination: boolean;
   /** The descriptive file the command is given. */
   config: string;
   stdout: string;
@@ -56,9 +58,11 @@ function writeConfig(command: Command): void {
   const hash = command.git.hashOf('h1');
   const committed = JSON.parse(readFileSync(COMMITTED, 'utf8')) as Record<string, unknown>;
   const gateCommand = [process.execPath, FAKE_GATE, 'publish', command.gateCode === 0 ? hash : 'none'];
+  // The report of the receipt names the destination the gate judged the commit against: `p0`, unless none.
+  const destination = command.gateDestination ? command.git.hashOf('p0') : 'none';
   writeFileSync(
     command.config,
-    JSON.stringify({ ...committed, gateCommand: [...gateCommand, String(command.gateCode)] }),
+    JSON.stringify({ ...committed, gateCommand: [...gateCommand, String(command.gateCode), destination] }),
   );
 }
 
@@ -106,6 +110,7 @@ Given(
         ARCHITECT_OS_HOST_XDG_CONFIG_HOME: 'set:' + home,
       },
       gateCode: 0,
+      gateDestination: true,
       config: join(home, 'deliver.json'),
       stdout: '',
       stderr: '',
@@ -117,6 +122,11 @@ Given(
 
 Given('the gate of the delivery command is red from now on', function () {
   commandOf(this).gateCode = 1;
+  writeConfig(commandOf(this));
+});
+
+Given('the receipt of the gate of the delivery command names no destination', function () {
+  commandOf(this).gateDestination = false;
   writeConfig(commandOf(this));
 });
 

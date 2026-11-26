@@ -29,16 +29,16 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         publication
         rangement
         """
-      And the delivery calls named "isClean, head, remoteHead, isAncestor, deletedLines, committedFile" are:
+      And the delivery calls named "isClean, head, remoteHead, isAncestor, committedFile, verdict, gate, deletedLines" are:
         """
         isClean
         head
-        remoteHead main
         remoteHead deliver/step
-        isAncestor p0 h1
-        deletedLines p0 h1 docs/design/journal.md
         committedFile h1 steps/step/record.json
-        remoteHead main
+        verdict
+        gate
+        verdict
+        deletedLines p0 h1 docs/design/journal.md
         remoteHead deliver/step
         """
       And the delivery calls named "verdict, gate, ci" are:
@@ -50,7 +50,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["deliver/step"],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
         """
       And the delivery log holds exactly the result
       And the delivery clock slept 0 seconds
@@ -89,7 +89,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":[],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":false,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":[],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":false,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
         """
       And the delivery forge holds 1 pull request, none a draft
 
@@ -102,7 +102,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       When I deliver "step" until "end"
       Then the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":[],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":[],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
         """
       And the delivery forge holds 1 pull request, none a draft
 
@@ -141,7 +141,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":["deliver/step"],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
         """
       And the delivery log holds exactly the result
 
@@ -174,7 +174,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[]}
+        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"base":"p0"}
         """
       And the delivery log holds exactly the result
       And the delivery forge holds 0 pull requests, none a draft
@@ -230,45 +230,26 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery log holds no entry
 
-    Scenario: a destination that is absent from the remote
+    Scenario: the destination is neither read nor compared with the commit
       Given the delivery remote branch "main" is absent
       When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "branche distante absente"
-      And the delivery acts are:
+      Then the delivery outcome is "delivered"
+      And the delivery calls named "remoteHead, isAncestor" are:
         """
-        fetch
+        remoteHead deliver/step
+        remoteHead deliver/step
         """
-      And the delivery phases reported are:
-        """
-        préalables
-        """
-      And the delivery calls named "remoteHead, isAncestor, deletedLines" are:
-        """
-        remoteHead main
-        """
-      And the delivery log holds no entry
-
-    Scenario: a destination that is not an ancestor of the commit
-      Given the delivery remote branch "main" is at "x9"
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "la branche distante n'est pas un ancêtre du commit"
-      And the delivery acts are:
-        """
-        fetch
-        """
-      And the delivery calls named "isAncestor, deletedLines, committedFile" are:
-        """
-        isAncestor x9 h1
-        """
-      And the delivery log holds no entry
 
     Scenario: a work branch that is not an ancestor of the commit
       Given the delivery remote branch "deliver/step" is at "x9"
       When I deliver "step" until "end"
       Then the delivery stopped at the phase "préalables" because "la branche distante n'est pas un ancêtre du commit"
-      And the delivery calls named "isAncestor, deletedLines" are:
+      And the delivery acts are:
         """
-        isAncestor p0 h1
+        fetch
+        """
+      And the delivery calls named "isAncestor, committedFile" are:
+        """
         isAncestor x9 h1
         """
       And the delivery log holds no entry
@@ -279,59 +260,10 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       Then the delivery calls named "isAncestor, push" are:
         """
         isAncestor p0 h1
-        isAncestor p0 h1
         push h1 sentinel/gate-1a-step
         push h1 deliver/step
         """
       And the delivery outcome is "delivered"
-
-    Scenario: a destination already at the commit: nothing to deliver
-      Given the delivery remote branch "main" is at "h1"
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "rien à livrer"
-      And the delivery acts are:
-        """
-        fetch
-        """
-      And the delivery calls named "isAncestor, deletedLines, committedFile" are:
-        """
-        """
-      And the delivery log holds no entry
-
-    Scenario: an append-only file that lost one line
-      Given the delivery file "docs/design/journal.md" lost 1 lines
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "un fichier en ajout seul a perdu des lignes"
-      And the delivery acts are:
-        """
-        fetch
-        """
-      And the delivery calls named "deletedLines, committedFile" are:
-        """
-        deletedLines p0 h1 docs/design/journal.md
-        """
-      And the delivery log holds no entry
-
-    Scenario: the first append-only file lost lines: the second is not read
-      Given the delivery append-only files are "a.md, b.md"
-      And the delivery file "a.md" lost 2 lines
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "un fichier en ajout seul a perdu des lignes"
-      And the delivery calls named "deletedLines" are:
-        """
-        deletedLines p0 h1 a.md
-        """
-
-    Scenario: the second append-only file lost lines
-      Given the delivery append-only files are "a.md, b.md"
-      And the delivery file "b.md" lost 5 lines
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "un fichier en ajout seul a perdu des lignes"
-      And the delivery calls named "deletedLines" are:
-        """
-        deletedLines p0 h1 a.md
-        deletedLines p0 h1 b.md
-        """
 
     Scenario: a commit that records no record of the step
       Given the delivery commit records no record of the step
@@ -450,11 +382,85 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"branche d'essai","reason":"push de la branche d'essai refusé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"published":[]}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":0,"polls":0},"published":[],"phase":"branche d'essai","reason":"push de la branche d'essai refusé"}
         """
       And the delivery log holds exactly the result
 
   Rule: the gate
+
+    Scenario: the append-only files grew since the destination the gate judged: the run goes on
+      Given the delivery history holds "p1" as an ancestor of "h1"
+      And the receipt of the delivery gate names the destination "p1"
+      When I deliver "step" until "end"
+      Then the delivery outcome is "delivered"
+      And the delivery calls named "deletedLines" are:
+        """
+        deletedLines p1 h1 docs/design/journal.md
+        """
+
+    Scenario: an append-only file that lost a line since the destination the gate judged: stopped after the gate, nothing published
+      Given the delivery file "docs/design/journal.md" lost 1 lines
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a perdu des lignes"
+      And the delivery acts are:
+        """
+        fetch
+        push h1 sentinel/gate-1a-step
+        gate
+        log stopped
+        """
+      And the delivery result is:
+        """
+        {"outcome":"stopped","phase":"porte","reason":"un fichier en ajout seul a perdu des lignes","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":0,"polls":0},"gate":"ran","published":[],"base":"p0"}
+        """
+      And the delivery log holds exactly the result
+
+    Scenario: a reused verdict gives the base of the append-only files too
+      Given the delivery gate verdict already names "h1"
+      And the delivery file "docs/design/journal.md" lost 1 lines
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a perdu des lignes"
+      And the delivery calls named "gate, deletedLines" are:
+        """
+        deletedLines p0 h1 docs/design/journal.md
+        """
+
+    Scenario: the first append-only file lost lines: the second is not read
+      Given the delivery append-only files are "a.md, b.md"
+      And the delivery file "a.md" lost 2 lines
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a perdu des lignes"
+      And the delivery calls named "deletedLines" are:
+        """
+        deletedLines p0 h1 a.md
+        """
+
+    Scenario: the second append-only file lost lines
+      Given the delivery append-only files are "a.md, b.md"
+      And the delivery file "b.md" lost 5 lines
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a perdu des lignes"
+      And the delivery calls named "deletedLines" are:
+        """
+        deletedLines p0 h1 a.md
+        deletedLines p0 h1 b.md
+        """
+
+    Scenario Outline: a receipt of the gate that names no destination: stopped, <verdict>
+      Given <given>
+      And the receipt of the delivery gate names no destination
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "le verdict de la porte ne nomme pas de destination"
+      And the delivery calls named "deletedLines, push" are:
+        """
+        push h1 sentinel/gate-1a-step
+        """
+      And the delivery log holds exactly the result
+
+      Examples:
+        | verdict             | given                                         |
+        | the gate played     | the delivery append-only files are "a.md"     |
+        | the verdict reused  | the delivery gate verdict already names "h1"  |
 
     Scenario: a gate that is red
       Given the delivery gate exits 1 and then leaves the verdict "none"
@@ -478,7 +484,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"porte","reason":"porte rouge","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"gate":"ran","published":[]}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":0,"polls":0},"gate":"ran","published":[],"phase":"porte","reason":"porte rouge"}
         """
       And the delivery log holds exactly the result
 
@@ -539,7 +545,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI rouge","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[]}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"base":"p0","phase":"CI","reason":"CI rouge"}
         """
       And the delivery log holds exactly the result
 
@@ -577,7 +583,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","published":["deliver/step"],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
         """
       And the delivery clock slept 60 seconds
 
@@ -586,7 +592,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       When I deliver "step" until "end"
       Then the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":2},"gate":"ran","published":["deliver/step"],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":2},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
         """
 
     Scenario: a CI that never answers within the polls
@@ -618,7 +624,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","published":[]}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","published":[],"base":"p0","phase":"CI","reason":"CI sans réponse"}
         """
 
     Scenario: a CI with no run at all within the polls
@@ -627,7 +633,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       When I deliver "step" until "end"
       Then the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":2},"gate":"ran","published":[]}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":0,"polls":2},"gate":"ran","published":[],"base":"p0","phase":"CI","reason":"CI sans réponse"}
         """
 
     Scenario: a single poll allowed
@@ -698,7 +704,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":["deliver/step"],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
         """
 
     Scenario: no runner at the last permitted attempt: no rerun, stopped
@@ -728,7 +734,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"aucun runner après le nombre de tentatives permis","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":[]}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":[],"base":"p0","phase":"CI","reason":"aucun runner après le nombre de tentatives permis"}
         """
 
     Scenario: no runner with a single attempt allowed: no rerun at all
@@ -798,7 +804,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":2,"polls":3},"gate":"ran","published":[]}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":2,"polls":3},"gate":"ran","published":[],"base":"p0","phase":"CI","reason":"CI sans réponse"}
         """
 
     Scenario: no runner on the only poll: no rerun at all
@@ -812,7 +818,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[]}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"base":"p0","phase":"CI","reason":"CI sans réponse"}
         """
 
     Scenario: the seconds between two polls are the ones of the file
@@ -822,24 +828,6 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       Then the delivery clock slept 7 seconds
 
   Rule: the publication
-
-    Scenario: the destination moved on the remote since the first fetch: nothing is pushed, no pull request
-      Given the delivery remote branch "main" moves to "p1" after the first fetch
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "une branche distante a bougé"
-      And the delivery acts are:
-        """
-        fetch
-        push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        log stopped
-        """
-      And the delivery result is:
-        """
-        {"outcome":"stopped","phase":"publication","reason":"une branche distante a bougé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[]}
-        """
-      And the delivery log holds exactly the result
 
     Scenario: a work branch that appeared on the remote since the first fetch
       Given the delivery remote branch "deliver/step" moves to "p0" after the first fetch
@@ -885,7 +873,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"push refusé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[]}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"base":"p0","phase":"publication","reason":"push refusé"}
         """
 
     Scenario: a pull request the forge refuses: the trial branch kept, the work branch pushed
@@ -903,7 +891,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"la forge a refusé la pull request","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["deliver/step"]}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["deliver/step"],"base":"p0","phase":"publication","reason":"la forge a refusé la pull request"}
         """
       And the delivery log holds exactly the result
 

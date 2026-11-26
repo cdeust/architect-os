@@ -92,8 +92,11 @@ function inMemoryGate(): GateFixture {
   const gate = new InMemoryGate(new Journal());
   return {
     gate,
-    willLeave(verdict, code) {
-      gate.afterRun = verdict;
+    willLeave(verdict, code, destination) {
+      gate.afterRun =
+        verdict === undefined
+          ? undefined
+          : { hash: verdict, destination: destination === 'none' ? undefined : destination };
       gate.code = code;
     },
   };
@@ -421,6 +424,19 @@ Then(
 
 // Gate
 
+/** The destination commit the report of a gate of these scenarios names, unless a scenario says it names none. */
+const GATE_DESTINATION = '0000000000000000000000000000000000000005';
+
+Then(
+  'the delivery gate verdict names {string} against the destination {string}',
+  function (hash: string, destination: string) {
+    assert.deepEqual(gateOf(this).gate.verdict(), {
+      hash,
+      destination: destination === 'none' ? undefined : destination,
+    });
+  },
+);
+
 Given('a delivery gate of the {word} adapter', function (name: string) {
   this.state['portGate'] = adapter(name, { 'in-memory': inMemoryGate, process: processGate }, this);
 });
@@ -428,7 +444,14 @@ Given('a delivery gate of the {word} adapter', function (name: string) {
 Given(
   'the delivery gate leaves the verdict {string} and exits {int}',
   function (verdict: string, code: number) {
-    gateOf(this).willLeave(verdict === 'none' ? undefined : verdict, code);
+    gateOf(this).willLeave(verdict === 'none' ? undefined : verdict, code, GATE_DESTINATION);
+  },
+);
+
+Given(
+  'the delivery gate leaves the verdict {string} against no destination and exits {int}',
+  function (verdict: string, code: number) {
+    gateOf(this).willLeave(verdict, code, 'none');
   },
 );
 
@@ -437,11 +460,11 @@ When('I run the delivery gate', async function () {
 });
 
 Then('the delivery gate verdict is nothing', function () {
-  assert.equal(gateOf(this).gate.verdictHash(), undefined);
+  assert.equal(gateOf(this).gate.verdict(), undefined);
 });
 
 Then('the delivery gate verdict names {string}', function (hash: string) {
-  assert.equal(gateOf(this).gate.verdictHash(), hash);
+  assert.equal(gateOf(this).gate.verdict()?.hash, hash);
 });
 
 Then('the delivery gate exited {int}', function (code: number) {
@@ -478,7 +501,6 @@ const entry = (outcome: DeliveryEntry['outcome'], hash: string): DeliveryEntry =
   outcome,
   hash,
   trial: 'sentinel/gate-1a-x',
-  parent: '0'.repeat(40),
   ci: { run: 7, attempts: 1, polls: 2 },
   gate: 'ran',
   published: ['deliver/x'],

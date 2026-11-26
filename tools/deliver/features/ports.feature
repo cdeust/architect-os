@@ -967,7 +967,18 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       Then the delivery gate verdict is nothing
       When I run the delivery gate
       Then the delivery gate exited 0
-      And the delivery gate verdict names "0000000000000000000000000000000000000006"
+      And the delivery gate verdict names "0000000000000000000000000000000000000006" against the destination "0000000000000000000000000000000000000005"
+
+      Examples:
+        | adapter   |
+        | in-memory |
+        | process   |
+
+    Scenario Outline: a verdict whose report names no destination is a verdict without one
+      Given a delivery gate of the <adapter> adapter
+      And the delivery gate leaves the verdict "0000000000000000000000000000000000000006" against no destination and exits 0
+      When I run the delivery gate
+      Then the delivery gate verdict names "0000000000000000000000000000000000000006" against the destination "none"
 
       Examples:
         | adapter   |

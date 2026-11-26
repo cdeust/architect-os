@@ -130,7 +130,7 @@ Given(
     const forge = new InMemoryForge(journal, 'cdeust/architect-os', repository.remotes);
     forge.script(hex(commit), TRIAL, [ciRun('green')]);
     const gate = new InMemoryGate(journal);
-    gate.afterRun = hex(commit);
+    gate.afterRun = { hash: hex(commit), destination: hex(parent) };
     this.state['delivery'] = {
       config: {
         description: 'scenario',
@@ -203,6 +203,18 @@ Given(
   },
 );
 
+Given('the receipt of the delivery gate names no destination', function () {
+  const { gate } = scene(this);
+  for (const verdict of [gate.held, gate.afterRun])
+    if (verdict !== undefined) verdict.destination = undefined;
+});
+
+Given('the receipt of the delivery gate names the destination {string}', function (hash: string) {
+  const { gate } = scene(this);
+  for (const verdict of [gate.held, gate.afterRun])
+    if (verdict !== undefined) verdict.destination = hex(hash);
+});
+
 Given('the delivery file {string} lost {int} lines', function (path: string, lines: number) {
   const { repository, commit } = scene(this);
   repository.removes(commit, path, lines);
@@ -217,14 +229,15 @@ Given('the delivery push to {string} is refused', function (branch: string) {
 });
 
 Given('the delivery gate verdict already names {string}', function (hash: string) {
-  scene(this).gate.verdict = hex(hash);
+  scene(this).gate.held = { hash: hex(hash), destination: scene(this).parent };
 });
 
 Given(
   'the delivery gate exits {int} and then leaves the verdict {string}',
   function (code: number, verdict: string) {
     scene(this).gate.code = code;
-    scene(this).gate.afterRun = verdict === 'none' ? undefined : hex(verdict);
+    scene(this).gate.afterRun =
+      verdict === 'none' ? undefined : { hash: hex(verdict), destination: scene(this).parent };
   },
 );
 
@@ -274,7 +287,7 @@ Given(
     repository.files.set(`${hex(commit)} ${RECORD}`, stepRecordText());
     repository.hash = hex(commit);
     forge.script(hex(commit), TRIAL, [ciRun('green')]);
-    gate.afterRun = hex(commit);
+    gate.afterRun = { hash: hex(commit), destination: scene(this).parent };
     scene(this).commit = hex(commit);
   },
 );

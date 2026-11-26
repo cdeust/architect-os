@@ -12,9 +12,7 @@ export type Reason =
   | "dépôt imbriqué dans l'arbre"
   | 'arbre non propre'
   | 'empreinte de commit invalide'
-  | 'branche distante absente'
   | "la branche distante n'est pas un ancêtre du commit"
-  | 'rien à livrer'
   | 'un fichier en ajout seul a perdu des lignes'
   | "nom de branche d'essai refusé"
   | "la destination n'accepte qu'une pull request"
@@ -23,6 +21,7 @@ export type Reason =
   | "push de la branche d'essai refusé"
   | 'porte rouge'
   | 'le verdict de la porte ne nomme pas ce commit'
+  | 'le verdict de la porte ne nomme pas de destination'
   | 'CI rouge'
   | 'aucun runner après le nombre de tentatives permis'
   | 'CI sans réponse'
@@ -123,9 +122,16 @@ export interface Forge {
   openPullRequest(request: PullRequestRequest): PullRequestResult;
 }
 
+/** What the receipt of a green gate says: the commit it judged, and the destination commit it judged it against. */
+export interface GateVerdict {
+  hash: string;
+  /** The commit of the destination the gate recorded (`- destination : <ref> à <commit>`); undefined when none. */
+  destination: string | undefined;
+}
+
 export interface Gate {
-  /** The hash the verdict file of the gate names; the file exists only when the gate was green. */
-  verdictHash(): string | undefined;
+  /** The verdict of the receipt of the gate; it exists only when the gate was green. */
+  verdict(): GateVerdict | undefined;
   /** The exit code of the gate. */
   run(): Promise<number>;
 }
@@ -139,13 +145,14 @@ export interface DeliveryEntry {
   outcome: 'delivered' | 'ready' | 'stopped';
   hash: string;
   trial: string;
-  parent: string;
   phase?: Phase;
   reason?: Reason;
   ci: { run?: number; attempts: number; polls: number };
   gate: 'reused' | 'ran' | undefined;
   /** The branches pushed by this run, in order. */
   published: string[];
+  /** The destination commit the gate judged this commit against: the base of the append-only files. */
+  base?: string;
   /** The pull request the run opened or found, and the SHA-256 of the body it was asked with. */
   pullRequest?: { number: number; url: string; created: boolean; body: string };
 }

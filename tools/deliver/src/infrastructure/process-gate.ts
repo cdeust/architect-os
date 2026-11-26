@@ -1,7 +1,7 @@
-import { readGateReceipt } from '@architect-os/sandbox/gate-receipt';
+import { readGateVerdict } from '@architect-os/sandbox/gate-receipt';
 import { gateReportPath } from '@architect-os/sandbox/gate-reports';
 import { runLocations } from '@architect-os/sandbox/runtime-context';
-import type { Gate } from '../domain/ports.js';
+import type { Gate, GateVerdict } from '../domain/ports.js';
 import { closedEnvironment, runToFile } from './host-process.js';
 
 /** A nested Gate uses the admitted run. Only Git and the forge use the caller's identity. */
@@ -13,8 +13,9 @@ export class ProcessGate implements Gate {
     private readonly env: Readonly<NodeJS.ProcessEnv>,
   ) {}
 
-  verdictHash(): string | undefined {
-    return readGateReceipt(this.env.ARCHITECT_OS_RUNTIME_ROOT!, this.worktree);
+  verdict(): GateVerdict | undefined {
+    const read = readGateVerdict(this.env.ARCHITECT_OS_RUNTIME_ROOT!, this.worktree);
+    return read && { hash: read.sha, destination: read.destination };
   }
 
   async run(): Promise<number> {

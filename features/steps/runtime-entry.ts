@@ -940,15 +940,18 @@ const SCRIPTED_GH = [
   'process.exitCode = answer.exit ?? 0;',
 ].join('\n');
 
-/** The gate of these scenarios: it records the XDG_CONFIG_HOME it sees and leaves the verdict of the commit. */
+/**
+ * The gate of these scenarios: it records the XDG_CONFIG_HOME it sees and leaves the verdict of the commit, judged against
+ * the destination commit it is given.
+ */
 const SCRIPTED_GATE = [
   "import { appendFileSync } from 'node:fs';",
-  'const [witness, sha, guard, publisher] = process.argv.slice(2);',
+  'const [witness, sha, guard, publisher, destination] = process.argv.slice(2);',
   "await import((await import('node:url')).pathToFileURL(guard).href);",
   "appendFileSync(witness, `${process.env['XDG_CONFIG_HOME'] ?? '(unset)'}\\n`);",
   'const { publishGateReceipt } = await import(publisher);',
   "const base = JSON.stringify({ job: 'linux', sha, count: 1, pickles: ['scenario'] });",
-  "const report = '# Porte de test, job linux : VERTE\\n- tête : ' + sha + '\\n';",
+  "const report = '# Porte de test, job linux : VERTE\\n- tête : ' + sha + '\\n- destination : refs/remotes/origin/main à ' + destination + ', 1 commit(s) jugé(s)\\n';",
   'publishGateReceipt(process.env.ARCHITECT_OS_RUNTIME_ROOT, process.cwd(), process.env.ARCHITECT_OS_RUN_DIR, sha, base, report);',
 ].join('\n');
 
@@ -996,6 +999,7 @@ Given(
     fixtureGit(work, 'add', '--all');
     fixtureGit(work, 'commit', '--quiet', '--message', 'p0');
     fixtureGit(work, 'push', '--quiet', 'origin', 'HEAD:refs/heads/main');
+    const parent = fixtureGit(work, 'rev-parse', 'HEAD').trim();
     writeFileSync(join(work, '.gitignore'), 'reports/\n');
     // The delivery reads the record of its step from the commit it delivers.
     mkdirSync(join(work, 'steps/step'), { recursive: true });
@@ -1071,6 +1075,7 @@ Given(
           hash,
           join(ROOT, 'scripts/require-run.mjs'),
           import.meta.resolve('@architect-os/sandbox/gate-receipt'),
+          parent,
         ],
       }),
     );

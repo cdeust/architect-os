@@ -70,7 +70,8 @@ export interface ProgressFixture {
 export interface GateFixture {
   gate: Gate;
   /** What the gate leaves, and how it exits, when it runs. */
-  willLeave(verdict: string | undefined, code: number): void;
+  /** What the gate leaves, how it exits, and the destination commit its report names (`none`: it names none). */
+  willLeave(verdict: string | undefined, code: number, destination: string): void;
 }
 
 export interface ClockFixture {

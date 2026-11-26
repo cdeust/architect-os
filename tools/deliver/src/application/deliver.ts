@@ -57,13 +57,13 @@ interface Stop {
   reason: Reason;
 }
 
-/** What phase 1 found: the work branch, where the two remote branches were, and the record of the step. */
+/** What phase 1 found: the work branch, where the remote had it, and the record of the step. */
 interface Started {
   ok: true;
   entry: DeliveryEntry;
   work: string;
-  /** Where the destination and the work branch were (undefined: the remote had no work branch). */
-  remotes: { destination: string; work: string | undefined };
+  /** Where the work branch was (undefined: the remote had no work branch). */
+  remote: string | undefined;
   /** The work branch is behind the hash, or absent, and is pushed. */
   push: boolean;
   record: StepRecordView;
@@ -120,28 +120,20 @@ function prerequisites(
   const branches = branchesOf(options, config);
   if ('reason' in branches) return refuse(branches.reason);
   repository.fetch();
-  const destination = repository.remoteHead(config.destination);
-  if (destination === undefined) return refuse('branche distante absente');
   const work = repository.remoteHead(branches.work);
-  const plan = planPublication(hash, destination, work, (ancestor) => repository.isAncestor(ancestor, hash));
+  const plan = planPublication(hash, work, (ancestor) => repository.isAncestor(ancestor, hash));
   if (!plan.ok) return refuse(plan.reason);
-  for (const path of config.appendOnly) {
-    if (repository.deletedLines(plan.parent, hash, path) !== 0) {
-      return refuse('un fichier en ajout seul a perdu des lignes');
-    }
-  }
   const record = recordOf(hash, options.name, repository, parseRecord);
   if (typeof record === 'string') return refuse(record);
   const entry: DeliveryEntry = {
     outcome: 'delivered',
     hash,
     trial: branches.trial,
-    parent: plan.parent,
     ci: { attempts: 0, polls: 0 },
     gate: undefined,
     published: [],
   };
-  return { ok: true, entry, work: branches.work, remotes: { destination, work }, push: plan.push, record };
+  return { ok: true, entry, work: branches.work, remote: work, push: plan.push, record };
 }
 
 /** Phase 2. */
@@ -152,16 +144,34 @@ function pushTrial(entry: DeliveryEntry, repository: Repository): Stop | undefin
   return undefined;
 }
 
-/** Phase 3. */
-async function playGate(entry: DeliveryEntry, gate: Gate): Promise<Stop | undefined> {
-  if (gate.verdictHash() === entry.hash) {
-    entry.gate = 'reused';
-    return undefined;
+/**
+ * Phase 3: a green verdict of the gate for this commit, reused or played, and the destination commit it judged the commit
+ * against, which is the base of the append-only files: the delivery compares nothing with the destination itself.
+ */
+async function playGate(
+  entry: DeliveryEntry,
+  config: DeliverConfig,
+  gate: Gate,
+  repository: Repository,
+): Promise<Stop | undefined> {
+  let verdict = gate.verdict();
+  if (verdict?.hash === entry.hash) entry.gate = 'reused';
+  else {
+    entry.gate = 'ran';
+    if ((await gate.run()) !== 0) return { phase: 'porte', reason: 'porte rouge' };
+    verdict = gate.verdict();
+    if (verdict?.hash !== entry.hash) {
+      return { phase: 'porte', reason: 'le verdict de la porte ne nomme pas ce commit' };
+    }
   }
-  entry.gate = 'ran';
-  if ((await gate.run()) !== 0) return { phase: 'porte', reason: 'porte rouge' };
-  if (gate.verdictHash() !== entry.hash) {
-    return { phase: 'porte', reason: 'le verdict de la porte ne nomme pas ce commit' };
+  const base = verdict.destination;
+  if (base === undefined)
+    return { phase: 'porte', reason: 'le verdict de la porte ne nomme pas de destination' };
+  entry.base = base;
+  for (const path of config.appendOnly) {
+    if (repository.deletedLines(base, entry.hash, path) !== 0) {
+      return { phase: 'porte', reason: 'un fichier en ajout seul a perdu des lignes' };
+    }
   }
   return undefined;
 }
@@ -211,9 +221,9 @@ async function awaitCi(
 }
 
 /**
- * Phase 5. Just before, both branches are read again and must be where phase 1 found them: the destination at the
- * parent, the work branch at the hash, behind it, or absent. The work branch is pushed when it is behind or absent;
- * then the pull request from it to the destination is opened, or the open one found.
+ * Phase 5. Just before, the work branch is read again and must be where phase 1 found it: at the hash, behind it, or
+ * absent. It is pushed when it is behind or absent; then the pull request from it to the destination is opened, or the
+ * open one found.
  */
 function publish(
   entry: DeliveryEntry,
@@ -223,10 +233,7 @@ function publish(
 ): Stop | undefined {
   const { repository, forge } = ports;
   repository.fetch();
-  if (
-    repository.remoteHead(config.destination) !== start.remotes.destination ||
-    repository.remoteHead(start.work) !== start.remotes.work
-  ) {
+  if (repository.remoteHead(start.work) !== start.remote) {
     return { phase: 'publication', reason: 'une branche distante a bougé' };
   }
   if (start.push) {
@@ -270,7 +277,7 @@ async function play(
   const trial = pushTrial(entry, ports.repository);
   if (trial !== undefined) return trial;
   progress.phase('porte');
-  const gate = await playGate(entry, ports.gate);
+  const gate = await playGate(entry, config, ports.gate, ports.repository);
   if (gate !== undefined) return gate;
   progress.phase('CI');
   const ci = await awaitCi(entry, config, ports.forge, ports.clock);

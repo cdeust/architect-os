@@ -156,28 +156,20 @@ Feature: The decisions of the delivery command (pure: the trial branch, the stat
     Scenario: without a planned family, jobs named like lanes are not producers
       Then the completed gate with producers "a" and jobs "linux=success/runner, a=success/runner, macos=success/runner, lane-1:m=failure/runner/failed-step" is "green"
 
-  Rule: the plan of what to publish is the destination as the parent and whether the work branch is pushed, or a refusal
+  Rule: the plan of what to publish is whether the work branch is pushed, or a refusal; the destination is not read
 
     Scenario Outline: <case>
-      When the publication of "h1" is planned over the destination "<destination>" and the work branch "<work>", the commit descending from "<ancestors>"
-      Then the plan is the parent "<destination>", the work branch <push>
+      When the publication of "h1" is planned over the work branch "<work>", the commit descending from "<ancestors>"
+      Then the plan pushes the work branch: <push>
       And the plan asked the ancestry of "<asked>"
 
       Examples:
-        | case                                                        | destination | work   | ancestors | push       | asked  |
-        | no work branch yet: it is pushed                            | p0          | absent | p0        | pushed     | p0     |
-        | a work branch at an ancestor: it is pushed forward          | p0          | w1     | p0, w1    | pushed     | p0, w1 |
-        | a work branch at the destination: it is pushed forward      | p0          | p0     | p0        | pushed     | p0, p0 |
-        | a work branch already at the hash: not pushed, still opened | p0          | h1     | p0        | not-pushed | p0     |
+        | case                                                        | work   | ancestors | push | asked |
+        | no work branch yet: it is pushed                            | absent | w1        | yes  |       |
+        | a work branch at an ancestor: it is pushed forward          | w1     | w1        | yes  | w1    |
+        | a work branch already at the hash: not pushed, still opened | h1     |           | no   |       |
 
-    Scenario Outline: <case>
-      When the publication of "h1" is planned over the destination "<destination>" and the work branch "<work>", the commit descending from "<ancestors>"
-      Then the plan is refused as "<reason>"
-      And the plan asked the ancestry of "<asked>"
-
-      Examples:
-        | case                                              | destination | work   | ancestors | reason                                              | asked  |
-        | a destination already at the hash                 | h1          | absent | p0        | rien à livrer                                       |        |
-        | a destination at the hash, the work branch behind | h1          | p0     | p0        | rien à livrer                                       |        |
-        | a destination the commit does not descend from    | p9          | absent | p0        | la branche distante n'est pas un ancêtre du commit  | p9     |
-        | a work branch the commit does not descend from    | p0          | w9     | p0        | la branche distante n'est pas un ancêtre du commit  | p0, w9 |
+    Scenario: a work branch the commit does not descend from
+      When the publication of "h1" is planned over the work branch "w9", the commit descending from "w1"
+      Then the plan is refused as "la branche distante n'est pas un ancêtre du commit"
+      And the plan asked the ancestry of "w9"

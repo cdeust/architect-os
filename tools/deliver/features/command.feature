@@ -43,7 +43,7 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Then the delivery command exited 0
       And the delivery command printed on its standard output:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"ran","published":["deliver/step"],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"BODY"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":1,"polls":1,"run":42},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"BODY"}}
         """
       And the delivery command wrote on its standard error:
         """
@@ -68,7 +68,7 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Then the delivery command exited 0
       And the delivery command printed on its standard output:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"reused","published":[],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":false,"body":"BODY"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":1,"polls":1,"run":42},"gate":"reused","published":[],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":false,"body":"BODY"}}
         """
       And the scripted forge of the delivery command was asked for 1 new pull request
       And the remote of the delivery command holds "main" at the commit "p0"
@@ -84,7 +84,7 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Then the delivery command exited 0
       And the delivery command printed on its standard output:
         """
-        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"ran","published":[]}
+        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":1,"polls":1,"run":42},"gate":"ran","published":[],"base":"p0"}
         """
       And the delivery command wrote on its standard error:
         """
@@ -111,7 +111,7 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Then the delivery command exited 0
       And the delivery command printed on its standard output:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":1,"polls":1,"run":42},"gate":"reused","published":["deliver/step"],"pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"BODY"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":1,"polls":1,"run":42},"gate":"reused","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"BODY"}}
         """
       And the remote of the delivery command holds "deliver/step" at the commit "h1"
       And the remote of the delivery command holds "main" at the commit "p0"
@@ -126,7 +126,7 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       Then the delivery command exited 1
       And the delivery command printed on its standard output:
         """
-        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"gate":"ran","published":[],"phase":"porte","reason":"porte rouge"}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":0,"polls":0},"gate":"ran","published":[],"phase":"porte","reason":"porte rouge"}
         """
       And the delivery command wrote on its standard error:
         """
@@ -136,6 +136,18 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
         stopped at porte: porte rouge
         """
       And the remote of the delivery command holds "main" at the commit "p0"
+      And the log of the delivery command holds 1 lines
+
+    Scenario: a receipt of the gate that names no destination: stopped at the gate, nothing published
+      Given the receipt of the gate of the delivery command names no destination
+      When I run the delivery command with "step"
+      Then the delivery command exited 1
+      And the delivery command printed on its standard output:
+        """
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":0,"polls":0},"gate":"ran","published":[],"phase":"porte","reason":"le verdict de la porte ne nomme pas de destination"}
+        """
+      And the remote of the delivery command has no branch "deliver/step"
+      And the scripted forge of the delivery command was asked for 0 new pull requests
       And the log of the delivery command holds 1 lines
 
     Scenario: a tree that is not clean: nothing is pushed

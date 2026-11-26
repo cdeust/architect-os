@@ -23,7 +23,12 @@ export interface ProcessGateFixture extends GateFixture {
   /** The delivery worktree. */
   worktree: string;
   /** The gate leaves this text as its verdict file (`undefined`: none), writes on both outputs when `noisy`. */
-  leaves(text: string | undefined, code: number, mode: 'quiet' | 'noisy' | 'signal' | 'publish'): void;
+  leaves(
+    text: string | undefined,
+    code: number,
+    mode: 'quiet' | 'noisy' | 'signal' | 'publish',
+    destination?: string,
+  ): void;
   /** The gate command is this argv instead of the script. */
   commandIs(argv: string[]): void;
   runtime: ReturnType<typeof gateRuntime>;
@@ -42,11 +47,18 @@ export function processGate(world: DeliverWorld): ProcessGateFixture {
     get gate() {
       return new ProcessGate(worktree, command, GATE_LOG, runtime.env);
     },
-    willLeave(verdict, code) {
-      fixture.leaves(verdict, code, 'publish');
+    willLeave(verdict, code, destination) {
+      fixture.leaves(verdict, code, 'publish', destination);
     },
-    leaves(text, code, mode) {
-      command = [process.execPath, FAKE_GATE, mode, text ?? 'none', String(code)];
+    leaves(text, code, mode, destination) {
+      command = [
+        process.execPath,
+        FAKE_GATE,
+        mode,
+        text ?? 'none',
+        String(code),
+        ...(destination ? [destination] : []),
+      ];
     },
     commandIs(argv) {
       command = argv;

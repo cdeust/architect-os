@@ -107,8 +107,31 @@ export function publishGateReceipt(
   }
 }
 
-/** Read-only: never creates a directory, follows a substituted journal path, or consults checkout reports. */
+/** What a checked receipt says: the commit, and the destination commit the gate judged it against, when it names one. */
+export interface GateVerdict {
+  sha: string;
+  destination: string | undefined;
+}
+
+/**
+ * The destination commit of the report, from its line `- destination : <reference> à <commit>, …`
+ * (tools/test-gate/src/domain/report.ts); undefined when the line is absent or names none (`aucune`).
+ */
+export function reportDestination(report: string): string | undefined {
+  for (const line of report.split('\n')) {
+    const found = /^- destination : \S+ à ([0-9a-f]{40}),/.exec(line);
+    if (found !== null) return found[1];
+  }
+  return undefined;
+}
+
+/** The commit of a checked receipt (`readGateVerdict`). */
 export function readGateReceipt(root: string, checkout: string): string | undefined {
+  return readGateVerdict(root, checkout)?.sha;
+}
+
+/** Read-only: never creates a directory, follows a substituted journal path, or consults checkout reports. */
+export function readGateVerdict(root: string, checkout: string): GateVerdict | undefined {
   try {
     const owner = physical(root),
       tree = physical(checkout);
@@ -142,7 +165,7 @@ export function readGateReceipt(root: string, checkout: string): string | undefi
         !validProof(data.sha, data.base, data.report)
       )
         return undefined;
-      return data.sha;
+      return { sha: data.sha, destination: reportDestination(data.report) };
     } finally {
       closeSync(fd);
     }

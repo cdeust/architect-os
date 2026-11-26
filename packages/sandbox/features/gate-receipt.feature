@@ -82,3 +82,20 @@ Feature: The full Linux gate publishes its checked commit and artifacts under pr
       | run suffix |
       | invalid directory message |
       | invalid proof message |
+
+  Scenario: a checked receipt gives the destination commit its report names
+    Then a checked Gate receipt whose report names the destination "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" reads as that commit and its destination
+
+  Scenario Outline: the destination commit of a report: <case>
+    Then the destination of the Gate report "<report>" is "<destination>"
+
+    Examples:
+      | case                              | report                                                                                                   | destination |
+      | the line of the report            | # V{lf}- tête : x{lf}- destination : refs/remotes/origin/main à aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, 2 commit(s) jugé(s){lf} | aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa |
+      | no commit of the destination      | - destination : refs/remotes/origin/main à aucune, 0 commit(s) jugé(s)                                   | none |
+      | no line of the destination        | # V{lf}- tête : aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                                                                                     | none |
+      | a commit of 39 characters         | - destination : refs/remotes/origin/main à aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, 1 commit(s) jugé(s)                                 | none |
+      | a commit in upper case            | - destination : refs/remotes/origin/main à AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA, 1 commit(s) jugé(s)                              | none |
+      | a line that does not start with it | x- destination : refs/remotes/origin/main à aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, 1 commit(s) jugé(s)                                    | none |
+      | a reference with a space          | - destination : refs main à aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, 1 commit(s) jugé(s)                                                     | none |
+      | a commit of 41 characters         | - destination : refs/remotes/origin/main à aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, 1 commit(s) jugé(s)                                     | none |
