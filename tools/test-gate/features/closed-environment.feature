@@ -147,6 +147,19 @@ Feature: the gate reads its own repository, whatever the environment it was star
         """
       And the witness program of the gate has not run
 
+    Scenario Outline: a <program> named by the repository does not run while the gate reads the lines of a change
+      Given the configuration of the gate repository names a witness program for its diffs as its "<program>"
+      Then the gate changes against the first parent are:
+        """
+        src/leaf.mjs: 1
+        """
+      And the witness program of the gate has not run
+
+      Examples:
+        | program                                       |
+        | external diff                                 |
+        | text conversion, given by its info attributes |
+
   Rule: the gate enters no repository nested in its tree, and judges no tree that holds one
 
     A session can leave a repository in its worktree, with a configuration of its own that names a program (here the

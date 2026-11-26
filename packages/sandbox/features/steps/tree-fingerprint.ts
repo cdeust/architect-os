@@ -145,6 +145,15 @@ Then('the witness program of the configuration of the repository has not run', f
   assert.equal(witnessRan(this), false);
 });
 
+Given('the file {string} of the repository is committed whatever ignores it', function (file: string) {
+  const { directory } = fp(this);
+  mkdirSync(dirname(join(directory, file)), { recursive: true });
+  writeFileSync(join(directory, file), 'kept\n');
+  git(directory, 'add', '-A');
+  git(directory, 'add', '-f', file);
+  git(directory, 'commit', '-q', '-m', 'kept');
+});
+
 Given('everything in the repository is committed', function () {
   const { directory } = fp(this);
   git(directory, 'add', '-A');

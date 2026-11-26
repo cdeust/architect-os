@@ -257,6 +257,33 @@ Feature: the fingerprint of the tree of a worktree
     When I take the fingerprint of the repository
     Then the fingerprint is clean
 
+  Scenario: an ignore rule the tree added to a tracked ignore file does not hide a nested repository
+    A session can rewrite a tracked ignore file: its rules are trusted only with the bytes it was committed with.
+
+    Given a throwaway repository with one commit
+    And the file ".gitignore" of the repository holds "*.log\nsub/\n"
+    And the file "sub/.git" of the repository holds "gitdir: /missing-gitdir\n"
+    When I try to take the fingerprint of it
+    Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+
+  Scenario: a committed rule that ignores a directory holding a tracked file does not hide a marker in it
+    Git walks a directory that holds a tracked path whatever ignores it: so does the walk for nested markers.
+
+    Given a throwaway repository with one commit
+    And the file ".gitignore" of the repository holds "lib/\n"
+    And the file "lib/kept.txt" of the repository is committed whatever ignores it
+    And the file "lib/.git" of the repository holds "gitdir: /missing-gitdir\n"
+    When I try to take the fingerprint of it
+    Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+
+  Scenario: a committed rule that ignores everything but a directory does not hide a nested repository in it
+    Given a throwaway repository with one commit
+    And the file ".gitignore" of the repository holds "*\n!sub/\n"
+    And everything in the repository is committed
+    And the file "sub/.git" of the repository holds "gitdir: /missing-gitdir\n"
+    When I try to take the fingerprint of it
+    Then the fingerprint throws "l'empreinte de l'arbre a échoué : dépôt imbriqué dans l'arbre"
+
   Rule: the guard of the checkout compares its bytes with the commit, and refuses what it cannot read
 
     The delivery asks it whether its checkout is clean, and the fingerprint, the gate and the delivery ask it for the

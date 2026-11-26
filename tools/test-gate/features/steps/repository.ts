@@ -472,6 +472,30 @@ Given(
   },
 );
 
+// diff.external, or a textconv that .git/info/attributes gives every file (neither the empty tree nor the attributes
+// file of the configuration reaches it): programs git starts for a diff unless told not to.
+Given(
+  'the configuration of the gate repository names a witness program for its diffs as its {string}',
+  function (program: string) {
+    const repo = repository(this);
+    const witness = join(mkdtempSync(join(tmpdir(), 'aos-gate-witness-')), 'witness');
+    this.cleanups.push(() => rmSync(dirname(witness), { recursive: true, force: true }));
+    writeFileSync(witness, `#!/bin/sh\n: > '${witness}.ran'\ncat "$1" 2>/dev/null\n`);
+    chmodSync(witness, 0o755);
+    const configuration = repo.path('.git/config');
+    const section =
+      program === 'external diff'
+        ? `[diff]\n\texternal = ${witness}\n`
+        : `[diff "witness"]\n\ttextconv = ${witness}\n`;
+    if (program !== 'external diff') {
+      mkdirSync(repo.path('.git/info'), { recursive: true });
+      writeFileSync(repo.path('.git/info/attributes'), '* diff=witness\n');
+    }
+    writeFileSync(configuration, `${readFileSync(configuration, 'utf8')}${section}`);
+    this.state['gateWitness'] = witness;
+  },
+);
+
 When('git is asked for the diff with none of the options of the gate', function () {
   const { firstParent } = new GitRepository(repository(this).dir).commits();
   assert.notEqual(firstParent, null, 'the gate repository must have a first parent');

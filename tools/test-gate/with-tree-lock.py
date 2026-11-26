@@ -75,7 +75,7 @@ def checkout():
     return path
 
 
-def nested_marker(tree_fd, tracked_ignores):
+def nested_marker(tree_fd, tracked_ignores, tracked):
     """Walk directories without opening Git markers. check-ignore matches names, it does
     not enumerate untracked files (Git's builtin/check-ignore.c and dir.c)."""
     def walk(fd, prefix):
@@ -106,9 +106,11 @@ def nested_marker(tree_fd, tracked_ignores):
             if matched.returncode not in (0, 1):
                 raise Refusal("GATE_CHECKOUT_UNREADABLE")
             records = iter(matched.stdout.split(b"\0")[:-1])
+            # Git walks a directory that holds a tracked path whatever ignores it: so does this walk.
             pruned = {
                 path[2:] for origin, _, pattern, path in zip(records, records, records, records)
                 if origin in tracked_ignores and not pattern.startswith(b"!")
+                and not any(name.startswith(path[2:] + b"/") for name in tracked)
             }
         for name, path in zip(children, paths):
             if path in pruned:
@@ -137,12 +139,37 @@ def refuse_nested_repository(fd):
         raise Refusal("GATE_NESTED_REPOSITORY")
 
 
+def recorded_bytes(fd, name, oid):
+    """Whether the file `name` under `fd` holds the blob `oid`, read without following a link."""
+    names = name.split(b"/")
+    current = os.dup(fd)
+    try:
+        for part in names[:-1]:
+            nxt = os.open(part, DIRECTORY, dir_fd=current)
+            os.close(current)
+            current = nxt
+        file = os.open(names[-1], os.O_RDONLY | FILE, dir_fd=current)
+        with os.fdopen(file, "rb") as stream:
+            data = stream.read()
+    except OSError:
+        return False
+    finally:
+        os.close(current)
+    blob = hashlib.sha1(b"blob %d\0" % len(data) + data, usedforsecurity=False)
+    return blob.hexdigest().encode() == oid
+
+
 def visible_marker(fd, tree):
+    """`tree` lists recorded paths (`ls-tree -r -z` or `ls-files -s -z`): their ignore files and the paths they hold."""
+    entries = [entry.partition(b"\t") for entry in tree.split(b"\0") if entry]
+    tracked = [name for _, _, name in entries]
+    # A session can rewrite a tracked ignore file: its rules are trusted only with the bytes it was recorded with.
     ignores = {
-        name for entry in tree.split(b"\0")
-        if (name := entry.partition(b"\t")[2]).rsplit(b"/", 1)[-1] == b".gitignore"
+        name for meta, _, name in entries
+        if name.rsplit(b"/", 1)[-1] == b".gitignore"
+        and recorded_bytes(fd, name, next((field for field in meta.split(b" ") if len(field) == 40), b""))
     }
-    return nested_marker(fd, ignores)
+    return nested_marker(fd, ignores, tracked)
 
 
 def lease(tree, existing):
