@@ -52,6 +52,12 @@ Feature: SandboxRunner contract on the real srt adapter
     When I start profile "builder" with command "test -d ${config}", close its input, drain its output and wait for it to end
     Then it exits with code 0
 
+  # I4 (docs/design/exigences-spec.md): the build reads the history of its repository itself, on demand.
+  Scenario: srt adapter lets the builder read the history of its repository with git
+    Given an srt runner over a throwaway git repository
+    When I start profile "builder" with command "git log -1 --format=%s" and read its output to its end
+    Then its output is "i"
+
   Scenario: srt adapter refuses an argument with an unknown variable
     Given an srt runner over a throwaway git repository
     When I try to start profile "builder" with command "echo ${nope}"

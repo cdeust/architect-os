@@ -82,7 +82,14 @@ export function verifyFacts(
   return { verified, rejected };
 }
 
-function rejection(fact: Fact, read: (path: string) => string | undefined): Rejection | undefined {
+/**
+ * Pourquoi l'hôte rejette une citation (fichier, ligne, texte), ou `undefined` s'il la retrouve telle quelle à sa ligne.
+ * Les faits des éclaireurs et les preuves des critères d'une revue (R2) passent par elle.
+ */
+export function rejection(
+  fact: Pick<Fact, 'file' | 'line' | 'quote'>,
+  read: (path: string) => string | undefined,
+): Rejection | undefined {
   if (refused(fact.file)) return 'chemin refusé';
   const text = read(fact.file);
   if (text === undefined) return 'fichier absent';

@@ -79,6 +79,8 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | appendOnly     | []                                                     |
         | appendOnly     | ["a","b","c","d","e","f","g","h"]                      |
         | judgePaths     | ["tools/test-gate/"]                                   |
+        | judgePaths     | ["**/node_modules/"]                                   |
+        | judgePaths     | ["**/*.cjs"]                                           |
         | approvalHours  | 1                                                      |
         | approvalHours  | 168                                                    |
         | gateCommand    | ["a"]                                                  |
@@ -213,6 +215,8 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | approvalHours  | 1.5                            | $.approvalHours                                    |
         | approvalHours  | "24"                           | $.approvalHours                                    |
         | judgePaths     | [""]                           | $.judgePaths.0                                     |
+        | judgePaths     | ["**/"]                        | $.judgePaths.0 a **/ rule names one directory: **/name/ |
+        | judgePaths     | ["**/a/b/"]                    | $.judgePaths.0 a **/ rule names one directory: **/name/ |
         | gateCommand    | []                             | $.gateCommand                                      |
         | gateCommand    | ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q"] | $.gateCommand        |
         | gateCommand    | [""]                           | $.gateCommand.0                                    |

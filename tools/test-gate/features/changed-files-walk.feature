@@ -11,6 +11,7 @@ Feature: The gate walks only the paths of a change, and names first what it chec
         "production": { "include": ["src/**/*.mjs", "*/src/**/*.mjs"], "exclude": ["**/specs/**"] },
         "features": { "include": ["specs/**/*.feature"], "exclude": ["**/node_modules/**"] },
         "jobs": { "linux": { "features": ["**/*.feature"], "mutation": true } },
+        "destination": "refs/remotes/origin/main",
         "debt": "mutation-debt.json",
         "reports": {
           "cucumber": "reports/cucumber.ndjson",

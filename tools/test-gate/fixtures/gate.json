@@ -8,6 +8,7 @@
     "linux": { "features": ["**/*.feature"], "mutation": true },
     "macos": { "features": ["specs/sandbox/**/*.feature"], "mutation": false }
   },
+  "destination": "refs/remotes/origin/main",
   "debt": "mutation-debt.json",
   "reports": {
     "cucumber": "reports/cucumber.ndjson",

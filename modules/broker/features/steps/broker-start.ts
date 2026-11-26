@@ -34,15 +34,31 @@ class StartScenario {
 }
 const scenario = (world: BrokerWorld) => slot(world, 'broker-start', () => new StartScenario());
 
-/** A port free at this instant. */
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer();
-    server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
+/** Ports handed out by `freePort` in this process: none is given twice. */
+const handedPorts = new Set<number>();
+
+/**
+ * A loopback port free at this instant, taken below the ranges the kernel hands out to outbound connections (Linux
+ * 32768 to 60999, macOS 49152 to 65535). A port from `listen(0)` comes from those ranges: between the probe and the
+ * bind of the process under test, a connection the scenario opens can be given the same port as its local end, and
+ * the bind fails with EADDRINUSE (lane 12 of #139, 26 November 2026). Below them, only an explicit bind can take it.
+ */
+async function freePort(): Promise<number> {
+  for (let attempt = 0; attempt < 500; attempt++) {
+    const port = 20000 + Math.floor(Math.random() * 12000);
+    if (handedPorts.has(port)) continue;
+    const free = await new Promise<boolean>((done) => {
+      const probe = createServer();
+      probe.once('error', () => done(false));
+      probe.listen(port, '127.0.0.1', () => probe.close(() => done(true)));
     });
-  });
+    if (free) {
+      handedPorts.add(port);
+      return port;
+    }
+  }
+  throw new Error('no free loopback port below the ephemeral ranges');
+}
 
 const KEYS: Record<string, { content: string; mode: number } | 'directory'> = {
   'readable by its group': { content: 'sk-test', mode: 0o640 },

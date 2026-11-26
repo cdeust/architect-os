@@ -97,3 +97,15 @@ Then('the released judge classifies {string} as {string}', async function (path:
     kind === 'judge',
   );
 });
+
+Then(
+  'the committed delivery policy classifies {string} as {string}',
+  async function (path: string, kind: string) {
+    const { changesJudge } = await import('../../src/domain/plan.js');
+    const { readFileSync } = await import('node:fs');
+    const policy = JSON.parse(readFileSync(new URL('../../deliver.json', import.meta.url), 'utf8')) as {
+      judgePaths: string[];
+    };
+    assert.equal(changesJudge([path], policy.judgePaths), kind === 'judge');
+  },
+);

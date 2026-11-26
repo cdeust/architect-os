@@ -699,3 +699,86 @@ Then('the hosted install leaves the lifecycle witness untouched', function () {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// The destination the gate judges against (tools/test-gate/src/domain/destination.ts): every job that runs the gate
+// points it first at the first parent of the commit it judges, the one reference gate.json names, from env.
+const RUNS_GATE = /tools\/test-gate\/src\/(main|hosted)\.ts|npm run gate\b/;
+const POINT = /^git update-ref "\$AOS_GATE_DESTINATION" HEAD\^1$/;
+// Anything else that could move the reference between the step and the gate.
+const MOVES_REFERENCE = /\bupdate-ref\b|\bgit\s+(fetch|pull|reset|checkout|switch|branch)\b/;
+
+export function assertDestinationPointed(source: string): void {
+  const gate = JSON.parse(readFileSync(join(ROOT, 'tools/test-gate/gate.json'), 'utf8')) as {
+    destination: string;
+  };
+  let jobs = 0;
+  for (const [id, job] of Object.entries(workflow(source).jobs)) {
+    const at = job.steps.findIndex((step) => RUNS_GATE.test(step.run ?? ''));
+    if (at === -1) continue;
+    jobs += 1;
+    const point = job.steps.findIndex((step) => POINT.test(step.run ?? ''));
+    assert.ok(point !== -1 && point < at, id + ': the gate runs without its destination pointed before it');
+    const reference = job.steps[point]!.env?.['AOS_GATE_DESTINATION'];
+    assert.equal(reference, gate.destination, id + ': not the reference of gate.json');
+    const between = job.steps.slice(point + 1, at).filter((step) => MOVES_REFERENCE.test(step.run ?? ''));
+    assert.deepEqual(between, [], id + ': a step between the pointing and the gate can move the reference');
+  }
+  assert.ok(jobs > 0, 'no job runs the gate');
+}
+
+Then('every job that runs the gate points the destination of gate.json before it', function () {
+  assertDestinationPointed(text(this));
+});
+
+type Step = { name?: string; run?: string; env?: Record<string, string> };
+
+/** A copy where `fault` is applied to the job `index` of those that run the gate. */
+function brokenCopy(source: string, fault: string, index: number): string | undefined {
+  const doc = parse(source) as { jobs: Record<string, { steps?: Step[] }> };
+  const jobs = Object.values(doc.jobs).filter((candidate) =>
+    (candidate.steps ?? []).some((step) => RUNS_GATE.test(step.run ?? '')),
+  );
+  const steps = jobs[index]?.steps;
+  if (steps === undefined) return undefined;
+  const at = steps.findIndex((step) => POINT.test(step.run ?? ''));
+  assert.ok(at !== -1);
+  const point = steps[at]!;
+  switch (fault) {
+    case 'without-the-step':
+      steps.splice(at, 1);
+      break;
+    case 'with-the-step-after-the-gate':
+      steps.splice(at, 1);
+      steps.push(point);
+      break;
+    case 'with-the-branch-written-into-the-command':
+      point.run = 'git update-ref "${{ env.AOS_GATE_DESTINATION }}" HEAD^1';
+      break;
+    case 'with-the-live-branch-fetched':
+      point.run = 'git fetch --quiet --no-tags --depth=2 origin "+refs/heads/main:$AOS_GATE_DESTINATION"';
+      break;
+    case 'with-another-branch':
+      point.env = { AOS_GATE_DESTINATION: 'refs/remotes/origin/feat/gate-1a' };
+      break;
+    case 'with-a-second-update-ref-before-the-gate':
+      steps.splice(at + 1, 0, { name: 'move it again', run: 'git update-ref "$AOS_GATE_DESTINATION" HEAD' });
+      break;
+    case 'with-a-fetch-before-the-gate':
+      steps.splice(at + 1, 0, { name: 'fetch', run: 'git fetch --quiet origin main' });
+      break;
+    default:
+      assert.fail(fault);
+  }
+  return stringify(doc);
+}
+
+Then('a copy of the workflow {word} is refused, in every job that runs the gate', function (fault: string) {
+  let copies = 0;
+  for (let index = 0; ; index++) {
+    const copy = brokenCopy(text(this), fault, index);
+    if (copy === undefined) break;
+    copies += 1;
+    assert.throws(() => assertDestinationPointed(copy), `job ${index}`);
+  }
+  assert.ok(copies > 0);
+});

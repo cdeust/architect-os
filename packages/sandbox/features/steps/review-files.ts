@@ -23,6 +23,25 @@ function checkPrompt(text: string): void {
   ]) {
     assert.ok(section.includes(needle), `the section on the checks does not say ${needle}`);
   }
+  // R2: each acceptance criterion confronted with the change, one status each, the unmet ones blocking.
+  const criteria = text.split('## Acceptance criteria')[1]?.split('\n## ')[0];
+  assert.ok(criteria !== undefined, 'the prompt has no section on the acceptance criteria');
+  for (const needle of [
+    'one entry per listed identifier, in that order',
+    '`met`',
+    '`unmet`',
+    '`not_established`',
+    'rejects the verdict if one is not on its line',
+    '`unmet` and `not_established` block the step',
+    'never `met` because a check passed',
+    'When the brief carries no criterion, `criteria` is empty',
+  ]) {
+    assert.ok(criteria.includes(needle), `the section on the criteria does not say ${needle}`);
+  }
+  assert.ok(
+    text.includes('or one criterion that is not `met`'),
+    'the verdict rule does not count a criterion that is not met',
+  );
 }
 
 type Json = Record<string, any>;
@@ -31,8 +50,13 @@ type Json = Record<string, any>;
 function checkSchema(schema: Json): void {
   assert.equal(schema['type'], 'object');
   assert.equal(schema['additionalProperties'], false);
-  assert.deepEqual([...schema['required']].sort(), ['findings', 'not_checked', 'verdict']);
-  assert.deepEqual(Object.keys(schema['properties']).sort(), ['findings', 'not_checked', 'verdict']);
+  assert.deepEqual([...schema['required']].sort(), ['criteria', 'findings', 'not_checked', 'verdict']);
+  assert.deepEqual(Object.keys(schema['properties']).sort(), [
+    'criteria',
+    'findings',
+    'not_checked',
+    'verdict',
+  ]);
   assert.deepEqual(schema['properties']['verdict']['enum'], ['accept', 'request_changes']);
   const findings = schema['properties']['findings'];
   assert.equal(findings['type'], 'array');
@@ -49,6 +73,13 @@ function checkSchema(schema: Json): void {
   const notChecked = schema['properties']['not_checked'];
   assert.equal(notChecked['type'], 'array');
   assert.equal(notChecked['items']['type'], 'string');
+  const criterion = schema['properties']['criteria']['items'];
+  assert.equal(criterion['additionalProperties'], false);
+  assert.deepEqual([...criterion['required']].sort(), ['evidence', 'id', 'reason', 'status']);
+  assert.deepEqual(criterion['properties']['status']['enum'], ['met', 'unmet', 'not_established']);
+  const proof = criterion['properties']['evidence']['items'];
+  assert.equal(proof['additionalProperties'], false);
+  assert.deepEqual([...proof['required']].sort(), ['file', 'line', 'quote']);
 }
 
 /** The checks on the build prompt: not empty, the committed rules by git, the replay profile, the forbidden git commands. */
@@ -108,6 +139,22 @@ const PROMPT_DEFECTS: Record<string, (text: string) => string> = {
     text.replaceAll('an indication and not a proof', 'a proof'),
   'no ban on running a listed command again': (text) =>
     text.replaceAll('Do not run a listed command again', 'Run a listed command again'),
+  'no section on the acceptance criteria': (text) => text.replaceAll('## Acceptance criteria', '## Other'),
+  'no status per listed criterion in order': (text) =>
+    text.replaceAll('one entry per listed identifier, in that order', 'one entry per criterion you checked'),
+  'no lookup of the evidence by the host': (text) =>
+    text.replaceAll('rejects the verdict if one is not on its line', 'reads it'),
+  'a criterion not established that does not block': (text) =>
+    text.replaceAll('`unmet` and `not_established` block the step', '`unmet` blocks the step'),
+  'a criterion met because a check passed': (text) =>
+    text.replaceAll('never `met` because a check passed', 'often `met` because a check passed'),
+  'no empty criteria for a brief without criteria': (text) =>
+    text.replaceAll(
+      'When the brief carries no criterion, `criteria` is empty',
+      'Invent criteria when the brief has none',
+    ),
+  'a verdict rule that ignores the criteria': (text) =>
+    text.replaceAll('or one criterion that is not `met`', ''),
   'no not_checked for what nothing established': (text) =>
     text.replaceAll('put in `not_checked` what neither', 'ignore what neither'),
   'no word on the sandbox of the checks': (text) => text.replaceAll('no network', 'a network'),
@@ -120,6 +167,15 @@ const SCHEMA_DEFECTS: Record<string, (schema: Json) => unknown> = {
   'a missing required key': (s) => (s['required'] = ['verdict', 'findings']),
   'an open top level': (s) => delete s['additionalProperties'],
   'an open finding': (s) => (s['properties']['findings']['items']['additionalProperties'] = true),
+  'no criteria': (s) => {
+    delete s['properties']['criteria'];
+    s['required'] = ['verdict', 'findings', 'not_checked'];
+  },
+  'a criterion status that does not exist': (s) =>
+    s['properties']['criteria']['items']['properties']['status']['enum'].push('partial'),
+  'an open criterion': (s) => (s['properties']['criteria']['items']['additionalProperties'] = true),
+  'an evidence key not required': (s) =>
+    (s['properties']['criteria']['items']['properties']['evidence']['items']['required'] = ['file', 'line']),
   'a finding key not required': (s) =>
     (s['properties']['findings']['items']['required'] = ['level', 'file', 'line', 'quote']),
 };

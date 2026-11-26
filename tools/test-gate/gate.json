@@ -25,6 +25,7 @@
       "mutation": false
     }
   },
+  "destination": "refs/remotes/origin/main",
   "debt": "tools/test-gate/mutation-debt.json",
   "canary": {
     "file": "tools/test-gate/canary/canary.ts",

@@ -12,10 +12,19 @@ import {
 import { replayViolations, type ReplayRecord } from './replay.js';
 import type { ReadFailure, Violation } from './violation.js';
 
+/** The destination the first parent was taken from (src/domain/destination.ts): what the proof is worth against. */
+export interface JudgedDestination {
+  readonly reference: string;
+  readonly commit: string | null;
+  /** Commits between the first parent judged and the head. */
+  readonly commits: number;
+}
+
 export interface GateInputs {
   readonly job: string;
   readonly head: string;
   readonly firstParent: string | null;
+  readonly destination: JudgedDestination;
   readonly staticNow: StaticSet;
   readonly staticParent: readonly string[];
   readonly run: CucumberRun | ReadFailure;
@@ -65,6 +74,7 @@ export interface Verdict {
   readonly job: string;
   readonly head: string;
   readonly firstParent: string | null;
+  readonly destination: JudgedDestination;
   readonly green: boolean;
   /** Identity texts of the executed pickles. */
   readonly executed: readonly string[];
@@ -108,6 +118,7 @@ export function evaluate(inputs: GateInputs): Verdict {
     job: inputs.job,
     head: inputs.head,
     firstParent: inputs.firstParent,
+    destination: inputs.destination,
     green: violations.length === 0,
     executed,
     staticCount: inputs.staticNow.ids.length,

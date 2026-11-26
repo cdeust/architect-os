@@ -70,7 +70,19 @@ function configSchema(): z.ZodType<DeliverConfig> {
       .optional(),
     appendOnly: z.array(path).max(8),
     approvalHours: count(168),
-    judgePaths: z.array(z.string().min(1).toLowerCase()).nonempty(),
+    judgePaths: z
+      .array(
+        z
+          .string()
+          .min(1)
+          .toLowerCase()
+          // `**/name/` is a directory of one name at any depth (plan.ts): `**/` alone or `**/a/b/` would match nothing.
+          .refine(
+            (rule) => !(rule.startsWith('**/') && rule.endsWith('/')) || /^\*\*\/[^/]+\/$/.test(rule),
+            'a **/ rule names one directory: **/name/',
+          ),
+      )
+      .nonempty(),
     gateCommand: z.array(word).min(1).max(16),
     gateLog: z
       .string()

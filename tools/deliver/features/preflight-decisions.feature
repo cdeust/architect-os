@@ -31,3 +31,18 @@ Feature: The released policy identifies the programs and paths that require main
       | my-node_modules/x        | ordinary |
       | nested/tool.cjs          | judge    |
       | nested/tool.cjs.txt      | ordinary |
+
+  Scenario Outline: the committed policy of the launcher classifies "<path>" as "<kind>"
+    Then the committed delivery policy classifies "<path>" as "<kind>"
+
+    Examples:
+      | path                              | kind     |
+      | tools/node_modules/x/index.js     | judge    |
+      | packages/sandbox/node_modules/y   | judge    |
+      | node_modules/.bin/tsc             | judge    |
+      | .github/workflows/gate.yml        | judge    |
+      | tools/deliver/approve             | judge    |
+      | tools/test-gate/gate.json         | judge    |
+      | nested/package.json               | judge    |
+      | gateway/src/main.ts               | ordinary |
+      | docs/design/trusted-gate.md       | ordinary |

@@ -62,6 +62,7 @@ Feature: Test gate, rules 1 and 3: unique identities, executed set equal to the 
         "production": { "include": ["src/**/*.mjs"], "exclude": [] },
         "features": { "include": ["specs/green.feature"], "exclude": [] },
         "jobs": { "linux": { "features": ["**/*.feature"], "mutation": true } },
+        "destination": "refs/remotes/origin/main",
         "debt": "mutation-debt.json",
         "reports": {
           "cucumber": "reports/cucumber.ndjson",

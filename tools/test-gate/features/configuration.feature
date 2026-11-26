@@ -33,6 +33,9 @@ Feature: Test gate configuration and command line
   Scenario: a job may count several feature globs
     Then a copy of the committed gate configuration with "jobs.macos.features" set to '["features/sandbox/**/*.feature", "features/macos/**/*.feature"]' loads
 
+  Scenario: a destination may be any remote-tracking reference, a branch with a slash included
+    Then a copy of the committed gate configuration with "destination" set to '"refs/remotes/upstream/feat/gate-1a"' loads
+
   Scenario: rule 7 is optional in a configuration
     Then a copy of the committed gate configuration with "canary" set to 'absent' loads
     And a copy of the committed gate configuration with "replay" set to 'absent' loads
@@ -64,6 +67,14 @@ Feature: Test gate configuration and command line
       | replay.limitMs        | 0           | hors schéma : ✖ Too small: expected number to be >0   → at replay.limitMs |
       | replay.limitMs        | 1.5         | hors schéma : ✖ Invalid input: expected int, received number   → at replay.limitMs |
       | replay.extra          | 1           | hors schéma : ✖ Unrecognized key: "extra"   → at replay |
+      | destination           | absent      | hors schéma : ✖ Invalid input: expected string, received undefined   → at destination |
+      | destination           | "refs/heads/main" | hors schéma : ✖ Invalid string: must match pattern /^refs\\/remotes\\/[A-Za-z0-9._-]+\\/[A-Za-z0-9._/-]+$/   → at destination |
+      | destination           | "xrefs/remotes/origin/main" | hors schéma : ✖ Invalid string: must match pattern /^refs\\/remotes\\/[A-Za-z0-9._-]+\\/[A-Za-z0-9._/-]+$/   → at destination |
+      | destination           | "refs/remotes/origin/main " | hors schéma : ✖ Invalid string: must match pattern /^refs\\/remotes\\/[A-Za-z0-9._-]+\\/[A-Za-z0-9._/-]+$/   → at destination |
+      | destination           | "refs/remotes//main" | hors schéma : ✖ Invalid string: must match pattern /^refs\\/remotes\\/[A-Za-z0-9._-]+\\/[A-Za-z0-9._/-]+$/   → at destination |
+      | destination           | "refs/remotes/origin/a..b" | hors schéma : ✖ a reference name   → at destination |
+      | destination           | "refs/remotes/origin/main/" | hors schéma : ✖ a reference name   → at destination |
+      | destination           | "refs/remotes/origin/main.lock" | hors schéma : ✖ a reference name   → at destination |
 
   Scenario: a configuration that is not JSON is refused by the command line
     Given a gate repository

@@ -721,6 +721,25 @@ Then(
   },
 );
 
+When(
+  'the owner runs the approval command into the directory {string}, which root owns',
+  function (directory: string) {
+    const c = commandOf(this);
+    // The suite does not run as root: a directory root owns is one the writing uid does not.
+    assert.notEqual(process.getuid!(), 0);
+    assert.equal(statSync(directory).uid, 0);
+    const err = join(c.home, 'approve-usr.stderr');
+    const result = runToEnd(
+      '/bin/sh',
+      ['-c', 'exec "$@" 2>"$0"', err, APPROVE, 'publication', 'cdeust/architect-os', c.git.hashOf('h1')],
+      c.home,
+      { PATH: '/usr/bin:/bin', ARCHITECT_OS_APPROVAL_DIRECTORY: directory },
+    );
+    assert.ok(result);
+    this.state['approval'] = { ...result, err: readFileSync(err, 'utf8') };
+  },
+);
+
 When('the approval command is run as this user into the owner directory', function () {
   const c = commandOf(this);
   const err = join(c.home, 'approve-root.stderr');

@@ -11,15 +11,16 @@ Feature: GitHub workflows
     And every checkout in it has persist-credentials false
 
     Examples:
-      | file                     |
-      | bench-sandbox.yml        |
-      | broker-live.yml          |
-      | claude-review.yml        |
-      | claude.yml               |
-      | gate.yml                 |
-      | gate-lane.yml            |
-      | mutation-full.yml        |
-      | pipeline-after-merge.yml |
+      | file                       |
+      | bench-sandbox.yml          |
+      | broker-live.yml            |
+      | claude-review.yml          |
+      | claude-security-review.yml |
+      | claude.yml                 |
+      | gate.yml                   |
+      | gate-lane.yml              |
+      | mutation-full.yml          |
+      | pipeline-after-merge.yml   |
       | watch.yml                |
 
   Scenario: the native lane preserves separate runner jobs and permissions
@@ -196,3 +197,19 @@ Feature: GitHub workflows
       | a cached setup          |
       | a bare operational Node |
       | an unguarded npx        |
+
+  Scenario Outline: every job of <file> that runs the gate points its destination first at the first parent of its head, the reference of gate.json from env
+    Given the committed workflow "<file>"
+    Then every job that runs the gate points the destination of gate.json before it
+    And a copy of the workflow without-the-step is refused, in every job that runs the gate
+    And a copy of the workflow with-the-step-after-the-gate is refused, in every job that runs the gate
+    And a copy of the workflow with-the-branch-written-into-the-command is refused, in every job that runs the gate
+    And a copy of the workflow with-another-branch is refused, in every job that runs the gate
+    And a copy of the workflow with-the-live-branch-fetched is refused, in every job that runs the gate
+    And a copy of the workflow with-a-second-update-ref-before-the-gate is refused, in every job that runs the gate
+    And a copy of the workflow with-a-fetch-before-the-gate is refused, in every job that runs the gate
+
+    Examples:
+      | file          |
+      | gate.yml      |
+      | gate-lane.yml |

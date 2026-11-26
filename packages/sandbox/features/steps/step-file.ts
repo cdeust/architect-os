@@ -401,3 +401,14 @@ When('I make a broken copy of the step file example whose tickets depend on each
   const [second, first] = twoTickets();
   this.state['broken'] = { ...example(), tickets: [second, { ...first!, depends_on: ['TICKET-002'] }] };
 });
+
+// R2 (docs/design/exigences-spec.md): the acceptance identifiers Plan approved for the Step.
+When('I make a copy of the step file example with the acceptance {}', function (json: string) {
+  const raw = example();
+  raw['acceptance'] = JSON.parse(json);
+  this.state['broken'] = raw;
+});
+
+Then('the step file copy keeps the acceptance {}', function (json: string) {
+  assert.deepEqual(parseStepFile(stored(this, 'broken')).acceptance, JSON.parse(json));
+});

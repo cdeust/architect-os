@@ -157,6 +157,10 @@ Feature: The destinations move only on the owner's approval of the exact commit,
         | directory writable by all       |
         | directory writable by its group |
 
+    Scenario: the owner's command does not write into an existing directory that another uid owns
+      When the owner runs the approval command into the directory "/usr", which root owns
+      Then the approval command refused with "APPROVE_DIRECTORY_UNSAFE" and wrote nothing
+
     Scenario: without a directory named for a scenario, the owner's command writes only as root
       When the approval command is run as this user into the owner directory
       Then the approval command refused with "APPROVE_REQUIRES_ROOT" and wrote nothing
