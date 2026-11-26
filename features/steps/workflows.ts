@@ -871,9 +871,13 @@ Then('the Linux package jobs use their shared host installer', function () {
   })) {
     const doc = workflow(readFileSync(join(ROOT, '.github/workflows', file), 'utf8'));
     for (const id of jobs) {
-      const commands = doc.jobs[id]?.steps.flatMap(({ run }) => (run ?? '').trimEnd().split('\n')) ?? [];
-      const invocation = installer + (file === 'bench-sandbox.yml' ? ' bench' : ' gate');
+      const steps = doc.jobs[id]?.steps ?? [];
+      const commands = steps.flatMap(({ run }) => (run ?? '').trimEnd().split('\n'));
+      const isBench = file === 'bench-sandbox.yml';
+      const invocation = installer + (isBench ? ' bench' : ' gate');
       assert.equal(commands.filter((line) => line === invocation).length, 1, file + '/' + id);
+      const installStep = steps.find(({ run }) => run?.split('\n').includes(invocation));
+      assert.equal(installStep?.if, isBench ? "runner.os == 'Linux'" : undefined, file + '/' + id);
       assert.ok(
         commands.indexOf(invocation) < commands.indexOf('/usr/lib/postgresql/17/bin/postgres --version'),
       );

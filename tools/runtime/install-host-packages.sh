@@ -20,7 +20,7 @@ apt() {
 apt update --error-on=any
 apt install -y --no-install-recommends bubblewrap socat ripgrep postgresql-common
 
-# Ubuntu's postgresql-common ships this public key. Keep the Ubuntu stanzas
+# postgresql-common owns the key at this path, including on prebuilt runners. Keep the Ubuntu stanzas
 # for server dependencies and add exactly the PGDG archive under that key.
 cat > "$dir/pgdg.sources" <<'PGDG'
 Types: deb
