@@ -31,6 +31,27 @@ Feature: Hosted runtime admission
       | lane       |
       | aggregate  |
 
+  Scenario Outline: the base lookup distinguishes an unavailable count from a failed retrieval for <situation>
+    Then the Gate fetches its Linux base for "<situation>" with outcome "<outcome>"
+
+    Examples:
+      | situation          | outcome  |
+      | current            | restored |
+      | legacy             | restored |
+      | root               | fallback |
+      | no run             | fallback |
+      | missing            | fallback |
+      | expired            | fallback |
+      | API error          | error    |
+      | malformed          | error    |
+      | truncated          | error    |
+      | invalid id         | error    |
+      | wrong event        | error    |
+      | wrong branch       | error    |
+      | wrong sha          | error    |
+      | artifact API error | error    |
+      | download error     | error    |
+
   Scenario Outline: the judge downloads the producers of its own plan and refuses a run that holds another set: <situation>
     Then the Gate downloads the producers of the plan of the judge alone, for "<situation>"
 

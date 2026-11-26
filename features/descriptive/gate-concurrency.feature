@@ -124,7 +124,7 @@ Feature: the gate has two entries, and only the runs of a pull request are in a 
 
   Rule: each reader of a gate run names the entry it reads
 
-    The base of the count is the artifact of a green run on main, a run of the push entry. The delivery waits for the
+    Each verdict job requests its own base through the admitted main-push retrieval script. The delivery waits for the
     run of a trial branch, a run of the push entry. The resolver of pipeline-after-merge.yml merges on a run of a pull
     request, a run of the pull-request entry, which it names by path and by display name.
 
@@ -134,9 +134,8 @@ Feature: the gate has two entries, and only the runs of a pull request are in a 
 
       Examples:
         | fault                                                     | refusal                                                                    |
-        | both entries read the base of the count from gate.yml     | the job gate-linux does not read the base of the count from the push entry |
-        | both entries read the base of the count on any branch     | the job gate-linux does not read the base of the count from the push entry |
-        | only gate-macos reads the base of the count from gate.yml | the job gate-macos does not read the base of the count from the push entry |
+        | both entries fetch the base outside the gate retrieval script | the job gate-linux does not read the base of the count from the push entry |
+        | only gate-macos requests the Linux base                       | the job gate-macos does not read the base of the count from the push entry |
         | the delivery waits for the pull-request entry             | the delivery does not wait for the push entry                              |
         | the push entry takes the name of the pull-request entry   | gate-push.yml is not named gate-push                                       |
         | the pull-request entry takes another name                 | gate.yml is not named gate                                                 |

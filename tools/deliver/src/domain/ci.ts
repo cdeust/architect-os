@@ -5,8 +5,8 @@ import type { CiJob, CiRun } from './ports.js';
 export type CiState = 'missing' | 'waiting' | 'green' | 'no-runner' | 'failed';
 
 /**
- * The jobs of a planned family the run must hold: for the lanes 1 to n it shows, one job per suffix. Undefined when
- * a job of the family has a name no plan gives (no lane number, a leading zero, a lane beyond a gap).
+ * The jobs a planned family requires: one job per suffix for lanes 1 through the number of distinct lane labels.
+ * A family member with an unknown suffix cannot be assigned to a lane.
  */
 function plannedProducers(
   jobs: readonly CiJob[],
@@ -22,8 +22,9 @@ function plannedProducers(
     lanes.add(rest.slice(0, rest.length - suffix.length));
   }
   const names: string[] = [];
+  // ciState requires each generated name exactly once. In particular, the job with the first suffix is always
+  // parsed as its own lane: a gap or a noncanonical label leaves at least one such required job missing.
   for (let lane = 1; lane <= lanes.size; lane++) {
-    if (!lanes.has(String(lane))) return undefined;
     for (const suffix of family.suffixes) names.push(family.prefix + lane + suffix);
   }
   return names;

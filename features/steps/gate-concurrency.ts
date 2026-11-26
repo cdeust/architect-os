@@ -34,8 +34,8 @@ const PULL_REQUEST_GROUP = { group: GROUP, 'cancel-in-progress': true };
 
 /** Where both verdict jobs ask for the base of the count: the green run of the push entry on main for one commit. */
 const BASE_STEP = 'Base of the count (artifact of the last green main run)';
-const BASE_LOOKUP =
-  'gh api "repos/$GITHUB_REPOSITORY/actions/workflows/gate-push.yml/runs?branch=main&status=success&head_sha=$parent&per_page=1"';
+const baseCommand = (job: string) =>
+  'sh tools/runtime/gate-job.sh -- sh tools/test-gate/fetch-gate-base.sh ' + job.slice('gate-'.length);
 
 type Mapping = Record<string, unknown>;
 
@@ -136,7 +136,7 @@ function assertGateEntries(gate: Gate): void {
     const steps = Array.isArray(job['steps']) ? (job['steps'] as Mapping[]) : [];
     const run = steps.find((step) => step['name'] === BASE_STEP)?.['run'];
     assert.ok(
-      typeof run === 'string' && run.includes(BASE_LOOKUP),
+      run === baseCommand(id),
       `the job ${id} does not read the base of the count from the push entry`,
     );
   }
@@ -353,26 +353,14 @@ const FAULTS: Record<string, (root: string) => void> = {
     [text, '  extra:', '    runs-on: ubuntu-24.04', '    steps:', "      - run: 'true'", ''].join('\n'),
   ),
   // The readers.
-  'both entries read the base of the count from gate.yml': (root) => {
+  'both entries fetch the base outside the gate retrieval script': (root) => {
     for (const file of [PULL_REQUEST_ENTRY, PUSH_ENTRY]) {
-      rewrite(root, workflowFile(file), (text) =>
-        text.replaceAll('actions/workflows/gate-push.yml/runs?', () => 'actions/workflows/gate.yml/runs?'),
-      );
+      rewrite(root, workflowFile(file), (text) => text.replaceAll('fetch-gate-base.sh', 'other.sh'));
     }
   },
-  'both entries read the base of the count on any branch': (root) => {
+  'only gate-macos requests the Linux base': (root) => {
     for (const file of [PULL_REQUEST_ENTRY, PUSH_ENTRY]) {
-      rewrite(root, workflowFile(file), (text) =>
-        text.replaceAll('runs?branch=main&status=success', () => 'runs?status=success'),
-      );
-    }
-  },
-  'only gate-macos reads the base of the count from gate.yml': (root) => {
-    for (const file of [PULL_REQUEST_ENTRY, PUSH_ENTRY]) {
-      rewrite(root, workflowFile(file), (text) => {
-        const last = text.lastIndexOf('actions/workflows/gate-push.yml/runs?');
-        return text.slice(0, last) + text.slice(last).replace('gate-push.yml', () => 'gate.yml');
-      });
+      rewrite(root, workflowFile(file), swap(baseCommand('gate-macos'), baseCommand('gate-linux')));
     }
   },
   'the delivery waits for the pull-request entry': (root) =>

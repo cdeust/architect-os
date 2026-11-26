@@ -125,6 +125,7 @@ Feature: The decisions of the delivery command (pure: the trial branch, the stat
         | one lane, green                        | success/runner                       | , lane-1:m=success/runner, lane-1:r=success/runner                                                 | green     |
         | three lanes, green                     | success/runner                       | , lane-2:r=success/runner, lane-1:m=success/runner, lane-3:m=success/runner, lane-1:r=success/runner, lane-2:m=success/runner, lane-3:r=success/runner | green |
         | no lane under a green aggregate        | success/runner                       |                                                                                                    | failed    |
+        | no lane, the aggregate got no runner   | cancelled/norunner                   |                                                                                                    | no-runner |
         | no lane, the aggregate red on its own  | failure/runner/failed-step           |                                                                                                    | failed    |
         | a lane that failed, aggregate green    | success/runner                       | , lane-1:m=failure/runner/failed-step, lane-1:r=skipped/norunner                                   | failed    |
         | a lane cancelled, aggregate green      | success/runner                       | , lane-1:m=cancelled/norunner, lane-1:r=skipped/norunner                                           | failed    |

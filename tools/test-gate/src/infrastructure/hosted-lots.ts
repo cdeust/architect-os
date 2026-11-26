@@ -202,7 +202,8 @@ export function planHostedSlices(
   }
   // A lane that received nothing would only replay the suite for the canary another lane already proves.
   const held = buckets.filter(({ groups: assigned, whole }) => assigned.length + whole.length > 0);
-  const open = held.length === 0 ? buckets.slice(0, 1) : held;
+  // With nothing assigned there were no production lots, so their cost was zero and lanesWorth opened one bucket.
+  const open = held.length === 0 ? buckets : held;
   // Number the heaviest planned lots first. GitHub controls the order in which its runners start them.
   return open
     .sort((a, b) => b.cost - a.cost)

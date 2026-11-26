@@ -189,7 +189,7 @@ export const TEXTS: ImageTexts = {
   roles: ROLE,
 };
 const DESCRIPTION =
-  'One row for each of the five profiles of the isolation, builder, reviewer, checker, worker and module: its role, the paths it opens for writing, the paths it closes for writing, the hosts its network list allows, and the variables of its environment that hold a token. A last row counts the paths denied for reading: one count when the five lists are the same, else one per profile. The image is produced from the five files of packages/sandbox/profiles by one function, and the gate requires the file to equal what it produces.';
+  'One row for each of the five profiles of the isolation, builder, reviewer, checker, worker and module: its role, the paths it opens for writing, the paths it closes for writing, the hosts its network list allows, and the variables of its environment that hold a token. A last row counts the paths denied for reading: one count when the five lists are the same, else one per profile. The image is produced from the five files of packages/sandbox/profiles by one function, and the gate requires the file to equal what it produces. The hosted gate retrieves the parent count with its own read token. That credential belongs to the runner retrieval step, outside the five profiles shown here.';
 
 /**
  * The whole image: its title and description, the five rows, then the row that counts the paths denied for reading.

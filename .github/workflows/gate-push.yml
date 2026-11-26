@@ -237,18 +237,7 @@ jobs:
         env:
           AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
           GH_TOKEN: ${{ github.token }}
-        run: |
-          sh tools/runtime/gate-job.sh -- sh -e <<'BASE'
-          # docs/design/platform-v3-srt.md §7.2: the run of gate-push.yml on main whose head_sha is the first parent.
-          # Nothing found, expired or no first parent: download nothing, the gate applies its written fallback and says so.
-          base=$(node "$GITHUB_WORKSPACE/tools/test-gate/report-files.mjs" path reports/base)
-          mkdir -p "$base"
-          parent=$(git rev-parse --verify --quiet HEAD^1 || true)
-          if [ -z "$parent" ]; then echo "base: no first parent"; exit 0; fi
-          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/gate-push.yml/runs?branch=main&status=success&head_sha=$parent&per_page=1" --jq '.workflow_runs[0].id // empty' || true)
-          if [ -z "$run_id" ]; then echo "base: no green main run for $parent"; exit 0; fi
-          gh run download "$run_id" -n gate-base-linux -D "$base" -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-linux of run $run_id not downloadable"
-          BASE
+        run: sh tools/runtime/gate-job.sh -- sh tools/test-gate/fetch-gate-base.sh linux
 
       - name: Bind the Gate plan to this checkout
         env:
@@ -346,18 +335,7 @@ jobs:
         env:
           AOS_GATE_CONTEXT_SHA: ${{ steps.runtime.outputs.context_sha }}
           GH_TOKEN: ${{ github.token }}
-        run: |
-          sh tools/runtime/gate-job.sh -- sh -e <<'BASE'
-          # docs/design/platform-v3-srt.md §7.2: the run of gate-push.yml on main whose head_sha is the first parent.
-          # Nothing found, expired or no first parent: download nothing, the gate applies its written fallback and says so.
-          base=$(node "$GITHUB_WORKSPACE/tools/test-gate/report-files.mjs" path reports/base)
-          mkdir -p "$base"
-          parent=$(git rev-parse --verify --quiet HEAD^1 || true)
-          if [ -z "$parent" ]; then echo "base: no first parent"; exit 0; fi
-          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/gate-push.yml/runs?branch=main&status=success&head_sha=$parent&per_page=1" --jq '.workflow_runs[0].id // empty' || true)
-          if [ -z "$run_id" ]; then echo "base: no green main run for $parent"; exit 0; fi
-          gh run download "$run_id" -n gate-base-macos -D "$base" -R "$GITHUB_REPOSITORY" || echo "base: artifact gate-base-macos of run $run_id not downloadable"
-          BASE
+        run: sh tools/runtime/gate-job.sh -- sh tools/test-gate/fetch-gate-base.sh macos
 
       - name: Gate
         env:

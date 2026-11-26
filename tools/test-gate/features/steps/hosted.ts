@@ -900,6 +900,20 @@ Then(
   },
 );
 
+Then('the judge distinguishes a missing shard directory from a regular file', async function () {
+  const repo = repository(this);
+  const directory = 'reports/mutation-shards';
+  await without(repo, directory, async () => {
+    await refusedByJudge(this, /inventaire différent du périmètre courant pour le lot 1/);
+    repo.write(directory, 'regular file');
+    try {
+      await refusedByJudge(this, /\bENOTDIR\b/);
+    } finally {
+      repo.remove(directory);
+    }
+  });
+});
+
 Then('a planned lane without its producer or without its receipt is refused', async function () {
   const repo = repository(this);
   for (const lane of lanesOf(this)) {

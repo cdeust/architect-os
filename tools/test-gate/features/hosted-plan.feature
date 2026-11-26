@@ -156,9 +156,9 @@ Feature: The hosted mutation plan follows the estimated cost, and the judge deri
     And the gate first parent is committed
     And the gate head is committed
     When the hosted plan is derived in the gate repository
-    Then the hosted plan announces the lanes "[1]"
-    And the manifest of hosted lane 1 mutates the canary alone
+    Then the manifest of hosted lane 1 mutates the canary alone
     And hosted lane 2 is refused as outside the plan
+    And the hosted plan announces the lanes "[1]"
 
   Scenario: a broken lane policy or broken costs stop the hosted plan before it announces anything
     Given a gate repository

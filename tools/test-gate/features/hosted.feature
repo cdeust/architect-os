@@ -56,6 +56,7 @@ Feature: Hosted mutation slices retain exhaustive producer and replay proof
     And the gate head is committed
     When the one hosted lane of an empty perimeter completes with the proof of its canary
     Then the hosted collector judges the empty perimeter on that one receipt
+    And the judge distinguishes a missing shard directory from a regular file
     And the hosted collector rejects an active mutant without static metadata
     And a replaced producer or a missing receipt cannot reuse the hosted verdict
 
