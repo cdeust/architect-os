@@ -373,3 +373,22 @@ Feature: Gate source files have an unambiguous mutation perimeter
         | mod/one/lib    | no  | lib is not src                                 |
         | docs           | no  | no glob begins with docs                       |
         | leaf.mjs       | no  | a file segment is not a directory: *.mjs root  |
+
+
+    Scenario Outline: the directory "<path>" may hold a production file of the committed configuration: <may>
+      Then the directory "<path>" may hold a production file of the committed gate configuration: <may>
+
+      Examples:
+        | path      | may | reason                                                    |
+        | packages  | yes | the first segment of packages/*/src/**/*.ts               |
+        | pacKages  | yes | the Kelvin sign folds to k, as on a volume blind to case  |
+        | ſervices  | yes | the long s folds to s, as on a volume blind to case       |
+        | docs      | no  | no glob begins with docs                                  |
+
+    Scenario Outline: the directory "<path>" may hold a production file of the glob <glob>: <may>
+      Then the directory "<path>" may hold a production file of the glob "<glob>": <may>
+
+      Examples:
+        | path    | glob         | may | reason                                                        |
+        | café   | café/**/*.mjs | yes | the decomposed é is the composed one once both are normalized |
+        | cafe    | café/**/*.mjs | no  | e is not é                                                    |
