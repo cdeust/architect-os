@@ -228,6 +228,59 @@ assert p.returncode==1 and 'GATE_TREE_BUSY' in p.stderr,p
             marker.write_text("gitdir: /missing-gitdir\n")
             refused = launch(tree, "/usr/bin/true", check=False)
             assert refused.returncode == 1 and "GATE_NESTED_REPOSITORY" in refused.stderr
+        elif mode == "changed ignore file":
+            # A directory the repository ignores holds a repository, as a dependency or another
+            # worktree does. The recorded ignore file prunes it; changed, it prunes nothing, and
+            # the refusal says why the ignored directory was searched.
+            ignore = tree / ".gitignore"
+            ignore.write_text("deps/\n")
+            run(tree, "git", "add", ".gitignore")
+            run(
+                tree,
+                "git",
+                "-c",
+                "user.name=fixture",
+                "-c",
+                "user.email=t@example.invalid",
+                "commit",
+                "-qm",
+                "ignore the dependencies",
+            )
+            (tree / "deps/package").mkdir(parents=True)
+            (tree / "deps/package/.git").write_text("gitdir: /missing-gitdir\n")
+            assert launch(tree, "/usr/bin/true").returncode == 0
+            ignore.write_text("deps/\n*.tmp\n")
+            refused = launch(tree, "/usr/bin/true", check=False)
+            assert refused.returncode == 1 and refused.stderr == (
+                "gate: GATE_NESTED_REPOSITORY: under a directory ignored by a tracked .gitignore "
+                "that is no longer the one recorded, so its rules are not applied: commit or "
+                "restore that file\n"
+            ), refused
+            ignore.write_text("deps/\n")
+            assert launch(tree, "/usr/bin/true").returncode == 0
+            # A repository that no ignore file ignores keeps the bare code.
+            (tree / "sub").mkdir()
+            (tree / "sub/.git").write_text("gitdir: /missing-gitdir\n")
+            refused = launch(tree, "/usr/bin/true", check=False)
+            assert refused.returncode == 1 and refused.stderr == "gate: GATE_NESTED_REPOSITORY\n", refused
+        elif mode == "host configuration":
+            # The configuration of the account excludes a file. The guard's git does not read it:
+            # the untracked file is seen and the checkout is not clean. The control is a git given
+            # the same account and none of the guard's variables, which lists nothing.
+            account = home / "account"
+            account.mkdir()
+            (account / "excluded").write_text("left-by-a-session.txt\n")
+            (account / ".gitconfig").write_text(f"[core]\n\texcludesFile = {account / 'excluded'}\n")
+            env = {"HOME": str(account), "PATH": os.environ["PATH"]}
+            inspect = [python, "-I", guard, "inspect-clean"]
+            assert sp.run(inspect, cwd=tree, env=env).returncode == 0
+            (tree / "left-by-a-session.txt").write_text("untracked\n")
+            listed = sp.run(
+                ["git", "ls-files", "--others", "--exclude-standard"],
+                cwd=tree, env=env, check=True, stdout=sp.PIPE, text=True,
+            )
+            assert listed.stdout == "", listed
+            assert sp.run(inspect, cwd=tree, env=env).returncode == 1
         elif mode == "staged addition":
             added = tree / "staged.txt"
             added.write_text("staged only\n")
@@ -323,6 +376,7 @@ assert p.returncode==1 and 'GATE_RECEIPT_TREE_CHANGED' in p.stderr,p
                 ".nvmrc",
                 "tools/runtime/node-locations",
                 "tools/test-gate/with-tree-lock.py",
+                "packages/sandbox/git-closed.json",
                 "packages/sandbox/src/runtime-context.ts",
             )
             for name in names:

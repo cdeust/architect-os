@@ -19,7 +19,7 @@ function inspect(
 ) {
   const result = spawnSync('/usr/bin/python3', ['-I', guard, mode], {
     cwd: root,
-    // The guard gives its git calls their own closed environment (GIT_ENV of with-tree-lock.py): none of the host's.
+    // The guard gives its git calls their own closed environment (`closed_git` of with-tree-lock.py): none of the host's.
     env: {},
     input,
     encoding: 'utf8',
@@ -30,9 +30,29 @@ function inspect(
   return result;
 }
 
+/** A directory of the tree that holds a `.git` marker. */
+export interface NestedMarker {
+  readonly path: string;
+  /**
+   * The tracked ignore file that ignored the directory of the marker and is no longer the one recorded. Its rules are
+   * not applied, since a session can rewrite it: the marker is found where the repository itself would not look.
+   */
+  readonly changedIgnoreFile?: string;
+}
+
 /** The first visible nested .git marker, without opening it or asking Git to classify it. */
-export function visibleNestedMarker(root: string, committed: string, timeout?: number): string | undefined {
-  return inspect(root, 'inspect-markers', [0], committed, timeout).stdout || undefined;
+export function visibleNestedMarker(
+  root: string,
+  committed: string,
+  timeout?: number,
+): NestedMarker | undefined {
+  // The guard prints the marker and, after a NUL, the changed ignore file that ignored its directory.
+  // `split` gives at least one part, the empty text when the guard found nothing.
+  const [path, changedIgnoreFile] = inspect(root, 'inspect-markers', [0], committed, timeout).stdout.split(
+    '\0',
+  ) as [string, ...string[]];
+  if (path === '') return undefined;
+  return changedIgnoreFile === undefined ? { path } : { path, changedIgnoreFile };
 }
 
 /** Verify the real index and checkout bytes with the same comparison as the native lease: 1 is a checkout not clean. */

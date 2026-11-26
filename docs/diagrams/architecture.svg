@@ -490,9 +490,9 @@
     <text x="53" y="1992" id="host-git-title" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Git and the worktree</text>
     <rect x="577" y="1974" width="68" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
     <text x="611" y="1991" data-type-role="badge" font-size="17" font-weight="600" text-anchor="middle" fill="#1a7f37">ready</text>
-    <text x="53" y="2015" data-type-role="brick-text" font-size="17" fill="#57606a">Host Git: allowlisted environment, empty-tree attributes; the fingerprint</text>
-    <text x="53" y="2036" data-type-role="brick-text" font-size="17" fill="#57606a">and Gate ignore machine configuration. Nested Git markers are refused first,</text>
-    <text x="53" y="2057" data-type-role="brick-text" font-size="17" fill="#57606a">the lease and Deliver verify checkout bytes, and the host owns Git metadata.</text>
+    <text x="53" y="2015" data-type-role="brick-text" font-size="17" fill="#57606a">The host owns Git metadata. Gate and fingerprint use fixed Git settings.</text>
+    <text x="53" y="2036" data-type-role="brick-text" font-size="17" fill="#57606a">The guard honors recorded regular ignore files with matching bytes.</text>
+    <text x="53" y="2057" data-type-role="brick-text" font-size="17" fill="#57606a">Replay sets up test repositories with an independent Git client.</text>
   </g>
   <g id="sbx-account-broker" role="group" aria-labelledby="sbx-broker-title">
     <rect x="40" y="2084" width="616" height="132" rx="6" fill="#f6f8fa" stroke="#8c959f"/>

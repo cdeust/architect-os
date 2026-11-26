@@ -106,6 +106,30 @@ Feature: no profile escapes its srt sandbox (platform-v3-srt.md, §8, exit of br
       | forges the folder of a step beside one already published          |
       | replaces the empty steps/ the host prepared by a link to the home |
 
+  Scenario Outline: the builder, which writes its worktree, cannot write the git directory of its repository: <attack>
+    The options and variables the host gives its git (packages/sandbox/git-closed.json) do not make a writable git
+    directory harmless: a `core.excludesFile` or a line of `info/exclude` hides an untracked file from the fingerprint,
+    and a `core.sshCommand`, a `url.*.insteadOf`, an `include.path` or a `credential.helper` is read by the push of the
+    delivery. What keeps a session from them is the refusal of the profile, held here on the two files themselves.
+    Given an srt runner for profile "builder" over a throwaway home, beside the bait of every escape attack
+    When it runs the escape attack "<attack>" inside its sandbox
+    Then the escape attack failed, as the host observes it
+
+    Examples:
+      | attack                                              |
+      | adds a line to the configuration of the repository  |
+      | adds a line to the exclusion file of the repository |
+
+  Scenario Outline: witness: without srt, the attack on the git directory succeeds on the host: <attack>
+    Given a throwaway git repository and a throwaway home, beside the bait of every escape attack, and no sandbox
+    When the host runs the escape attack "<attack>" itself, without srt
+    Then the escape attack succeeded, as the host observes it
+
+    Examples:
+      | attack                                              |
+      | adds a line to the configuration of the repository  |
+      | adds a line to the exclusion file of the repository |
+
   Scenario Outline: positive control: profile <profile> writes a file in its own folder <folder> and reads it back
     Given an srt runner for profile "<profile>" over a throwaway home, beside the bait of every escape attack
     When it writes a file in its own folder "<folder>" inside its sandbox and reads it back
