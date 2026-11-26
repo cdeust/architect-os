@@ -9,7 +9,7 @@ Feature: The released policy identifies the programs and paths that require main
       | darwin   | x64   | /usr/local/bin/gh    |
       | linux    | arm64 | /usr/bin/gh          |
 
-  Scenario Outline: directory boundaries and basename patterns classify a committed path
+  Scenario Outline: directory boundaries, directories at any depth and basename patterns classify a committed path
     Then the released judge classifies "<path>" as "<kind>"
 
     Examples:
@@ -29,3 +29,5 @@ Feature: The released policy identifies the programs and paths that require main
       | NODE_MODULES/x           | judge    |
       | tools/node_modules_x/y   | ordinary |
       | my-node_modules/x        | ordinary |
+      | nested/tool.cjs          | judge    |
+      | nested/tool.cjs.txt      | ordinary |
