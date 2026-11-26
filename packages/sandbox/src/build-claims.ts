@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Les écarts que la session de construction déclare au brief (docs/design/orchestration-fable-5-2.md, §14 ; journal
-// §102, §122) : un bloc de son rapport, que l'hôte extrait et valide. Une revue les reçoit comme des affirmations à
+// §102, §123) : un bloc de son rapport, que l'hôte extrait et valide. Une revue les reçoit comme des affirmations à
 // vérifier, citées comme données, jamais comme des instructions. Les schémas sont construits dans des fonctions : un
 // littéral au niveau du module ferait rejouer toute la suite pour chacun de ses mutants (Stryker).
 
