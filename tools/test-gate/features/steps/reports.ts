@@ -279,6 +279,11 @@ Then('the gate violations are:', function (text: string) {
   assert.deepEqual(violations(repo.read(REPORT)), expectedLines(repo, text));
 });
 
+Then('the gate reports no violation of rule {int}', function (rule: number) {
+  const ofRule = violations(repository(this).read(REPORT)).filter((line) => line.startsWith(`${rule}: `));
+  assert.deepEqual(ofRule, []);
+});
+
 Then('the gate violations of rule {int} are:', function (rule: number, text: string) {
   const repo = repository(this);
   const ofRule = violations(repo.read(REPORT)).filter((line) => line.startsWith(`${rule}: `));

@@ -9,6 +9,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -19,7 +20,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { Given as CucumberGiven, Then as CucumberThen, When as CucumberWhen } from '@cucumber/cucumber';
 import { parseRawDiff } from '../../src/domain/diff.js';
-import { mayHoldProduction } from '../../src/domain/layout.js';
+import { isProduction, mayHoldProduction } from '../../src/domain/layout.js';
 import { parseGateConfig, type GateConfig } from '../../src/infrastructure/config.js';
 import { changedFiles, CONFIG_PATH, runGate } from '../../src/infrastructure/gate.js';
 import { git, gitWithOptions, GitRepository } from '../../src/infrastructure/git.js';
@@ -621,6 +622,11 @@ Then(
   },
 );
 
+Given('the target of the link {string} changes its file {string}', function (link: string, file: string) {
+  const target = realpathSync(repository(this).path(link));
+  writeFileSync(join(target, file), 'export const witness = 2 + 3;\n');
+});
+
 Given('the gate workspace has a directory where the source {string} is expected', function (path: string) {
   mkdirSync(repository(this).path(path), { recursive: true });
 });
@@ -725,6 +731,17 @@ Then(
   'the directory {string} may hold a production file of the gate configuration: {word}',
   function (path: string, may: string) {
     assert.equal(mayHoldProduction(repository(this).layout(), path), may === 'yes');
+  },
+);
+
+Then(
+  'the path {string} is a production file of the committed gate configuration: {word}',
+  function (path: string, is: string) {
+    const config = parseGateConfig(
+      readFileSync(fileURLToPath(new URL('../../gate.json', import.meta.url)), 'utf8'),
+    );
+    assert.ok(!('failure' in config), JSON.stringify(config));
+    assert.equal(isProduction(config, path), is === 'yes');
   },
 );
 

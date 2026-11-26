@@ -8,6 +8,7 @@ import { runHostedGate } from '../../src/infrastructure/hosted-gate.js';
 import { CONFIG_PATH } from '../../src/infrastructure/gate.js';
 import { HOSTED_COSTS, planHostedSlices } from '../../src/infrastructure/hosted-lots.js';
 import type { Lot } from '../../src/infrastructure/mutation-lot-proof.js';
+import { requireNativeMutationReport } from '../../src/infrastructure/mutation-report.js';
 import { fixtureIgnorer } from './mutation-inventory.js';
 import { projectNative } from '../../src/infrastructure/mutation-shards.js';
 import { mutationCatalog } from '../../src/infrastructure/mutation-catalog.js';
@@ -146,7 +147,7 @@ Then('the hosted collector rejects an active mutant without static metadata', as
     patterns: string[];
   };
   assert.throws(
-    () => projectNative(incomplete, lots, patterns, true),
+    () => requireNativeMutationReport(JSON.stringify(projectNative(incomplete, lots, patterns).raw)),
     /marquage statique absent pour un mutant actif/,
   );
   repo.write(path, incomplete);

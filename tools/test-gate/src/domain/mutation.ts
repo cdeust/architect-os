@@ -108,8 +108,25 @@ const INVALID = new Set(['CompileError']);
 const DIRECTIVE = 'Stryker disable';
 const NEXT_LINE = `// ${DIRECTIVE} next-line `;
 const EQUIVALENT = ': équivalent: ';
-/** A comment that starts a Stryker directive (Stryker reads `//` and block comments alike). */
-const DIRECTIVE_COMMENT = /\/[/*]\s*Stryker\s+disable/;
+/**
+ * Each Stryker directive of a source that is not a well-formed justification: the line its comment starts on, and its
+ * text, the lines it spans joined by a space. A directive is read on the whole text: Stryker reads `//` and block
+ * comments alike, and the space it allows before its word may be a line break (@stryker-mutator/instrumenter,
+ * transformers/directive-bookkeeper.js). Any space is taken, so the gate reads at least what Stryker reads.
+ */
+export function refusedDirectives(source: string): readonly { line: number; text: string }[] {
+  // Built here, not at module level: a module-level regex is a static mutant; built per call, its mutants are covered.
+  const DIRECTIVE_COMMENT = /\/[/*]\s*Stryker\s+disable/g;
+  const lines = source.split('\n');
+  return [...source.matchAll(DIRECTIVE_COMMENT)].flatMap((match) => {
+    const start = source.slice(0, match.index).split('\n').length;
+    const end = start + (match[0].split('\n').length - 1);
+    const spanned = lines.slice(start - 1, end).map((line) => line.trim());
+    // A justification is one `//` line: a directive whose comment spans lines is never one.
+    const text = spanned.join(' ');
+    return justifiedMutators(text) !== null ? [] : [{ line: start, text }];
+  });
+}
 
 /**
  * The mutators a well-formed justification names, or null when the line is not one. The invariant after the
@@ -162,11 +179,8 @@ export function judgeMutation(
       continue;
     }
     const lines = result.source.split('\n');
-    lines.forEach((line, index) => {
-      if (DIRECTIVE_COMMENT.test(line) && justifiedMutators(line) === null) {
-        add(`${file}:${index + 1} : directive Stryker refusée : ${line.trim()}`);
-      }
-    });
+    for (const { line, text } of refusedDirectives(result.source))
+      add(`${file}:${line} : directive Stryker refusée : ${text}`);
     for (const mutant of result.mutants) {
       if (!inPerimeter(perimeter, file, mutant)) continue;
       mutants.push({ file, mutant });
