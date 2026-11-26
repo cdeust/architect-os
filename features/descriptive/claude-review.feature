@@ -57,3 +57,38 @@ Feature: The Claude review
       | that guard the inline comments only          |
       | that run the guard from the checkout         |
       | that set an environment                      |
+
+  Scenario: every workflow that runs the action fixes its permission mode and forbids auto and bypass
+    A new pin of the action cannot change the mode in silence: each sets it once, default or acceptEdits, and installs
+    managed settings that forbid auto and bypass, from a sparse checkout of the commit of the run, before the action.
+    Then every workflow that runs the action fixes its mode and forbids auto and bypass:
+      | claude.yml                 |
+      | claude-review.yml          |
+      | claude-security-review.yml |
+
+  Scenario Outline: "<file>" <kind> is rejected
+    Then "<file>" <kind> is rejected by the rule of the permission mode
+
+    Examples:
+      | file                       | kind                                          |
+      | claude.yml                 | in auto mode                                  |
+      | claude.yml                 | without a mode                                |
+      | claude.yml                 | with two modes                                |
+      | claude.yml                 | without its managed settings                  |
+      | claude.yml                 | with managed settings from the default branch |
+      | claude.yml                 | with its settings checked out in cone mode    |
+      | claude-review.yml          | in auto mode                                  |
+      | claude-review.yml          | without a mode                                |
+      | claude-review.yml          | without its managed settings                  |
+      | claude-security-review.yml | in auto mode                                  |
+      | claude-security-review.yml | without a mode                                |
+      | claude-security-review.yml | without its managed settings                  |
+      | claude-security-review.yml | with managed settings from the default branch |
+
+  Scenario Outline: managed settings that do not forbid <mode> are rejected
+    Then managed settings that do not forbid <mode> are rejected by the rule of the permission mode
+
+    Examples:
+      | mode        |
+      | auto mode   |
+      | bypass mode |

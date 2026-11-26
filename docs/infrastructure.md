@@ -45,6 +45,8 @@ The step `Restrict Claude Code to reading and guard its comments` installs, from
 
 Not established: whether the Codex app obeys an @mention written by a bot (`claude[bot]`, `github-actions[bot]`), or added by editing a comment; nor whether it is installed on this repository, which listing installations would say and needs an app token. To establish it: on a pull request of a repository where the app is installed, create a comment and edit another, each with `@codex review`, from each of the two bots, and see which the app answers. The guard refuses the mention either way.
 
+No workflow that runs the action leaves its permission mode to the action, whose default changed with v1.0.290 (auto mode unless `allowed_bots` is set): each sets `--permission-mode` once, `default` for the two reviews and `acceptEdits` for `claude.yml`, the `@claude` bot, which edits the files of its checkout, and installs managed settings that forbid the auto and bypass modes, from a sparse checkout of the commit of the run, before the action (`features/descriptive/claude-review.feature`, the rule of the permission mode). Those of `claude.yml`, `.github/claude/managed-settings.json`, also deny `Read(.git/**)` and run managed hooks only; its tools are `Read`, `Glob`, `Grep`, `Edit` and `Write`, plus what the action adds in tag mode (its git wrappers and comment tool).
+
 A pull request that changes `claude-review.yml` gets no review from it: the action skips without an error when the workflow file differs from the default branch's (`src/github/token.ts`, `WorkflowValidationSkipError`; `src/entrypoints/run.ts`), so no verdict is posted and the resolver holds the merge.
 
 ### The Claude security review

@@ -27,34 +27,39 @@ jobs:
       actions: read # Required for Claude to read CI results on PRs
     steps:
       - name: Checkout repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
           persist-credentials: false
+
+      # The managed settings of this bot (.github/claude/managed-settings.json), from the commit of the run, where
+      # Claude Code reads them above every other source (docs/infrastructure.md, "The Claude review"): no auto mode
+      # and no bypass mode whatever a new pin of the action makes the default, no hook but managed ones, and no read
+      # of .git. Only that directory, no cone; removed once installed.
+      - name: Checkout the settings of this run
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: claude-config
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout: .github/claude
+          sparse-checkout-cone-mode: false
+      - name: Install the managed settings of the bot
+        run: |
+          set -euo pipefail
+          sudo install -D -m 0644 -o root -g root claude-config/.github/claude/managed-settings.json /etc/claude-code/managed-settings.json
+          rm -rf claude-config
 
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c # v1.0.290
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-          # Optional: Customize the trigger phrase (default: @claude)
-          # trigger_phrase: "/claude"
-
-          # Optional: Trigger when specific user is assigned to an issue
-          # assignee_trigger: "claude-bot"
-
-          # Optional: Configure Claude's behavior with CLI arguments
-          # claude_args: |
-          #   --model claude-opus-4-1-20250805
-          #   --max-turns 10
-          #   --allowedTools "Bash(npm install),Bash(npm run build),Bash(npm run test:*),Bash(npm run lint:*)"
-          #   --system-prompt "Follow our coding standards. Ensure all new code has tests. Use TypeScript for new files."
-
-          # Optional: Advanced settings configuration
-          # settings: |
-          #   {
-          #     "env": {
-          #       "NODE_ENV": "test"
-          #     }
-          #   }
+          # The mode is set, not left to the action: from v1.0.290 a session starts in auto mode unless
+          # allowed_bots is set (src/modes/permission-mode.ts). acceptEdits lets Claude edit the files of the
+          # checkout, which is what the bot is asked for; the action adds its git wrappers and comment tool.
+          claude_args: |
+            --permission-mode acceptEdits
+            --allowedTools "Read,Glob,Grep,Edit,Write"
+            --model "claude-opus-5-5"

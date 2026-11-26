@@ -351,3 +351,107 @@ Then("the review's managed settings {} are rejected", function (kind: string) {
   breakIt(settings);
   assert.throws(() => ReviewSettings.parse(settings));
 });
+
+/**
+ * Every workflow that runs the action fixes its permission mode and installs managed settings that forbid the auto
+ * and bypass modes, before the action starts: a new pin cannot change the mode in silence (from v1.0.290 the action
+ * starts a session in auto mode unless `allowed_bots` is set, src/modes/permission-mode.ts).
+ */
+const MODES = ['default', 'acceptEdits'];
+const MANAGED = '/etc/claude-code/managed-settings.json';
+
+export function assertModeFixed(text: string): void {
+  const doc = parse(text) as { jobs: Record<string, { steps?: StepT[] }> };
+  const jobs = Object.values(doc.jobs).filter((job) =>
+    (job.steps ?? []).some((step) => step.uses?.startsWith('anthropics/claude-code-action@')),
+  );
+  assert.ok(jobs.length > 0, 'no job runs the action');
+  for (const job of jobs) {
+    const steps = job.steps ?? [];
+    const action = steps.findIndex((step) => step.uses?.startsWith('anthropics/claude-code-action@'));
+    const args = String(steps[action]?.with?.['claude_args'] ?? '');
+    const modes = [...args.matchAll(/--permission-mode\s+(\S+)/g)].map((match) => match[1]);
+    assert.equal(modes.length, 1, 'the permission mode is not set once');
+    assert.ok(MODES.includes(modes[0] ?? ''), `permission mode ${modes[0]}`);
+    const install = steps.findIndex((step) => (step.run ?? '').includes(` ${MANAGED}`));
+    assert.ok(install >= 0 && install < action, 'no managed settings installed before the action');
+    const source = (steps[install]?.run ?? '').match(
+      / (\S+\/managed-settings\.json) \/etc\/claude-code\/managed-settings\.json/,
+    )?.[1];
+    assert.ok(source !== undefined, 'the source of the managed settings is not named');
+    const checkout = steps
+      .slice(0, install)
+      .find((step) => source.startsWith(`${String(step.with?.['path'])}/`));
+    assert.ok(checkout !== undefined, 'the managed settings come from no checkout of the run');
+    assert.equal(checkout.with?.['ref'], '${{ github.sha }}');
+    assert.equal(
+      checkout.with?.['sparse-checkout-cone-mode'],
+      false,
+      'the settings checkout brings more than its directory',
+    );
+    assert.equal(checkout.with?.['persist-credentials'], false);
+    const committed = source.slice(String(checkout.with?.['path']).length + 1);
+    assert.equal(checkout.with?.['sparse-checkout'], committed.slice(0, committed.lastIndexOf('/')));
+    assertModesForbidden(readFileSync(join(ROOT, committed), 'utf8'));
+  }
+}
+
+function assertModesForbidden(settings: string): void {
+  const permissions = (JSON.parse(settings) as { permissions?: Record<string, unknown> }).permissions ?? {};
+  assert.equal(permissions['disableAutoMode'], 'disable', 'auto mode is not forbidden');
+  assert.equal(permissions['disableBypassPermissionsMode'], 'disable', 'bypass mode is not forbidden');
+}
+
+Then(
+  'every workflow that runs the action fixes its mode and forbids auto and bypass:',
+  function (table: { raw(): string[][] }) {
+    for (const [file] of table.raw()) {
+      assertModeFixed(readFileSync(join(ROOT, '.github/workflows', String(file)), 'utf8'));
+    }
+  },
+);
+
+const MODE_BREAKS: Record<string, (yaml: string) => string> = {
+  'in auto mode': (yaml) => yaml.replace(/--permission-mode (default|acceptEdits)/, '--permission-mode auto'),
+  'without a mode': (yaml) => yaml.replace(/\n *--permission-mode (default|acceptEdits)/, ''),
+  'with two modes': (yaml) =>
+    yaml.replace(
+      /(--permission-mode (default|acceptEdits))/,
+      '$1\n            --permission-mode bypassPermissions',
+    ),
+  'without its managed settings': (yaml) =>
+    yaml.replace(
+      /(\n *|run: )sudo install -D -m 0644 -o root -g root \S+\/managed-settings\.json \/etc\/claude-code\/managed-settings\.json/,
+      (_match, lead: string) => (lead === 'run: ' ? 'run: true' : ''),
+    ),
+  'with its settings checked out in cone mode': (yaml) =>
+    yaml.replace('sparse-checkout-cone-mode: false', 'sparse-checkout-cone-mode: true'),
+  'with managed settings from the default branch': (yaml) =>
+    yaml.replace(/ (review-config|claude-config)\/(\.github\/\S+\/managed-settings\.json)/, ' $2'),
+};
+
+Then('{string} {} is rejected by the rule of the permission mode', function (file: string, kind: string) {
+  const breakIt = MODE_BREAKS[kind];
+  assert.ok(breakIt !== undefined, `no broken workflow named "${kind}"`);
+  const original = readFileSync(join(ROOT, '.github/workflows', file), 'utf8');
+  const broken = breakIt(original);
+  assert.notEqual(broken, original);
+  assert.throws(() => assertModeFixed(broken));
+});
+
+Then(
+  'managed settings that do not forbid {} are rejected by the rule of the permission mode',
+  function (mode: string) {
+    for (const path of [
+      '.github/claude/managed-settings.json',
+      '.github/claude-review/managed-settings.json',
+      '.github/claude-security-review/managed-settings.json',
+    ]) {
+      const settings = JSON.parse(readFileSync(join(ROOT, path), 'utf8')) as {
+        permissions: Record<string, unknown>;
+      };
+      delete settings.permissions[mode === 'auto mode' ? 'disableAutoMode' : 'disableBypassPermissionsMode'];
+      assert.throws(() => assertModesForbidden(JSON.stringify(settings)), path);
+    }
+  },
+);
