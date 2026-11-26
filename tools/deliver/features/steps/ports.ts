@@ -266,6 +266,13 @@ Given(
 );
 
 Then(
+  'the delivery forge gives for the commit {string}, asked for no job, the run {int} with the jobs {string}',
+  function (hash: string, id: number, jobs: string) {
+    assert.deepEqual(forgeOf(this).forge.run(hash, 'gate'), { id, completed: true, jobs: JSON.parse(jobs) });
+  },
+);
+
+Then(
   'the delivery forge gives for the commit {string}, asked for {string}, the run {int} at attempt {int} with the jobs {string}',
   function (hash: string, asked: string, id: number, attempt: number, jobs: string) {
     const names = asked === 'all' ? 'all' : (JSON.parse(asked) as string[]);

@@ -57,17 +57,16 @@ export class InMemoryForge implements Forge {
   run(hash: string, workflow: string, jobNames?: readonly string[] | 'all'): CiRun | undefined {
     this.journal.record('ci', hash, workflow);
     const recorded = this.attempts.get(hash);
-    if (recorded !== undefined && jobNames !== undefined) {
+    if (recorded !== undefined) {
       const current = recorded.attempts.length;
+      const jobsOf = (attempt: number): CiJob[] => recorded.attempts.slice(attempt - 1, attempt).flat();
+      // Without job names the forge reads the run as listed, its latest attempt alone and without its number.
+      if (jobNames === undefined) return { id: recorded.id, completed: true, jobs: jobsOf(current) };
       return {
         id: recorded.id,
         completed: true,
         attempt: current,
-        jobs: effectiveJobs(
-          current,
-          (attempt) => recorded.attempts[attempt - 1] ?? [],
-          jobNames === 'all' ? undefined : jobNames,
-        ),
+        jobs: effectiveJobs(current, jobsOf, jobNames === 'all' ? undefined : jobNames),
       };
     }
     const replayed = this.replayed.get(hash);

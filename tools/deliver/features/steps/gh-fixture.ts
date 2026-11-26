@@ -121,6 +121,8 @@ export function ghForge(world: DeliverWorld, workflow = 'gate'): GhForgeFixture 
       answers('run', String(id), {
         stdout: JSON.stringify({ id, head_sha: hash, status: 'completed', run_attempt: attempts.length }),
       });
+      // Read without job names, the run is its jobs as listed: those of its latest attempt.
+      answers('jobs', String(id), { stdout: JSON.stringify({ jobs: (attempts.at(-1) ?? []).map(jobText) }) });
       let next = 1;
       attempts.forEach((jobs, index) => {
         answers('attempt', `${id}/${index + 1}`, {

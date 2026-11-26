@@ -403,6 +403,16 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | in-memory | the job of the last attempt | ["gate-linux-lane-1"] | [{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false}] |
         | gh        | the job of the last attempt | ["gate-linux-lane-1"] | [{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false}] |
 
+    Scenario Outline: a run whose failed jobs ran again, asked for no job, gives the jobs of its latest attempt alone
+      Given a delivery forge of the <adapter> adapter
+      And the delivery forge holds for the commit "0000000000000000000000000000000000000022" the run 32, whose attempts executed the jobs '[[{"name":"gate-linux-lane-1","conclusion":"failure","hadRunner":true,"failedStep":true},{"name":"gate-linux-lane-2","conclusion":"success","hadRunner":true,"failedStep":false}],[{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false}]]'
+      Then the delivery forge gives for the commit "0000000000000000000000000000000000000022", asked for no job, the run 32 with the jobs '[{"name":"gate-linux-lane-1","conclusion":"success","hadRunner":true,"failedStep":false}]'
+
+      Examples:
+        | adapter   |
+        | in-memory |
+        | gh        |
+
     Scenario Outline: a rerun is recorded, and the run is then not completed, without jobs
       Given a delivery forge of the <adapter> adapter
       And the delivery forge holds for the commit "0000000000000000000000000000000000000003" the run 9, completed "yes", with the jobs '[{"name":"gate-macos","conclusion":"cancelled","hadRunner":false,"failedStep":false}]'
