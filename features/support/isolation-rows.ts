@@ -10,7 +10,7 @@ export const PROFILES = ['builder', 'reviewer', 'checker', 'worker', 'module'] a
 
 /** What a row says a session is: the role of the profile, not a list of its file. */
 const ROLE: Record<(typeof PROFILES)[number], string> = {
-  builder: 'a build session. The host checks Git ignore files at their exact pathname bytes.',
+  builder: 'a build session. The host owns Git metadata and checks recorded ignore files.',
   reviewer: 'a review session',
   checker: 'a check of a step: a command, no model',
   worker: 'the agent worker of one task',

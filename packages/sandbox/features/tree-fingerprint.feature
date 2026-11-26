@@ -180,12 +180,25 @@ Feature: the fingerprint of the tree of a worktree
         | middle   | 0link  |
         | last     | zlink  |
 
+    Scenario Outline: the path of the first gitlink is read from Git's bytes at the <position> record
+      Given a throwaway repository with one commit
+      And the commit of the repository records a gitlink "<name>" with no directory in the tree
+      Then the first gitlink of its head and of its index is "<name>"
+
+      # The two regular entries in the fixture are .gitignore and a.txt, in Git order.
+      Examples:
+        | position | name  |
+        | first    | !link |
+        | middle   | 0link |
+        | last     | zlink |
+
     Scenario: the fingerprint accepts an ordinary filename containing the gitlink mode
       Given a throwaway repository with one commit
       And the file "160000 notes" of the repository holds "ordinary file"
       And everything in the repository is committed
       When I take the fingerprint of the repository
       Then the fingerprint is clean
+      And its head and its index hold no gitlink
 
     Scenario: the fingerprint accepts an empty Git tree
       Given a throwaway repository with an empty root commit

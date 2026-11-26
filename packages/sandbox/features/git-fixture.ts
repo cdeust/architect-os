@@ -3,9 +3,13 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 
 /** Git for setting up disposable scenario repositories, independent of the adapters being mutated. */
 export function gitInFixture(directory: string, args: readonly string[]): string {
+  return gitBytesInFixture(directory, args).toString('utf8');
+}
+
+/** The same Git, its output as the bytes Git wrote: a path that is not UTF-8 is not rewritten. */
+export function gitBytesInFixture(directory: string, args: readonly string[]): Buffer {
   return execFileSync('/usr/bin/git', args, {
     cwd: directory,
-    encoding: 'utf8',
     stdio: 'pipe',
     env: {
       PATH: process.env['PATH'] ?? '',

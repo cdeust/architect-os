@@ -1,5 +1,5 @@
 import { closedGitOptions, machineIndependentGitEnvironment } from '@architect-os/sandbox/git-closed';
-import { visibleNestedMarker, type NestedMarker } from '@architect-os/sandbox/git-worktree';
+import { firstGitlinkPath, visibleNestedMarker, type NestedMarker } from '@architect-os/sandbox/git-worktree';
 import { execFileSync } from 'node:child_process';
 import { destinationMessage, judgedParent, type DestinationFacts } from '../domain/destination.js';
 import type { JudgedDestination } from '../domain/verdict.js';
@@ -33,13 +33,16 @@ function names(output: string): string[] {
  * match no path when given back to git, and leave a changed file without changed lines. It is refused.
  */
 function gitList(cwd: string, args: readonly string[]): string {
-  return decodeExactly(
-    execFileSync('git', [...options(), ...args], {
-      cwd,
-      env: machineIndependentGitEnvironment(),
-      maxBuffer: 1 << 30,
-    }),
-  );
+  return decodeExactly(gitBytes(cwd, args));
+}
+
+/** A list of git as the bytes git wrote. */
+function gitBytes(cwd: string, args: readonly string[]): Buffer {
+  return execFileSync('git', [...options(), ...args], {
+    cwd,
+    env: machineIndependentGitEnvironment(),
+    maxBuffer: 1 << 30,
+  });
 }
 
 /** What the gate reads from git: the head, its first parent, the diff against it and the tree of the first parent. */
@@ -181,10 +184,13 @@ export class GitRepository {
 
   /** Refuse recorded gitlinks and visible markers before any Git worktree traversal. */
   nested(): NestedMarker | undefined {
-    const index = gitList(this.root, ['ls-files', '-s', '-z']);
-    const head = gitList(this.root, ['ls-tree', '-r', '-z', 'HEAD']);
-    const recorded = [...names(index), ...names(head)].find((entry) => entry.startsWith('160000 '));
-    if (recorded !== undefined) return { path: recorded.slice(recorded.indexOf('\t') + 1) };
+    const index = gitBytes(this.root, ['ls-files', '-s', '-z']);
+    const head = gitBytes(this.root, ['ls-tree', '-r', '-z', 'HEAD']);
+    // A name that is not UTF-8 is refused here, as everywhere the gate reads git, before any name is read.
+    decodeExactly(index);
+    decodeExactly(head);
+    const recorded = firstGitlinkPath(index) ?? firstGitlinkPath(head);
+    if (recorded !== undefined) return { path: recorded };
     return visibleNestedMarker(this.root, head);
   }
 
