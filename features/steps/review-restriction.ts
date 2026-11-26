@@ -170,6 +170,34 @@ When(
   },
 );
 
+/** The reads of a credential of the runner that the explicit denies name, without the block of reads outside. */
+function sensitiveReads(checkout: string, dir: string, home: string, temp: string): [string, ModelTurn][] {
+  const names = new Set([
+    'Read /proc/self/environ',
+    'Read the environ of the parent',
+    'Read /proc/self/cmdline',
+    'Grep /proc/self/environ',
+    'Grep every environ of /proc',
+    'Glob /proc',
+    'Read the home of the runner',
+    'Read ~/.claude',
+    'Read the credentials of gh',
+    'Read RUNNER_TEMP',
+    'Read GITHUB_ENV',
+    'Read GITHUB_OUTPUT',
+    'Grep RUNNER_TEMP',
+  ]);
+  return credentialReads(checkout, dir, home, temp).filter(([name]) => names.has(name));
+}
+
+When(
+  'a real Claude Code under the explicit denies alone of {} is asked by a scripted model to read what holds a credential',
+  { timeout: 300_000 },
+  async function (review: string) {
+    await trial(this, review, sensitiveReads, { withoutBlock: true });
+  },
+);
+
 When(
   'a real Claude Code under the managed settings of {} is asked by a scripted model for what an injected prompt asks',
   { timeout: 180_000 },
@@ -182,6 +210,7 @@ async function trial(
   world: Parameters<typeof stored>[0],
   review: string,
   script: (checkout: string, dir: string, home: string, temp: string) => [string, ModelTurn][],
+  options: { withoutBlock?: boolean } = {},
 ): Promise<void> {
   {
     const settingsPath = SETTINGS[review];
@@ -215,9 +244,15 @@ async function trial(
     const config = join(dir, 'config');
     mkdirSync(config);
 
-    const settings = JSON.parse(readFileSync(join(ROOT, settingsPath), 'utf8')) as Record<string, unknown>;
+    const settings = JSON.parse(readFileSync(join(ROOT, settingsPath), 'utf8')) as {
+      permissions: Record<string, unknown>;
+    } & Record<string, unknown>;
     delete settings['allowManagedHooksOnly'];
-    const text = JSON.stringify(settings).replaceAll('/etc/claude-code/comment-guard.py', join(ROOT, GUARD));
+    if (options.withoutBlock === true) delete settings.permissions['blockReadsOutsideWorkingDirectories'];
+    // RUNNER_TEMP of a hosted runner is /home/runner/work/_temp; the trial's is its own folder.
+    const text = JSON.stringify(settings)
+      .replaceAll('/etc/claude-code/comment-guard.py', join(ROOT, GUARD))
+      .replaceAll('//home/runner/work/_temp/', `/${temp}/`);
     writeFileSync(join(dir, 'settings.json'), text);
 
     const calls = join(dir, 'calls.jsonl');

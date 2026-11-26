@@ -33,3 +33,15 @@ Feature: The managed settings of the Claude reviews hold before a real Claude Co
       | the security review |
       | the PR review       |
       | the @claude bot     |
+
+  Scenario Outline: under the explicit denies alone of <workflow>, no read reaches a credential of the runner
+    The second line: without the block of reads outside the working directory, the denies of /proc, of the
+    credentials of the home (git, gh, Claude Code) and of RUNNER_TEMP still refuse Read, Grep and Glob there.
+    When a real Claude Code under the explicit denies alone of <workflow> is asked by a scripted model to read what holds a credential
+    Then no credential of the runner reached the model, through any of those reads
+
+    Examples:
+      | workflow            |
+      | the security review |
+      | the PR review       |
+      | the @claude bot     |

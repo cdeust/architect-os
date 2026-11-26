@@ -60,7 +60,8 @@ Feature: The Claude review
 
   Scenario: every workflow that runs the action fixes its permission mode and forbids auto and bypass
     A new pin of the action cannot change the mode in silence: each sets it once, default or acceptEdits, and installs
-    managed settings that forbid auto and bypass, from a sparse checkout of the commit of the run, before the action.
+    managed settings that forbid auto and bypass, block reads outside the checkout and deny by name what a credential
+    of the runner sits behind, from a sparse checkout of the commit of the run, before the action.
     Then every workflow that runs the action fixes its mode and forbids auto and bypass:
       | claude.yml                 |
       | claude-review.yml          |
@@ -72,6 +73,9 @@ Feature: The Claude review
     Examples:
       | file                       | kind                                          |
       | claude.yml                 | in auto mode                                  |
+      | claude.yml                 | without the scrub of its subprocesses         |
+      | claude-review.yml          | without the scrub of its subprocesses         |
+      | claude-security-review.yml | without the scrub of its subprocesses         |
       | claude.yml                 | without a mode                                |
       | claude.yml                 | with two modes                                |
       | claude.yml                 | without its managed settings                  |
@@ -89,6 +93,18 @@ Feature: The Claude review
     Then managed settings that do not forbid <mode> are rejected by the rule of the permission mode
 
     Examples:
-      | mode        |
-      | auto mode   |
-      | bypass mode |
+      | mode                       |
+      | auto mode                  |
+      | bypass mode                |
+      | reads outside the checkout |
+      | .git/**                    |
+      | //proc/**                  |
+      | ~/.claude/**               |
+      | ~/.config/gh/**            |
+      | ~/.git-credentials         |
+      | ~/.gitconfig               |
+      | //home/runner/work/_temp/  |
+
+  Scenario: the job of the @claude bot reads with its own token
+    Its token is in the environment of Claude Code; the bot writes with the token of the Claude app.
+    Then the job of the @claude bot reads with its own token and writes with the token of the Claude app

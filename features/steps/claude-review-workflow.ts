@@ -370,6 +370,11 @@ export function assertModeFixed(text: string): void {
     const steps = job.steps ?? [];
     const action = steps.findIndex((step) => step.uses?.startsWith('anthropics/claude-code-action@'));
     const args = String(steps[action]?.with?.['claude_args'] ?? '');
+    assert.deepEqual(
+      steps[action]?.env,
+      { CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' },
+      'the environment of the subprocesses is not scrubbed of the credentials',
+    );
     const modes = [...args.matchAll(/--permission-mode\s+(\S+)/g)].map((match) => match[1]);
     assert.equal(modes.length, 1, 'the permission mode is not set once');
     assert.ok(MODES.includes(modes[0] ?? ''), `permission mode ${modes[0]}`);
@@ -396,10 +401,28 @@ export function assertModeFixed(text: string): void {
   }
 }
 
+/** What a credential of a hosted runner sits behind, denied by name in every Claude workflow's managed settings. */
+export const SENSITIVE = [
+  'Read(.git/**)',
+  'Read(//proc/**)',
+  'Read(~/.claude/**)',
+  'Read(~/.config/gh/**)',
+  'Read(~/.git-credentials)',
+  'Read(~/.gitconfig)',
+  'Read(//home/runner/work/_temp/**)',
+];
+
 function assertModesForbidden(settings: string): void {
   const permissions = (JSON.parse(settings) as { permissions?: Record<string, unknown> }).permissions ?? {};
   assert.equal(permissions['disableAutoMode'], 'disable', 'auto mode is not forbidden');
   assert.equal(permissions['disableBypassPermissionsMode'], 'disable', 'bypass mode is not forbidden');
+  assert.equal(
+    permissions['blockReadsOutsideWorkingDirectories'],
+    true,
+    'reads outside the checkout are not blocked',
+  );
+  const deny = Array.isArray(permissions['deny']) ? (permissions['deny'] as unknown[]) : [];
+  for (const path of SENSITIVE) assert.ok(deny.includes(path), `not denied: ${path}`);
 }
 
 Then(
@@ -412,6 +435,8 @@ Then(
 );
 
 const MODE_BREAKS: Record<string, (yaml: string) => string> = {
+  'without the scrub of its subprocesses': (yaml) =>
+    yaml.replace(/\n *CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: ["']1["']/, '\n          KEEP: "1"'),
   'in auto mode': (yaml) => yaml.replace(/--permission-mode (default|acceptEdits)/, '--permission-mode auto'),
   'without a mode': (yaml) => yaml.replace(/\n *--permission-mode (default|acceptEdits)/, ''),
   'with two modes': (yaml) =>
@@ -441,17 +466,38 @@ Then('{string} {} is rejected by the rule of the permission mode', function (fil
 
 Then(
   'managed settings that do not forbid {} are rejected by the rule of the permission mode',
-  function (mode: string) {
+  function (what: string) {
     for (const path of [
       '.github/claude/managed-settings.json',
       '.github/claude-review/managed-settings.json',
       '.github/claude-security-review/managed-settings.json',
     ]) {
       const settings = JSON.parse(readFileSync(join(ROOT, path), 'utf8')) as {
-        permissions: Record<string, unknown>;
+        permissions: Record<string, unknown> & { deny: string[] };
       };
-      delete settings.permissions[mode === 'auto mode' ? 'disableAutoMode' : 'disableBypassPermissionsMode'];
+      if (what === 'auto mode') delete settings.permissions['disableAutoMode'];
+      else if (what === 'bypass mode') delete settings.permissions['disableBypassPermissionsMode'];
+      else if (what === 'reads outside the checkout')
+        delete settings.permissions['blockReadsOutsideWorkingDirectories'];
+      else {
+        const denied = SENSITIVE.find((rule) => rule.includes(what));
+        assert.ok(denied !== undefined, `no denied path named "${what}"`);
+        settings.permissions.deny = settings.permissions.deny.filter((rule) => rule !== denied);
+      }
       assert.throws(() => assertModesForbidden(JSON.stringify(settings)), path);
     }
+  },
+);
+
+Then(
+  'the job of the @claude bot reads with its own token and writes with the token of the Claude app',
+  function () {
+    const doc = parse(readFileSync(join(ROOT, '.github/workflows/claude.yml'), 'utf8')) as {
+      jobs: Record<string, { permissions?: unknown }>;
+    };
+    assert.deepEqual(
+      Object.values(doc.jobs).map((job) => job.permissions),
+      [{ contents: 'read', actions: 'read', 'id-token': 'write' }],
+    );
   },
 );
