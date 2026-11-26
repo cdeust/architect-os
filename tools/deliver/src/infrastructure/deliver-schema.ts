@@ -98,7 +98,10 @@ function configSchema(): z.ZodType<DeliverConfig> {
     ciPolls: count(600),
     ruleSuitePolls: count(60),
   });
-  return object
+  // Run relationship checks only on a successful parse. During validation of an
+  // invalid child, Zod can still hold its intermediate list of dictionary entries.
+  const relationships = z
+    .custom<z.output<typeof object>>()
     .refine(
       ({ requiredJobs, jobDependencies = {} }) => {
         return Object.entries(jobDependencies).every(
@@ -134,6 +137,7 @@ function configSchema(): z.ZodType<DeliverConfig> {
       path: ['trialPrefix'],
       message: 'a trial branch is never a branch to publish',
     });
+  return object.pipe(relationships);
 }
 
 export const parseDeliverConfig: ParseConfig = (raw) => {

@@ -1014,7 +1014,8 @@ Given(
         ...(plannedProducers?.suffixes ?? []).map((suffix) => plannedProducers?.prefix + '1' + suffix),
       ]),
     ]);
-    const jobs = [...required].map((name) => ({
+    const jobs = [...required].map((name, index) => ({
+      id: index + 1,
       name,
       conclusion: 'success',
       runner_name: 'runner-1',
@@ -1031,7 +1032,7 @@ Given(
           }),
         },
         ['--paginate --slurp repos/' + REPO + '/actions/runs/42/attempts/1/jobs?per_page=100']: {
-          stdout: JSON.stringify([{ jobs }]),
+          stdout: JSON.stringify([{ total_count: jobs.length, jobs }]),
         },
       }),
     );

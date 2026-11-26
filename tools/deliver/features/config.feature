@@ -139,6 +139,18 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
       And the accepted deliver config judges the names "gate-linux, gate-macos, gate-linux-cucumber-1, gate-linux-cucumber-2, gate-linux-plan, gate-linux-lane-1 / mutation, gate-linux-lane-1 / replay, custom" with "custom" failing as "green"
       And the accepted deliver config judges the names "gate-linux, gate-macos, gate-linux-cucumber-1, gate-linux-cucumber-2, gate-linux-plan, gate-linux-lane-1 / mutation, gate-linux-lane-1 / replay, gate-linux-lane-custom, custom" with "custom" failing as "failed"
 
+    Scenario Outline: invalid groups under numeric job names produce ordinary configuration errors
+      Given a deliver config of the base form
+      And the deliver config field "requiredJobs" is set to '["0","gate-macos"]'
+      And the deliver config field "jobDependencies" is set to '<groups>'
+      When the deliver config is parsed
+      Then the deliver config is refused with a reason holding "<reason>"
+
+      Examples:
+        | groups                                                                                             | reason                         |
+        | {"0":{"producers":["job","job"],"admissionStep":"Check"}}                                          | the producers are all different |
+        | {"0":{"producers":["job"],"plannedProducers":{"prefix":"p-","suffixes":["x","x"]},"admissionStep":"Check"}} | the suffixes are all different  |
+
     Scenario Outline: dependency records round-trip every declared job label as data
       Given a deliver config of the base form
       And the deliver config field "requiredJobs" is set to '["<label>","gate-macos"]'
