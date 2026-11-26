@@ -1,4 +1,24 @@
 Feature: The approved Plan is read by the real Step host
+  Scenario: Ticket estimates and dependencies survive stdio, local approval, and Step recording
+    Given an isolated Define plugin that returns delivery tickets
+    When the host invokes the Define reader over stdio
+    And the host reads the matching verified proposal over stdio
+    Given a recorded delivery Plan input
+    And the Plan reads the saved Define and verified proposal CLI output
+    When I prepare the Plan once
+    Then the approved Step inputs contain the tickets and the operator build configuration
+    When the operator records an approval of the preview
+    And I materialize the Plan
+    Then the materialized files match the preview and its manifest
+    Given a step folder
+    And the step uses the materialized Plan folder
+    And the build session writes the fixture "session.jsonl"
+    When I run the step with the arguments "<folder>"
+    Then the step exits with 0
+    And the sessions started were "code.json"
+    And the Step record binds the two approved input files
+    And the Step record preserves the approved tickets and builder model
+
   Scenario: One prepared delivery step links every acceptance criterion into the Step record
     Given a recorded delivery Plan input
     When I prepare the Plan once

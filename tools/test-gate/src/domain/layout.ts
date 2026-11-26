@@ -34,12 +34,16 @@ export function isProduction(layout: Layout, path: string): boolean {
 /**
  * Whether `directory` can hold a production file: some include glob matches it segment by segment as a directory (its
  * last segment names files) or reaches a `**` first. Excludes are not read: they narrow files, and a link is refused
- * wherever an included file could be.
+ * wherever an included file could be. Names compare after Unicode normalization and case folding: macOS volumes are
+ * insensitive to both, and a link `Src` there serves the files of `src/`.
  */
 export function mayHoldProduction(layout: Layout, directory: string): boolean {
-  const names = directory.split('/');
+  // Upper then lower, as a volume folds case: U+017F (long s) reaches s, and U+03F4 (capital theta symbol), which NFC
+  // keeps, reaches θ as Θ does.
+  const fold = (text: string) => text.normalize('NFC').toUpperCase().toLowerCase();
+  const names = fold(directory).split('/');
   return layout.production.include.some((glob) => {
-    const segments = glob.split('/');
+    const segments = fold(glob).split('/');
     for (const [index, name] of names.entries()) {
       const segment = segments[index] as string;
       if (segment === '**') return true;

@@ -9,3 +9,4 @@ export * from './evidence.js';
 export * from './define.js';
 export * from './plan.js';
 export * from './spec-pipeline.js';
+export { ticketsSchema } from './tickets.js';

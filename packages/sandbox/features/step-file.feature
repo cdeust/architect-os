@@ -243,3 +243,11 @@ Feature: step.json, the descriptive file of a step
 
   Scenario: A Step accepts only the supported model and effort for its builder
     Then the Step file binds the provider, model and effort of a subscription build
+
+  Scenario: a step file may carry the tickets approved by Plan, kept in order
+    When I parse the step file example with two tickets
+    Then the step tickets are "TICKET-002, TICKET-001" in that order
+
+  Scenario: a step file whose tickets form a cycle is refused
+    When I make a broken copy of the step file example whose tickets depend on each other
+    Then parsing the step file fails

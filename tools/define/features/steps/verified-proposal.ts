@@ -8,6 +8,8 @@ import { runProposal } from '../../src/proposal.js';
 import { Then } from '@cucumber/cucumber';
 import { reviewedProposal, verifiedProposal } from '../../src/application/verified-proposal.js';
 
+const DIGEST = 'c'.repeat(64);
+
 Then('the verified proposal with {string} yields {string}', async function (change: string, outcome: string) {
   const file = (v: unknown) => JSON.stringify(v) + '\n';
   const sha = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -47,7 +49,18 @@ Then('the verified proposal with {string} yields {string}', async function (chan
     );
   if (outcome === 'accept') assert.equal(consume(), file(proposal));
   else if (
-    !['missing 0', 'missing 1', 'missing 2', 'missing 3', 'extra', 'refusal', 'transport'].includes(change)
+    ![
+      'missing 0',
+      'missing 1',
+      'missing 2',
+      'missing 3',
+      'missing 4',
+      'malformed digest',
+      'extra',
+      'refusal',
+      'transport',
+      'bundle',
+    ].includes(change)
   )
     assert.throws(consume);
   const drafter = { provider: 'openai', model: 'fixture-author' };
@@ -78,7 +91,18 @@ Then('the verified proposal with {string} yields {string}', async function (chan
     );
   if (outcome === 'accept') assert.equal(consumeReviewed(), file(reviewed));
   else if (
-    !['missing 0', 'missing 1', 'missing 2', 'missing 3', 'extra', 'refusal', 'transport'].includes(change)
+    ![
+      'missing 0',
+      'missing 1',
+      'missing 2',
+      'missing 3',
+      'missing 4',
+      'malformed digest',
+      'extra',
+      'refusal',
+      'transport',
+      'bundle',
+    ].includes(change)
   )
     assert.throws(
       consumeReviewed,
@@ -92,20 +116,23 @@ Then('the verified proposal with {string} yields {string}', async function (chan
     let out = '',
       err = '',
       reads = 0;
-    const args = [run, 'fixture-plugin', step, path];
-    if (/^missing [0-3]$/.test(change)) args[Number(change.at(-1))] = '';
+    const args = [run, 'fixture-plugin', DIGEST, step, path];
+    if (/^missing [0-4]$/.test(change)) args[Number(change.at(-1))] = '';
+    if (change === 'malformed digest') args[2] = DIGEST.toUpperCase();
     if (change === 'extra') args.push('extra');
-    const invalidArgs = change.startsWith('missing ') || change === 'extra';
+    const invalidArgs = change.startsWith('missing ') || change === 'extra' || change === 'malformed digest';
     const proc = {
       argv: ['node', 'proposal', ...args],
       execPath: 'trusted-node',
       stdout: { write: (text: string) => (out += text) },
       stderr: { write: (text: string) => (err += text) },
     };
-    const code = await runProposal(proc, async (node, plugin, args) => {
+    const code = await runProposal(proc, async (node, plugin, sha256, args) => {
       ++reads;
       assert.equal(node, 'trusted-node');
       assert.equal(plugin, resolve('fixture-plugin'));
+      assert.equal(sha256, DIGEST);
+      if (change === 'bundle') throw new Error('SPEC_BUNDLE_MISMATCH');
       assert.deepEqual(args, { run_id: run, format: 'verified_plan_v1', plan_step: step });
       if (change === 'transport') throw new Error();
       return {
@@ -115,17 +142,20 @@ Then('the verified proposal with {string} yields {string}', async function (chan
     });
     assert.equal(reads, invalidArgs ? 0 : 1);
     const transport = change === 'transport';
+    const bundle = change === 'bundle';
     assert.equal(code, transport ? 3 : outcome === 'accept' ? 0 : 2);
     assert.equal(out, outcome === 'accept' ? file(proposal) : '');
     assert.equal(
       err,
       invalidArgs
-        ? 'usage: plan:proposal <run_id> <prd-gen-plugin-root> <step> <define-file>\n'
-        : transport
-          ? 'architect-os proposal: PLAN_TRANSPORT_FAILED\n'
-          : outcome === 'accept'
-            ? ''
-            : 'architect-os proposal: PLAN_PROJECTION_REFUSED\n',
+        ? 'usage: plan:proposal <run_id> <prd-gen-plugin-root> <bundle-sha256> <step> <define-file>\n'
+        : bundle
+          ? 'architect-os proposal: SPEC_BUNDLE_MISMATCH\n'
+          : transport
+            ? 'architect-os proposal: PLAN_TRANSPORT_FAILED\n'
+            : outcome === 'accept'
+              ? ''
+              : 'architect-os proposal: PLAN_PROJECTION_REFUSED\n',
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

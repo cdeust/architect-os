@@ -11,6 +11,21 @@ Feature: the folder steps/ keeps what each step saw
     Given a copy of steps/ holding the valid step folder "demo"
     Then every entry of it follows the rule of the folders of steps
 
+  Scenario: a Step record can carry the same tickets as its approved input
+    Given a copy of steps/ holding a ticketed step folder "demo"
+    Then every entry of it follows the rule of the folders of steps
+
+  Scenario Outline: Editing a ticket in the record cannot change an approved estimate
+    Given a copy of steps/ holding a ticketed step folder "demo"
+    When the copy is broken with <defect>
+    Then that copy of steps/ is refused, because "<reason>"
+
+    Examples:
+      | defect                         | reason                                        |
+      | a different recorded estimate  | demo: record.tickets differs from step.json   |
+      | tickets removed from the record| demo: record.tickets differs from step.json   |
+      | a cycle in the recorded tickets| demo: record.json is refused                  |
+
   Scenario: a file that the repository ignores, beside the folders and inside one, is not judged: it can never be committed
     Given a copy of steps/ in a repository that ignores ".DS_Store" and "node_modules/", holding the valid step folder "demo"
     When the copy holds the file ".DS_Store"

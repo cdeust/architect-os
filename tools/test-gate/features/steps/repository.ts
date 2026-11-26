@@ -707,6 +707,25 @@ Then(
   },
 );
 
+Then(
+  'the directory {string} may hold a production file of the committed gate configuration: {word}',
+  function (path: string, may: string) {
+    const config = parseGateConfig(
+      readFileSync(fileURLToPath(new URL('../../gate.json', import.meta.url)), 'utf8'),
+    );
+    assert.ok(!('failure' in config), JSON.stringify(config));
+    assert.equal(mayHoldProduction(config, path), may === 'yes');
+  },
+);
+
+Then(
+  'the directory {string} may hold a production file of the glob {string}: {word}',
+  function (path: string, glob: string, may: string) {
+    const layout = { production: { include: [glob], exclude: [] }, features: { include: [], exclude: [] } };
+    assert.equal(mayHoldProduction(layout, path), may === 'yes');
+  },
+);
+
 Given('the gate configuration takes the production files of the root as well', function () {
   const repo = repository(this);
   const config = JSON.parse(repo.read(CONFIG_PATH));

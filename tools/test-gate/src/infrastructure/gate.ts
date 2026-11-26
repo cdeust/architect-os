@@ -239,7 +239,6 @@ function replayShardPath(shard: number): string {
   return 'reports/replay-shards/' + shard + '/replay.json';
 }
 
-/** A production checkout lease can revoke or publish the checked Linux result. */
 /** The mutation report of a job with mutation, checked against the lots of its perimeter, and the controls of rule 7. */
 async function mutationEvidence(
   config: GateConfig,
@@ -259,6 +258,7 @@ async function mutationEvidence(
   return { ...scope, report, control: controlOf(config, workspace, text) };
 }
 
+/** A production checkout lease can revoke or publish the checked Linux result. */
 export interface GateReceiptAuthority {
   discard(): void;
   publish(config: GateConfig, workspace: Workspace): void;

@@ -1,4 +1,19 @@
 Feature: Prepare and explicitly approve one step from Define v1
+  Scenario: Tickets affect the preview and approval but leave the operator policy intact
+    Given a recorded delivery Plan input
+    And the saved Define handoff contains ticket estimates
+    When I prepare the Plan once
+    Then the approved Step inputs contain the tickets and the operator build configuration
+
+  Scenario: A changed estimate invalidates the old approval
+    Given a recorded delivery Plan input
+    And the saved Define handoff contains ticket estimates
+    When I prepare the Plan once
+    And the operator records an approval of the preview
+    And the ticket estimate changes after approval
+    And I materialize the Plan
+    Then Plan refuses with "PLAN_NOT_APPROVED" and publishes nothing
+
   Scenario: Preparing twice gives the same approval digest without creating Step inputs
     Given a recorded delivery Plan input
     When I prepare the Plan twice
@@ -25,10 +40,13 @@ Feature: Prepare and explicitly approve one step from Define v1
       | byte order mark        | PLAN_INPUT_INVALID |
       | historical refusal     | PLAN_INPUT_INVALID |
       | unlinked acceptance    | PLAN_INPUT_INVALID |
+      | invalid handoff tickets| PLAN_INPUT_INVALID |
       | unknown criterion      | PLAN_INPUT_INVALID |
       | incomplete coverage    | PLAN_INPUT_INVALID |
       | repeated criterion     | PLAN_INPUT_INVALID |
       | proposal command       | PLAN_INPUT_INVALID |
+      | proposal tickets       | PLAN_INPUT_INVALID |
+      | policy tickets         | PLAN_INPUT_INVALID |
       | policy command         | PLAN_INPUT_INVALID |
       | malformed policy       | PLAN_INPUT_INVALID |
       | prototype question     | PLAN_INPUT_INVALID |

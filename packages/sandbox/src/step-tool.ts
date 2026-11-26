@@ -544,6 +544,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       startedAt,
       tree,
       inputs,
+      tickets: step.tickets,
       launcher,
       sessions: [
         ...scoutOutcomes.map((scout) => recorded('scout', scout.config, scout, scout.config.name)),

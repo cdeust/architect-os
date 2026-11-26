@@ -316,6 +316,32 @@ Feature: Gate source files have an unambiguous mutation perimeter
         porte de test : GATE_SOURCE_LINK : src
         """
 
+    Scenario: a link named like the directory of sources in another case is refused, since a macOS volume serves src/ through it
+      Given a gate repository
+      And the gate repository has a source with a LF separator at "src/leaf.mjs"
+      And the gate first parent is committed
+      And the gate repository file "src/leaf.mjs" is removed
+      And the gate repository replaces "Src" with a directory link to a disposable sibling
+      And the gate head is committed
+      When the gate plans the "linux" job
+      Then the gate exits with 1
+      And the gate output is:
+        """
+        porte de test : GATE_SOURCE_LINK : Src
+        """
+
+    Scenario: a file of a root commit that the checkout no longer holds, where a directory of sources could be, is no link
+      Given a gate repository
+      And the gate repository has a source with a LF separator at "src/leaf.mjs"
+      And the gate repository file "mod/notes" reads:
+        """
+        a note
+        """
+      And the gate head is committed
+      And the gate repository file "mod/notes" is removed
+      When the gate plans the "linux" job
+      Then the gate exits with 0
+
     Scenario: a regular file where a module directory could be, and a link outside the sources, are accepted
       Given a gate repository
       And the gate first parent is committed
@@ -339,6 +365,7 @@ Feature: Gate source files have an unambiguous mutation perimeter
       Examples:
         | path           | may | reason                                         |
         | src            | yes | the first segment of src/**/*.mjs              |
+        | SRC            | yes | the same directory on a volume blind to case   |
         | src/a/b        | yes | under the ** of src/**/*.mjs                   |
         | mod            | yes | the first segment of mod/*/src/**/*.mjs        |
         | mod/one        | yes | the * of mod/*/src/**/*.mjs                    |
@@ -346,3 +373,23 @@ Feature: Gate source files have an unambiguous mutation perimeter
         | mod/one/lib    | no  | lib is not src                                 |
         | docs           | no  | no glob begins with docs                       |
         | leaf.mjs       | no  | a file segment is not a directory: *.mjs root  |
+
+
+    Scenario Outline: the directory "<path>" may hold a production file of the committed configuration: <may>
+      Then the directory "<path>" may hold a production file of the committed gate configuration: <may>
+
+      Examples:
+        | path      | may | reason                                                    |
+        | packages  | yes | the first segment of packages/*/src/**/*.ts               |
+        | pacKages  | yes | NFC turns the Kelvin sign into K                          |
+        | ſervices  | yes | the long s folds to s, as on a volume blind to case       |
+        | docs      | no  | no glob begins with docs                                  |
+
+    Scenario Outline: the directory "<path>" may hold a production file of the glob <glob>: <may>
+      Then the directory "<path>" may hold a production file of the glob "<glob>": <may>
+
+      Examples:
+        | path    | glob         | may | reason                                                        |
+        | café   | café/**/*.mjs | yes | the decomposed é is the composed one once both are normalized |
+        | cafe    | café/**/*.mjs | no  | e is not é                                                    |
+        | ϴ       | θ/**/*.mjs   | yes | ϴ, which NFC keeps, and θ fold to the same letter             |
