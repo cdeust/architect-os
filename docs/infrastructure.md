@@ -9,6 +9,7 @@ Rule: no secret ever enters a worker. The worker is given `ANTHROPIC_BASE_URL` p
 ## Postgres, pgvector and migrations
 
 - Postgres 17 with the `vector` extension (the CI job `gate-linux` runs `pgvector/pgvector:pg17`).
+- Hosted Linux jobs install sandbox tools and the PostgreSQL signing key from the image’s Ubuntu archive. The Gate and full mutation jobs then install PostgreSQL 17 and pgvector from the signed HTTPS `noble-pgdg` repository, alongside Ubuntu for dependencies. The benchmark requests the server alone. Other image repositories do not participate. [Ubuntu archive on GitHub runners](https://github.com/actions/runner-images/blob/c03600ca998467081ccec9bb9dbf5de6b68e862a/images/ubuntu/scripts/build/configure-apt.sh) · [Key shipped in Ubuntu’s postgresql-common](https://packages.ubuntu.com/noble/all/postgresql-common/filelist) · [PostgreSQL APT repository](https://www.postgresql.org/download/linux/ubuntu/)
 - `data/migrations/<NNNN>_<name>.sql`, applied in order, once each, inside a transaction, recorded in `schema_migrations` (`data/src/infrastructure/migrate.ts`). The `data` service applies pending migrations at start.
   - `0001_runs.sql`: registry of executions (`runs`, `run_events`).
   - `0002_memory.sql`: `CREATE EXTENSION vector`, schema `memory`, table `memory.memories` with `embedding vector(384)` and an HNSW cosine index. The dimension must equal `EMBEDDING_DIMENSION` in `packages/contracts/src/data-ops.ts`, which rejects any other length at the API.
@@ -113,14 +114,19 @@ On #151, the hosted security engine completed nine turns and returned structured
 Each job that runs the action has a step with the id `bubblewrap`, and the condition of the action requires `steps.bubblewrap.outcome == 'success'`:
 
 ```
-sudo apt-get update
-sudo apt-get install -y --no-install-recommends bubblewrap socat
+ubuntu=/etc/apt/sources.list.d/ubuntu.sources
+test -s "$ubuntu"
+apt=(sudo apt-get -o "Dir::Etc::sourcelist=$ubuntu" -o Dir::Etc::sourceparts=/dev/null)
+"${apt[@]}" update --error-on=any
+"${apt[@]}" install -y --no-install-recommends bubblewrap socat
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 bwrap --version
 bwrap --unshare-user --unshare-pid --ro-bind / / --proc /proc true
 ```
 
 What the step is for: a review that starts, and a runner where bubblewrap is missing or cannot create a namespace stopped with that reason before the model is called. It is not what keeps a credential from a subprocess; that is Claude Code's, under the scrub, and no text of a workflow guarantees it. The packages and the sysctl are those of the action's own step. Ubuntu 24.04 gives an unprivileged program no user namespace by default; the sysctl is one way to allow it, an AppArmor profile for bubblewrap would be another, and it holds for every process of the runner until the job ends. On Ubuntu 24.04.2 (kernel 6.8, bubblewrap 0.9.0, the VM of the bench) the last line fails with "setting up uid map: Permission denied" while the sysctl is 1 and passes at 0, where `bwrap --version` answers in both cases. The proof has its own condition in the security review only (the credential is present); elsewhere it has none.
+
+The runner also configures third-party APT sources. On the first functional shard, Microsoft’s archive returned HTTP 403 during a global refresh while the Ubuntu indexes downloaded. The review steps select Ubuntu’s own `ubuntu.sources` for both update and install. A failed Ubuntu refresh stops the job. [Failed functional shard](https://github.com/cdeust/architect-os/actions/runs/45843228169/job/139990086280)
 
 The three jobs run on `ubuntu-24.04`. A label with a version names a release of Ubuntu, not a frozen image: on 26 November 2026 the two jobs of one run of the security review got two versions of it (20261122.23.1 and 20261116.376.1), which is why the step installs and proves instead of trusting the image. `features/descriptive/workflows.feature` reads every workflow file of the directory and refuses a job on `ubuntu-latest`, `macos-latest`, or any image outside `ubuntu-24.04` and `macos-26`; the budget job of `claude-review.yml` and the two jobs of `pipeline-after-merge.yml` ran on `ubuntu-latest` too.
 

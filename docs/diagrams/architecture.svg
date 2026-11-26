@@ -667,8 +667,8 @@
   <text x="36" y="4494.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">The gate (1a): npm run gate on the host, then CI on Linux and macOS</text>
   <text x="36" y="4520.5" data-type-role="brick-text" font-size="17" fill="#57606a">Linux splits the full suite into two shards and checks changed-line mutants in sixteen lanes. Survived or uncovered</text>
   <text x="36" y="4542.5" data-type-role="brick-text" font-size="17" fill="#57606a">mutants require recorded debt. Linux independently replays Killed, Timeout, RuntimeError, Survived and Ignored;</text>
-  <text x="36" y="4564.5" data-type-role="brick-text" font-size="17" fill="#57606a">macOS runs the sandbox scenarios.</text>
-  <text x="36" y="4602.5" data-type-role="legend" font-size="17" fill="#57606a">Hosted Claude actions on Ubuntu 24.04 require managed settings and a successful bubblewrap namespace probe.</text>
+  <text x="36" y="4564.5" data-type-role="brick-text" font-size="17" fill="#57606a">macOS runs the sandbox scenarios. Linux installs host packages from signed Ubuntu and PostgreSQL archives.</text>
+  <text x="36" y="4602.5" data-type-role="legend" font-size="17" fill="#57606a">On Ubuntu 24.04 the Claude actions require signed Ubuntu packages, managed settings and a successful bubblewrap namespace probe.</text>
   <rect x="890" y="4452.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
   <text x="922" y="4470.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
   <rect x="994" y="4464.5" width="382" height="114" rx="6" fill="#f6f8fa" stroke="#8c959f"/>

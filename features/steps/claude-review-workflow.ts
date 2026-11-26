@@ -414,8 +414,11 @@ const PROOF = {
   name: 'Prove bubblewrap before the scrub of subprocesses',
   run: [
     'set -euo pipefail',
-    'sudo apt-get update',
-    'sudo apt-get install -y --no-install-recommends bubblewrap socat',
+    'ubuntu=/etc/apt/sources.list.d/ubuntu.sources',
+    'test -s "$ubuntu"',
+    'apt=(sudo apt-get -o "Dir::Etc::sourcelist=$ubuntu" -o Dir::Etc::sourceparts=/dev/null)',
+    '"${apt[@]}" update --error-on=any',
+    '"${apt[@]}" install -y --no-install-recommends bubblewrap socat',
     'sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0',
     'bwrap --version',
     'bwrap --unshare-user --unshare-pid --ro-bind / / --proc /proc true',
@@ -821,6 +824,10 @@ const SHAPE_BREAKS: Record<string, [(doc: RawWorkflow) => void, RegExp]> = {
   ],
   'with a proof of bubblewrap on another condition': [
     (doc) => void (shape(doc).proof['if'] = `env.${SCRUB} == '1'`),
+    NOT_THE_PROOF,
+  ],
+  'whose proof updates unrelated image repositories': [
+    proofRun((run) => run.replace('"${apt[@]}" update --error-on=any', 'sudo apt-get update')),
     NOT_THE_PROOF,
   ],
   'that installs bubblewrap without proving it': [

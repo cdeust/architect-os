@@ -216,7 +216,7 @@ Everything is in `baseline/`: tasks, harness, defect generator, raw data and ana
 
 ## Quick start
 
-Requires Node 26 LTS (`.nvmrc`) and npm. Gate also uses `/usr/bin/git` and the standard library of `/usr/bin/python3` (3.9 or newer) for the checkout lock and recovery. The sandbox scenarios need what srt needs: nothing more on macOS; `bubblewrap`, `socat` and `ripgrep` on Linux; on Windows, WSL2.
+Requires Node 26 LTS (`.nvmrc`) and npm. Gate also uses `/usr/bin/git` and the standard library of `/usr/bin/python3` (3.9 or newer) for the checkout lock and recovery. Hosted Ubuntu jobs install the sandbox tools from the signed Ubuntu archive. Jobs that need PostgreSQL 17 add its signed PGDG archive. The sandbox scenarios need what srt needs: nothing more on macOS; `bubblewrap`, `socat` and `ripgrep` on Linux; on Windows, WSL2.
 
 Configure `ARCHITECT_OS_RUNTIME_ROOT` with the absolute path of an existing physical directory. Its installer marks it once with the environment (`workstation`, `hosted-runner` or `server`). For a newly provisioned workstation root:
 
@@ -304,7 +304,7 @@ A first realisation ran each component in a container behind a proxy, the compon
 
 ## Working with Claude
 
-`CLAUDE.md` holds the commands, boundaries and the "what the review must refuse" list. `.claude/agents/` has three review subagents, `.claude/commands/review-pr.md` runs them, and `.github/workflows/` runs Claude on `@claude` mentions and on pull requests (workflows from `anthropics/claude-code-action`). On Ubuntu 24.04, each of the three Claude workflows installs its managed settings and proves that bubblewrap can start a process in a new user and PID namespace before starting the action with subprocess environment scrubbing enabled. The read-only security review also checks for its credential. [Hosted review configuration](docs/infrastructure.md#the-claude-review)
+`CLAUDE.md` holds the commands, boundaries and the "what the review must refuse" list. `.claude/agents/` has three review subagents, `.claude/commands/review-pr.md` runs them, and `.github/workflows/` runs Claude on `@claude` mentions and on pull requests (workflows from `anthropics/claude-code-action`). On Ubuntu 24.04, each of the three Claude workflows installs bubblewrap and socat from the Ubuntu archive, loads its managed settings and proves that bubblewrap can start a process in a new user and PID namespace before starting the action with subprocess environment scrubbing enabled. The read-only security review also checks for its credential. [Hosted review configuration](docs/infrastructure.md#the-claude-review)
 
 ## Documentation
 

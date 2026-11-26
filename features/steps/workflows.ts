@@ -859,3 +859,98 @@ Then('a copy of the workflow {word} is refused', function (fault: string) {
   }
   assert.throws(() => assertDestinationPointed(stringify(doc)));
 });
+
+Then('the Linux package jobs use their shared host installer', function () {
+  const installer =
+    '"$GITHUB_WORKSPACE/aos" -- sh "$GITHUB_WORKSPACE/tools/runtime/install-host-packages.sh"';
+  for (const [file, jobs] of Object.entries({
+    'gate.yml': ['gate-linux-cucumber'],
+    'gate-lane.yml': ['mutation', 'replay'],
+    'mutation-full.yml': ['mutation-full'],
+    'bench-sandbox.yml': ['bench'],
+  })) {
+    const doc = workflow(readFileSync(join(ROOT, '.github/workflows', file), 'utf8'));
+    for (const id of jobs) {
+      const commands = doc.jobs[id]?.steps.flatMap(({ run }) => (run ?? '').trimEnd().split('\n')) ?? [];
+      const invocation = installer + (file === 'bench-sandbox.yml' ? ' bench' : ' gate');
+      assert.equal(commands.filter((line) => line === invocation).length, 1, file + '/' + id);
+      assert.ok(
+        commands.indexOf(invocation) < commands.indexOf('/usr/lib/postgresql/17/bin/postgres --version'),
+      );
+      assert.ok(commands.every((line) => !/\bapt(?:-get)?\b|apt\.postgresql\.org\.sh/.test(line)));
+    }
+  }
+});
+
+Then(
+  'the {word} package install with {word} failure uses only its required archives',
+  function (mode: string, failure: string) {
+    const dir = mkdtempSync(join(tmpdir(), 'apt-scope-'));
+    const ubuntu =
+      'Types: deb\nURIs: https://example.invalid/ubuntu\nSuites: noble\nComponents: main universe\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg';
+    const pgdg =
+      'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: noble-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n';
+    try {
+      writeFileSync(join(dir, 'ubuntu'), ubuntu);
+      writeFileSync(
+        join(dir, 'cp'),
+        [
+          '#!/bin/sh',
+          'set -eu',
+          'test "$#" = 2 && test "$1" = /etc/apt/sources.list.d/ubuntu.sources || exit 2',
+          'exec /bin/cp "$FIXTURE/ubuntu" "$2"',
+          '',
+        ].join('\n'),
+        { mode: 0o700 },
+      );
+      writeFileSync(
+        join(dir, 'sudo'),
+        [
+          '#!/bin/sh',
+          'set -eu',
+          'test "$1" = apt-get',
+          'test "$2" = -o',
+          'test "$4" = -o',
+          'test "$3" = Dir::Etc::sourcelist=/dev/null',
+          'parts=${5#Dir::Etc::sourceparts=}',
+          'shift 5',
+          'phase=ubuntu',
+          'if [ -f "$parts/pgdg.sources" ]; then phase=pgdg; fi',
+          'ls -1 "$parts" > "$FIXTURE/$phase-$1.files"',
+          'for source in "$parts"/*.sources; do /bin/cp "$source" "$FIXTURE/$phase-$1-${source##*/}"; done',
+          'echo "$phase $*" >> "$FIXTURE/commands"',
+          'if [ "$FAILURE" = "$phase-$1" ]; then exit 37; fi',
+          '',
+        ].join('\n'),
+        { mode: 0o700 },
+      );
+      const result = spawnSync('/bin/sh', [join(ROOT, 'tools/runtime/install-host-packages.sh'), mode], {
+        env: { PATH: dir + ':/usr/bin:/bin', TMPDIR: dir, FIXTURE: dir, FAILURE: failure },
+        encoding: 'utf8',
+      });
+      const commands = [
+        'ubuntu update --error-on=any',
+        'ubuntu install -y --no-install-recommends bubblewrap socat ripgrep postgresql-common',
+        'pgdg update --error-on=any',
+        'pgdg install -y --no-install-recommends postgresql-17' +
+          (mode === 'gate' ? ' postgresql-17-pgvector' : ''),
+      ];
+      const failed = commands.findIndex((cmd) => cmd.split(' ').slice(0, 2).join('-') === failure);
+      const expected = failed < 0 ? commands : commands.slice(0, failed + 1);
+      assert.equal(result.status, failed < 0 ? 0 : 37, result.stderr);
+      assert.deepEqual(readFileSync(join(dir, 'commands'), 'utf8').trim().split('\n'), expected);
+      for (const line of expected) {
+        const [phase, action] = line.split(' ');
+        const saved = join(dir, phase + '-' + action);
+        const names = readFileSync(saved + '.files', 'utf8')
+          .trim()
+          .split('\n');
+        assert.deepEqual(names, phase === 'ubuntu' ? ['ubuntu.sources'] : ['pgdg.sources', 'ubuntu.sources']);
+        assert.equal(readFileSync(saved + '-ubuntu.sources', 'utf8'), ubuntu);
+        if (phase === 'pgdg') assert.equal(readFileSync(saved + '-pgdg.sources', 'utf8'), pgdg);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);

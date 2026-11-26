@@ -239,3 +239,18 @@ Feature: GitHub workflows
       | file          |
       | gate.yml      |
       | gate-lane.yml |
+
+  Scenario: Linux host installers run before each real server probe
+    Then the Linux package jobs use their shared host installer
+
+  Scenario Outline: Ubuntu installs the tools and key before the signed PGDG index is used
+    Then the <mode> package install with <failure> failure uses only its required archives
+
+    Examples:
+      | mode  | failure        |
+      | gate  | none           |
+      | bench | none           |
+      | gate  | ubuntu-update  |
+      | gate  | ubuntu-install |
+      | gate  | pgdg-update    |
+      | gate  | pgdg-install   |

@@ -174,3 +174,10 @@ The hosted gate later judged these lines (journal section 111):
 - [x] B.4 Intégrer la session de compte, les contrôles de provenance et le reçu du constructeur.
 - [x] Recompiler, contrôler le format et l’architecture, rejouer les scénarios modifiés et mesurer la mutation. Les 1 000 scénarios passent. Les 1 811 mutants TypeScript des trois campagnes comptent zéro survivant et zéro sans couverture. [Résultats](../JOURNAL-SBX.md#résultat-du-step-hors-ligne)
 - [ ] Essai par le Step de production après le signal du mainteneur, avec la session établie à l’installation.
+
+## PR 151 — archives APT des runners (26 novembre 2026)
+
+- [x] Relier le 403 de l’image Ubuntu à la commande du premier fragment Cucumber.
+- [x] Isoler l’archive Ubuntu pour le sandbox et ajouter PGDG, signé par la clé du paquet Ubuntu, pour les jobs PostgreSQL.
+- [x] Exécuter les tests de préparation, des trois revues et des schémas. Voir le [journal, section 118](../docs/design/journal.md#118-les-paquets-du-runner-ne-dépendent-que-de-leurs-archives-26-novembre-2026).
+- [ ] Confirmer le téléchargement et les signatures sur le prochain runner GitHub, puis obtenir la revue indépendante de ce commit.

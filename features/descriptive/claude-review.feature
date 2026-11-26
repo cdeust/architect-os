@@ -166,6 +166,7 @@ Feature: The Claude review
       | claude-review.yml          | with a step between the proof of bubblewrap and the action                                             |
       | claude.yml                 | with a proof of bubblewrap on another condition                                                        |
       | claude-security-review.yml | with a proof of bubblewrap on another condition                                                        |
+      | claude.yml                 | whose proof updates unrelated image repositories                                                            |
       | claude.yml                 | that installs bubblewrap without proving it                                                            |
       | claude-review.yml          | that reads the version of bubblewrap and creates no namespace                                          |
       | claude-security-review.yml | that reads the version of bubblewrap and creates no namespace                                          |
