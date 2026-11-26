@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import {
   blocks,
+  claimsRefusal,
   criteriaRefusal,
   parseReviewVerdict,
   renderAcceptance,
@@ -22,6 +23,14 @@ const valid = (): Record<string, any> => ({
       status: 'met',
       evidence: [{ file: 'src/a.ts', line: 12, quote: 'x = 1' }],
       reason: 'x is set',
+    },
+  ],
+  claims: [
+    {
+      id: 'CL-1',
+      status: 'refuted',
+      evidence: [{ file: 'src/a.ts', line: 12, quote: 'x = 1' }],
+      reason: 'x is not what the claim says',
     },
   ],
 });
@@ -53,6 +62,17 @@ const DEFECTS: Record<string, (v: Record<string, any>) => unknown> = {
   'an evidence quote of 301 characters': (v) => (v['criteria'][0]['evidence'][0]['quote'] = 'q'.repeat(301)),
   'an empty evidence file': (v) => (v['criteria'][0]['evidence'][0]['file'] = ''),
   'an evidence file of 301 characters': (v) => (v['criteria'][0]['evidence'][0]['file'] = 'f'.repeat(301)),
+  'a missing claims': (v) => delete v['claims'],
+  'an unknown claim status': (v) => (v['claims'][0]['status'] = 'trusted'),
+  'a claim id that is not a claim id': (v) => (v['claims'][0]['id'] = 'AC-1'),
+  'a claim id with a suffix': (v) => (v['claims'][0]['id'] = 'CL-1x'),
+  'a claim id with a prefix': (v) => (v['claims'][0]['id'] = 'xCL-1'),
+  'a missing claim evidence': (v) => delete v['claims'][0]['evidence'],
+  'a missing claim reason': (v) => delete v['claims'][0]['reason'],
+  'an extra key in a claim': (v) => (v['claims'][0]['note'] = 'x'),
+  'a claim evidence quote on two lines': (v) => (v['claims'][0]['evidence'][0]['quote'] = 'x\ny'),
+  'eleven proofs for a claim': (v) =>
+    (v['claims'][0]['evidence'] = Array.from({ length: 11 }, () => v['claims'][0]['evidence'][0])),
   'eleven proofs for a criterion': (v) =>
     (v['criteria'][0]['evidence'] = Array.from({ length: 11 }, () => v['criteria'][0]['evidence'][0])),
 };
@@ -98,6 +118,7 @@ Given('a verdict {string} with finding levels {string}', function (verdict: stri
         : levels.split(',').map((level) => ({ level, file: 'f', line: 1, quote: 'q', reason: 'r' })),
     not_checked: [],
     criteria: [],
+    claims: [],
   });
 });
 
@@ -108,6 +129,22 @@ Given('a verdict {string} with criteria statuses {string}', function (verdict: s
     not_checked: [],
     criteria: statuses.split(',').map((status, index) => ({
       id: `AC-00${index + 1}`,
+      status,
+      evidence: [],
+      reason: 'r',
+    })),
+    claims: [],
+  });
+});
+
+Given('a verdict {string} with claim statuses {string}', function (verdict: string, statuses: string) {
+  this.state['verdict'] = parseReviewVerdict({
+    verdict,
+    findings: [],
+    not_checked: [],
+    criteria: [],
+    claims: statuses.split(',').map((status, index) => ({
+      id: `CL-${index + 1}`,
       status,
       evidence: [],
       reason: 'r',
@@ -145,3 +182,29 @@ Then(
 Then('the acceptance block for {string} is:', function (ids: string, text: string) {
   assert.equal(renderAcceptance(ids.split(' ')), `${text}\n`);
 });
+
+Then(
+  /^the claims of the valid verdict against "([^"]*)" are refused with: (.*)$/,
+  function (ids: string, reason: string) {
+    const files = new Map([['src/a.ts', 'line\n'.repeat(11) + 'x = 1\n']]);
+    const expected = ids === '' ? [] : ids.split(' ');
+    assert.equal(
+      claimsRefusal(parseReviewVerdict(valid()), expected, (path) => files.get(path)) ?? 'none',
+      reason,
+    );
+  },
+);
+
+Then(
+  'a verdict whose claim {string} cites {string} is refused with: {string}',
+  function (status: string, evidence: string, reason: string) {
+    const files = new Map([['src/a.ts', 'line\n'.repeat(11) + 'x = 1\n']]);
+    const verdict = valid();
+    verdict['claims'][0]['status'] = status;
+    verdict['claims'][0]['evidence'] = JSON.parse(evidence) as unknown;
+    assert.equal(
+      claimsRefusal(parseReviewVerdict(verdict), ['CL-1'], (path) => files.get(path)) ?? 'none',
+      reason,
+    );
+  },
+);

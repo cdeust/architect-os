@@ -372,13 +372,13 @@
   <text x="868" y="2433" data-type-role="brick-text" font-size="17" fill="#57606a">Use one rubric per dimension and link each</text>
   <text x="868" y="2457" data-type-role="brick-text" font-size="17" fill="#57606a">finding to its failing scenario.</text>
 </g>
-<g role="group" aria-label="Builder claims · next">
-  <rect x="854" y="2475" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+<g role="group" aria-label="Builder claims · ready">
+  <rect x="854" y="2475" width="505" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
   <text x="868" y="2503" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Builder claims</text>
-  <rect x="1277" y="2483" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2502" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2531" data-type-role="brick-text" font-size="17" fill="#57606a">Give the Builder’s declared claims to the</text>
-  <text x="868" y="2555" data-type-role="brick-text" font-size="17" fill="#57606a">reviewers for verification.</text>
+  <rect x="1277" y="2483" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1312" y="2502" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="868" y="2531" data-type-role="brick-text" font-size="17" fill="#57606a">The host validates the Builder’s declared</text>
+  <text x="868" y="2555" data-type-role="brick-text" font-size="17" fill="#57606a">departures; each review verifies them.</text>
 </g>
 <g role="group" aria-label="Automatic refusal brief · next">
   <rect x="854" y="2573" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>

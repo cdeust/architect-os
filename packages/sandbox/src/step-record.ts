@@ -15,6 +15,9 @@ function stepName(): RegExp {
 function modelName(): RegExp {
   return /^[a-z0-9][a-z0-9.-]{0,63}$/;
 }
+function claimId(): RegExp {
+  return /^CL-\d{1,9}$/;
+}
 
 /** Le nom d'une étape est le nom de son dossier : il entre dans un chemin du dépôt. */
 export function isStepName(name: string): boolean {
@@ -55,12 +58,21 @@ export function stepRecordSchema() {
   const commit = () => z.string().regex(/^[0-9a-f]{40}$/);
   const digest = () => z.string().regex(/^[0-9a-f]{64}$/);
   const seconds = () => z.number().int().min(0);
-  return z.strictObject({
+  const record = z.strictObject({
     step: z.string().regex(stepName()),
     startedAt: z.iso.datetime(),
     tree: z.strictObject({ commit: commit(), tree: commit(), clean: z.boolean() }),
     inputs: keyed(/^(brief\.md|step\.json|scout\.[a-z][a-z0-9-]{0,31}\.md)$/, digest()),
     tickets: ticketsSchema().optional(),
+    // Les écarts que la construction a déclarés (`src/build-claims.ts`), absent quand son rapport n'en porte aucun
+    // bloc : un bloc refusé (`valid` faux) n'en donne aucun ; sinon l'identifiant que l'hôte a donné à chacun, dans
+    // l'ordre, et l'empreinte de la ligne que les revues ont reçue. Jamais leur texte.
+    claims: z
+      .strictObject({
+        valid: z.boolean(),
+        given: z.array(z.strictObject({ id: z.string().regex(claimId()), sha256: digest() })).max(20),
+      })
+      .optional(),
     admission_sha256: digest().optional(),
     launcher: keyed(/^(?!.*\.\.)[a-z0-9][a-z0-9./-]*$/, digest()),
     sessions: z.array(
@@ -138,10 +150,35 @@ export function stepRecordSchema() {
           )
           .min(1)
           .optional(),
+        // Le statut de chaque écart déclaré qu'un verdict valide a rendu ; absent sans écart déclaré.
+        claims: z
+          .array(
+            z.strictObject({
+              id: z.string().regex(claimId()),
+              status: z.enum(['verified', 'refuted', 'not_checked']),
+            }),
+          )
+          .min(1)
+          .optional(),
       }),
     ),
     outcome: z.enum(['passed', 'refused']),
   });
+  return record.refine(
+    ({ claims, reviews }) => {
+      const ids = JSON.stringify((claims?.given ?? []).map(({ id }) => id));
+      // Un bloc refusé ne donne rien ; les identifiants sont CL-1, CL-2… ; chaque statut rendu couvre exactement ceux-là.
+      return (
+        (claims?.valid !== false || claims.given.length === 0) &&
+        (claims?.given ?? []).every(({ id }, index) => id === `CL-${index + 1}`) &&
+        reviews.every(
+          (review) =>
+            review.claims === undefined || JSON.stringify(review.claims.map(({ id }) => id)) === ids,
+        )
+      );
+    },
+    { message: 'revendications incohérentes' },
+  );
 }
 export type StepRecord = z.infer<ReturnType<typeof stepRecordSchema>>;
 
@@ -185,6 +222,7 @@ export interface RecordParts {
   /** Le texte lu au départ de chaque fichier d'entrée, par nom de fichier. */
   inputs: Readonly<Record<string, string>>;
   tickets?: StepFile['tickets'];
+  claims?: StepRecord['claims'];
   /** Le texte de chaque fichier du lanceur, par chemin relatif à `packages/sandbox`. */
   launcher: Readonly<Record<string, string>>;
   sessions: readonly RecordedSession[];
@@ -205,6 +243,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
     ...(parts.admission_sha256 ? { admission_sha256: parts.admission_sha256 } : {}),
     inputs: digests(parts.inputs),
     ...(parts.tickets ? { tickets: parts.tickets } : {}),
+    ...(parts.claims ? { claims: parts.claims } : {}),
     launcher: digests(parts.launcher),
     sessions: parts.sessions.map((session) => ({
       role: session.role,

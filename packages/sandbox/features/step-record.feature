@@ -534,6 +534,72 @@ Feature: the step leaves its brief and its record in the worktree
         | launcher.[profiles/checker.json] | "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |
         | inputs.[scout.a-1.md]      | "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |
 
+    Scenario Outline: a record with claims, refused: <field> becomes <value>
+      Given a record of a step with two claims that the schema accepts
+      When its field "<field>" becomes <value>
+      Then the schema of the record refuses it
+
+      Examples:
+        | field                  | value                                                                                     |
+        | claims                 | {"valid":false,"given":[{"id":"CL-1","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"id":"CL-2","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]} |
+        | claims.valid           | "yes"                                                                                     |
+        | claims.extra           | true                                                                                      |
+        | claims.given           | {}                                                                                        |
+        | claims.given.0.sha256  | "aaaa"                                                                                    |
+        | claims.given.0.extra   | true                                                                                      |
+        | reviews.0.claims       | []                                                                                        |
+        | reviews.0.claims       | [{"id":"CL-1","status":"verified"}]                                                       |
+        | reviews.0.claims       | [{"id":"CL-2","status":"verified"},{"id":"CL-1","status":"verified"}]                     |
+        | reviews.0.claims.1.status | "trusted"                                                                              |
+        | reviews.0.claims.1.extra | true                                                                                    |
+
+    Scenario: a record whose claims block was refused keeps no claim, and its reviews none
+      Given a record of a step with two claims that the schema accepts
+      When its field "claims" becomes {"valid":false,"given":[]}
+      And its field "reviews.0.claims" becomes [{"id":"CL-1","status":"verified"}]
+      Then the schema of the record refuses it
+      When its field "reviews.0" becomes {"name":"correctness","verdict":"accept","findings":0}
+      Then the schema of the record accepts it
+
+    Scenario: a review that gives claim statuses in a record without claims is refused
+      Given a record of a step that the schema accepts
+      When its field "reviews.0.claims" becomes [{"id":"CL-1","status":"verified"}]
+      Then the schema of the record refuses it
+
+    Scenario Outline: claims given and reviewed as <ids>: <outcome>
+      Given a record of a step with two claims that the schema accepts
+      When the record gives the claims "<ids>", each with its status
+      Then the schema of the record <outcome> it
+
+      Examples:
+        | ids            | outcome |
+        | CL-1 CL-2 CL-3 | accepts |
+        | CL-1           | accepts |
+        | CL-2           | refuses |
+        | CL-1 CL-3      | refuses |
+        | CL-2 CL-1      | refuses |
+        | AC-1           | refuses |
+        | xCL-1          | refuses |
+        | CL-1x          | refuses |
+
+    Scenario: twenty claims are accepted, twenty-one refused
+      Given a record of a step with two claims that the schema accepts
+      When the record gives 20 claims, each with its status
+      Then the schema of the record accepts it
+      When the record gives 21 claims, each with its status
+      Then the schema of the record refuses it
+
+    Scenario Outline: a record with claims, accepted: <field> becomes <value>
+      Given a record of a step with two claims that the schema accepts
+      When its field "<field>" becomes <value>
+      Then the schema of the record accepts it
+
+      Examples:
+        | field                     | value                                            |
+        | reviews.0.claims.1.status | "not_checked"                                    |
+        | reviews.0.claims          | [{"id":"CL-1","status":"refuted"},{"id":"CL-2","status":"verified"}] |
+        | claims.valid              | true                                             |
+
   Scenario Outline: A subscription receipt binds the client and observed usage to its builder
     Then the recorded subscription fixture "<case>" is "<result>"
 
