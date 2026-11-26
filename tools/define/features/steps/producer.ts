@@ -17,6 +17,7 @@ import { After, Given, Then, When } from '@cucumber/cucumber';
 import {
   PRODUCER_MAX_BYTES,
   PRODUCER_MAX_FILES,
+  producerArguments,
   producerDigest,
   stageProducer,
   type StagedProducer,
@@ -200,5 +201,29 @@ Then(
       () => stageProducer(missing, '0'.repeat(64)),
       (error: NodeJS.ErrnoException) => error.code === code && !error.message.startsWith('SPEC_'),
     );
+  },
+);
+
+Then(
+  'launching it with {string} writable is {string}',
+  function (this: ProducerWorld, which: string, outcome: string) {
+    const { staged, parent } = world(this);
+    assert.ok(staged);
+    const writable = {
+      'a sibling directory': join(parent, 'aos-producer-tmp-sibling'),
+      'the copy itself': staged.root,
+      'the parent of the copy': parent,
+      'a directory in the copy': join(staged.root, 'mcp-server'),
+    }[which];
+    assert.ok(writable);
+    if (outcome === 'allowed')
+      assert.deepEqual(producerArguments(staged, [writable]), [
+        '--permission',
+        `--allow-fs-read=${staged.root}`,
+        `--allow-fs-read=${writable}`,
+        `--allow-fs-write=${writable}`,
+        staged.entry,
+      ]);
+    else assert.throws(() => producerArguments(staged, [writable]), { message: outcome });
   },
 );

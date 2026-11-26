@@ -13,6 +13,18 @@ Feature: Pin and stage the producer the operator installed
   Scenario: A plugin root that does not exist keeps its own error
     Then staging a plugin root that does not exist fails with "ENOENT", not a producer refusal
 
+  Scenario Outline: The copy is never inside a directory the server may write, nor holds one: <case>
+    Given a provisioned fixture producer with a command link among its dependencies
+    When the host stages the pinned producer
+    Then launching it with "<case>" writable is "<outcome>"
+
+    Examples:
+      | case                    | outcome                     |
+      | a sibling directory     | allowed                     |
+      | the copy itself         | SPEC_PRODUCER_COPY_WRITABLE |
+      | the parent of the copy  | SPEC_PRODUCER_COPY_WRITABLE |
+      | a directory in the copy | SPEC_PRODUCER_COPY_WRITABLE |
+
   Scenario: A stage with another digest copies nothing
     Given a provisioned fixture producer with a command link among its dependencies
     Then staging it with another digest is refused with "SPEC_PRODUCER_MISMATCH" and copies nothing

@@ -217,6 +217,7 @@ appendFileSync(record, JSON.stringify({
   homeWrite: process.permission.has('fs.write', ${JSON.stringify(homeOf(world))}),
   addon: process.permission.has('addon'),
   copyWrite: process.permission.has('fs.write', __filename),
+  hardlink: attempt(() => require('node:fs').linkSync(__filename, ${JSON.stringify(join(homeOf(world), '.prd-gen', 'linked.js'))})),
 }) + '\\n');
 appendFileSync(record, JSON.stringify({ reread: attempt(() => readFileSync(record, 'utf8').length > 0) }) + '\\n');
 (async () => {
@@ -714,6 +715,7 @@ function assertConfined(world: DefineWorld, root: string, row: unknown): void {
       homeWrite: false,
       addon: false,
       copyWrite: false,
+      hardlink: 'ERR_ACCESS_DENIED',
     },
   );
 }

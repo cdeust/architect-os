@@ -1,5 +1,5 @@
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import {
   pinnedTreeDigest,
   readPinnedTree,
@@ -84,9 +84,12 @@ export function stageProducer(
  * --allow-fs-write). The server reads only its copy and the given directories and writes only the writable ones. It
  * gets no child process, worker, network, inspector, and no native addon: an addon runs outside the model, and a
  * writable directory would let the server write one and load it. The producer then runs without its sqlite caches.
- * No writable directory may hold the copy: the caller stages it elsewhere.
+ * No writable directory may hold the copy, nor lie inside it: `SPEC_PRODUCER_COPY_WRITABLE`.
  */
 export function producerArguments(staged: StagedProducer, writable: readonly string[]) {
+  const overlaps = (a: string, b: string) => !relative(a, b).startsWith('..');
+  if (writable.some((path) => overlaps(path, staged.root) || overlaps(staged.root, path)))
+    throw Error('SPEC_PRODUCER_COPY_WRITABLE');
   return [
     '--permission',
     `--allow-fs-read=${staged.root}`,

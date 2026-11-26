@@ -114,8 +114,15 @@ export async function withPlanningSpec<T>(
       return part.text;
     });
   } finally {
-    await transport?.close();
-    staged?.dispose();
-    if (scratch) rmSync(scratch, { recursive: true, force: true });
+    // Each step of the cleanup runs even if the one before it fails.
+    try {
+      await transport?.close();
+    } finally {
+      try {
+        staged?.dispose();
+      } finally {
+        if (scratch) rmSync(scratch, { recursive: true });
+      }
+    }
   }
 }
