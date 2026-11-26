@@ -336,8 +336,12 @@ function assertGate(text: string, file: string): void {
 function assertGateLane(text: string): void {
   const doc = workflow(text);
   assert.deepEqual(doc.on, { workflow_call: { inputs: { lane: { type: 'number', required: true } } } });
-  assert.deepEqual(doc.permissions, { contents: 'read', actions: 'read' });
-  assert.ok(!text.includes('secrets.'));
+  assert.deepEqual(
+    doc.permissions,
+    { contents: 'read', actions: 'read' },
+    'the permissions of gate-lane.yml are not contents: read and actions: read',
+  );
+  assert.ok(!text.includes('secrets.'), 'gate-lane.yml must not use a secret');
   assert.deepEqual(Object.keys(doc.jobs).sort(), ['mutation', 'replay']);
   assert.equal(doc.jobs['mutation']?.needs, undefined);
   assert.equal(doc.jobs['replay']?.needs, 'mutation');
@@ -345,8 +349,8 @@ function assertGateLane(text: string): void {
   assertNpmCiSafe(text);
   assertCheckoutWithoutCredentials(text);
   for (const [id, job] of Object.entries(doc.jobs)) {
-    assert.equal(job.permissions, undefined);
-    assert.equal(job.secrets, undefined);
+    assert.equal(job.permissions, undefined, `the job ${id} sets its own permissions`);
+    assert.equal(job.secrets, undefined, `the job ${id} receives secrets`);
     assert.equal(job.name, id);
     assert.equal(job['runs-on'], 'ubuntu-24.04');
     for (const step of job.steps) {
@@ -507,10 +511,13 @@ Then('Gate jobs reject explicit secrets and permissions', function () {
   const verify = original.includes('workflow_call:')
     ? assertGateLane
     : (source: string) => assertGate(source, entry);
-  for (const setting of ['secrets: inherit', 'permissions: write-all']) {
+  for (const [setting, refusal] of [
+    ['secrets: inherit', /^the job \S+ receives secrets$/],
+    ['permissions: write-all', /^the job \S+ sets its own permissions$/],
+  ] as const) {
     const edited = original.replace(/^(    name: .+)$/m, '$1\n    ' + setting);
     assert.notEqual(edited, original);
-    assert.throws(() => verify(edited));
+    assert.throws(() => verify(edited), refusedFor(refusal));
   }
 });
 
