@@ -103,7 +103,7 @@
         ".github/workflows/claude-review.yml",
         ".github/workflows/claude-security-review.yml"
       ],
-      "relies": "The variables a profile sets: `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_TMPDIR`, `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, `DISABLE_AUTOUPDATER`, `DISABLE_TELEMETRY`. For the three Claude workflows: what `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` removes, and that on Linux it runs subprocesses in a PID namespace, for which each job proves bubblewrap before the action."
+      "relies": "The variables a profile sets: `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_TMPDIR`, `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, `DISABLE_AUTOUPDATER`, `DISABLE_TELEMETRY`. For the three Claude workflows: that `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` removes credentials from the environments of Bash commands, hooks and stdio MCP servers, leaves `GITHUB_TOKEN` and `GH_TOKEN` in place, and on Linux runs Bash subprocesses in an isolated PID namespace; the page promises no namespace for a hook or an MCP server. Each job proves bubblewrap before the action. Not recorded as read: only that section was."
     },
     {
       "id": "authentication",
