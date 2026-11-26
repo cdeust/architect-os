@@ -147,11 +147,14 @@ export function routedStep(
     checks: policy.checks.length,
     scouts: policy.scouts.length,
   });
-  // Une session d'éclaireur ne porte pas de fournisseur : elle est toujours de Claude Code, sous le profil `reviewer`.
-  const { provider: _provider, ...scout } = route.scout ?? { provider: 'anthropic' };
   return parseStepFile({
     build: route.ladder[0]!.build,
-    scouts: policy.scouts.map(({ name }) => ({ name, ...scout })),
+    // `deriveRoute` rend `scout` dès que la politique a un éclaireur. Une session d'éclaireur ne porte pas de
+    // fournisseur : elle est toujours de Claude Code, sous le profil `reviewer`.
+    scouts: policy.scouts.map(({ name }) => {
+      const { provider: _provider, ...scout } = route.scout!;
+      return { name, ...scout };
+    }),
     checks: policy.checks,
     reviews: [],
     parallel: policy.parallel,

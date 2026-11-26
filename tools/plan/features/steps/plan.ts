@@ -64,6 +64,11 @@ const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const load = (path: string) => JSON.parse(readFileSync(path, 'utf8'));
 const json = (path: string, value: unknown) => writeFileSync(path, JSON.stringify(value));
 
+/** The routing table of a policy that is not routed: reading it is a defect. */
+const unreadTable = (): string => {
+  throw new Error('a policy without routing read the routing table');
+};
+
 function launch(args: readonly string[], routingTable?: string): TextResult {
   let out = '';
   let err = '';
@@ -490,9 +495,9 @@ Then('the Plan validation identifies the rejected coverage or question', functio
   const proposal = readFileSync(item.proposal, 'utf8');
   const policy = readFileSync(item.policy, 'utf8');
   if (load(item.policy).step.scouts) {
-    assert.throws(() => readStepInputs(policy), { message: 'PLAN_SCOUT_QUESTIONS_INVALID' });
+    assert.throws(() => readStepInputs(policy, unreadTable), { message: 'PLAN_SCOUT_QUESTIONS_INVALID' });
   } else {
-    assert.throws(() => preparePlan({ define, proposal, policy }, readStepInputs(policy)), {
+    assert.throws(() => preparePlan({ define, proposal, policy }, readStepInputs(policy, unreadTable)), {
       message: 'PLAN_COVERAGE_INVALID',
     });
   }
@@ -639,7 +644,11 @@ Then(
         assert.fail(field);
     }
     assert.throws(
-      () => preparePlan({ define, proposal: JSON.stringify(receipt), policy }, readStepInputs(policy)),
+      () =>
+        preparePlan(
+          { define, proposal: JSON.stringify(receipt), policy },
+          readStepInputs(policy, unreadTable),
+        ),
       { message: 'PLAN_REVIEW_EVIDENCE_MISMATCH' },
     );
   },
@@ -649,7 +658,7 @@ Then('Plan reports a schema error for the JSON primitive {string}', function (th
   const item = scenario(this);
   const define = readFileSync(item.define, 'utf8');
   const policy = readFileSync(item.policy, 'utf8');
-  assert.throws(() => preparePlan({ define, proposal, policy }, readStepInputs(policy)), {
+  assert.throws(() => preparePlan({ define, proposal, policy }, readStepInputs(policy, unreadTable)), {
     name: 'ZodError',
   });
 });
@@ -678,7 +687,7 @@ Then('preparing the reviewed proposal refuses its coverage', function (this: Wor
     define = readFileSync(item.define, 'utf8'),
     proposal = readFileSync(item.proposal, 'utf8'),
     policy = readFileSync(item.policy, 'utf8');
-  assert.throws(() => preparePlan({ define, proposal, policy }, readStepInputs(policy)), {
+  assert.throws(() => preparePlan({ define, proposal, policy }, readStepInputs(policy, unreadTable)), {
     message: 'PLAN_COVERAGE_INVALID',
   });
 });

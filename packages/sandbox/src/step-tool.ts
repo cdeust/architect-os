@@ -59,7 +59,7 @@ import {
   stepOutcome,
   type PassSignal,
 } from './step-passes.js';
-import { parseRoutingTable } from './routing.js';
+import { parseRoutingTable, RoutingError } from './routing.js';
 import {
   observedTokens,
   buildRecord,
@@ -485,9 +485,13 @@ function passPlans(step: StepFile): PassPlan[] {
   }));
 }
 
-/** Les constats d'un verdict valide ; aucun pour un verdict invalide, dont l'hôte ne transmet rien. */
-function blockingFindings(verdict: ReviewOutcome['verdict']): ReviewVerdict['findings'] {
-  return verdict.verdict === 'invalid' ? [] : (verdict.file as ReviewVerdict).findings;
+/**
+ * Les constats que la passe d'avant donne à la suivante. Une passe n'a de revue jouée que si sa construction et ses
+ * contrôles ont passé ; elle n'est promue avec une revue que sur `changes_requested`, donc sur un verdict valide qui
+ * bloque, le seul de sa passe (une passe routée a une revue). Sans passe d'avant, aucun.
+ */
+function previousFindings(previous: PassOutcome | undefined): ReviewVerdict['findings'] {
+  return previous?.outcomes.flatMap(({ verdict }) => (verdict.file as ReviewVerdict).findings) ?? [];
 }
 
 /**
@@ -505,7 +509,7 @@ async function playPass(
   context: { systemPrompt: string; worktree: string; maxBytes: number },
   prior: ReviewVerdict['findings'],
 ): Promise<PassOutcome> {
-  if (pre !== '') deps.writeFile(join(outputs.retained, `${pre}build.brief.md`), passBrief);
+  deps.writeFile(join(outputs.retained, `${pre}build.brief.md`), passBrief);
   const stream = join(outputs.streams, `${pre}build.stream.jsonl`);
   deps.writeFile(stream, '');
   const build = await deps.builder.build({
@@ -580,8 +584,11 @@ function verifyRoute(step: StepFile, launcher: Readonly<Record<string, string>>)
       text,
       step.tickets,
     );
-  } catch {
-    throw new Refusal('STEP_ROUTING_MISMATCH');
+  } catch (error) {
+    // La table gelée ne se lit pas, ou la route ne se dérive plus des tickets du fichier : le refus dit laquelle.
+    throw new Refusal(
+      `STEP_ROUTING_MISMATCH: ${error instanceof RoutingError ? error.code : 'ROUTING_TABLE_INVALID'}`,
+    );
   }
   if (JSON.stringify(expected) !== JSON.stringify(step)) throw new Refusal('STEP_ROUTING_MISMATCH');
 }
@@ -639,25 +646,21 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       brief,
       scoutOutcomes.flatMap(({ verified }) => verified),
     );
-    deps.writeFile(join(outputs.retained, 'build.brief.md'), forBuild);
     const definition = parseTool(JSON.parse(launcher['code.json']!));
     const plans = passPlans(step);
     const passes: PassOutcome[] = [];
     for (const [index, plan] of plans.entries()) {
       const previous = passes.at(-1);
       const pre = index === 0 ? '' : `pass-${index + 1}.`;
+      const prior = previousFindings(previous);
       const passBrief = previous
         ? `${forBuild.trimEnd()}\n\n${renderPromotion(
             { pass: index, model: previous.plan.build.model, signal: previous.signal },
             previous.played.filter((report) => !passed(report)),
-            previous.outcomes.flatMap(({ verdict }) => (verdict.blocks ? blockingFindings(verdict) : [])),
+            prior,
             outputBound(),
           )}`
         : forBuild;
-      const prior =
-        previous?.signal === 'changes_requested'
-          ? previous.outcomes.flatMap(({ verdict }) => (verdict.blocks ? blockingFindings(verdict) : []))
-          : [];
       const outcome = await playPass(
         deps,
         outputs,
@@ -725,14 +728,17 @@ export async function runStep(deps: StepDependencies): Promise<number> {
               points: step.routing.points,
               table_sha256: step.routing.table_sha256,
               start: step.routing.start,
-              passes: passes.map(({ plan, signal }, index) => ({
-                pass: index + 1,
-                band: plan.band!,
-                provider: plan.build.provider ?? 'anthropic',
-                model: plan.build.model,
-                effort: plan.build.effort,
-                signal,
-              })),
+              passes: passes.map(({ signal }, index) => {
+                const { band, build } = step.routing!.ladder[index]!;
+                return {
+                  pass: index + 1,
+                  band,
+                  provider: build.provider,
+                  model: build.model,
+                  effort: build.effort,
+                  signal,
+                };
+              }),
             },
           }
         : {}),

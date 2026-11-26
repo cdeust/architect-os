@@ -26,6 +26,10 @@ Feature: routing.json, the routing table of the launcher
       | an OpenAI review candidate          | roles.review.bands.0.candidates.0 |
       | a model that is not a Claude model  | roles.scout.bands.0.candidates.0  |
       | an empty basis                      | basis                             |
+      | a blank description                 | description                       |
+      | a review band that requires checks  | roles.review.bands.0              |
+      | a Claude model with a prefix        | roles.scout.bands.0.candidates.0  |
+      | a Claude model with a suffix        | roles.scout.bands.0.candidates.0  |
 
   Scenario Outline: the committed table routes a ticket of <points> points with <checks> checks to <ladder>
     Given the committed routing table
@@ -112,3 +116,33 @@ Feature: routing.json, the routing table of the launcher
     And the tickets "TICKET-001=3"
     When I derive the route for the ticket "" with the providers "anthropic", 0 checks and 0 scouts
     Then deriving the route fails with "ROUTING_NO_INDEPENDENT_REVIEWER"
+
+  Scenario: the table accepts every effort of its schema and Claude versions of two digits
+    Given the routing table whose candidates carry the efforts and versions of every kind
+    Then the routing table loads, provisional
+
+  Scenario: a band above the first that requires checks is skipped without changing the reason of the start
+    Given the routing table where the band of 3 points requires checks
+    And the tickets "TICKET-001=1"
+    When I derive the route for the ticket "" with the providers "anthropic", 0 checks and 0 scouts
+    Then the route serves "TICKET-001" at 1 points, starting on "BAND_REQUIRES_CHECKS"
+    And the ladder of the route is "8 anthropic claude-opus-5-5 high"
+
+  Scenario: a band skipped after the first pass leaves the reason of the start as it was
+    Given the routing table where only the band of 3 points requires checks
+    And the tickets "TICKET-001=1"
+    When I derive the route for the ticket "" with the providers "anthropic", 0 checks and 0 scouts
+    Then the route serves "TICKET-001" at 1 points, starting on "BAND_OF_POINTS"
+    And the ladder of the route is "1 anthropic claude-haiku-5-5 medium; 8 anthropic claude-opus-5-5 high"
+
+  Scenario Outline: the routed policy of the operator: <change>
+    Then a routed policy with <change> is <outcome>
+
+    Examples:
+      | change                      | outcome                                    |
+      | nothing more                | accepted                                   |
+      | the parallel 1              | accepted                                   |
+      | the parallel 8              | accepted                                   |
+      | the parallel 0              | refused with "parallel"                    |
+      | the parallel 9              | refused with "parallel"                    |
+      | two scouts of the same name | refused with "scouts duplicate scout name" |

@@ -10,6 +10,7 @@ import {
   type Route,
   type RouteRequest,
 } from '../../src/routing.js';
+import { parseRoutedPolicy } from '../../src/step-file.js';
 import { Given, PKG, Then, When, stored, type SandboxWorld } from './helpers.js';
 
 interface Routing {
@@ -46,6 +47,10 @@ const defects: Record<string, (table: Json) => void> = {
   'an OpenAI review candidate': (t) => (t.roles.review.bands[0].candidates = [sol]),
   'a model that is not a Claude model': (t) => (t.roles.scout.bands[0].candidates[0].model = 'haiku'),
   'an empty basis': (t) => (t.basis = '  '),
+  'a blank description': (t) => (t.description = '  '),
+  'a review band that requires checks': (t) => (t.roles.review.bands[0].requiresChecks = true),
+  'a Claude model with a prefix': (t) => (t.roles.scout.bands[0].candidates[0].model = 'xclaude-haiku-5-5'),
+  'a Claude model with a suffix': (t) => (t.roles.scout.bands[0].candidates[0].model = 'claude-haiku-5-5x'),
 };
 
 Given('the committed routing table', function () {
@@ -199,4 +204,65 @@ Then('deriving the route fails with {string}', function (code: string) {
   const { error } = routing(this);
   assert.ok(error instanceof RoutingError, String(error));
   assert.equal(error.code, code);
+});
+
+Given('the routing table whose candidates carry the efforts and versions of every kind', function () {
+  this.state['routing'] = {
+    text: edited((t) => {
+      t.roles.scout.bands[0].candidates[0] = {
+        provider: 'anthropic',
+        model: 'claude-haiku-10-15',
+        effort: 'xhigh',
+        limitSeconds: 300,
+      };
+      t.roles.build.bands[0].candidates = [
+        { provider: 'anthropic', model: 'claude-haiku-5-5', effort: 'max', limitSeconds: 1200 },
+        { provider: 'openai', model: 'gpt-6.2-sol', effort: 'low', limitSeconds: 1200 },
+      ];
+      t.roles.build.bands[1].candidates = [
+        { provider: 'openai', model: 'gpt-6.2-astra', effort: 'medium', limitSeconds: 4800 },
+        { provider: 'openai', model: 'gpt-6.2-sol', effort: 'xhigh', limitSeconds: 4800 },
+      ];
+    }),
+  } satisfies Routing;
+});
+
+Given('the routing table where the band of 3 points requires checks', function () {
+  this.state['routing'] = {
+    text: edited((t) => (t.roles.build.bands[1].requiresChecks = true)),
+  } satisfies Routing;
+});
+
+const routedPolicy = (change: string): unknown => {
+  const policy: Json = { routing: { providers: ['anthropic'] }, scouts: [{ name: 'files' }] };
+  if (change === 'two scouts of the same name') policy['scouts'] = [{ name: 'files' }, { name: 'files' }];
+  else if (change.startsWith('the parallel '))
+    policy['parallel'] = Number(change.slice('the parallel '.length));
+  else if (change !== 'nothing more') throw new Error(`unknown change ${change}`);
+  return policy;
+};
+
+Then('a routed policy with {} is accepted', function (change: string) {
+  assert.doesNotThrow(() => parseRoutedPolicy(routedPolicy(change)));
+});
+
+Then('a routed policy with {} is refused with {string}', function (change: string, reason: string) {
+  assert.throws(
+    () => parseRoutedPolicy(routedPolicy(change)),
+    (error: unknown) => {
+      assert.ok(error instanceof ZodError);
+      const said = error.issues.map((issue) => `${issue.path.join('.')} ${issue.message}`).join('\n');
+      assert.ok(said.includes(reason), said);
+      return true;
+    },
+  );
+});
+
+Given('the routing table where only the band of 3 points requires checks', function () {
+  this.state['routing'] = {
+    text: edited((t) => {
+      delete t.roles.build.bands[0].requiresChecks;
+      t.roles.build.bands[1].requiresChecks = true;
+    }),
+  } satisfies Routing;
 });

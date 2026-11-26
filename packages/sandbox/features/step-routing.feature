@@ -24,7 +24,6 @@ Feature: a routed Step plays its ladder, one band at a time, on objective signal
         | a review outside the ladder              |
         | the digest of another table              |
         | a ticket estimated higher than its route |
-        | another admitted provider                |
 
     Scenario: a Google review cannot be turned into a session by the step file
       Given a step folder
@@ -69,6 +68,61 @@ Feature: a routed Step plays its ladder, one band at a time, on objective signal
       When I run the step with the arguments "<folder>"
       Then the published record launcher lists exactly "code.json profiles/builder.json profiles/checker.json prompts/build.md routing.json"
 
+    Scenario Outline: a step.json whose route no longer derives is refused before any session, with the cause: <change>
+      Given a step folder
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "types" and the providers "anthropic"
+      And the routed step.json is tampered with: <change>
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: STEP_ROUTING_MISMATCH: <code>"
+      And no session was started
+
+      Examples:
+        | change                                        | code                        |
+        | another admitted provider                     | ROUTING_NO_ADMITTED_BUILDER |
+        | a designated ticket the tickets no longer hold | ROUTING_TICKET_UNKNOWN     |
+
+    Scenario: a launcher table that does not load refuses a routed step, and says so
+      Given a step folder
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "types" and the providers "anthropic"
+      And the launcher routing table is not a valid table
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: STEP_ROUTING_MISMATCH: ROUTING_TABLE_INVALID"
+      And no session was started
+
+    Scenario Outline: a routing block its schema refuses is refused as a step file: <change>
+      Given a step folder
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "types" and the providers "anthropic"
+      And the routed step.json is tampered with: <change>
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: step.json refusé : <issue>"
+      And no session was started
+
+      Examples:
+        | change                                    | issue                                                                 |
+        | a provider admitted twice                 | routing.providers: ROUTING_PROVIDER_DUPLICATE                         |
+        | a table digest with a character before it | routing.table_sha256: Invalid string: must match pattern /^[0-9a-f]{64}$/ |
+        | a table digest with a character after it  | routing.table_sha256: Invalid string: must match pattern /^[0-9a-f]{64}$/ |
+
+    Scenario: the launcher files of a ladder that crosses to OpenAI hold the SBX assets, and the review tool for the pass that can be reviewed
+      Given a step folder
+      And the launcher routing table sends reviews to Gemini, then Opus, and builds on Sol alone from 8 points
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "types" and the providers "anthropic openai"
+      And the build session writes the fixture "build-exact.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the published record launcher lists exactly "code.json profiles/builder.json profiles/checker.json profiles/reviewer.json prompts/build.md prompts/review.md review.json routing.json sbx/codex-guest.py sbx/isolation.json"
+
+    Scenario: a routed Step with a scout gives it the scout model of the table
+      Given a step folder
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "types", the scouts "files" and the providers "anthropic"
+      And the scout session writes the fixture "scout-facts-a.jsonl"
+      And the build session writes the fixture "build-exact.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the scout sessions started with the models "claude-haiku-5-5"
+      And the published record field "outcome" is "waiting"
+
   Rule: a review that waits is a named wait, never a skip nor a fallback to the author's provider
 
     Scenario: the checks pass and the Google review waits: no review session, the step ends waiting
@@ -100,6 +154,10 @@ Feature: a routed Step plays its ladder, one band at a time, on objective signal
       And the brief of build pass 2 contains "## Previous pass, as the host observed it"
       And the brief of build pass 2 contains "after pass 1 on claude-sonnet-5-5, on the signal check_failed"
       And the brief of build pass 2 contains "\"TS2322 in the new file\""
+      And the brief of build pass 2 contains "Build the thing.\n\n## Previous pass, as the host observed it\n\nThe host promoted"
+      And the retained file "build.brief.md" is the brief of build pass 1
+      And the retained file "pass-2.build.brief.md" is the brief of build pass 2
+      And the step stdout carries the record field "routing" as "routing"
       And the published record field "routing.passes" is [{"pass":1,"band":3,"provider":"anthropic","model":"claude-sonnet-5-5","effort":"medium","signal":"check_failed"},{"pass":2,"band":8,"provider":"anthropic","model":"claude-opus-5-5","effort":"high","signal":"review_waiting"}]
       And the published record lists the checks "types=failed types=passed"
       And the published record field "checks" is [{"name":"types","pass":1,"passed":false,"stopped":false,"durationSeconds":0},{"name":"types","pass":2,"passed":true,"stopped":false,"durationSeconds":0}]
@@ -109,6 +167,7 @@ Feature: a routed Step plays its ladder, one band at a time, on objective signal
       And the published record is accepted by the schema
       And a copy of the published record whose passes are "out of order" is refused by the schema with "ROUTING_PASS_ORDER"
       And a copy of the published record whose passes are "numbered from 2" is refused by the schema with "ROUTING_PASS_ORDER"
+      And a copy of the published record whose passes are "with a gap" is refused by the schema with "ROUTING_PASS_ORDER"
 
     Scenario: a build stopped by its limit promotes to the next band
       Given a step folder
@@ -208,6 +267,7 @@ Feature: a routed Step plays its ladder, one band at a time, on objective signal
       Then the step exits with 0
       And the brief of review session 1 does not contain "## Findings of the previous review"
       And the brief of review session 2 contains "## Findings of the previous review"
+      And the brief of review session 2 contains "Build the thing.\n\n## Findings of the previous review\n\nThe review of the previous pass"
       And the brief of review session 2 contains "- PF-1 correctness \"src/a.ts\":3 \"wrong\""
       And the brief of review session 2 contains "- PF-2 proposal \"src/a.ts\":3 \"wrong\""
       And the published record field "routing.passes.1.signal" is "accepted"
@@ -261,3 +321,46 @@ Feature: a routed Step plays its ladder, one band at a time, on objective signal
       When I run the step with the arguments "<folder>"
       Then the step exits with 0
       And the brief of review session 1 does not contain "## Findings of the previous review"
+
+  Rule: what a promoted pass receives, and what the Step reports, are exactly what the host observed
+
+    Scenario: a passed check is not given to the next pass, only the one that failed
+      Given a step folder
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "types lint" and the providers "anthropic"
+      And the build session writes the fixture "build-exact.jsonl"
+      And the check 2 ends with the exit code 1
+      When I run the step with the arguments "<folder>"
+      Then the build sessions started with the models "claude-sonnet-5-5 claude-opus-5-5"
+      And the brief of build pass 2 contains "- lint: [\"npm\",\"run\",\"lint\"] exit 1"
+      And the brief of build pass 2 does not contain "- types:"
+
+    Scenario: a ladder that crosses to OpenAI reports no dollar cost, since the subscription has none
+      Given a step folder
+      And the launcher routing table sends reviews to Gemini, then Opus, and builds on Sol alone from 8 points
+      And the step folder holds a routed step.json for a ticket of 5 points, with the checks "types" and the providers "anthropic openai"
+      And the build session writes the fixture "build-exact.jsonl"
+      And the check 1 ends with the exit code 1
+      And the review session writes the fixture "review-accept-proposal.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the build sessions started with the models "claude-sonnet-5-5 gpt-6.2-sol"
+      And the step stdout field "costUsd" is null
+      And the published record field "outcome" is "passed"
+
+    Scenario: the record keeps every effort of the ladder, and the start of a ticket whose band needs a check
+      Given a step folder
+      And the launcher routing table builds with the efforts "low xhigh max" from 1, 3 and 8 points
+      And the step folder holds a routed step.json for a ticket of 1 points, with the checks "types" and the providers "anthropic"
+      And the build session writes the fixture "build-exact.jsonl"
+      And the check 1 ends with the exit code 1
+      And the check 2 ends with the exit code 1
+      And the check 3 ends with the exit code 1
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 1
+      And the published record field "routing.passes" is [{"pass":1,"band":1,"provider":"anthropic","model":"claude-haiku-5-5","effort":"low","signal":"check_failed"},{"pass":2,"band":3,"provider":"anthropic","model":"claude-sonnet-5-5","effort":"xhigh","signal":"check_failed"},{"pass":3,"band":8,"provider":"anthropic","model":"claude-opus-5-5","effort":"max","signal":"check_failed"}]
+
+    Scenario: the record keeps the start of a small ticket without a check
+      Given a step folder
+      And the step folder holds a routed step.json for a ticket of 2 points, with the checks "" and the providers "anthropic"
+      And the build session writes the fixture "build-exact.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the published record field "routing.start" is "BAND_REQUIRES_CHECKS"

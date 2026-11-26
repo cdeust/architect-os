@@ -253,7 +253,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
           }
         : {}),
       name: session.name,
-      ...(session.pass === undefined ? {} : { pass: session.pass }),
+      pass: session.pass,
       model: session.config.model,
       effort: session.config.effort,
       completed: session.completed,
@@ -265,7 +265,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
     })),
     checks: parts.checks.map(({ name, pass, passed, stopped, durationSeconds }) => ({
       name,
-      ...(pass === undefined ? {} : { pass }),
+      pass,
       passed,
       stopped,
       durationSeconds,

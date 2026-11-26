@@ -1423,24 +1423,37 @@ Then('the production Step orchestrates the subscription fixture {string}', async
 // Routed Steps (docs/design/orchestration-fable-5-2.md, §13): step.json is what Plan writes from the launcher table.
 const launcherRoutingText = (s: Step) => s.launcherRouting ?? readFileSync(join(PKG, 'routing.json'), 'utf8');
 
+const writeRouted = (s: Step, points: number, checks: string, providers: string, scouts: string) => {
+  const text = launcherRoutingText(s);
+  const names = scouts === '' ? [] : scouts.split(' ');
+  for (const name of names) writeFileSync(join(s.folder, `scout.${name}.md`), `Where is ${name}?\n`);
+  const policy = parseRoutedPolicy({
+    routing: { providers: providers.split(' ') },
+    scouts: names.map((name) => ({ name })),
+    checks:
+      checks === ''
+        ? []
+        : checks.split(' ').map((name) => ({ name, command: ['npm', 'run', name], limitSeconds: 120 })),
+  });
+  const tickets = [{ id: 'TICKET-001', story_points: points, depends_on: [], acceptance_ids: ['AC-1'] }];
+  writeFileSync(
+    join(s.folder, 'step.json'),
+    JSON.stringify(routedStep(policy, parseRoutingTable(text), text, tickets)),
+  );
+  writeFileSync(join(s.folder, 'brief.md'), 'Build the thing.\n');
+};
+
 Given(
   'the step folder holds a routed step.json for a ticket of {int} points, with the checks {string} and the providers {string}',
   function (points: number, checks: string, providers: string) {
-    const s = step(this);
-    const text = launcherRoutingText(s);
-    const policy = parseRoutedPolicy({
-      routing: { providers: providers.split(' ') },
-      checks:
-        checks === ''
-          ? []
-          : checks.split(' ').map((name) => ({ name, command: ['npm', 'run', name], limitSeconds: 120 })),
-    });
-    const tickets = [{ id: 'TICKET-001', story_points: points, depends_on: [], acceptance_ids: ['AC-1'] }];
-    writeFileSync(
-      join(s.folder, 'step.json'),
-      JSON.stringify(routedStep(policy, parseRoutingTable(text), text, tickets)),
-    );
-    writeFileSync(join(s.folder, 'brief.md'), 'Build the thing.\n');
+    writeRouted(step(this), points, checks, providers, '');
+  },
+);
+
+Given(
+  'the step folder holds a routed step.json for a ticket of {int} points, with the checks {string}, the scouts {string} and the providers {string}',
+  function (points: number, checks: string, scouts: string, providers: string) {
+    writeRouted(step(this), points, checks, providers, scouts);
   },
 );
 
@@ -1506,6 +1519,18 @@ Given('the routed step.json is tampered with: {}', function (change: string) {
       break;
     case 'another admitted provider':
       routed.routing.providers = ['openai'];
+      break;
+    case 'a designated ticket the tickets no longer hold':
+      routed.tickets[0].id = 'TICKET-002';
+      break;
+    case 'a provider admitted twice':
+      routed.routing.providers = ['anthropic', 'anthropic'];
+      break;
+    case 'a table digest with a character before it':
+      routed.routing.table_sha256 = 'f' + routed.routing.table_sha256;
+      break;
+    case 'a table digest with a character after it':
+      routed.routing.table_sha256 = routed.routing.table_sha256 + 'f';
       break;
     default:
       throw new Error(`unknown change ${change}`);
@@ -1578,7 +1603,7 @@ Then(
 
 Then('the brief of review session {int} contains {string}', function (n: number, text: string) {
   const brief = step(this).calls.filter((call) => call.tool === 'review.json')[n - 1]?.brief;
-  assert.ok(brief?.includes(text), brief ?? '');
+  assert.ok(brief?.includes(text.replaceAll('\\n', '\n')), brief ?? '');
 });
 
 Then('the brief of review session {int} does not contain {string}', function (n: number, text: string) {
@@ -1599,6 +1624,7 @@ Then(
     const record = JSON.parse(published['record.json']!);
     const passes = record.routing.passes as { pass: number }[];
     if (defect === 'out of order') [passes[0]!.pass, passes[1]!.pass] = [passes[1]!.pass, passes[0]!.pass];
+    else if (defect === 'with a gap') passes[1]!.pass = 3;
     else if (defect === 'numbered from 2') for (const entry of passes) entry.pass += 1;
     else throw new Error(`unknown defect ${defect}`);
     const parsed = stepRecordSchema().safeParse(record);
@@ -1609,3 +1635,46 @@ Then(
     );
   },
 );
+
+Given('the launcher routing table is not a valid table', function () {
+  step(this).launcherRouting = '{"version": 1}';
+});
+
+Given(
+  'the launcher routing table builds with the efforts {string} from 1, 3 and 8 points',
+  function (efforts: string) {
+    const s = step(this);
+    const table = JSON.parse(launcherRoutingText(s));
+    const [one, three, eight] = efforts.split(' ');
+    table.roles.build.bands[0].candidates[0].effort = one;
+    table.roles.build.bands[1].candidates[0].effort = three;
+    table.roles.build.bands[2].candidates[0].effort = eight;
+    s.launcherRouting = JSON.stringify(table);
+  },
+);
+
+Then('the retained file {string} contains {string}', function (file: string, text: string) {
+  const content = readFileSync(join(step(this).outputs.retained, file), 'utf8');
+  assert.ok(content.includes(text.replaceAll('\\n', '\n')), content);
+});
+
+Then('the retained file {string} is the brief of build pass {int}', function (file: string, n: number) {
+  assert.equal(
+    readFileSync(join(step(this).outputs.retained, file), 'utf8'),
+    builds(step(this))[n - 1]?.brief,
+  );
+});
+
+Then('the step stdout field {string} is {}', function (field: string, json: string) {
+  assert.deepEqual(JSON.parse(step(this).stdout)[field], JSON.parse(json));
+});
+
+Then('the step stdout carries the record field {string} as {string}', function (path: string, field: string) {
+  const record = JSON.parse(step(this).published.get('demo')!['record.json']!);
+  assert.deepEqual(JSON.parse(step(this).stdout)[field], record[path]);
+});
+
+Then('the brief of build pass {int} does not contain {string}', function (n: number, text: string) {
+  const brief = builds(step(this))[n - 1]?.brief;
+  assert.ok(brief !== undefined && !brief.includes(text), brief ?? '');
+});

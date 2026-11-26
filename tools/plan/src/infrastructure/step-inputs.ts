@@ -26,11 +26,10 @@ function scoutQuestions(names: readonly string[], questions: Readonly<Record<str
  * from the routing table of the launcher and the ticket the Step serves, once the Define tickets are read. The table is
  * read only for such a policy.
  */
-export function readStepInputs(text: string, routingTable?: () => string): StepInputs {
+export function readStepInputs(text: string, routingTable: () => string): StepInputs {
   const policy = parsePlanPolicy(JSON.parse(text));
   if (Object.hasOwn(Object(policy.step), 'routing')) {
     const routed = parseRoutedPolicy(policy.step);
-    if (!routingTable) throw new Error('PLAN_ROUTING_TABLE_REQUIRED');
     const text = routingTable();
     const table = parseRoutingTable(text);
     return {

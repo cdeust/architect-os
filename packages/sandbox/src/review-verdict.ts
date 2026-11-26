@@ -34,7 +34,7 @@ export const parseReviewVerdict = (raw: unknown): ReviewVerdict => ReviewVerdict
  */
 export const blocks = (verdict: ReviewVerdict): boolean =>
   verdict.verdict === 'request_changes' ||
-  (verdict.prior_findings ?? []).some(({ status }) => status === 'unresolved') ||
+  verdict.prior_findings?.some(({ status }) => status === 'unresolved') === true ||
   verdict.findings.some((finding) => finding.level === 'correctness' || finding.level === 'contradiction');
 
 /**
