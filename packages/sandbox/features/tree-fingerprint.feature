@@ -192,6 +192,12 @@ Feature: the fingerprint of the tree of a worktree
         | middle   | 0link |
         | last     | zlink |
 
+    Scenario: the path of the first of two gitlinks is the one read, the first at the head of Git's list
+      Given a throwaway repository with one commit
+      And the commit of the repository records a gitlink "!link" with no directory in the tree
+      And the commit of the repository records a gitlink "zlink" with no directory in the tree
+      Then the first gitlink of its head and of its index is "!link"
+
     Scenario: the fingerprint accepts an ordinary filename containing the gitlink mode
       Given a throwaway repository with one commit
       And the file "160000 notes" of the repository holds "ordinary file"
