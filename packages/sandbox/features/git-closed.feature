@@ -12,12 +12,19 @@ Feature: every git the host starts takes its closed options and variables from o
   Scenario Outline: a broken copy of the file is refused: <change>
     When a copy of the committed closed git file is read with the change "<change>"
     Then the closed git copy is refused with "<message>"
+    And loading the closed git copy throws "<message>"
 
     Examples:
-      | change                    | message                     |
-      | text that is not JSON     | git-closed.json : JSON invalide |
-      | no option                 | git-closed.json :           |
-      | an option that is empty   | git-closed.json :           |
-      | a variable not of git     | git-closed.json :           |
-      | a variable with no value  | git-closed.json :           |
-      | a key of its own          | git-closed.json :           |
+      | change                                | message                          |
+      | text that is not JSON                 | git-closed.json : JSON invalide  |
+      | no option                             | git-closed.json : schéma refusé  |
+      | an option that is empty               | git-closed.json : schéma refusé  |
+      | an option of the floor removed        | git-closed.json : schéma refusé  |
+      | a variable of git it does not hold    | git-closed.json : schéma refusé  |
+      | a variable of another name            | git-closed.json : schéma refusé  |
+      | a closed variable set to 0            | git-closed.json : schéma refusé  |
+      | a key of its own                      | git-closed.json : schéma refusé  |
+
+  Scenario: an option the file adds beyond the floor is kept
+    When a copy of the committed closed git file is read with the change "an option added"
+    Then the closed git copy is accepted with the option "-c" "core.quotePath=false" last

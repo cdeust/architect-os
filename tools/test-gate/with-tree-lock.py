@@ -27,12 +27,12 @@ with open(
 ) as closed_file:
     CLOSED = json.load(closed_file)
 GIT_ENV = {
+    **CLOSED["environment"],
     "PATH": "/usr/bin:/bin",
     "GIT_OPTIONAL_LOCKS": "0",
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "LC_ALL": "C",
-    **CLOSED["environment"],
 }
 GIT = ["/usr/bin/git", *CLOSED["options"]]
 PENDING = "pending.json"

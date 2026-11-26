@@ -15,10 +15,27 @@ export interface ClosedGit {
   readonly environment: Readonly<Record<string, string>>;
 }
 
+/**
+ * The floor of the file: the options every git of the host must be given whatever the file adds, a security floor
+ * written in code (CLAUDE.md, « Descriptive files before code »). The variables are exactly the two that say the same.
+ */
+const FLOOR = [
+  '--no-replace-objects',
+  '--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+  'core.fsmonitor=false',
+  'core.hooksPath=/dev/null',
+  'diff.ignoreSubmodules=all',
+  'core.attributesFile=/dev/null',
+];
+
 const ClosedGitSchema = z
   .object({
-    options: z.array(z.string().min(1)).min(1),
-    environment: z.record(z.string().regex(/^GIT_[A-Z_]+$/), z.string().min(1)),
+    options: z
+      .array(z.string().min(1))
+      .refine((options) => FLOOR.every((option) => options.includes(option))),
+    environment: z
+      .object({ GIT_ATTR_NOSYSTEM: z.literal('1'), GIT_NO_REPLACE_OBJECTS: z.literal('1') })
+      .strict(),
   })
   .strict();
 
@@ -31,7 +48,14 @@ export function parseClosedGit(text: string): ClosedGit | { failure: string } {
     return { failure: 'git-closed.json : JSON invalide' };
   }
   const parsed = ClosedGitSchema.safeParse(json);
-  return parsed.success ? parsed.data : { failure: 'git-closed.json : ' + parsed.error.issues[0]?.message };
+  return parsed.success ? parsed.data : { failure: 'git-closed.json : schéma refusé' };
+}
+
+/** The closed options and variables of git in `text`; a refused text throws, and no git is started. */
+export function loadClosedGit(text: string): ClosedGit {
+  const parsed = parseClosedGit(text);
+  if ('failure' in parsed) throw new Error(parsed.failure);
+  return parsed;
 }
 
 /** The committed file of the launcher package, never one of the checkout under inspection. A refused file throws. */
@@ -39,7 +63,5 @@ export function closedGit(): ClosedGit {
   const path = fileURLToPath(
     new URL('../git-closed.json', import.meta.resolve('@architect-os/sandbox/runtime-context')),
   );
-  const parsed = parseClosedGit(readFileSync(path, 'utf8'));
-  if ('failure' in parsed) throw new Error(parsed.failure);
-  return parsed;
+  return loadClosedGit(new TextDecoder().decode(readFileSync(path)));
 }
