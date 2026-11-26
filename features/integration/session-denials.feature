@@ -1,19 +1,23 @@
 Feature: The denials of .claude/settings.json before a real Claude Code
-  The project settings deny a session the calls that the ruleset of `main` refuses (a push to `main`, a bypass) or
-  that the rules of the repository leave to the merge resolver and to the owner (a merge, an edit of a ruleset):
+  The project settings deny a session calls that the ruleset of `main` refuses (a push to `main`) or that the rules
+  of the repository leave to the merge resolver and to the owner (a merge, an edit of a ruleset):
   docs/infrastructure.md, "What a session is spared". They are friction, not a control: a rule matches the text of
-  a command, and the last two rows are denied calls written another way, which run. What holds `main` is the
-  ruleset. A real Claude Code, the binary of the pinned Agent SDK, runs before a scripted model that asks for each
-  call; `gh`, `git` and the GitHub MCP server are stand-ins that record what reaches them.
+  a command, so it refuses a read that looks like the call and misses the call written another way; the table shows
+  both. What holds `main` is the ruleset. A real Claude Code, the binary of the pinned Agent SDK, runs before a
+  scripted model that asks for each call; `gh`, `git` and the GitHub MCP server are stand-ins that record what
+  reaches them.
 
   Scenario Outline: a real Claude Code, in a folder named <folder>, refuses the calls the settings deny and runs the others
-    The calls that run are the reads and the neighbours of the denied calls, then, in the last two rows, denied calls
-    written another way. The second folder has a space and an apostrophe, as a runtime root may.
+    The table is what was observed, not a claim of completeness. Among the refused calls, `gh pr merge --help` only
+    reads. The calls that run are reads and neighbours of the denied calls, then, in the last four rows, writes the
+    rules miss: denied calls written another way. The second folder has a space and an apostrophe, as a runtime root
+    may.
     When a real Claude Code under the denials of .claude/settings.json, in a folder named "<folder>", is asked by a scripted model for these calls
       | call                                                                                    | outcome |
       | gh pr merge 12                                                                          | refused |
       | gh pr merge                                                                             | refused |
       | gh pr merge 12 --admin                                                                  | refused |
+      | gh pr merge --help                                                                       | refused |
       | gh -R owner/repo pr merge 12 --squash                                                   | refused |
       | gh api repos/owner/repo/pulls/12/merge -X PUT                                           | refused |
       | gh api repos/owner/repo/pulls/12/merge --method PUT                                     | refused |
@@ -51,6 +55,8 @@ Feature: The denials of .claude/settings.json before a real Claude Code
       | mcp__github__get_me                                                                     | ran     |
       | git -C . push origin main                                                               | ran     |
       | sh -c 'gh pr merge 12'                                                                  | ran     |
+      | gh api repos/owner/repo/pulls/12/merge --method=PUT                                      | ran     |
+      | gh api repos/owner/repo/rulesets -f name=another                                         | ran     |
     Then Claude Code refused each call marked refused and ran each call marked ran
     And the stand-ins of gh, git and the GitHub server received the calls marked ran alone
 

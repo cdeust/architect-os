@@ -12,9 +12,9 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DataTable } from '@cucumber/cucumber';
-import { binary, resultOf, run } from '../support/claude-trial.js';
 import { startFakeModel, type ModelTurn } from '../support/fake-model.js';
 import { ROOT, Then, When, stored } from './helpers.js';
+import { binary, resultOf, run } from './review-restriction.js';
 
 /**
  * The denials of `.claude/settings.json`, tried on a real Claude Code before a scripted model
@@ -22,7 +22,8 @@ import { ROOT, Then, When, stored } from './helpers.js';
  * stand-ins that record their arguments and reach no host, and the GitHub MCP server is the stand-in of
  * features/support/fake-comment-mcp.mjs. Only the `permissions` of the committed file are given, with `--settings`:
  * its plugins would be fetched from a marketplace. Every tool is allowed, so a call that does not run was denied by a
- * rule. The binary is the one of the pinned Agent SDK (features/support/claude-trial.ts).
+ * rule. The binary, the process and the reading of the answers are those of the trial of the reviews
+ * (features/steps/review-restriction.ts).
  */
 interface Asked {
   readonly call: string;

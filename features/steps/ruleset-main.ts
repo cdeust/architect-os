@@ -80,12 +80,74 @@ export function requiredChecks(ruleset: MainRuleset): string[] {
 }
 
 /**
- * The ruleset `value` describes, or an error whose words name what it lets through. Exact, not by presence: each rule
- * once, since a second rule of a type says something else than the first; the two jobs of the gate and no other
- * check; `refs/heads/main` and no other ref, since a pattern beside it would bring branches under a body written for
- * `main`; no excluded ref, since a pattern may match `main`.
+ * The policy the owner decided on 26 November 2026, value by value: what the live ruleset read that day, and what the
+ * committed file must be. The named refusals of `mainRuleset` say what a weakened copy lets through; this says the
+ * rest. A policy that is stricter (a required approval, strict checks) or other is refused too: it is a decision,
+ * made by changing this value in the same pull request as the file.
  */
-export function mainRuleset(value: unknown): MainRuleset {
+const DECIDED: MainRuleset = {
+  name: 'main',
+  target: 'branch',
+  enforcement: 'active',
+  conditions: { ref_name: { include: [MAIN], exclude: [] } },
+  bypass_actors: [],
+  rules: [
+    { type: 'deletion' },
+    { type: 'non_fast_forward' },
+    {
+      type: 'required_status_checks',
+      parameters: {
+        strict_required_status_checks_policy: false,
+        do_not_enforce_on_create: false,
+        required_status_checks: [{ context: 'gate-linux' }, { context: 'gate-macos' }],
+      },
+    },
+    {
+      type: 'pull_request',
+      parameters: {
+        required_approving_review_count: 0,
+        dismiss_stale_reviews_on_push: false,
+        required_reviewers: [],
+        require_code_owner_review: false,
+        require_last_push_approval: false,
+        required_review_thread_resolution: false,
+        require_extra_approval_for_unattributed_changes: true,
+        allowed_merge_methods: ['merge', 'squash', 'rebase'],
+      },
+    },
+  ],
+};
+
+/** The first place where `actual` is not `expected`, as a path, or undefined when they are the same value. */
+function firstDifference(actual: unknown, expected: unknown, path: string): string | undefined {
+  if (typeof expected !== 'object' || expected === null || typeof actual !== 'object' || actual === null)
+    return actual === expected ? undefined : path;
+  if (Array.isArray(expected) !== Array.isArray(actual)) return path;
+  const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+  for (const key of keys) {
+    const at = firstDifference(
+      (actual as Record<string, unknown>)[key],
+      (expected as Record<string, unknown>)[key],
+      path === '' ? key : `${path}.${key}`,
+    );
+    if (at !== undefined) return at;
+  }
+  return undefined;
+}
+
+/**
+ * The ruleset the text describes, or an error whose words name what it lets through. The text must be the canonical
+ * form of what it parses to (two spaces, a final newline): `JSON.parse` keeps the last of two keys of the same name,
+ * so a text that says `disabled` then `active` would otherwise be read as active. Then the shape, strict; then what a
+ * weakened copy lets through, by name; then every value against the decided policy.
+ */
+export function mainRuleset(text: string): MainRuleset {
+  const value = JSON.parse(text) as unknown;
+  assert.equal(
+    text,
+    `${JSON.stringify(value, null, 2)}\n`,
+    'the text is not the canonical form of what it parses to: a key written twice, or another layout',
+  );
   const parsed = RulesetSchema.safeParse(value);
   if (!parsed.success)
     throw new Error(
@@ -111,14 +173,25 @@ export function mainRuleset(value: unknown): MainRuleset {
     true,
     'the checks are not required when the ref is created',
   );
+  // source: .github/workflows/pipeline-after-merge.yml, `"merge_method": "squash"`.
+  assert.ok(
+    ruleOf(ruleset, 'pull_request')[0]!.parameters.allowed_merge_methods?.includes('squash') !== false,
+    'the resolver merges by squash, which the ruleset does not allow',
+  );
+  const at = firstDifference(ruleset, DECIDED, '');
+  assert.equal(
+    at,
+    undefined,
+    `${at} is not the value decided on 26 November 2026: another policy, even a stricter one, changes the reader too`,
+  );
   return ruleset;
 }
 
 const FILE = 'docs/design/ruleset-main.json';
 
-/** The committed description, parsed and checked. */
+/** The committed description, read and checked. */
 export function committedMainRuleset(): MainRuleset {
-  return mainRuleset(JSON.parse(readFileSync(join(ROOT, FILE), 'utf8')));
+  return mainRuleset(readFileSync(join(ROOT, FILE), 'utf8'));
 }
 
 Given('the committed description of the ruleset of main', function () {
@@ -128,7 +201,7 @@ Given('the committed description of the ruleset of main', function () {
 Then(
   'it describes a ruleset that no actor bypasses and that requires a pull request and the gate',
   function () {
-    mainRuleset(JSON.parse(stored<string>(this, 'ruleset-text')));
+    mainRuleset(stored<string>(this, 'ruleset-text'));
   },
 );
 
@@ -136,6 +209,8 @@ type Json = Record<string, any>;
 const withoutRule = (type: string) => (r: Json) => {
   r['rules'] = r['rules'].filter((rule: Json) => rule['type'] !== type);
 };
+const pullRequestOf = (r: Json): Json =>
+  r['rules'].find((rule: Json) => rule['type'] === 'pull_request')['parameters'];
 const checksOf = (r: Json): Json =>
   r['rules'].find((rule: Json) => rule['type'] === 'required_status_checks')['parameters'];
 const withoutCheck = (context: string) => (r: Json) => {
@@ -205,17 +280,47 @@ const RULESET_BREAKS: Record<string, (ruleset: Json) => void> = {
   'without its bypass list': (r) => {
     delete r['bypass_actors'];
   },
+  'that allows the merge commit alone': (r) => {
+    pullRequestOf(r)['allowed_merge_methods'] = ['merge'];
+  },
+  'that requires one approval': (r) => {
+    pullRequestOf(r)['required_approving_review_count'] = 1;
+  },
+  'that requires a branch up to date': (r) => {
+    checksOf(r)['strict_required_status_checks_policy'] = true;
+  },
+  'under another name': (r) => {
+    r['name'] = 'default';
+  },
+  'with its rules in another order': (r) => {
+    r['rules'].reverse();
+  },
+};
+/** Copies that are broken in their text, which no parsed value can carry. */
+const TEXT_BREAKS: Record<string, (text: string) => string> = {
+  'that says disabled, then active': (text) =>
+    text.replace(
+      '  "enforcement": "active",\n',
+      '  "enforcement": "disabled",\n  "enforcement": "active",\n',
+    ),
+  'on one line': (text) => `${JSON.stringify(JSON.parse(text))}\n`,
 };
 
 Then(
   'a description of the ruleset of main {} is refused with {string}',
   function (kind: string, words: string) {
+    const original = stored<string>(this, 'ruleset-text');
+    const breakText = TEXT_BREAKS[kind];
     const breakIt = RULESET_BREAKS[kind];
-    assert.ok(breakIt !== undefined, `no broken ruleset named "${kind}"`);
-    const broken = JSON.parse(stored<string>(this, 'ruleset-text')) as Json;
-    const before = JSON.stringify(broken);
-    breakIt(broken);
-    assert.notEqual(JSON.stringify(broken), before, 'the copy is not broken');
+    assert.ok(breakText !== undefined || breakIt !== undefined, `no broken ruleset named "${kind}"`);
+    let broken: string;
+    if (breakText !== undefined) broken = breakText(original);
+    else {
+      const value = JSON.parse(original) as Json;
+      breakIt!(value);
+      broken = `${JSON.stringify(value, null, 2)}\n`;
+    }
+    assert.notEqual(broken, original, 'the copy is not broken');
     assert.throws(
       () => mainRuleset(broken),
       (error: Error) => {
