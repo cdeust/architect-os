@@ -52,6 +52,7 @@ const promptProof = z.strictObject({
   cases_sha256: sha,
   results: z.array(specimen).min(1),
 });
+const specimenProofs = z.array(promptProof).min(1);
 const manifest = z.strictObject({
   version: z.literal(1),
   run_id: z.string(),
@@ -68,7 +69,7 @@ const payload = z.strictObject({
   launcher_sha256: sha,
   define: z.strictObject({ sha256: sha, review: independence }),
   plan: z.strictObject({ sha256: sha, define_sha256: sha, raw_receipt_sha256: sha, review: independence }),
-  specimens: z.array(promptProof).min(1),
+  specimens: specimenProofs,
 });
 const authority = z.strictObject({
   version: z.literal(1),
@@ -139,6 +140,10 @@ function attestsCriteria(role: string, proof: z.infer<typeof promptProof>) {
 }
 
 type AdmissionPayload = z.infer<typeof payload>;
+/** Le reçu d'admission entier, tel que Step le lit. */
+export type StepAdmissionAuthority = z.infer<typeof authority>;
+export type Specimens = z.infer<typeof promptProof>[];
+export type ReviewIndependence = z.infer<typeof independence>;
 
 function fileDigestsMatch(
   recorded: Readonly<Record<string, string>>,
@@ -194,7 +199,6 @@ function planningMatchesReceipt(proof: AdmissionPayload, subject: StepAdmissionS
 export function requireStepAdmission(value: unknown, subject: StepAdmissionSubject): string {
   const { approved_sha256, payload: proof } = authority.parse(value);
   const hashes = digestFiles(subject.inputs);
-  const required = promptSubjects(subject);
   if (
     approved_sha256 !== admissionDigest(JSON.stringify(proof)) ||
     proof.step !== subject.name ||
@@ -202,26 +206,50 @@ export function requireStepAdmission(value: unknown, subject: StepAdmissionSubje
     !manifestApprovesStep(proof, subject, hashes) ||
     !executionMatchesReceipt(proof, subject, hashes) ||
     !planningMatchesReceipt(proof, subject) ||
-    proof.specimens.length !== required.length
+    proof.specimens.length !== promptSubjects(subject).length
   )
     throw new Error('STEP_ADMISSION_EVIDENCE_MISMATCH');
-  const byRole = new Map(proof.specimens.map((item) => [item.role, item]));
-  for (const route of required) {
-    const evaluated = byRole.get(route.role);
-
-    if (
-      !evaluated ||
-      evaluated.model.provider !==
-        (route.role === 'build' ? (subject.step.build.provider ?? 'anthropic') : 'anthropic') ||
-      evaluated.model.model !== route.model ||
-      evaluated.prompt_sha256 !== route.prompt_sha256 ||
-      !successfulReplays(evaluated) ||
-      !attestsCriteria(route.role, evaluated)
-    ) {
-      throw new Error('STEP_ADMISSION_SPECIMENS_REQUIRED');
-    }
-  }
+  if (!specimensAttest(proof.specimens, subject)) throw new Error('STEP_ADMISSION_SPECIMENS_REQUIRED');
   return approved_sha256;
+}
+
+/**
+ * Scelle un reçu : la charge est lue par le schéma même que Step applique, et l'empreinte approuvée est prise sur ce
+ * que Step relira ; lève si la charge n'a pas sa forme.
+ */
+export function sealStepAdmission(value: unknown): StepAdmissionAuthority {
+  const sealed = payload.parse(value);
+  return { version: 1, approved_sha256: admissionDigest(JSON.stringify(sealed)), payload: sealed };
+}
+
+/** La preuve de spécimens telle que le reçu la porte ; lève si elle n'a pas sa forme. */
+export function parseSpecimens(value: unknown): Specimens {
+  return specimenProofs.parse(value);
+}
+
+/**
+ * Chaque rôle que l'étape lance a sa preuve : son fournisseur, son modèle, l'empreinte du prompt que le lanceur lui
+ * donnera, chaque rejeu égal à son attendu, un cas à critères pour une revue ; et aucune preuve de plus. Le même
+ * jugement pour l'émetteur et pour Step.
+ */
+export function specimensAttest(specimens: Specimens, subject: StepAdmissionSubject): boolean {
+  const required = promptSubjects(subject);
+  const byRole = new Map(specimens.map((item) => [item.role, item]));
+  return (
+    specimens.length === required.length &&
+    required.every((route) => {
+      const evaluated = byRole.get(route.role);
+      return (
+        evaluated !== undefined &&
+        evaluated.model.provider ===
+          (route.role === 'build' ? (subject.step.build.provider ?? 'anthropic') : 'anthropic') &&
+        evaluated.model.model === route.model &&
+        evaluated.prompt_sha256 === route.prompt_sha256 &&
+        successfulReplays(evaluated) &&
+        attestsCriteria(route.role, evaluated)
+      );
+    })
+  );
 }
 
 function digestEntryOrder(hashes: Readonly<Record<string, string>>) {

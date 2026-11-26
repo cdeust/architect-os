@@ -93,3 +93,35 @@ export function admittedFixture(
   };
   return { version: 1, approved_sha256: hash(JSON.stringify(payload)), payload };
 }
+
+/**
+ * The proof of specimens a host replay would have measured for each role the Step launches: its route, the digest of
+ * the prompt the launcher gives it, and one case whose observed outcome equals the expected one (a review case carries
+ * a status per criterion).
+ */
+export function measuredSpecimens(
+  step: StepAdmissionSubject['step'],
+  launcher: Readonly<Record<string, string>>,
+) {
+  const prompt = (tool: string) =>
+    hash(launcher[(JSON.parse(launcher[tool]!) as { launcherPromptFile: string }).launcherPromptFile]!);
+  const expected = { verdict: 'pass', findings: [] as string[] };
+  const plain = { id: 'trace-a-local-receipt', input_sha256: hash('Replay a saved receipt'), expected };
+  const reviewed = { ...plain, expected: { ...expected, criteria: [{ id: 'AC-001', status: 'met' }] } };
+  const proof = (role: string, provider: string, model: string, tool: string) => {
+    const kase = role.startsWith('review:') ? reviewed : plain;
+    return {
+      role,
+      model: { provider, model },
+      prompt_sha256: prompt(tool),
+      oracle_sha256: hash('The receipt is named and correctly attributed'),
+      cases_sha256: hash(JSON.stringify([kase])),
+      results: [{ ...kase, observed: kase.expected }],
+    };
+  };
+  return [
+    proof('build', step.build.provider ?? 'anthropic', step.build.model, 'code.json'),
+    ...step.scouts.map(({ name, model }) => proof('scout:' + name, 'anthropic', model, 'scout.json')),
+    ...step.reviews.map(({ name, model }) => proof('review:' + name, 'anthropic', model, 'review.json')),
+  ];
+}

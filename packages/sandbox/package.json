@@ -34,6 +34,10 @@
     "./gate-reports": {
       "types": "./dist/src/gate-reports.d.ts",
       "default": "./src/gate-reports.ts"
+    },
+    "./step-admission-issuer": {
+      "types": "./dist/src/step-admission-issuer.d.ts",
+      "default": "./src/step-admission-issuer.ts"
     }
   },
   "dependencies": {

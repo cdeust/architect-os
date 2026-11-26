@@ -42,13 +42,35 @@ The destination must be new, match the approved Step name and stay outside every
 "$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run step -- /absolute/intake/delivery
 ```
 
-Step requires the separately issued host receipt `ARCHITECT_OS_STEP_EVIDENCE`, bound to the target tree, input bytes, launcher, reviews and prompt specimens. The production receipt issuer is pending. Step reads the approved folder once and validates `step.json` before launching sessions. The host archives the input hashes and the optional tickets in `steps/<name>/record.json` in the target worktree. Ticket points and dependencies are recorded, not yet used: no code chooses a model, effort or command from them. Session models and commands come from the host policy. Under `ARCHITECT_OS_RUNTIME_ROOT`, reports and verdicts go to `state/steps/<run-id>/delivery/` and raw streams to `run/<run-id>/tmp/steps/delivery/`.
+Step requires the separately issued host receipt `ARCHITECT_OS_STEP_EVIDENCE`, bound to the target tree, input bytes, launcher, reviews and prompt specimens. `npm run admit` issues it ([below](#issue-the-step-admission-receipt)). Step reads the approved folder once and validates `step.json` before launching sessions. The host archives the input hashes and the optional tickets in `steps/<name>/record.json` in the target worktree. Ticket points and dependencies are recorded, not yet used: no code chooses a model, effort or command from them. Session models and commands come from the host policy. Under `ARCHITECT_OS_RUNTIME_ROOT`, reports and verdicts go to `state/steps/<run-id>/delivery/` and raw streams to `run/<run-id>/tmp/steps/delivery/`.
 
 The offline integration scenario reads both projections across MCP stdio from a fixture, approves and materializes the exact preview, then runs the Step host with controlled sessions and a test receipt. It checks the archived tickets and policy along with the input fingerprints. See the [producer report](../SPEC-PLUG-PRODUCER.md) for the rejected projections from the named checkout. Automated exploration before approval and a measured replay through Deliver remain future work.
 
 ## Preview an independently reviewed Spec Plan
 
-Pass `reviewed-plan.json` in place of `proposal.json` to `plan prepare`, using the exact paired `define.json` written by the Spec planning host. Plan verifies both reviews and the bound input bytes. `plan materialize` returns `PLAN_SPECIMEN_EVIDENCE_REQUIRED` for this receipt even with a matching local approval. Production specimen evidence and the receipt issuer are pending.
+Pass `reviewed-plan.json` in place of `proposal.json` to `plan prepare`, using the exact paired `define.json` written by the Spec planning host. Plan verifies both reviews and the bound input bytes. With a matching local approval, `plan materialize` writes the folder as for a proposal. The folder starts nothing: Step refuses it until `npm run admit` has issued its receipt, which requires the specimen proof.
+
+## Issue the Step admission receipt
+
+Only a reviewed Plan can be admitted. Run the issuer from the trusted launcher checkout, the one whose `aos` will start Step, with the same Plan sources and decision, the specimen proof, the materialized folder and the root of the clean linked worktree:
+
+```sh
+./aos -- npm run --silent admit -- define.json reviewed-plan.json policy.json decision.json specimens.json "$INTAKE/delivery" "$WORKTREE"
+```
+
+`npm run admit` is a separate entry: `npm run step` never calls it, and a dependency rule lets only the issuing adapter of Plan import the issuer. Before it writes anything, the issuer:
+
+- re-derives the manifest from the three sources as `plan prepare` does, and requires the reviewed Plan (`ADMIT_INPUT_INVALID`, `ADMIT_REVIEWED_PLAN_REQUIRED`). Both reviews must use a different provider and model from their drafters.
+- requires the decision for that exact approval digest (`ADMIT_NOT_APPROVED`).
+- requires a folder named for the Step and outside every Git checkout, whose `brief.md`, `step.json` and scout questions, read as Step reads them, carry the approved digests (`ADMIT_FOLDER_INVALID`, `ADMIT_INPUTS_MISMATCH`).
+- requires the canonical root of a linked worktree whose tree is clean, and takes its fingerprint (`ADMIT_WORKTREE_INVALID`, `ADMIT_TREE_DIRTY`).
+- reads the launcher files that this Step will load (`ADMIT_LAUNCHER_UNREADABLE`).
+- requires one specimen proof per role that the Step launches, and nothing more. Each proof has its provider and model, the digest of the launcher prompt and replays that match their expected verdict, findings and criteria. A review proof also has a criteria case (`ADMIT_SPECIMENS_REQUIRED`).
+- applies the Step check to the sealed receipt (`ADMIT_EVIDENCE_MISMATCH`).
+
+It then creates `<step>-<approved_sha256>.json`, mode 0600, in `~/.config/architect-os/step-admission`. That directory must be mode 0700, owned by the effective user, canonical and outside the worktree (`ADMIT_AUTHORITY_UNSAFE`). The issuer opens the file exclusively without following a link, so an existing receipt is never replaced (`ADMIT_RECEIPT_EXISTS`). A failed write leaves no file (`ADMIT_RECEIPT_WRITE_FAILED`). On success it prints `{"status":"issued","step",...,"path","approved_sha256"}`; set `ARCHITECT_OS_STEP_EVIDENCE` to that `path`. Exit codes: 0 issued, 2 refused with the code on stderr, 3 unexpected error.
+
+The specimen file is an array in the receipt's `specimens` form. The issuer checks its coverage and replay results. It cannot establish that a host replay produced them. That provenance belongs to the prompt specimens brick, which is still pending. Step folders in `main` have no relaunch pass. A relaunch bound to a refused record therefore has no receipt case yet.
 
 ## Recorded Define-to-Plan replay
 

@@ -34,6 +34,7 @@
     "watch": "node scripts/require-run.mjs && node --import tsx tools/watch/src/cli.ts",
     "define": "node scripts/require-run.mjs && node --import tsx tools/define/src/cli.ts",
     "plan": "node scripts/require-run.mjs && node --import tsx tools/plan/src/cli.ts",
+    "admit": "node scripts/require-run.mjs && node --import tsx tools/plan/src/admit-cli.ts",
     "deliver": "node scripts/require-run.mjs && node --import tsx tools/deliver/src/cli.ts",
     "typecheck": "node scripts/require-run.mjs && tsc -b",
     "format": "node scripts/require-run.mjs && prettier --write .",
