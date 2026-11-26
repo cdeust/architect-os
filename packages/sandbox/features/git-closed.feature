@@ -77,8 +77,11 @@ Feature: one file and one module give the git of the host what precedes its subc
         | TypeScript module | a variable named __proto__                      |
         | TypeScript module | a variable with no value                        |
         | TypeScript module | a variable whose value ends with a line end     |
+        | TypeScript module | a variable whose value begins with a space      |
         | TypeScript module | a variable that is not text                     |
         | TypeScript module | variables that are a list                       |
+        | TypeScript module | variables that are a number                     |
+        | TypeScript module | variables that are null                         |
         | TypeScript module | a machine variable that is not of git           |
         | TypeScript module | no name of the host                             |
         | TypeScript module | names of the host that are not a list           |
@@ -86,6 +89,7 @@ Feature: one file and one module give the git of the host what precedes its subc
         | TypeScript module | the name XDG_CONFIG_HOME                        |
         | TypeScript module | a name of the host that is a git variable       |
         | TypeScript module | a name of the host in lower case                |
+        | TypeScript module | a name of the host that begins in lower case    |
         | TypeScript module | a name of the host followed by a line end       |
         | TypeScript module | a name of the host that is not text             |
         | TypeScript module | a name of the host twice                        |
@@ -111,8 +115,11 @@ Feature: one file and one module give the git of the host what precedes its subc
         | guard             | a variable named __proto__                      |
         | guard             | a variable with no value                        |
         | guard             | a variable whose value ends with a line end     |
+        | guard             | a variable whose value begins with a space      |
         | guard             | a variable that is not text                     |
         | guard             | variables that are a list                       |
+        | guard             | variables that are a number                     |
+        | guard             | variables that are null                         |
         | guard             | a machine variable that is not of git           |
         | guard             | no name of the host                             |
         | guard             | names of the host that are not a list           |
@@ -120,6 +127,7 @@ Feature: one file and one module give the git of the host what precedes its subc
         | guard             | the name XDG_CONFIG_HOME                        |
         | guard             | a name of the host that is a git variable       |
         | guard             | a name of the host in lower case                |
+        | guard             | a name of the host that begins in lower case    |
         | guard             | a name of the host followed by a line end       |
         | guard             | a name of the host that is not text             |
         | guard             | a name of the host twice                        |
