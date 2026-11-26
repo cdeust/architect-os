@@ -142,9 +142,17 @@ export class GhForge implements Forge {
       const pages = this.read(
         'jobs',
         ['--paginate', '--slurp', `${path}/attempts/${attempt}/jobs?per_page=100`],
-        z.array(z.object({ jobs: z.array(jobSchema()) })),
+        z
+          .array(z.object({ total_count: z.number(), jobs: z.array(jobSchema().extend({ id: idSchema() })) }))
+          .min(1),
       );
       const rows = pages.flatMap((page) => page.jobs);
+      // Every page states the total for this attempt. Repeated IDs can hide an omitted execution at the same count.
+      if (
+        pages.some((page) => page.total_count !== rows.length) ||
+        new Set(rows.map((row) => row.id)).size !== rows.length
+      )
+        throw new Error(failure('jobs'));
       if (attempt === current && rows.length === 0) return [];
       // Take the newest execution of each name. Preserve ties from the same attempt for ciState to reject.
       const fresh = rows.filter((row) => !seen.has(row.name));

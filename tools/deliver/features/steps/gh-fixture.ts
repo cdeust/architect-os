@@ -103,7 +103,9 @@ export function ghForge(world: DeliverWorld, workflow = 'gate'): GhForgeFixture 
         }),
       });
       answers('attempt', String(run.id) + '/' + String(run.attempt ?? 1), {
-        stdout: JSON.stringify([{ jobs: run.jobs.map(jobText) }]),
+        stdout: JSON.stringify([
+          { total_count: run.jobs.length, jobs: run.jobs.map((job, i) => ({ ...jobText(job), id: i + 1 })) },
+        ]),
       });
       // A rerun leaves the run not completed, and without jobs.
       answers('rerun', String(run.id), {
