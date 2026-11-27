@@ -194,6 +194,13 @@ Feature: one commit per pass, made by the host on the work branch of the worktre
       Then the pass "p1" exits with 0
       And the pass commit of "p1" does not hold "debug.log"
 
+    Scenario: a file the build writes that info/exclude of the repository ignores is refused on a linked worktree, and the branch stays
+      Given a throwaway linked worktree on the branch "step/series" for the passes
+      And the info/exclude of the repository of the passes ignores "left.tmp"
+      When the pass "p1" is played, its build writing "left.tmp" with "hidden\n" and "src/a.ts"
+      Then the pass "p1" exits with 2 and the stderr "architect-os step: PASS_UNRECORDED_IGNORE"
+      And the work branch "step/series" is still at its first commit
+
   Rule: a build that rewrites what only the host writes is refused on real git, independently of the sandbox barriers
 
     Scenario: a build that rewrites the record of an earlier pass is refused, and the branch stays at the earlier pass

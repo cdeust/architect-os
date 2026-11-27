@@ -985,3 +985,8 @@ Then('the pass commit of {string} does not hold {string}', function (name: strin
   assert.equal(fixtureGit(p.repo, 'ls-tree', '--name-only', commit, '--', path), '');
   assert.equal(existsSync(join(p.worktree, path)), true);
 });
+
+Given('the info\\/exclude of the repository of the passes ignores {string}', function (pattern: string) {
+  const exclude = join(passes(this).repo, '.git', 'info', 'exclude');
+  writeFileSync(exclude, `${readFileSync(exclude, 'utf8')}${pattern}\n`);
+});

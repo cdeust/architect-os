@@ -23,6 +23,8 @@ interface Driver {
   describe(commit: string): { parents: string[]; tree: string; message: string; seconds: number };
   /** The tree of the index of the worktree. */
   indexTree(): string;
+  /** Add an ignore rule in `ruleFile` with `pattern` and write an untracked file at `ignoredPath`. */
+  ignore(ruleFile: string, pattern: string, ignoredPath: string): void;
 }
 
 interface Contract {
@@ -87,6 +89,12 @@ function gitDriver(directory: string): Driver {
       };
     },
     indexTree: () => fixtureGit(directory, 'write-tree'),
+    ignore(ruleFile, pattern, ignoredPath) {
+      mkdirSync(dirname(join(directory, ruleFile)), { recursive: true });
+      writeFileSync(join(directory, ruleFile), `${pattern}\n`);
+      mkdirSync(dirname(join(directory, ignoredPath)), { recursive: true });
+      writeFileSync(join(directory, ignoredPath), 'ignored\n');
+    },
   };
 }
 
@@ -112,6 +120,11 @@ function inMemoryDriver(files: readonly string[]): Driver {
       };
     },
     indexTree: () => repository.index,
+    ignore(ruleFile, pattern, ignoredPath) {
+      if (!ruleFile.startsWith('.git/')) repository.files.set(ruleFile, `${pattern}\n`);
+      repository.files.set(ignoredPath, 'ignored\n');
+      repository.ignored.set(ignoredPath, ruleFile);
+    },
   };
 }
 
@@ -251,4 +264,26 @@ Then(
 Then('the index of the pass repository is the tree of the written commit', function () {
   const c = contract(this);
   assert.equal(c.driver.indexTree(), c.driver.describe(c.written as string).tree);
+});
+
+Given(
+  'the rule file {string} of the pass repository ignores {string} with {string}',
+  function (ruleFile: string, ignoredPath: string, pattern: string) {
+    contract(this).driver.ignore(ruleFile, pattern, ignoredPath);
+  },
+);
+
+Then('the first commit of the pass repository holds {string}', function (path: string) {
+  const c = contract(this);
+  assert.equal(c.driver.repository.holds(c.first, path), true);
+});
+
+Then('the first commit of the pass repository does not hold {string}', function (path: string) {
+  const c = contract(this);
+  assert.equal(c.driver.repository.holds(c.first, path), false);
+});
+
+Then('the files ignoring untracked paths in the pass repository are {string}', function (files: string) {
+  const c = contract(this);
+  assert.deepEqual(c.driver.repository.ignoringFiles(), files === '' ? [] : files.split(' '));
 });

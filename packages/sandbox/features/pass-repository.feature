@@ -1,9 +1,10 @@
 Feature: the repository of a pass, one contract for its two adapters
   The port PassRepository (packages/sandbox/src/pass-commit.ts) is what the host asks of the repository of a worktree
   to commit a pass: the branch HEAD names and its commit, the paths a tree changes from a commit, a commit written under
-  the fixed identity of the host, a branch advanced by compare and swap, and the index of the worktree settled on the
-  new commit. Each scenario runs on the in-memory adapter and on the git adapter, over a throwaway repository whose
-  snapshot is the fingerprint of its tree (`fingerprintTree`).
+  the fixed identity of the host, a branch advanced by compare and swap, the index of the worktree settled on the
+  new commit, the rule files ignoring untracked paths, and whether a commit holds a path. Each scenario runs on the
+  in-memory adapter and on the git adapter, over a throwaway repository whose snapshot is the fingerprint of its tree
+  (`fingerprintTree`).
 
   Scenario Outline: the head names the branch and its commit (<adapter>)
     Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
@@ -107,6 +108,52 @@ Feature: the repository of a pass, one contract for its two adapters
     And I advance the branch "step/other" from the first commit to the written commit
     Then the branch was not advanced
     And the head of the pass repository is the branch "step/demo" at the first commit
+
+    Examples:
+      | adapter   |
+      | in memory |
+      | git       |
+
+  Scenario Outline: a commit holds its tracked files and none of the untracked, absent or outside paths (<adapter>)
+    Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
+    And the file "untracked.txt" of the pass repository holds "new\n"
+    Then the first commit of the pass repository holds "a.txt"
+    And the first commit of the pass repository does not hold "untracked.txt"
+    And the first commit of the pass repository does not hold "missing.txt"
+    And the first commit of the pass repository does not hold ""
+    And the first commit of the pass repository does not hold "/outside/exclude"
+    And the first commit of the pass repository does not hold "../outside"
+
+    Examples:
+      | adapter   |
+      | in memory |
+      | git       |
+
+  Scenario Outline: without an ignored untracked file, no rule file is reported (<adapter>)
+    Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
+    Then the files ignoring untracked paths in the pass repository are ""
+
+    Examples:
+      | adapter   |
+      | in memory |
+      | git       |
+
+  Scenario Outline: a rule file ignoring untracked paths is reported once (<adapter>)
+    Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
+    And the rule file ".gitignore" of the pass repository ignores "a.log" with "*.log"
+    And the rule file ".gitignore" of the pass repository ignores "b.log" with "*.log"
+    Then the files ignoring untracked paths in the pass repository are ".gitignore"
+
+    Examples:
+      | adapter   |
+      | in memory |
+      | git       |
+
+  Scenario Outline: info/exclude ignoring an untracked path is reported and not held by the first commit (<adapter>)
+    Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
+    And the rule file ".git/info/exclude" of the pass repository ignores "left.tmp" with "left.tmp"
+    Then the files ignoring untracked paths in the pass repository are ".git/info/exclude"
+    And the first commit of the pass repository does not hold ".git/info/exclude"
 
     Examples:
       | adapter   |

@@ -4,6 +4,7 @@
 // environnement qui ne lit aucune configuration de la machine, auquel le commit ajoute l'identité et la date qu'il pose
 // lui-même. Aucun chemin ni nom ne vient d'une session : la branche est celle que `HEAD` nomme, et `isWorkBranch` l'a
 // admise avant qu'elle entre dans un argv.
+import { isAbsolute } from 'node:path';
 import { machineIndependentGitEnvironment } from './git-closed.js';
 import { PASS_IDENTITY, type PassCommitRequest, type PassHead, type PassRepository } from './pass-commit.js';
 import { hostGit } from './tree-fingerprint.js';
@@ -102,6 +103,9 @@ export function gitPassRepository(root: () => string, timeoutMs = 60_000): PassR
       return [...new Set(fields.slice(0, -1).filter((_, at) => at % 4 === 0))];
     },
     holds(commit, path) {
+      // Un chemin hors de l'arbre (absolu comme `info/exclude` d'un worktree lié, vide ou qui remonte) ne peut être
+      // dans aucun commit ; `ls-tree` sortirait en 128 au lieu de répondre faux.
+      if (path === '' || isAbsolute(path) || path.split('/').includes('..')) return false;
       // Un chemin pris tel quel, jamais comme un motif.
       return git(['--literal-pathspecs', 'ls-tree', '-z', '--name-only', commit, '--', path]) === `${path}\0`;
     },
