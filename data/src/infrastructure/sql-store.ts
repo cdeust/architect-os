@@ -162,21 +162,18 @@ const ends = (): ReadonlySet<string> =>
   ]);
 
 /**
- * The tokens of a statement: comments and string literals removed (an E'' string ends at an unescaped quote, a standard
- * one at a quote that is not doubled), then quoted identifiers, names, parameters, numbers and single characters.
+ * The tokens of a statement: comments and string literals removed in one pass (an E'' string ends at an unescaped
+ * quote, a standard one at a quote that is not doubled), then quoted identifiers, names and single characters.
  */
 function tokens(sql: string): string[] {
-  const code = sql
-    .replace(/--[^\n]*/g, ' ')
-    .replace(/\bE'(?:[^'\\]|\\.)*'/gi, ' ')
-    .replace(/'(?:[^']|'')*'/g, ' ');
-  return [...code.matchAll(/"[^"]*"|[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)*|\$\d+|\d+(?:\.\d+)?|\S/g)].map(
-    (match) => match[0].toLowerCase(),
+  const code = sql.replace(/--[^\n]*|\bE'(?:[^'\\]|\\.)*'|'(?:[^']|'')*'/gi, ' ');
+  return [...code.matchAll(/"[^"]*"|[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)*|\S/g)].map((match) =>
+    match[0].toLowerCase(),
   );
 }
 
-/** A name, schema-qualified or not, as `tokens` gives it. */
-const isName = (word: string): boolean => /^[a-z_][\w$]*(?:\.[a-z_][\w$]*)*$/.test(word);
+/** A token of `tokens` is an unquoted name (schema-qualified or not) iff it starts with a letter or underscore. */
+const isName = (word: string | undefined): word is string => word !== undefined && /^[a-z_]/.test(word);
 
 /**
  * The tables a statement reads: the source of each FROM and JOIN, but the target of a DELETE FROM, the operand of IS
@@ -188,7 +185,7 @@ const isName = (word: string): boolean => /^[a-z_][\w$]*(?:\.[a-z_][\w$]*)*$/.te
 export function readTables(sql: string, tables: ReadonlySet<string>, where: string): string[] {
   const words = tokens(sql);
   const stops = ends();
-  const refuse = (why: string): never => {
+  const refuse: (why: string) => never = (why) => {
     throw new SqlSourceError(where, why);
   };
   const defined = new Set<string>();
@@ -207,15 +204,16 @@ export function readTables(sql: string, tables: ReadonlySet<string>, where: stri
     if (words[at] === 'only') at += 1;
     const source = words[at];
     if (source === '(') refuse(`a subquery after ${word.toUpperCase()}`);
-    if (source === undefined || !isName(source)) refuse(`no table after ${word.toUpperCase()}`);
+    if (!isName(source)) refuse(`no table after ${word.toUpperCase()}`);
     if (words[at + 1] === '(') refuse(`a function after ${word.toUpperCase()}`);
     at += 1;
     if (words[at] === 'as') at += 1;
-    if (words[at] !== undefined && !stops.has(words[at]!) && isName(words[at]!)) at += 1;
+    const alias = words[at];
+    if (isName(alias) && !stops.has(alias)) at += 1;
     const next = words[at];
     if (next === ',') refuse(`a comma between two sources of one ${word.toUpperCase()}`);
     if (next !== undefined && !stops.has(next)) refuse(`an unreadable source after ${word.toUpperCase()}`);
-    if (!defined.has(source as string)) sources.push(source as string);
+    if (!defined.has(source)) sources.push(source);
   });
   const returned = words.includes('returning') ? writtenTables(sql) : [];
   return [...new Set([...sources, ...returned])];

@@ -77,6 +77,25 @@ Feature: SQL store, statement table and migrations
       | SELECT 1 FROM  runs JOIN  tasks ON true                                       | runs, tasks            |
       | SELECT 1 FROM runs; SELECT 2 FROM runs                                        | runs                   |
       | UPDATE runs SET a = 1 returning id                                            | runs                   |
+      | SELECT 1 FROM runs r GROUP BY r.id                                            | runs                   |
+      | SELECT 1 FROM runs r ORDER BY r.id                                            | runs                   |
+      | SELECT 1 FROM runs r LIMIT 1                                                  | runs                   |
+      | SELECT 1 FROM runs r OFFSET 1                                                 | runs                   |
+      | SELECT 1 FROM runs r HAVING count(*) > 0                                      | runs                   |
+      | SELECT 1 FROM runs r WINDOW w AS ()                                           | runs                   |
+      | SELECT 1 FROM runs r FETCH FIRST 1 ROW ONLY                                   | runs                   |
+      | SELECT 1 FROM runs r FOR UPDATE                                               | runs                   |
+      | SELECT 1 FROM runs r UNION SELECT 1 FROM tasks                                | runs, tasks            |
+      | SELECT 1 FROM runs r INTERSECT SELECT 1 FROM tasks                            | runs, tasks            |
+      | SELECT 1 FROM runs r EXCEPT SELECT 1 FROM tasks                               | runs, tasks            |
+      | SELECT 1 FROM runs r RIGHT JOIN tasks t ON true                               | runs, tasks            |
+      | SELECT 1 FROM runs r INNER JOIN tasks t ON true                               | runs, tasks            |
+      | SELECT 1 FROM runs r FULL JOIN tasks t ON true                                | runs, tasks            |
+      | SELECT 1 FROM runs r CROSS JOIN tasks t                                       | runs, tasks            |
+      | SELECT 1 FROM runs r NATURAL JOIN tasks t                                     | runs, tasks            |
+      | SELECT 1 FROM runs AS delete JOIN tasks ON true                               | runs, tasks            |
+      | SELECT'a'FROM runs                                                            | runs                   |
+      | SELECT '--' FROM runs                                                         | runs                   |
 
   Scenario Outline: refuses a statement whose sources it cannot read whole: <form>
     Then the statement "<statement>" is refused as unreadable, saying "<why>"
@@ -113,6 +132,9 @@ Feature: SQL store, statement table and migrations
 
   Scenario: reads a statement whose quoted name holds the word FROM
     Then the statement 'SELECT 1 AS "x FROM tasks" FROM runs' reads "runs"
+
+  Scenario: refuses a quoted table name after FROM as unreadable
+    Then the statement 'SELECT 1 FROM "runs"' is refused as unreadable, saying "no table after FROM"
 
   Scenario: the usage records are written by usage.append only
     Then only the operation "usage.append" writes the table "usage_records"
