@@ -24,6 +24,8 @@ export class InMemoryRepository implements Repository {
   private readonly parents = new Map<string, Set<string>>();
   /** `<hash> <path>` to the bytes of the regular file the commit records there. */
   readonly files = new Map<string, Uint8Array>();
+  /** `<hash> <path>` of the entries the commit records that are not regular files: links, nested repositories. */
+  readonly others = new Set<string>();
   private fetches = 0;
 
   /** `hash` is the local head. */
@@ -89,6 +91,21 @@ export class InMemoryRepository implements Repository {
   committedFile(hash: string, path: string): Uint8Array | undefined {
     this.journal.record('committedFile', hash, path);
     return this.files.get(`${hash} ${path}`);
+  }
+
+  committedEntries(hash: string, path: string): readonly { path: string; regular: boolean }[] {
+    this.journal.record('committedEntries', hash, path);
+    const under = (key: string): string | undefined => {
+      const at = key.slice(hash.length + 1);
+      return key.startsWith(`${hash} `) && (at === path || at.startsWith(`${path}/`)) ? at : undefined;
+    };
+    const found = [
+      ...[...this.files.keys()].map((key) => ({ path: under(key), regular: true })),
+      ...[...this.others].map((key) => ({ path: under(key), regular: false })),
+    ];
+    return found.flatMap((entry) =>
+      entry.path === undefined ? [] : [{ path: entry.path, regular: entry.regular }],
+    );
   }
 
   deleteRemoteBranch(branch: string): void {

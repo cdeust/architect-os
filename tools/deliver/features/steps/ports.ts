@@ -31,10 +31,19 @@ function inMemoryRepository(): RepositoryFixture {
   const repository = new InMemoryRepository(new Journal(), '0'.repeat(40));
   const hashes = new Map<string, string>();
   const hashOf = (label: string): string => hashes.get(label) as string;
+  // A commit records what its parent records, as in git, and what it adds.
   const commit: RepositoryFixture['commit'] = (label, parent) => {
     const hash = (hashes.size + 1).toString(16).padStart(40, '0');
     hashes.set(label, hash);
-    if (parent !== undefined) repository.link(hashOf(parent), hash);
+    if (parent === undefined) return;
+    const from = hashOf(parent);
+    repository.link(from, hash);
+    for (const [key, bytes] of [...repository.files]) {
+      if (key.startsWith(`${from} `)) repository.files.set(`${hash}${key.slice(from.length)}`, bytes);
+    }
+    for (const key of [...repository.others]) {
+      if (key.startsWith(`${from} `)) repository.others.add(`${hash}${key.slice(from.length)}`);
+    }
   };
   return {
     repository,
@@ -42,6 +51,10 @@ function inMemoryRepository(): RepositoryFixture {
     commitFile(label, parent, path, text) {
       commit(label, parent);
       repository.files.set(`${hashOf(label)} ${path}`, Buffer.from(text));
+    },
+    commitLink(label, parent, path) {
+      commit(label, parent);
+      repository.others.add(`${hashOf(label)} ${path}`);
     },
     checkout(label) {
       repository.hash = hashOf(label);
@@ -228,6 +241,25 @@ Then(
   function (label: string, path: string, text: string) {
     const { repository, hashOf } = repo(this);
     assert.deepEqual(Buffer.from(repository.committedFile(hashOf(label), path) ?? []), Buffer.from(text));
+  },
+);
+
+Given(
+  'the delivery repository holds the commit {string} after {string} that records a link at {string} to {string}',
+  function (label: string, parent: string, path: string, target: string) {
+    repo(this).commitLink(label, parent, path, target);
+  },
+);
+
+Then(
+  'the delivery commit {string} records at {string} and under it the entries {string}',
+  function (label: string, path: string, expected: string) {
+    const { repository, hashOf } = repo(this);
+    const entries = repository
+      .committedEntries(hashOf(label), path)
+      .map((entry) => `${entry.path} ${entry.regular ? 'file' : 'other'}`)
+      .sort();
+    assert.deepEqual(entries, expected === '' ? [] : expected.split(', '));
   },
 );
 

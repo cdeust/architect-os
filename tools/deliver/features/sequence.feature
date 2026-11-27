@@ -29,7 +29,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         publication
         rangement
         """
-      And the delivery calls named "isClean, head, remoteHead, isAncestor, committedFile, verdict, gate" are:
+      And the delivery calls named "isClean, head, remoteHead, isAncestor, committedFile, committedEntries, verdict, gate" are:
         """
         isClean
         head
@@ -38,8 +38,8 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         verdict
         gate
         verdict
-        committedFile p0 docs/design/journal.md
-        committedFile h1 docs/design/journal.md
+        committedEntries h1 docs/design/journal.md
+        committedEntries p0 docs/design/journal.md
         remoteHead deliver/step
         """
       And the delivery calls named "verdict, gate, ci" are:
@@ -397,11 +397,11 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       And the receipt of the delivery gate names the destination "p1"
       When I deliver "step" until "end"
       Then the delivery outcome is "delivered"
-      And the delivery calls named "committedFile" are:
+      And the delivery calls named "committedFile, committedEntries" are:
         """
         committedFile h1 steps/step/record.json
-        committedFile p1 docs/design/journal.md
-        committedFile h1 docs/design/journal.md
+        committedEntries h1 docs/design/journal.md
+        committedEntries p1 docs/design/journal.md
         """
 
     Scenario Outline: an append-only file whose bytes at the base are the first bytes at the commit: <case>
@@ -440,6 +440,39 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         | a line inserted first               | a{lf}        | z{lf}a{lf}         |
         | the file deleted                    | a{lf}        | none               |
 
+    Scenario Outline: an append-only directory: every file at the base keeps its bytes first at the commit; <case>
+      Given the delivery append-only files are "ev"
+      And the delivery file "ev/a.json" holds "a" at "p0"
+      And the delivery file "ev/x/b.json" holds "b" at "p0"
+      And the delivery file "ev/a.json" holds "<a>" at "h1"
+      And the delivery file "ev/x/b.json" holds "<b>" at "h1"
+      And the delivery file "ev/c.json" holds "<c>" at "h1"
+      When I deliver "step" until "end"
+      Then the delivery <outcome>
+
+      Examples:
+        | case                    | a     | b    | c    | outcome                                                                                         |
+        | unchanged               | a     | b    | none | outcome is "delivered"                                                                          |
+        | a new file              | a     | b    | c    | outcome is "delivered"                                                                          |
+        | a file appended         | a{lf} | b    | none | outcome is "delivered"                                                                          |
+        | a file rewritten        | z     | b    | c    | stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin" |
+        | a nested file rewritten | a     | B    | none | stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin" |
+        | a file removed          | none  | b    | none | stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin" |
+        | a nested file removed   | a     | none | c    | stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin" |
+
+    Scenario Outline: a link in an append-only directory, or in its place, is refused: <case>
+      Given the delivery append-only files are "ev"
+      And the delivery file "ev/a.json" holds "a" at "p0"
+      And the delivery file "ev/a.json" holds "a" at "h1"
+      And the delivery commit "h1" records a link at "<link>"
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin"
+
+      Examples:
+        | case                      | link      |
+        | in place of the directory | ev        |
+        | in the directory          | ev/l.json |
+
     Scenario: a reused verdict gives the base of the append-only files too
       Given the delivery gate verdict already names "h1"
       And the delivery file "docs/design/journal.md" holds "a{lf}c{lf}" at "p0"
@@ -469,11 +502,13 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       And the delivery file "b.md" holds "x{lf}" at "p0"
       When I deliver "step" until "end"
       Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin"
-      And the delivery calls named "committedFile" are:
+      And the delivery calls named "committedFile, committedEntries" are:
         """
         committedFile h1 steps/step/record.json
-        committedFile p0 a.md
-        committedFile h1 a.md
+        committedEntries h1 a.md
+        committedEntries p0 a.md
+        committedEntries h1 b.md
+        committedEntries p0 b.md
         committedFile p0 b.md
         committedFile h1 b.md
         """

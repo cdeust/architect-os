@@ -21,6 +21,7 @@ Feature: what the git of the delivery receives, and the programs it does not sta
         | push               |
         | deleteRemoteBranch |
         | committedFile      |
+        | committedEntries   |
 
     Scenario: a name of the list that the host does not set is not received
       Given the host of the delivery repository sets "GH_TOKEN=t"

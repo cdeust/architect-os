@@ -185,11 +185,25 @@ async function playGate(
     return { phase: 'porte', reason: 'le verdict de la porte ne nomme pas de destination' };
   entry.base = base;
   for (const path of config.appendOnly) {
-    if (!onlyAppended(repository.committedFile(base, path), repository.committedFile(entry.hash, path))) {
+    if (!appendedOnly(repository, base, entry.hash, path)) {
       return { phase: 'porte', reason: "un fichier en ajout seul a changé ailleurs qu'à sa fin" };
     }
   }
   return undefined;
+}
+
+/**
+ * An entry of `appendOnly`, a file or a directory, between the base and the commit: every file the base records there
+ * keeps its bytes as the first bytes of the same file at the commit, and the commit records nothing there that is not a
+ * regular file (a link in place of the directory, or in it). A file new at the commit is appended.
+ */
+function appendedOnly(repository: Repository, base: string, hash: string, path: string): boolean {
+  if (repository.committedEntries(hash, path).some((found) => !found.regular)) return false;
+  return repository
+    .committedEntries(base, path)
+    .every((found) =>
+      onlyAppended(repository.committedFile(base, found.path), repository.committedFile(hash, found.path)),
+    );
 }
 
 /** Phase 4. */

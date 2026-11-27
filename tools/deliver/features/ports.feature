@@ -117,6 +117,24 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | in-memory |
         | git       |
 
+    Scenario Outline: a commit records, at a path and under it, its files at any depth, and a link as no file
+      Given a delivery repository of the <adapter> adapter
+      And the delivery repository holds the commit "c1"
+      And the delivery repository holds the commit "c2" after "c1" that records "ev/a.json" as the text "a"
+      And the delivery repository holds the commit "c3" after "c2" that records "ev/x/b.json" as the text "b"
+      And the delivery repository holds the commit "c4" after "c3" that records a link at "ev2" to "ev"
+      Then the delivery commit "c1" records at "ev" and under it the entries ""
+      And the delivery commit "c3" records at "ev" and under it the entries "ev/a.json file, ev/x/b.json file"
+      And the delivery commit "c3" records at "ev/a.json" and under it the entries "ev/a.json file"
+      And the delivery commit "c3" records at "e" and under it the entries ""
+      And the delivery commit "c4" records at "ev2" and under it the entries "ev2 other"
+      And the delivery commit "c4" records at "ev/x" and under it the entries "ev/x/b.json file"
+
+      Examples:
+        | adapter   |
+        | in-memory |
+        | git       |
+
     Scenario Outline: a remote branch deleted is absent after a fetch
       Given a delivery repository of the <adapter> adapter
       And the delivery repository holds the commit "c1"
@@ -192,6 +210,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | isAncestor         | git merge-base exited with code 128 |
         | deleteRemoteBranch | git push exited with code 128    |
         | committedFile      | git ls-tree exited with code 128 |
+        | committedEntries   | git ls-tree exited with code 128 |
 
     Scenario Outline: each method is one fixed git command, started with no file monitor, no hook and the terminal prompt switched off
       Given a delivery repository over a git that records what it is asked
@@ -208,12 +227,13 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | push               | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null push --quiet --recurse-submodules=no origin aaa:refs/heads/main |
         | deleteRemoteBranch | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null push --quiet --recurse-submodules=no origin :refs/heads/main |
         | committedFile      | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null ls-tree -r -z --full-tree aaa |
+        | committedEntries   | --no-replace-objects --attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904 -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.ignoreSubmodules=all -c core.attributesFile=/dev/null ls-tree -r -z --full-tree aaa |
 
     Scenario: what a commit records at a path is read from the commit, whatever the checkout holds, and a link is no file
       Given a delivery repository of the git adapter
       And the delivery repository holds the commit "c1"
       And the delivery repository holds the commit "c2" after "c1" that records "steps/step/record.json" as the text "recorded"
-      And the delivery repository holds the commit "c3" after "c2" with a link at "steps/link/record.json" to "../step/record.json"
+      And the delivery repository holds the commit "c3" after "c2" that records a link at "steps/link/record.json" to "../step/record.json"
       When the delivery worktree file "steps/step/record.json" now holds "changed"
       Then the delivery commit "c2" records at "steps/step/record.json" the text "recorded"
       And the delivery commit "c3" records at "steps/step/record.json" the text "recorded"

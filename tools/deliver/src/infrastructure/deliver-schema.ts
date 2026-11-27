@@ -38,7 +38,9 @@ function configSchema(): z.ZodType<DeliverConfig> {
     .refine(
       (value) => !value.startsWith('/') && !value.includes('\\') && !value.includes('..'),
       'a repository path is relative and has no .. nor backslash',
-    );
+    )
+    // A path names a file or a directory, every file under it then counting: written without a final slash.
+    .refine((value) => !value.endsWith('/'), 'a path of a file or of a directory does not end with /');
   const word = z
     .string()
     .regex(/^\P{Cc}{1,200}$/u, 'a word of the command is 1 to 200 characters, none a control character');

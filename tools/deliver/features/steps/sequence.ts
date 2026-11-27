@@ -216,6 +216,10 @@ Given('the receipt of the delivery gate names the destination {string}', functio
     if (verdict !== undefined) verdict.destination = hex(hash);
 });
 
+Given('the delivery commit {string} records a link at {string}', function (hash: string, path: string) {
+  scene(this).repository.others.add(`${hex(hash)} ${path}`);
+});
+
 Given(
   'the delivery file {string} holds {string} at {string}',
   function (path: string, text: string, hash: string) {

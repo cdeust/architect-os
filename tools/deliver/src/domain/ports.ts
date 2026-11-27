@@ -99,6 +99,12 @@ export interface Repository {
    * checkout holds; undefined when the commit has no regular file there.
    */
   committedFile(hash: string, path: string): Uint8Array | undefined;
+  /**
+   * The entries the commit `hash` records at `path` and under it (`path/…`, at any depth): each path, and whether it is a
+   * regular file. A directory is not an entry, its files are; a link or a nested repository is an entry that is not a
+   * regular file. Empty when the commit records nothing there.
+   */
+  committedEntries(hash: string, path: string): readonly { path: string; regular: boolean }[];
   deleteRemoteBranch(branch: string): void;
 }
 

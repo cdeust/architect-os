@@ -223,6 +223,7 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | requiredJobs   | ["a"]                                                  |
         | requiredJobs   | ["a","b","c","d","e","f","g","h"]                      |
         | appendOnly     | []                                                     |
+        | appendOnly     | ["docs/design/journal.md","packages/sandbox/specimens/evidence"] |
         | appendOnly     | ["a","b","c","d","e","f","g","h"]                      |
         | gateCommand    | ["a"]                                                  |
         | gateCommand    | ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p"] |
@@ -363,6 +364,7 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | appendOnly     | ["a/../b"]                     | $.appendOnly.0 a repository path is relative       |
         | appendOnly     | [".."]                         | $.appendOnly.0 a repository path is relative       |
         | appendOnly     | ["a\\\\b"]                     | $.appendOnly.0 a repository path is relative       |
+        | appendOnly     | ["packages/sandbox/specimens/evidence/"] | $.appendOnly.0 a path of a file or of a directory does not end with / |
         | appendOnly     | [""]                           | $.appendOnly.0                                     |
         | appendOnly     | "docs/design/journal.md"       | $.appendOnly                                       |
         | gateCommand    | []                             | $.gateCommand                                      |

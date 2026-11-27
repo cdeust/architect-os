@@ -114,6 +114,7 @@ export function gitFixture(world: DeliverWorld): GitFixture {
     commitWith,
     commit: (label, parent) => commitWith(label, parent, {}),
     commitFile: (label, parent, path, text) => commitWith(label, parent, { file: { path, text } }),
+    commitLink: (label, parent, path, target) => commitWith(label, parent, { link: { path, target } }),
     checkout: (label) => void git(work, 'checkout', '--quiet', '--detach', hashOf(label)),
     setRemote: (branch, label) =>
       void git(work, 'push', '--quiet', 'origin', `${hashOf(label)}:refs/heads/${branch}`),

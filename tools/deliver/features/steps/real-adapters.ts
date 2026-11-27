@@ -119,13 +119,6 @@ When(
 );
 
 Given(
-  'the delivery repository holds the commit {string} after {string} with a link at {string} to {string}',
-  function (label: string, parent: string, path: string, target: string) {
-    gitOf(this).commitWith(label, parent, { link: { path, target } });
-  },
-);
-
-Given(
   'the delivery repository holds the commit {string} after {string} that records {string} executable, as the text {string}',
   function (label: string, parent: string, path: string, text: string) {
     gitOf(this).commitWith(label, parent, { file: { path, text, mode: 0o755 } });
@@ -163,6 +156,7 @@ const calls: Record<string, (repository: Repository) => unknown> = {
   push: (repository) => repository.push('aaa', 'main'),
   deleteRemoteBranch: (repository) => repository.deleteRemoteBranch('main'),
   committedFile: (repository) => repository.committedFile('aaa', 'steps/a/record.json'),
+  committedEntries: (repository) => repository.committedEntries('aaa', 'steps'),
 };
 
 const callOf = (name: string): ((repository: Repository) => unknown) => {

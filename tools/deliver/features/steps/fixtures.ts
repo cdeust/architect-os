@@ -29,6 +29,8 @@ export interface RepositoryFixture {
   commit(label: string, parent: string | undefined): void;
   /** A commit that records the text at the path, besides what the commit of `commit` records. */
   commitFile(label: string, parent: string | undefined, path: string, text: string): void;
+  /** A commit that records a symbolic link at the path, to the target. */
+  commitLink(label: string, parent: string | undefined, path: string, target: string): void;
   checkout(label: string): void;
   setRemote(branch: string, label: string): void;
   touchWorktree(): void;
