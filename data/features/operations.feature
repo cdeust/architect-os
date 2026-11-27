@@ -107,6 +107,17 @@ Feature: Data operations
       | whose content is not base64              | steps.recordArtifact | {"run":"r","step":"s","kind":"build.report","bytes":"not base64!"}              |
       | of more than 1 MiB                       | steps.recordArtifact | {"run":"r","step":"s","kind":"build.report","bytes":"$beyond"}                  |
 
+  Scenario: explains why a Step artifact is refused by its contract
+    Given data operations over an in-memory store
+    And the variable "beyond" holds 1048577 bytes in base64
+    When I execute "steps.reserve" with the input '{"run":"r","step":"s"}'
+    And I execute "steps.recordArtifact" with the input '{"run":"r","step":"s","kind":"build.report","bytes":"$beyond"}' and it is refused
+    Then the failure code is "INVALID_INPUT"
+    And the failure message contains "more than 1048576 bytes"
+    When I execute "steps.recordArtifact" with the input '{"run":"r","step":"s","kind":"check","bytes":""}' and it is refused
+    Then the failure code is "INVALID_INPUT"
+    And the failure message contains "a kind of a session or a check carries a name, the others none"
+
   Scenario: keeps a Step artifact of exactly 1 MiB, and its bytes
     Given data operations over an in-memory store
     And the variable "mebibyte" holds 1048576 bytes in base64

@@ -107,6 +107,8 @@ Feature: SQL store, statement table and migrations
       | SELECT 1 FROM schema_migrations WINDOW schema_migrations AS ()                | schema_migrations      |
       | WITH RECURSIVE r AS (SELECT 1 FROM runs) SELECT 1 FROM r                      | runs                   |
       | WITH a AS (SELECT (1) FROM runs), b AS (SELECT 1 FROM tasks) SELECT 1 FROM a JOIN b ON true | runs, tasks |
+      | SELECT E'a''\\\\'', * FROM tasks WHERE x = E'b''\\\\''                        | tasks                  |
+      | WITH schema_migrations AS (SELECT 1) SELECT 1 FROM schema_migrations; SELECT 1 FROM schema_migrations | schema_migrations |
 
   Scenario Outline: refuses a statement whose sources it cannot read whole: <form>
     Then the statement "<statement>" is refused as unreadable, saying "<why>"
@@ -131,6 +133,7 @@ Feature: SQL store, statement table and migrations
       | a block comment                        | SELECT 1 /* ' */ FROM tasks /* ' */                                | a block comment                                  |
       | a dollar-quoted string                 | SELECT $$'$$, * FROM tasks WHERE x = $$'$$                         | a dollar-quoted string                           |
       | a tagged dollar-quoted string          | SELECT $tag$'$tag$ FROM tasks                                      | a dollar-quoted string                           |
+      | a non-ASCII dollar-quoted string       | SELECT $é$'$é$, * FROM tasks WHERE x = $é$'$é$                     | a dollar-quoted string                           |
       | an unclosed single quote               | SELECT 'unclosed FROM tasks                                        | an unclosed quote                                |
       | a TABLE shorthand                      | TABLE tasks                                                        | a TABLE shorthand                                |
       | a TABLE shorthand in UNION             | SELECT id FROM runs UNION ALL TABLE tasks                          | a TABLE shorthand                                |

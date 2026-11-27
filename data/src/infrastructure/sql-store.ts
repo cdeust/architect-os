@@ -169,7 +169,7 @@ const ends = (): ReadonlySet<string> =>
 function tokens(sql: string, refuse: (why: string) => never): string[] {
   const words: string[] = [];
   for (const [raw] of sql.matchAll(
-    /--[^\n]*|\/\*|\$\w*\$|\bE'(?:[^'\\]|\\.)*'|'(?:[^']|'')*'|"(?:[^"]|"")*"|['"]|[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)*|\S/gi,
+    /--[^\n]*|\/\*|\$\D|\bE'(?:[^'\\]|\\.|'')*'|'(?:[^']|'')*'|"(?:[^"]|"")*"|['"]|[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)*|\S/gi,
   )) {
     if (raw === '/*') refuse('a block comment');
     if (raw[0] === '$' && raw.length > 1) refuse('a dollar-quoted string');
@@ -198,33 +198,32 @@ export function readTables(sql: string, tables: ReadonlySet<string>, where: stri
   const words = tokens(sql, refuse);
   const stops = ends();
   const defined = new Set<string>();
-  words.forEach((word, i) => {
-    if (word !== 'with') return;
-    let at = i + 1;
-    if (words[at] === 'recursive') at += 1;
-    for (;;) {
-      const name = words[at];
-      if (!isName(name)) refuse('an unreadable WITH clause');
-      defined.add(name);
-      at += 1;
-      if (words[at] !== 'as' || words[at + 1] !== '(') refuse('an unreadable WITH clause');
-      at += 2;
-      let depth = 1;
-      while (depth > 0) {
-        const next = words[at];
-        if (next === undefined) refuse('an unclosed WITH clause');
-        if (next === '(') depth += 1;
-        else if (next === ')') depth -= 1;
-        at += 1;
-      }
-      if (words[at] !== ',') break;
-      at += 1;
-    }
-  });
-  for (const name of defined)
-    if (tables.has(name)) refuse(`a WITH clause takes the name of the table ${name}`);
   const sources: string[] = [];
   words.forEach((word, index) => {
+    if (word === ';') defined.clear();
+    if (word === 'with') {
+      let at = index + 1;
+      if (words[at] === 'recursive') at += 1;
+      for (;;) {
+        const name = words[at];
+        if (!isName(name)) refuse('an unreadable WITH clause');
+        if (tables.has(name)) refuse(`a WITH clause takes the name of the table ${name}`);
+        defined.add(name);
+        at += 1;
+        if (words[at] !== 'as' || words[at + 1] !== '(') refuse('an unreadable WITH clause');
+        at += 2;
+        let depth = 1;
+        while (depth > 0) {
+          const next = words[at];
+          if (next === undefined) refuse('an unclosed WITH clause');
+          if (next === '(') depth += 1;
+          else if (next === ')') depth -= 1;
+          at += 1;
+        }
+        if (words[at] !== ',') break;
+        at += 1;
+      }
+    }
     if (word === 'using' && words[index + 1] !== '(') refuse('a USING that brings a table');
     if (word === 'table') refuse('a TABLE shorthand');
     if (word !== 'from' && word !== 'join') return;

@@ -104,7 +104,7 @@ export const TaskRecordSchema = z.strictObject({
 export type TaskRecord = z.infer<typeof TaskRecordSchema>;
 
 /** The bytes that a canonical base64 text holds: three per four characters, its padding removed, rounded down. */
-const decodedBytes = (base64: string): number => Math.floor((base64.replace(/=+$/, '').length * 3) / 4);
+const decodedBytes = (base64: string): number => Math.floor((base64.replace(/=+/, '').length * 3) / 4);
 /** A Step of a run (orchestration §15, step A): the run is the identifier of the run that plays it. */
 const StepKeySchema = z.strictObject({ run: IdSchema, step: StepNameSchema });
 export const StepsReserveInputSchema = StepKeySchema;
