@@ -156,36 +156,41 @@ Feature: The decisions of the delivery command (pure: the trial branch, the stat
     Scenario: without a planned family, jobs named like lanes are not producers
       Then the completed gate with producers "a" and jobs "linux=success/runner, a=success/runner, macos=success/runner, lane-1:m=failure/runner/failed-step" is "green"
 
-  Rule: the plan of what to publish is the parent and the branches left, or a refusal
+  Rule: the plan of what to publish is whether the work branch is pushed, or a refusal; the destination is not read
 
-    Scenario: every branch is at the parent
-      When the publication of "h1" is planned over the remotes "feat/gate-1a=p0, main=p0"
-      Then the plan is the parent "p0" and the branches "feat/gate-1a, main"
+    Scenario Outline: <case>
+      When the publication of "h1" is planned over the work branch "<work>", the commit descending from "<ancestors>"
+      Then the plan pushes the work branch: <push>
+      And the plan asked the ancestry of "<asked>"
 
-    Scenario: the first branch is already at the hash
-      When the publication of "h1" is planned over the remotes "feat/gate-1a=h1, main=p0"
-      Then the plan is the parent "p0" and the branches "main"
+      Examples:
+        | case                                                        | work   | ancestors | push | asked |
+        | no work branch yet: it is pushed                            | absent | w1        | yes  |       |
+        | a work branch at an ancestor: it is pushed forward          | w1     | w1        | yes  | w1    |
+        | a work branch already at the hash: not pushed, still opened | h1     |           | no   |       |
 
-    Scenario: the last branch is already at the hash
-      When the publication of "h1" is planned over the remotes "feat/gate-1a=p0, main=h1"
-      Then the plan is the parent "p0" and the branches "feat/gate-1a"
+    Scenario: a work branch the commit does not descend from
+      When the publication of "h1" is planned over the work branch "w9", the commit descending from "w1"
+      Then the plan is refused as "la branche distante n'est pas un ancêtre du commit"
+      And the plan asked the ancestry of "w9"
 
-    Scenario: every branch is at the hash
-      When the publication of "h1" is planned over the remotes "feat/gate-1a=h1, main=h1"
-      Then the plan is refused as "rien à livrer"
+  Rule: an append-only file keeps, as its first bytes, every byte it had at the base
 
-    Scenario: the branches are at two different parents
-      When the publication of "h1" is planned over the remotes "feat/gate-1a=p0, main=p1"
-      Then the plan is refused as "les branches distantes diffèrent"
+    Scenario Outline: "<base>" at the base, "<commit>" at the commit: <case>
+      Then the bytes "<base>" at the base and "<commit>" at the commit are only appended: <appended>
 
-    Scenario: one branch is at the hash and the other two at two different parents
-      When the publication of "h1" is planned over the remotes "a=h1, b=p0, c=p1"
-      Then the plan is refused as "les branches distantes diffèrent"
-
-    Scenario: one branch
-      When the publication of "h1" is planned over the remotes "main=p0"
-      Then the plan is the parent "p0" and the branches "main"
-
-    Scenario: one branch, already at the hash
-      When the publication of "h1" is planned over the remotes "main=h1"
-      Then the plan is refused as "rien à livrer"
+      Examples:
+        | case                              | base       | commit          | appended |
+        | unchanged                         | a{lf}b{lf} | a{lf}b{lf}      | yes      |
+        | a line appended                   | a{lf}      | a{lf}b{lf}      | yes      |
+        | the last line completed           | a{lf}b     | a{lf}bc{lf}     | yes      |
+        | absent at the base                | none       | a{lf}           | yes      |
+        | absent at both                    | none       | none            | yes      |
+        | empty at the base                 |            | a{lf}           | yes      |
+        | a line inserted in the middle     | a{lf}c{lf} | a{lf}b{lf}c{lf} | no       |
+        | a line inserted first             | a{lf}      | b{lf}a{lf}      | no       |
+        | a line rewritten                  | a{lf}b{lf} | a{lf}c{lf}      | no       |
+        | the last byte rewritten           | a{lf}b     | a{lf}c          | no       |
+        | the trailing line break removed   | a{lf}b{lf} | a{lf}b          | no       |
+        | emptied                           | a{lf}      |                 | no       |
+        | deleted                           | a{lf}      | none            | no       |

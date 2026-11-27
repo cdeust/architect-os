@@ -53,13 +53,6 @@ export class GitRepository implements Repository {
     return this.run(['merge-base', '--is-ancestor', ancestor, descendant], 1).status === 0;
   }
 
-  deletedLines(from: string, to: string, path: string): number {
-    const { out } = this.run(['diff', '--numstat', '--ignore-submodules=all', from, to, '--', path]);
-    if (out.length === 0) return 0;
-    const deleted = out.toString().split('\t')[1];
-    return deleted === '-' ? 1 : Number(deleted);
-  }
-
   push(hash: string, branch: string): 'pushed' | 'refused' {
     const { status } = this.start([
       'push',
@@ -69,6 +62,43 @@ export class GitRepository implements Repository {
       `${hash}:refs/heads/${branch}`,
     ]);
     return status === 0 ? 'pushed' : 'refused';
+  }
+
+  committedFile(hash: string, path: string): Uint8Array | undefined {
+    const entry = this.entries(hash, (found) => found === path)[0];
+    if (entry?.regular !== true) return undefined;
+    return this.run(['cat-file', 'blob', entry.object]).out;
+  }
+
+  committedEntries(hash: string, path: string): readonly { path: string; regular: boolean }[] {
+    return this.entries(hash, (found) => found === path || found.startsWith(`${path}/`)).map((entry) => ({
+      path: entry.path,
+      regular: entry.regular,
+    }));
+  }
+
+  /**
+   * Every entry of the tree of the commit matching `matches`, `<mode> <type> <object>\t<path>\0`, compared byte for
+   * byte: a path is never given to git as a pathspec, whose magic would read it otherwise. A regular file is of mode
+   * 100644 or 100755; a link (120000) or a nested repository (160000) is not.
+   */
+  private entries(
+    hash: string,
+    matches: (path: string) => boolean,
+  ): { path: string; object: string; regular: boolean }[] {
+    return this.run(['ls-tree', '-r', '-z', '--full-tree', hash])
+      .out.toString()
+      .split('\0')
+      .filter((line) => matches(line.slice(line.indexOf('\t') + 1)))
+      .map((line) => {
+        const tab = line.indexOf('\t');
+        const [mode, , object] = line.slice(0, tab).split(' ');
+        return {
+          path: line.slice(tab + 1),
+          object: object as string,
+          regular: mode === '100644' || mode === '100755',
+        };
+      });
   }
 
   deleteRemoteBranch(branch: string): void {

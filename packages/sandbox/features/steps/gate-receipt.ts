@@ -19,7 +19,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { mock } from 'node:test';
 import { syncBuiltinESMExports } from 'node:module';
-import { publishGateReceipt, readGateReceipt } from '../../src/gate-receipt.js';
+import {
+  publishGateReceipt,
+  readGateReceipt,
+  readGateVerdict,
+  reportDestination,
+} from '../../src/gate-receipt.js';
 import { Given, Then, stored } from './helpers.js';
 
 const sha = 'd'.repeat(40),
@@ -436,4 +441,25 @@ Then('the retained Gate receipt exercises {string}', function (kind: string) {
   assert.ok(descriptor >= 0);
   assert.deepEqual(close, [descriptor]);
   assert.throws(() => rawFstat(descriptor), { code: 'EBADF' });
+});
+
+Then(
+  'a checked Gate receipt whose report names the destination {string} reads as that commit and its destination',
+  function (destination: string) {
+    const r = stored<Fixture>(this, 'receiptFixture');
+    const named =
+      report +
+      '- premier parent : ' +
+      another +
+      '\n- destination : refs/remotes/origin/main à ' +
+      destination +
+      ', 1 commit(s) jugé(s)\n';
+    write(r, sha, value, named);
+    assert.deepEqual(readGateVerdict(r.root, r.tree), { sha, destination: reportDestination(named) });
+    assert.equal(readGateReceipt(r.root, r.tree), sha);
+  },
+);
+
+Then('the destination of the Gate report {string} is {string}', function (text: string, expected: string) {
+  assert.equal(reportDestination(text.replaceAll('{lf}', '\n')), expected === 'none' ? undefined : expected);
 });

@@ -12,24 +12,46 @@ export type Reason =
   | "dépôt imbriqué dans l'arbre"
   | 'arbre non propre'
   | 'empreinte de commit invalide'
-  | 'branche distante absente'
   | "la branche distante n'est pas un ancêtre du commit"
-  | 'les branches distantes diffèrent'
-  | 'rien à livrer'
-  | 'un fichier en ajout seul a perdu des lignes'
+  | "un fichier en ajout seul a changé ailleurs qu'à sa fin"
   | "nom de branche d'essai refusé"
+  | "la destination n'accepte qu'une pull request"
+  | "enregistrement d'étape absent"
+  | "enregistrement d'étape refusé"
+  | 'le corps de la pull request dépasse la limite de la forge'
   | "push de la branche d'essai refusé"
   | 'porte rouge'
   | 'le verdict de la porte ne nomme pas ce commit'
+  | 'le verdict de la porte ne nomme pas de destination'
   | 'CI rouge'
   | 'aucun runner après le nombre de tentatives permis'
   | 'CI sans réponse'
   | 'une branche distante a bougé'
   | 'push refusé'
-  | "le ruleset n'a pas rendu pass"
-  | 'évaluation du ruleset introuvable';
+  | PullRequestRefusal;
 
-export type RuleSuite = 'pass' | 'fail' | 'bypass';
+/** Why the forge opened no pull request: a closed list (docs/design/exigences-spec.md, §4). */
+export type PullRequestRefusal =
+  | 'la forge ne voit pas la branche de travail'
+  | "la tête de la branche de travail n'est pas le commit livré"
+  | 'une pull request en brouillon est ouverte pour cette tête'
+  | 'la destination contient déjà le commit livré'
+  | 'la forge a refusé la pull request';
+
+/** What `Forge.openPullRequest` is asked: every value comes from the descriptive file, the commit or the host. */
+export interface PullRequestRequest {
+  /** The branch already pushed, which holds `hash`. */
+  head: string;
+  /** The branch the pull request asks to change: the destination of the descriptive file. */
+  base: string;
+  /** The commit the head must be at; nothing is opened otherwise. */
+  hash: string;
+  title: string;
+  body: string;
+}
+
+export type PullRequestResult =
+  { ok: true; number: number; url: string; created: boolean } | { ok: false; reason: PullRequestRefusal };
 
 export interface CiJob {
   name: string;
@@ -70,24 +92,52 @@ export interface Repository {
   /** The hash of the branch on the remote, as last fetched. */
   remoteHead(branch: string): string | undefined;
   isAncestor(ancestor: string, descendant: string): boolean;
-  /** The lines removed from that file between the two commits. */
-  deletedLines(from: string, to: string, path: string): number;
   /** Never forced: `refused` when the remote branch is not an ancestor of `hash`, and then it is left as it was. */
   push(hash: string, branch: string): 'pushed' | 'refused';
+  /**
+   * The bytes of the regular file at `path` in the tree of the commit `hash`, as that commit records it, whatever the
+   * checkout holds; undefined when the commit has no regular file there.
+   */
+  committedFile(hash: string, path: string): Uint8Array | undefined;
+  /**
+   * The entries the commit `hash` records at `path` and under it (`path/…`, at any depth): each path, and whether it is a
+   * regular file. A directory is not an entry, its files are; a link or a nested repository is an entry that is not a
+   * regular file. Empty when the commit records nothing there.
+   */
+  committedEntries(hash: string, path: string): readonly { path: string; regular: boolean }[];
   deleteRemoteBranch(branch: string): void;
 }
 
 export interface Forge {
-  /** 'all' reads the effective jobs of every numbered attempt when a family has no fixed membership. */
-  run(hash: string, workflow: string, jobNames?: readonly string[] | 'all'): CiRun | undefined;
+  /**
+   * The run of `workflow` started by the push of `hash` to `branch`: no run of another event or of another branch, even
+   * at the same commit. 'all' reads the effective jobs of every numbered attempt when a family has no fixed membership.
+   */
+  run(
+    hash: string,
+    workflow: string,
+    branch: string,
+    jobNames?: readonly string[] | 'all',
+  ): CiRun | undefined;
   rerunFailed(id: number): void;
-  /** The evaluation of the push that brought `hash` to `branch`; undefined while there is none (or nobody pushed). */
-  ruleSuite(branch: string, hash: string): RuleSuite | undefined;
+  /**
+   * Opens a pull request from `head` to `base`, never as a draft, and never merges it. The open pull request of the same
+   * head and base is given back, not doubled (`created` false). Nothing is opened when the forge does not see `head`
+   * at `hash`.
+   */
+  openPullRequest(request: PullRequestRequest): PullRequestResult;
+}
+
+/** What the receipt of a green gate says: the commit it judged, and the destination commit it judged it against. */
+export interface GateVerdict {
+  hash: string;
+  /** The commit of the destination the gate recorded (`- destination : <ref> à <commit>`); undefined when none. */
+  destination: string | undefined;
 }
 
 export interface Gate {
-  /** The hash the verdict file of the gate names; the file exists only when the gate was green. */
-  verdictHash(): string | undefined;
+  /** The verdict of the receipt of the gate; it exists only when the gate was green. */
+  verdict(): GateVerdict | undefined;
   /** The exit code of the gate. */
   run(): Promise<number>;
 }
@@ -101,15 +151,16 @@ export interface DeliveryEntry {
   outcome: 'delivered' | 'ready' | 'stopped';
   hash: string;
   trial: string;
-  parent: string;
   phase?: Phase;
   reason?: Reason;
   ci: { run?: number; attempts: number; polls: number };
   gate: 'reused' | 'ran' | undefined;
   /** The branches pushed by this run, in order. */
   published: string[];
-  /** The evaluation read for each branch of the file, pushed by this run or already at the hash. */
-  ruleSuites: Map<string, RuleSuite>;
+  /** The destination commit the gate judged this commit against: the base of the append-only files. */
+  base?: string;
+  /** The pull request the run opened or found, and the SHA-256 of the body it was asked with. */
+  pullRequest?: { number: number; url: string; created: boolean; body: string };
 }
 
 export interface DeliveryLog {

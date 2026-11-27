@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CiJob, CiRun, RuleSuite } from '../../src/domain/ports.js';
+import type { CiJob, CiRun } from '../../src/domain/ports.js';
 import { GhForge } from '../../src/infrastructure/gh-forge.js';
-import { hostOf, temporaryDirectory, type ForgeFixture } from './fixtures.js';
+import { DESTINATION, TRIAL, hostOf, temporaryDirectory, type ForgeFixture } from './fixtures.js';
 import { REPOSITORY, type DeliverWorld } from './support.js';
 
 const FAKE_GH = `${REPOSITORY}tools/deliver/fixtures/fake-gh.mjs`;
@@ -11,6 +11,7 @@ export const REPO = 'cdeust/architect-os';
 /** What the scripted client answers to one call (see `fixtures/fake-gh.mjs`). */
 interface Answer {
   exit?: number;
+  signal?: boolean;
   stdout?: string;
   then?: Record<string, Answer>;
 }
@@ -21,12 +22,19 @@ export interface GhForgeFixture extends ForgeFixture {
   /** The program and the argv prefix the adapter is started with. */
   program: string;
   prefix: string[];
-  /** The answer to the call named by `kind` (`runs` of a commit, `jobs` or `rerun` of a run, `suites` of a branch). */
+  /**
+   * The answer to the call named by `kind` (`runs` of a commit, `jobs` or `rerun` of a run, `refs` of a branch, `pulls`
+   * of a head to the destination, `open` for every new pull request).
+   */
   answers(kind: string, subject: string, answer: Answer): void;
   /** The arguments the client received, one line per call, in order. */
   asked(): string[];
   /** The names of the environment the client received, sorted and joined by a space, one line per call, in order. */
   environments(): string[];
+  /** The calls that asked for a new pull request, as `asked` gives them. */
+  created(): string[];
+  /** The arguments of the first call that asked for a new pull request, one per line, as the client received them. */
+  createdArguments(): string[];
 }
 
 const keys: Record<string, (subject: string) => string> = {
@@ -38,8 +46,10 @@ const keys: Record<string, (subject: string) => string> = {
     return `--paginate --slurp repos/${REPO}/actions/runs/${run}/attempts/${attempt}/jobs?per_page=100`;
   },
   rerun: (id) => `--method POST repos/${REPO}/actions/runs/${id}/rerun-failed-jobs`,
-  suites: (branch) =>
-    `repos/${REPO}/rulesets/rule-suites?ref=${encodeURIComponent(`refs/heads/${branch}`)}&per_page=100`,
+  refs: (branch) => `repos/${REPO}/git/matching-refs/heads/${branch}`,
+  pulls: (head) =>
+    `repos/${REPO}/pulls?head=${encodeURIComponent(`${REPO.split('/')[0]}:${head}`)}&base=${DESTINATION}&state=open&per_page=100`,
+  open: () => `--method POST repos/${REPO}/pulls`,
 };
 
 export function keyOf(kind: string, subject: string): string {
@@ -49,7 +59,19 @@ export function keyOf(kind: string, subject: string): string {
 }
 
 const runsText = (workflow: string, hash: string, id: number, status: string): string =>
-  JSON.stringify({ workflow_runs: [{ id, name: workflow, head_sha: hash, status }] });
+  JSON.stringify({
+    workflow_runs: [{ id, name: workflow, head_sha: hash, event: 'push', head_branch: TRIAL, status }],
+  });
+
+/** A pull request as the forge gives it. */
+export const pullText = (number: number, head: string, sha: string, draft = false) => ({
+  number,
+  html_url: `https://github.com/${REPO}/pull/${number}`,
+  state: 'open',
+  draft,
+  head: { ref: head, sha, repo: { full_name: REPO } },
+  base: { ref: DESTINATION },
+});
 
 const jobText = (job: CiJob) => ({
   name: job.name,
@@ -68,13 +90,24 @@ export function ghForge(world: DeliverWorld, workflow = 'gate'): GhForgeFixture 
   const file = join(temporaryDirectory(world), 'answers.json');
   const planned: Record<string, Answer> = {
     [`repos/${REPO}/actions/runs`]: { stdout: JSON.stringify({ workflow_runs: [] }) },
-    [`repos/${REPO}/rulesets/rule-suites`]: { stdout: '[]' },
   };
   const write = (): void => writeFileSync(file, JSON.stringify(planned));
   write();
   const prefix = [FAKE_GH, file];
   const asked = (): string[] =>
-    existsSync(`${file}.argv`) ? readFileSync(`${file}.argv`, 'utf8').split('\n').slice(0, -1) : [];
+    existsSync(`${file}.argv`)
+      ? readFileSync(`${file}.argv`, 'utf8')
+          .split('\n')
+          .slice(0, -1)
+          .map((line) => (JSON.parse(line) as string[]).join(' '))
+      : [];
+  /** The open pull requests, by head: what the list answers, and what the next creation adds to. */
+  const pulls = new Map<string, ReturnType<typeof pullText>[]>();
+  const listPulls = (head: string): void => {
+    const open = pulls.get(head) ?? [];
+    pulls.set(head, open);
+    answers('pulls', head, { stdout: JSON.stringify(open) });
+  };
   const environments = (): string[] =>
     existsSync(`${file}.env`) ? readFileSync(`${file}.env`, 'utf8').split('\n').slice(0, -1) : [];
   const answers: GhForgeFixture['answers'] = (kind, subject, answer) => {
@@ -121,7 +154,15 @@ export function ghForge(world: DeliverWorld, workflow = 'gate'): GhForgeFixture 
       answers('runs', hash, {
         stdout: JSON.stringify({
           workflow_runs: [
-            { id, name: workflow, head_sha: hash, status: 'completed', run_attempt: attempts.length },
+            {
+              id,
+              name: workflow,
+              head_sha: hash,
+              event: 'push',
+              head_branch: TRIAL,
+              status: 'completed',
+              run_attempt: attempts.length,
+            },
           ],
         }),
       });
@@ -137,8 +178,56 @@ export function ghForge(world: DeliverWorld, workflow = 'gate'): GhForgeFixture 
         });
       });
     },
-    evaluated(branch: string, hash: string, suite: RuleSuite) {
-      answers('suites', branch, { stdout: JSON.stringify([{ after_sha: hash, result: suite }]) });
+    hasBranch(branch: string, hash: string) {
+      answers('refs', branch, {
+        stdout: JSON.stringify([{ ref: `refs/heads/${branch}`, object: { sha: hash } }]),
+      });
+      listPulls(branch);
+      // A creation answers the next number, and lists it from then on.
+      const created = pullText([...pulls.values()].flat().length + 1, branch, hash);
+      answers('open', '', {
+        stdout: JSON.stringify(created),
+        then: {
+          [keyOf('pulls', branch)]: { stdout: JSON.stringify([...(pulls.get(branch) ?? []), created]) },
+        },
+      });
+    },
+    lacksBranch(branch: string) {
+      // A prefix that names other references only.
+      answers('refs', branch, {
+        stdout: JSON.stringify([{ ref: `refs/heads/${branch}-other`, object: { sha: '0'.repeat(40) } }]),
+      });
+    },
+    hasDraft(head: string, hash: string) {
+      this.hasBranch(head, hash);
+      const number = [...pulls.values()].flat().length + 1;
+      pulls.set(head, [...(pulls.get(head) ?? []), pullText(number, head, hash, true)]);
+      listPulls(head);
+    },
+    refusesPullRequests() {
+      answers('open', '', { exit: 1, stdout: 'MARKER-9c2e' });
+    },
+    answersMerged() {
+      // What GitHub answers (422) when the base holds every commit of the head.
+      answers('open', '', {
+        exit: 1,
+        stdout: JSON.stringify({
+          message: 'Validation Failed',
+          errors: [
+            { resource: 'PullRequest', code: 'custom', message: 'No commits between main and deliver/step' },
+          ],
+        }),
+      });
+    },
+    created: () => asked().filter((line) => line.startsWith(`api ${keyOf('open', '')}`)),
+    createdArguments: () => {
+      const calls = existsSync(`${file}.argv`)
+        ? readFileSync(`${file}.argv`, 'utf8')
+            .split('\n')
+            .slice(0, -1)
+            .map((line) => JSON.parse(line) as string[])
+        : [];
+      return calls.find((argv) => argv.slice(1, 4).join(' ') === keyOf('open', '')) ?? [];
     },
     reruns: () =>
       asked()

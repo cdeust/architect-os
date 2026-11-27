@@ -416,12 +416,12 @@
   <text x="1312" y="2871" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
   <text x="868" y="2900" data-type-role="brick-text" font-size="17" fill="#57606a">Replay the full loop three times on two subjects.</text>
 </g>
-<g role="group" aria-label="Run selection for Deliver · next">
-  <rect x="854" y="2933" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+<g role="group" aria-label="Run selection for Deliver · ready">
+  <rect x="854" y="2933" width="505" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
   <text x="868" y="2961" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Run selection for Deliver</text>
-  <rect x="1277" y="2941" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2960" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2989" data-type-role="brick-text" font-size="17" fill="#57606a">Bind the run Deliver reads to its workflow, the push</text>
+  <rect x="1277" y="2941" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1312" y="2960" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="868" y="2989" data-type-role="brick-text" font-size="17" fill="#57606a">The run Deliver reads is bound to its workflow, the push</text>
   <text x="868" y="3013" data-type-role="brick-text" font-size="17" fill="#57606a">event, the trial branch and the SHA together.</text>
 </g>
 <g role="group" aria-label="Suite duration · next">
@@ -441,8 +441,8 @@
   <rect x="50" y="3256" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
   <text x="85" y="3275" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
   <text x="283" y="3197" data-type-role="brick-text" font-size="17" fill="#57606a">The host commits the accepted work and its archive.</text>
-  <text x="283" y="3221" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver was written to push the same commit to the</text>
-  <text x="283" y="3245" data-type-role="brick-text" font-size="17" fill="#57606a">work branch, then main. main takes pull requests only.</text>
+  <text x="283" y="3221" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver pushes the commit to its work branch and opens</text>
+  <text x="283" y="3245" data-type-role="brick-text" font-size="17" fill="#57606a">a pull request to main, which it never pushes.</text>
 <g role="group" aria-label="Same-commit CI · ready">
   <rect x="269" y="3263" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
   <text x="283" y="3291" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Same-commit CI</text>
@@ -456,8 +456,8 @@
   <text x="283" y="3389" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Target pull request</text>
   <rect x="757" y="3369" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
   <text x="792" y="3388" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="283" y="3417" data-type-role="brick-text" font-size="17" fill="#57606a">Open a pull request on the target repository,</text>
-  <text x="283" y="3441" data-type-role="brick-text" font-size="17" fill="#57606a">its body rendered from record.json.</text>
+  <text x="283" y="3417" data-type-role="brick-text" font-size="17" fill="#57606a">Built for this repository. Left: a policy per target held</text>
+  <text x="283" y="3441" data-type-role="brick-text" font-size="17" fill="#57606a">by the launcher, and the approval bound to the commit.</text>
 </g>
 <g role="group" aria-label="Delivery gate · next">
   <rect x="854" y="3174" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
@@ -708,10 +708,10 @@
   <rect x="994" y="4758.5" width="382" height="158" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
   <text x="1006" y="4788.5" data-type-role="brick-name" font-size="20" font-weight="600" fill="#1f2328">Commit and delivery</text>
   <text x="1006" y="4814.5" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver checks the saved Linux receipt and CI</text>
-  <text x="1006" y="4836.5" data-type-role="brick-text" font-size="17" fill="#57606a">for the same commit, then was to push each</text>
-  <text x="1006" y="4858.5" data-type-role="brick-text" font-size="17" fill="#57606a">branch. main takes pull requests only</text>
-  <rect x="1302" y="4746.5" width="64" height="24" rx="12" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1334" y="4764.5" data-type-role="badge" font-size="17" font-weight="600" fill="#0969da" text-anchor="middle">next</text>
+  <text x="1006" y="4836.5" data-type-role="brick-text" font-size="17" fill="#57606a">for the same commit, pushes its work branch,</text>
+  <text x="1006" y="4858.5" data-type-role="brick-text" font-size="17" fill="#57606a">and opens a pull request to main.</text>
+  <rect x="1302" y="4746.5" width="64" height="24" rx="12" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1334" y="4764.5" data-type-role="badge" font-size="17" font-weight="600" fill="#1a7f37" text-anchor="middle">ready</text>
   <polyline points="964,4815.5 992,4815.5" fill="none" stroke="#57606a" stroke-width="1.5" marker-end="url(#a)"/>
   <g role="group" aria-label="The Claude workflows of CI · ready, with the subscription token · next">
   <rect x="24" y="4934.5" width="1352" height="180" rx="6" fill="#f6f8fa" stroke="#8c959f"/>

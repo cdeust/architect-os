@@ -4,7 +4,7 @@ import { ProcessGate } from '../../src/infrastructure/process-gate.js';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { commitDistinctIgnorePaths } from '../../../../packages/sandbox/features/git-fixture.js';
-import type { DeliveryEntry, Repository, RuleSuite } from '../../src/domain/ports.js';
+import type { DeliveryEntry, Repository } from '../../src/domain/ports.js';
 import { GitRepository } from '../../src/infrastructure/git-repository.js';
 import { hostOf, temporaryDirectory } from './fixtures.js';
 import type { GitFixture } from './git-fixture.js';
@@ -58,7 +58,7 @@ Then('a legacy checkout verdict cannot satisfy the delivery Gate', function () {
     mkdirSync(join(parent, 'reports'), { mode: 0o700 });
     writeFileSync(join(parent, 'reports/gate-base.json'), JSON.stringify({ sha: '1'.repeat(40) }));
   }
-  assert.equal(gate.verdictHash(), undefined);
+  assert.equal(gate.verdict(), undefined);
 });
 
 // Repository over git
@@ -67,13 +67,6 @@ Given('the delivery repository holds an empty root commit', function () {
   const { git, work } = gitOf(this);
   git(work, 'commit', '--quiet', '--allow-empty', '--message', 'empty tree');
 });
-
-Given(
-  'the delivery repository holds the commit {string} after {string} with the file {string} of {int} lines',
-  function (label: string, parent: string, path: string, count: number) {
-    gitOf(this).commitWith(label, parent, { lines: { path, count } });
-  },
-);
 
 Given(
   'the delivery repository holds the commit {string} after {string} with the binary file {string}',
@@ -112,12 +105,6 @@ Given(
   },
 );
 
-Given('the git configuration of the host marks {string} as binary', function (pattern: string) {
-  const directory = join(gitOf(this).hostConfiguration, 'git');
-  mkdirSync(directory, { recursive: true });
-  writeFileSync(join(directory, 'attributes'), `${pattern} binary\n`);
-});
-
 Given('everything in the delivery worktree is committed', function () {
   gitOf(this).commitEverything();
 });
@@ -130,6 +117,25 @@ When(
     else git(work, 'fetch', '--quiet', '--prune', 'origin');
   },
 );
+
+Given(
+  'the delivery repository holds the commit {string} after {string} that records {string} executable, as the text {string}',
+  function (label: string, parent: string, path: string, text: string) {
+    gitOf(this).commitWith(label, parent, { file: { path, text, mode: 0o755 } });
+  },
+);
+
+Then(
+  'the delivery commit {string} records at {string} the bytes its checkout holds',
+  function (label: string, path: string) {
+    const { repository, hashOf, work } = gitOf(this);
+    assert.deepEqual(repository.committedFile(hashOf(label), path), readFileSync(join(work, path)));
+  },
+);
+
+When('the delivery worktree file {string} now holds {string}', function (path: string, text: string) {
+  writeFileSync(join(gitOf(this).work, path), text);
+});
 
 Then('the witness program of the nested delivery repository has not run', function () {
   assert.equal(gitOf(this).witnessRan(), false);
@@ -147,9 +153,10 @@ const calls: Record<string, (repository: Repository) => unknown> = {
   fetch: (repository) => repository.fetch(),
   remoteHead: (repository) => repository.remoteHead('main'),
   isAncestor: (repository) => repository.isAncestor('aaa', 'bbb'),
-  deletedLines: (repository) => repository.deletedLines('aaa', 'bbb', 'docs/a.md'),
   push: (repository) => repository.push('aaa', 'main'),
   deleteRemoteBranch: (repository) => repository.deleteRemoteBranch('main'),
+  committedFile: (repository) => repository.committedFile('aaa', 'steps/a/record.json'),
+  committedEntries: (repository) => repository.committedEntries('aaa', 'steps'),
 };
 
 const callOf = (name: string): ((repository: Repository) => unknown) => {
@@ -275,23 +282,15 @@ Given('the delivery log file already holds the line {string}', function (line: s
   logOf(this).prepare(`${line}\n`);
 });
 
-When('I append to the delivery log an entry with the rule suites {string}', function (suites: string) {
+When('I append to the delivery log an entry with the pull request {string}', function (pull: string) {
   const entry: DeliveryEntry = {
-    outcome: 'ready',
+    outcome: 'delivered',
     hash: '0'.repeat(40),
     trial: 'sentinel/gate-1a-x',
-    parent: '1'.repeat(40),
     ci: { attempts: 1, polls: 1 },
     gate: undefined,
     published: [],
-    ruleSuites: new Map(
-      suites === 'none'
-        ? []
-        : suites.split(',').map((pair) => {
-            const [branch, suite] = pair.split('=');
-            return [branch as string, suite as RuleSuite] as const;
-          }),
-    ),
+    ...(pull === 'none' ? {} : { pullRequest: JSON.parse(pull) as DeliveryEntry['pullRequest'] }),
   };
   logOf(this).log.append(entry);
 });

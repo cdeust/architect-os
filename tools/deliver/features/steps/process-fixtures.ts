@@ -1,7 +1,7 @@
 import { gateRuntime } from './gate-runtime.js';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { DeliveryEntry, RuleSuite } from '../../src/domain/ports.js';
+import type { DeliveryEntry } from '../../src/domain/ports.js';
 import { FileLog } from '../../src/infrastructure/file-log.js';
 import { ProcessGate } from '../../src/infrastructure/process-gate.js';
 import { TimerClock } from '../../src/infrastructure/timer-clock.js';
@@ -23,7 +23,12 @@ export interface ProcessGateFixture extends GateFixture {
   /** The delivery worktree. */
   worktree: string;
   /** The gate leaves this text as its verdict file (`undefined`: none), writes on both outputs when `noisy`. */
-  leaves(text: string | undefined, code: number, mode: 'quiet' | 'noisy' | 'signal' | 'publish'): void;
+  leaves(
+    text: string | undefined,
+    code: number,
+    mode: 'quiet' | 'noisy' | 'signal' | 'publish',
+    destination?: string,
+  ): void;
   /** The gate command is this argv instead of the script. */
   commandIs(argv: string[]): void;
   runtime: ReturnType<typeof gateRuntime>;
@@ -42,11 +47,18 @@ export function processGate(world: DeliverWorld): ProcessGateFixture {
     get gate() {
       return new ProcessGate(worktree, command, GATE_LOG, runtime.env);
     },
-    willLeave(verdict, code) {
-      fixture.leaves(verdict, code, 'publish');
+    willLeave(verdict, code, destination) {
+      fixture.leaves(verdict, code, 'publish', destination);
     },
-    leaves(text, code, mode) {
-      command = [process.execPath, FAKE_GATE, mode, text ?? 'none', String(code)];
+    leaves(text, code, mode, destination) {
+      command = [
+        process.execPath,
+        FAKE_GATE,
+        mode,
+        text ?? 'none',
+        String(code),
+        ...(destination ? [destination] : []),
+      ];
     },
     commandIs(argv) {
       command = argv;
@@ -102,12 +114,7 @@ export function fileLog(world: DeliverWorld): FileLogFixture {
   mkdirSync(join(home, 'state'), { mode: 0o700 });
   const path = join(home, 'state/deliveries.jsonl');
   const text = (): string => readFileSync(path, 'utf8');
-  const parse = (line: string): DeliveryEntry => {
-    const read = JSON.parse(line) as Omit<DeliveryEntry, 'ruleSuites'> & {
-      ruleSuites: Record<string, RuleSuite>;
-    };
-    return { ...read, ruleSuites: new Map(Object.entries(read.ruleSuites)) };
-  };
+  const parse = (line: string): DeliveryEntry => JSON.parse(line) as DeliveryEntry;
   return {
     log: new FileLog('${state}/deliveries.jsonl', home),
     directory: dirname(path),

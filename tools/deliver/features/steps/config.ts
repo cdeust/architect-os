@@ -20,7 +20,9 @@ const base = (): Record<string, unknown> => ({
   description: 'La commande de livraison.',
   remote: 'origin',
   repository: 'cdeust/architect-os',
-  branches: ['feat/gate-1a', 'main'],
+  destination: 'main',
+  workPrefix: 'deliver/',
+  pullRequestTitle: 'Deliver the step ${name}',
   trialPrefix: 'sentinel/gate-1a-',
   workflow: 'gate',
   requiredJobs: ['gate-linux', 'gate-macos'],
@@ -32,7 +34,7 @@ const base = (): Record<string, unknown> => ({
   ciAttempts: 6,
   pollSeconds: 30,
   ciPolls: 90,
-  ruleSuitePolls: 10,
+  pullRequestPolls: 6,
 });
 
 Given('a deliver config of the base form', function () {
@@ -159,13 +161,15 @@ Then('the deliver config is refused with the reason {string}', function (reason:
 });
 
 Then(
-  'the accepted deliver config holds the branches {string} and the required jobs {string}',
-  function (branches: string, jobs: string) {
+  'the accepted deliver config asks for a pull request to {string} from a branch under {string}, titled {string}, and requires the jobs {string}',
+  function (destination: string, prefix: string, title: string, jobs: string) {
     const result = parsed(this);
     assert.ok(result.ok);
     const config: DeliverConfig = result.config;
-    assert.deepEqual(config.branches, branches.split(', '));
-    assert.deepEqual(config.requiredJobs, jobs.split(', '));
+    assert.deepEqual(
+      [config.destination, config.workPrefix, config.pullRequestTitle, config.requiredJobs],
+      [destination, prefix, title, jobs.split(', ')],
+    );
   },
 );
 

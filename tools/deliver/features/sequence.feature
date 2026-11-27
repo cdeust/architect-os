@@ -1,10 +1,11 @@
 Feature: The delivery command over in-memory ports (the six phases, each reason, the acts in order)
-  The doubles record every call. The trial branch is "sentinel/gate-1a-step", the commit "h1", both branches at "p0".
+  The doubles record every call. The commit "h1" is ahead of "main" at "p0", and records the record of the step "step".
+  The trial branch is "sentinel/gate-1a-step", the work branch "deliver/step"; the remote has no work branch yet.
 
   Background:
-    Given a delivery over the in-memory ports, the commit "h1" ahead of both branches at "p0"
+    Given a delivery over the in-memory ports, the commit "h1" ahead of the destination at "p0"
 
-  Rule: a delivery goes through the six phases for the one commit
+  Rule: a delivery goes through the six phases for the one commit, and ends with a pull request to the destination
 
     Scenario: the whole delivery, with a gate that runs
       When I deliver "step" until "end"
@@ -14,8 +15,8 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         push h1 sentinel/gate-1a-step
         gate
         fetch
-        push h1 feat/gate-1a
-        push h1 main
+        push h1 deliver/step
+        pullRequest deliver/step main h1
         delete sentinel/gate-1a-step
         log delivered
         """
@@ -28,39 +29,99 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         publication
         rangement
         """
-      And the delivery calls named "isClean, head, remoteHead, isAncestor, deletedLines" are:
+      And the delivery calls named "isClean, head, remoteHead, isAncestor, committedFile, committedEntries, verdict, gate" are:
         """
         isClean
         head
-        remoteHead feat/gate-1a
-        remoteHead main
-        isAncestor p0 h1
-        isAncestor p0 h1
-        deletedLines p0 h1 docs/design/journal.md
-        remoteHead feat/gate-1a
-        remoteHead main
+        remoteHead deliver/step
+        committedFile h1 steps/step/record.json
+        verdict
+        gate
+        verdict
+        committedEntries h1 docs/design/journal.md
+        committedEntries p0 docs/design/journal.md
+        remoteHead deliver/step
         """
       And the delivery calls named "verdict, gate, ci" are:
         """
         verdict
         gate
         verdict
-        ci h1 gate
-        """
-      And the delivery calls named "push, ruleSuite" are:
-        """
-        push h1 sentinel/gate-1a-step
-        push h1 feat/gate-1a
-        ruleSuite feat/gate-1a h1
-        push h1 main
-        ruleSuite main h1
+        ci h1 gate sentinel/gate-1a-step
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
         """
       And the delivery log holds exactly the result
       And the delivery clock slept 0 seconds
+      And the delivery forge holds 1 pull request, none a draft
+      And the delivery pull request was asked from "deliver/step" to "main" with the title "Deliver the step step" and the body of the record
+
+    Scenario: the destination is never pushed, whatever the run does
+      When I deliver "step" until "end"
+      And I deliver "step" until "end"
+      Then the delivery calls named "push" are:
+        """
+        push h1 sentinel/gate-1a-step
+        push h1 deliver/step
+        push h1 sentinel/gate-1a-step
+        """
+
+    Scenario: the same delivery again: the work branch is not pushed again, and the pull request is found, not doubled
+      When I deliver "step" until "end"
+      And I deliver "step" until "end"
+      Then the delivery acts are:
+        """
+        fetch
+        push h1 sentinel/gate-1a-step
+        gate
+        fetch
+        push h1 deliver/step
+        pullRequest deliver/step main h1
+        delete sentinel/gate-1a-step
+        log delivered
+        fetch
+        push h1 sentinel/gate-1a-step
+        fetch
+        pullRequest deliver/step main h1
+        delete sentinel/gate-1a-step
+        log delivered
+        """
+      And the delivery result is:
+        """
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":[],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":false,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
+        """
+      And the delivery forge holds 1 pull request, none a draft
+
+    Scenario: a run stopped after the push of the work branch opens the pull request when it is started again
+      Given the forge of the delivery sequence refuses every new pull request
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "publication" because "la forge a refusé la pull request"
+      And the delivery forge holds 0 pull requests, none a draft
+      Given the forge of the delivery sequence opens pull requests again
+      When I deliver "step" until "end"
+      Then the delivery result is:
+        """
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":[],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
+        """
+      And the delivery forge holds 1 pull request, none a draft
+
+    Scenario: a later commit of the same work branch: the work branch is pushed forward, and its pull request found
+      When I deliver "step" until "end"
+      Given the delivery commit "h2" follows "h1", records the record of the step, and is the one to deliver
+      When I deliver "step" until "end"
+      Then the delivery calls named "push, pullRequest" are:
+        """
+        push h1 sentinel/gate-1a-step
+        push h1 deliver/step
+        pullRequest deliver/step main h1
+        push h2 sentinel/gate-1a-step
+        push h2 deliver/step
+        pullRequest deliver/step main h2
+        """
+      And the delivery outcome is "delivered"
+      And the delivery forge holds 1 pull request, none a draft
 
     Scenario: a verdict that already names the commit: the gate is not run again
       Given the delivery gate verdict already names "h1"
@@ -70,19 +131,10 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         fetch
         push h1 sentinel/gate-1a-step
         fetch
-        push h1 feat/gate-1a
-        push h1 main
+        push h1 deliver/step
+        pullRequest deliver/step main h1
         delete sentinel/gate-1a-step
         log delivered
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        rangement
         """
       And the delivery calls named "verdict, gate" are:
         """
@@ -90,7 +142,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
         """
       And the delivery log holds exactly the result
 
@@ -105,7 +157,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery outcome is "delivered"
 
-    Scenario: until the CI: no push to a branch, the trial branch kept
+    Scenario: until the CI: no push of the work branch, no pull request, the trial branch kept
       When I deliver "step" until "ci"
       Then the delivery acts are:
         """
@@ -123,81 +175,22 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"ready","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"base":"p0"}
         """
       And the delivery log holds exactly the result
+      And the delivery forge holds 0 pull requests, none a draft
 
     Scenario: until the CI, a CI that is red still stops the run
       Given the delivery CI answers "failed"
       When I deliver "step" until "ci"
       Then the delivery stopped at the phase "CI" because "CI rouge"
 
-    Scenario: a delivery resumed when the first branch is already at the hash: only the second is pushed, the first is still read
-      Given the delivery remote branch "feat/gate-1a" is at "h1"
-      When I deliver "step" until "end"
-      Then the delivery acts are:
-        """
-        fetch
-        push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        push h1 main
-        delete sentinel/gate-1a-step
-        log delivered
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        rangement
-        """
-      And the delivery calls named "ruleSuite" are:
-        """
-        ruleSuite feat/gate-1a h1
-        ruleSuite main h1
-        """
-      And the delivery calls named "isAncestor, deletedLines" are:
-        """
-        isAncestor p0 h1
-        deletedLines p0 h1 docs/design/journal.md
-        """
-      And the delivery result is:
-        """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
-        """
-      And the delivery log holds exactly the result
-
-    Scenario: a delivery of a single branch
-      Given the delivery branches are "main"
-      When I deliver "step" until "end"
-      Then the delivery acts are:
-        """
-        fetch
-        push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        push h1 main
-        delete sentinel/gate-1a-step
-        log delivered
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        rangement
-        """
-
     Scenario: no append-only file to watch
       Given the delivery append-only files are ""
       When I deliver "step" until "end"
-      Then the delivery calls named "deletedLines" are:
+      Then the delivery calls named "committedFile" are:
         """
+        committedFile h1 steps/step/record.json
         """
       And the delivery outcome is "delivered"
 
@@ -239,137 +232,74 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery log holds no entry
 
-    Scenario: a branch that is absent from the remote
+    Scenario: the destination is neither read nor compared with the commit
       Given the delivery remote branch "main" is absent
       When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "branche distante absente"
-      And the delivery acts are:
+      Then the delivery outcome is "delivered"
+      And the delivery calls named "remoteHead, isAncestor" are:
         """
-        fetch
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        """
-      And the delivery calls named "isAncestor, deletedLines" are:
-        """
-        """
-      And the delivery log holds no entry
-
-    Scenario: an absent branch is told before a branch that is not an ancestor
-      Given the delivery remote branch "main" is absent
-      And the delivery remote branch "feat/gate-1a" is at "x9"
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "branche distante absente"
-      And the delivery calls named "isAncestor" are:
-        """
+        remoteHead deliver/step
+        remoteHead deliver/step
         """
 
-    Scenario: a remote branch that is not an ancestor of the commit
-      Given the delivery remote branch "feat/gate-1a" is at "x9"
+    Scenario: a work branch that is not an ancestor of the commit
+      Given the delivery remote branch "deliver/step" is at "x9"
       When I deliver "step" until "end"
       Then the delivery stopped at the phase "préalables" because "la branche distante n'est pas un ancêtre du commit"
       And the delivery acts are:
         """
         fetch
         """
-      And the delivery phases reported are:
+      And the delivery calls named "isAncestor, committedFile" are:
         """
-        préalables
+        isAncestor x9 h1
         """
       And the delivery log holds no entry
 
-    Scenario: the second branch is not an ancestor of the commit
-      Given the delivery remote branch "main" is at "p2"
+    Scenario: a work branch at an ancestor of the commit is pushed forward
+      Given the delivery remote branch "deliver/step" is at "p0"
       When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "la branche distante n'est pas un ancêtre du commit"
-      And the delivery calls named "isAncestor" are:
+      Then the delivery calls named "isAncestor, push" are:
         """
         isAncestor p0 h1
-        isAncestor p2 h1
+        push h1 sentinel/gate-1a-step
+        push h1 deliver/step
         """
+      And the delivery outcome is "delivered"
 
-    Scenario: two branches at two different parents
-      Given the delivery remote branch "main" is at "p1"
-      And the delivery history holds "p1" as an ancestor of "h1"
+    Scenario: a commit that records no record of the step
+      Given the delivery commit records no record of the step
       When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "les branches distantes diffèrent"
+      Then the delivery stopped at the phase "préalables" because "enregistrement d'étape absent"
       And the delivery acts are:
         """
         fetch
         """
-      And the delivery phases reported are:
-        """
-        préalables
-        """
-      And the delivery calls named "deletedLines" are:
-        """
-        """
       And the delivery log holds no entry
 
-    Scenario: every branch already at the commit: nothing to deliver
-      Given the delivery remote branch "feat/gate-1a" is at "h1"
-      And the delivery remote branch "main" is at "h1"
+    Scenario Outline: a record of the step that is refused: <case>
+      Given the delivery commit records as the record of the step <record>
       When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "rien à livrer"
+      Then the delivery stopped at the phase "préalables" because "enregistrement d'étape refusé"
       And the delivery acts are:
         """
         fetch
         """
-      And the delivery phases reported are:
-        """
-        préalables
-        """
-      And the delivery calls named "isAncestor, deletedLines, ruleSuite" are:
-        """
-        """
       And the delivery log holds no entry
 
-    Scenario: an append-only file that lost one line
-      Given the delivery file "docs/design/journal.md" lost 1 lines
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "un fichier en ajout seul a perdu des lignes"
-      And the delivery acts are:
-        """
-        fetch
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        """
-      And the delivery calls named "deletedLines" are:
-        """
-        deletedLines p0 h1 docs/design/journal.md
-        """
-      And the delivery log holds no entry
+      Examples:
+        | case                        | record                                         |
+        | not JSON                    | the text "not JSON"                            |
+        | not UTF-8                   | the text "{bytes}"                             |
+        | valid but for a byte        | one that its schema accepts but for a byte that is not UTF-8 |
+        | JSON its schema refuses     | the text "{\"step\":\"step\"}"                 |
+        | the record of another step  | the record of the step "other"                 |
 
-    Scenario: the first append-only file lost lines: the second is not read
-      Given the delivery append-only files are "a.md, b.md"
-      And the delivery file "a.md" lost 2 lines
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "un fichier en ajout seul a perdu des lignes"
-      And the delivery calls named "deletedLines" are:
-        """
-        deletedLines p0 h1 a.md
-        """
-
-    Scenario: the second append-only file lost lines
-      Given the delivery append-only files are "a.md, b.md"
-      And the delivery file "b.md" lost 5 lines
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "préalables" because "un fichier en ajout seul a perdu des lignes"
-      And the delivery calls named "deletedLines" are:
-        """
-        deletedLines p0 h1 a.md
-        deletedLines p0 h1 b.md
-        """
-
-    Scenario: a name that is not a branch name
-      When I deliver "--force" until "end"
+    Scenario Outline: a name that is not a branch name: nothing is fetched
+      When I deliver "<name>" until "end"
       Then the delivery stopped at the phase "préalables" because "nom de branche d'essai refusé"
       And the delivery acts are:
         """
-        fetch
         """
       And the delivery phases reported are:
         """
@@ -377,20 +307,36 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery log holds no entry
 
-    Scenario: a trial branch that is one of the branches to publish
-      Given the delivery branches are "feat/gate-1a, sentinel/gate-1a-step"
-      And the delivery remote branch "sentinel/gate-1a-step" is at "p0"
+      Examples:
+        | name    |
+        | --force |
+        | Step    |
+
+    Scenario: a trial branch that is the work branch
+      Given the delivery setting "workPrefix" is the text "sentinel/gate-1a-"
       When I deliver "step" until "end"
       Then the delivery stopped at the phase "préalables" because "nom de branche d'essai refusé"
       And the delivery acts are:
         """
-        fetch
-        """
-      And the delivery phases reported are:
-        """
-        préalables
         """
       And the delivery log holds no entry
+
+    Scenario Outline: a <branch> branch that would be the destination: the destination is never pushed
+      Given the delivery setting "destination" is the text "<destination>"
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "préalables" because "la destination n'accepte qu'une pull request"
+      And the delivery acts are:
+        """
+        """
+      And the delivery calls named "push" are:
+        """
+        """
+      And the delivery log holds no entry
+
+      Examples:
+        | branch | destination           |
+        | trial  | sentinel/gate-1a-step |
+        | work   | deliver/step          |
 
     Scenario Outline: a commit that is not a full lower-case hash stops the run before any act
       Given the delivery commit to deliver is "<hash>"
@@ -440,11 +386,149 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"branche d'essai","reason":"push de la branche d'essai refusé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"published":[],"ruleSuites":{}}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":0,"polls":0},"published":[],"phase":"branche d'essai","reason":"push de la branche d'essai refusé"}
         """
       And the delivery log holds exactly the result
 
   Rule: the gate
+
+    Scenario: the append-only file at the base is read from the destination the gate judged, not from a branch
+      Given the delivery history holds "p1" as an ancestor of "h1"
+      And the receipt of the delivery gate names the destination "p1"
+      When I deliver "step" until "end"
+      Then the delivery outcome is "delivered"
+      And the delivery calls named "committedFile, committedEntries" are:
+        """
+        committedFile h1 steps/step/record.json
+        committedEntries h1 docs/design/journal.md
+        committedEntries p1 docs/design/journal.md
+        """
+
+    Scenario Outline: an append-only file whose bytes at the base are the first bytes at the commit: <case>
+      Given the delivery file "docs/design/journal.md" holds "<base>" at "p0"
+      And the delivery file "docs/design/journal.md" holds "<commit>" at "h1"
+      When I deliver "step" until "end"
+      Then the delivery outcome is "delivered"
+
+      Examples:
+        | case                      | base         | commit                 |
+        | unchanged                 | a{lf}b{lf}   | a{lf}b{lf}             |
+        | a line appended           | a{lf}b{lf}   | a{lf}b{lf}c{lf}        |
+        | the last line completed   | a{lf}b       | a{lf}bc{lf}            |
+        | a file new at the commit  | none         | a{lf}                  |
+
+    Scenario Outline: an append-only file changed before its end is refused after the gate, nothing published: <case>
+      Given the delivery file "docs/design/journal.md" holds "<base>" at "p0"
+      And the delivery file "docs/design/journal.md" holds "<commit>" at "h1"
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin"
+      And the delivery acts are:
+        """
+        fetch
+        push h1 sentinel/gate-1a-step
+        gate
+        log stopped
+        """
+      And the delivery log holds exactly the result
+
+      Examples:
+        | case                                | base         | commit             |
+        | a line inserted in the middle       | a{lf}c{lf}   | a{lf}b{lf}c{lf}    |
+        | a line rewritten                    | a{lf}b{lf}   | a{lf}B{lf}         |
+        | the trailing line break removed     | a{lf}b{lf}   | a{lf}b             |
+        | a line removed at the end           | a{lf}b{lf}   | a{lf}              |
+        | a line inserted first               | a{lf}        | z{lf}a{lf}         |
+        | the file deleted                    | a{lf}        | none               |
+
+    Scenario Outline: an append-only directory: every file at the base keeps its bytes first at the commit; <case>
+      Given the delivery append-only files are "ev"
+      And the delivery file "ev/a.json" holds "a" at "p0"
+      And the delivery file "ev/x/b.json" holds "b" at "p0"
+      And the delivery file "ev/a.json" holds "<a>" at "h1"
+      And the delivery file "ev/x/b.json" holds "<b>" at "h1"
+      And the delivery file "ev/c.json" holds "<c>" at "h1"
+      When I deliver "step" until "end"
+      Then the delivery <outcome>
+
+      Examples:
+        | case                    | a     | b    | c    | outcome                                                                                         |
+        | unchanged               | a     | b    | none | outcome is "delivered"                                                                          |
+        | a new file              | a     | b    | c    | outcome is "delivered"                                                                          |
+        | a file appended         | a{lf} | b    | none | outcome is "delivered"                                                                          |
+        | a file rewritten        | z     | b    | c    | stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin" |
+        | a nested file rewritten | a     | B    | none | stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin" |
+        | a file removed          | none  | b    | none | stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin" |
+        | a nested file removed   | a     | none | c    | stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin" |
+
+    Scenario Outline: a link in an append-only directory, or in its place, is refused: <case>
+      Given the delivery append-only files are "ev"
+      And the delivery file "ev/a.json" holds "a" at "p0"
+      And the delivery file "ev/a.json" holds "a" at "h1"
+      And the delivery commit "h1" records a link at "<link>"
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin"
+
+      Examples:
+        | case                      | link      |
+        | in place of the directory | ev        |
+        | in the directory          | ev/l.json |
+
+    Scenario: a reused verdict gives the base of the append-only files too
+      Given the delivery gate verdict already names "h1"
+      And the delivery file "docs/design/journal.md" holds "a{lf}c{lf}" at "p0"
+      And the delivery file "docs/design/journal.md" holds "a{lf}b{lf}c{lf}" at "h1"
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin"
+      And the delivery result is:
+        """
+        {"outcome":"stopped","phase":"porte","reason":"un fichier en ajout seul a changé ailleurs qu'à sa fin","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":0,"polls":0},"gate":"reused","published":[],"base":"p0"}
+        """
+
+    Scenario: the first append-only file changed: the second is not read
+      Given the delivery append-only files are "a.md, b.md"
+      And the delivery file "a.md" holds "x{lf}" at "p0"
+      And the delivery file "a.md" holds "y{lf}" at "h1"
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin"
+      And the delivery calls named "committedFile" are:
+        """
+        committedFile h1 steps/step/record.json
+        committedFile p0 a.md
+        committedFile h1 a.md
+        """
+
+    Scenario: the second append-only file changed
+      Given the delivery append-only files are "a.md, b.md"
+      And the delivery file "b.md" holds "x{lf}" at "p0"
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "un fichier en ajout seul a changé ailleurs qu'à sa fin"
+      And the delivery calls named "committedFile, committedEntries" are:
+        """
+        committedFile h1 steps/step/record.json
+        committedEntries h1 a.md
+        committedEntries p0 a.md
+        committedEntries h1 b.md
+        committedEntries p0 b.md
+        committedFile p0 b.md
+        committedFile h1 b.md
+        """
+
+    Scenario Outline: a receipt of the gate that names no destination: stopped, <verdict>
+      Given <given>
+      And the receipt of the delivery gate names no destination
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "porte" because "le verdict de la porte ne nomme pas de destination"
+      And the delivery calls named "committedFile, push" are:
+        """
+        committedFile h1 steps/step/record.json
+        push h1 sentinel/gate-1a-step
+        """
+      And the delivery log holds exactly the result
+
+      Examples:
+        | verdict             | given                                         |
+        | the gate played     | the delivery append-only files are "a.md"     |
+        | the verdict reused  | the delivery gate verdict already names "h1"  |
 
     Scenario: a gate that is red
       Given the delivery gate exits 1 and then leaves the verdict "none"
@@ -468,7 +552,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"porte","reason":"porte rouge","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":0},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":0,"polls":0},"gate":"ran","published":[],"phase":"porte","reason":"porte rouge"}
         """
       And the delivery log holds exactly the result
 
@@ -529,7 +613,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI rouge","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"base":"p0","phase":"CI","reason":"CI rouge"}
         """
       And the delivery log holds exactly the result
 
@@ -545,8 +629,8 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         sleep 30
         sleep 30
         fetch
-        push h1 feat/gate-1a
-        push h1 main
+        push h1 deliver/step
+        pullRequest deliver/step main h1
         delete sentinel/gate-1a-step
         log delivered
         """
@@ -561,13 +645,13 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery calls named "ci" are:
         """
-        ci h1 gate
-        ci h1 gate
-        ci h1 gate
+        ci h1 gate sentinel/gate-1a-step
+        ci h1 gate sentinel/gate-1a-step
+        ci h1 gate sentinel/gate-1a-step
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
         """
       And the delivery clock slept 60 seconds
 
@@ -576,7 +660,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       When I deliver "step" until "end"
       Then the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":2},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":2},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
         """
 
     Scenario: a CI that never answers within the polls
@@ -602,13 +686,13 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery calls named "ci" are:
         """
-        ci h1 gate
-        ci h1 gate
-        ci h1 gate
+        ci h1 gate sentinel/gate-1a-step
+        ci h1 gate sentinel/gate-1a-step
+        ci h1 gate sentinel/gate-1a-step
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","published":[],"base":"p0","phase":"CI","reason":"CI sans réponse"}
         """
 
     Scenario: a CI with no run at all within the polls
@@ -617,7 +701,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       When I deliver "step" until "end"
       Then the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"attempts":0,"polls":2},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"attempts":0,"polls":2},"gate":"ran","published":[],"base":"p0","phase":"CI","reason":"CI sans réponse"}
         """
 
     Scenario: a single poll allowed
@@ -672,8 +756,8 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         sleep 30
         sleep 30
         fetch
-        push h1 feat/gate-1a
-        push h1 main
+        push h1 deliver/step
+        pullRequest deliver/step main h1
         delete sentinel/gate-1a-step
         log delivered
         """
@@ -688,7 +772,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"pass"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
         """
 
     Scenario: no runner at the last permitted attempt: no rerun, stopped
@@ -718,7 +802,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"aucun runner après le nombre de tentatives permis","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":[],"base":"p0","phase":"CI","reason":"aucun runner après le nombre de tentatives permis"}
         """
 
     Scenario: no runner with a single attempt allowed: no rerun at all
@@ -788,7 +872,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":2,"polls":3},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":2,"polls":3},"gate":"ran","published":[],"base":"p0","phase":"CI","reason":"CI sans réponse"}
         """
 
     Scenario: no runner on the only poll: no rerun at all
@@ -802,7 +886,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"CI","reason":"CI sans réponse","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"base":"p0","phase":"CI","reason":"CI sans réponse"}
         """
 
     Scenario: the seconds between two polls are the ones of the file
@@ -813,146 +897,37 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
 
   Rule: the publication
 
-    Scenario: the first branch moved on the remote since the first fetch
-      Given the delivery remote branch "feat/gate-1a" moves to "p9" after the first fetch
+    Scenario: a work branch that appeared on the remote since the first fetch
+      Given the delivery remote branch "deliver/step" moves to "p0" after the first fetch
       When I deliver "step" until "end"
       Then the delivery stopped at the phase "publication" because "une branche distante a bougé"
-      And the delivery acts are:
+      And the delivery calls named "push, pullRequest" are:
         """
-        fetch
         push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        log stopped
         """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        """
-      And the delivery result is:
-        """
-        {"outcome":"stopped","phase":"publication","reason":"une branche distante a bougé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
-        """
-      And the delivery log holds exactly the result
 
-    Scenario: the last branch moved on the remote since the first fetch
-      Given the delivery remote branch "main" moves to "p9" after the first fetch
+    Scenario: a work branch found at the commit that was deleted since: nothing is pushed, no pull request
+      Given the delivery remote branch "deliver/step" is at "h1"
+      And the delivery remote branch "deliver/step" is deleted after the first fetch
       When I deliver "step" until "end"
       Then the delivery stopped at the phase "publication" because "une branche distante a bougé"
-      And the delivery acts are:
+      And the delivery calls named "push, pullRequest" are:
         """
-        fetch
         push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        log stopped
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
         """
 
-    Scenario: every branch is read again before publication: the one at the hash too
-      Given the delivery remote branch "feat/gate-1a" is at "h1"
+    Scenario: a work branch found at the commit is not pushed again
+      Given the delivery remote branch "deliver/step" is at "h1"
       When I deliver "step" until "end"
-      Then the delivery outcome is "delivered"
-      And the delivery calls named "remoteHead" are:
+      Then the delivery calls named "push, pullRequest" are:
         """
-        remoteHead feat/gate-1a
-        remoteHead main
-        remoteHead feat/gate-1a
-        remoteHead main
-        """
-
-    Scenario: a branch found at the hash that moved to another commit: nothing is pushed, no rule suite is read
-      Given the delivery remote branch "feat/gate-1a" is at "h1"
-      And the delivery remote branch "feat/gate-1a" moves to "p9" after the first fetch
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "une branche distante a bougé"
-      And the delivery acts are:
-        """
-        fetch
         push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        log stopped
+        pullRequest deliver/step main h1
         """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        """
-      And the delivery calls named "ruleSuite" are:
-        """
-        """
-      And the delivery result is:
-        """
-        {"outcome":"stopped","phase":"publication","reason":"une branche distante a bougé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
-        """
+      And the delivery outcome is "delivered"
 
-    Scenario: a branch found at the hash that was deleted: nothing is pushed, no rule suite is read
-      Given the delivery remote branch "feat/gate-1a" is at "h1"
-      And the delivery remote branch "feat/gate-1a" is deleted after the first fetch
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "une branche distante a bougé"
-      And the delivery acts are:
-        """
-        fetch
-        push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        log stopped
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        """
-      And the delivery calls named "ruleSuite" are:
-        """
-        """
-
-    Scenario: a branch found at the parent that moved, the other being at the hash: nothing is pushed, no rule suite is read
-      Given the delivery remote branch "feat/gate-1a" is at "h1"
-      And the delivery remote branch "main" moves to "p9" after the first fetch
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "une branche distante a bougé"
-      And the delivery acts are:
-        """
-        fetch
-        push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        log stopped
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        """
-      And the delivery calls named "ruleSuite" are:
-        """
-        """
-
-    Scenario: a push of the first branch that is refused
-      Given the delivery push to "feat/gate-1a" is refused
+    Scenario: a push of the work branch that is refused: no pull request, the trial branch kept
+      Given the delivery push to "deliver/step" is refused
       When I deliver "step" until "end"
       Then the delivery stopped at the phase "publication" because "push refusé"
       And the delivery acts are:
@@ -961,51 +936,16 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         push h1 sentinel/gate-1a-step
         gate
         fetch
-        push h1 feat/gate-1a
+        push h1 deliver/step
         log stopped
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"push refusé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"base":"p0","phase":"publication","reason":"push refusé"}
         """
 
-    Scenario: a push of the second branch that is refused
-      Given the delivery push to "main" is refused
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "push refusé"
-      And the delivery acts are:
-        """
-        fetch
-        push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        push h1 feat/gate-1a
-        push h1 main
-        log stopped
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        """
-      And the delivery result is:
-        """
-        {"outcome":"stopped","phase":"publication","reason":"push refusé","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["feat/gate-1a"],"ruleSuites":{"feat/gate-1a":"pass"}}
-        """
-
-    Scenario: a rule suite that is not found twice, then pass: the second branch waits for it
-      Given the delivery rule suite of "feat/gate-1a" answers "none, none, pass"
+    Scenario: a pull request the forge refuses: the trial branch kept, the work branch pushed
+      Given the forge of the delivery sequence refuses every new pull request
       When I deliver "step" until "end"
       Then the delivery acts are:
         """
@@ -1013,272 +953,88 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         push h1 sentinel/gate-1a-step
         gate
         fetch
-        push h1 feat/gate-1a
-        sleep 30
-        sleep 30
-        push h1 main
-        delete sentinel/gate-1a-step
-        log delivered
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        rangement
-        """
-      And the delivery calls named "push, ruleSuite" are:
-        """
-        push h1 sentinel/gate-1a-step
-        push h1 feat/gate-1a
-        ruleSuite feat/gate-1a h1
-        ruleSuite feat/gate-1a h1
-        ruleSuite feat/gate-1a h1
-        push h1 main
-        ruleSuite main h1
-        """
-      And the delivery clock slept 60 seconds
-
-    Scenario: a rule suite that is never found
-      Given the delivery rule suite of "feat/gate-1a" answers "none"
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "évaluation du ruleset introuvable"
-      And the delivery acts are:
-        """
-        fetch
-        push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        push h1 feat/gate-1a
-        sleep 30
-        sleep 30
+        push h1 deliver/step
+        pullRequest deliver/step main h1
         log stopped
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        """
-      And the delivery calls named "ruleSuite" are:
-        """
-        ruleSuite feat/gate-1a h1
-        ruleSuite feat/gate-1a h1
-        ruleSuite feat/gate-1a h1
         """
       And the delivery result is:
         """
-        {"outcome":"stopped","phase":"publication","reason":"évaluation du ruleset introuvable","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["feat/gate-1a"],"ruleSuites":{}}
-        """
-
-    Scenario: a single read of the rule suite allowed
-      Given the delivery setting "ruleSuitePolls" is 1
-      And the delivery rule suite of "feat/gate-1a" answers "none, pass"
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "évaluation du ruleset introuvable"
-      And the delivery clock slept 0 seconds
-
-    Scenario: a rule suite that bypassed on the first branch: the second is never pushed and the trial branch is kept
-      Given the delivery rule suite of "feat/gate-1a" answers "bypass"
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "le ruleset n'a pas rendu pass"
-      And the delivery acts are:
-        """
-        fetch
-        push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        push h1 feat/gate-1a
-        log stopped
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        """
-      And the delivery result is:
-        """
-        {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["feat/gate-1a"],"ruleSuites":{"feat/gate-1a":"bypass"}}
+        {"outcome":"stopped","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["deliver/step"],"base":"p0","phase":"publication","reason":"la forge a refusé la pull request"}
         """
       And the delivery log holds exactly the result
 
-    Scenario: a rule suite that failed on the first branch
-      Given the delivery rule suite of "feat/gate-1a" answers "fail"
+    Scenario: a draft pull request already open for the work branch is not taken, and nothing else is opened
+      Given a draft pull request from "deliver/step" to "main" is open on the forge of the delivery sequence
       When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "le ruleset n'a pas rendu pass"
-      And the delivery calls named "push" are:
-        """
-        push h1 sentinel/gate-1a-step
-        push h1 feat/gate-1a
-        """
+      Then the delivery stopped at the phase "publication" because "une pull request en brouillon est ouverte pour cette tête"
+      And the delivery forge holds only the draft pull request
 
-    Scenario: a rule suite that is not found, then bypassed
-      Given the delivery rule suite of "feat/gate-1a" answers "none, bypass"
+    Scenario: the title of the pull request is the template of the file with the name
+      Given the delivery setting "pullRequestTitle" is the text "Step ${name}, delivered"
       When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "le ruleset n'a pas rendu pass"
-      And the delivery clock slept 30 seconds
+      Then the delivery pull request was asked from "deliver/step" to "main" with the title "Step step, delivered" and the body of the record
 
-    Scenario: a rule suite that failed on the second branch: the trial branch is kept
-      Given the delivery rule suite of "main" answers "fail"
+    Scenario: a head the forge shows late at the commit: the pull request is asked again, a poll apart, and opened
+      Given the forge of the delivery sequence shows the head of the work branch at another commit for 2 reads
       When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "le ruleset n'a pas rendu pass"
-      And the delivery acts are:
+      Then the delivery outcome is "delivered"
+      And the delivery calls named "pullRequest, sleep" are:
         """
-        fetch
-        push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        push h1 feat/gate-1a
-        push h1 main
-        log stopped
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        """
-      And the delivery result is:
-        """
-        {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["feat/gate-1a","main"],"ruleSuites":{"feat/gate-1a":"pass","main":"fail"}}
-        """
-
-    Scenario: a first branch already at the hash is read and passes: the second is pushed
-      Given the delivery remote branch "feat/gate-1a" is at "h1"
-      When I deliver "step" until "end"
-      Then the delivery calls named "push, ruleSuite" are:
-        """
-        push h1 sentinel/gate-1a-step
-        ruleSuite feat/gate-1a h1
-        push h1 main
-        ruleSuite main h1
-        """
-      And the delivery outcome is "delivered"
-
-    Scenario: a first branch already at the hash whose rule suite bypassed: the second is never pushed, the trial branch is kept
-      Given the delivery remote branch "feat/gate-1a" is at "h1"
-      And the delivery rule suite of "feat/gate-1a" answers "bypass"
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "le ruleset n'a pas rendu pass"
-      And the delivery acts are:
-        """
-        fetch
-        push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        log stopped
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        """
-      And the delivery calls named "push, ruleSuite" are:
-        """
-        push h1 sentinel/gate-1a-step
-        ruleSuite feat/gate-1a h1
-        """
-      And the delivery result is:
-        """
-        {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{"feat/gate-1a":"bypass"}}
-        """
-
-    Scenario: a first branch already at the hash whose rule suite failed
-      Given the delivery remote branch "feat/gate-1a" is at "h1"
-      And the delivery rule suite of "feat/gate-1a" answers "fail"
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "le ruleset n'a pas rendu pass"
-      And the delivery acts are:
-        """
-        fetch
-        push h1 sentinel/gate-1a-step
-        gate
-        fetch
-        log stopped
-        """
-      And the delivery phases reported are:
-        """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
-        """
-      And the delivery calls named "push, ruleSuite" are:
-        """
-        push h1 sentinel/gate-1a-step
-        ruleSuite feat/gate-1a h1
-        """
-      And the delivery result is:
-        """
-        {"outcome":"stopped","phase":"publication","reason":"le ruleset n'a pas rendu pass","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{"feat/gate-1a":"fail"}}
-        """
-
-    Scenario: a first branch already at the hash whose rule suite is never found
-      Given the delivery remote branch "feat/gate-1a" is at "h1"
-      And the delivery rule suite of "feat/gate-1a" answers "none"
-      When I deliver "step" until "end"
-      Then the delivery stopped at the phase "publication" because "évaluation du ruleset introuvable"
-      And the delivery acts are:
-        """
-        fetch
-        push h1 sentinel/gate-1a-step
-        gate
-        fetch
+        pullRequest deliver/step main h1
         sleep 30
+        pullRequest deliver/step main h1
         sleep 30
-        log stopped
+        pullRequest deliver/step main h1
         """
-      And the delivery phases reported are:
+      And the delivery forge holds 1 pull request, none a draft
+
+    Scenario: a head the forge still shows at another commit after the last poll: stopped, the trial branch kept
+      Given the forge of the delivery sequence shows the head of the work branch at another commit for 4 reads
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "publication" because "la tête de la branche de travail n'est pas le commit livré"
+      And the delivery calls named "pullRequest, sleep, delete" are:
         """
-        préalables
-        branche d'essai
-        porte
-        CI
-        publication
+        pullRequest deliver/step main h1
+        sleep 30
+        pullRequest deliver/step main h1
+        sleep 30
+        pullRequest deliver/step main h1
+        sleep 30
+        pullRequest deliver/step main h1
         """
-      And the delivery calls named "push, ruleSuite" are:
+      And the delivery forge holds 0 pull requests, none a draft
+
+    Scenario Outline: a refusal other than a late head is not asked again: <reason>
+      Given <given>
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "publication" because "<reason>"
+      And the delivery calls named "pullRequest, sleep" are:
         """
-        push h1 sentinel/gate-1a-step
-        ruleSuite feat/gate-1a h1
-        ruleSuite feat/gate-1a h1
-        ruleSuite feat/gate-1a h1
-        """
-      And the delivery result is:
-        """
-        {"outcome":"stopped","phase":"publication","reason":"évaluation du ruleset introuvable","hash":"h1","trial":"sentinel/gate-1a-step","parent":"p0","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":[],"ruleSuites":{}}
+        pullRequest deliver/step main h1
         """
 
-    Scenario: a second branch already at the hash is read after the first is pushed and read
-      Given the delivery remote branch "main" is at "h1"
+      Examples:
+        | given                                                                            | reason                                                    |
+        | the forge of the delivery sequence refuses every new pull request                | la forge a refusé la pull request                         |
+        | the forge of the delivery sequence answers that the destination holds the commit | la destination contient déjà le commit livré              |
+        | a draft pull request from "deliver/step" to "main" is open on the forge of the delivery sequence | une pull request en brouillon est ouverte pour cette tête |
+
+    Scenario: a body longer than the forge takes is refused before any push
+      Given the record of the step has 1100 checks
       When I deliver "step" until "end"
-      Then the delivery calls named "push, ruleSuite" are:
+      Then the delivery stopped at the phase "préalables" because "le corps de la pull request dépasse la limite de la forge"
+      And the delivery acts are:
         """
-        push h1 sentinel/gate-1a-step
-        push h1 feat/gate-1a
-        ruleSuite feat/gate-1a h1
-        ruleSuite main h1
+        fetch
         """
-      And the delivery outcome is "delivered"
+      And the delivery log holds no entry
+
+    Scenario: a body the forge takes, though long, is delivered
+      Given the record of the step has 1000 checks
+      When I deliver "step" until "end"
+      Then the delivery outcome is "delivered"
 
   Rule: the doubles
 
     Scenario: a journal of a scenario that made no call is empty
       Then the delivery journal is empty
-
-    Scenario: the forge evaluates only a push that left the branch at the commit
-      Then the delivery forge gives no rule suite of the branch "main" at "h1"
-      When the delivery repository pushes "h1" to "main"
-      Then the delivery forge gives the rule suite "pass" of the branch "main" at "h1"

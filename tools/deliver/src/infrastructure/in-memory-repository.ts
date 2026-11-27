@@ -2,8 +2,8 @@ import type { Repository } from '../domain/ports.js';
 import type { Journal } from './in-memory-journal.js';
 
 /**
- * `Repository` over a small history (the parents of each commit, never a cycle), the lines each commit removed from a
- * file as the scenario gives them, a remote, the remote as last fetched and a local head. A push moves a remote branch
+ * `Repository` over a small history (the parents of each commit, never a cycle), the files each commit records as the
+ * scenario gives them, a remote, the remote as last fetched and a local head. A push moves a remote branch
  * only to a descendant, like git without force.
  */
 export class InMemoryRepository implements Repository {
@@ -22,8 +22,10 @@ export class InMemoryRepository implements Repository {
   private fetched = new Map<string, string>();
   /** The parents of a commit. */
   private readonly parents = new Map<string, Set<string>>();
-  /** `<hash> <path>` to the lines that commit removed from the file, relative to its parent. */
-  private readonly removed = new Map<string, number>();
+  /** `<hash> <path>` to the bytes of the regular file the commit records there. */
+  readonly files = new Map<string, Uint8Array>();
+  /** `<hash> <path>` of the entries the commit records that are not regular files: links, nested repositories. */
+  readonly others = new Set<string>();
   private fetches = 0;
 
   /** `hash` is the local head. */
@@ -35,11 +37,6 @@ export class InMemoryRepository implements Repository {
   /** Makes `parent` a parent of `child`. */
   link(parent: string, child: string): void {
     this.parents.set(child, this.parentsOf(child).add(parent));
-  }
-
-  /** `hash` removed `lines` lines from the file `path`, relative to its parent. */
-  removes(hash: string, path: string, lines: number): void {
-    this.removed.set(`${hash} ${path}`, lines);
   }
 
   /** A file of the worktree changes. */
@@ -82,13 +79,6 @@ export class InMemoryRepository implements Repository {
     return this.reaches(ancestor, descendant);
   }
 
-  deletedLines(from: string, to: string, path: string): number {
-    this.journal.record('deletedLines', from, to, path);
-    let lines = 0;
-    for (const hash of this.since(from, to)) lines += this.removed.get(`${hash} ${path}`) ?? 0;
-    return lines;
-  }
-
   push(hash: string, branch: string): 'pushed' | 'refused' {
     this.journal.record('push', hash, branch);
     const current = this.remotes.get(branch);
@@ -98,22 +88,29 @@ export class InMemoryRepository implements Repository {
     return 'pushed';
   }
 
+  committedFile(hash: string, path: string): Uint8Array | undefined {
+    this.journal.record('committedFile', hash, path);
+    return this.files.get(`${hash} ${path}`);
+  }
+
+  committedEntries(hash: string, path: string): readonly { path: string; regular: boolean }[] {
+    this.journal.record('committedEntries', hash, path);
+    const under = (key: string): string | undefined => {
+      const at = key.slice(hash.length + 1);
+      return key.startsWith(`${hash} `) && (at === path || at.startsWith(`${path}/`)) ? at : undefined;
+    };
+    const found = [
+      ...[...this.files.keys()].map((key) => ({ path: under(key), regular: true })),
+      ...[...this.others].map((key) => ({ path: under(key), regular: false })),
+    ];
+    return found.flatMap((entry) =>
+      entry.path === undefined ? [] : [{ path: entry.path, regular: entry.regular }],
+    );
+  }
+
   deleteRemoteBranch(branch: string): void {
     this.journal.record('delete', branch);
     this.remotes.delete(branch);
-  }
-
-  /** The commits from `to` back to `from`, `from` excluded, along the parents. */
-  private since(from: string, to: string): Set<string> {
-    const found = new Set<string>();
-    const walk = (hash: string): void => {
-      if (hash === from) return;
-
-      found.add(hash);
-      for (const parent of this.parentsOf(hash)) walk(parent);
-    };
-    walk(to);
-    return found;
   }
 
   /** Whether `ancestor` is `descendant` or one of its ancestors. */

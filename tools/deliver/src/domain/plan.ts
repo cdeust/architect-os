@@ -1,22 +1,21 @@
-// What to publish (docs/design/orchestration-fable-5-2.md §14, phase 1).
-
-export interface RemoteBranch {
-  branch: string;
-  /** The hash of the branch on the remote. */
-  head: string;
-}
+// What to publish (docs/design/orchestration-fable-5-2.md §14, phase 1): the work branch, the head of the pull request.
+// The destination is neither read nor compared: only a pull request changes it, and the gate alone judges against it.
 
 export type Plan =
-  | { ok: true; parent: string; publish: string[] }
-  | { ok: false; reason: 'rien à livrer' | 'les branches distantes diffèrent' };
+  { ok: true; push: boolean } | { ok: false; reason: "la branche distante n'est pas un ancêtre du commit" };
 
-/** A branch already at the hash is up to date; the others must all be at one same commit, the parent. */
-export function planPublication(hash: string, remotes: readonly RemoteBranch[]): Plan {
-  const behind = remotes.filter((remote) => remote.head !== hash);
-  const first = behind[0];
-  if (first === undefined) return { ok: false, reason: 'rien à livrer' };
-  if (behind.some((remote) => remote.head !== first.head)) {
-    return { ok: false, reason: 'les branches distantes diffèrent' };
+/**
+ * `work` is where the remote has the work branch (undefined when it has none yet), `descends` says whether a commit is
+ * the hash or one of its ancestors. The work branch is pushed without force, so the commit descends from it; a work
+ * branch already at the hash is not pushed again, and its pull request is still opened, or found.
+ */
+export function planPublication(
+  hash: string,
+  work: string | undefined,
+  descends: (ancestor: string) => boolean,
+): Plan {
+  if (work !== undefined && work !== hash && !descends(work)) {
+    return { ok: false, reason: "la branche distante n'est pas un ancêtre du commit" };
   }
-  return { ok: true, parent: first.head, publish: behind.map((remote) => remote.branch) };
+  return { ok: true, push: work !== hash };
 }

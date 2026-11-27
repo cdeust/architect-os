@@ -1,14 +1,9 @@
 import { StateJournal } from '@architect-os/sandbox/state-journal';
 import type { DeliveryEntry, DeliveryLog } from '../domain/ports.js';
 
-/** The entry as one line of JSON, without its line break; the rule suites are an object in the order of the Map. */
+/** The entry as one line of JSON, without its line break. */
 export function entryLine(entry: DeliveryEntry): string {
-  const { ruleSuites, ...rest } = entry;
-  // Written by hand: an object would put a key such as "10" before the others, not in the order of the Map.
-  const suites = [...ruleSuites].map(
-    ([branch, suite]) => `${JSON.stringify(branch)}:${JSON.stringify(suite)}`,
-  );
-  return `${JSON.stringify(rest).slice(0, -1)},"ruleSuites":{${suites.join(',')}}}`;
+  return JSON.stringify(entry);
 }
 
 /** Persistent delivery records, retained in the host state of the admitted root. */

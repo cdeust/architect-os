@@ -5,8 +5,15 @@ export interface DeliverConfig {
   description: string;
   remote: string;
   repository: string;
-  /** The branches to publish, in the order they are pushed. */
-  branches: string[];
+  /**
+   * The branch a delivery asks to change, by a pull request: never pushed by the delivery (since 26 November 2026 its
+   * ruleset refuses any push outside a pull request).
+   */
+  destination: string;
+  /** The work branch of a delivery is this prefix and its name: the head of its pull request. */
+  workPrefix: string;
+  /** The title of the pull request: `${name}` is replaced by the name of the delivery, once. */
+  pullRequestTitle: string;
   trialPrefix: string;
   workflow: string;
   requiredJobs: string[];
@@ -30,7 +37,11 @@ export interface DeliverConfig {
   ciAttempts: number;
   pollSeconds: number;
   ciPolls: number;
-  ruleSuitePolls: number;
+  /**
+   * How many times the pull request is asked for again, `pollSeconds` apart, while the forge still shows its head at
+   * another commit than the delivered one: GitHub moves the head of a pull request after the push, not with it.
+   */
+  pullRequestPolls: number;
 }
 
 export interface JobDependency {

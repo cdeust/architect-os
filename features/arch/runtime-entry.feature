@@ -214,7 +214,7 @@ Feature: The shell entry aos, witnessed from outside (docs/design/orchestration-
   Rule: an admitted delivery identifies itself to the forge as its caller does; the run keeps its own configuration
 
     Scenario Outline: through the launcher, a delivery whose caller has <case> gives the client of the forge <forwarded>, and the gate the run's configuration
-      Given a throwaway repository for a delivery through the launcher, its commit ahead of both branches, and a scripted forge
+      Given a throwaway repository for a delivery through the launcher, its commit ahead of the destination, and a scripted forge
       And the identity of the scripted forge is configured <where>
       And the launcher inherits <xdg> and a forged handover of XDG_CONFIG_HOME
       When the launcher copy runs the delivery command with "step --until ci" from the throwaway worktree

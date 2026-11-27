@@ -18,9 +18,10 @@ Feature: what the git of the delivery receives, and the programs it does not sta
         | fetch              |
         | remoteHead         |
         | isAncestor         |
-        | deletedLines       |
         | push               |
         | deleteRemoteBranch |
+        | committedFile      |
+        | committedEntries   |
 
     Scenario: a name of the list that the host does not set is not received
       Given the host of the delivery repository sets "GH_TOKEN=t"
@@ -37,15 +38,15 @@ Feature: what the git of the delivery receives, and the programs it does not sta
   Rule: a hook of the repository is not run by the delivery
 
     Scenario: a pre-push hook of the worktree is not run by a delivery that pushes
-      Given a delivery command over a throwaway repository, the commit "h1" ahead of both branches at "p0"
+      Given a delivery command over a throwaway repository, the commit "h1" ahead of the destination at "p0"
       And the worktree of the delivery command has a pre-push hook that writes a witness file
       When I run the delivery command with "step"
       Then the delivery command exited 0
-      And the remote of the delivery command holds "main" at the commit "h1"
+      And the remote of the delivery command holds "deliver/step" at the commit "h1"
       And the pre-push hook of the delivery command has not run
 
     Scenario: the same hook is run by a git that is started without the options of the delivery, so that the scenario above can fail
-      Given a delivery command over a throwaway repository, the commit "h1" ahead of both branches at "p0"
+      Given a delivery command over a throwaway repository, the commit "h1" ahead of the destination at "p0"
       And the worktree of the delivery command has a pre-push hook that writes a witness file
       When git pushes directly from the worktree of the delivery command, without the options of the delivery
       Then the pre-push hook of the delivery command has run
