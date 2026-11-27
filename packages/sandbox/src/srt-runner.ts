@@ -252,8 +252,11 @@ export class SrtSandboxRunner implements SandboxRunner {
       const config = join(dir, 'config');
       mkdirSync(tmp, { mode: 0o700 });
       mkdirSync(config, { mode: 0o700 });
+      const given = withSandboxes(o.variables, dir);
       const vars = {
-        ...withSandboxes(o.variables, dir),
+        ...given,
+        // `${inputs}` vaut le worktree, sauf pour les entrées inventées, dont le lanceur donne la pose (`inputsFolder`).
+        inputs: inputsFolder(given['inputs'], wt.worktree, o.runDir),
         runtime: o.runtimeRoot,
         home: realpathSync(o.home),
         repo: wt.repo,
@@ -478,8 +481,27 @@ function sandboxFolder(tmpRoot: string): string {
   return folder;
 }
 
+/**
+ * Le dossier que `${inputs}` ouvre en lecture : le worktree quand le lanceur n'en donne pas ; sinon la pose des entrées
+ * inventées d'une étape, `<run>/tmp/fresh/<étape>`, un chemin réel (sans lien) et rien d'autre. Un autre chemin ouvrirait
+ * à la sandbox ce que son profil refuse : il est refusé (ISOLATION_UNAVAILABLE).
+ */
+export function inputsFolder(given: string | undefined, worktree: string, run: string): string {
+  if (given === undefined) return worktree;
+  if (
+    dirname(given) !== join(run, 'tmp', 'fresh') ||
+    !/^[a-z][a-z0-9-]{0,31}$/.test(basename(given)) ||
+    realpathSync(given) !== given
+  )
+    throw unavailable('invalid fresh inputs location');
+  return given;
+}
+
 /** Les variables données, plus `sandboxes` : le parent du dossier de la sandbox. */
-function withSandboxes(variables: Readonly<Record<string, string>> | undefined, dir: string) {
+function withSandboxes(
+  variables: Readonly<Record<string, string>> | undefined,
+  dir: string,
+): Readonly<Record<string, string>> & { sandboxes: string } {
   return { ...variables, sandboxes: dirname(dir) };
 }
 

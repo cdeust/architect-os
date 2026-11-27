@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ticketsSchema } from '@architect-os/contracts';
 import { freshInputsMax } from './fresh-inputs.js';
+import { refusedPath } from './scout-facts.js';
 
 export const codexModelSchema = z.enum(['gpt-6.2-astra', 'gpt-6.2-sol']);
 export type CodexModel = z.infer<typeof codexModelSchema>;
@@ -78,7 +79,8 @@ const checksSchema = () =>
  * joue sous le profil `checker` pour chacune (`runner` : un argv, auquel l'hôte ajoute le chemin du scénario qu'il a
  * écrit, et sa limite), et, facultatif, le validateur (`validate`, de même forme, par exemple la répétition à sec et
  * stricte de l'exécuteur) que l'hôte joue avant lui sur chaque entrée : une entrée qu'il refuse est `invalid`, une
- * faute de la session et non du code. Absentes, l'étape n'en a pas : les dossiers d'avant restent rejouables.
+ * faute de la session et non du code. `runnerFiles` nomme les fichiers de configuration de l'exécuteur (de 1 à 16) que
+ * l'hôte lit au départ de l'étape, avant toute session : si la construction en change un, aucune entrée n'est jouée. Absentes, l'étape n'en a pas : les dossiers d'avant restent rejouables.
  */
 const commandSchema = () =>
   z.strictObject({
@@ -86,12 +88,24 @@ const commandSchema = () =>
     limitSeconds: z.number().int().min(1).max(7200),
   });
 
+/**
+ * Un chemin de fichier du worktree, depuis sa racine : ni absolu, ni `..`, ni `.git`, ni barre oblique inverse, NUL ou
+ * saut de ligne (`refusedPath`, la règle des citations d'éclaireur).
+ */
+const worktreePathSchema = () =>
+  z
+    .string()
+    .min(1)
+    .max(300)
+    .refine((path) => !refusedPath(path), { error: 'a path the host does not read' });
+
 const freshInputsSchema = () =>
   sessionSchema().extend({
     enabled: z.boolean(),
     count: z.number().int().min(1).max(freshInputsMax()),
     runner: commandSchema(),
     validate: commandSchema().optional(),
+    runnerFiles: z.array(worktreePathSchema()).min(1).max(16),
   });
 
 /**

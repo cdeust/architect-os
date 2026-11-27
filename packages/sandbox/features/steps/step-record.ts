@@ -479,6 +479,7 @@ When('its fresh inputs become {int} inputs that passed, from fresh-1 in order', 
     durationSeconds: 0,
   }));
   stored<Record<string, unknown>>(this, 'schemaRecord')['freshInputs'] = {
+    runnerChanged: false,
     received: true,
     reasons: [],
     inputs,

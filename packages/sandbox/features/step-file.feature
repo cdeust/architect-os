@@ -303,6 +303,9 @@ Feature: step.json, the descriptive file of a step
         | a fresh runner limit of 7200  |
         | a fresh session effort of max |
         | a fresh validator             |
+        | one runner file               |
+        | sixteen runner files          |
+        | a runner file of 300 characters |
         | a fresh validator of 32 arguments and a limit of 7200 |
 
     Scenario Outline: a copy of the step file with <defect> is refused
@@ -341,3 +344,16 @@ Feature: step.json, the descriptive file of a step
         | a fresh validator argument with a line feed |
         | a fresh validator without a limit        |
         | a fresh validator limit of 0             |
+        | fresh inputs without runner files        |
+        | no runner file                           |
+        | seventeen runner files                   |
+        | an empty runner file                     |
+        | a runner file of 301 characters          |
+        | an absolute runner file                  |
+        | a runner file outside the worktree       |
+        | a runner file under .git                 |
+        | a runner file with a line feed           |
+
+    Scenario: an absolute runner file is refused, and the refusal says why
+      When I break a copy of the step file example with an absolute runner file
+      Then parsing the broken step file fails with "freshInputs.runnerFiles.0: a path the host does not read"

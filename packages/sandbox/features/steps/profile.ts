@@ -27,6 +27,7 @@ const VARS: ProfileVariables = {
   tmp: '/t/aos/tmp',
   config: '/t/aos/config',
   sandboxes: '/t',
+  inputs: '/r/.claude/worktrees/w',
   authProxyPort: '4321',
   sessionToken: 'session-token',
 };

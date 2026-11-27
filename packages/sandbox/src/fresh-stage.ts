@@ -1,19 +1,19 @@
-// Où l'hôte pose les scénarios des entrées inventées (docs/design/orchestration-fable-5-2.md, §4) : un dossier du
-// worktree qu'il crée lui-même après la construction, que l'exécuteur lit sous le profil `checker` (le worktree y est en
-// lecture seule) et que l'hôte retire à la fin de la phase. La phase ne le commite jamais. Aucun chemin ne vient d'une
-// session : les noms de fichiers sont ceux que l'hôte a donnés.
-import { lstatSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+// Où l'hôte pose les scénarios des entrées inventées (docs/design/orchestration-fable-5-2.md, §4) : hors du worktree,
+// dans le temporaire privé du run admis, `$ARCHITECT_OS_RUN_DIR/tmp/fresh/<étape>/`, que le profil `checker` lit par sa
+// variable `${inputs}`. L'hôte crée le dossier, le vérifie comme les sorties d'une étape (`step-outputs.ts`), y crée
+// chaque fichier sans suivre de lien et sans en remplacer un, et le retire à la fin de la phase. Rien n'est écrit dans
+// le worktree ; aucun chemin ne vient d'une session : les noms de fichiers sont ceux que l'hôte a donnés.
+import { closeSync, constants, lstatSync, mkdirSync, openSync, rmSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
-
-/** Le nom, à la racine du worktree, du dossier que l'hôte crée pour la phase ; une fonction : un littéral au niveau du module ferait rejouer toute la suite à chacun de ses mutants (Stryker). */
-export function freshStageFolder(): string {
-  return '.architect-os-fresh-inputs';
-}
+import { hasAdmittedRun } from './runtime-context.js';
+import { checkPrivateDirectory } from './state-journal.js';
 
 export interface FreshStage {
+  /** Le dossier de la pose, chemin absolu : la variable `${inputs}` du profil `checker` pour les entrées. */
+  readonly folder: string;
   /**
-   * Crée le dossier et y écrit chaque fichier (nom -> texte) ; rend le chemin de chacun, relatif à la racine du
-   * worktree, dans l'ordre donné. Refuse si quoi que ce soit occupe déjà le chemin du dossier.
+   * Crée le dossier et y écrit chaque fichier (nom -> texte) ; rend le chemin absolu de chacun, dans l'ordre donné.
+   * Refuse si quoi que ce soit occupe déjà le chemin du dossier, ou un fichier.
    */
   write(files: Readonly<Record<string, string>>): string[];
   /** Retire le dossier que `write` a créé et ce qu'il contient ; sans effet si `write` ne l'a pas créé. */
@@ -31,49 +31,70 @@ function checkNames(files: Readonly<Record<string, string>>): void {
   }
 }
 
-/** Le dossier réel, sous la racine que `root` rend. */
-export function freshStage(root: () => string): FreshStage {
-  const folder = (): string => join(root(), freshStageFolder());
+/**
+ * La pose réelle d'une étape, dans le run admis de `env`. Le nom de l'étape est déjà validé. Le dossier `tmp/fresh` est
+ * créé s'il manque, puis chaque dossier est vérifié privé (0700, à l'utilisateur, sur le volume de la racine, sans
+ * lien) avant qu'on y écrive.
+ */
+export function freshStage(env: NodeJS.ProcessEnv, step: string): FreshStage {
+  const tmp = join(env.ARCHITECT_OS_RUN_DIR!, 'tmp');
+  const parent = join(tmp, 'fresh');
+  const folder = join(parent, step);
   // Vrai entre la création du dossier par `write` et son retrait : ce que l'hôte n'a pas créé, il ne le retire pas.
   let created = false;
   return {
+    folder,
     write(files) {
       checkNames(files);
-      // Sans `recursive` : un dossier, un fichier ou un lien déjà là fait échouer la création, et rien n'est écrit au
-      // travers d'un chemin qu'une session aurait posé.
-      mkdirSync(folder(), { mode: 0o700 });
+      if (!hasAdmittedRun(env)) throw new Error('RUNTIME_ENTRY_REQUIRED');
+      const device = lstatSync(env.ARCHITECT_OS_RUNTIME_ROOT!, { bigint: true }).dev;
+      checkPrivateDirectory(tmp, device);
+      mkdirSync(parent, { recursive: true, mode: 0o700 });
+      checkPrivateDirectory(parent, device);
+      // Sans `recursive` : un dossier, un fichier ou un lien déjà là fait échouer la création.
+      mkdirSync(folder, { mode: 0o700 });
+      // Créé 0700 sous un parent privé : un masque ne peut qu'ôter des droits, jamais en donner.
       created = true;
       return Object.entries(files).map(([name, text]) => {
-        // Le dossier vient d'être créé, et `mkdirSync` refuse un dossier qui existe ; les noms sont les clés d'un objet :
-        // aucun fichier n'y est à remplacer.
-        writeFileSync(join(folder(), name), text, { mode: 0o600 });
-        return `${freshStageFolder()}/${name}`;
+        const path = join(folder, name);
+        // Créé ici ou refusé : jamais un fichier déjà là, jamais au travers d'un lien.
+        const descriptor = openSync(
+          path,
+          constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW | constants.O_WRONLY,
+          0o600,
+        );
+        try {
+          writeSync(descriptor, text);
+        } finally {
+          closeSync(descriptor);
+        }
+        return path;
       });
     },
     remove() {
       if (!created) return;
-      const own = lstatSync(folder(), { throwIfNoEntry: false });
       created = false;
+      const own = lstatSync(folder, { throwIfNoEntry: false });
       if (own === undefined) return;
-      if (!own.isDirectory())
-        throw new Error(`${freshStageFolder()} n'est pas un dossier ordinaire du worktree`);
-      rmSync(folder(), { recursive: true });
+      if (!own.isDirectory()) throw new Error(`${folder} n'est pas un dossier ordinaire`);
+      rmSync(folder, { recursive: true });
     },
   };
 }
 
-/** Le dossier en mémoire, pour les scénarios : les fichiers écrits, par chemin relatif à la racine. */
-export function inMemoryFreshStage(): FreshStage & { readonly files: Map<string, string> } {
+/** La pose en mémoire, pour les scénarios : les fichiers écrits, par chemin absolu sous `folder`. */
+export function inMemoryFreshStage(folder: string): FreshStage & { readonly files: Map<string, string> } {
   const files = new Map<string, string>();
   let staged = false;
   return {
+    folder,
     files,
     write(given) {
       checkNames(given);
-      if (staged) throw new Error(`EEXIST: ${freshStageFolder()}`);
+      if (staged) throw new Error(`EEXIST: ${folder}`);
       staged = true;
       return Object.entries(given).map(([name, text]) => {
-        const path = `${freshStageFolder()}/${name}`;
+        const path = join(folder, name);
         files.set(path, text);
         return path;
       });

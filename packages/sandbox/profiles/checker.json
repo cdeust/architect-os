@@ -1,5 +1,5 @@
 {
-  "description": "Profil checker de l'étape O.3c (docs/design/orchestration-fable-5-2.md, §13, O.3c, et règle 1) : une commande que le fichier de l'étape nomme, jouée par l'hôte après la construction, sans modèle. Le worktree et le .git du dépôt sont en lecture seule ; aucun domaine n'est joignable, aucun proxy d'authentification, aucun secret ni variable du lanceur ; le dossier temporaire de la sandbox (${tmp}) est le seul inscriptible et sert de TMPDIR et de cache npm, hors ligne. Les secrets de l'hôte et les dossiers des autres sandboxes (${sandboxes}) sont refusés en lecture, les dossiers inscriptibles propres à la sandbox rouverts par allowRead. Aucun terminal. Variables : ${home}, ${repo}, ${worktree}, ${worktreeName}, ${tmp}, ${config} et ${sandboxes} (adaptateur) seulement.",
+  "description": "Profil checker de l'étape O.3c (docs/design/orchestration-fable-5-2.md, §13, O.3c, et règle 1) : une commande que le fichier de l'étape nomme, jouée par l'hôte après la construction, sans modèle. Le worktree et le .git du dépôt sont en lecture seule ; aucun domaine n'est joignable, aucun proxy d'authentification, aucun secret ni variable du lanceur ; le dossier temporaire de la sandbox (${tmp}) est le seul inscriptible et sert de TMPDIR et de cache npm, hors ligne. Les secrets de l'hôte et les dossiers des autres sandboxes (${sandboxes}) sont refusés en lecture, les dossiers inscriptibles propres à la sandbox rouverts par allowRead. Aucun terminal. Le dossier ${inputs} est ouvert en lecture : le worktree, ou, pour les entrées inventées (§4), leur pose hors du worktree, sous le temporaire privé du run. Variables : ${home}, ${repo}, ${worktree}, ${worktreeName}, ${tmp}, ${config}, ${sandboxes} et ${inputs} (adaptateur) seulement.",
   "srt": {
     "network": {
       "allowedDomains": [],
@@ -24,7 +24,7 @@
         "${runtime}/run",
         "${runtime}/state"
       ],
-      "allowRead": ["${tmp}", "${worktree}"],
+      "allowRead": ["${tmp}", "${worktree}", "${inputs}"],
       "allowWrite": ["${tmp}"],
       "denyWrite": ["/tmp/claude", "/private/tmp/claude", "${runtime}/cache", "${runtime}/state"]
     }

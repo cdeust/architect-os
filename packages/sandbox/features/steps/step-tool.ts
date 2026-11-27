@@ -112,7 +112,7 @@ interface Step {
   phases: Record<Phased, Phase>;
   /** The checks, which the step plays one at a time: they differ by the order in which they start (1 is the first). */
   checks: Phase;
-  checkCalls: { command: readonly string[]; limitSeconds: number }[];
+  checkCalls: { command: readonly string[]; limitSeconds: number; inputs?: string }[];
   /** The clock of the step, in milliseconds: only a check moves it. */
   clock: number;
   /** The files of the worktree the step runs in, as `readSource` gives them. */
@@ -136,6 +136,8 @@ interface Step {
   staged: string[][];
   stageWrites: number;
   stageRemovals: number;
+  /** What the build session changes in the worktree while it runs: a new text, or the file removed. */
+  sourceChanges: { path: string; text: string | undefined }[];
   /** The files that the build session rewrites in the step folder while it runs. */
   rewrites: { file: string; content: string }[];
   finished: boolean;
@@ -166,10 +168,11 @@ const newStepFolder = (world: SandboxWorld, name: string) => {
     outputs: { retained: join(parent, 'retained-output'), streams: join(parent, 'raw-streams') },
     calls: [],
     behaviours: { 'code.json': {}, 'review.json': {}, 'scout.json': {}, 'fresh.json': {} },
-    stage: inMemoryFreshStage(),
+    stage: inMemoryFreshStage('/the/run/tmp/fresh/demo'),
     staged: [],
     stageWrites: 0,
     stageRemovals: 0,
+    sourceChanges: [],
     phases: { 'scout.json': newPhase(), 'review.json': newPhase() },
     checks: newPhase(),
     checkCalls: [],
@@ -247,6 +250,7 @@ const writeStep = (
                     },
                   }
                 : {}),
+              runnerFiles: ['cucumber.mjs', 'features/support/world.ts'],
               model: 'claude-opus-5-5',
               effort: 'high',
               limitSeconds: 1200,
@@ -261,6 +265,11 @@ const writeStep = (
     }),
   );
   writeFileSync(join(s.folder, 'brief.md'), 'Build the thing.\n');
+  // The configuration of the runner of the fresh inputs, as the worktree holds it at the start of the step.
+  if (fresh !== undefined) {
+    s.source.set('cucumber.mjs', 'export default { strict: true };\n');
+    s.source.set('features/support/world.ts', 'export class World {}\n');
+  }
 };
 
 Given('the step folder holds a step.json with a build and {string}', function (review: string) {
@@ -493,8 +502,8 @@ const start = (s: Step, args: string): Promise<void> => {
       return s.outputs;
     },
     appendFile: (path, content) => writeFileSync(path, content, { flag: 'a' }),
-    check: async (command, limitSeconds) => {
-      s.checkCalls.push({ command, limitSeconds });
+    check: async (command, limitSeconds, inputs) => {
+      s.checkCalls.push({ command, limitSeconds, ...(inputs === undefined ? {} : { inputs }) });
       s.staged.push([...s.stage.files.keys()]);
       const n = s.checkCalls.length;
       const own = s.checks.behaviours.get(n) ?? {};
@@ -544,7 +553,8 @@ const start = (s: Step, args: string): Promise<void> => {
       s.acceptedAdmission = requireStepAdmission(evidence, subject);
       return s.acceptedAdmission;
     },
-    stage: {
+    stage: () => ({
+      folder: s.stage.folder,
       write: (files) => {
         s.stageWrites++;
         return s.stage.write(files);
@@ -553,7 +563,7 @@ const start = (s: Step, args: string): Promise<void> => {
         s.stageRemovals++;
         s.stage.remove();
       },
-    },
+    }),
     steps: {
       prepare: () => void s.prepared.push(s.calls.length),
       exists: (name) => s.taken.has(name),
@@ -579,6 +589,10 @@ const start = (s: Step, args: string): Promise<void> => {
         if (own.failure) throw own.failure;
         if (tool === 'code.json') {
           for (const { file, content } of s.rewrites) writeFileSync(join(s.folder, file), content);
+          for (const { path, text } of s.sourceChanges) {
+            if (text === undefined) s.source.delete(path);
+            else s.source.set(path, text);
+          }
         }
         const text = own.text ?? (own.fixture === undefined ? '' : fixture(own.fixture));
         // In two chunks, as a stream arrives.
@@ -1588,18 +1602,6 @@ Given('the worktree of the step holds the files {string}', function (paths: stri
   for (const path of paths.split(' ')) step(this).source.set(path, `// ${path}\n`);
 });
 
-Given('the stage of the fresh inputs is already taken', function () {
-  const s = step(this);
-  const memory = s.stage;
-  s.stage = {
-    files: memory.files,
-    write: () => {
-      throw new Error('EEXIST: .architect-os-fresh-inputs');
-    },
-    remove: () => memory.remove(),
-  };
-});
-
 Then('the checks staged {string} when each started', function (staged: string) {
   assert.deepEqual(
     step(this).staged.map((paths) => paths.join(',')),
@@ -1615,8 +1617,9 @@ Then(
   'the check {int} was started with the runner and the staged file {string}',
   function (n: number, file: string) {
     assert.deepEqual(step(this).checkCalls[n - 1], {
-      command: ['npx', 'cucumber-js', '--profile', 'replay', `.architect-os-fresh-inputs/${file}`],
+      command: ['npx', 'cucumber-js', '--profile', 'replay', `/the/run/tmp/fresh/demo/${file}`],
       limitSeconds: 600,
+      inputs: '/the/run/tmp/fresh/demo',
     });
   },
 );
@@ -1630,7 +1633,7 @@ Then(
       join(s.outputs.retained, `fresh.${file.replace('.feature', '')}.feature`),
       'utf8',
     );
-    assert.equal(s.staged[n - 1]?.includes(`.architect-os-fresh-inputs/${file}`), true);
+    assert.equal(s.staged[n - 1]?.includes(`/the/run/tmp/fresh/demo/${file}`), true);
     const lines = retained.split('\n');
     assert.equal(lines.filter((line) => /^\s*(Given|When|Then|And|But) /.test(line)).length, 3);
     assert.equal(
@@ -1661,4 +1664,21 @@ Then('the stage of the fresh inputs was never written', function () {
 
 Then('the stage of the fresh inputs was written once and removed once', function () {
   assert.deepEqual([step(this).stageWrites, step(this).stageRemovals], [1, 1]);
+});
+
+Given('the build session {word} the worktree file {string}', function (change: string, path: string) {
+  assert.ok(change === 'rewrites' || change === 'removes', `no change named ${change}`);
+  step(this).sourceChanges.push({
+    path,
+    text: change === 'rewrites' ? 'export default { strict: false };\n' : undefined,
+  });
+});
+
+Given('the worktree of the step has no file {string}', function (path: string) {
+  step(this).source.delete(path);
+});
+
+Then('the check {int} was started with no inputs folder', function (n: number) {
+  assert.equal(step(this).checkCalls[n - 1]?.inputs, undefined);
+  assert.equal(Object.hasOwn(step(this).checkCalls[n - 1]!, 'inputs'), false);
 });

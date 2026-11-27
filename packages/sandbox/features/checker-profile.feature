@@ -2,7 +2,8 @@ Feature: Checker profile template (docs/design/orchestration-fable-5-2.md, §13,
   profiles/checker.json is a descriptive file, under the strict schema of the builder profile. A check is a command that
   the step file names and the host plays after the build, without a model: it reads the worktree and cannot write it
   nor the repository's .git, reaches no network, holds no secret and no launcher variable, and denies reading the same
-  secrets of the host as the reviewer.
+  secrets of the host as the reviewer. It also reads the folder of ${inputs}: the worktree, or the stage of the fresh
+  inputs of a step, outside the worktree.
 
   Scenario: loads the committed file against the strict schema
     When I load the committed checker profile
@@ -37,6 +38,7 @@ Feature: Checker profile template (docs/design/orchestration-fable-5-2.md, §13,
     And the profile allows reading exactly:
       | ${tmp} |
       | ${worktree} |
+      | ${inputs} |
     And the profile allows no network domain and denies none
     And the profile allows no pseudo-terminal
     And the profile unsets exactly the variables:
@@ -69,6 +71,13 @@ Feature: Checker profile template (docs/design/orchestration-fable-5-2.md, §13,
     And the resolved profile reaches no network domain
     And the resolved environment sets "TMPDIR" to "/t/aos/tmp"
     And the resolved environment sets "npm_config_cache" to "/t/aos/tmp/npm"
+
+  Scenario: given the stage of the fresh inputs of a step as ${inputs}, reads it and cannot write it
+    When I load the committed checker profile
+    And I resolve the profile with the variables of the adapter and the inputs "/rt/run/rAb9cX4/tmp/fresh/demo"
+    Then the resolved profile reads "/rt/run/rAb9cX4/tmp/fresh/demo"
+    And none of these paths is writable:
+      | /rt/run/rAb9cX4/tmp/fresh/demo/fresh-1.feature |
 
   Scenario: never makes the worktree, the repository's .git or the user files writable
     When I load the committed checker profile

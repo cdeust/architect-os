@@ -24,7 +24,7 @@ Look for what the change did not try: bounds, the empty case, the very large, an
 
 ## How the host plays them
 
-The host writes each scenario in a fixed template, one value per line, and runs it with a fixed runner that the step file names, in a sandbox with no network and a read-only worktree. Your text is data to that runner: it is never run by a shell. A scenario that fails, or that uses a step that does not exist, blocks the step as a failed check does.
+The host writes each scenario in a fixed template, one value per line, outside the worktree, and runs it with a fixed runner that the step file names, whose configuration is the one the step started from, in a sandbox with no network and a read-only worktree. Your text is data to that runner: it is never run by a shell. A scenario that fails, or that uses a step that does not exist, blocks the step as a failed check does.
 
 ## What you could not express
 

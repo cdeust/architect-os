@@ -276,7 +276,10 @@ Then(
   'the reasons of the fresh phase received {word} with the outcomes {string} are {string}',
   function (received: string, outcomes: string, reasons: string) {
     const list = outcomes === '' ? [] : (outcomes.split(' ') as FreshInputOutcome[]);
-    assert.deepEqual(freshReasons(received === 'true', list), reasons === '' ? [] : reasons.split(' '));
+    assert.deepEqual(
+      freshReasons({ runnerChanged: false, received: received === 'true', outcomes: list }),
+      reasons === '' ? [] : reasons.split(' '),
+    );
   },
 );
 

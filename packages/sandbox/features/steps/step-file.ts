@@ -26,6 +26,7 @@ const freshPolicy = () => ({
   effort: 'high',
   limitSeconds: 1200,
   runner: { command: ['npx', 'cucumber-js', '--profile', 'replay'], limitSeconds: 600 },
+  runnerFiles: ['cucumber.mjs', 'features/support/world.ts'],
 });
 
 const withFresh = (s: Record<string, any>) => (s['freshInputs'] = freshPolicy());
@@ -57,6 +58,15 @@ const EDGES: Record<string, (s: Record<string, any>) => unknown> = {
   ),
   'a fresh runner limit of 7200': (s) => (withFresh(s), (s['freshInputs']['runner']['limitSeconds'] = 7200)),
   'a fresh session effort of max': (s) => (withFresh(s), (s['freshInputs']['effort'] = 'max')),
+  'one runner file': (s) => (withFresh(s), (s['freshInputs']['runnerFiles'] = ['cucumber.mjs'])),
+  'sixteen runner files': (s) => (
+    withFresh(s),
+    (s['freshInputs']['runnerFiles'] = Array.from({ length: 16 }, (_, i) => `f${i}.mjs`))
+  ),
+  'a runner file of 300 characters': (s) => (
+    withFresh(s),
+    (s['freshInputs']['runnerFiles'] = ['x'.repeat(300)])
+  ),
   'a fresh validator': (s) => (
     withFresh(s),
     (s['freshInputs']['validate'] = { command: ['npx', 'cucumber-js', '--dry-run'], limitSeconds: 60 })
@@ -191,6 +201,24 @@ const DEFECTS: Record<string, (s: Record<string, any>) => unknown> = {
     withFresh(s),
     (s['freshInputs']['validate'] = { command: ['x'] })
   ),
+  'fresh inputs without runner files': (s) => (withFresh(s), delete s['freshInputs']['runnerFiles']),
+  'no runner file': (s) => (withFresh(s), (s['freshInputs']['runnerFiles'] = [])),
+  'seventeen runner files': (s) => (
+    withFresh(s),
+    (s['freshInputs']['runnerFiles'] = Array.from({ length: 17 }, (_, i) => `f${i}.mjs`))
+  ),
+  'an empty runner file': (s) => (withFresh(s), (s['freshInputs']['runnerFiles'] = [''])),
+  'a runner file of 301 characters': (s) => (
+    withFresh(s),
+    (s['freshInputs']['runnerFiles'] = ['x'.repeat(301)])
+  ),
+  'an absolute runner file': (s) => (withFresh(s), (s['freshInputs']['runnerFiles'] = ['/etc/passwd'])),
+  'a runner file outside the worktree': (s) => (
+    withFresh(s),
+    (s['freshInputs']['runnerFiles'] = ['../cucumber.mjs'])
+  ),
+  'a runner file under .git': (s) => (withFresh(s), (s['freshInputs']['runnerFiles'] = ['.git/config'])),
+  'a runner file with a line feed': (s) => (withFresh(s), (s['freshInputs']['runnerFiles'] = ['a\nb'])),
   'a fresh validator limit of 0': (s) => (
     withFresh(s),
     (s['freshInputs']['validate'] = { command: ['x'], limitSeconds: 0 })

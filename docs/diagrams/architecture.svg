@@ -281,8 +281,8 @@
 </g>
 </g>
 <g id="loop-checks" role="group" aria-labelledby="phase-checks">
-  <rect x="24" y="1914" width="1352" height="182" rx="6" fill="#ffffff" stroke="#d0d7de"/>
-  <rect x="36" y="1928" width="216" height="154" rx="6" fill="#ffffff" stroke="#bf8700"/>
+  <rect x="24" y="1914" width="1352" height="212" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="36" y="1928" width="216" height="184" rx="6" fill="#ffffff" stroke="#bf8700"/>
   <text x="50" y="1963" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-checks">4 · Checks</text>
   <text x="50" y="1994" data-type-role="brick-text" font-size="17" fill="#57606a">Step · checker srt</text>
   <rect x="50" y="2010" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
@@ -306,31 +306,31 @@
   <text x="868" y="1984" data-type-role="brick-text" font-size="17" fill="#57606a">Measure how much the checks save in review cost</text>
   <text x="868" y="2008" data-type-role="brick-text" font-size="17" fill="#57606a">(pilot HR2).</text>
 </g>
+<g role="group" aria-label="Fresh test inputs · ready">
+  <rect x="854" y="2026" width="505" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
+  <text x="868" y="2054" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Fresh test inputs</text>
+  <rect x="1277" y="2034" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="1312" y="2053" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="868" y="2082" data-type-role="brick-text" font-size="17" fill="#57606a">A read-only session invents inputs; the checker</text>
+  <text x="868" y="2106" data-type-role="brick-text" font-size="17" fill="#57606a">plays each, a failure blocks the Step.</text>
+</g>
 </g>
 <g id="loop-replay" role="group" aria-labelledby="phase-replay">
-  <rect x="24" y="2122" width="1352" height="215" rx="6" fill="#ffffff" stroke="#d0d7de"/>
-  <rect x="36" y="2136" width="216" height="187" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
-  <text x="50" y="2171" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-replay">5 · Replay</text>
-  <text x="50" y="2202" data-type-role="brick-text" font-size="17" fill="#57606a">Host · maintainer</text>
-  <rect x="50" y="2218" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="85" y="2237" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="2159" data-type-role="brick-text" font-size="17" fill="#57606a">Inspect the diff. Replay the changes with real srt,</text>
-  <text x="283" y="2183" data-type-role="brick-text" font-size="17" fill="#57606a">PostgreSQL and mutation tools as needed.</text>
+  <rect x="24" y="2152" width="1352" height="185" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="36" y="2166" width="216" height="157" rx="6" fill="#f6f8fa" stroke="#8c959f"/>
+  <text x="50" y="2201" data-type-role="section-title" font-size="25" fill="#1f2328" font-weight="600" id="phase-replay">5 · Replay</text>
+  <text x="50" y="2232" data-type-role="brick-text" font-size="17" fill="#57606a">Host · maintainer</text>
+  <rect x="50" y="2248" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
+  <text x="85" y="2267" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
+  <text x="283" y="2189" data-type-role="brick-text" font-size="17" fill="#57606a">Inspect the diff. Replay the changes with real srt,</text>
+  <text x="283" y="2213" data-type-role="brick-text" font-size="17" fill="#57606a">PostgreSQL and mutation tools as needed.</text>
 <g role="group" aria-label="Mutation as a Step phase · next">
-  <rect x="854" y="2136" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
-  <text x="868" y="2164" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Mutation as a Step phase</text>
-  <rect x="1277" y="2144" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
-  <text x="1312" y="2163" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
-  <text x="868" y="2192" data-type-role="brick-text" font-size="17" fill="#57606a">Feed survivors from the manual replay into the</text>
-  <text x="868" y="2216" data-type-role="brick-text" font-size="17" fill="#57606a">next brief.</text>
-</g>
-<g role="group" aria-label="Fresh test inputs · ready">
-  <rect x="854" y="2234" width="505" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
-  <text x="868" y="2262" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Fresh test inputs</text>
-  <rect x="1277" y="2242" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="1312" y="2261" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="868" y="2290" data-type-role="brick-text" font-size="17" fill="#57606a">A read-only session invents inputs; the checker</text>
-  <text x="868" y="2314" data-type-role="brick-text" font-size="17" fill="#57606a">plays each, a failure blocks the Step.</text>
+  <rect x="854" y="2166" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
+  <text x="868" y="2194" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Mutation as a Step phase</text>
+  <rect x="1277" y="2174" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="1312" y="2193" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="868" y="2222" data-type-role="brick-text" font-size="17" fill="#57606a">Feed survivors from the manual replay into the</text>
+  <text x="868" y="2246" data-type-role="brick-text" font-size="17" fill="#57606a">next brief.</text>
 </g>
 </g>
 <g id="loop-reviews" role="group" aria-labelledby="phase-reviews">
@@ -487,7 +487,7 @@
   <path data-from="loop-brief" data-to="loop-scouts" d="M144 1365 V1388" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
   <path data-from="loop-scouts" data-to="loop-build" d="M144 1549 V1572" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
   <path data-from="loop-build" data-to="loop-checks" d="M144 1888 V1911" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
-  <path data-from="loop-checks" data-to="loop-replay" d="M144 2096 V2119" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
+  <path data-from="loop-checks" data-to="loop-replay" d="M144 2126 V2149" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
   <path data-from="loop-replay" data-to="loop-reviews" d="M144 2337 V2360" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
   <path data-from="loop-reviews" data-to="loop-gate" d="M144 2804 V2827" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>
   <path data-from="loop-gate" data-to="loop-delivery" d="M144 3134 V3157" fill="none" stroke="#57606a" stroke-width="2" marker-end="url(#a)"/>

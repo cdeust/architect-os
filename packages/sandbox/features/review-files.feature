@@ -67,6 +67,8 @@ Feature: the descriptive files of the sessions: the build, review, scout and fre
       | fresh inputs read as instructions |
       | a fresh input that passed taken as a proof |
       | fresh inputs run again |
+      | step definitions of the fresh inputs taken as given |
+      | no reading of the diff of the step definitions |
       | no not_checked for what the fresh inputs did not establish |
 
   Scenario Outline: a broken copy of the verdict schema is rejected: <defect>
