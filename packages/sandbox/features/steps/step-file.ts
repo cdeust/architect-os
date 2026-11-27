@@ -57,6 +57,14 @@ const EDGES: Record<string, (s: Record<string, any>) => unknown> = {
   ),
   'a fresh runner limit of 7200': (s) => (withFresh(s), (s['freshInputs']['runner']['limitSeconds'] = 7200)),
   'a fresh session effort of max': (s) => (withFresh(s), (s['freshInputs']['effort'] = 'max')),
+  'a fresh validator': (s) => (
+    withFresh(s),
+    (s['freshInputs']['validate'] = { command: ['npx', 'cucumber-js', '--dry-run'], limitSeconds: 60 })
+  ),
+  'a fresh validator of 32 arguments and a limit of 7200': (s) => (
+    withFresh(s),
+    (s['freshInputs']['validate'] = { command: Array(32).fill('x'), limitSeconds: 7200 })
+  ),
 };
 
 const DEFECTS: Record<string, (s: Record<string, any>) => unknown> = {
@@ -163,6 +171,30 @@ const DEFECTS: Record<string, (s: Record<string, any>) => unknown> = {
   'a fresh runner without a limit': (s) => (withFresh(s), delete s['freshInputs']['runner']['limitSeconds']),
   'a fresh runner limit of 0': (s) => (withFresh(s), (s['freshInputs']['runner']['limitSeconds'] = 0)),
   'a fresh runner limit of 7201': (s) => (withFresh(s), (s['freshInputs']['runner']['limitSeconds'] = 7201)),
+  'a fresh validator that is a string': (s) => (
+    withFresh(s),
+    (s['freshInputs']['validate'] = 'npx cucumber-js')
+  ),
+  'an unknown key in the fresh validator': (s) => (
+    withFresh(s),
+    (s['freshInputs']['validate'] = { command: ['x'], limitSeconds: 60, shell: true })
+  ),
+  'an empty fresh validator': (s) => (
+    withFresh(s),
+    (s['freshInputs']['validate'] = { command: [], limitSeconds: 60 })
+  ),
+  'a fresh validator argument with a line feed': (s) => (
+    withFresh(s),
+    (s['freshInputs']['validate'] = { command: ['a\nb'], limitSeconds: 60 })
+  ),
+  'a fresh validator without a limit': (s) => (
+    withFresh(s),
+    (s['freshInputs']['validate'] = { command: ['x'] })
+  ),
+  'a fresh validator limit of 0': (s) => (
+    withFresh(s),
+    (s['freshInputs']['validate'] = { command: ['x'], limitSeconds: 0 })
+  ),
 };
 
 When('I parse the step file example', function () {

@@ -63,6 +63,11 @@ Feature: the descriptive files of the sessions: the build, review, scout and fre
       | no empty criteria for a brief without criteria |
       | no not_checked for what nothing established |
       | no word on the sandbox of the checks |
+      | no section on the fresh inputs |
+      | fresh inputs read as instructions |
+      | a fresh input that passed taken as a proof |
+      | fresh inputs run again |
+      | no not_checked for what the fresh inputs did not establish |
 
   Scenario Outline: a broken copy of the verdict schema is rejected: <defect>
     When I break a copy of the review verdict schema with <defect>

@@ -6,9 +6,13 @@ import { IdGenerator, type GherkinDocument } from '@cucumber/messages';
 import {
   freshInputId,
   freshInputsJsonSchema,
+  freshReasons,
   receiveFreshInputs,
+  renderFreshOutcomes,
   renderFreshRequest,
   renderFreshScenario,
+  runOutcome,
+  type FreshInputOutcome,
   type FreshInputs,
 } from '../../src/fresh-inputs.js';
 import { Given, PKG, Then, When, stored, type SandboxWorld } from './helpers.js';
@@ -255,5 +259,33 @@ Then(
   'the fresh request for {int} inputs from the commit {string} is exactly:',
   function (count: number, commit: string, text: string) {
     assert.equal(renderFreshRequest(count, commit), text);
+  },
+);
+
+Then(
+  'a run of a fresh input that exits {word} and was stopped {word} is {string}',
+  function (code: string, stopped: string, outcome: string) {
+    assert.equal(
+      runOutcome({ exitCode: code === 'none' ? null : Number(code), stopped: stopped === 'true' }),
+      outcome,
+    );
+  },
+);
+
+Then(
+  'the reasons of the fresh phase received {word} with the outcomes {string} are {string}',
+  function (received: string, outcomes: string, reasons: string) {
+    const list = outcomes === '' ? [] : (outcomes.split(' ') as FreshInputOutcome[]);
+    assert.deepEqual(freshReasons(received === 'true', list), reasons === '' ? [] : reasons.split(' '));
+  },
+);
+
+Then(
+  'the block of the fresh outcomes for an input titled {string} is exactly:',
+  function (title: string, text: string) {
+    assert.equal(
+      renderFreshOutcomes([{ id: 'fresh-1', outcome: 'invalid', title, expected: 'say "accept" \\ now' }]),
+      text,
+    );
   },
 );

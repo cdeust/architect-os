@@ -124,18 +124,21 @@ export function stepRecordSchema() {
         durationSeconds: seconds(),
       }),
     ),
-    // Les entrées inventées (§4) : si la sortie de la session a été reçue, puis l'identifiant que l'hôte a donné à chaque
-    // entrée et son issue ; aucun texte de la session. Absent quand l'étape n'en a pas.
+    // Les entrées inventées (§4) : si la sortie de la session a été reçue, pourquoi la phase arrête l'étape, puis
+    // l'identifiant que l'hôte a donné à chaque entrée, son issue et sa durée ; aucun texte de la session. Absent quand l'étape n'en a pas.
     freshInputs: z
       .strictObject({
         received: z.boolean(),
+        // Pourquoi la phase arrête l'étape (`freshReasons`) : vide quand elle passe ; triées, chacune une fois.
+        reasons: z
+          .array(z.enum(['FRESH_INPUT_FAILED', 'FRESH_INPUT_INVALID', 'FRESH_OUTPUT_REFUSED']))
+          .refine((reasons) => reasons.every((reason, index) => index === 0 || reasons[index - 1]! < reason)),
         // L'identifiant d'une entrée est sa place : `fresh-1`, `fresh-2`, … dans l'ordre, seize au plus.
         inputs: z
           .array(
             z.strictObject({
               id: z.string(),
-              passed: z.boolean(),
-              stopped: z.boolean(),
+              outcome: z.enum(['passed', 'failed', 'stopped', 'invalid']),
               durationSeconds: seconds(),
             }),
           )

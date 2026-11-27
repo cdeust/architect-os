@@ -507,22 +507,27 @@ Feature: the step leaves its brief and its record in the worktree
         | reviews.0.criteria           | [{"id":"AC-1","status":"partial"}]                                    |
         | reviews.0.criteria           | [{"id":"AC-1","status":"met","evidence":[]}]                          |
         | outcome                      | "stopped"                                                             |
-        | freshInputs                  | true                                                                  |
-        | freshInputs                  | {"received":true}                                                     |
-        | freshInputs                  | {"inputs":[]}                                                         |
-        | freshInputs                  | {"received":"yes","inputs":[]}                                        |
-        | freshInputs                  | {"received":true,"inputs":[],"extra":true}                            |
-        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-0","passed":true,"stopped":false,"durationSeconds":0}]} |
-        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-2","passed":true,"stopped":false,"durationSeconds":0}]} |
-        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-01","passed":true,"stopped":false,"durationSeconds":0}]} |
-        | freshInputs                  | {"received":true,"inputs":[{"id":"Fresh-1","passed":true,"stopped":false,"durationSeconds":0}]} |
-        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":false,"durationSeconds":0},{"id":"fresh-1","passed":true,"stopped":false,"durationSeconds":0}]} |
-        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":"yes","stopped":false,"durationSeconds":0}]} |
-        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":0,"durationSeconds":0}]} |
-        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":false,"durationSeconds":-1}]} |
-        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":false,"durationSeconds":0.5}]} |
-        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":false}]} |
-        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":false,"durationSeconds":0,"target":"src/a.ts"}]} |
+        | freshInputs                  | true |
+        | freshInputs                  | {"received":true,"reasons":[]} |
+        | freshInputs                  | {"reasons":[],"inputs":[]} |
+        | freshInputs                  | {"received":true,"inputs":[]} |
+        | freshInputs                  | {"received":"yes","reasons":[],"inputs":[]} |
+        | freshInputs                  | {"received":true,"reasons":[],"inputs":[],"extra":true} |
+        | freshInputs                  | {"received":true,"reasons":["FRESH_INPUT_LOST"],"inputs":[]} |
+        | freshInputs                  | {"received":true,"reasons":["FRESH_INPUT_INVALID","FRESH_INPUT_FAILED"],"inputs":[]} |
+        | freshInputs                  | {"received":true,"reasons":["FRESH_INPUT_FAILED","FRESH_INPUT_FAILED"],"inputs":[]} |
+        | freshInputs                  | {"received":true,"reasons":"FRESH_INPUT_FAILED","inputs":[]} |
+        | freshInputs                  | {"received":true,"reasons":[],"inputs":[{"id":"fresh-0","outcome":"passed","durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"reasons":[],"inputs":[{"id":"fresh-2","outcome":"passed","durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"reasons":[],"inputs":[{"id":"fresh-01","outcome":"passed","durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"reasons":[],"inputs":[{"id":"Fresh-1","outcome":"passed","durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":0},{"id":"fresh-1","outcome":"passed","durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"skipped","durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":-1}]} |
+        | freshInputs                  | {"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":0.5}]} |
+        | freshInputs                  | {"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"passed"}]} |
+        | freshInputs                  | {"received":true,"reasons":[],"inputs":[{"id":"fresh-1","durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":0,"title":"an input"}]} |
         | sessions.0.role              | "invent"                                                              |
 
     Scenario Outline: accepted: <field> becomes <value>
@@ -551,8 +556,8 @@ Feature: the step leaves its brief and its record in the worktree
         | launcher.[profiles/checker.json] | "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |
         | inputs.[scout.a-1.md]      | "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |
         | sessions.0.role            | "fresh"                              |
-        | freshInputs                | {"received":false,"inputs":[]}       |
-        | freshInputs                | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":false,"durationSeconds":0},{"id":"fresh-2","passed":false,"stopped":true,"durationSeconds":7}]} |
+        | freshInputs                | {"received":false,"reasons":["FRESH_OUTPUT_REFUSED"],"inputs":[]} |
+        | freshInputs                | {"received":true,"reasons":["FRESH_INPUT_FAILED","FRESH_INPUT_INVALID"],"inputs":[{"id":"fresh-1","outcome":"invalid","durationSeconds":0},{"id":"fresh-2","outcome":"stopped","durationSeconds":7},{"id":"fresh-3","outcome":"failed","durationSeconds":1},{"id":"fresh-4","outcome":"passed","durationSeconds":2}]} |
 
     Scenario Outline: the fresh inputs of a record hold <count> inputs, from fresh-1 in order: <result>
       Given a record of a step that the schema accepts

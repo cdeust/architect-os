@@ -475,11 +475,14 @@ When('its field {string} becomes {}', function (path: string, json: string) {
 When('its fresh inputs become {int} inputs that passed, from fresh-1 in order', function (count: number) {
   const inputs = Array.from({ length: count }, (_, index) => ({
     id: `fresh-${index + 1}`,
-    passed: true,
-    stopped: false,
+    outcome: 'passed',
     durationSeconds: 0,
   }));
-  stored<Record<string, unknown>>(this, 'schemaRecord')['freshInputs'] = { received: true, inputs };
+  stored<Record<string, unknown>>(this, 'schemaRecord')['freshInputs'] = {
+    received: true,
+    reasons: [],
+    inputs,
+  };
 });
 
 Then('the schema of the record refuses it', function () {

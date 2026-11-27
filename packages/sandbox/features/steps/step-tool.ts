@@ -219,7 +219,7 @@ const writeStep = (
   scouts: readonly ReviewRow[] = [],
   checks: readonly string[] = [],
   acceptance?: readonly string[],
-  fresh?: { enabled: boolean; count: number },
+  fresh?: { enabled: boolean; count: number; validate?: boolean },
 ) => {
   writeFileSync(
     join(s.folder, 'step.json'),
@@ -237,7 +237,16 @@ const writeStep = (
         ? {}
         : {
             freshInputs: {
-              ...fresh,
+              enabled: fresh.enabled,
+              count: fresh.count,
+              ...(fresh.validate === true
+                ? {
+                    validate: {
+                      command: ['npx', 'cucumber-js', '--profile', 'replay', '--dry-run'],
+                      limitSeconds: 60,
+                    },
+                  }
+                : {}),
               model: 'claude-opus-5-5',
               effort: 'high',
               limitSeconds: 1200,
@@ -843,6 +852,19 @@ Given(
     writeFileSync(join(step(this).folder, name), JSON.parse(`"${content}"`));
   },
 );
+
+Then('the step file {string} ends with:', function (name: string, text: string) {
+  const content = readFileSync(stepFile(step(this), name), 'utf8');
+  assert.ok(content.endsWith(text), content);
+});
+
+Then('the step stdout contains {string}', function (text: string) {
+  assert.ok(step(this).stdout.includes(text), step(this).stdout);
+});
+
+Then('the check {int} was started with the limit {int}', function (n: number, limit: number) {
+  assert.equal(step(this).checkCalls[n - 1]?.limitSeconds, limit);
+});
 
 Then('the step file {string} contains {string}', function (name: string, text: string) {
   assert.ok(readFileSync(stepFile(step(this), name), 'utf8').includes(text));
@@ -1451,6 +1473,21 @@ Then(
 
 // The fresh inputs (docs/design/orchestration-fable-5-2.md, §4): the policy of the step, the output of the fresh
 // session, and what the host staged and played.
+
+Given(
+  'the step folder holds a step.json with a build, the checks {string}, {int} fresh inputs on with a validator and the reviews {string}',
+  function (checks: string, count: number, reviews: string) {
+    writeStep(
+      step(this),
+      reviews === '' ? [] : rows(reviews),
+      undefined,
+      [],
+      checks === '' ? [] : checks.split(' '),
+      undefined,
+      { enabled: true, count, validate: true },
+    );
+  },
+);
 
 Given(
   'the step folder holds a step.json with a build, the checks {string}, {int} fresh inputs {word} and the reviews {string}',

@@ -302,6 +302,8 @@ Feature: step.json, the descriptive file of a step
         | a fresh runner of 32 arguments |
         | a fresh runner limit of 7200  |
         | a fresh session effort of max |
+        | a fresh validator             |
+        | a fresh validator of 32 arguments and a limit of 7200 |
 
     Scenario Outline: a copy of the step file with <defect> is refused
       When I break a copy of the step file example with <defect>
@@ -333,3 +335,9 @@ Feature: step.json, the descriptive file of a step
         | a fresh runner without a limit           |
         | a fresh runner limit of 0                |
         | a fresh runner limit of 7201             |
+        | a fresh validator that is a string       |
+        | an unknown key in the fresh validator    |
+        | an empty fresh validator                 |
+        | a fresh validator argument with a line feed |
+        | a fresh validator without a limit        |
+        | a fresh validator limit of 0             |

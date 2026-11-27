@@ -76,16 +76,22 @@ const checksSchema = () =>
  * Les entrées inventées (docs/design/orchestration-fable-5-2.md, §4) : allumées ou non (`enabled`), le nombre d'entrées
  * demandé (`count`, de 1 à 16), la session neuve qui les invente (modèle, effort, limite) et l'exécuteur fixe que l'hôte
  * joue sous le profil `checker` pour chacune (`runner` : un argv, auquel l'hôte ajoute le chemin du scénario qu'il a
- * écrit, et sa limite). Absentes, l'étape n'en a pas : les dossiers d'avant restent rejouables.
+ * écrit, et sa limite), et, facultatif, le validateur (`validate`, de même forme, par exemple la répétition à sec et
+ * stricte de l'exécuteur) que l'hôte joue avant lui sur chaque entrée : une entrée qu'il refuse est `invalid`, une
+ * faute de la session et non du code. Absentes, l'étape n'en a pas : les dossiers d'avant restent rejouables.
  */
+const commandSchema = () =>
+  z.strictObject({
+    command: z.array(argumentSchema()).min(1).max(32),
+    limitSeconds: z.number().int().min(1).max(7200),
+  });
+
 const freshInputsSchema = () =>
   sessionSchema().extend({
     enabled: z.boolean(),
     count: z.number().int().min(1).max(freshInputsMax()),
-    runner: z.strictObject({
-      command: z.array(argumentSchema()).min(1).max(32),
-      limitSeconds: z.number().int().min(1).max(7200),
-    }),
+    runner: commandSchema(),
+    validate: commandSchema().optional(),
   });
 
 /**

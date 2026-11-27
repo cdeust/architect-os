@@ -41,7 +41,16 @@ import {
   ReviewVerdictSchema,
 } from './review-verdict.js';
 import { factsJsonSchema, parseFacts, renderFacts, verifyFacts, type Fact } from './scout-facts.js';
-import { freshInputId, receiveFreshInputs, renderFreshRequest, renderFreshScenario } from './fresh-inputs.js';
+import {
+  freshInputId,
+  freshReasons,
+  receiveFreshInputs,
+  renderFreshOutcomes,
+  renderFreshRequest,
+  renderFreshScenario,
+  runOutcome,
+  type FreshInputOutcome,
+} from './fresh-inputs.js';
 import { freshStage, type FreshStage } from './fresh-stage.js';
 import { SrtSandboxRunner } from './srt-runner.js';
 import type { SandboxRunner } from './port.js';
@@ -290,27 +299,28 @@ interface FreshOutcome extends PlayedSession {
   config: FreshConfig;
   /** La sortie de la session a passé le schéma et les vérifications de l'hôte. */
   received: boolean;
-  /** Chaque entrée jouée, dans l'ordre de la sortie ; son nom est l'identifiant que l'hôte lui a donné. */
-  played: CheckReport[];
+  /** Chaque entrée jouée, dans l'ordre de la sortie. */
+  played: PlayedInput[];
 }
 
 /**
- * Les entrées inventées ont passé : reçues, et chacune jouée avec succès. Une sortie reçue en porte au moins une (le
- * schéma), et chacune est jouée ou la phase lève : `played` n'est jamais vide quand `received` est vrai.
+ * Une entrée jouée : l'identifiant que l'hôte lui a donné, son issue, la durée du validateur et de l'exécuteur ensemble,
+ * et, pour le brief des revues seulement, son titre et le comportement attendu, textes de la session.
  */
-function freshPassed({ received, played }: FreshOutcome): boolean {
-  return received && played.every(passed);
+interface PlayedInput {
+  id: string;
+  outcome: FreshInputOutcome;
+  durationSeconds: number;
+  title: string;
+  expected: string;
 }
 
-/** Ce que l'enregistrement et le résumé gardent de chaque entrée jouée : son identifiant et son issue. */
-function playedInputs({ played }: FreshOutcome) {
-  return played.map((report) => ({
-    id: report.name,
-    exitCode: report.exitCode,
-    passed: passed(report),
-    stopped: report.stopped,
-    durationSeconds: report.durationSeconds,
-  }));
+/**
+ * Les entrées inventées ont passé : reçues, et chacune `passed`. Une sortie reçue en porte au moins une (le schéma), et
+ * chacune est jouée ou la phase lève : `played` n'est jamais vide quand `received` est vrai.
+ */
+function freshPassed({ received, played }: FreshOutcome): boolean {
+  return received && played.every(({ outcome }) => outcome === 'passed');
 }
 
 /**
@@ -355,20 +365,46 @@ async function freshInputs(
     deps.writeFile(join(outputs.retained, `fresh.${id}.feature`), text);
     return [`${id}.feature`, text] as const;
   });
-  const played: CheckReport[] = [];
+  const played: PlayedInput[] = [];
   try {
     const paths = deps.stage.write(Object.fromEntries(scenarios));
     for (const [index, path] of paths.entries()) {
       const id = freshInputId(index);
-      const command = [...config.runner.command, path];
-      played.push(
-        await playCheck(
-          deps,
-          outputs,
-          { name: id, command, limitSeconds: config.runner.limitSeconds },
-          `fresh.${id}.json`,
-        ),
-      );
+      // Le validateur d'abord, s'il y en a un : une entrée qu'il refuse n'est pas jouée.
+      const validation =
+        config.validate === undefined
+          ? undefined
+          : await playCheck(
+              deps,
+              outputs,
+              {
+                name: id,
+                command: [...config.validate.command, path],
+                limitSeconds: config.validate.limitSeconds,
+              },
+              `fresh.${id}.validate.json`,
+            );
+      const run =
+        validation === undefined || passed(validation)
+          ? await playCheck(
+              deps,
+              outputs,
+              {
+                name: id,
+                command: [...config.runner.command, path],
+                limitSeconds: config.runner.limitSeconds,
+              },
+              `fresh.${id}.json`,
+            )
+          : undefined;
+      const { input, expected } = received.inputs[index]!;
+      played.push({
+        id,
+        outcome: run === undefined ? 'invalid' : runOutcome(run),
+        durationSeconds: (validation?.durationSeconds ?? 0) + (run?.durationSeconds ?? 0),
+        title: input.title,
+        expected,
+      });
     }
   } finally {
     deps.stage.remove();
@@ -642,6 +678,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     const appended = [
       ...(step.acceptance ? [renderAcceptance(step.acceptance)] : []),
       ...(played.length > 0 ? [renderChecks(played, outputBound())] : []),
+      ...(fresh === undefined ? [] : [renderFreshOutcomes(fresh.played)]),
     ];
     const forReviews = appended.length === 0 ? brief : `${brief.trimEnd()}\n\n${appended.join('\n')}`;
     if (verified) deps.writeFile(join(outputs.retained, 'review.brief.md'), forReviews);
@@ -719,10 +756,14 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         : {
             freshInputs: {
               received: fresh.received,
-              inputs: playedInputs(fresh).map(({ id, passed, stopped, durationSeconds }) => ({
+              reasons: freshReasons(
+                fresh.received,
+                fresh.played.map(({ outcome }) => outcome),
+              ),
+              // L'identifiant, l'issue et la durée de chaque entrée : ni son titre ni le comportement attendu.
+              inputs: fresh.played.map(({ id, outcome, durationSeconds }) => ({
                 id,
-                passed,
-                stopped,
+                outcome,
                 durationSeconds,
               })),
             },
@@ -761,7 +802,13 @@ export async function runStep(deps: StepDependencies): Promise<number> {
               received: fresh.received,
               costUsd: fresh.measure.costUsd,
               costByModel: fresh.measure.costByModel,
-              inputs: Object.fromEntries(playedInputs(fresh).map(({ id, ...rest }) => [id, rest])),
+              reasons: freshReasons(
+                fresh.received,
+                fresh.played.map(({ outcome }) => outcome),
+              ),
+              inputs: Object.fromEntries(
+                fresh.played.map(({ id, outcome, durationSeconds }) => [id, { outcome, durationSeconds }]),
+              ),
             },
           }),
       reviews,
