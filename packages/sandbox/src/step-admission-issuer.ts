@@ -209,6 +209,7 @@ function writeNew(path: string, text: string): void {
     const bytes = Buffer.from(text);
     for (let offset = 0; offset < bytes.length;)
       offset += writeSync(descriptor, bytes, offset, bytes.length - offset);
+    // Stryker disable next-line CallExpression: équivalent: fsync ne change que la durabilité du reçu après une coupure de l'hôte, qu'aucun processus vivant ne peut observer
     fsyncSync(descriptor);
   } catch {
     unlinkSync(path);

@@ -139,3 +139,60 @@ Then(
     assert.deepEqual(await admitWithProductionHost(issued), { refused: code });
   },
 );
+
+Then(
+  'the production Step host on a clean linked worktree refuses the materialized folder without a receipt and starts no session',
+  async function (this: ArchitectWorld) {
+    const folder = this.state['planFolder'] as string;
+    const { worktree } = repoOf(this);
+    const stderr = new PassThrough();
+    let diagnostic = '';
+    stderr.on('data', (chunk: Buffer) => (diagnostic += chunk.toString()));
+    const env: NodeJS.ProcessEnv = { ...process.env, INIT_CWD: worktree };
+    delete env['ARCHITECT_OS_STEP_EVIDENCE'];
+    const proc = {
+      ...process,
+      env,
+      cwd: () => worktree,
+      argv: [process.execPath, 'step', folder],
+      stderr,
+      stdout: new PassThrough(),
+      stdin: new PassThrough(),
+    };
+    const deps = stepDependencies(proc);
+    let started = 0;
+    let built = 0;
+    let checked = 0;
+    let prepared = 0;
+    const code = await runStep({
+      ...deps,
+      session: async () => {
+        started++;
+        return { exitCode: 1, stopped: true };
+      },
+      builder: {
+        build: async () => {
+          built++;
+          throw new Error('no build may start');
+        },
+      },
+      check: async () => {
+        checked++;
+        throw new Error('no check may start');
+      },
+      steps: { ...deps.steps, prepare: () => void prepared++ },
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(
+      { code, diagnostic, started, built, checked, prepared },
+      {
+        code: 2,
+        diagnostic: 'architect-os step: STEP_ADMISSION_REQUIRED\n',
+        started: 0,
+        built: 0,
+        checked: 0,
+        prepared: 0,
+      },
+    );
+  },
+);

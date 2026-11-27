@@ -119,7 +119,8 @@ export function runAdmit(proc: PlanProcess, issue: Issue = issueAdmission): numb
     proc.stdout.write(`${JSON.stringify({ status: 'issued', step: plan.manifest.step, ...issued })}\n`);
     return 0;
   } catch (error) {
-    const code = error instanceof Error ? error.message : '';
-    return /^ADMIT_[A-Z_]+$/.test(code) ? fail(code) : fail('ADMIT_UNEXPECTED_ERROR', 3);
+    // Only a named refusal keeps its name; anything else attests nothing.
+    if (error instanceof Error && /^ADMIT_[A-Z_]+$/.test(error.message)) return fail(error.message);
+    return fail('ADMIT_UNEXPECTED_ERROR', 3);
   }
 }

@@ -9,6 +9,17 @@ Feature: The production issuer writes a Step admission receipt only for what it 
     Then the receipt is a private file named for its Step and approved digest in a private authority directory
     And the Step authority reads the issued receipt and admits the exact subject
 
+  Scenario Outline: Folder bytes that Step reads the same way are admitted: <variant>
+    Given an approved Step folder for a clean linked worktree with measured specimens
+    And the approved folder is varied by "<variant>"
+    When the host issues the Step admission receipt
+    Then the Step authority reads the issued receipt and admits the exact subject
+
+    Examples:
+      | variant                                    |
+      | a brief that begins with a byte order mark |
+      | file digests listed in reverse order       |
+
   Scenario: The production host reads the launcher Step reads and writes where Step looks
     Then the production admission host reads the launcher of this package and the Step authority directory
 

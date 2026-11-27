@@ -59,3 +59,12 @@ Feature: The approved Plan is read by the real Step host
     Then the production Step host admits the materialized folder with the issued receipt
     When the approved brief is changed after issuance
     Then the production Step host refuses the materialized folder with "STEP_ADMISSION_EVIDENCE_MISMATCH"
+
+  Scenario: A materialized reviewed Plan folder starts no session in the production Step host without a receipt
+    Given a recorded delivery Plan input
+    And the recorded proposal carries independent Define and Plan reviews
+    When I prepare the Plan once
+    And the operator records an approval of the preview
+    And I materialize the Plan
+    Then the reviewed Plan folder holds exactly the approved files of the preview
+    And the production Step host on a clean linked worktree refuses the materialized folder without a receipt and starts no session

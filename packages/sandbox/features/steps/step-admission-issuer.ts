@@ -124,6 +124,32 @@ Given('an approved Step folder for a clean linked worktree with measured specime
 
 type Specimen = ReturnType<typeof measuredSpecimens>[number];
 
+/** The manifest with these file digests, in this order, and the approval of that manifest. */
+function reapprove(item: Issuance, files: Record<string, string>, order?: readonly string[]) {
+  const manifest = item.request.plan.manifest as { files_sha256: Record<string, string> };
+  const merged = { ...manifest.files_sha256, ...files };
+  manifest.files_sha256 = Object.fromEntries(
+    (order ?? Object.keys(merged)).map((name) => [name, merged[name]!]),
+  );
+  Object.assign(item.request.plan, { approval_sha256: hash(JSON.stringify(item.request.plan.manifest)) });
+}
+
+const variants: Record<string, (item: Issuance) => void> = {
+  'a brief that begins with a byte order mark': (item) => {
+    const text = '\uFEFF# Approved plan inputs\n\nDeliver the verified commit.\n';
+    writeFileSync(join(item.request.folder, 'brief.md'), text);
+    reapprove(item, { 'brief.md': hash(text) });
+  },
+  'file digests listed in reverse order': (item) =>
+    reapprove(item, {}, ['step.json', 'scout.history.md', 'brief.md']),
+};
+
+Given('the approved folder is varied by {string}', function (variant: string) {
+  const item = issuance(this);
+  item.request = mutable(item.request);
+  variants[variant]!(item);
+});
+
 const changes: Record<string, (item: Issuance) => void> = {
   'no specimens': (item) => (item.request.specimens = undefined),
   'an empty specimen list': (item) => (item.request.specimens = []),
@@ -169,8 +195,12 @@ const changes: Record<string, (item: Issuance) => void> = {
     rmSync(join(item.request.folder, 'brief.md'));
     execFileSync('mkfifo', [join(item.request.folder, 'brief.md')]);
   },
-  'a brief that is not UTF-8': (item) =>
-    writeFileSync(join(item.request.folder, 'brief.md'), Buffer.from([0x23, 0xff, 0x0a])),
+  'a brief that is not UTF-8': (item) => {
+    // Approved as a lossy decoder would read it: only the refusal of ill-formed UTF-8 keeps it out.
+    const bytes = Buffer.from([0x23, 0xff, 0x0a]);
+    writeFileSync(join(item.request.folder, 'brief.md'), bytes);
+    reapprove(item, { 'brief.md': hash(new TextDecoder('utf-8').decode(bytes)) });
+  },
   'a missing step file': (item) => rmSync(join(item.request.folder, 'step.json')),
   'a step file refused by its schema': (item) =>
     writeFileSync(join(item.request.folder, 'step.json'), JSON.stringify({ build: {} })),
