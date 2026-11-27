@@ -123,23 +123,107 @@ export function writtenTables(sql: string): string[] {
   return [...new Set([...targets].map((m) => String(m[1]).toLowerCase()))];
 }
 
+/** A statement whose table sources the reader cannot enumerate whole: refused when the statement table loads. */
+export class SqlSourceError extends Error {
+  readonly code = 'SQL_SOURCES_UNREADABLE';
+  constructor(where: string, why: string) {
+    super(`${where}: SQL_SOURCES_UNREADABLE: ${why}`);
+    this.name = 'SqlSourceError';
+  }
+}
+
+/** The words that end the source of a FROM or a JOIN; JOIN and USING start another one, read on their own. */
+const ends = (): ReadonlySet<string> =>
+  new Set([
+    'where',
+    'group',
+    'order',
+    'limit',
+    'offset',
+    'having',
+    'window',
+    'fetch',
+    'for',
+    'returning',
+    'union',
+    'intersect',
+    'except',
+    'join',
+    'left',
+    'right',
+    'inner',
+    'full',
+    'cross',
+    'natural',
+    'on',
+    'using',
+    ')',
+    ';',
+  ]);
+
 /**
- * The tables a statement reads: the source of each FROM and JOIN, comments removed, but the target of a DELETE FROM,
- * the operand of IS DISTINCT FROM and the names its WITH clauses define; and, when it has a RETURNING clause, the tables
- * it writes, whose rows it returns.
+ * The tokens of a statement: comments and string literals removed (an E'' string ends at an unescaped quote, a standard
+ * one at a quote that is not doubled), then quoted identifiers, names, parameters, numbers and single characters.
  */
-export function readTables(sql: string): string[] {
-  const code = sql.replace(/--[^\n]*/g, '');
-  const defined = new Set(
-    [...code.matchAll(/\b([A-Za-z_]\w*)\s+AS\s*\(/gi)].map((m) => String(m[1]).toLowerCase()),
+function tokens(sql: string): string[] {
+  const code = sql
+    .replace(/--[^\n]*/g, ' ')
+    .replace(/\bE'(?:[^'\\]|\\.)*'/gi, ' ')
+    .replace(/'(?:[^']|'')*'/g, ' ');
+  return [...code.matchAll(/"[^"]*"|[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)*|\$\d+|\d+(?:\.\d+)?|\S/g)].map(
+    (match) => match[0].toLowerCase(),
   );
-  const sources = [
-    ...code.matchAll(/(?<!\b(?:DELETE|DISTINCT)\s+)\b(?:FROM|JOIN)\s+(?:ONLY\s+)?([A-Za-z_][\w.]*)/gi),
-  ]
-    .map((m) => String(m[1]).toLowerCase())
-    .filter((name) => !defined.has(name));
-  const returned = /\bRETURNING\b/i.test(code) ? writtenTables(code) : [];
+}
+
+/** A name, schema-qualified or not, as `tokens` gives it. */
+const isName = (word: string): boolean => /^[a-z_][\w$]*(?:\.[a-z_][\w$]*)*$/.test(word);
+
+/**
+ * The tables a statement reads: the source of each FROM and JOIN, but the target of a DELETE FROM, the operand of IS
+ * DISTINCT FROM and the names its WITH clauses define; and, when it has a RETURNING clause, the tables it writes, whose
+ * rows it returns. It fails closed: a source it cannot name whole is refused with SqlSourceError, never left out. So
+ * are a comma between two sources of one FROM, a USING that brings a table (DELETE ... USING, MERGE ... USING), a
+ * subquery or a function in FROM or JOIN, and a WITH clause that takes the name of a table of `tables`.
+ */
+export function readTables(sql: string, tables: ReadonlySet<string>, where: string): string[] {
+  const words = tokens(sql);
+  const stops = ends();
+  const refuse = (why: string): never => {
+    throw new SqlSourceError(where, why);
+  };
+  const defined = new Set<string>();
+  words.forEach((word, index) => {
+    if (words[index + 1] === 'as' && words[index + 2] === '(' && isName(word)) defined.add(word);
+  });
+  for (const name of defined)
+    if (tables.has(name)) refuse(`a WITH clause takes the name of the table ${name}`);
+  const sources: string[] = [];
+  words.forEach((word, index) => {
+    if (word === 'using' && words[index + 1] !== '(') refuse('a USING that brings a table');
+    if (word !== 'from' && word !== 'join') return;
+    const before = words[index - 1];
+    if (word === 'from' && (before === 'delete' || before === 'distinct')) return;
+    let at = index + 1;
+    if (words[at] === 'only') at += 1;
+    const source = words[at];
+    if (source === '(') refuse(`a subquery after ${word.toUpperCase()}`);
+    if (source === undefined || !isName(source)) refuse(`no table after ${word.toUpperCase()}`);
+    if (words[at + 1] === '(') refuse(`a function after ${word.toUpperCase()}`);
+    at += 1;
+    if (words[at] === 'as') at += 1;
+    if (words[at] !== undefined && !stops.has(words[at]!) && isName(words[at]!)) at += 1;
+    const next = words[at];
+    if (next === ',') refuse(`a comma between two sources of one ${word.toUpperCase()}`);
+    if (next !== undefined && !stops.has(next)) refuse(`an unreadable source after ${word.toUpperCase()}`);
+    if (!defined.has(source as string)) sources.push(source as string);
+  });
+  const returned = words.includes('returning') ? writtenTables(sql) : [];
   return [...new Set([...sources, ...returned])];
+}
+
+/** The tables the contract names, written or read by an operation: a WITH clause may not take one of their names. */
+export function knownTables(): ReadonlySet<string> {
+  return new Set(DATA_OP_NAMES.flatMap((op) => [...DATA_OPS[op].writes, ...DATA_OPS[op].reads]));
 }
 
 /** The tables of `actual` against those of `declared`: equal as sets, or the error that names both. */
@@ -161,9 +245,14 @@ function checkAccess(
  */
 function checkWrites(table: StatementTable): StatementTable {
   for (const op of DATA_OP_NAMES) {
-    const texts = table.statements.filter((s) => s.op === op).map((s) => s.text);
-    checkAccess(op, 'writes', new Set(texts.flatMap(writtenTables)), DATA_OPS[op].writes);
-    checkAccess(op, 'reads', new Set(texts.flatMap(readTables)), DATA_OPS[op].reads);
+    const statements = table.statements.filter((s) => s.op === op);
+    checkAccess(op, 'writes', new Set(statements.flatMap((s) => writtenTables(s.text))), DATA_OPS[op].writes);
+    checkAccess(
+      op,
+      'reads',
+      new Set(statements.flatMap((s) => readTables(s.text, knownTables(), s.file))),
+      DATA_OPS[op].reads,
+    );
   }
   return table;
 }

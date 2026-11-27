@@ -167,8 +167,8 @@ export const DATA_OPS = {
   'runs.appendEvent': {
     input: RunsAppendEventInputSchema,
     output: RunEventSchema,
-    writes: ['run_events'],
-    reads: ['run_events'],
+    writes: ['runs', 'run_events'],
+    reads: ['runs', 'run_events'],
   },
   'runs.complete': { input: RunsCompleteInputSchema, output: RunSchema, writes: ['runs'], reads: ['runs'] },
   'runs.get': { input: RunsGetInputSchema, output: RunSchema, writes: [], reads: ['runs'] },
