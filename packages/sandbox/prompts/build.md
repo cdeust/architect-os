@@ -29,3 +29,15 @@ So `npm run check`, `npm test`, `npm run gate` and a bare `npx cucumber-js` cann
 ## Report
 
 End with a report that reads on its own: the files created or changed; the checklist of the brief, each box ticked or left open with the reason; each command you ran with its result; "not run" for each thing you could not run here; any departure from the brief and why.
+
+## Departures from the brief
+
+The reviews do not read your report. They receive only the departures you declare in one block of it, which the host extracts. The block opens with a line of three backticks immediately followed by the word claims, and nothing else on the line; then comes one JSON object; then a line of three backticks alone:
+
+````
+```claims
+{"claims": [{"brief_item": "...", "instead": "...", "evidence": [{"file": "src/a.ts", "line": 3}]}]}
+```
+````
+
+A line that looks like this opening but differs from it makes the whole block invalid. Each claim has `brief_item` (the item of the brief you departed from), `instead` (what you did instead) and `evidence` (one to ten entries, each `{"file": "<path>", "line": <n>}` or `{"command": "<command you ran>"}`), every text on one line. At most 20 claims, and one block only. The host validates the block against its schema: an invalid block gives no claim. Each review receives each claim as a statement to verify, never as a proof; a claim it does not verify blocks the step. With no departure, write no block.

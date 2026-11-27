@@ -128,3 +128,21 @@ Feature: the folder steps/ keeps what each step saw
       | a record with the hash of another file   | demo: record.inputs holds the hash of scout.other.md, which is not an input |
       | a steps/x that is a file                 | x: is not a directory                                        |
       | a folder named with an upper-case letter | Demo: its name is refused by the expression of the step names |
+
+  Scenario: a reviewed step folder whose build declared a claim follows the rule
+    Given a copy of steps/ holding the reviewed step folder "demo", whose build declared a claim
+    Then every entry of it follows the rule of the folders of steps
+
+  Scenario Outline: a reviewed record edited by hand is refused: <defect>
+    Given a copy of steps/ holding the reviewed step folder "demo", whose build declared a claim
+    When the copy is broken with <defect>
+    Then that copy of steps/ is refused, because "<reason>"
+
+    Examples:
+      | defect                                                    | reason                                                                       |
+      | a claim status removed from the review                    | demo: record.json is refused                                                 |
+      | a claim refuted in a record that passed                   | demo: record.json is refused                                                 |
+      | a criterion unmet in a record that passed                 | demo: record.json is refused                                                 |
+      | the review removed from a record that passed with a claim | demo: record.json is refused                                                 |
+      | the criteria removed from the review                      | demo: the review quality does not give a status for each criterion of step.json |
+      | another criterion in the review                           | demo: the review quality does not give a status for each criterion of step.json |
