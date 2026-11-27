@@ -2,8 +2,9 @@
 // Les éclaireurs (au plus `parallel` à la fois), dont l'hôte vérifie chaque citation en lisant le fichier ; la session de
 // construction avec le brief et les faits vérifiés, puis les contrôles sans modèle (§13, O.3c), un à la fois, sous srt
 // par le profil `checker`, puis les sessions de revue (au plus `parallel` à la fois), chacune sous srt par l'outil de
-// code ; l'état de l'étape reste sous la racine admise, les flux dans le temporaire du run. Ni rejeu sur l'hôte, ni porte, ni commit : ils restent à
-// l'orchestrateur. `step.ts` ne fait que lui passer le processus.
+// code ; l'état de l'étape reste sous la racine admise, les flux dans le temporaire du run. À la fin, l'hôte publie
+// `steps/<nom>/` et commite la passe sur la branche de travail du worktree (pass-commit.ts). Ni rejeu sur l'hôte, ni
+// porte : ils restent à l'orchestrateur. `step.ts` ne fait que lui passer le processus.
 import {
   appendFileSync,
   closeSync,
@@ -53,6 +54,8 @@ import {
   type RecordedSession,
 } from './step-record.js';
 import { reserveStepOutputs, type StepOutputs } from './step-outputs.js';
+import { admitPass, commitPass, PassRefusal, type PassRepository } from './pass-commit.js';
+import { gitPassRepository } from './pass-repository.js';
 import { stepsFolder, type StepsFolder } from './steps-folder.js';
 import { parseTool } from './tool.js';
 import {
@@ -96,6 +99,8 @@ export interface StepDependencies {
   readonly dispose?: () => void;
   /** Le dossier `steps/` du worktree. */
   readonly steps: StepsFolder;
+  /** Le dépôt du worktree, où l'hôte commite la passe. */
+  readonly repository: PassRepository;
   readonly stdout: Writable;
   readonly stderr: Writable;
 }
@@ -442,6 +447,8 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     if (deps.steps.exists(name)) throw new Refusal(`l'étape ${name} a déjà un dossier dans steps/`);
     // Pris avant toute session, et les textes lus ici sont ceux que l'hôte publiera : jamais relus à la fin.
     const tree = deps.fingerprint();
+    // La branche que la passe avancera, et un départ propre : refusés avant toute session.
+    const branch = admitPass(deps.repository, tree);
     const launcher = launcherFiles(deps.readLauncher, step);
     const startedAt = deps.date();
     const inputs = {
@@ -599,7 +606,19 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       outcome: built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 'passed' : 'refused',
     });
     // Relu par son propre schéma : ce que la porte refuserait n'entre pas dans le worktree.
-    deps.steps.publish(name, { ...inputs, 'record.json': json(stepRecordSchema().parse(record)) });
+    const recordText = json(stepRecordSchema().parse(record));
+    const published = { ...inputs, 'record.json': recordText };
+    deps.steps.publish(name, published);
+    // L'empreinte de fin met le travail de la passe et son dossier dans le magasin d'objets ; l'hôte en fait le commit.
+    const commit = commitPass(deps.repository, {
+      name,
+      branch,
+      start: tree,
+      end: deps.fingerprint(),
+      published: Object.keys(published),
+      record: recordText,
+      seconds: Math.floor(startedAt.getTime() / 1000),
+    });
     const summary = {
       outcome: record.outcome,
       scouts,
@@ -620,11 +639,12 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         build.provider === 'openai' ? null : measures.reduce((sum, measure) => sum + measure.costUsd, 0),
       costByModel: sumByModel(measures.map((measure) => measure.costByModel)),
       record: `steps/${name}/record.json`,
+      commit,
     };
     deps.stdout.write(`${JSON.stringify(summary)}\n`);
     return record.outcome === 'passed' ? 0 : 1;
   } catch (error) {
-    if (error instanceof Refusal) {
+    if (error instanceof Refusal || error instanceof PassRefusal) {
       deps.stderr.write(`architect-os step: ${error.message}\n`);
       return 2;
     }
@@ -802,6 +822,7 @@ export function stepDependencies(proc: CodeProcess, buildSubscription = buildSbx
     },
     dispose: () => snapshot?.dispose(),
     steps: stepsFolder(root),
+    repository: gitPassRepository(root),
     stdout: proc.stdout,
     stderr: proc.stderr,
   };
