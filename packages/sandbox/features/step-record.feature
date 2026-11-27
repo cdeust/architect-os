@@ -507,6 +507,23 @@ Feature: the step leaves its brief and its record in the worktree
         | reviews.0.criteria           | [{"id":"AC-1","status":"partial"}]                                    |
         | reviews.0.criteria           | [{"id":"AC-1","status":"met","evidence":[]}]                          |
         | outcome                      | "stopped"                                                             |
+        | freshInputs                  | true                                                                  |
+        | freshInputs                  | {"received":true}                                                     |
+        | freshInputs                  | {"inputs":[]}                                                         |
+        | freshInputs                  | {"received":"yes","inputs":[]}                                        |
+        | freshInputs                  | {"received":true,"inputs":[],"extra":true}                            |
+        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-0","passed":true,"stopped":false,"durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-2","passed":true,"stopped":false,"durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-01","passed":true,"stopped":false,"durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"inputs":[{"id":"Fresh-1","passed":true,"stopped":false,"durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":false,"durationSeconds":0},{"id":"fresh-1","passed":true,"stopped":false,"durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":"yes","stopped":false,"durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":0,"durationSeconds":0}]} |
+        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":false,"durationSeconds":-1}]} |
+        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":false,"durationSeconds":0.5}]} |
+        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":false}]} |
+        | freshInputs                  | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":false,"durationSeconds":0,"target":"src/a.ts"}]} |
+        | sessions.0.role              | "invent"                                                              |
 
     Scenario Outline: accepted: <field> becomes <value>
       Given a record of a step that the schema accepts
@@ -533,6 +550,19 @@ Feature: the step leaves its brief and its record in the worktree
         | tree.clean                 | false                                |
         | launcher.[profiles/checker.json] | "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |
         | inputs.[scout.a-1.md]      | "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |
+        | sessions.0.role            | "fresh"                              |
+        | freshInputs                | {"received":false,"inputs":[]}       |
+        | freshInputs                | {"received":true,"inputs":[{"id":"fresh-1","passed":true,"stopped":false,"durationSeconds":0},{"id":"fresh-2","passed":false,"stopped":true,"durationSeconds":7}]} |
+
+    Scenario Outline: the fresh inputs of a record hold <count> inputs, from fresh-1 in order: <result>
+      Given a record of a step that the schema accepts
+      When its fresh inputs become <count> inputs that passed, from fresh-1 in order
+      Then the schema of the record <result> it
+
+      Examples:
+        | count | result  |
+        | 16    | accepts |
+        | 17    | refuses |
 
   Scenario Outline: A subscription receipt binds the client and observed usage to its builder
     Then the recorded subscription fixture "<case>" is "<result>"

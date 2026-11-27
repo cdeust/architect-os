@@ -1,7 +1,7 @@
 import { measureSession, type SessionMeasure } from './measure.js';
 import type { StepFile } from './step-file.js';
 
-export type ToolFile = 'code.json' | 'review.json' | 'scout.json';
+export type ToolFile = 'code.json' | 'review.json' | 'scout.json' | 'fresh.json';
 
 /** Une session de l'outil : son code de sortie, et si la limite l'a arrêtée. `onOutput` reçoit sa sortie au fil de l'eau. */
 export type StepSession = (

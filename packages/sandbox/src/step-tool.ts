@@ -41,6 +41,8 @@ import {
   ReviewVerdictSchema,
 } from './review-verdict.js';
 import { factsJsonSchema, parseFacts, renderFacts, verifyFacts, type Fact } from './scout-facts.js';
+import { freshInputId, receiveFreshInputs, renderFreshRequest, renderFreshScenario } from './fresh-inputs.js';
+import { freshStage, type FreshStage } from './fresh-stage.js';
 import { SrtSandboxRunner } from './srt-runner.js';
 import type { SandboxRunner } from './port.js';
 import { outputTail, passed, renderChecks, type CheckOutcome, type CheckReport } from './step-checks.js';
@@ -96,6 +98,8 @@ export interface StepDependencies {
   readonly dispose?: () => void;
   /** Le dossier `steps/` du worktree. */
   readonly steps: StepsFolder;
+  /** Le dossier du worktree où l'hôte pose les scénarios des entrées inventées, le temps de les jouer. */
+  readonly stage: FreshStage;
   readonly stdout: Writable;
   readonly stderr: Writable;
 }
@@ -155,6 +159,11 @@ function readStep(deps: StepDependencies): {
 
 type PlayedSession = Awaited<ReturnType<StepSession>> & { measure: SessionMeasure };
 
+/** Le fichier du lanceur qui porte le schéma de la sortie des entrées inventées, passé tel qu'admis à `--json-schema`. */
+function freshSchemaFile(): string {
+  return 'prompts/fresh-inputs.schema.json';
+}
+
 /** Le résultat structuré ne peut servir qu'après la réussite du processus et du flux. */
 function sessionSucceeded(session: PlayedSession): boolean {
   return passed(session) && session.measure.completed;
@@ -192,18 +201,22 @@ const outputBound = () => 4000;
 
 type CheckConfig = StepFile['checks'][number];
 
-/** Un contrôle : joué, sa durée mesurée en secondes entières, son résultat écrit dans `check.<nom>.json`. */
+/**
+ * Un contrôle : joué, sa durée mesurée en secondes entières, son résultat écrit dans `file` (`check.<nom>.json` pour un
+ * contrôle de l'étape).
+ */
 async function playCheck(
   deps: StepDependencies,
   outputs: StepOutputs,
   config: CheckConfig,
+  file = `check.${config.name}.json`,
 ): Promise<CheckReport> {
   const before = deps.now();
   const outcome = await deps.check(config.command, config.limitSeconds);
   const durationSeconds = Math.round((deps.now() - before) / 1000);
   const { exitCode, stopped, cut, output } = outcome;
   deps.writeFile(
-    join(outputs.retained, `check.${config.name}.json`),
+    join(outputs.retained, file),
     json({ command: config.command, exitCode, stopped, durationSeconds, cut, output }),
   );
   return { name: config.name, command: config.command, exitCode, stopped, durationSeconds, cut, output };
@@ -269,6 +282,98 @@ async function playBounded<Config, Outcome>(
     if (result.status === 'rejected') throw result.reason;
     return result.value;
   });
+}
+
+type FreshConfig = NonNullable<StepFile['freshInputs']>;
+
+interface FreshOutcome extends PlayedSession {
+  config: FreshConfig;
+  /** La sortie de la session a passé le schéma et les vérifications de l'hôte. */
+  received: boolean;
+  /** Chaque entrée jouée, dans l'ordre de la sortie ; son nom est l'identifiant que l'hôte lui a donné. */
+  played: CheckReport[];
+}
+
+/**
+ * Les entrées inventées ont passé : reçues, et chacune jouée avec succès. Une sortie reçue en porte au moins une (le
+ * schéma), et chacune est jouée ou la phase lève : `played` n'est jamais vide quand `received` est vrai.
+ */
+function freshPassed({ received, played }: FreshOutcome): boolean {
+  return received && played.every(passed);
+}
+
+/** Ce que l'enregistrement et le résumé gardent de chaque entrée jouée : son identifiant et son issue. */
+function playedInputs({ played }: FreshOutcome) {
+  return played.map((report) => ({
+    id: report.name,
+    exitCode: report.exitCode,
+    passed: passed(report),
+    stopped: report.stopped,
+    durationSeconds: report.durationSeconds,
+  }));
+}
+
+/**
+ * Les entrées inventées (§4) : une session neuve, sous le profil en lecture seule, reçoit le brief de l'étape suivi de
+ * la demande de l'hôte et rend ses entrées ; l'hôte les reçoit (`receiveFreshInputs`), écrit le scénario de chacune
+ * dans son gabarit, les pose dans le worktree et joue chacune, toutes, sous le profil `checker`, par l'argv fixe de
+ * `runner` suivi du chemin du scénario. Le dossier posé est retiré quoi qu'il arrive. Une sortie refusée ne fait jouer
+ * aucune entrée.
+ */
+async function freshInputs(
+  deps: StepDependencies,
+  outputs: StepOutputs,
+  config: FreshConfig,
+  step: string,
+  brief: string,
+  commit: string,
+  schema: string,
+): Promise<FreshOutcome> {
+  const forFresh = `${brief.trimEnd()}\n\n${renderFreshRequest(config.count, commit)}`;
+  deps.writeFile(join(outputs.retained, 'fresh.brief.md'), forFresh);
+  const session = await play(
+    deps,
+    outputs,
+    'fresh',
+    'fresh.json',
+    config,
+    ['--json-schema', JSON.stringify(JSON.parse(schema))],
+    forFresh,
+  );
+  const received = sessionSucceeded(session)
+    ? receiveFreshInputs(session.measure.structuredOutput, config.count, deps.readSource)
+    : 'la session n’a pas abouti';
+  const inputsFile = join(outputs.retained, 'fresh.inputs.json');
+  if (typeof received === 'string') {
+    deps.writeFile(inputsFile, json({ invalid: received }));
+    return { config, ...session, received: false, played: [] };
+  }
+  deps.writeFile(inputsFile, json(received));
+  const scenarios = received.inputs.map(({ input }, index) => {
+    const id = freshInputId(index);
+    const text = renderFreshScenario(step, id, input);
+    deps.writeFile(join(outputs.retained, `fresh.${id}.feature`), text);
+    return [`${id}.feature`, text] as const;
+  });
+  const played: CheckReport[] = [];
+  try {
+    const paths = deps.stage.write(Object.fromEntries(scenarios));
+    for (const [index, path] of paths.entries()) {
+      const id = freshInputId(index);
+      const command = [...config.runner.command, path];
+      played.push(
+        await playCheck(
+          deps,
+          outputs,
+          { name: id, command, limitSeconds: config.runner.limitSeconds },
+          `fresh.${id}.json`,
+        ),
+      );
+    }
+  } finally {
+    deps.stage.remove();
+  }
+  return { config, ...session, received: true, played };
 }
 
 interface ScoutOutcome extends PlayedSession {
@@ -406,10 +511,12 @@ export function launcherFiles(
   readLauncher: StepDependencies['readLauncher'],
   step: StepFile,
 ): Record<string, string> {
+  const fresh = step.freshInputs?.enabled === true;
   const tools: ToolFile[] = [
     'code.json',
     ...(step.reviews.length > 0 ? (['review.json'] as const) : []),
     ...(step.scouts.length > 0 ? (['scout.json'] as const) : []),
+    ...(fresh ? (['fresh.json'] as const) : []),
   ];
   const files = new Map<string, string>();
   for (const toolFile of tools) {
@@ -423,9 +530,10 @@ export function launcherFiles(
   if (step.build.provider === 'openai') {
     for (const asset of ['sbx/isolation.json', 'sbx/codex-guest.py']) files.set(asset, readLauncher(asset));
   }
-  // Les contrôles tournent sous le profil `checker`, qu'aucun fichier d'outil ne nomme.
+  if (fresh) files.set(freshSchemaFile(), readLauncher(freshSchemaFile()));
+  // Les contrôles et les entrées inventées tournent sous le profil `checker`, qu'aucun fichier d'outil ne nomme.
   const checker = 'profiles/checker.json';
-  if (step.checks.length > 0) files.set(checker, readLauncher(checker));
+  if (step.checks.length > 0 || fresh) files.set(checker, readLauncher(checker));
   return Object.fromEntries([...files.keys()].sort().map((file) => [file, files.get(file) as string]));
 }
 
@@ -516,18 +624,32 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       }
     }
     const checked = played.every(passed);
+    const freshConfig = step.freshInputs?.enabled === true ? step.freshInputs : undefined;
+    const fresh =
+      built && checked && freshConfig !== undefined
+        ? await freshInputs(
+            deps,
+            outputs,
+            freshConfig,
+            name,
+            brief,
+            tree.commit,
+            launcher[freshSchemaFile()]!,
+          )
+        : undefined;
+    // Une entrée inventée qui échoue arrête l'étape comme un contrôle : aucune revue.
+    const verified = built && checked && (fresh === undefined || freshPassed(fresh));
     const appended = [
       ...(step.acceptance ? [renderAcceptance(step.acceptance)] : []),
       ...(played.length > 0 ? [renderChecks(played, outputBound())] : []),
     ];
     const forReviews = appended.length === 0 ? brief : `${brief.trimEnd()}\n\n${appended.join('\n')}`;
-    if (built && checked) deps.writeFile(join(outputs.retained, 'review.brief.md'), forReviews);
-    const outcomes =
-      built && checked
-        ? await playBounded(step.reviews, step.parallel, (config) =>
-            review(deps, outputs, config, forReviews, step.acceptance ?? []),
-          )
-        : [];
+    if (verified) deps.writeFile(join(outputs.retained, 'review.brief.md'), forReviews);
+    const outcomes = verified
+      ? await playBounded(step.reviews, step.parallel, (config) =>
+          review(deps, outputs, config, forReviews, step.acceptance ?? []),
+        )
+      : [];
     const checks = Object.fromEntries(
       played.map((report) => [
         report.name,
@@ -556,6 +678,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     const measures = [
       ...scoutOutcomes.map(({ measure }) => measure),
       build.measure,
+      ...(fresh === undefined ? [] : [fresh.measure]),
       ...outcomes.map(({ measure }) => measure),
     ];
     const record = buildRecord({
@@ -582,6 +705,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
               }
             : {}),
         },
+        ...(fresh === undefined ? [] : [recorded('fresh', fresh.config, fresh)]),
         ...outcomes.map((review) => recorded('review', review.config, review, review.config.name)),
       ],
       checks: played.map((report) => ({
@@ -590,13 +714,26 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         stopped: report.stopped,
         durationSeconds: report.durationSeconds,
       })),
+      ...(fresh === undefined
+        ? {}
+        : {
+            freshInputs: {
+              received: fresh.received,
+              inputs: playedInputs(fresh).map(({ id, passed, stopped, durationSeconds }) => ({
+                id,
+                passed,
+                stopped,
+                durationSeconds,
+              })),
+            },
+          }),
       reviews: outcomes.map(({ config, verdict }) => ({
         name: config.name,
         verdict: verdict.verdict,
         findings: verdict.findings,
         ...(verdict.criteria.length > 0 ? { criteria: verdict.criteria } : {}),
       })),
-      outcome: built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 'passed' : 'refused',
+      outcome: verified && !outcomes.some(({ verdict }) => verdict.blocks) ? 'passed' : 'refused',
     });
     // Relu par son propre schéma : ce que la porte refuserait n'entre pas dans le worktree.
     deps.steps.publish(name, { ...inputs, 'record.json': json(stepRecordSchema().parse(record)) });
@@ -615,6 +752,18 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         costByModel: build.measure.costByModel,
       },
       checks,
+      ...(fresh === undefined
+        ? {}
+        : {
+            freshInputs: {
+              completed: fresh.measure.completed,
+              exitCode: fresh.exitCode,
+              received: fresh.received,
+              costUsd: fresh.measure.costUsd,
+              costByModel: fresh.measure.costByModel,
+              inputs: Object.fromEntries(playedInputs(fresh).map(({ id, ...rest }) => [id, rest])),
+            },
+          }),
       reviews,
       costUsd:
         build.provider === 'openai' ? null : measures.reduce((sum, measure) => sum + measure.costUsd, 0),
@@ -802,6 +951,7 @@ export function stepDependencies(proc: CodeProcess, buildSubscription = buildSbx
     },
     dispose: () => snapshot?.dispose(),
     steps: stepsFolder(root),
+    stage: freshStage(root),
     stdout: proc.stdout,
     stderr: proc.stderr,
   };

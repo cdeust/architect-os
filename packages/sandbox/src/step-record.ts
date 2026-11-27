@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { ticketsSchema } from '@architect-os/contracts';
 import { codexModelSchema, type StepFile } from './step-file.js';
+import { freshInputsMax, freshInputId } from './fresh-inputs.js';
 import type { TreeFingerprint } from './tree-fingerprint.js';
 
 // Les schémas et les expressions sont construits dans des fonctions : un littéral au niveau du module ferait rejouer
@@ -66,7 +67,7 @@ export function stepRecordSchema() {
     sessions: z.array(
       z
         .strictObject({
-          role: z.enum(['scout', 'build', 'review']),
+          role: z.enum(['scout', 'build', 'fresh', 'review']),
           provider: z.enum(['anthropic', 'openai']).optional(),
           client: z.strictObject({ version: z.string().min(1), sha256: digest() }).optional(),
           usage: z
@@ -123,6 +124,25 @@ export function stepRecordSchema() {
         durationSeconds: seconds(),
       }),
     ),
+    // Les entrées inventées (§4) : si la sortie de la session a été reçue, puis l'identifiant que l'hôte a donné à chaque
+    // entrée et son issue ; aucun texte de la session. Absent quand l'étape n'en a pas.
+    freshInputs: z
+      .strictObject({
+        received: z.boolean(),
+        // L'identifiant d'une entrée est sa place : `fresh-1`, `fresh-2`, … dans l'ordre, seize au plus.
+        inputs: z
+          .array(
+            z.strictObject({
+              id: z.string(),
+              passed: z.boolean(),
+              stopped: z.boolean(),
+              durationSeconds: seconds(),
+            }),
+          )
+          .max(freshInputsMax())
+          .refine((inputs) => inputs.every(({ id }, index) => id === freshInputId(index))),
+      })
+      .optional(),
     reviews: z.array(
       z.strictObject({
         name: z.string().regex(stepName()),
@@ -161,7 +181,7 @@ export function publicCosts(costs: Readonly<Record<string, number>>): Record<str
 
 /** Ce qu'une session a laissé de mesurable. */
 export interface RecordedSession {
-  role: 'scout' | 'build' | 'review';
+  role: 'scout' | 'build' | 'fresh' | 'review';
   provider?: 'anthropic' | 'openai';
   client?: { version: string; sha256: string };
   usage?: { inputTokens: number | null; outputTokens: number | null };
@@ -189,6 +209,7 @@ export interface RecordParts {
   launcher: Readonly<Record<string, string>>;
   sessions: readonly RecordedSession[];
   checks: readonly { name: string; passed: boolean; stopped: boolean; durationSeconds: number }[];
+  freshInputs?: StepRecord['freshInputs'];
   reviews: StepRecord['reviews'];
   outcome: StepRecord['outcome'];
 }
@@ -232,6 +253,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
       stopped,
       durationSeconds,
     })),
+    ...(parts.freshInputs ? { freshInputs: parts.freshInputs } : {}),
     reviews: parts.reviews,
     outcome: parts.outcome,
   };

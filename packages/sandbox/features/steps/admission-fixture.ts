@@ -35,6 +35,9 @@ export function admittedFixture(
       model,
       prompt: 'prompts/review.md',
     })),
+    ...(subject.step.freshInputs?.enabled
+      ? [{ role: 'fresh', model: subject.step.freshInputs.model, prompt: 'prompts/fresh.md' }]
+      : []),
   ];
   const expected = { verdict: 'pass', findings: [] };
   const caseInput = { id: 'trace-a-local-receipt', input_sha256: hash('Replay a saved receipt'), expected };

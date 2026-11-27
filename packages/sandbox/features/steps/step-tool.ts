@@ -37,6 +37,7 @@ import { admittedFixture } from './admission-fixture.js';
 import { factsJsonSchema } from '../../src/scout-facts.js';
 import { stepRecordSchema } from '../../src/step-record.js';
 import { stepsFolder } from '../../src/steps-folder.js';
+import { inMemoryFreshStage } from '../../src/fresh-stage.js';
 import { repoOf } from './runner.js';
 import { parseStepFile } from '../../src/step-file.js';
 import type { TreeFingerprint } from '../../src/tree-fingerprint.js';
@@ -130,6 +131,11 @@ interface Step {
   publication?: Error;
   /** The files of the launcher that the step cannot read. */
   missing: Set<string>;
+  /** Where the step stages the scenarios of the fresh inputs, and what was staged when each check started. */
+  stage: ReturnType<typeof inMemoryFreshStage>;
+  staged: string[][];
+  stageWrites: number;
+  stageRemovals: number;
   /** The files that the build session rewrites in the step folder while it runs. */
   rewrites: { file: string; content: string }[];
   finished: boolean;
@@ -159,7 +165,11 @@ const newStepFolder = (world: SandboxWorld, name: string) => {
     folder,
     outputs: { retained: join(parent, 'retained-output'), streams: join(parent, 'raw-streams') },
     calls: [],
-    behaviours: { 'code.json': {}, 'review.json': {}, 'scout.json': {} },
+    behaviours: { 'code.json': {}, 'review.json': {}, 'scout.json': {}, 'fresh.json': {} },
+    stage: inMemoryFreshStage(),
+    staged: [],
+    stageWrites: 0,
+    stageRemovals: 0,
     phases: { 'scout.json': newPhase(), 'review.json': newPhase() },
     checks: newPhase(),
     checkCalls: [],
@@ -209,6 +219,7 @@ const writeStep = (
   scouts: readonly ReviewRow[] = [],
   checks: readonly string[] = [],
   acceptance?: readonly string[],
+  fresh?: { enabled: boolean; count: number },
 ) => {
   writeFileSync(
     join(s.folder, 'step.json'),
@@ -222,6 +233,17 @@ const writeStep = (
             checks: checks.map((name) => ({ name, command: ['npm', 'run', name], limitSeconds: 120 })),
           }
         : {}),
+      ...(fresh === undefined
+        ? {}
+        : {
+            freshInputs: {
+              ...fresh,
+              model: 'claude-opus-5-5',
+              effort: 'high',
+              limitSeconds: 1200,
+              runner: { command: ['npx', 'cucumber-js', '--profile', 'replay'], limitSeconds: 600 },
+            },
+          }),
       ...(reviews.length > 0
         ? { reviews: reviews.map((review) => ({ ...review, effort: 'high', limitSeconds: 900 })) }
         : {}),
@@ -432,12 +454,14 @@ Given('the review session {int} is stopped by its limit', function (n: number) {
   behaviour(step(this), 'review.json', n).stopped = true;
 });
 
-/** The files of the launcher as the scenarios see them: the three tool files as committed, the others fixed. */
+/** The files of the launcher as the scenarios see them: the four tool files and the schema of the fresh inputs as committed, the others fixed. */
 const launcherFile =
   (s: Step) =>
   (file: string): string => {
     if (s.missing.has(file)) throw new Error(`missing launcher file ${file}`);
-    return /^(code|review|scout)\.json$/.test(file) ? readFileSync(join(PKG, file), 'utf8') : `fixed:${file}`;
+    return /^((code|review|scout|fresh)\.json|prompts\/fresh-inputs\.schema\.json)$/.test(file)
+      ? readFileSync(join(PKG, file), 'utf8')
+      : `fixed:${file}`;
   };
 
 Given('the step has {string} admission evidence', function (reason: string) {
@@ -462,6 +486,7 @@ const start = (s: Step, args: string): Promise<void> => {
     appendFile: (path, content) => writeFileSync(path, content, { flag: 'a' }),
     check: async (command, limitSeconds) => {
       s.checkCalls.push({ command, limitSeconds });
+      s.staged.push([...s.stage.files.keys()]);
       const n = s.checkCalls.length;
       const own = s.checks.behaviours.get(n) ?? {};
       gate(s.checks.started, n).resolve();
@@ -495,6 +520,12 @@ const start = (s: Step, args: string): Promise<void> => {
         return requireStepAdmission({ ...evidence, payload }, subject);
       }
       if (s.refusedAdmission === 'stale') evidence.payload.inputs_sha256['brief.md'] = 'a'.repeat(64);
+      if (s.refusedAdmission === 'no fresh specimen') {
+        evidence.payload.specimens = evidence.payload.specimens.filter(({ role }) => role !== 'fresh');
+        evidence.approved_sha256 = createHash('sha256')
+          .update(JSON.stringify(evidence.payload))
+          .digest('hex');
+      }
       if (s.refusedAdmission === 'failed specimen') {
         evidence.payload.specimens[0]!.results[0]!.observed = { verdict: 'refuse', findings: [] };
         evidence.approved_sha256 = createHash('sha256')
@@ -503,6 +534,16 @@ const start = (s: Step, args: string): Promise<void> => {
       }
       s.acceptedAdmission = requireStepAdmission(evidence, subject);
       return s.acceptedAdmission;
+    },
+    stage: {
+      write: (files) => {
+        s.stageWrites++;
+        return s.stage.write(files);
+      },
+      remove: () => {
+        s.stageRemovals++;
+        s.stage.remove();
+      },
     },
     steps: {
       prepare: () => void s.prepared.push(s.calls.length),
@@ -515,7 +556,7 @@ const start = (s: Step, args: string): Promise<void> => {
     builder: s.fixtureBuilder ?? new ClaudeBuilder((...args) => deps.session(...args)),
     session: async (tool, argv, brief, limitSeconds, onOutput) => {
       s.calls.push({ tool, argv, brief, limitSeconds });
-      const phase = tool === 'code.json' ? undefined : s.phases[tool];
+      const phase = tool === 'code.json' || tool === 'fresh.json' ? undefined : s.phases[tool];
       const n = s.calls.filter((call) => call.tool === tool).length;
       const own = { ...s.behaviours[tool], ...phase?.behaviours.get(n) };
       if (phase !== undefined) {
@@ -1407,3 +1448,180 @@ Then(
     assert.equal(deps.readSource(path)?.length, size);
   },
 );
+
+// The fresh inputs (docs/design/orchestration-fable-5-2.md, §4): the policy of the step, the output of the fresh
+// session, and what the host staged and played.
+
+Given(
+  'the step folder holds a step.json with a build, the checks {string}, {int} fresh inputs {word} and the reviews {string}',
+  function (checks: string, count: number, state: string, reviews: string) {
+    assert.ok(state === 'on' || state === 'off', `fresh inputs are on or off, not ${state}`);
+    writeStep(
+      step(this),
+      reviews === '' ? [] : rows(reviews),
+      undefined,
+      [],
+      checks === '' ? [] : checks.split(' '),
+      undefined,
+      { enabled: state === 'on', count },
+    );
+  },
+);
+
+/** The stream of a fresh session that ends with `structured_output`. */
+const freshStream = (output: unknown): string =>
+  [
+    {
+      type: 'assistant',
+      message: { id: 'msg_f1', model: 'claude-opus-5-5', usage: { input_tokens: 1, output_tokens: 1 } },
+    },
+    {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      num_turns: 3,
+      duration_ms: 7000,
+      total_cost_usd: 0.5,
+      result: 'Inputs given.',
+      permission_denials: [],
+      usage: {
+        input_tokens: 2,
+        output_tokens: 100,
+        cache_read_input_tokens: 500,
+        cache_creation_input_tokens: 10,
+      },
+      modelUsage: { 'claude-opus-5-5': { costUSD: 0.5 } },
+      structured_output: output,
+    },
+  ]
+    .map((event) => JSON.stringify(event))
+    .join('\n')
+    .concat('\n');
+
+/** One input on `target`, its step 2 with the text `text`. */
+const freshInput = (target: string, text: string) => ({
+  target,
+  input: {
+    title: `an input on ${target}`,
+    steps: [
+      { keyword: 'Given', text: 'a step folder' },
+      { keyword: 'When', text },
+      { keyword: 'Then', text: 'the step exits with 2' },
+    ],
+  },
+  expected: 'the brief says that the step refuses it',
+});
+
+Given('the fresh session invents one input on each of the targets {string}', function (targets: string) {
+  const s = step(this);
+  s.behaviours['fresh.json'].text = freshStream({
+    inputs: targets.split(' ').map((target) => freshInput(target, 'I run the step with the arguments ""')),
+    open: ['a symbolic link cannot be written with the existing steps'],
+  });
+});
+
+Given(
+  'the fresh session invents one input on {string} whose step 2 is: {}',
+  function (target: string, text: string) {
+    step(this).behaviours['fresh.json'].text = freshStream({ inputs: [freshInput(target, text)], open: [] });
+  },
+);
+
+Given('the fresh session gives the structured output:', function (output: string) {
+  step(this).behaviours['fresh.json'].text = freshStream(JSON.parse(output));
+});
+
+Given('the fresh session gives no structured output', function () {
+  step(this).behaviours['fresh.json'].text = freshStream(undefined);
+});
+
+Given('the fresh session exits with {int}', function (code: number) {
+  step(this).behaviours['fresh.json'].nativeExit = code;
+});
+
+Given('the fresh session is stopped by its limit', function () {
+  step(this).behaviours['fresh.json'].stopped = true;
+});
+
+Given('the fresh session fails with the plain error {string}', function (message: string) {
+  step(this).behaviours['fresh.json'].failure = new Error(message);
+});
+
+Given('the worktree of the step holds the files {string}', function (paths: string) {
+  for (const path of paths.split(' ')) step(this).source.set(path, `// ${path}\n`);
+});
+
+Given('the stage of the fresh inputs is already taken', function () {
+  const s = step(this);
+  const memory = s.stage;
+  s.stage = {
+    files: memory.files,
+    write: () => {
+      throw new Error('EEXIST: .architect-os-fresh-inputs');
+    },
+    remove: () => memory.remove(),
+  };
+});
+
+Then('the checks staged {string} when each started', function (staged: string) {
+  assert.deepEqual(
+    step(this).staged.map((paths) => paths.join(',')),
+    staged.split(' '),
+  );
+});
+
+Then('the stage of the fresh inputs holds nothing', function () {
+  assert.equal(step(this).stage.files.size, 0);
+});
+
+Then(
+  'the check {int} was started with the runner and the staged file {string}',
+  function (n: number, file: string) {
+    assert.deepEqual(step(this).checkCalls[n - 1], {
+      command: ['npx', 'cucumber-js', '--profile', 'replay', `.architect-os-fresh-inputs/${file}`],
+      limitSeconds: 600,
+    });
+  },
+);
+
+Then(
+  'the staged file {string} parsed by the check {int} has the step 2 text: {}',
+  function (file: string, n: number, text: string) {
+    const s = step(this);
+    // The file the check read is the one the host retained: it was staged as written.
+    const retained = readFileSync(
+      join(s.outputs.retained, `fresh.${file.replace('.feature', '')}.feature`),
+      'utf8',
+    );
+    assert.equal(s.staged[n - 1]?.includes(`.architect-os-fresh-inputs/${file}`), true);
+    const lines = retained.split('\n');
+    assert.equal(lines.filter((line) => /^\s*(Given|When|Then|And|But) /.test(line)).length, 3);
+    assert.equal(
+      lines.filter((line) => /^\s*(Feature|Scenario|Rule|Background|Examples):/.test(line)).length,
+      2,
+    );
+    assert.equal(lines[4], `    When ${text}`);
+  },
+);
+
+Then(
+  'the session {int} got the arguments {string} and then the committed schema of the fresh inputs',
+  function (n: number, args: string) {
+    const argv = step(this).calls[n - 1]?.argv ?? [];
+    assert.deepEqual(argv.slice(0, -1), args.split(' '));
+    const schema = JSON.parse(argv.at(-1) as string) as Record<string, unknown>;
+    assert.deepEqual(
+      schema,
+      JSON.parse(readFileSync(join(PKG, 'prompts', 'fresh-inputs.schema.json'), 'utf8')),
+    );
+    assert.equal(schema['$schema'], 'http://json-schema.org/draft-07/schema#');
+  },
+);
+
+Then('the stage of the fresh inputs was never written', function () {
+  assert.equal(step(this).stageWrites, 0);
+});
+
+Then('the stage of the fresh inputs was written once and removed once', function () {
+  assert.deepEqual([step(this).stageWrites, step(this).stageRemovals], [1, 1]);
+});

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ticketsSchema } from '@architect-os/contracts';
+import { freshInputsMax } from './fresh-inputs.js';
 
 export const codexModelSchema = z.enum(['gpt-6.2-astra', 'gpt-6.2-sol']);
 export type CodexModel = z.infer<typeof codexModelSchema>;
@@ -72,6 +73,22 @@ const checksSchema = () =>
     .default([]);
 
 /**
+ * Les entrées inventées (docs/design/orchestration-fable-5-2.md, §4) : allumées ou non (`enabled`), le nombre d'entrées
+ * demandé (`count`, de 1 à 16), la session neuve qui les invente (modèle, effort, limite) et l'exécuteur fixe que l'hôte
+ * joue sous le profil `checker` pour chacune (`runner` : un argv, auquel l'hôte ajoute le chemin du scénario qu'il a
+ * écrit, et sa limite). Absentes, l'étape n'en a pas : les dossiers d'avant restent rejouables.
+ */
+const freshInputsSchema = () =>
+  sessionSchema().extend({
+    enabled: z.boolean(),
+    count: z.number().int().min(1).max(freshInputsMax()),
+    runner: z.strictObject({
+      command: z.array(argumentSchema()).min(1).max(32),
+      limitSeconds: z.number().int().min(1).max(7200),
+    }),
+  });
+
+/**
  * `step.json`, le fichier descriptif d'une étape : la session de construction, les éclaireurs et les revues (au plus 8
  * de chaque, chacun avec son nom, son modèle, son effort et sa limite) et le nombre de sessions d'une même sorte qui
  * peuvent tourner en même temps. Un nom d'éclaireur peut être celui d'une revue.
@@ -89,6 +106,7 @@ const stepPolicySchema = () =>
     ]),
     scouts: namedSessions('scout'),
     checks: checksSchema(),
+    freshInputs: freshInputsSchema().optional(),
     reviews: namedSessions('review'),
     parallel: z.number().int().min(1).max(8).default(2),
   });

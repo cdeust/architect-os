@@ -1,0 +1,37 @@
+{
+  "description": "Session des entrées inventées (docs/design/orchestration-fable-5-2.md, §4) : même commande, même profil en lecture seule et même proxy d'authentification que la revue, prompt système pris dans le checkout du lanceur. Une session neuve, qui n'a pas vu la construction, lit le brief et le changement et invente des entrées que les scénarios de la construction n'emploient pas, en scénarios écrits avec les steps qui existent ; l'hôte les écrit dans un gabarit fixe et les joue sous le profil checker. Aucun secret dans la sandbox.",
+  "profile": "reviewer",
+  "command": ["claude", "--bare", "--settings", "${config}/settings.json", "--strict-mcp-config"],
+  "launcherPromptFile": "prompts/fresh.md",
+  "authProxy": {
+    "upstream": "https://api.anthropic.com",
+    "routes": ["^/v1/messages(/count_tokens)?(\\?[^#]*)?$"],
+    "betas": ["oauth-2025-04-20"],
+    "policy": {
+      "bodyFields": [
+        "context_management",
+        "max_tokens",
+        "messages",
+        "metadata",
+        "model",
+        "output_config",
+        "stop_sequences",
+        "stream",
+        "system",
+        "temperature",
+        "thinking",
+        "tool_choice",
+        "tools"
+      ],
+      "maxBodyBytes": 67108864
+    },
+    "credentialCommand": [
+      "/usr/bin/security",
+      "find-generic-password",
+      "-s",
+      "Claude Code-credentials",
+      "-w"
+    ],
+    "usageLog": "${state}/usage.jsonl"
+  }
+}

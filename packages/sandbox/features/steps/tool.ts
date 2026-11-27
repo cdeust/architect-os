@@ -91,6 +91,24 @@ Then('the scout.json auth proxy and command are those of review.json', function 
   assert.deepEqual(scout, review);
 });
 
+When('I load the committed fresh.json', function () {
+  this.state['tool'] = loadTool(join(PKG, 'fresh.json'));
+});
+
+When('I break a copy of the committed fresh.json with {}', function (defect: string) {
+  const breakIt = DEFECTS[defect];
+  assert.ok(breakIt, `no defect named "${defect}"`);
+  const broken = committed('fresh.json');
+  breakIt(broken);
+  this.state['broken'] = broken;
+});
+
+Then('the fresh.json auth proxy and command are those of review.json', function () {
+  const { description: _fresh, launcherPromptFile: _freshPrompt, ...fresh } = committed('fresh.json');
+  const { description: _review, launcherPromptFile: _reviewPrompt, ...review } = committed('review.json');
+  assert.deepEqual(fresh, review);
+});
+
 When('I load the committed code.json', function () {
   this.state['tool'] = loadTool(join(PKG, 'code.json'));
 });

@@ -18,6 +18,18 @@ const withCheck = (s: Record<string, any>) => (s['checks'] = [checkNamed('types'
 
 const withScout = (s: Record<string, any>) => (s['scouts'] = [scoutNamed('files')]);
 
+/** The fresh inputs of a step: on, two inputs, a session, a fixed runner. */
+const freshPolicy = () => ({
+  enabled: true,
+  count: 2,
+  model: 'claude-opus-5-5',
+  effort: 'high',
+  limitSeconds: 1200,
+  runner: { command: ['npx', 'cucumber-js', '--profile', 'replay'], limitSeconds: 600 },
+});
+
+const withFresh = (s: Record<string, any>) => (s['freshInputs'] = freshPolicy());
+
 /** Copies of the example that the schema accepts: the edge of each rule of `checks`. */
 const EDGES: Record<string, (s: Record<string, any>) => unknown> = {
   'eight checks': (s) => (s['checks'] = Array.from({ length: 8 }, (_, i) => checkNamed(`c${i}`))),
@@ -35,6 +47,16 @@ const EDGES: Record<string, (s: Record<string, any>) => unknown> = {
   ),
   'a check limit of 1': (s) => (withCheck(s), (s['checks'][0]['limitSeconds'] = 1)),
   'a check limit of 7200': (s) => (withCheck(s), (s['checks'][0]['limitSeconds'] = 7200)),
+  'fresh inputs turned off': (s) => (withFresh(s), (s['freshInputs']['enabled'] = false)),
+  'a count of 1 fresh input': (s) => (withFresh(s), (s['freshInputs']['count'] = 1)),
+  'a count of 16 fresh inputs': (s) => (withFresh(s), (s['freshInputs']['count'] = 16)),
+  'a fresh runner of one argument': (s) => (withFresh(s), (s['freshInputs']['runner']['command'] = ['x'])),
+  'a fresh runner of 32 arguments': (s) => (
+    withFresh(s),
+    (s['freshInputs']['runner']['command'] = Array(32).fill('x'))
+  ),
+  'a fresh runner limit of 7200': (s) => (withFresh(s), (s['freshInputs']['runner']['limitSeconds'] = 7200)),
+  'a fresh session effort of max': (s) => (withFresh(s), (s['freshInputs']['effort'] = 'max')),
 };
 
 const DEFECTS: Record<string, (s: Record<string, any>) => unknown> = {
@@ -108,6 +130,39 @@ const DEFECTS: Record<string, (s: Record<string, any>) => unknown> = {
   'a non-integer limit': (s) => (s['build']['limitSeconds'] = 60.5),
   'an empty model': (s) => (s['build']['model'] = ''),
   'no build': (s) => delete s['build'],
+  'fresh inputs that are not an object': (s) => (s['freshInputs'] = true),
+  'the singular fresh input key': (s) => (s['freshInput'] = freshPolicy()),
+  'an unknown key in the fresh inputs': (s) => (withFresh(s), (s['freshInputs']['name'] = 'fresh')),
+  'fresh inputs without enabled': (s) => (withFresh(s), delete s['freshInputs']['enabled']),
+  'an enabled that is a string': (s) => (withFresh(s), (s['freshInputs']['enabled'] = 'true')),
+  'fresh inputs without a count': (s) => (withFresh(s), delete s['freshInputs']['count']),
+  'a count of 0 fresh inputs': (s) => (withFresh(s), (s['freshInputs']['count'] = 0)),
+  'a count of 17 fresh inputs': (s) => (withFresh(s), (s['freshInputs']['count'] = 17)),
+  'a fractional count of fresh inputs': (s) => (withFresh(s), (s['freshInputs']['count'] = 1.5)),
+  'fresh inputs without a model': (s) => (withFresh(s), delete s['freshInputs']['model']),
+  'an empty fresh model': (s) => (withFresh(s), (s['freshInputs']['model'] = '')),
+  'a fresh effort not in the list': (s) => (withFresh(s), (s['freshInputs']['effort'] = 'extreme')),
+  'a fresh session limit of 0': (s) => (withFresh(s), (s['freshInputs']['limitSeconds'] = 0)),
+  'a fresh session limit of 7201': (s) => (withFresh(s), (s['freshInputs']['limitSeconds'] = 7201)),
+  'fresh inputs without a runner': (s) => (withFresh(s), delete s['freshInputs']['runner']),
+  'a fresh runner that is a string': (s) => (withFresh(s), (s['freshInputs']['runner'] = 'npx cucumber-js')),
+  'an unknown key in the fresh runner': (s) => (withFresh(s), (s['freshInputs']['runner']['shell'] = true)),
+  'an empty fresh runner': (s) => (withFresh(s), (s['freshInputs']['runner']['command'] = [])),
+  'a fresh runner of 33 arguments': (s) => (
+    withFresh(s),
+    (s['freshInputs']['runner']['command'] = Array(33).fill('x'))
+  ),
+  'a fresh runner argument with a line feed': (s) => (
+    withFresh(s),
+    (s['freshInputs']['runner']['command'] = ['npx', 'a\nb'])
+  ),
+  'an empty fresh runner argument': (s) => (
+    withFresh(s),
+    (s['freshInputs']['runner']['command'] = ['npx', ''])
+  ),
+  'a fresh runner without a limit': (s) => (withFresh(s), delete s['freshInputs']['runner']['limitSeconds']),
+  'a fresh runner limit of 0': (s) => (withFresh(s), (s['freshInputs']['runner']['limitSeconds'] = 0)),
+  'a fresh runner limit of 7201': (s) => (withFresh(s), (s['freshInputs']['runner']['limitSeconds'] = 7201)),
 };
 
 When('I parse the step file example', function () {
@@ -411,4 +466,18 @@ When('I make a copy of the step file example with the acceptance {}', function (
 
 Then('the step file copy keeps the acceptance {}', function (json: string) {
   assert.deepEqual(parseStepFile(stored(this, 'broken')).acceptance, JSON.parse(json));
+});
+
+When('I parse the step file example with fresh inputs', function () {
+  const raw = example();
+  withFresh(raw);
+  this.state['step'] = parseStepFile(raw);
+});
+
+Then('the step fresh inputs are the policy of the example', function () {
+  assert.deepEqual(stored<StepFile>(this, 'step').freshInputs, freshPolicy());
+});
+
+Then('the step has no fresh inputs', function () {
+  assert.equal(stored<StepFile>(this, 'step').freshInputs, undefined);
 });

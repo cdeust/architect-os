@@ -185,6 +185,10 @@ Then('the published record field {string} is {}', function (path: string, json: 
   assert.deepEqual(at(record(this), path), JSON.parse(json));
 });
 
+Then('the published record has no field {string}', function (field: string) {
+  assert.equal(Object.hasOwn(record(this), field), false);
+});
+
 Then(
   'the published record field {string} has its keys in the order {string}',
   function (path: string, keys: string) {
@@ -466,6 +470,16 @@ Given('a record of a step that the schema accepts', function () {
 
 When('its field {string} becomes {}', function (path: string, json: string) {
   setAt(stored<Record<string, unknown>>(this, 'schemaRecord'), path, JSON.parse(json));
+});
+
+When('its fresh inputs become {int} inputs that passed, from fresh-1 in order', function (count: number) {
+  const inputs = Array.from({ length: count }, (_, index) => ({
+    id: `fresh-${index + 1}`,
+    passed: true,
+    stopped: false,
+    durationSeconds: 0,
+  }));
+  stored<Record<string, unknown>>(this, 'schemaRecord')['freshInputs'] = { received: true, inputs };
 });
 
 Then('the schema of the record refuses it', function () {

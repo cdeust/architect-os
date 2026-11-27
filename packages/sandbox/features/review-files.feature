@@ -1,4 +1,4 @@
-Feature: the descriptive files of the sessions: the build and review prompts, and the verdict schema
+Feature: the descriptive files of the sessions: the build, review, scout and fresh prompts, the verdict schema and the schema of the fresh inputs
   The prompts and the schema are read by Claude Code, not by the launcher: these scenarios check what they must carry.
 
   Scenario: the committed build prompt is not empty and names the rules by git, the replay profile and the forbidden git commands
@@ -80,3 +80,44 @@ Feature: the descriptive files of the sessions: the build and review prompts, an
       | an open criterion          |
       | an evidence key not required |
       | a finding key not required |
+
+  Scenario: the committed fresh prompt says the session never saw the build, changes nothing, reads data, takes its oracle from the brief and is played by a fixed runner
+    When I read the committed fresh prompt
+    Then the fresh prompt checks pass
+
+  Scenario Outline: a broken copy of the fresh prompt is rejected: <defect>
+    When I break a copy of the fresh prompt with <defect>
+    Then the fresh prompt checks fail
+
+    Examples:
+      | defect                                         |
+      | an empty prompt                                |
+      | blanks only                                    |
+      | no word that the session never saw the build   |
+      | no promise to change nothing                   |
+      | no reading of the request of the host          |
+      | no reading as data                             |
+      | an oracle taken from the code                  |
+      | no list of what the build did not try          |
+      | no target                                      |
+      | no input                                       |
+      | no expected behaviour                          |
+      | steps that may be new                          |
+      | a session that may write steps                 |
+      | no word that no shell runs the text            |
+      | no word that a failed input blocks the step    |
+      | no open list for what cannot be expressed      |
+
+  Scenario Outline: a broken copy of the fresh inputs schema is not the schema the contract generates: <defect>
+    When I break a copy of the fresh inputs schema with <defect>
+    Then the copy is not the schema the fresh inputs contract generates
+
+    Examples:
+      | defect                                |
+      | an open top level                     |
+      | an open input                         |
+      | a keyword that opens a scenario       |
+      | a step text that may hold a line feed |
+      | no expected behaviour required        |
+      | seventeen inputs                      |
+      | the 2020-12 dialect                   |

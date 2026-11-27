@@ -41,7 +41,7 @@ export type Rejection = 'chemin refusé' | 'fichier absent' | 'ligne absente' | 
  * segment remonte (`..`) ou nomme les données de git (`.git`, sans égard à la casse : le volume d'un poste macOS ne
  * la distingue pas ; à toute profondeur : `./.git`, un sous-module).
  */
-function refused(path: string): boolean {
+export function refusedPath(path: string): boolean {
   return (
     path.startsWith('/') ||
     ['\\', '\0', '\n', '\r'].some((forbidden) => path.includes(forbidden)) ||
@@ -90,7 +90,7 @@ export function rejection(
   fact: Pick<Fact, 'file' | 'line' | 'quote'>,
   read: (path: string) => string | undefined,
 ): Rejection | undefined {
-  if (refused(fact.file)) return 'chemin refusé';
+  if (refusedPath(fact.file)) return 'chemin refusé';
   const text = read(fact.file);
   if (text === undefined) return 'fichier absent';
   const line = linesOf(text)[fact.line - 1];
