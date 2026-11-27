@@ -340,7 +340,7 @@ Given(
 );
 
 Given('the forge of the delivery sequence opens pull requests again', function () {
-  scene(this).forge.refusing = false;
+  scene(this).forge.refusing = undefined;
 });
 
 Given(

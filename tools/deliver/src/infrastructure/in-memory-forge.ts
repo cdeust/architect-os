@@ -37,7 +37,7 @@ export class InMemoryForge implements Forge {
   /** What `openPullRequest` was asked, in order. */
   readonly requests: PullRequestRequest[] = [];
   /** Fault injection: the forge refuses to open a pull request, or answers that the destination holds the commit. */
-  refusing: false | 'refused' | 'merged' = false;
+  refusing: 'refused' | 'merged' | undefined;
   /** Fault injection: the forge shows the head at another commit for that many more reads, as GitHub does after a push. */
   staleReads = 0;
 

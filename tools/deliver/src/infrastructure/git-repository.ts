@@ -65,27 +65,31 @@ export class GitRepository implements Repository {
   }
 
   committedFile(hash: string, path: string): Uint8Array | undefined {
-    const entry = this.entries(hash).find((found) => found.path === path);
+    const entry = this.entries(hash, (found) => found === path)[0];
     if (entry?.regular !== true) return undefined;
     return this.run(['cat-file', 'blob', entry.object]).out;
   }
 
   committedEntries(hash: string, path: string): readonly { path: string; regular: boolean }[] {
-    return this.entries(hash)
-      .filter((entry) => entry.path === path || entry.path.startsWith(`${path}/`))
-      .map((entry) => ({ path: entry.path, regular: entry.regular }));
+    return this.entries(hash, (found) => found === path || found.startsWith(`${path}/`)).map((entry) => ({
+      path: entry.path,
+      regular: entry.regular,
+    }));
   }
 
   /**
-   * Every entry of the tree of the commit, `<mode> <type> <object>\t<path>\0`, a path compared byte for byte by its
-   * callers: a path is never given to git as a pathspec, whose magic would read it otherwise. A regular file is of mode
+   * Every entry of the tree of the commit matching `matches`, `<mode> <type> <object>\t<path>\0`, compared byte for
+   * byte: a path is never given to git as a pathspec, whose magic would read it otherwise. A regular file is of mode
    * 100644 or 100755; a link (120000) or a nested repository (160000) is not.
    */
-  private entries(hash: string): { path: string; object: string; regular: boolean }[] {
+  private entries(
+    hash: string,
+    matches: (path: string) => boolean,
+  ): { path: string; object: string; regular: boolean }[] {
     return this.run(['ls-tree', '-r', '-z', '--full-tree', hash])
       .out.toString()
       .split('\0')
-      .filter((line) => line !== '')
+      .filter((line) => matches(line.slice(line.indexOf('\t') + 1)))
       .map((line) => {
         const tab = line.indexOf('\t');
         const [mode, , object] = line.slice(0, tab).split(' ');
