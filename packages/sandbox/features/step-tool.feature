@@ -1458,6 +1458,30 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         | cwd      |
         | a link   |
 
+    Scenario Outline: the real readRunnerFile refuses any link, even inside the worktree, when the worktree is named by <how>
+      Given a worktree folder with a file, a directory, a link inside and links outside
+      When I build the step dependencies of a process running in that worktree, which it names by "<how>"
+      Then the step dependencies read the runner file "src/a.ts" as "export const a = 1;\n"
+      And the step dependencies read the runner file "link-in.ts" as undefined
+      And the step dependencies read the runner file "link-dir/a.ts" as undefined
+      And the step dependencies read the runner file "src" as undefined
+      And the step dependencies read the runner file "link-out.txt" as undefined
+      And the step dependencies read the runner file "link-out-dir/b.txt" as undefined
+      And the step dependencies read the runner file "link-dangling.txt" as undefined
+      And the step dependencies read the runner file "locked.txt" as undefined
+      And the step dependencies read the runner file "missing.txt" as undefined
+      And the step dependencies read the runner file "../outside.txt" as undefined
+      And the step dependencies read the runner file "../worktree-sibling/s.txt" as undefined
+      And the step dependencies read the runner file "at-bound.txt" whole, of 1048576 bytes
+      And the step dependencies read the runner file "past-bound.txt" as undefined
+      And the step dependencies read the runner file "/etc/hosts" as undefined
+
+      Examples:
+        | how      |
+        | INIT_CWD |
+        | cwd      |
+        | a link   |
+
   Rule: Host admission enforces independent correctness review
 
     Scenario: A legacy Claude builder and Claude correctness reviewer are refused before any session

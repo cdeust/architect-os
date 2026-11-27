@@ -138,6 +138,9 @@ interface Step {
   stageRemovals: number;
   /** What the build session changes in the worktree while it runs: a new text, or the file removed. */
   sourceChanges: { path: string; text: string | undefined }[];
+  /** A real on-disk runner file reader and build-time disk mutations, for symlink-rejection scenarios. */
+  realRunnerReader?: (path: string) => string | undefined;
+  onBuild: (() => void)[];
   /** The files that the build session rewrites in the step folder while it runs. */
   rewrites: { file: string; content: string }[];
   finished: boolean;
@@ -173,6 +176,7 @@ const newStepFolder = (world: SandboxWorld, name: string) => {
     stageWrites: 0,
     stageRemovals: 0,
     sourceChanges: [],
+    onBuild: [],
     phases: { 'scout.json': newPhase(), 'review.json': newPhase() },
     checks: newPhase(),
     checkCalls: [],
@@ -495,6 +499,7 @@ const start = (s: Step, args: string): Promise<void> => {
     folderArguments: args === '' ? [] : args.split(' ').map((arg) => arg.replace('<folder>', s.folder)),
     readFile: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined),
     readSource: (path) => s.source.get(path),
+    readRunnerFile: (path) => (s.realRunnerReader ? s.realRunnerReader(path) : s.source.get(path)),
     writeFile: (path, content) => writeFileSync(path, content),
     reserveOutputs: () => {
       mkdirSync(s.outputs.retained);
@@ -593,6 +598,7 @@ const start = (s: Step, args: string): Promise<void> => {
             if (text === undefined) s.source.delete(path);
             else s.source.set(path, text);
           }
+          for (const action of s.onBuild) action();
         }
         const text = own.text ?? (own.fixture === undefined ? '' : fixture(own.fixture));
         // In two chunks, as a stream arrives.
@@ -1139,6 +1145,7 @@ Given('a worktree folder with a file, a directory, a link inside and links outsi
   mkdirSync(join(root, 'worktree-sibling'));
   writeFileSync(join(root, 'worktree-sibling', 's.txt'), 'secret\n');
   symlinkSync('src/a.ts', join(worktree, 'link-in.ts'));
+  symlinkSync('src', join(worktree, 'link-dir'));
   symlinkSync(join(root, 'outside.txt'), join(worktree, 'link-out.txt'));
   symlinkSync(join(root, 'outside-dir'), join(worktree, 'link-out-dir'));
   symlinkSync('missing.txt', join(worktree, 'link-dangling.txt'));
@@ -1182,6 +1189,27 @@ Then('the step dependencies read the source {string} as undefined', function (pa
   const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
   assert.equal(deps.readSource(path), undefined);
 });
+
+Then(
+  'the step dependencies read the runner file {string} as {string}',
+  function (path: string, text: string) {
+    const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+    assert.equal(deps.readRunnerFile(path), text.replaceAll('\\n', '\n'));
+  },
+);
+
+Then('the step dependencies read the runner file {string} as undefined', function (path: string) {
+  const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+  assert.equal(deps.readRunnerFile(path), undefined);
+});
+
+Then(
+  'the step dependencies read the runner file {string} whole, of {int} bytes',
+  function (path: string, size: number) {
+    const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+    assert.equal(deps.readRunnerFile(path)?.length, size);
+  },
+);
 
 Given('the step uses the materialized Plan folder', function () {
   const s = step(this);
@@ -1682,3 +1710,53 @@ Then('the check {int} was started with no inputs folder', function (n: number) {
   assert.equal(step(this).checkCalls[n - 1]?.inputs, undefined);
   assert.equal(Object.hasOwn(step(this).checkCalls[n - 1]!, 'inputs'), false);
 });
+
+/** Prepares a real temporary worktree holding the default runner files and wires the production `readRunnerFile`. */
+function useRealRunnerWorktree(world: SandboxWorld): string {
+  const s = step(world);
+  const worktree = mkdtempSync(join(tmpdir(), 'aos-runner-wt-'));
+  world.cleanups.push(() => rmSync(worktree, { recursive: true, force: true }));
+  mkdirSync(join(worktree, 'features', 'support'), { recursive: true });
+  writeFileSync(join(worktree, 'cucumber.mjs'), 'export default { strict: true };\n');
+  writeFileSync(join(worktree, 'features', 'support', 'world.ts'), 'export class World {}\n');
+  const proc = {
+    argv: ['node', 'step.ts', s.folder],
+    env: {},
+    cwd: () => worktree,
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+  } as unknown as CodeProcess;
+  s.realRunnerReader = stepDependencies(proc).readRunnerFile;
+  world.state['runnerWorktree'] = worktree;
+  return worktree;
+}
+
+Given('the worktree of the step on disk holds the runner files', function () {
+  useRealRunnerWorktree(this);
+});
+
+Given(
+  'the worktree of the step on disk has the runner file {string} as an intra-worktree symlink',
+  function (file: string) {
+    const worktree = useRealRunnerWorktree(this);
+    mkdirSync(join(worktree, 'evil'), { recursive: true });
+    const text = readFileSync(join(worktree, file), 'utf8');
+    writeFileSync(join(worktree, 'evil', file), text);
+    rmSync(join(worktree, file));
+    symlinkSync(join('evil', file), join(worktree, file));
+  },
+);
+
+Given(
+  'the build session replaces the runner file {string} on disk with an intra-worktree symlink to identical bytes',
+  function (file: string) {
+    const worktree = stored<string>(this, 'runnerWorktree');
+    step(this).onBuild.push(() => {
+      mkdirSync(join(worktree, 'evil'), { recursive: true });
+      const text = readFileSync(join(worktree, file), 'utf8');
+      writeFileSync(join(worktree, 'evil', file), text);
+      rmSync(join(worktree, file));
+      symlinkSync(join('evil', file), join(worktree, file));
+    });
+  },
+);

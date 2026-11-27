@@ -491,10 +491,19 @@ export function inputsFolder(given: string | undefined, worktree: string, run: s
   if (
     dirname(given) !== join(run, 'tmp', 'fresh') ||
     !/^[a-z][a-z0-9-]{0,31}$/.test(basename(given)) ||
-    realpathSync(given) !== given
+    realPath(given) !== given
   )
     throw unavailable('invalid fresh inputs location');
   return given;
+}
+
+function realPath(path: string): string | undefined {
+  try {
+    return realpathSync(path);
+  } catch {
+    // Absent ou illisible : `inputsFolder` le refuse en `ISOLATION_UNAVAILABLE`.
+  }
+  return undefined;
 }
 
 /** Les variables données, plus `sandboxes` : le parent du dossier de la sandbox. */

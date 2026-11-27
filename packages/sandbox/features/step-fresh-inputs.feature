@@ -274,6 +274,33 @@ Feature: the fresh inputs of a step, end to end, with scripted sessions
       And the step stderr is "architect-os step: freshInputs.runnerFiles : features/support/world.ts n'est pas un fichier du worktree"
       And no session was started
 
+    Scenario: a runner file that is an intra-worktree symlink at the start refuses the step before any session
+      Given a step folder
+      And the step folder holds a step.json with a build, the checks "", 1 fresh inputs on and the reviews ""
+      And the worktree of the step on disk has the runner file "cucumber.mjs" as an intra-worktree symlink
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: freshInputs.runnerFiles : cucumber.mjs n'est pas un fichier du worktree"
+      And no session was started
+
+    Scenario: a build that replaces a runner file with an intra-worktree symlink to identical bytes plays no fresh input
+      Given a step folder
+      And the step folder holds a step.json with a build, the checks "types", 1 fresh inputs on and the reviews "a=claude-opus-5-5"
+      And the worktree of the step on disk holds the runner files
+      And the worktree of the step holds the files "src/a.ts"
+      And the build session writes the fixture "session.jsonl"
+      And the build session replaces the runner file "cucumber.mjs" on disk with an intra-worktree symlink to identical bytes
+      And the fresh session invents one input on each of the targets "src/a.ts"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 1
+      And the sessions started were "code.json"
+      And the checks started were "npm run types"
+      And the step file "fresh.runner.json" contains "cucumber.mjs"
+      And the step folder has no file "fresh.brief.md"
+      And the published record field "freshInputs" is {"runnerChanged":true,"received":false,"reasons":["FRESH_RUNNER_CHANGED"],"inputs":[]}
+      And the published record lists the sessions "build"
+      And the step stdout contains "\"freshInputs\":{\"runnerChanged\":true,\"received\":false,\"reasons\":[\"FRESH_RUNNER_CHANGED\"],\"inputs\":{}}"
+
   Rule: an output the host does not receive plays no input and blocks the step
 
     Scenario Outline: the fresh session <failure>: no input is played, no review, exit 1

@@ -158,6 +158,7 @@ Feature: the stage of the fresh inputs: where the host puts their scenarios whil
         | the folder tmp/fresh of the run         |
         | a folder named a_b under tmp/fresh      |
         | a link under tmp/fresh to the stage     |
+        | a missing folder under tmp/fresh        |
         | the home folder                         |
 
   Rule: the host gives the checker the stage of the step, and closes what it opens

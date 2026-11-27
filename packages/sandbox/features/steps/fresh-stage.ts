@@ -15,6 +15,7 @@ import { mock } from 'node:test';
 import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { freshStage, inMemoryFreshStage, type FreshStage } from '../../src/fresh-stage.js';
+import { SandboxError } from '../../src/port.js';
 import { inputsFolder, SrtSandboxRunner } from '../../src/srt-runner.js';
 import { checkVariables, stepDependencies } from '../../src/step-tool.js';
 import type { CodeProcess } from '../../src/code-tool.js';
@@ -270,13 +271,17 @@ Then('the inputs folder given {} is refused', function (which: string) {
       symlinkSync(stage(this).stage.folder, join(fresh, 'other'));
       return join(fresh, 'other');
     },
+    'a missing folder under tmp/fresh': () => join(fresh, 'missing'),
     'the home folder': () => homedir(),
   };
   const folder = folders[which];
   assert.ok(folder, `no folder named ${which}`);
   assert.throws(
     () => inputsFolder(folder(), '/the/worktree', run),
-    (error: Error) => error.message.includes('invalid fresh inputs location'),
+    (error: unknown) =>
+      error instanceof SandboxError &&
+      error.code === 'ISOLATION_UNAVAILABLE' &&
+      error.message.includes('invalid fresh inputs location'),
   );
 });
 

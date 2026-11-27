@@ -96,6 +96,8 @@ export interface StepDependencies {
   readonly readFile: (path: string) => string | undefined;
   /** Le texte d'un fichier du worktree où l'étape tourne, `undefined` s'il n'en est pas un (fichier ordinaire dans ce worktree). */
   readonly readSource: (path: string) => string | undefined;
+  /** Le texte d'un fichier de configuration de l'exécuteur (`runnerFiles`), sans suivre aucun lien symbolique. */
+  readonly readRunnerFile: (path: string) => string | undefined;
   readonly writeFile: (path: string, content: string) => void;
   readonly reserveOutputs: (name: string, intake: string, worktree: string) => StepOutputs;
   readonly appendFile: (path: string, content: Uint8Array) => void;
@@ -355,7 +357,7 @@ async function freshInputs(
   schema: string,
   frozen: Readonly<Record<string, string>>,
 ): Promise<FreshOutcome> {
-  const changed = changedRunnerFiles(frozen, deps.readSource);
+  const changed = changedRunnerFiles(frozen, deps.readRunnerFile);
   if (changed.length > 0) {
     deps.writeFile(join(outputs.retained, 'fresh.runner.json'), json({ changed }));
     return { config, runnerChanged: true, received: false, played: [] };
@@ -608,7 +610,7 @@ function frozenRunnerFiles(deps: StepDependencies, step: StepFile): Record<strin
   if (fresh?.enabled !== true) return {};
   return Object.fromEntries(
     fresh.runnerFiles.map((path) => {
-      const text = deps.readSource(path);
+      const text = deps.readRunnerFile(path);
       if (text === undefined)
         throw new Refusal(`freshInputs.runnerFiles : ${path} n'est pas un fichier du worktree`);
       return [path, text];
@@ -974,6 +976,31 @@ const sourceReader =
   };
 
 /**
+ * La lecture d'un fichier de configuration de l'exécuteur (`freshInputs.runnerFiles`) : un fichier ordinaire du
+ * worktree, sans suivre aucun lien symbolique ni dans le chemin ni dans ses dossiers parents, borné à `SOURCE_MAX_BYTES`.
+ */
+function runnerFileReader(cwd: string): (path: string) => string | undefined {
+  return (path) => {
+    try {
+      const root = realpathSync(cwd);
+      const expected = resolve(root, path);
+      const real = realpathSync(expected);
+      const stats = statSync(real);
+      if (
+        real === expected &&
+        real.startsWith(root + sep) &&
+        stats.isFile() &&
+        stats.size <= SOURCE_MAX_BYTES
+      )
+        return readFileSync(real, 'utf8');
+    } catch {
+      // Absent, lien symbolique ou illisible : ce n'est pas un fichier ordinaire du worktree.
+    }
+    return undefined;
+  };
+}
+
+/**
  * Le texte d'un fichier du dossier de l'étape. Ce que l'hôte publie et hache est ce texte : un fichier qui n'est pas de
  * l'UTF-8 valide ne se relirait pas octet pour octet, il est refusé avant toute session. Une marque d'ordre des octets
  * en tête est gardée : elle fait partie du fichier.
@@ -1021,6 +1048,7 @@ export function stepDependencies(proc: CodeProcess, buildSubscription = buildSbx
     folderArguments: proc.argv.slice(2),
     readFile: (path) => (existsSync(path) && statSync(path).isFile() ? readText(path) : undefined),
     readSource: sourceReader(cwd),
+    readRunnerFile: runnerFileReader(cwd),
     reserveOutputs: (name, intake, worktree) => reserveStepOutputs(proc.env, name, intake, worktree),
     writeFile: (path, content) => writeFileSync(path, content, { flag: 'wx', mode: 0o600 }),
     appendFile: (path, content) => {
