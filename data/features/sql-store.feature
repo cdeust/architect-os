@@ -96,6 +96,17 @@ Feature: SQL store, statement table and migrations
       | SELECT 1 FROM runs AS delete JOIN tasks ON true                               | runs, tasks            |
       | SELECT'a'FROM runs                                                            | runs                   |
       | SELECT '--' FROM runs                                                         | runs                   |
+      | SELECT 1 FROM runs -- trailing comment                                        | runs                   |
+      | SELECT 1 AS delete FROM tasks                                                 | tasks                  |
+      | SELECT (1) delete FROM tasks                                                  | tasks                  |
+      | SELECT 1 FROM runs; DELETE FROM tasks                                         | runs                   |
+      | WITH d AS (DELETE FROM runs) SELECT 1 FROM d                                  |                        |
+      | SELECT a IS NOT DISTINCT FROM b                                               |                        |
+      | SELECT NOT a FROM tasks                                                       | tasks                  |
+      | SELECT 1 AS distinct FROM tasks                                               | tasks                  |
+      | SELECT 1 FROM schema_migrations WINDOW schema_migrations AS ()                | schema_migrations      |
+      | WITH RECURSIVE r AS (SELECT 1 FROM runs) SELECT 1 FROM r                      | runs                   |
+      | WITH a AS (SELECT (1) FROM runs), b AS (SELECT 1 FROM tasks) SELECT 1 FROM a JOIN b ON true | runs, tasks |
 
   Scenario Outline: refuses a statement whose sources it cannot read whole: <form>
     Then the statement "<statement>" is refused as unreadable, saying "<why>"
@@ -116,6 +127,17 @@ Feature: SQL store, statement table and migrations
       | a number after FROM                    | SELECT 1 FROM 1                                                    | no table after FROM                              |
       | a source with a column list            | SELECT 1 FROM runs r (a, b)                                        | an unreadable source after FROM                  |
       | a sampled source                       | SELECT 1 FROM runs TABLESAMPLE SYSTEM (1)                          | an unreadable source after FROM                  |
+      | an escaped string after FROM           | SELECT 1 FROM E'runs'                                              | no table after FROM                              |
+      | a block comment                        | SELECT 1 /* ' */ FROM tasks /* ' */                                | a block comment                                  |
+      | a dollar-quoted string                 | SELECT $$'$$, * FROM tasks WHERE x = $$'$$                         | a dollar-quoted string                           |
+      | a tagged dollar-quoted string          | SELECT $tag$'$tag$ FROM tasks                                      | a dollar-quoted string                           |
+      | an unclosed single quote               | SELECT 'unclosed FROM tasks                                        | an unclosed quote                                |
+      | a TABLE shorthand                      | TABLE tasks                                                        | a TABLE shorthand                                |
+      | a TABLE shorthand in UNION             | SELECT id FROM runs UNION ALL TABLE tasks                          | a TABLE shorthand                                |
+      | a WITH clause without a name           | WITH 1 AS (SELECT 1) SELECT 1                                      | an unreadable WITH clause                        |
+      | a WITH clause without AS               | WITH a x (SELECT 1) SELECT 1 FROM a                                | an unreadable WITH clause                        |
+      | a WITH clause without a parenthesis    | WITH a AS MATERIALIZED (SELECT 1) SELECT 1 FROM a                  | an unreadable WITH clause                        |
+      | an unclosed WITH clause                | WITH a AS (SELECT 1 FROM runs                                      | an unclosed WITH clause                          |
 
   Scenario Outline: reads a statement whose words only look like a source: <form>
     Then the statement "<statement>" reads "<tables>"
@@ -133,8 +155,14 @@ Feature: SQL store, statement table and migrations
   Scenario: reads a statement whose quoted name holds the word FROM
     Then the statement 'SELECT 1 AS "x FROM tasks" FROM runs' reads "runs"
 
+  Scenario: reads a statement whose quoted names hold single quotes or doubled quotes
+    Then the statement 'SELECT 1 AS "a\'b", 2 AS "e""f" FROM tasks WHERE x = "c\'d"' reads "tasks"
+
   Scenario: refuses a quoted table name after FROM as unreadable
     Then the statement 'SELECT 1 FROM "runs"' is refused as unreadable, saying "no table after FROM"
+
+  Scenario: refuses an unclosed double quote as unreadable
+    Then the statement 'SELECT "unclosed FROM tasks' is refused as unreadable, saying "an unclosed quote"
 
   Scenario: the usage records are written by usage.append only
     Then only the operation "usage.append" writes the table "usage_records"

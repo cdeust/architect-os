@@ -162,44 +162,76 @@ const ends = (): ReadonlySet<string> =>
   ]);
 
 /**
- * The tokens of a statement: comments and string literals removed in one pass (an E'' string ends at an unescaped
- * quote, a standard one at a quote that is not doubled), then quoted identifiers, names and single characters.
+ * The tokens of a statement, scanned in one left-to-right pass: line comments and string literals (E'' and standard) are
+ * skipped; quoted identifiers, names and single characters are kept. Block comments, dollar-quoted strings and unclosed
+ * quotes are refused with `refuse`.
  */
-function tokens(sql: string): string[] {
-  const code = sql.replace(/--[^\n]*|\bE'(?:[^'\\]|\\.)*'|'(?:[^']|'')*'/gi, ' ');
-  return [...code.matchAll(/"[^"]*"|[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)*|\S/g)].map((match) =>
-    match[0].toLowerCase(),
-  );
+function tokens(sql: string, refuse: (why: string) => never): string[] {
+  const words: string[] = [];
+  for (const [raw] of sql.matchAll(
+    /--[^\n]*|\/\*|\$\w*\$|\bE'(?:[^'\\]|\\.)*'|'(?:[^']|'')*'|"(?:[^"]|"")*"|['"]|[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)*|\S/gi,
+  )) {
+    if (raw === '/*') refuse('a block comment');
+    if (raw[0] === '$' && raw.length > 1) refuse('a dollar-quoted string');
+    if (raw === "'" || raw === '"') refuse('an unclosed quote');
+    if (raw.startsWith('--') || raw.endsWith("'")) continue;
+    words.push(raw.toLowerCase());
+  }
+  return words;
 }
 
 /** A token of `tokens` is an unquoted name (schema-qualified or not) iff it starts with a letter or underscore. */
 const isName = (word: string | undefined): word is string => word !== undefined && /^[a-z_]/.test(word);
 
 /**
- * The tables a statement reads: the source of each FROM and JOIN, but the target of a DELETE FROM, the operand of IS
- * DISTINCT FROM and the names its WITH clauses define; and, when it has a RETURNING clause, the tables it writes, whose
- * rows it returns. It fails closed: a source it cannot name whole is refused with SqlSourceError, never left out. So
- * are a comma between two sources of one FROM, a USING that brings a table (DELETE ... USING, MERGE ... USING), a
- * subquery or a function in FROM or JOIN, and a WITH clause that takes the name of a table of `tables`.
+ * The tables a statement reads: the source of each FROM and JOIN, except the target of a statement-leading DELETE FROM,
+ * the operand of IS [NOT] DISTINCT FROM and the CTE names its WITH clauses define; and, when it has a RETURNING clause,
+ * the tables it writes, whose rows it returns. It fails closed: any source or construct it cannot read whole is refused
+ * with SqlSourceError, never left out (block comments, dollar-quoted strings, unclosed quotes, TABLE shorthand, commas
+ * between sources, USING that brings a table, subqueries or functions in FROM/JOIN, unreadable or unclosed WITH
+ * clauses, and WITH clauses taking the name of a table of `tables`).
  */
 export function readTables(sql: string, tables: ReadonlySet<string>, where: string): string[] {
-  const words = tokens(sql);
-  const stops = ends();
   const refuse: (why: string) => never = (why) => {
     throw new SqlSourceError(where, why);
   };
+  const words = tokens(sql, refuse);
+  const stops = ends();
   const defined = new Set<string>();
-  words.forEach((word, index) => {
-    if (words[index + 1] === 'as' && words[index + 2] === '(' && isName(word)) defined.add(word);
+  words.forEach((word, i) => {
+    if (word !== 'with') return;
+    let at = i + 1;
+    if (words[at] === 'recursive') at += 1;
+    for (;;) {
+      const name = words[at];
+      if (!isName(name)) refuse('an unreadable WITH clause');
+      defined.add(name);
+      at += 1;
+      if (words[at] !== 'as' || words[at + 1] !== '(') refuse('an unreadable WITH clause');
+      at += 2;
+      let depth = 1;
+      while (depth > 0) {
+        const next = words[at];
+        if (next === undefined) refuse('an unclosed WITH clause');
+        if (next === '(') depth += 1;
+        else if (next === ')') depth -= 1;
+        at += 1;
+      }
+      if (words[at] !== ',') break;
+      at += 1;
+    }
   });
   for (const name of defined)
     if (tables.has(name)) refuse(`a WITH clause takes the name of the table ${name}`);
   const sources: string[] = [];
   words.forEach((word, index) => {
     if (word === 'using' && words[index + 1] !== '(') refuse('a USING that brings a table');
+    if (word === 'table') refuse('a TABLE shorthand');
     if (word !== 'from' && word !== 'join') return;
     const before = words[index - 1];
-    if (word === 'from' && (before === 'delete' || before === 'distinct')) return;
+    const prev = words[index - 2];
+    if (before === 'delete' && (prev === undefined || prev === ';' || prev === '(')) return;
+    if (before === 'distinct' && (prev === 'is' || prev === 'not')) return;
     let at = index + 1;
     if (words[at] === 'only') at += 1;
     const source = words[at];
