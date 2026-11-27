@@ -38,6 +38,7 @@ export function hostGit(
   call: readonly string[],
   environment: Readonly<Record<string, string>>,
   timeoutMs: number,
+  input?: Buffer,
 ): Buffer {
   // Les options et l'environnement de chaque git que l'hôte lance viennent d'un seul module (git-closed.ts) : aucune
   // variable de l'hôte hors de sa liste, aucune configuration de la machine.
@@ -45,6 +46,7 @@ export function hostGit(
     cwd: worktree,
     env: environment,
     timeout: timeoutMs,
+    input,
     // Les deux listes d'un arbre entier passent ici : la borne par défaut (1 Mio) arrêterait git avant sa fin.
     maxBuffer: 1 << 30,
   });

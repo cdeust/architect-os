@@ -60,14 +60,14 @@ Given('the pass of the step also changes {string} of its worktree', function (pa
 });
 
 Then('the work branch of the step is still at its start commit', function () {
-  assert.equal(step(this).repository.branches.get('work/demo'), 'a'.repeat(40));
+  assert.equal(step(this).repository.branches.get('step/demo'), 'a'.repeat(40));
 });
 
 Then(
   'the work branch of the step is at the commit of the pass, which holds the folder {string}',
   function (name: string) {
     const { repository, published } = step(this);
-    const commit = repository.branches.get('work/demo') as string;
+    const commit = repository.branches.get('step/demo') as string;
     const written = repository.commits.get(commit);
     assert.equal(written?.parent, 'a'.repeat(40));
     assert.match(written?.message ?? '', new RegExp(`^Record the pass ${name} of the loop\n`));

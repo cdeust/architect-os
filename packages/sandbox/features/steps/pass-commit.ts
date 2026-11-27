@@ -28,7 +28,7 @@ import {
 } from '../../src/pass-commit.js';
 import { gitPassRepository } from '../../src/pass-repository.js';
 import { requireStepAdmission } from '../../src/step-admission.js';
-import { runStep, type StepDependencies } from '../../src/step-tool.js';
+import { rootOf, runStep, type StepDependencies } from '../../src/step-tool.js';
 import { stepsFolder } from '../../src/steps-folder.js';
 import { fingerprintTree, type TreeFingerprint } from '../../src/tree-fingerprint.js';
 import { gitInFixture } from '../git-fixture.js';
@@ -61,8 +61,47 @@ Then('the work branch name {string} is {word}', function (name: string, verdict:
 });
 
 Given('a pass repository in memory on the branch {string}', function (branch: string) {
-  const repository = new InMemoryPassRepository({ branch, files: { 'a.txt': 'first\n' } });
+  const repository = new InMemoryPassRepository({
+    branch,
+    files: { 'a.txt': 'first\n', '.gitignore': '*.log\n' },
+  });
   this.state['passRules'] = { repository, published: [], record: '' } satisfies Rules;
+});
+
+Given(
+  'the in-memory pass repository has {string} ignored by {string}',
+  function (path: string, file: string) {
+    const { repository } = rules(this);
+    repository.files.set(path, 'ignored\n');
+    repository.ignored.set(path, file);
+  },
+);
+
+Given(
+  'the in-memory pass repository has {string} changed and {string} ignored by it',
+  function (file: string, path: string) {
+    const { repository } = rules(this);
+    repository.files.set(file, 'changed\n');
+    repository.files.set(path, 'ignored\n');
+    repository.ignored.set(path, file);
+  },
+);
+
+Given(
+  'the in-memory pass repository has {string} ignored by itself and {string} ignored by it',
+  function (file: string, path: string) {
+    const { repository } = rules(this);
+    for (const ignored of [file, path]) {
+      repository.files.set(ignored, 'ignored\n');
+      repository.ignored.set(ignored, file);
+    }
+  },
+);
+
+Then('the commit of the pass does not hold {string}', function (path: string) {
+  const r = rules(this);
+  assert.equal(r.repository.holds(r.commit as string, path), false);
+  assert.equal(r.repository.files.has(path), true);
 });
 
 Given('the head of the in-memory pass repository is detached', function () {
@@ -138,7 +177,7 @@ Given(
   'a pass repository in memory whose first commit is {string} with the tree {string}',
   function (commit: string, tree: string) {
     const repository = new InMemoryPassRepository({
-      branch: 'work/demo',
+      branch: 'step/demo',
       commit,
       tree,
       files: { 'a.txt': 'first\n' },
@@ -295,11 +334,13 @@ Given('a throwaway linked worktree on the branch {string} for the passes', funct
   const parent = realpathSync(mkdtempSync(join(tmpdir(), 'aos-passes-')));
   this.cleanups.push(() => rmSync(parent, { recursive: true, force: true }));
   const repo = join(parent, 'repo');
-  const worktree = join(parent, 'worktree');
+  // Where the resolution of a worktree accepts one: `<repo>/.claude/worktrees/<name>` (src/worktree.ts).
+  const worktree = join(repo, '.claude', 'worktrees', 'w');
   mkdirSync(repo);
   fixtureGit(repo, 'init', '-q');
   fixtureGit(repo, 'checkout', '-q', '-b', 'main');
   writeFileSync(join(repo, 'README.md'), 'fixture\n');
+  writeFileSync(join(repo, '.gitignore'), '*.log\n');
   fixtureGit(repo, 'add', '-A');
   fixtureGit(repo, 'commit', '-q', '-m', 'first');
   fixtureGit(repo, 'worktree', 'add', '-q', '-b', branch, worktree);
@@ -342,6 +383,9 @@ async function play(world: SandboxWorld, name: string, build: (worktree: string)
     onOutput(readFileSync(join(PKG, 'fixtures', 'build-exact.jsonl')));
     return { exitCode: 0, stopped: false };
   };
+  // As the dependencies of production (stepDependencies): each use of the worktree resolves it again, so that a .git
+  // pointer the build rewrote is refused, whatever the git that would follow it.
+  const root = (): string => rootOf(p.worktree);
   const deps: StepDependencies = {
     folderArguments: [folder],
     readFile: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined),
@@ -358,12 +402,12 @@ async function play(world: SandboxWorld, name: string, build: (worktree: string)
     check: async () => assert.fail('no check in these passes'),
     now: () => 0,
     date: () => new Date(SECONDS * 1000),
-    root: () => p.worktree,
-    fingerprint: () => fingerprintTree(p.worktree),
+    root,
+    fingerprint: () => fingerprintTree(root()),
     readLauncher: (file) => readFileSync(join(PKG, file), 'utf8'),
     admit: (subject) => requireStepAdmission(admittedFixture(subject), subject),
-    steps: stepsFolder(() => p.worktree),
-    repository: gitPassRepository(() => p.worktree),
+    steps: stepsFolder(root),
+    repository: gitPassRepository(root),
     stdout: out,
     stderr: err,
   };
@@ -592,30 +636,53 @@ Given(
   },
 );
 
+/** Each hook leaves its own mark, `<hook>.ran`, in a folder of the scenario. */
+const marks = (world: SandboxWorld): string => {
+  const known = world.state['passHookMarks'] as string | undefined;
+  if (known !== undefined) return known;
+  const folder = mkdtempSync(join(tmpdir(), 'aos-pass-hooks-'));
+  world.cleanups.push(() => rmSync(folder, { recursive: true, force: true }));
+  world.state['passHookMarks'] = folder;
+  return folder;
+};
+
+const installHooks = (world: SandboxWorld, directory: string, hooks: readonly string[]) => {
+  for (const hook of hooks) {
+    writeFileSync(join(directory, hook), `#!/bin/sh\n: > '${join(marks(world), hook)}.ran'\nexit 0\n`);
+    chmodSync(join(directory, hook), 0o755);
+  }
+};
+
+const hookRan = (world: SandboxWorld, hook: string): boolean => existsSync(join(marks(world), `${hook}.ran`));
+
 Given(
-  'the repository of the passes has the witness program as its hooks {string}, {string} and {string}',
-  function (one: string, two: string, three: string) {
-    const hooks = [one, two, three];
-    const p = passes(this);
-    const program = readFileSync(witness(this), 'utf8');
-    for (const hook of hooks) {
-      writeFileSync(join(p.repo, '.git', 'hooks', hook), program);
-      chmodSync(join(p.repo, '.git', 'hooks', hook), 0o755);
-    }
+  'the repository of the passes has the hooks {string} and {string}, each leaving its mark',
+  function (one: string, two: string) {
+    installHooks(this, join(passes(this).repo, '.git', 'hooks'), [one, two]);
+  },
+);
+
+Then('the hooks {string} and {string} of the passes have not run', function (one: string, two: string) {
+  assert.deepEqual([hookRan(this, one), hookRan(this, two)], [false, false]);
+});
+
+Then('the hook {string} of the passes has run', function (hook: string) {
+  assert.equal(hookRan(this, hook), true);
+});
+
+When(
+  'a git without the options of the host reads the head into the index of the worktree of the passes',
+  function () {
+    gitInFixture(passes(this).worktree, ['read-tree', 'HEAD']);
   },
 );
 
 Given(
-  'the configuration of the repository of the passes names the directory {string} of the worktree as its hooks, with the witness program as its {string} and {string}',
+  'the configuration of the repository of the passes names the directory {string} of the worktree as its hooks {string} and {string}, each leaving its mark',
   function (directory: string, one: string, two: string) {
-    const hooks = [one, two];
     const p = passes(this);
-    const program = readFileSync(witness(this), 'utf8');
     mkdirSync(join(p.worktree, directory));
-    for (const hook of hooks) {
-      writeFileSync(join(p.worktree, directory, hook), program);
-      chmodSync(join(p.worktree, directory, hook), 0o755);
-    }
+    installHooks(this, join(p.worktree, directory), [one, two]);
     // Committed before the hooks are named, so that the pass starts from a clean tree and the setup runs none of them.
     fixtureGit(p.worktree, 'add', '-A');
     fixtureGit(p.worktree, 'commit', '-q', '-m', 'hooks');
@@ -699,7 +766,8 @@ const answers = JSON.parse(fs.readFileSync(path.join(__dirname, 'answers.json'),
 const args = process.argv.slice(2);
 const names = Object.keys(process.env).filter((name) => name !== '__CF_USER_TEXT_ENCODING').sort();
 const own = Object.fromEntries(names.filter((name) => /^GIT_(AUTHOR|COMMITTER)_/.test(name)).map((name) => [name, process.env[name]]));
-fs.appendFileSync(path.join(__dirname, 'calls.log'), JSON.stringify([args, names, own]) + '\\n');
+const input = args.includes('--stdin') ? fs.readFileSync(0).toString('base64') : '';
+fs.appendFileSync(path.join(__dirname, 'calls.log'), JSON.stringify([args, names, own, input]) + '\\n');
 const call = args.slice(10).join(' ');
 const answer = answers[call];
 if (answer && answer.fail) {
@@ -707,8 +775,9 @@ if (answer && answer.fail) {
   process.stderr.write('MARKER\\n');
   process.exitCode = 3;
 } else if (answer) process.stdout.write(answer.text);
-else if (call.startsWith('rev-parse --symbolic-full-name')) process.stdout.write('refs/heads/work/demo\\n');
+else if (call.startsWith('rev-parse --symbolic-full-name')) process.stdout.write('refs/heads/step/demo\\n');
 else if (call.startsWith('diff-tree')) process.stdout.write('steps/demo/record.json\\0');
+else if (call.startsWith('ls-files')) process.stdout.write('');
 else process.stdout.write('cccccccccccccccccccccccccccccccccccccccc\\n');
 `;
 
@@ -738,6 +807,13 @@ Given('the fake git of the pass commit fails the call {string} with a marker', f
 });
 
 Given(
+  'the fake git of the pass commit answers the call {string} with the bytes {string}',
+  function (call: string, bytes: string) {
+    answers(this, call, { text: bytes.replaceAll('\\0', '\0') });
+  },
+);
+
+Given(
   'the fake git of the pass commit answers the call {string} with {string}',
   function (call: string, answer: string) {
     answers(this, call, { text: `${answer}\n` });
@@ -747,7 +823,7 @@ Given(
 const C = 'c'.repeat(40);
 const fakePass = (): PassToCommit => ({
   name: 'demo',
-  branch: 'work/demo',
+  branch: 'step/demo',
   start: { commit: C, tree: C, clean: true },
   end: { commit: C, tree: C, clean: false },
   published: ['record.json'],
@@ -783,7 +859,7 @@ const fakeCalls = (world: SandboxWorld) =>
   readFileSync(fake(world).log, 'utf8')
     .split('\n')
     .filter((line) => line !== '')
-    .map((line) => JSON.parse(line) as [string[], string[], Record<string, string>]);
+    .map((line) => JSON.parse(line) as [string[], string[], Record<string, string>, string]);
 
 Then(
   'the fake git of the pass commit was called, in this order, with:',
@@ -849,4 +925,63 @@ Then('the pass commit is refused with {string}', function (code: string) {
   const { error } = fake(this);
   assert.ok(error instanceof PassRefusal);
   assert.equal(error.code, code);
+});
+
+Then(
+  'the fake git of the pass commit gave check-ignore the bytes {string} on its input',
+  function (bytes: string) {
+    const checks = fakeCalls(this).filter(([args]) => args[10] === 'check-ignore');
+    assert.equal(checks.length, 1);
+    assert.equal(Buffer.from(checks[0]?.[3] ?? '', 'base64').toString('utf8'), bytes.replaceAll('\\0', '\0'));
+  },
+);
+
+Then(
+  'the fake git of the pass commit was asked whether the start commit holds {string} and {string}',
+  function (one: string, two: string) {
+    const asked = fakeCalls(this)
+      .map(([args]) => args.slice(10).join(' '))
+      .filter((call) => call.startsWith('--literal-pathspecs ls-tree'));
+    assert.deepEqual(
+      asked,
+      [one, two].map((path) => `--literal-pathspecs ls-tree -z --name-only ${C} -- ${path}`),
+    );
+  },
+);
+
+// --- the build rewrites what only the host writes -----------------------------------------------------------------
+
+Given(
+  'a second linked worktree {string} of the same repository on the branch {string}',
+  function (name: string, branch: string) {
+    const p = passes(this);
+    fixtureGit(p.repo, 'worktree', 'add', '-q', '-b', branch, join(p.repo, '.claude', 'worktrees', name));
+  },
+);
+
+When(
+  'the pass {string} is played, its build pointing the .git file of its worktree at the worktree {string} and writing {string}',
+  async function (name: string, other: string, path: string) {
+    const p = passes(this);
+    await play(this, name, (worktree) => {
+      writeFileSync(join(worktree, '.git'), `gitdir: ${join(p.repo, '.git', 'worktrees', other)}\n`);
+      write(worktree, path);
+    });
+  },
+);
+
+Then(
+  'the work branch {string} is at the commit of the pass {string}',
+  function (branch: string, name: string) {
+    const p = passes(this);
+    const commit = fixtureGit(p.repo, 'rev-parse', `refs/heads/${branch}`);
+    assert.equal(nameOf(p, commit), name);
+  },
+);
+
+Then('the pass commit of {string} does not hold {string}', function (name: string, path: string) {
+  const p = passes(this);
+  const commit = passCommits(p).find((c) => nameOf(p, c) === name) as string;
+  assert.equal(fixtureGit(p.repo, 'ls-tree', '--name-only', commit, '--', path), '');
+  assert.equal(existsSync(join(p.worktree, path)), true);
 });

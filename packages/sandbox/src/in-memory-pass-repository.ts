@@ -29,6 +29,8 @@ const key = (files: Files): string => JSON.stringify([...files].sort());
 export class InMemoryPassRepository implements PassRepository {
   /** Le répertoire de travail : chemin -> texte. */
   readonly files = new Map<string, string>();
+  /** Les chemins du répertoire de travail qu'une règle écarte : chemin -> fichier de la règle. */
+  readonly ignored = new Map<string, string>();
   readonly commits = new Map<string, InMemoryCommit>();
   readonly branches = new Map<string, string>();
   /** La branche que `HEAD` nomme, ou le commit d'un `HEAD` détaché. */
@@ -78,7 +80,7 @@ export class InMemoryPassRepository implements PassRepository {
   /** L'empreinte du répertoire de travail, comme `fingerprintTree` la donne pour un dépôt git. */
   snapshot(): TreeFingerprint {
     const commit = this.headCommit();
-    const tree = this.treeOf(new Map(this.files));
+    const tree = this.treeOf(new Map([...this.files].filter(([path]) => !this.ignored.has(path))));
     return { commit, tree, clean: tree === (this.commits.get(commit) as InMemoryCommit).tree };
   }
 
@@ -114,6 +116,14 @@ export class InMemoryPassRepository implements PassRepository {
     if (this.branches.get(branch) !== expected) return false;
     this.branches.set(branch, commit);
     return true;
+  }
+
+  ignoringFiles(): string[] {
+    return [...new Set(this.ignored.values())];
+  }
+
+  holds(commit: string, path: string): boolean {
+    return this.filesOfCommit(commit).has(path);
   }
 
   settleIndex(commit: string): void {

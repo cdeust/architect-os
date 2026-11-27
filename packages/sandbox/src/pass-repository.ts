@@ -36,7 +36,16 @@ export function gitPassRepository(root: () => string, timeoutMs = 60_000): PassR
     },
     changedPaths(commit, tree) {
       // Des noms séparés par NUL, tels que git les écrit : aucun n'est cité ni échappé.
-      const listed = git(['diff-tree', '-r', '-z', '--name-only', '--no-renames', commit, tree]);
+      const listed = git([
+        'diff-tree',
+        '-r',
+        '-z',
+        '--name-only',
+        '--no-renames',
+        '--ignore-submodules=all',
+        commit,
+        tree,
+      ]);
       return listed.split('\0').filter((path) => path !== '');
     },
     writeCommit({ tree, parent, subject, body, seconds }: PassCommitRequest) {
@@ -65,6 +74,36 @@ export function gitPassRepository(root: () => string, timeoutMs = 60_000): PassR
     },
     settleIndex(commit) {
       git(['read-tree', '--reset', commit]);
+    },
+    ignoringFiles() {
+      const environment = machineIndependentGitEnvironment();
+      // Les chemins non suivis qu'une règle écarte, un dossier écarté en entier nommé une fois.
+      const ignored = hostGit(
+        WHAT,
+        root(),
+        ['ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'],
+        environment,
+        timeoutMs,
+      );
+      if (ignored.length === 0) return [];
+      // Pour chacun, la règle qui l'écarte : fichier, ligne, motif, chemin, séparés par NUL. Un nom qui n'est pas de
+      // l'UTF-8 est lu avec des caractères de remplacement : il ne se retrouve dans aucun commit, et le refus tient.
+      const fields = hostGit(
+        WHAT,
+        root(),
+        ['check-ignore', '-v', '-z', '--stdin'],
+        environment,
+        timeoutMs,
+        ignored,
+      )
+        .toString('utf8')
+        .split('\0');
+      // Le dernier champ est le vide qui suit le dernier NUL.
+      return [...new Set(fields.slice(0, -1).filter((_, at) => at % 4 === 0))];
+    },
+    holds(commit, path) {
+      // Un chemin pris tel quel, jamais comme un motif.
+      return git(['--literal-pathspecs', 'ls-tree', '-z', '--name-only', commit, '--', path]) === `${path}\0`;
     },
   };
 }

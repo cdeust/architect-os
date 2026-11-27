@@ -768,7 +768,7 @@ function readText(path: string): string {
  * La racine du worktree lié qui contient `cwd`, si `cwd` en est la racine ; sinon un refus. `resolveWorktree` lève sa
  * `SandboxError` telle quelle quand `cwd` n'est dans aucun worktree lié.
  */
-function rootOf(cwd: string): string {
+export function rootOf(cwd: string): string {
   const { worktree } = resolveWorktree(cwd);
   if (worktree !== realpathSync(resolve(cwd)))
     throw new Refusal(`une étape se lance depuis la racine de son worktree : ${cwd} n'est pas ${worktree}`);

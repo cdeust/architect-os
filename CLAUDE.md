@@ -14,7 +14,7 @@ LAUNCHER='<absolute path to the trusted launcher checkout>'
 ./aos -- npm run format:check   # prettier --check (npm run format to fix; also a scenario)
 ./aos -- npm run arch           # dependency-cruiser: layers, boundaries, cycles (also a scenario)
 "$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run review # from a worktree: the read-only reviewer session, prompt from the launcher
-"$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run step -- <folder>  # requires a host-issued ARCHITECT_OS_STEP_EVIDENCE receipt before any builder session, a clean tree and a checked-out work branch other than main; commits the pass on that branch at its end (packages/sandbox/README.md)
+"$LAUNCHER/aos" -- npm --prefix "$LAUNCHER" run step -- <folder>  # requires a host-issued ARCHITECT_OS_STEP_EVIDENCE receipt before any builder session, a clean tree and a checked-out `step/<series>` work branch; commits the pass, refused ones included, on that branch at its end (packages/sandbox/README.md)
 ./aos -- npm run diagram:isolation   # after a build (npm run typecheck): rewrite docs/diagrams/isolation-profiles.svg whole from packages/sandbox/profiles when it differs (features/arch/isolation-diagram.feature requires the file equal to it)
 ./aos -- npm run workflow:gate-push   # after a change to .github/workflows/gate.yml: rewrite .github/workflows/gate-push.yml whole from it when it differs (features/descriptive/gate-concurrency.feature requires the file equal to it)
 ./aos -- npm run evidence -- ask <ledger> <desk> <id> < question.txt  # evidence desk: record a question, publish the skill (tools/evidence/README.md)

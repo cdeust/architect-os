@@ -6,8 +6,8 @@ Feature: the repository of a pass, one contract for its two adapters
   snapshot is the fingerprint of its tree (`fingerprintTree`).
 
   Scenario Outline: the head names the branch and its commit (<adapter>)
-    Given a pass repository "<adapter>" on the branch "work/demo" whose first commit holds "a.txt" and "b.txt"
-    Then the head of the pass repository is the branch "work/demo" at the first commit
+    Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
+    Then the head of the pass repository is the branch "step/demo" at the first commit
     And the first commit has no parent and the message "first\n"
 
     Examples:
@@ -16,7 +16,7 @@ Feature: the repository of a pass, one contract for its two adapters
       | git       |
 
   Scenario Outline: a detached head names no branch (<adapter>)
-    Given a pass repository "<adapter>" on the branch "work/demo" whose first commit holds "a.txt" and "b.txt"
+    Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
     And the head of the pass repository is detached
     Then the head of the pass repository names no branch, at the first commit
 
@@ -26,7 +26,7 @@ Feature: the repository of a pass, one contract for its two adapters
       | git       |
 
   Scenario Outline: the paths a tree changes from a commit are each path modified, removed or added, once (<adapter>)
-    Given a pass repository "<adapter>" on the branch "work/demo" whose first commit holds "a.txt" and "b.txt"
+    Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
     And the file "a.txt" of the pass repository holds "changed\n"
     And the file "b.txt" of the pass repository is removed
     And the file "c/d.txt" of the pass repository holds "new\n"
@@ -41,7 +41,7 @@ Feature: the repository of a pass, one contract for its two adapters
       | git       |
 
   Scenario Outline: a file removed and written back with its bytes gives the tree of the commit again (<adapter>)
-    Given a pass repository "<adapter>" on the branch "work/demo" whose first commit holds "a.txt" and "b.txt"
+    Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
     And the file "a.txt" of the pass repository is removed
     And the file "a.txt" of the pass repository holds "first\n"
     When I take the snapshot of the pass repository
@@ -54,7 +54,7 @@ Feature: the repository of a pass, one contract for its two adapters
       | git       |
 
   Scenario Outline: an unchanged tree changes no path from its commit (<adapter>)
-    Given a pass repository "<adapter>" on the branch "work/demo" whose first commit holds "a.txt" and "b.txt"
+    Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
     When I take the snapshot of the pass repository
     Then the snapshot of the pass repository is clean
     And the paths changed from the first commit to the snapshot are ""
@@ -65,14 +65,14 @@ Feature: the repository of a pass, one contract for its two adapters
       | git       |
 
   Scenario Outline: a commit written, its branch advanced and the index settled make it the clean head (<adapter>)
-    Given a pass repository "<adapter>" on the branch "work/demo" whose first commit holds "a.txt" and "b.txt"
+    Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
     And the file "a.txt" of the pass repository holds "changed\n"
     When I take the snapshot of the pass repository
     And I write the commit of the snapshot on the first commit with the subject "Record the pass p1 of the loop", the body "record.json sha256 00" and the date 1700000000
-    And I advance the branch "work/demo" from the first commit to the written commit
+    And I advance the branch "step/demo" from the first commit to the written commit
     And I settle the index of the pass repository on the written commit
     Then the branch was advanced
-    And the head of the pass repository is the branch "work/demo" at the written commit
+    And the head of the pass repository is the branch "step/demo" at the written commit
     And the written commit has the first commit for its only parent and the tree of the snapshot
     And the written commit has the message "Record the pass p1 of the loop\n\nrecord.json sha256 00\n" and the date 1700000000
     And the index of the pass repository is the tree of the written commit
@@ -86,13 +86,13 @@ Feature: the repository of a pass, one contract for its two adapters
       | git       |
 
   Scenario Outline: a branch that is not at the expected commit is not advanced, and is left where it is (<adapter>)
-    Given a pass repository "<adapter>" on the branch "work/demo" whose first commit holds "a.txt" and "b.txt"
+    Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
     And the file "a.txt" of the pass repository holds "changed\n"
     When I take the snapshot of the pass repository
     And I write the commit of the snapshot on the first commit with the subject "Record the pass p1 of the loop", the body "record.json sha256 00" and the date 1700000000
-    And I advance the branch "work/demo" from the written commit to the written commit
+    And I advance the branch "step/demo" from the written commit to the written commit
     Then the branch was not advanced
-    And the head of the pass repository is the branch "work/demo" at the first commit
+    And the head of the pass repository is the branch "step/demo" at the first commit
 
     Examples:
       | adapter   |
@@ -100,13 +100,13 @@ Feature: the repository of a pass, one contract for its two adapters
       | git       |
 
   Scenario Outline: a branch that does not exist is not advanced (<adapter>)
-    Given a pass repository "<adapter>" on the branch "work/demo" whose first commit holds "a.txt" and "b.txt"
+    Given a pass repository "<adapter>" on the branch "step/demo" whose first commit holds "a.txt" and "b.txt"
     And the file "a.txt" of the pass repository holds "changed\n"
     When I take the snapshot of the pass repository
     And I write the commit of the snapshot on the first commit with the subject "Record the pass p1 of the loop", the body "record.json sha256 00" and the date 1700000000
-    And I advance the branch "work/other" from the first commit to the written commit
+    And I advance the branch "step/other" from the first commit to the written commit
     Then the branch was not advanced
-    And the head of the pass repository is the branch "work/demo" at the first commit
+    And the head of the pass repository is the branch "step/demo" at the first commit
 
     Examples:
       | adapter   |

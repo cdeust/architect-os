@@ -174,7 +174,7 @@ const newStepFolder = (world: SandboxWorld, name: string) => {
     fingerprint: { commit: 'a'.repeat(40), tree: 'b'.repeat(40), clean: true },
     fingerprints: 0,
     repository: new InMemoryPassRepository({
-      branch: 'work/demo',
+      branch: 'step/demo',
       commit: 'a'.repeat(40),
       tree: 'b'.repeat(40),
     }),

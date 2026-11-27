@@ -92,7 +92,7 @@ function gitDriver(directory: string): Driver {
 
 function inMemoryDriver(files: readonly string[]): Driver {
   const repository = new InMemoryPassRepository({
-    branch: 'work/demo',
+    branch: 'step/demo',
     files: Object.fromEntries(files.map((file) => [file, 'first\n'])),
   });
   return {
@@ -119,7 +119,7 @@ Given(
   'a pass repository {string} on the branch {string} whose first commit holds {string} and {string}',
   function (adapter: string, branch: string, one: string, two: string) {
     assert.ok(adapter === 'in memory' || adapter === 'git', `no adapter ${adapter}`);
-    assert.equal(branch, 'work/demo', 'the in-memory driver starts on work/demo');
+    assert.equal(branch, 'step/demo', 'the in-memory driver starts on step/demo');
     const driver =
       adapter === 'git'
         ? gitDriver(throwawayRepository(this, branch, [one, two]))
