@@ -114,17 +114,23 @@ const issues = (error: z.ZodError): string =>
 const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 
 /** Lit le dossier ; refuse avant toute session. */
-function readStep(deps: StepDependencies): {
-  folder: string;
-  step: StepFile;
-  raw: string;
-  brief: string;
-  questions: string[];
-} {
+function readStep(deps: StepDependencies): ReturnType<typeof readStepFolder> & { folder: string } {
   const [folder, ...others] = deps.folderArguments;
   if (folder === undefined || others.length > 0) throw new Refusal('un seul dossier est attendu');
   if (!isAbsolute(folder)) throw new Refusal(`le dossier doit être un chemin absolu : ${folder}`);
-  const raw = deps.readFile(join(folder, 'step.json'));
+  return { folder, ...readStepFolder(deps.readFile, folder) };
+}
+
+/**
+ * Le dossier d'une étape tel que Step le lit avant toute session : `step.json` validé, le refus
+ * `STEP_CORRECTNESS_PROVIDER`, un brief et une question par éclaireur, non vides. Lève une erreur dont le message dit le
+ * refus. L'émetteur du reçu d'admission l'applique tel quel : il n'atteste pas un dossier que Step refuserait.
+ */
+export function readStepFolder(
+  readFile: StepDependencies['readFile'],
+  folder: string,
+): { step: StepFile; raw: string; brief: string; questions: string[] } {
+  const raw = readFile(join(folder, 'step.json'));
   if (raw === undefined) throw new Refusal(`step.json introuvable dans ${folder}`);
   let step: StepFile;
   try {
@@ -141,16 +147,16 @@ function readStep(deps: StepDependencies): {
     )
   )
     throw new Refusal('STEP_CORRECTNESS_PROVIDER');
-  const brief = deps.readFile(join(folder, 'brief.md'));
+  const brief = readFile(join(folder, 'brief.md'));
   if (brief === undefined || brief.trim() === '') throw new Refusal('brief.md absent ou vide');
   // La question d'un éclaireur est son fichier ; il en faut un, non vide, avant toute session.
   const questions = step.scouts.map((scout) => {
     const file = `scout.${scout.name}.md`;
-    const question = deps.readFile(join(folder, file));
+    const question = readFile(join(folder, file));
     if (question === undefined || question.trim() === '') throw new Refusal(`${file} absent ou vide`);
     return question;
   });
-  return { folder, step, raw, brief, questions };
+  return { step, raw, brief, questions };
 }
 
 type PlayedSession = Awaited<ReturnType<StepSession>> & { measure: SessionMeasure };
@@ -730,6 +736,11 @@ const sourceReader =
     return undefined;
   };
 
+/** Un fichier du dossier de l'étape tel que Step le lit : `undefined` s'il n'est pas un fichier ordinaire. */
+export function readStepFolderFile(path: string): string | undefined {
+  return existsSync(path) && statSync(path).isFile() ? readText(path) : undefined;
+}
+
 /**
  * Le texte d'un fichier du dossier de l'étape. Ce que l'hôte publie et hache est ce texte : un fichier qui n'est pas de
  * l'UTF-8 valide ne se relirait pas octet pour octet, il est refusé avant toute session. Une marque d'ordre des octets
@@ -768,7 +779,7 @@ export function stepDependencies(proc: CodeProcess, buildSubscription = buildSbx
   const launch = codeToolSession((tool) => processDependencies(proc, isatty, tool, admittedRoot()));
   return {
     folderArguments: proc.argv.slice(2),
-    readFile: (path) => (existsSync(path) && statSync(path).isFile() ? readText(path) : undefined),
+    readFile: readStepFolderFile,
     readSource: sourceReader(cwd),
     reserveOutputs: (name, intake, worktree) => reserveStepOutputs(proc.env, name, intake, worktree),
     writeFile: (path, content) => writeFileSync(path, content, { flag: 'wx', mode: 0o600 }),

@@ -8,30 +8,32 @@ import {
   closeSync,
   constants,
   fsyncSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
   realpathSync,
-  statSync,
   unlinkSync,
   writeSync,
 } from 'node:fs';
-import { basename, isAbsolute, join, relative, sep } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { PKG } from './code-tool.js';
 import {
   parseSpecimens,
   requireStepAdmission,
-  sealStepAdmission,
+  parseStepAdmissionPayload,
   specimensAttest,
   stepAdmissionAuthority,
   type ReviewIndependence,
+  type StepAdmissionAuthority,
   type Specimens,
   type StepAdmissionSubject,
 } from './step-admission.js';
-import { parseStepFile, type StepFile } from './step-file.js';
+import type { StepFile } from './step-file.js';
 import { isStepName, sha256 } from './step-record.js';
-import { launcherFiles } from './step-tool.js';
+import { launcherFiles, readStepFolder, readStepFolderFile } from './step-tool.js';
 import { fingerprintTree, type TreeFingerprint } from './tree-fingerprint.js';
 import { resolveWorktree } from './worktree.js';
 
@@ -74,6 +76,8 @@ export interface AdmissionHost {
   /** Le texte d'un fichier du lanceur, chemin relatif à `packages/sandbox` : celui que Step lira. */
   readonly readLauncher: (file: string) => string;
   readonly fingerprint: (worktree: string) => TreeFingerprint;
+  /** La racine du lanceur, celle dont `readLauncher` lit : jamais sous le worktree que le reçu admet. */
+  readonly launcherRoot: string;
   /** Le répertoire d'autorité, celui où `readStepAdmission` cherche le reçu. */
   readonly authority: () => string;
   readonly uid: () => number | undefined;
@@ -82,6 +86,7 @@ export interface AdmissionHost {
 export function productionAdmissionHost(): AdmissionHost {
   return {
     readLauncher: (file) => readFileSync(join(PKG, file), 'utf8'),
+    launcherRoot: PKG,
     fingerprint: (worktree) => fingerprintTree(worktree),
     authority: stepAdmissionAuthority,
     uid: () => process.getuid?.(),
@@ -102,40 +107,27 @@ export interface IssuedAdmission {
 }
 
 /**
- * Un fichier du dossier comme Step le lit : un fichier ordinaire, de l'UTF-8 valide, une marque d'ordre des octets en
- * tête gardée ; `undefined` sinon.
+ * Les entrées de l'étape, lues par la fonction même de Step avant ses sessions (`readStepFolder`, avec son lecteur de
+ * fichiers) et composées comme `runStep` les compose. Un dossier que Step refuserait (brief ou question vide,
+ * `STEP_CORRECTNESS_PROVIDER`, `step.json` absent ou refusé, UTF-8 mal formé) n'est pas attesté.
  */
-function folderText(path: string): string | undefined {
-  let text: string | undefined;
-  try {
-    // Ni un répertoire ni un tube : lire un tube nommé bloquerait l'émetteur.
-    if (statSync(path).isFile())
-      text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(readFileSync(path));
-  } catch {
-    // Absent, illisible ou pas de l'UTF-8 : pas le fichier approuvé.
-  }
-  return text;
-}
-
-/** Les entrées de l'étape, comme `runStep` les compose : le brief, `step.json`, la question de chaque éclaireur. */
 function folderInputs(folder: string): { step: StepFile; inputs: Record<string, string> } {
-  const raw = folderText(join(folder, 'step.json'));
-  const brief = folderText(join(folder, 'brief.md'));
-  let step: StepFile | undefined;
+  let read: ReturnType<typeof readStepFolder> | undefined;
   try {
-    step = parseStepFile(JSON.parse(raw!));
+    read = readStepFolder(readStepFolderFile, folder);
   } catch {
-    // Absent, illisible ou refusé : le dossier ne tient pas le `step.json` approuvé.
+    // Le refus de Step lui-même : son message reste à Step.
   }
-  if (!step || brief === undefined) return refuse('ADMIT_INPUTS_MISMATCH');
-  const inputs: Record<string, string> = { 'brief.md': brief, 'step.json': raw! };
-  for (const { name } of step.scouts) {
-    const file = `scout.${name}.md`;
-    const question = folderText(join(folder, file));
-    if (question === undefined) return refuse('ADMIT_INPUTS_MISMATCH');
-    inputs[file] = question;
-  }
-  return { step, inputs };
+  if (!read) return refuse('ADMIT_STEP_REFUSED');
+  const { step, raw, brief, questions } = read;
+  return {
+    step,
+    inputs: {
+      'brief.md': brief,
+      'step.json': raw,
+      ...Object.fromEntries(step.scouts.map(({ name }, index) => [`scout.${name}.md`, questions[index]!])),
+    },
+  };
 }
 
 const digests = (files: Readonly<Record<string, string>>) =>
@@ -191,20 +183,25 @@ function privateAuthority(host: AdmissionHost, worktree: string): string {
   return refuse('ADMIT_AUTHORITY_UNSAFE');
 }
 
-/** Crée le reçu, 0600, sans suivre de lien et sans jamais remplacer un fichier ; un échec d'écriture n'en laisse rien. */
+/**
+ * Crée le reçu, 0600, sans suivre de lien et sans jamais remplacer un fichier. Les octets sont écrits sous un nom
+ * temporaire du même répertoire, puis liés au nom final, qui n'apparaît qu'entier (`link` refuse un nom pris) ; le nom
+ * temporaire est ensuite retiré. Un échec ne laisse jamais le nom final : au pis, un fichier temporaire que Step ne lit
+ * pas.
+ */
 function writeNew(path: string, text: string): void {
+  const temporary = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
   let descriptor: number;
   try {
     descriptor = openSync(
-      path,
+      temporary,
       constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
       0o600,
     );
-  } catch (error) {
-    return refuse(
-      (error as NodeJS.ErrnoException).code === 'EEXIST' ? 'ADMIT_RECEIPT_EXISTS' : 'ADMIT_AUTHORITY_UNSAFE',
-    );
+  } catch {
+    return refuse('ADMIT_AUTHORITY_UNSAFE');
   }
+  let failure: string | undefined;
   try {
     const bytes = Buffer.from(text);
     for (let offset = 0; offset < bytes.length;)
@@ -212,11 +209,40 @@ function writeNew(path: string, text: string): void {
     // Stryker disable next-line CallExpression: équivalent: fsync ne change que la durabilité du reçu après une coupure de l'hôte, qu'aucun processus vivant ne peut observer
     fsyncSync(descriptor);
   } catch {
-    unlinkSync(path);
-    refuse('ADMIT_RECEIPT_WRITE_FAILED');
+    failure = 'ADMIT_RECEIPT_WRITE_FAILED';
   } finally {
     closeSync(descriptor);
   }
+  if (!failure) {
+    try {
+      linkSync(temporary, path);
+    } catch (error) {
+      failure =
+        (error as NodeJS.ErrnoException).code === 'EEXIST'
+          ? 'ADMIT_RECEIPT_EXISTS'
+          : 'ADMIT_RECEIPT_WRITE_FAILED';
+    }
+  }
+  try {
+    unlinkSync(temporary);
+  } catch {
+    // Le nom temporaire reste : Step ne le lit pas. Lié, le nom final aurait deux liens, que Step refuse ; il est retiré.
+    if (!failure) {
+      unlinkSync(path);
+      failure = 'ADMIT_RECEIPT_WRITE_FAILED';
+    }
+  }
+  if (failure) refuse(failure);
+}
+
+/**
+ * Scelle un reçu : la charge est lue par le schéma même que Step applique, et l'empreinte approuvée est prise sur ce que
+ * Step relira. Le reçu n'est pas signé : seul ce module le scelle, et les profils srt refusent aux sessions le
+ * répertoire d'autorité (journal, §123).
+ */
+function seal(value: unknown): StepAdmissionAuthority {
+  const sealed = parseStepAdmissionPayload(value);
+  return { version: 1, approved_sha256: sha256(JSON.stringify(sealed)), payload: sealed };
 }
 
 /**
@@ -242,6 +268,9 @@ export function issueStepAdmission(
   const { step, inputs } = folderInputs(request.folder);
   if (!sameDigests(plan.manifest.files_sha256, digests(inputs))) refuse('ADMIT_INPUTS_MISMATCH');
   const { root, tree } = cleanWorktree(request.worktree, host);
+  // Un lanceur sous le worktree serait écrit par la session même qu'il lance : son empreinte n'atteste rien.
+  if (!relative(root, realpathSync(host.launcherRoot)).startsWith('..' + sep))
+    refuse('ADMIT_LAUNCHER_INSIDE_WORKTREE');
   let launcher: Record<string, string> | undefined;
   try {
     launcher = launcherFiles(host.readLauncher, step);
@@ -264,9 +293,9 @@ export function issueStepAdmission(
     plan_review: plan.plan.review,
   };
   if (!specimensAttest(specimens, subject)) refuse('ADMIT_SPECIMENS_REQUIRED');
-  let receipt: ReturnType<typeof sealStepAdmission> | undefined;
+  let receipt: StepAdmissionAuthority | undefined;
   try {
-    receipt = sealStepAdmission({
+    receipt = seal({
       step: name,
       worktree: { root, commit: tree.commit, tree: tree.tree, clean: tree.clean },
       manifest: plan.manifest,

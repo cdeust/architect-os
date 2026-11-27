@@ -127,10 +127,18 @@ module.exports = {
       comment:
         'The production issuer of the Step admission receipt stays distinct from its consumers ' +
         '(orchestration-fable-5-2.md, §15, decision 7): only the issuing adapter of Plan, behind `npm run admit`, ' +
-        'imports it; `npm run step`, the code tool, a worker or a module never can, and a consumer that issued its ' +
-        'own receipt would certify only itself. Scenarios may import it.',
+        'imports it; `npm run step`, the code tool, a worker, a module (the orchestrator included) or the workbench ' +
+        'never can: the receipt is unsigned, and the sealing lives in that module alone, so a consumer that imported ' +
+        'it could certify itself. Only the scenarios of the sandbox package, of Plan and of the root may import it.',
       severity: 'error',
-      from: { pathNot: ['^tools/plan/src/infrastructure/admission\\.ts$', '(^|/)features/'] },
+      from: {
+        pathNot: [
+          '^tools/plan/src/infrastructure/admission\\.ts$',
+          '^packages/sandbox/features/',
+          '^tools/plan/features/',
+          '^features/',
+        ],
+      },
       to: { path: '^packages/sandbox/src/step-admission-issuer\\.ts$' },
     },
     {

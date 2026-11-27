@@ -51,6 +51,8 @@ interface Issuance {
   issued?: IssuedAdmission;
   refusal?: string;
   restore: (() => void)[];
+  /** A failed cleanup may leave a temporary name, never the final one. */
+  temporaryMayRemain?: boolean;
 }
 const issuance = (world: SandboxWorld) => stored<Issuance>(world, 'issuance');
 
@@ -114,6 +116,7 @@ Given('an approved Step folder for a clean linked worktree with measured specime
     request: { plan, specimens: measuredSpecimens(parseStepFile(step), launcher), folder, worktree },
     host: {
       readLauncher,
+      launcherRoot: PKG,
       fingerprint: (path) => fingerprintTree(path),
       authority: () => authority,
       uid: () => process.getuid!(),
@@ -149,6 +152,26 @@ Given('the approved folder is varied by {string}', function (variant: string) {
   item.request = mutable(item.request);
   variants[variant]!(item);
 });
+
+/** Makes `fs[method]` fail with `code`, for its first `times` calls (all of them by default), until the issuance ends. */
+function failing(
+  item: Issuance,
+  method: 'writeSync' | 'unlinkSync' | 'linkSync',
+  code: string,
+  times = Infinity,
+) {
+  const real = fs[method] as (...args: unknown[]) => unknown;
+  let calls = 0;
+  const replaced = mock.method(fs, method, (...args: unknown[]) => {
+    if (calls++ < times) throw Object.assign(new Error(code), { code });
+    return real(...args);
+  });
+  syncBuiltinESMExports();
+  item.restore.push(() => {
+    replaced.mock.restore();
+    syncBuiltinESMExports();
+  });
+}
 
 const changes: Record<string, (item: Issuance) => void> = {
   'no specimens': (item) => (item.request.specimens = undefined),
@@ -280,6 +303,32 @@ const changes: Record<string, (item: Issuance) => void> = {
     mkdirSync(item.authority, { recursive: true, mode: 0o700 });
     chmodSync(item.authority, 0o500);
     item.restore.push(() => chmodSync(item.authority, 0o700));
+  },
+  'a blank brief': (item) => writeFileSync(join(item.request.folder, 'brief.md'), '  \n'),
+  'a blank scout question': (item) => writeFileSync(join(item.request.folder, 'scout.history.md'), '\n'),
+  'a correctness review on the Anthropic builder': (item) => {
+    const path = join(item.request.folder, 'step.json');
+    const step = JSON.parse(readFileSync(path, 'utf8'));
+    step.reviews[0].dimension = 'correctness';
+    const text = JSON.stringify(step, null, 2) + '\n';
+    writeFileSync(path, text);
+    reapprove(item, { 'step.json': hash(text) });
+  },
+  'a launcher inside the worktree': (item) => {
+    const inside = join(item.worktree, 'launcher');
+    Object.assign(item.host, { launcherRoot: inside });
+    mkdirSync(inside);
+    // The worktree stays clean: the directory holds nothing git records.
+  },
+  'a failed write and a failed cleanup': (item) => {
+    item.temporaryMayRemain = true;
+    failing(item, 'writeSync', 'ENOSPC');
+    failing(item, 'unlinkSync', 'EIO');
+  },
+  'a failed link': (item) => failing(item, 'linkSync', 'EPERM'),
+  'a temporary name that outlives its link': (item) => {
+    item.temporaryMayRemain = true;
+    failing(item, 'unlinkSync', 'EIO', 1);
   },
   'a failed write': (item) => {
     const write = mock.method(fs, 'writeSync', () => {
@@ -441,8 +490,16 @@ Then('the issuer refuses with {string} and writes no receipt', function (code: s
   const authority = item.host.authority();
   // A relative authority is not resolved against the working directory, not even created there.
   if (!isAbsolute(authority)) assert.equal(existsSync(authority), false);
-  else if (existsSync(authority) && lstatSync(authority).isDirectory())
-    assert.deepEqual(readdirSync(authority), []);
+  else if (existsSync(authority) && lstatSync(authority).isDirectory()) {
+    const names = readdirSync(authority);
+    // Never a final name; a temporary one only when its removal failed.
+    assert.deepEqual(
+      names.filter((name) => !name.startsWith('.')),
+      [],
+    );
+    if (!item.temporaryMayRemain) assert.deepEqual(names, []);
+    else assert.ok(names.every((name) => /^\.delivery-[a-f0-9]{64}\.json\.[0-9a-f-]{36}\.tmp$/.test(name)));
+  }
 });
 
 Then(

@@ -214,12 +214,11 @@ export function requireStepAdmission(value: unknown, subject: StepAdmissionSubje
 }
 
 /**
- * Scelle un reçu : la charge est lue par le schéma même que Step applique, et l'empreinte approuvée est prise sur ce
- * que Step relira ; lève si la charge n'a pas sa forme.
+ * La charge d'un reçu, lue par le schéma même que Step applique ; lève si elle n'a pas sa forme. Une lecture : sceller
+ * (prendre l'empreinte approuvée) n'appartient qu'à l'émetteur, `step-admission-issuer.ts`.
  */
-export function sealStepAdmission(value: unknown): StepAdmissionAuthority {
-  const sealed = payload.parse(value);
-  return { version: 1, approved_sha256: admissionDigest(JSON.stringify(sealed)), payload: sealed };
+export function parseStepAdmissionPayload(value: unknown): StepAdmissionAuthority['payload'] {
+  return payload.parse(value);
 }
 
 /** La preuve de spécimens telle que le reçu la porte ; lève si elle n'a pas sa forme. */

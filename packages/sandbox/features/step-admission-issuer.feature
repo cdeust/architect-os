@@ -69,15 +69,19 @@ Feature: The production issuer writes a Step admission receipt only for what it 
       | a Step name Step refuses              | ADMIT_FOLDER_INVALID       |
       | a relative folder                     | ADMIT_FOLDER_INVALID       |
       | a changed brief                       | ADMIT_INPUTS_MISMATCH      |
-      | a missing brief                       | ADMIT_INPUTS_MISMATCH      |
-      | a brief that is a directory           | ADMIT_INPUTS_MISMATCH      |
-      | a brief that is a named pipe          | ADMIT_INPUTS_MISMATCH      |
-      | a brief that is not UTF-8             | ADMIT_INPUTS_MISMATCH      |
-      | a missing step file                   | ADMIT_INPUTS_MISMATCH      |
-      | a step file refused by its schema     | ADMIT_INPUTS_MISMATCH      |
-      | a missing scout question              | ADMIT_INPUTS_MISMATCH      |
+      | a missing brief                       | ADMIT_STEP_REFUSED         |
+      | a brief that is a directory           | ADMIT_STEP_REFUSED         |
+      | a brief that is a named pipe          | ADMIT_STEP_REFUSED         |
+      | a brief that is not UTF-8             | ADMIT_STEP_REFUSED         |
+      | a missing step file                   | ADMIT_STEP_REFUSED         |
+      | a step file refused by its schema     | ADMIT_STEP_REFUSED         |
+      | a missing scout question              | ADMIT_STEP_REFUSED         |
       | an approved file the folder lacks     | ADMIT_INPUTS_MISMATCH      |
       | a folder file the manifest omits      | ADMIT_INPUTS_MISMATCH      |
+      | a blank brief                         | ADMIT_STEP_REFUSED         |
+      | a blank scout question                | ADMIT_STEP_REFUSED         |
+      | a correctness review on the Anthropic builder | ADMIT_STEP_REFUSED |
+      | a launcher inside the worktree        | ADMIT_LAUNCHER_INSIDE_WORKTREE |
       | the main checkout                     | ADMIT_WORKTREE_INVALID     |
       | a directory inside the worktree       | ADMIT_WORKTREE_INVALID     |
       | a relative worktree                   | ADMIT_WORKTREE_INVALID     |
@@ -99,3 +103,6 @@ Feature: The production issuer writes a Step admission receipt only for what it 
       | no user identity                      | ADMIT_AUTHORITY_UNSAFE     |
       | an authority closed to writing        | ADMIT_AUTHORITY_UNSAFE     |
       | a failed write                        | ADMIT_RECEIPT_WRITE_FAILED |
+      | a failed write and a failed cleanup   | ADMIT_RECEIPT_WRITE_FAILED |
+      | a failed link                         | ADMIT_RECEIPT_WRITE_FAILED |
+      | a temporary name that outlives its link | ADMIT_RECEIPT_WRITE_FAILED |

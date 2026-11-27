@@ -63,7 +63,9 @@ Given('no architecture fixture file is left over', function () {
 Given('these temporary architecture fixtures exist:', function (table: DataTable) {
   const fixtures = table.hashes() as unknown as Fixture[];
   for (const fixture of fixtures) {
-    mkdirSync(dirname(join(ROOT, fixture.file)), { recursive: true });
+    // A fixture may stand for a component that does not exist yet: the directories it creates go with it.
+    const created = mkdirSync(dirname(join(ROOT, fixture.file)), { recursive: true });
+    if (created !== undefined) this.cleanups.push(() => rmSync(created, { recursive: true, force: true }));
     writeFileSync(join(ROOT, fixture.file), `${fixture.code}\nexport {};\n`);
   }
   this.state['fixtures'] = fixtures;

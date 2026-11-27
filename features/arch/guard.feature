@@ -46,6 +46,9 @@ Feature: Architecture guard (dependency-cruiser)
       | gateway/src/domain/node_modules/zz-fixture-hidden.ts    | import '../../infrastructure/in-memory.js';               | domain-imports-only-domain-and-contracts      |
       | packages/sandbox/src/zz-fixture-issuer.ts              | import './step-admission-issuer.js';                      | step-admission-issuer-only-from-the-issuing-host |
       | tools/plan/src/infrastructure/zz-fixture-issuer.ts     | import '@architect-os/sandbox/step-admission-issuer';     | step-admission-issuer-only-from-the-issuing-host |
+      | modules/orchestrator/src/infrastructure/zz-fixture-issuer.ts | import '../../../../packages/sandbox/src/step-admission-issuer.js'; | step-admission-issuer-only-from-the-issuing-host |
+      | modules/orchestrator/features/steps/zz-fixture-issuer.ts | import '../../../../packages/sandbox/src/step-admission-issuer.js'; | step-admission-issuer-only-from-the-issuing-host |
+      | gateway/src/infrastructure/zz-fixture-issuer.ts         | import '../../../packages/sandbox/src/step-admission-issuer.js'; | step-admission-issuer-only-from-the-issuing-host |
       | data/src/domain/zz-fixture-cycle-a.ts                   | import './zz-fixture-cycle-b.js';\nexport const a = 1;    | no-circular                                   |
       | data/src/domain/zz-fixture-cycle-b.ts                   | import './zz-fixture-cycle-a.js';\nexport const b = 1;    | no-circular                                   |
     When the architecture guard runs
