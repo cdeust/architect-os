@@ -18,8 +18,8 @@ export interface StepRecordView {
   outcome: string;
 }
 
-/** The record of a text, checked by the schema of the Step record; undefined when the schema refuses it. */
-export type ParseRecord = (text: string) => StepRecordView | undefined;
+/** The record of the bytes of a file, UTF-8 and checked by the schema of the Step record; undefined otherwise. */
+export type ParseRecord = (bytes: Uint8Array) => StepRecordView | undefined;
 
 /** What the body names besides the record: where the record is, in the commit that holds it. */
 export interface Delivered {

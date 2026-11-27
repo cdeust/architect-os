@@ -273,6 +273,33 @@ Given(
   },
 );
 
+Given(
+  'the delivery commit records as the record of the step one that its schema accepts but for a byte that is not UTF-8',
+  function () {
+    const { repository, commit } = scene(this);
+    // A model name is any text to the schema: decoded without refusal, the byte would become U+FFFD and pass.
+    const session = {
+      role: 'review',
+      name: 'correctness',
+      model: 'MODEL-X',
+      effort: 'high',
+      completed: true,
+      stopped: false,
+      durationSeconds: 1,
+      costUsd: 0,
+      costByModel: {},
+    };
+    const text = JSON.stringify({ ...stepRecord(), sessions: [session] });
+    assert.ok(
+      parseStepRecord(Buffer.from(text)) !== undefined,
+      'the record is valid before its byte is changed',
+    );
+    const bytes = Buffer.from(text);
+    bytes[bytes.indexOf('MODEL-X') + 6] = 0xff;
+    repository.files.set(`${commit} ${RECORD}`, bytes);
+  },
+);
+
 Given('the forge of the delivery sequence refuses every new pull request', function () {
   scene(this).forge.refusing = true;
 });

@@ -101,13 +101,7 @@ function recordOf(
 ): StepRecordView | Reason {
   const bytes = repository.committedFile(hash, `steps/${name}/record.json`);
   if (bytes === undefined) return "enregistrement d'étape absent";
-  let text: string;
-  try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  } catch {
-    return "enregistrement d'étape refusé";
-  }
-  const record = parseRecord(text);
+  const record = parseRecord(bytes);
   // A record of another step, copied in this folder, is not the record of this one.
   if (record === undefined || record.step !== name) return "enregistrement d'étape refusé";
   return record;

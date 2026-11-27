@@ -291,6 +291,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         | case                        | record                                         |
         | not JSON                    | the text "not JSON"                            |
         | not UTF-8                   | the text "{bytes}"                             |
+        | valid but for a byte        | one that its schema accepts but for a byte that is not UTF-8 |
         | JSON its schema refuses     | the text "{\"step\":\"step\"}"                 |
         | the record of another step  | the record of the step "other"                 |
 
