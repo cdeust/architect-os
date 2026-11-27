@@ -135,6 +135,7 @@ Then('the public host template variables identify the runtime and session locati
     'tmp',
     'config',
     'sandboxes',
+    'inputs',
   ]);
 });
 

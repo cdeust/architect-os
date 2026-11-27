@@ -73,7 +73,8 @@ export type ProfileTemplate = z.infer<typeof ProfileTemplateSchema>;
 
 /**
  * Variables posées par l'adaptateur ; le lanceur peut en ajouter (`SrtRunnerOptions.variables`). `sandboxes` est le
- * parent des dossiers de toutes les sandboxes.
+ * parent des dossiers de toutes les sandboxes ; `inputs` le dossier qu'un contrôle lit en plus du worktree : le worktree
+ * lui-même, ou la pose des entrées inventées que le lanceur donne (`inputsFolder` de `srt-runner.ts`).
  */
 export const PROFILE_VARIABLES = [
   'home',
@@ -84,6 +85,7 @@ export const PROFILE_VARIABLES = [
   'tmp',
   'config',
   'sandboxes',
+  'inputs',
 ] as const;
 export type ProfileVariables = Record<(typeof PROFILE_VARIABLES)[number], string> & Record<string, string>;
 

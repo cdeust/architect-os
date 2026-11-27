@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { ticketsSchema } from '@architect-os/contracts';
+import { freshInputsMax } from './fresh-inputs.js';
+import { refusedPath } from './scout-facts.js';
 
 export const codexModelSchema = z.enum(['gpt-6.2-astra', 'gpt-6.2-sol']);
 export type CodexModel = z.infer<typeof codexModelSchema>;
@@ -72,6 +74,41 @@ const checksSchema = () =>
     .default([]);
 
 /**
+ * Les entrées inventées (docs/design/orchestration-fable-5-2.md, §4) : allumées ou non (`enabled`), le nombre d'entrées
+ * demandé (`count`, de 1 à 16), la session neuve qui les invente (modèle, effort, limite) et l'exécuteur fixe que l'hôte
+ * joue sous le profil `checker` pour chacune (`runner` : un argv, auquel l'hôte ajoute le chemin du scénario qu'il a
+ * écrit, et sa limite), et, facultatif, le validateur (`validate`, de même forme, par exemple la répétition à sec et
+ * stricte de l'exécuteur) que l'hôte joue avant lui sur chaque entrée : une entrée qu'il refuse est `invalid`, une
+ * faute de la session et non du code. `runnerFiles` nomme les fichiers de configuration de l'exécuteur (de 1 à 16) que
+ * l'hôte lit au départ de l'étape, avant toute session : si la construction en change un, aucune entrée n'est jouée. Absentes, l'étape n'en a pas : les dossiers d'avant restent rejouables.
+ */
+const commandSchema = () =>
+  z.strictObject({
+    command: z.array(argumentSchema()).min(1).max(32),
+    limitSeconds: z.number().int().min(1).max(7200),
+  });
+
+/**
+ * Un chemin de fichier du worktree, depuis sa racine : ni absolu, ni `..`, ni `.git`, ni barre oblique inverse, NUL ou
+ * saut de ligne (`refusedPath`, la règle des citations d'éclaireur).
+ */
+const worktreePathSchema = () =>
+  z
+    .string()
+    .min(1)
+    .max(300)
+    .refine((path) => !refusedPath(path), { error: 'a path the host does not read' });
+
+const freshInputsSchema = () =>
+  sessionSchema().extend({
+    enabled: z.boolean(),
+    count: z.number().int().min(1).max(freshInputsMax()),
+    runner: commandSchema(),
+    validate: commandSchema().optional(),
+    runnerFiles: z.array(worktreePathSchema()).min(1).max(16),
+  });
+
+/**
  * `step.json`, le fichier descriptif d'une étape : la session de construction, les éclaireurs et les revues (au plus 8
  * de chaque, chacun avec son nom, son modèle, son effort et sa limite) et le nombre de sessions d'une même sorte qui
  * peuvent tourner en même temps. Un nom d'éclaireur peut être celui d'une revue.
@@ -89,6 +126,7 @@ const stepPolicySchema = () =>
     ]),
     scouts: namedSessions('scout'),
     checks: checksSchema(),
+    freshInputs: freshInputsSchema().optional(),
     reviews: namedSessions('review'),
     parallel: z.number().int().min(1).max(8).default(2),
   });

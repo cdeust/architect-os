@@ -12,9 +12,22 @@ const ADAPTER_VARS = (): ProfileVariables => ({
   tmp: '/t/aos/tmp',
   config: '/t/aos/config',
   sandboxes: '/t',
+  inputs: '/r/.claude/worktrees/w',
 });
 
 const template = (world: Parameters<typeof stored>[0]) => stored<ProfileTemplate>(world, 'template');
+
+When(
+  'I resolve the profile with the variables of the adapter and the inputs {string}',
+  function (inputs: string) {
+    this.state['resolved'] = resolveProfile(template(this), { ...ADAPTER_VARS(), inputs });
+  },
+);
+
+Then('the resolved profile reads {string}', function (path: string) {
+  const resolved = stored<{ settings: { filesystem: { allowRead?: string[] } } }>(this, 'resolved');
+  assert.ok(resolved.settings.filesystem.allowRead?.includes(path));
+});
 
 When('I resolve the profile with the variables of the adapter only', function () {
   this.state['resolved'] = resolveProfile(template(this), ADAPTER_VARS());

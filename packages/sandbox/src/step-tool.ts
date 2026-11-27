@@ -43,6 +43,19 @@ import {
   ReviewVerdictSchema,
 } from './review-verdict.js';
 import { factsJsonSchema, parseFacts, renderFacts, verifyFacts, type Fact } from './scout-facts.js';
+import {
+  changedRunnerFiles,
+  freshInputId,
+  freshReasons,
+  receiveFreshInputs,
+  renderFreshOutcomes,
+  renderFreshRequest,
+  renderFreshScenario,
+  runOutcome,
+  validationOutcome,
+  type FreshInputOutcome,
+} from './fresh-inputs.js';
+import { freshStage, type FreshStage } from './fresh-stage.js';
 import { SrtSandboxRunner } from './srt-runner.js';
 import type { SandboxRunner } from './port.js';
 import { outputTail, passed, renderChecks, type CheckOutcome, type CheckReport } from './step-checks.js';
@@ -69,8 +82,15 @@ import { resolveWorktree } from './worktree.js';
 
 export type { StepSession, ToolFile } from './builder.js';
 
-/** Un contrôle : la commande jouée sous srt (profil `checker`), sa limite en secondes ; ce qu'elle a rendu. */
-export type StepCheck = (command: readonly string[], limitSeconds: number) => Promise<CheckOutcome>;
+/**
+ * Un contrôle : la commande jouée sous srt (profil `checker`), sa limite en secondes, et le dossier que le profil ouvre
+ * en lecture par `${inputs}` (la pose des entrées inventées ; sans lui, le worktree) ; ce qu'elle a rendu.
+ */
+export type StepCheck = (
+  command: readonly string[],
+  limitSeconds: number,
+  inputs?: string,
+) => Promise<CheckOutcome>;
 
 export interface StepDependencies {
   /** Les arguments après le nom du script. */
@@ -79,6 +99,8 @@ export interface StepDependencies {
   readonly readFile: (path: string) => string | undefined;
   /** Le texte d'un fichier du worktree où l'étape tourne, `undefined` s'il n'en est pas un (fichier ordinaire dans ce worktree). */
   readonly readSource: (path: string) => string | undefined;
+  /** Le texte d'un fichier de configuration de l'exécuteur (`runnerFiles`), sans suivre aucun lien symbolique. */
+  readonly readRunnerFile: (path: string) => string | undefined;
   readonly writeFile: (path: string, content: string) => void;
   readonly reserveOutputs: (name: string, intake: string, worktree: string) => StepOutputs;
   readonly appendFile: (path: string, content: Uint8Array) => void;
@@ -99,6 +121,8 @@ export interface StepDependencies {
   readonly dispose?: () => void;
   /** Le dossier `steps/` du worktree. */
   readonly steps: StepsFolder;
+  /** La pose des scénarios des entrées inventées d'une étape, hors du worktree, le temps de les jouer. */
+  readonly stage: (step: string) => FreshStage;
   readonly stdout: Writable;
   readonly stderr: Writable;
 }
@@ -158,6 +182,11 @@ function readStep(deps: StepDependencies): {
 
 type PlayedSession = Awaited<ReturnType<StepSession>> & { measure: SessionMeasure };
 
+/** Le fichier du lanceur qui porte le schéma de la sortie des entrées inventées, passé tel qu'admis à `--json-schema`. */
+function freshSchemaFile(): string {
+  return 'prompts/fresh-inputs.schema.json';
+}
+
 /** Le résultat structuré ne peut servir qu'après la réussite du processus et du flux. */
 function sessionSucceeded(session: PlayedSession): boolean {
   return passed(session) && session.measure.completed;
@@ -195,18 +224,24 @@ const outputBound = () => 4000;
 
 type CheckConfig = StepFile['checks'][number];
 
-/** Un contrôle : joué, sa durée mesurée en secondes entières, son résultat écrit dans `check.<nom>.json`. */
+/**
+ * Un contrôle : joué, sa durée mesurée en secondes entières, son résultat écrit dans `file` (`check.<nom>.json` pour un
+ * contrôle de l'étape). `inputs` est le dossier que le profil `checker` ouvre en lecture par `${inputs}`, la pose des
+ * entrées inventées ; sans lui, la variable vaut le worktree.
+ */
 async function playCheck(
   deps: StepDependencies,
   outputs: StepOutputs,
   config: CheckConfig,
+  file = `check.${config.name}.json`,
+  inputs?: string,
 ): Promise<CheckReport> {
   const before = deps.now();
-  const outcome = await deps.check(config.command, config.limitSeconds);
+  const outcome = await deps.check(config.command, config.limitSeconds, inputs);
   const durationSeconds = Math.round((deps.now() - before) / 1000);
   const { exitCode, stopped, cut, output } = outcome;
   deps.writeFile(
-    join(outputs.retained, `check.${config.name}.json`),
+    join(outputs.retained, file),
     json({ command: config.command, exitCode, stopped, durationSeconds, cut, output }),
   );
   return { name: config.name, command: config.command, exitCode, stopped, durationSeconds, cut, output };
@@ -272,6 +307,139 @@ async function playBounded<Config, Outcome>(
     if (result.status === 'rejected') throw result.reason;
     return result.value;
   });
+}
+
+type FreshConfig = NonNullable<StepFile['freshInputs']>;
+
+interface FreshOutcome {
+  config: FreshConfig;
+  /** La session qui a inventé les entrées ; absente quand la configuration de l'exécuteur avait changé. */
+  session?: PlayedSession;
+  /** Un fichier de `runnerFiles` n'était plus celui du départ : ni session ni entrée. */
+  runnerChanged: boolean;
+  /** La sortie de la session a passé le schéma et les vérifications de l'hôte. */
+  received: boolean;
+  /** Chaque entrée jouée, dans l'ordre de la sortie. */
+  played: PlayedInput[];
+}
+
+/**
+ * Une entrée jouée : l'identifiant que l'hôte lui a donné, son issue, la durée du validateur et de l'exécuteur ensemble,
+ * et, pour le brief des revues seulement, son titre et le comportement attendu, textes de la session.
+ */
+interface PlayedInput {
+  id: string;
+  outcome: FreshInputOutcome;
+  durationSeconds: number;
+  title: string;
+  expected: string;
+}
+
+/** Les raisons de la phase (`freshReasons`) : vides quand elle passe. */
+function reasonsOf({ runnerChanged, received, played }: FreshOutcome) {
+  return freshReasons({ runnerChanged, received, outcomes: played.map(({ outcome }) => outcome) });
+}
+
+/**
+ * Les entrées inventées (§4). D'abord, les fichiers de configuration de l'exécuteur (`runnerFiles`) sont relus et
+ * comparés au texte lu au départ de l'étape : si la construction en a changé un, rien n'est joué, pas même la session.
+ * Sinon une session neuve, sous le profil en lecture seule, reçoit le brief de l'étape suivi de la demande de l'hôte et
+ * rend ses entrées ; l'hôte les reçoit (`receiveFreshInputs`), écrit le scénario de chacune dans son gabarit, les pose
+ * hors du worktree (`FreshStage`) et joue chacune, toutes, sous le profil `checker` qui lit la pose par sa variable
+ * `${inputs}` : le validateur s'il y en a un, puis l'exécuteur si le validateur l'a acceptée, chacun par son argv fixe
+ * suivi du chemin absolu du scénario. La pose est retirée quoi qu'il arrive. Une sortie refusée ne fait jouer aucune
+ * entrée.
+ */
+async function freshInputs(
+  deps: StepDependencies,
+  outputs: StepOutputs,
+  config: FreshConfig,
+  step: string,
+  brief: string,
+  commit: string,
+  schema: string,
+  frozen: Readonly<Record<string, string>>,
+): Promise<FreshOutcome> {
+  const changed = changedRunnerFiles(frozen, deps.readRunnerFile);
+  if (changed.length > 0) {
+    deps.writeFile(join(outputs.retained, 'fresh.runner.json'), json({ changed }));
+    return { config, runnerChanged: true, received: false, played: [] };
+  }
+  const forFresh = `${brief.trimEnd()}\n\n${renderFreshRequest(config.count, commit)}`;
+  deps.writeFile(join(outputs.retained, 'fresh.brief.md'), forFresh);
+  const session = await play(
+    deps,
+    outputs,
+    'fresh',
+    'fresh.json',
+    config,
+    ['--json-schema', JSON.stringify(JSON.parse(schema))],
+    forFresh,
+  );
+  const received = sessionSucceeded(session)
+    ? receiveFreshInputs(session.measure.structuredOutput, config.count, deps.readSource)
+    : 'la session n’a pas abouti';
+  const inputsFile = join(outputs.retained, 'fresh.inputs.json');
+  if (typeof received === 'string') {
+    deps.writeFile(inputsFile, json({ invalid: received }));
+    return { config, session, runnerChanged: false, received: false, played: [] };
+  }
+  deps.writeFile(inputsFile, json(received));
+  const scenarios = received.inputs.map(({ input }, index) => {
+    const id = freshInputId(index);
+    const text = renderFreshScenario(step, id, input);
+    deps.writeFile(join(outputs.retained, `fresh.${id}.feature`), text);
+    return [`${id}.feature`, text] as const;
+  });
+  const stage = deps.stage(step);
+  const played: PlayedInput[] = [];
+  try {
+    const paths = stage.write(Object.fromEntries(scenarios));
+    for (const [index, path] of paths.entries()) {
+      const id = freshInputId(index);
+      // Le validateur d'abord, s'il y en a un : une entrée qu'il ne laisse pas passer n'est pas jouée.
+      const validation =
+        config.validate === undefined
+          ? undefined
+          : await playCheck(
+              deps,
+              outputs,
+              {
+                name: id,
+                command: [...config.validate.command, path],
+                limitSeconds: config.validate.limitSeconds,
+              },
+              `fresh.${id}.validate.json`,
+              stage.folder,
+            );
+      const refused = validation === undefined ? undefined : validationOutcome(validation);
+      const run =
+        refused === undefined
+          ? await playCheck(
+              deps,
+              outputs,
+              {
+                name: id,
+                command: [...config.runner.command, path],
+                limitSeconds: config.runner.limitSeconds,
+              },
+              `fresh.${id}.json`,
+              stage.folder,
+            )
+          : undefined;
+      const { input, expected } = received.inputs[index]!;
+      played.push({
+        id,
+        outcome: run === undefined ? refused! : runOutcome(run),
+        durationSeconds: (validation?.durationSeconds ?? 0) + (run?.durationSeconds ?? 0),
+        title: input.title,
+        expected,
+      });
+    }
+  } finally {
+    stage.remove();
+  }
+  return { config, session, runnerChanged: false, received: true, played };
 }
 
 interface ScoutOutcome extends PlayedSession {
@@ -439,10 +607,12 @@ export function launcherFiles(
   readLauncher: StepDependencies['readLauncher'],
   step: StepFile,
 ): Record<string, string> {
+  const fresh = step.freshInputs?.enabled === true;
   const tools: ToolFile[] = [
     'code.json',
     ...(step.reviews.length > 0 ? (['review.json'] as const) : []),
     ...(step.scouts.length > 0 ? (['scout.json'] as const) : []),
+    ...(fresh ? (['fresh.json'] as const) : []),
   ];
   const files = new Map<string, string>();
   for (const toolFile of tools) {
@@ -456,10 +626,29 @@ export function launcherFiles(
   if (step.build.provider === 'openai') {
     for (const asset of ['sbx/isolation.json', 'sbx/codex-guest.py']) files.set(asset, readLauncher(asset));
   }
-  // Les contrôles tournent sous le profil `checker`, qu'aucun fichier d'outil ne nomme.
+  if (fresh) files.set(freshSchemaFile(), readLauncher(freshSchemaFile()));
+  // Les contrôles et les entrées inventées tournent sous le profil `checker`, qu'aucun fichier d'outil ne nomme.
   const checker = 'profiles/checker.json';
-  if (step.checks.length > 0) files.set(checker, readLauncher(checker));
+  if (step.checks.length > 0 || fresh) files.set(checker, readLauncher(checker));
   return Object.fromEntries([...files.keys()].sort().map((file) => [file, files.get(file) as string]));
+}
+
+/**
+ * Le texte, lu dans le worktree au départ de l'étape, de chaque fichier de configuration de l'exécuteur des entrées
+ * inventées (`runnerFiles`), par chemin ; vide quand l'étape n'en joue pas. Un fichier que l'hôte ne lit pas refuse
+ * l'étape avant toute session.
+ */
+function frozenRunnerFiles(deps: StepDependencies, step: StepFile): Record<string, string> {
+  const fresh = step.freshInputs;
+  if (fresh?.enabled !== true) return {};
+  return Object.fromEntries(
+    fresh.runnerFiles.map((path) => {
+      const text = deps.readRunnerFile(path);
+      if (text === undefined)
+        throw new Refusal(`freshInputs.runnerFiles : ${path} n'est pas un fichier du worktree`);
+      return [path, text];
+    }),
+  );
 }
 
 /** Une étape ; son code de sortie : 0, 1 (l'étape ne passe pas) ou 2 (refus, échec de l'outil). */
@@ -484,6 +673,9 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         step.scouts.map(({ name: scout }, index) => [`scout.${scout}.md`, questions[index] as string]),
       ),
     };
+    // Les fichiers de configuration de l'exécuteur des entrées inventées, lus avant toute session : la construction ne
+    // pourra pas changer la façon dont elles sont jouées.
+    const frozen = frozenRunnerFiles(deps, step);
     let admission_sha256: string;
     try {
       admission_sha256 = deps.admit({ name, worktree, tree, inputs, step, launcher });
@@ -559,22 +751,38 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       }
     }
     const checked = played.every(passed);
+    const freshConfig = step.freshInputs?.enabled === true ? step.freshInputs : undefined;
+    const fresh =
+      built && checked && freshConfig !== undefined
+        ? await freshInputs(
+            deps,
+            outputs,
+            freshConfig,
+            name,
+            brief,
+            tree.commit,
+            launcher[freshSchemaFile()]!,
+            frozen,
+          )
+        : undefined;
+    // Une phase d'entrées inventées qui ne passe pas arrête l'étape comme un contrôle : aucune revue.
+    const verified = built && checked && (fresh === undefined || reasonsOf(fresh).length === 0);
     const appended = [
       ...(step.acceptance ? [renderAcceptance(step.acceptance)] : []),
       ...(given.length > 0 ? [renderClaims(given)] : []),
       ...(played.length > 0 ? [renderChecks(played, outputBound())] : []),
+      ...(fresh === undefined ? [] : [renderFreshOutcomes(fresh.played)]),
     ];
     const forReviews = appended.length === 0 ? brief : `${brief.trimEnd()}\n\n${appended.join('\n')}`;
-    if (built && checked) deps.writeFile(join(outputs.retained, 'review.brief.md'), forReviews);
-    const outcomes =
-      built && checked
-        ? await playBounded(step.reviews, step.parallel, (config) =>
-            review(deps, outputs, config, forReviews, {
-              acceptance: step.acceptance ?? [],
-              claims: given.map(({ id }) => id),
-            }),
-          )
-        : [];
+    if (verified) deps.writeFile(join(outputs.retained, 'review.brief.md'), forReviews);
+    const outcomes = verified
+      ? await playBounded(step.reviews, step.parallel, (config) =>
+          review(deps, outputs, config, forReviews, {
+            acceptance: step.acceptance ?? [],
+            claims: given.map(({ id }) => id),
+          }),
+        )
+      : [];
     const checks = Object.fromEntries(
       played.map((report) => [
         report.name,
@@ -603,6 +811,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     const measures = [
       ...scoutOutcomes.map(({ measure }) => measure),
       build.measure,
+      ...(fresh?.session === undefined ? [] : [fresh.session.measure]),
       ...outcomes.map(({ measure }) => measure),
     ];
     const record = buildRecord({
@@ -638,6 +847,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
               }
             : {}),
         },
+        ...(fresh?.session === undefined ? [] : [recorded('fresh', fresh.config, fresh.session)]),
         ...outcomes.map((review) => recorded('review', review.config, review, review.config.name)),
       ],
       checks: played.map((report) => ({
@@ -646,6 +856,21 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         stopped: report.stopped,
         durationSeconds: report.durationSeconds,
       })),
+      ...(fresh === undefined
+        ? {}
+        : {
+            freshInputs: {
+              runnerChanged: fresh.runnerChanged,
+              received: fresh.received,
+              reasons: reasonsOf(fresh),
+              // L'identifiant, l'issue et la durée de chaque entrée : ni son titre ni le comportement attendu.
+              inputs: fresh.played.map(({ id, outcome, durationSeconds }) => ({
+                id,
+                outcome,
+                durationSeconds,
+              })),
+            },
+          }),
       reviews: outcomes.map(({ config, verdict }) => ({
         name: config.name,
         verdict: verdict.verdict,
@@ -654,9 +879,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         ...(verdict.claims.length > 0 ? { claims: verdict.claims } : {}),
       })),
       outcome:
-        built && checked && !unreviewed && !outcomes.some(({ verdict }) => verdict.blocks)
-          ? 'passed'
-          : 'refused',
+        verified && !unreviewed && !outcomes.some(({ verdict }) => verdict.blocks) ? 'passed' : 'refused',
     });
     // Relu par son propre schéma : ce que la porte refuserait n'entre pas dans le worktree.
     deps.steps.publish(name, { ...inputs, 'record.json': json(stepRecordSchema().parse(record)) });
@@ -675,6 +898,26 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         costByModel: build.measure.costByModel,
       },
       checks,
+      ...(fresh === undefined
+        ? {}
+        : {
+            freshInputs: {
+              ...(fresh.session === undefined
+                ? {}
+                : {
+                    completed: fresh.session.measure.completed,
+                    exitCode: fresh.session.exitCode,
+                    costUsd: fresh.session.measure.costUsd,
+                    costByModel: fresh.session.measure.costByModel,
+                  }),
+              runnerChanged: fresh.runnerChanged,
+              received: fresh.received,
+              reasons: reasonsOf(fresh),
+              inputs: Object.fromEntries(
+                fresh.played.map(({ id, outcome, durationSeconds }) => [id, { outcome, durationSeconds }]),
+              ),
+            },
+          }),
       reviews,
       costUsd:
         build.provider === 'openai' ? null : measures.reduce((sum, measure) => sum + measure.costUsd, 0),
@@ -793,6 +1036,31 @@ const sourceReader =
   };
 
 /**
+ * La lecture d'un fichier de configuration de l'exécuteur (`freshInputs.runnerFiles`) : un fichier ordinaire du
+ * worktree, sans suivre aucun lien symbolique ni dans le chemin ni dans ses dossiers parents, borné à `SOURCE_MAX_BYTES`.
+ */
+function runnerFileReader(cwd: string): (path: string) => string | undefined {
+  return (path) => {
+    try {
+      const root = realpathSync(cwd);
+      const expected = resolve(root, path);
+      const real = realpathSync(expected);
+      const stats = statSync(real);
+      if (
+        real === expected &&
+        real.startsWith(root + sep) &&
+        stats.isFile() &&
+        stats.size <= SOURCE_MAX_BYTES
+      )
+        return readFileSync(real, 'utf8');
+    } catch {
+      // Absent, lien symbolique ou illisible : ce n'est pas un fichier ordinaire du worktree.
+    }
+    return undefined;
+  };
+}
+
+/**
  * Le texte d'un fichier du dossier de l'étape. Ce que l'hôte publie et hache est ce texte : un fichier qui n'est pas de
  * l'UTF-8 valide ne se relirait pas octet pour octet, il est refusé avant toute session. Une marque d'ordre des octets
  * en tête est gardée : elle fait partie du fichier.
@@ -817,6 +1085,14 @@ function rootOf(cwd: string): string {
   return worktree;
 }
 
+/**
+ * Les variables du lanceur pour un contrôle : `inputs` quand il lit la pose des entrées inventées, aucune sinon (le
+ * profil `checker` lit alors le worktree par `${inputs}`).
+ */
+export function checkVariables(inputs: string | undefined): Record<string, string> {
+  return inputs === undefined ? {} : { inputs };
+}
+
 /** Les dépendances réelles : les fichiers du disque, les sessions sous srt, les flux du processus. */
 export function stepDependencies(proc: CodeProcess, buildSubscription = buildSbxStep): StepDependencies {
   const cwd = proc.env['INIT_CWD'] ?? proc.cwd();
@@ -832,6 +1108,7 @@ export function stepDependencies(proc: CodeProcess, buildSubscription = buildSbx
     folderArguments: proc.argv.slice(2),
     readFile: (path) => (existsSync(path) && statSync(path).isFile() ? readText(path) : undefined),
     readSource: sourceReader(cwd),
+    readRunnerFile: runnerFileReader(cwd),
     reserveOutputs: (name, intake, worktree) => reserveStepOutputs(proc.env, name, intake, worktree),
     writeFile: (path, content) => writeFileSync(path, content, { flag: 'wx', mode: 0o600 }),
     appendFile: (path, content) => {
@@ -849,8 +1126,11 @@ export function stepDependencies(proc: CodeProcess, buildSubscription = buildSbx
           ? buildSubscription(request, admittedRoot(), PKG, proc.env.ARCHITECT_OS_RUNTIME_ROOT!)
           : new ClaudeBuilder(launch).build(request),
     },
-    check: (...args) =>
-      sandboxCheck(new SrtSandboxRunner(srtOptions(proc, {}, admittedRoot())), cwd)(...args),
+    check: (command, limitSeconds, inputs) =>
+      sandboxCheck(new SrtSandboxRunner(srtOptions(proc, checkVariables(inputs), admittedRoot())), cwd)(
+        command,
+        limitSeconds,
+      ),
     now: () => Date.now(),
     date: () => new Date(),
     root,
@@ -864,6 +1144,7 @@ export function stepDependencies(proc: CodeProcess, buildSubscription = buildSbx
     },
     dispose: () => snapshot?.dispose(),
     steps: stepsFolder(root),
+    stage: (step) => freshStage(proc.env, step),
     stdout: proc.stdout,
     stderr: proc.stderr,
   };

@@ -278,3 +278,82 @@ Feature: step.json, the descriptive file of a step
   Scenario: an acceptance that names a criterion twice is refused, and the refusal says so
     When I make a copy of the step file example with the acceptance ["AC-1","AC-2","AC-1"]
     Then parsing the broken step file fails with "acceptance: duplicate acceptance id"
+
+  Rule: the fresh inputs of a step (docs/design/orchestration-fable-5-2.md, §4): on or off, a count, a session, a fixed runner
+
+    Scenario: a step file with fresh inputs keeps their policy as written
+      When I parse the step file example with fresh inputs
+      Then the step fresh inputs are the policy of the example
+
+    Scenario: a step file without fresh inputs has none
+      When I parse the step file example
+      Then the step has no fresh inputs
+
+    Scenario Outline: a copy of the step file holding <edge> is accepted
+      When I parse a copy of the step file example holding <edge>
+      Then the step build session is "claude-sonnet-5-5", "medium", 2400 seconds
+
+      Examples:
+        | edge                          |
+        | fresh inputs turned off       |
+        | a count of 1 fresh input      |
+        | a count of 16 fresh inputs    |
+        | a fresh runner of one argument |
+        | a fresh runner of 32 arguments |
+        | a fresh runner limit of 7200  |
+        | a fresh session effort of max |
+        | a fresh validator             |
+        | one runner file               |
+        | sixteen runner files          |
+        | a runner file of 300 characters |
+        | a fresh validator of 32 arguments and a limit of 7200 |
+
+    Scenario Outline: a copy of the step file with <defect> is refused
+      When I break a copy of the step file example with <defect>
+      Then parsing the broken step file fails
+
+      Examples:
+        | defect                                   |
+        | fresh inputs that are not an object      |
+        | the singular fresh input key             |
+        | an unknown key in the fresh inputs       |
+        | fresh inputs without enabled             |
+        | an enabled that is a string              |
+        | fresh inputs without a count             |
+        | a count of 0 fresh inputs                |
+        | a count of 17 fresh inputs               |
+        | a fractional count of fresh inputs       |
+        | fresh inputs without a model             |
+        | an empty fresh model                     |
+        | a fresh effort not in the list           |
+        | a fresh session limit of 0               |
+        | a fresh session limit of 7201            |
+        | fresh inputs without a runner            |
+        | a fresh runner that is a string          |
+        | an unknown key in the fresh runner       |
+        | an empty fresh runner                    |
+        | a fresh runner of 33 arguments           |
+        | a fresh runner argument with a line feed |
+        | an empty fresh runner argument           |
+        | a fresh runner without a limit           |
+        | a fresh runner limit of 0                |
+        | a fresh runner limit of 7201             |
+        | a fresh validator that is a string       |
+        | an unknown key in the fresh validator    |
+        | an empty fresh validator                 |
+        | a fresh validator argument with a line feed |
+        | a fresh validator without a limit        |
+        | a fresh validator limit of 0             |
+        | fresh inputs without runner files        |
+        | no runner file                           |
+        | seventeen runner files                   |
+        | an empty runner file                     |
+        | a runner file of 301 characters          |
+        | an absolute runner file                  |
+        | a runner file outside the worktree       |
+        | a runner file under .git                 |
+        | a runner file with a line feed           |
+
+    Scenario: an absolute runner file is refused, and the refusal says why
+      When I break a copy of the step file example with an absolute runner file
+      Then parsing the broken step file fails with "freshInputs.runnerFiles.0: a path the host does not read"

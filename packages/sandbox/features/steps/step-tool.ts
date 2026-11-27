@@ -37,6 +37,7 @@ import { admittedFixture } from './admission-fixture.js';
 import { factsJsonSchema } from '../../src/scout-facts.js';
 import { stepRecordSchema } from '../../src/step-record.js';
 import { stepsFolder } from '../../src/steps-folder.js';
+import { inMemoryFreshStage } from '../../src/fresh-stage.js';
 import { repoOf } from './runner.js';
 import { parseStepFile } from '../../src/step-file.js';
 import type { TreeFingerprint } from '../../src/tree-fingerprint.js';
@@ -111,7 +112,7 @@ interface Step {
   phases: Record<Phased, Phase>;
   /** The checks, which the step plays one at a time: they differ by the order in which they start (1 is the first). */
   checks: Phase;
-  checkCalls: { command: readonly string[]; limitSeconds: number }[];
+  checkCalls: { command: readonly string[]; limitSeconds: number; inputs?: string }[];
   /** The clock of the step, in milliseconds: only a check moves it. */
   clock: number;
   /** The files of the worktree the step runs in, as `readSource` gives them. */
@@ -130,6 +131,16 @@ interface Step {
   publication?: Error;
   /** The files of the launcher that the step cannot read. */
   missing: Set<string>;
+  /** Where the step stages the scenarios of the fresh inputs, and what was staged when each check started. */
+  stage: ReturnType<typeof inMemoryFreshStage>;
+  staged: string[][];
+  stageWrites: number;
+  stageRemovals: number;
+  /** What the build session changes in the worktree while it runs: a new text, or the file removed. */
+  sourceChanges: { path: string; text: string | undefined }[];
+  /** A real on-disk runner file reader and build-time disk mutations, for symlink-rejection scenarios. */
+  realRunnerReader?: (path: string) => string | undefined;
+  onBuild: (() => void)[];
   /** The files that the build session rewrites in the step folder while it runs. */
   rewrites: { file: string; content: string }[];
   finished: boolean;
@@ -159,7 +170,13 @@ const newStepFolder = (world: SandboxWorld, name: string) => {
     folder,
     outputs: { retained: join(parent, 'retained-output'), streams: join(parent, 'raw-streams') },
     calls: [],
-    behaviours: { 'code.json': {}, 'review.json': {}, 'scout.json': {} },
+    behaviours: { 'code.json': {}, 'review.json': {}, 'scout.json': {}, 'fresh.json': {} },
+    stage: inMemoryFreshStage('/the/run/tmp/fresh/demo'),
+    staged: [],
+    stageWrites: 0,
+    stageRemovals: 0,
+    sourceChanges: [],
+    onBuild: [],
     phases: { 'scout.json': newPhase(), 'review.json': newPhase() },
     checks: newPhase(),
     checkCalls: [],
@@ -209,6 +226,7 @@ const writeStep = (
   scouts: readonly ReviewRow[] = [],
   checks: readonly string[] = [],
   acceptance?: readonly string[],
+  fresh?: { enabled: boolean; count: number; validate?: boolean },
 ) => {
   writeFileSync(
     join(s.folder, 'step.json'),
@@ -222,6 +240,27 @@ const writeStep = (
             checks: checks.map((name) => ({ name, command: ['npm', 'run', name], limitSeconds: 120 })),
           }
         : {}),
+      ...(fresh === undefined
+        ? {}
+        : {
+            freshInputs: {
+              enabled: fresh.enabled,
+              count: fresh.count,
+              ...(fresh.validate === true
+                ? {
+                    validate: {
+                      command: ['npx', 'cucumber-js', '--profile', 'replay', '--dry-run'],
+                      limitSeconds: 60,
+                    },
+                  }
+                : {}),
+              runnerFiles: ['cucumber.mjs', 'features/support/world.ts'],
+              model: 'claude-opus-5-5',
+              effort: 'high',
+              limitSeconds: 1200,
+              runner: { command: ['npx', 'cucumber-js', '--profile', 'replay'], limitSeconds: 600 },
+            },
+          }),
       ...(reviews.length > 0
         ? { reviews: reviews.map((review) => ({ ...review, effort: 'high', limitSeconds: 900 })) }
         : {}),
@@ -230,6 +269,11 @@ const writeStep = (
     }),
   );
   writeFileSync(join(s.folder, 'brief.md'), 'Build the thing.\n');
+  // The configuration of the runner of the fresh inputs, as the worktree holds it at the start of the step.
+  if (fresh !== undefined) {
+    s.source.set('cucumber.mjs', 'export default { strict: true };\n');
+    s.source.set('features/support/world.ts', 'export class World {}\n');
+  }
 };
 
 Given('the step folder holds a step.json with a build and {string}', function (review: string) {
@@ -432,12 +476,14 @@ Given('the review session {int} is stopped by its limit', function (n: number) {
   behaviour(step(this), 'review.json', n).stopped = true;
 });
 
-/** The files of the launcher as the scenarios see them: the three tool files as committed, the others fixed. */
+/** The files of the launcher as the scenarios see them: the four tool files and the schema of the fresh inputs as committed, the others fixed. */
 const launcherFile =
   (s: Step) =>
   (file: string): string => {
     if (s.missing.has(file)) throw new Error(`missing launcher file ${file}`);
-    return /^(code|review|scout)\.json$/.test(file) ? readFileSync(join(PKG, file), 'utf8') : `fixed:${file}`;
+    return /^((code|review|scout|fresh)\.json|prompts\/fresh-inputs\.schema\.json)$/.test(file)
+      ? readFileSync(join(PKG, file), 'utf8')
+      : `fixed:${file}`;
   };
 
 Given('the step has {string} admission evidence', function (reason: string) {
@@ -453,6 +499,7 @@ const start = (s: Step, args: string): Promise<void> => {
     folderArguments: args === '' ? [] : args.split(' ').map((arg) => arg.replace('<folder>', s.folder)),
     readFile: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined),
     readSource: (path) => s.source.get(path),
+    readRunnerFile: (path) => (s.realRunnerReader ? s.realRunnerReader(path) : s.source.get(path)),
     writeFile: (path, content) => writeFileSync(path, content),
     reserveOutputs: () => {
       mkdirSync(s.outputs.retained);
@@ -460,8 +507,9 @@ const start = (s: Step, args: string): Promise<void> => {
       return s.outputs;
     },
     appendFile: (path, content) => writeFileSync(path, content, { flag: 'a' }),
-    check: async (command, limitSeconds) => {
-      s.checkCalls.push({ command, limitSeconds });
+    check: async (command, limitSeconds, inputs) => {
+      s.checkCalls.push({ command, limitSeconds, ...(inputs === undefined ? {} : { inputs }) });
+      s.staged.push([...s.stage.files.keys()]);
       const n = s.checkCalls.length;
       const own = s.checks.behaviours.get(n) ?? {};
       gate(s.checks.started, n).resolve();
@@ -495,6 +543,12 @@ const start = (s: Step, args: string): Promise<void> => {
         return requireStepAdmission({ ...evidence, payload }, subject);
       }
       if (s.refusedAdmission === 'stale') evidence.payload.inputs_sha256['brief.md'] = 'a'.repeat(64);
+      if (s.refusedAdmission === 'no fresh specimen') {
+        evidence.payload.specimens = evidence.payload.specimens.filter(({ role }) => role !== 'fresh');
+        evidence.approved_sha256 = createHash('sha256')
+          .update(JSON.stringify(evidence.payload))
+          .digest('hex');
+      }
       if (s.refusedAdmission === 'failed specimen') {
         evidence.payload.specimens[0]!.results[0]!.observed = { verdict: 'refuse', findings: [] };
         evidence.approved_sha256 = createHash('sha256')
@@ -504,6 +558,17 @@ const start = (s: Step, args: string): Promise<void> => {
       s.acceptedAdmission = requireStepAdmission(evidence, subject);
       return s.acceptedAdmission;
     },
+    stage: () => ({
+      folder: s.stage.folder,
+      write: (files) => {
+        s.stageWrites++;
+        return s.stage.write(files);
+      },
+      remove: () => {
+        s.stageRemovals++;
+        s.stage.remove();
+      },
+    }),
     steps: {
       prepare: () => void s.prepared.push(s.calls.length),
       exists: (name) => s.taken.has(name),
@@ -515,7 +580,7 @@ const start = (s: Step, args: string): Promise<void> => {
     builder: s.fixtureBuilder ?? new ClaudeBuilder((...args) => deps.session(...args)),
     session: async (tool, argv, brief, limitSeconds, onOutput) => {
       s.calls.push({ tool, argv, brief, limitSeconds });
-      const phase = tool === 'code.json' ? undefined : s.phases[tool];
+      const phase = tool === 'code.json' || tool === 'fresh.json' ? undefined : s.phases[tool];
       const n = s.calls.filter((call) => call.tool === tool).length;
       const own = { ...s.behaviours[tool], ...phase?.behaviours.get(n) };
       if (phase !== undefined) {
@@ -529,6 +594,11 @@ const start = (s: Step, args: string): Promise<void> => {
         if (own.failure) throw own.failure;
         if (tool === 'code.json') {
           for (const { file, content } of s.rewrites) writeFileSync(join(s.folder, file), content);
+          for (const { path, text } of s.sourceChanges) {
+            if (text === undefined) s.source.delete(path);
+            else s.source.set(path, text);
+          }
+          for (const action of s.onBuild) action();
         }
         const text = own.text ?? (own.fixture === undefined ? '' : fixture(own.fixture));
         // In two chunks, as a stream arrives.
@@ -803,6 +873,19 @@ Given(
   },
 );
 
+Then('the step file {string} ends with:', function (name: string, text: string) {
+  const content = readFileSync(stepFile(step(this), name), 'utf8');
+  assert.ok(content.endsWith(text), content);
+});
+
+Then('the step stdout contains {string}', function (text: string) {
+  assert.ok(step(this).stdout.includes(text), step(this).stdout);
+});
+
+Then('the check {int} was started with the limit {int}', function (n: number, limit: number) {
+  assert.equal(step(this).checkCalls[n - 1]?.limitSeconds, limit);
+});
+
 Then('the step file {string} contains {string}', function (name: string, text: string) {
   assert.ok(readFileSync(stepFile(step(this), name), 'utf8').includes(text));
 });
@@ -1062,6 +1145,7 @@ Given('a worktree folder with a file, a directory, a link inside and links outsi
   mkdirSync(join(root, 'worktree-sibling'));
   writeFileSync(join(root, 'worktree-sibling', 's.txt'), 'secret\n');
   symlinkSync('src/a.ts', join(worktree, 'link-in.ts'));
+  symlinkSync('src', join(worktree, 'link-dir'));
   symlinkSync(join(root, 'outside.txt'), join(worktree, 'link-out.txt'));
   symlinkSync(join(root, 'outside-dir'), join(worktree, 'link-out-dir'));
   symlinkSync('missing.txt', join(worktree, 'link-dangling.txt'));
@@ -1105,6 +1189,27 @@ Then('the step dependencies read the source {string} as undefined', function (pa
   const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
   assert.equal(deps.readSource(path), undefined);
 });
+
+Then(
+  'the step dependencies read the runner file {string} as {string}',
+  function (path: string, text: string) {
+    const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+    assert.equal(deps.readRunnerFile(path), text.replaceAll('\\n', '\n'));
+  },
+);
+
+Then('the step dependencies read the runner file {string} as undefined', function (path: string) {
+  const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+  assert.equal(deps.readRunnerFile(path), undefined);
+});
+
+Then(
+  'the step dependencies read the runner file {string} whole, of {int} bytes',
+  function (path: string, size: number) {
+    const { deps } = stored<{ deps: StepDependencies }>(this, 'stepDeps');
+    assert.equal(deps.readRunnerFile(path)?.length, size);
+  },
+);
 
 Given('the step uses the materialized Plan folder', function () {
   const s = step(this);
@@ -1408,6 +1513,254 @@ Then(
   },
 );
 
+// The fresh inputs (docs/design/orchestration-fable-5-2.md, §4): the policy of the step, the output of the fresh
+// session, and what the host staged and played.
+
+Given(
+  'the step folder holds a step.json with a build, the checks {string}, {int} fresh inputs on with a validator and the reviews {string}',
+  function (checks: string, count: number, reviews: string) {
+    writeStep(
+      step(this),
+      reviews === '' ? [] : rows(reviews),
+      undefined,
+      [],
+      checks === '' ? [] : checks.split(' '),
+      undefined,
+      { enabled: true, count, validate: true },
+    );
+  },
+);
+
+Given(
+  'the step folder holds a step.json with a build, the checks {string}, {int} fresh inputs {word} and the reviews {string}',
+  function (checks: string, count: number, state: string, reviews: string) {
+    assert.ok(state === 'on' || state === 'off', `fresh inputs are on or off, not ${state}`);
+    writeStep(
+      step(this),
+      reviews === '' ? [] : rows(reviews),
+      undefined,
+      [],
+      checks === '' ? [] : checks.split(' '),
+      undefined,
+      { enabled: state === 'on', count },
+    );
+  },
+);
+
+/** The stream of a fresh session that ends with `structured_output`. */
+const freshStream = (output: unknown): string =>
+  [
+    {
+      type: 'assistant',
+      message: { id: 'msg_f1', model: 'claude-opus-5-5', usage: { input_tokens: 1, output_tokens: 1 } },
+    },
+    {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      num_turns: 3,
+      duration_ms: 7000,
+      total_cost_usd: 0.5,
+      result: 'Inputs given.',
+      permission_denials: [],
+      usage: {
+        input_tokens: 2,
+        output_tokens: 100,
+        cache_read_input_tokens: 500,
+        cache_creation_input_tokens: 10,
+      },
+      modelUsage: { 'claude-opus-5-5': { costUSD: 0.5 } },
+      structured_output: output,
+    },
+  ]
+    .map((event) => JSON.stringify(event))
+    .join('\n')
+    .concat('\n');
+
+/** One input on `target`, its step 2 with the text `text`. */
+const freshInput = (target: string, text: string) => ({
+  target,
+  input: {
+    title: `an input on ${target}`,
+    steps: [
+      { keyword: 'Given', text: 'a step folder' },
+      { keyword: 'When', text },
+      { keyword: 'Then', text: 'the step exits with 2' },
+    ],
+  },
+  expected: 'the brief says that the step refuses it',
+});
+
+Given('the fresh session invents one input on each of the targets {string}', function (targets: string) {
+  const s = step(this);
+  s.behaviours['fresh.json'].text = freshStream({
+    inputs: targets.split(' ').map((target) => freshInput(target, 'I run the step with the arguments ""')),
+    open: ['a symbolic link cannot be written with the existing steps'],
+  });
+});
+
+Given(
+  'the fresh session invents one input on {string} whose step 2 is: {}',
+  function (target: string, text: string) {
+    step(this).behaviours['fresh.json'].text = freshStream({ inputs: [freshInput(target, text)], open: [] });
+  },
+);
+
+Given('the fresh session gives the structured output:', function (output: string) {
+  step(this).behaviours['fresh.json'].text = freshStream(JSON.parse(output));
+});
+
+Given('the fresh session gives no structured output', function () {
+  step(this).behaviours['fresh.json'].text = freshStream(undefined);
+});
+
+Given('the fresh session exits with {int}', function (code: number) {
+  step(this).behaviours['fresh.json'].nativeExit = code;
+});
+
+Given('the fresh session is stopped by its limit', function () {
+  step(this).behaviours['fresh.json'].stopped = true;
+});
+
+Given('the fresh session fails with the plain error {string}', function (message: string) {
+  step(this).behaviours['fresh.json'].failure = new Error(message);
+});
+
+Given('the worktree of the step holds the files {string}', function (paths: string) {
+  for (const path of paths.split(' ')) step(this).source.set(path, `// ${path}\n`);
+});
+
+Then('the checks staged {string} when each started', function (staged: string) {
+  assert.deepEqual(
+    step(this).staged.map((paths) => paths.join(',')),
+    staged.split(' '),
+  );
+});
+
+Then('the stage of the fresh inputs holds nothing', function () {
+  assert.equal(step(this).stage.files.size, 0);
+});
+
+Then(
+  'the check {int} was started with the runner and the staged file {string}',
+  function (n: number, file: string) {
+    assert.deepEqual(step(this).checkCalls[n - 1], {
+      command: ['npx', 'cucumber-js', '--profile', 'replay', `/the/run/tmp/fresh/demo/${file}`],
+      limitSeconds: 600,
+      inputs: '/the/run/tmp/fresh/demo',
+    });
+  },
+);
+
+Then(
+  'the staged file {string} parsed by the check {int} has the step 2 text: {}',
+  function (file: string, n: number, text: string) {
+    const s = step(this);
+    // The file the check read is the one the host retained: it was staged as written.
+    const retained = readFileSync(
+      join(s.outputs.retained, `fresh.${file.replace('.feature', '')}.feature`),
+      'utf8',
+    );
+    assert.equal(s.staged[n - 1]?.includes(`/the/run/tmp/fresh/demo/${file}`), true);
+    const lines = retained.split('\n');
+    assert.equal(lines.filter((line) => /^\s*(Given|When|Then|And|But) /.test(line)).length, 3);
+    assert.equal(
+      lines.filter((line) => /^\s*(Feature|Scenario|Rule|Background|Examples):/.test(line)).length,
+      2,
+    );
+    assert.equal(lines[4], `    When ${text}`);
+  },
+);
+
+Then(
+  'the session {int} got the arguments {string} and then the committed schema of the fresh inputs',
+  function (n: number, args: string) {
+    const argv = step(this).calls[n - 1]?.argv ?? [];
+    assert.deepEqual(argv.slice(0, -1), args.split(' '));
+    const schema = JSON.parse(argv.at(-1) as string) as Record<string, unknown>;
+    assert.deepEqual(
+      schema,
+      JSON.parse(readFileSync(join(PKG, 'prompts', 'fresh-inputs.schema.json'), 'utf8')),
+    );
+    assert.equal(schema['$schema'], 'http://json-schema.org/draft-07/schema#');
+  },
+);
+
+Then('the stage of the fresh inputs was never written', function () {
+  assert.equal(step(this).stageWrites, 0);
+});
+
+Then('the stage of the fresh inputs was written once and removed once', function () {
+  assert.deepEqual([step(this).stageWrites, step(this).stageRemovals], [1, 1]);
+});
+
+Given('the build session {word} the worktree file {string}', function (change: string, path: string) {
+  assert.ok(change === 'rewrites' || change === 'removes', `no change named ${change}`);
+  step(this).sourceChanges.push({
+    path,
+    text: change === 'rewrites' ? 'export default { strict: false };\n' : undefined,
+  });
+});
+
+Given('the worktree of the step has no file {string}', function (path: string) {
+  step(this).source.delete(path);
+});
+
+Then('the check {int} was started with no inputs folder', function (n: number) {
+  assert.equal(step(this).checkCalls[n - 1]?.inputs, undefined);
+  assert.equal(Object.hasOwn(step(this).checkCalls[n - 1]!, 'inputs'), false);
+});
+
+/** Prepares a real temporary worktree holding the default runner files and wires the production `readRunnerFile`. */
+function useRealRunnerWorktree(world: SandboxWorld): string {
+  const s = step(world);
+  const worktree = mkdtempSync(join(tmpdir(), 'aos-runner-wt-'));
+  world.cleanups.push(() => rmSync(worktree, { recursive: true, force: true }));
+  mkdirSync(join(worktree, 'features', 'support'), { recursive: true });
+  writeFileSync(join(worktree, 'cucumber.mjs'), 'export default { strict: true };\n');
+  writeFileSync(join(worktree, 'features', 'support', 'world.ts'), 'export class World {}\n');
+  const proc = {
+    argv: ['node', 'step.ts', s.folder],
+    env: {},
+    cwd: () => worktree,
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+  } as unknown as CodeProcess;
+  s.realRunnerReader = stepDependencies(proc).readRunnerFile;
+  world.state['runnerWorktree'] = worktree;
+  return worktree;
+}
+
+Given('the worktree of the step on disk holds the runner files', function () {
+  useRealRunnerWorktree(this);
+});
+
+Given(
+  'the worktree of the step on disk has the runner file {string} as an intra-worktree symlink',
+  function (file: string) {
+    const worktree = useRealRunnerWorktree(this);
+    mkdirSync(join(worktree, 'evil'), { recursive: true });
+    const text = readFileSync(join(worktree, file), 'utf8');
+    writeFileSync(join(worktree, 'evil', file), text);
+    rmSync(join(worktree, file));
+    symlinkSync(join('evil', file), join(worktree, file));
+  },
+);
+
+Given(
+  'the build session replaces the runner file {string} on disk with an intra-worktree symlink to identical bytes',
+  function (file: string) {
+    const worktree = stored<string>(this, 'runnerWorktree');
+    step(this).onBuild.push(() => {
+      mkdirSync(join(worktree, 'evil'), { recursive: true });
+      const text = readFileSync(join(worktree, file), 'utf8');
+      writeFileSync(join(worktree, 'evil', file), text);
+      rmSync(join(worktree, file));
+      symlinkSync(join('evil', file), join(worktree, file));
+    });
+  },
+);
+
 // The departures a build declares (src/build-claims.ts): a report that carries a claims block, and what the record keeps.
 Given('the build session reports:', function (report: string) {
   const stream = fixture('session.jsonl').trimEnd().split('\n');
@@ -1444,10 +1797,6 @@ Then(
     });
   },
 );
-
-Then('the step stdout contains {string}', function (text: string) {
-  assert.ok(step(this).stdout.includes(text), `${step(this).stdout} does not contain ${text}`);
-});
 
 Then(
   'the published record of the step {string} gives the claims {string} with no review',

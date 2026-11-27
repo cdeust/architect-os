@@ -507,6 +507,7 @@ Feature: the step leaves its brief and its record in the worktree
         | reviews.0.criteria           | [{"id":"AC-1","status":"partial"}]                                    |
         | reviews.0.criteria           | [{"id":"AC-1","status":"met","evidence":[]}]                          |
         | outcome                      | "stopped"                                                             |
+        | sessions.0.role              | "invent"                                                              |
 
     Scenario Outline: accepted: <field> becomes <value>
       Given a record of a step that the schema accepts
@@ -530,6 +531,89 @@ Feature: the step leaves its brief and its record in the worktree
         | tree.clean                 | false                                |
         | launcher.[profiles/checker.json] | "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |
         | inputs.[scout.a-1.md]      | "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" |
+        | sessions.0.role            | "fresh"                              |
+
+    Scenario Outline: the shape of the fresh inputs of a record is refused: <value>
+      Given a record of a step that the schema accepts
+      When its field "freshInputs" becomes <value>
+      And its field "outcome" becomes "refused"
+      Then the schema of the record refuses it
+
+      Examples:
+        | value |
+        | true |
+        | {"runnerChanged":false,"received":true,"reasons":[]} |
+        | {"runnerChanged":false,"reasons":[],"inputs":[]} |
+        | {"received":false,"reasons":["FRESH_OUTPUT_REFUSED"],"inputs":[]} |
+        | {"runnerChanged":false,"received":"yes","reasons":[],"inputs":[]} |
+        | {"runnerChanged":"no","received":false,"reasons":["FRESH_OUTPUT_REFUSED"],"inputs":[]} |
+        | {"runnerChanged":false,"received":false,"reasons":["FRESH_OUTPUT_REFUSED"],"inputs":[],"extra":true} |
+        | {"runnerChanged":false,"received":true,"reasons":["FRESH_INPUT_LOST"],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":0}]} |
+        | {"runnerChanged":false,"received":true,"reasons":"FRESH_INPUT_FAILED","inputs":[{"id":"fresh-1","outcome":"failed","durationSeconds":0}]} |
+        | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-0","outcome":"passed","durationSeconds":0}]} |
+        | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-2","outcome":"passed","durationSeconds":0}]} |
+        | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-01","outcome":"passed","durationSeconds":0}]} |
+        | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"Fresh-1","outcome":"passed","durationSeconds":0}]} |
+        | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":0},{"id":"fresh-1","outcome":"passed","durationSeconds":0}]} |
+        | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"skipped","durationSeconds":0}]} |
+        | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":-1}]} |
+        | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":0.5}]} |
+        | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"passed"}]} |
+        | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-1","durationSeconds":0}]} |
+        | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":0,"title":"an input"}]} |
+
+    Scenario Outline: fresh inputs that do not hold together are refused: <case>
+      Given a record of a step that the schema accepts
+      When its field "freshInputs" becomes <value>
+      And its field "outcome" becomes "refused"
+      Then the schema of the record refuses it
+
+      Examples:
+        | case | value |
+        | a changed runner that received an output | {"runnerChanged":true,"received":true,"reasons":["FRESH_RUNNER_CHANGED"],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":0}]} |
+        | a changed runner with the reason of a refused output | {"runnerChanged":true,"received":false,"reasons":["FRESH_OUTPUT_REFUSED"],"inputs":[]} |
+        | inputs without a received output | {"runnerChanged":false,"received":false,"reasons":["FRESH_OUTPUT_REFUSED"],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":0}]} |
+        | a received output without input | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[]} |
+        | a failed input without its reason | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"failed","durationSeconds":0}]} |
+        | a reason no input gives | {"runnerChanged":false,"received":true,"reasons":["FRESH_INPUT_FAILED"],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":0}]} |
+        | reasons out of order | {"runnerChanged":false,"received":true,"reasons":["FRESH_INPUT_INVALID","FRESH_INPUT_FAILED"],"inputs":[{"id":"fresh-1","outcome":"invalid","durationSeconds":0},{"id":"fresh-2","outcome":"failed","durationSeconds":0}]} |
+        | a reason twice | {"runnerChanged":false,"received":true,"reasons":["FRESH_INPUT_FAILED","FRESH_INPUT_FAILED"],"inputs":[{"id":"fresh-1","outcome":"failed","durationSeconds":0}]} |
+        | a stopped validator counted as invalid | {"runnerChanged":false,"received":true,"reasons":["FRESH_INPUT_INVALID"],"inputs":[{"id":"fresh-1","outcome":"unvalidated","durationSeconds":0}]} |
+
+    Scenario Outline: fresh inputs that hold together are accepted, with the outcome <outcome>: <value>
+      Given a record of a step that the schema accepts
+      When its field "freshInputs" becomes <value>
+      And its field "outcome" becomes "<outcome>"
+      Then the schema of the record accepts it
+
+      Examples:
+        | outcome | value |
+        | passed | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":0}]} |
+        | refused | {"runnerChanged":false,"received":true,"reasons":[],"inputs":[{"id":"fresh-1","outcome":"passed","durationSeconds":0}]} |
+        | refused | {"runnerChanged":false,"received":false,"reasons":["FRESH_OUTPUT_REFUSED"],"inputs":[]} |
+        | refused | {"runnerChanged":true,"received":false,"reasons":["FRESH_RUNNER_CHANGED"],"inputs":[]} |
+        | refused | {"runnerChanged":false,"received":true,"reasons":["FRESH_INPUT_FAILED","FRESH_INPUT_INVALID","FRESH_VALIDATOR_STOPPED"],"inputs":[{"id":"fresh-1","outcome":"invalid","durationSeconds":0},{"id":"fresh-2","outcome":"stopped","durationSeconds":7},{"id":"fresh-3","outcome":"failed","durationSeconds":1},{"id":"fresh-4","outcome":"passed","durationSeconds":2},{"id":"fresh-5","outcome":"unvalidated","durationSeconds":3}]} |
+
+    Scenario Outline: a step that passed holds no reason of its fresh inputs: <value>
+      Given a record of a step that the schema accepts
+      When its field "freshInputs" becomes <value>
+      Then the schema of the record refuses it
+
+      Examples:
+        | value |
+        | {"runnerChanged":false,"received":true,"reasons":["FRESH_INPUT_FAILED"],"inputs":[{"id":"fresh-1","outcome":"failed","durationSeconds":0}]} |
+        | {"runnerChanged":false,"received":false,"reasons":["FRESH_OUTPUT_REFUSED"],"inputs":[]} |
+        | {"runnerChanged":true,"received":false,"reasons":["FRESH_RUNNER_CHANGED"],"inputs":[]} |
+
+    Scenario Outline: the fresh inputs of a record hold <count> inputs, from fresh-1 in order: <result>
+      Given a record of a step that the schema accepts
+      When its fresh inputs become <count> inputs that passed, from fresh-1 in order
+      Then the schema of the record <result> it
+
+      Examples:
+        | count | result  |
+        | 16    | accepts |
+        | 17    | refuses |
 
     Scenario Outline: a record of a refused step, accepted: <field> becomes <value>
       Given a record of a step that was refused, which the schema accepts

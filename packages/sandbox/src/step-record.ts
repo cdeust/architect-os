@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { ticketsSchema } from '@architect-os/contracts';
 import { codexModelSchema, type StepFile } from './step-file.js';
+import { freshInputsMax, freshInputId, freshReasons, type FreshInputOutcome } from './fresh-inputs.js';
 import type { TreeFingerprint } from './tree-fingerprint.js';
 
 // Les schémas et les expressions sont construits dans des fonctions : un littéral au niveau du module ferait rejouer
@@ -75,7 +76,7 @@ export function stepRecordSchema() {
     sessions: z.array(
       z
         .strictObject({
-          role: z.enum(['scout', 'build', 'review']),
+          role: z.enum(['scout', 'build', 'fresh', 'review']),
           provider: z.enum(['anthropic', 'openai']).optional(),
           client: z.strictObject({ version: z.string().min(1), sha256: digest() }).optional(),
           usage: z
@@ -132,6 +133,36 @@ export function stepRecordSchema() {
         durationSeconds: seconds(),
       }),
     ),
+    // Les entrées inventées (§4) : si la configuration de l'exécuteur avait changé, si la sortie de la session a été
+    // reçue, pourquoi la phase arrête l'étape, puis l'identifiant que l'hôte a donné à chaque entrée, son issue et sa
+    // durée ; aucun texte de la session. Absent quand l'étape n'en a pas. La cohérence de ces champs entre eux et avec
+    // l'issue de l'étape est tenue plus bas (`freshConsistent`).
+    freshInputs: z
+      .strictObject({
+        runnerChanged: z.boolean(),
+        received: z.boolean(),
+        reasons: z.array(
+          z.enum([
+            'FRESH_INPUT_FAILED',
+            'FRESH_INPUT_INVALID',
+            'FRESH_OUTPUT_REFUSED',
+            'FRESH_RUNNER_CHANGED',
+            'FRESH_VALIDATOR_STOPPED',
+          ]),
+        ),
+        // L'identifiant d'une entrée est sa place : `fresh-1`, `fresh-2`, … dans l'ordre, seize au plus.
+        inputs: z
+          .array(
+            z.strictObject({
+              id: z.string(),
+              outcome: z.enum(['passed', 'failed', 'stopped', 'invalid', 'unvalidated']),
+              durationSeconds: seconds(),
+            }),
+          )
+          .max(freshInputsMax())
+          .refine((inputs) => inputs.every(({ id }, index) => id === freshInputId(index))),
+      })
+      .optional(),
     reviews: z.array(
       z.strictObject({
         name: z.string().regex(stepName()),
@@ -161,7 +192,30 @@ export function stepRecordSchema() {
     ),
     outcome: z.enum(['passed', 'refused']),
   });
-  return record.refine(coherent);
+  return record.refine(coherent).refine(freshConsistent);
+}
+
+/**
+ * Les entrées inventées d'un enregistrement se tiennent : une configuration changée n'a rien reçu, une sortie reçue a
+ * au moins une entrée et une sortie non reçue aucune, les raisons sont exactement celles que `freshReasons` déduit, et une étape `passed` n'en a aucune.
+ */
+function freshConsistent({ freshInputs, outcome }: { freshInputs?: FreshRecord; outcome: string }): boolean {
+  if (freshInputs === undefined) return true;
+  const { runnerChanged, received, reasons, inputs } = freshInputs;
+  const outcomes = inputs.map((input) => input.outcome);
+  return (
+    !(runnerChanged && received) &&
+    received === inputs.length > 0 &&
+    JSON.stringify(reasons) === JSON.stringify(freshReasons({ runnerChanged, received, outcomes })) &&
+    (outcome !== 'passed' || reasons.length === 0)
+  );
+}
+
+interface FreshRecord {
+  runnerChanged: boolean;
+  received: boolean;
+  reasons: readonly string[];
+  inputs: readonly { outcome: FreshInputOutcome }[];
 }
 
 /** Les champs que `coherent` lit, typés sans passer par le schéma qui l'appelle. */
@@ -232,7 +286,7 @@ export function publicCosts(costs: Readonly<Record<string, number>>): Record<str
 
 /** Ce qu'une session a laissé de mesurable. */
 export interface RecordedSession {
-  role: 'scout' | 'build' | 'review';
+  role: 'scout' | 'build' | 'fresh' | 'review';
   provider?: 'anthropic' | 'openai';
   client?: { version: string; sha256: string };
   usage?: { inputTokens: number | null; outputTokens: number | null };
@@ -261,6 +315,7 @@ export interface RecordParts {
   launcher: Readonly<Record<string, string>>;
   sessions: readonly RecordedSession[];
   checks: readonly { name: string; passed: boolean; stopped: boolean; durationSeconds: number }[];
+  freshInputs?: StepRecord['freshInputs'];
   reviews: StepRecord['reviews'];
   outcome: StepRecord['outcome'];
 }
@@ -305,6 +360,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
       stopped,
       durationSeconds,
     })),
+    ...(parts.freshInputs ? { freshInputs: parts.freshInputs } : {}),
     reviews: parts.reviews,
     outcome: parts.outcome,
   };

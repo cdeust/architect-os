@@ -116,6 +116,10 @@ function promptSubjects(subject: StepAdmissionSubject) {
     for (const role of roles)
       required.push({ role: group + ':' + role.name, model: role.model, prompt_sha256 });
   }
+  // La session qui invente les entrées a son prompt prouvé comme les autres, quand l'étape l'allume.
+  const fresh = subject.step.freshInputs;
+  if (fresh?.enabled)
+    required.push({ role: 'fresh', model: fresh.model, prompt_sha256: promptSha('fresh.json') });
   return required;
 }
 
