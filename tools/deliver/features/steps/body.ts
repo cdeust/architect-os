@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  bodyFits,
   inert,
   pullRequestBody,
   pullRequestTitle,
@@ -18,9 +19,22 @@ interface Scene {
 
 const scene = (world: DeliverWorld): Scene => world.state['pullBody'] as Scene;
 
-/** `{zw}` is the zero-width space, `{lf}` a line break: neither can be written in a cell of a table. */
-const shown = (text: string): string => text.replaceAll('​', '{zw}');
-const given = (text: string): string => text.replaceAll('{lf}', '\n');
+/**
+ * Characters a cell of a table cannot show, by name: `{zw}` the zero-width space, `{lf}` a line break, `{rlo}` the
+ * right-to-left override, `{wj}` the word joiner, `{bom}` the zero-width no-break space, `{fffd}` the replacement
+ * character.
+ */
+const NAMED: readonly (readonly [string, string])[] = [
+  ['{zw}', '\u200b'],
+  ['{lf}', '\n'],
+  ['{rlo}', '\u202e'],
+  ['{wj}', '\u2060'],
+  ['{bom}', '\ufeff'],
+  ['{fffd}', '\ufffd'],
+];
+const shown = (text: string): string =>
+  NAMED.reduce((out, [name, char]) => (name === '{lf}' ? out : out.replaceAll(char, name)), text);
+const given = (text: string): string => NAMED.reduce((out, [name, char]) => out.replaceAll(name, char), text);
 
 const HASH = '1'.repeat(40);
 
@@ -132,3 +146,54 @@ Then(
     assert.equal(shown(pullRequestTitle(template, name)), expected);
   },
 );
+
+Given(
+  'the record of a step whose build declared the departures {string}, judged by {string} as {string} and by {string} as {string}',
+  function (ids: string, first: string, firstStatuses: string, second: string, secondStatuses: string) {
+    this.state['pullBody'] = {
+      record: withClaims(ids, [
+        [first, firstStatuses],
+        [second, secondStatuses],
+      ]),
+    } satisfies Scene;
+  },
+);
+
+Given(
+  'the record of a step whose build declared the departures {string}, judged by {string} as {string}',
+  function (ids: string, review: string, statuses: string) {
+    this.state['pullBody'] = { record: withClaims(ids, [[review, statuses]]) } satisfies Scene;
+  },
+);
+
+Given('the record of a step whose declared departures the host refused', function () {
+  this.state['pullBody'] = {
+    record: { ...stepRecord(), claims: { valid: false, given: [] } },
+  } satisfies Scene;
+});
+
+/** The record whose build declared `ids` (each line hashed 4…, 5…), and each review with its statuses, in order. */
+function withClaims(ids: string, reviews: readonly (readonly [string, string])[]): StepRecordView {
+  const declared = ids === '' ? [] : ids.split(', ');
+  const base = stepRecord();
+  return {
+    ...base,
+    claims: { valid: true, given: declared.map((id, i) => ({ id, sha256: String(4 + i).repeat(64) })) },
+    reviews: reviews.map(([name, statuses], i) => ({
+      ...(i === 0 ? base.reviews[0] : { verdict: 'accept', findings: 0 }),
+      name,
+      ...(statuses === ''
+        ? {}
+        : { claims: statuses.split(', ').map((status, j) => ({ id: declared[j] as string, status })) }),
+    })) as StepRecordView['reviews'],
+  };
+}
+
+Then('the body of the pull request holds:', function (expected: string) {
+  const body = scene(this).body as string;
+  assert.ok(body.includes(`${expected}\n`), body);
+});
+
+Then('a body of {int} characters fits the forge: {word}', function (length: number, fits: string) {
+  assert.equal(bodyFits('x'.repeat(length)), fits === 'yes');
+});

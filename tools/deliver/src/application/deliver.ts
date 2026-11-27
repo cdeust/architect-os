@@ -17,10 +17,12 @@ import type {
   Gate,
   Phase,
   Progress,
+  PullRequestResult,
   Reason,
   Repository,
 } from '../domain/ports.js';
 import {
+  bodyFits,
   pullRequestBody,
   pullRequestTitle,
   type ParseRecord,
@@ -67,7 +69,9 @@ interface Started {
   remote: string | undefined;
   /** The work branch is behind the hash, or absent, and is pushed. */
   push: boolean;
-  record: StepRecordView;
+  /** The title and the body of the pull request, rendered once from the record, before any push. */
+  title: string;
+  body: string;
 }
 
 type Start = Started | { ok: false; reason: Reason };
@@ -126,6 +130,9 @@ function prerequisites(
   if (!plan.ok) return refuse(plan.reason);
   const record = recordOf(hash, options.name, repository, parseRecord);
   if (typeof record === 'string') return refuse(record);
+  const body = pullRequestBody(record, { repository: config.repository, hash, name: record.step });
+  // Refused here, before any push, rather than by the forge once the work branch is pushed.
+  if (!bodyFits(body)) return refuse('le corps de la pull request dépasse la limite de la forge');
   const entry: DeliveryEntry = {
     outcome: 'delivered',
     hash,
@@ -134,7 +141,15 @@ function prerequisites(
     gate: undefined,
     published: [],
   };
-  return { ok: true, entry, work: branches.work, remote: work, push: plan.push, record };
+  return {
+    ok: true,
+    entry,
+    work: branches.work,
+    remote: work,
+    push: plan.push,
+    title: pullRequestTitle(config.pullRequestTitle, record.step),
+    body,
+  };
 }
 
 /** Phase 2. */
@@ -226,13 +241,13 @@ async function awaitCi(
  * absent. It is pushed when it is behind or absent; then the pull request from it to the destination is opened, or the
  * open one found.
  */
-function publish(
+async function publish(
   entry: DeliveryEntry,
   start: Started,
   config: DeliverConfig,
   ports: DeliverPorts,
-): Stop | undefined {
-  const { repository, forge } = ports;
+): Promise<Stop | undefined> {
+  const { repository } = ports;
   repository.fetch();
   if (repository.remoteHead(start.work) !== start.remote) {
     return { phase: 'publication', reason: 'une branche distante a bougé' };
@@ -243,26 +258,41 @@ function publish(
     }
     entry.published.push(start.work);
   }
-  const body = pullRequestBody(start.record, {
-    repository: config.repository,
-    hash: entry.hash,
-    name: start.record.step,
-  });
-  const opened = forge.openPullRequest({
-    head: start.work,
-    base: config.destination,
-    hash: entry.hash,
-    title: pullRequestTitle(config.pullRequestTitle, start.record.step),
-    body,
-  });
+  const opened = await openPullRequest(entry, start, config, ports);
   if (!opened.ok) return { phase: 'publication', reason: opened.reason };
   entry.pullRequest = {
     number: opened.number,
     url: opened.url,
     created: opened.created,
-    body: createHash('sha256').update(body).digest('hex'),
+    body: createHash('sha256').update(start.body).digest('hex'),
   };
   return undefined;
+}
+
+/**
+ * The pull request, opened or found. While the forge shows its head at another commit, it is asked again,
+ * `pollSeconds` apart, at most `pullRequestPolls` times more: GitHub moves the head after the push, not with it.
+ */
+async function openPullRequest(
+  entry: DeliveryEntry,
+  start: Started,
+  config: DeliverConfig,
+  ports: DeliverPorts,
+): Promise<PullRequestResult> {
+  const request = {
+    head: start.work,
+    base: config.destination,
+    hash: entry.hash,
+    title: start.title,
+    body: start.body,
+  };
+  let opened = ports.forge.openPullRequest(request);
+  for (let poll = 1; poll <= config.pullRequestPolls; poll++) {
+    if (opened.ok || opened.reason !== "la tête de la branche de travail n'est pas le commit livré") break;
+    await ports.clock.sleep(config.pollSeconds);
+    opened = ports.forge.openPullRequest(request);
+  }
+  return opened;
 }
 
 /** Phases 2 to 6, over a commit that passed the preconditions. */
@@ -288,7 +318,7 @@ async function play(
     return undefined;
   }
   progress.phase('publication');
-  const refused = publish(entry, start, config, ports);
+  const refused = await publish(entry, start, config, ports);
   if (refused !== undefined) return refused;
   progress.phase('rangement');
   ports.repository.deleteRemoteBranch(entry.trial);

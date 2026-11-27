@@ -18,6 +18,7 @@ export type Reason =
   | "la destination n'accepte qu'une pull request"
   | "enregistrement d'étape absent"
   | "enregistrement d'étape refusé"
+  | 'le corps de la pull request dépasse la limite de la forge'
   | "push de la branche d'essai refusé"
   | 'porte rouge'
   | 'le verdict de la porte ne nomme pas ce commit'
@@ -34,6 +35,7 @@ export type PullRequestRefusal =
   | 'la forge ne voit pas la branche de travail'
   | "la tête de la branche de travail n'est pas le commit livré"
   | 'une pull request en brouillon est ouverte pour cette tête'
+  | 'la destination contient déjà le commit livré'
   | 'la forge a refusé la pull request';
 
 /** What `Forge.openPullRequest` is asked: every value comes from the descriptive file, the commit or the host. */

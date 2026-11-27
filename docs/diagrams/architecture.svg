@@ -451,13 +451,13 @@
   <text x="283" y="3319" data-type-role="brick-text" font-size="17" fill="#57606a">Deliver checks Linux and macOS for one SHA and reserves</text>
   <text x="283" y="3343" data-type-role="brick-text" font-size="17" fill="#57606a">one prefix per family. Linux checks all attempts and artifacts.</text>
 </g>
-<g role="group" aria-label="Target pull request · ready">
-  <rect x="269" y="3361" width="570" height="89" rx="6" fill="#ffffff" stroke="#1a7f37"/>
+<g role="group" aria-label="Target pull request · next">
+  <rect x="269" y="3361" width="570" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>
   <text x="283" y="3389" data-type-role="brick-name" font-size="20" fill="#1f2328" font-weight="600">Target pull request</text>
-  <rect x="757" y="3369" width="70" height="26" rx="13" fill="#dafbe1" stroke="#1a7f37"/>
-  <text x="792" y="3388" data-type-role="badge" font-size="17" fill="#1a7f37" font-weight="600" text-anchor="middle">ready</text>
-  <text x="283" y="3417" data-type-role="brick-text" font-size="17" fill="#57606a">Opened or found, never a draft, never merged; its body</text>
-  <text x="283" y="3441" data-type-role="brick-text" font-size="17" fill="#57606a">rendered from record.json alone, mentions made inert.</text>
+  <rect x="757" y="3369" width="70" height="26" rx="13" fill="#ddf4ff" stroke="#0969da"/>
+  <text x="792" y="3388" data-type-role="badge" font-size="17" fill="#0969da" font-weight="600" text-anchor="middle">next</text>
+  <text x="283" y="3417" data-type-role="brick-text" font-size="17" fill="#57606a">Built for this repository. Left: a policy per target held</text>
+  <text x="283" y="3441" data-type-role="brick-text" font-size="17" fill="#57606a">by the launcher, and the approval bound to the commit.</text>
 </g>
 <g role="group" aria-label="Delivery gate · next">
   <rect x="854" y="3174" width="505" height="89" rx="6" fill="#ffffff" stroke="#0969da" stroke-dasharray="5 4"/>

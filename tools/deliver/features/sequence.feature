@@ -51,7 +51,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
         """
       And the delivery log holds exactly the result
       And the delivery clock slept 0 seconds
@@ -90,7 +90,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":[],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":false,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":[],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":false,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
         """
       And the delivery forge holds 1 pull request, none a draft
 
@@ -103,7 +103,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       When I deliver "step" until "end"
       Then the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":[],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":[],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
         """
       And the delivery forge holds 1 pull request, none a draft
 
@@ -142,7 +142,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":1},"gate":"reused","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
         """
       And the delivery log holds exactly the result
 
@@ -616,7 +616,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":3},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
         """
       And the delivery clock slept 60 seconds
 
@@ -625,7 +625,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       When I deliver "step" until "end"
       Then the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":2},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":1,"polls":2},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
         """
 
     Scenario: a CI that never answers within the polls
@@ -737,7 +737,7 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
         """
       And the delivery result is:
         """
-        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"c84e7ea5eebd72d354680525d104a6ca78bb55a4ebe2d5cc1ba8cb7cd9bde496"}}
+        {"outcome":"delivered","hash":"h1","trial":"sentinel/gate-1a-step","ci":{"run":42,"attempts":3,"polls":5},"gate":"ran","published":["deliver/step"],"base":"p0","pullRequest":{"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true,"body":"d8dbddb90a12c97085c8f6070ce04041fdc08984e0d353725f0d1cc12389c9de"}}
         """
 
     Scenario: no runner at the last permitted attempt: no rerun, stopped
@@ -938,6 +938,66 @@ Feature: The delivery command over in-memory ports (the six phases, each reason,
       Given the delivery setting "pullRequestTitle" is the text "Step ${name}, delivered"
       When I deliver "step" until "end"
       Then the delivery pull request was asked from "deliver/step" to "main" with the title "Step step, delivered" and the body of the record
+
+    Scenario: a head the forge shows late at the commit: the pull request is asked again, a poll apart, and opened
+      Given the forge of the delivery sequence shows the head of the work branch at another commit for 2 reads
+      When I deliver "step" until "end"
+      Then the delivery outcome is "delivered"
+      And the delivery calls named "pullRequest, sleep" are:
+        """
+        pullRequest deliver/step main h1
+        sleep 30
+        pullRequest deliver/step main h1
+        sleep 30
+        pullRequest deliver/step main h1
+        """
+      And the delivery forge holds 1 pull request, none a draft
+
+    Scenario: a head the forge still shows at another commit after the last poll: stopped, the trial branch kept
+      Given the forge of the delivery sequence shows the head of the work branch at another commit for 4 reads
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "publication" because "la tête de la branche de travail n'est pas le commit livré"
+      And the delivery calls named "pullRequest, sleep, delete" are:
+        """
+        pullRequest deliver/step main h1
+        sleep 30
+        pullRequest deliver/step main h1
+        sleep 30
+        pullRequest deliver/step main h1
+        sleep 30
+        pullRequest deliver/step main h1
+        """
+      And the delivery forge holds 0 pull requests, none a draft
+
+    Scenario Outline: a refusal other than a late head is not asked again: <reason>
+      Given <given>
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "publication" because "<reason>"
+      And the delivery calls named "pullRequest, sleep" are:
+        """
+        pullRequest deliver/step main h1
+        """
+
+      Examples:
+        | given                                                                            | reason                                                    |
+        | the forge of the delivery sequence refuses every new pull request                | la forge a refusé la pull request                         |
+        | the forge of the delivery sequence answers that the destination holds the commit | la destination contient déjà le commit livré              |
+        | a draft pull request from "deliver/step" to "main" is open on the forge of the delivery sequence | une pull request en brouillon est ouverte pour cette tête |
+
+    Scenario: a body longer than the forge takes is refused before any push
+      Given the record of the step has 1100 checks
+      When I deliver "step" until "end"
+      Then the delivery stopped at the phase "préalables" because "le corps de la pull request dépasse la limite de la forge"
+      And the delivery acts are:
+        """
+        fetch
+        """
+      And the delivery log holds no entry
+
+    Scenario: a body the forge takes, though long, is delivered
+      Given the record of the step has 1000 checks
+      When I deliver "step" until "end"
+      Then the delivery outcome is "delivered"
 
   Rule: the doubles
 

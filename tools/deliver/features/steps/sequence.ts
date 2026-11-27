@@ -150,6 +150,7 @@ Given(
         ciAttempts: 3,
         pollSeconds: 30,
         ciPolls: 5,
+        pullRequestPolls: 3,
       },
       commit: hex(commit),
       parent: hex(parent),
@@ -301,7 +302,30 @@ Given(
 );
 
 Given('the forge of the delivery sequence refuses every new pull request', function () {
-  scene(this).forge.refusing = true;
+  scene(this).forge.refusing = 'refused';
+});
+
+Given('the forge of the delivery sequence answers that the destination holds the commit', function () {
+  scene(this).forge.refusing = 'merged';
+});
+
+Given(
+  'the forge of the delivery sequence shows the head of the work branch at another commit for {int} reads',
+  function (reads: number) {
+    scene(this).forge.staleReads = reads;
+  },
+);
+
+Given('the record of the step has {int} checks', function (count: number) {
+  const { repository, commit } = scene(this);
+  const checks = Array.from({ length: count }, (_, i) => ({
+    // Names of 32 characters, the longest the schema takes: about 70 characters a row of the body.
+    name: `check-${String(i).padStart(26, '0')}`,
+    passed: true,
+    stopped: false,
+    durationSeconds: 1,
+  }));
+  repository.files.set(`${commit} ${RECORD}`, Buffer.from(JSON.stringify({ ...stepRecord(), checks })));
 });
 
 Given(

@@ -36,8 +36,10 @@ export class InMemoryForge implements Forge {
   readonly pulls: Pull[] = [];
   /** What `openPullRequest` was asked, in order. */
   readonly requests: PullRequestRequest[] = [];
-  /** Fault injection: the forge refuses to open a pull request. */
-  refusing = false;
+  /** Fault injection: the forge refuses to open a pull request, or answers that the destination holds the commit. */
+  refusing: false | 'refused' | 'merged' = false;
+  /** Fault injection: the forge shows the head at another commit for that many more reads, as GitHub does after a push. */
+  staleReads = 0;
 
   /**
    * `repository` (`owner/name`) is in the address of each pull request. `remote` is where the forge sees each branch:
@@ -111,14 +113,18 @@ export class InMemoryForge implements Forge {
     this.requests.push(request);
     const at = this.remote.get(head);
     if (at === undefined) return { ok: false, reason: 'la forge ne voit pas la branche de travail' };
-    if (at !== hash)
+    if (at !== hash || this.staleReads > 0) {
+      this.staleReads = Math.max(0, this.staleReads - 1);
       return { ok: false, reason: "la tête de la branche de travail n'est pas le commit livré" };
+    }
     const open = this.pulls.find((pull) => pull.head === head && pull.base === base);
     if (open?.draft === true) {
       return { ok: false, reason: 'une pull request en brouillon est ouverte pour cette tête' };
     }
     if (open !== undefined) return { ok: true, number: open.number, url: this.address(open), created: false };
-    if (this.refusing) return { ok: false, reason: 'la forge a refusé la pull request' };
+    if (this.refusing === 'refused') return { ok: false, reason: 'la forge a refusé la pull request' };
+    if (this.refusing === 'merged')
+      return { ok: false, reason: 'la destination contient déjà le commit livré' };
     const pull: Pull = { number: this.pulls.length + 1, head, base, draft: false };
     this.pulls.push(pull);
     return { ok: true, number: pull.number, url: this.address(pull), created: true };

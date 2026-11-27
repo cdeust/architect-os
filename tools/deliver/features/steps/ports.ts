@@ -77,7 +77,8 @@ function inMemoryForge(): ForgeFixture {
       forge.remote.set(head, hash);
       forge.openDraft(head, DESTINATION);
     },
-    refusesPullRequests: () => void (forge.refusing = true),
+    refusesPullRequests: () => void (forge.refusing = 'refused'),
+    answersMerged: () => void (forge.refusing = 'merged'),
     reruns: () => journal.calls.filter((call) => call.startsWith('rerun ')),
   };
 }
@@ -287,6 +288,14 @@ Given(
   'a pull request from {string} at the commit {string} is open as a draft on the delivery forge',
   function (head: string, hash: string) {
     forgeOf(this).hasDraft(head, hash);
+  },
+);
+
+Given(
+  'the delivery forge sees the branch {string} at the commit {string}, and answers that the destination holds the commit',
+  function (branch: string, hash: string) {
+    forgeOf(this).hasBranch(branch, hash);
+    forgeOf(this).answersMerged();
   },
 );
 

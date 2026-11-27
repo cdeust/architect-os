@@ -74,6 +74,43 @@ Feature: npm run deliver, the command as a whole (the real adapters over a throw
       And the remote of the delivery command holds "main" at the commit "p0"
       And the log of the delivery command holds 2 lines
 
+    Scenario: a pull request whose head the forge shows late: asked again, a poll apart, and found at the commit
+      Given the scripted forge of the delivery command shows the new pull request at the parent for 2 reads
+      When I run the delivery command with "step"
+      Then the delivery command exited 0
+      And the scripted forge of the delivery command was asked for 1 new pull request
+      And the remote of the delivery command has no branch "sentinel/gate-1a-step"
+
+    Scenario: a pull request whose head the forge still shows at the parent after the last poll: stopped, the trial branch kept
+      Given the scripted forge of the delivery command shows the new pull request at the parent for 20 reads
+      When I run the delivery command with "step"
+      Then the delivery command exited 1
+      And the delivery command wrote on its standard error:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        stopped at publication: la tête de la branche de travail n'est pas le commit livré
+        """
+      And the scripted forge of the delivery command was asked for 1 new pull request
+      And the remote of the delivery command holds "sentinel/gate-1a-step" at the commit "h1"
+
+    Scenario: a forge that answers the destination already holds the commit: its own reason
+      Given the scripted forge of the delivery command answers that the destination holds the commit
+      When I run the delivery command with "step"
+      Then the delivery command exited 1
+      And the delivery command wrote on its standard error:
+        """
+        préalables
+        branche d'essai
+        porte
+        CI
+        publication
+        stopped at publication: la destination contient déjà le commit livré
+        """
+
     Scenario: without INIT_CWD, the working directory is the worktree
       When I run the delivery command with "step" from the worktree, without INIT_CWD
       Then the delivery command exited 0

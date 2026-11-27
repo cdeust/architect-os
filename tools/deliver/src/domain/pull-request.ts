@@ -7,6 +7,8 @@ export interface StepRecordView {
   step: string;
   tree: { commit: string; tree: string; clean: boolean };
   inputs: Readonly<Record<string, string>>;
+  /** The departures the build declared: refused as a block (`valid` false), or each with the SHA-256 of its line. */
+  claims?: { valid: boolean; given: readonly { id: string; sha256: string }[] } | undefined;
   launcher: Readonly<Record<string, string>>;
   checks: readonly { name: string; passed: boolean; stopped: boolean; durationSeconds: number }[];
   reviews: readonly {
@@ -14,6 +16,7 @@ export interface StepRecordView {
     verdict: string;
     findings: number;
     criteria?: readonly { id: string; status: string }[] | undefined;
+    claims?: readonly { id: string; status: string }[] | undefined;
   }[];
   outcome: string;
 }
@@ -36,15 +39,26 @@ function keywords(): RegExp {
   return /\b(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\b/gi;
 }
 
+/** The most characters GitHub takes in the body of a pull request. */
+export const BODY_LIMIT = 65_536;
+
+/** Whether the forge takes a body of that length. */
+export function bodyFits(body: string): boolean {
+  return body.length <= BODY_LIMIT;
+}
+
 /**
- * A value made inert as text: no control character (a line break would end a row of a table), no `@` that mentions an
- * account, no `#` that names an issue, no `:` that starts an address, no keyword that closes an issue. A zero-width
- * space is put after each `@`, `#` and `:` and after the first letter of each keyword: what is read stays the same,
- * what GitHub links is gone. `|` would split a cell of a table, and a backtick end a code span: both are replaced.
+ * A value made inert as text: no control character (a line break would end a row of a table), no format character (a
+ * bidirectional override or a zero-width character could reorder what is read or hide a keyword: each becomes U+FFFD,
+ * seen), no `@` that mentions an account, no `#` that names an issue, no `:` that starts an address, no keyword that
+ * closes an issue. A zero-width space is put after each `@`, `#` and `:` and after the first letter of each keyword:
+ * what is read stays the same, what GitHub links is gone. `|` would split a cell of a table, and a backtick end a code
+ * span: both are replaced.
  */
 export function inert(value: string): string {
   return value
     .replace(/\p{Cc}/gu, ' ')
+    .replace(/\p{Cf}/gu, '\ufffd')
     .replace(/`/g, "'")
     .replace(/\|/g, '¦')
     .replace(/[@#:]/g, (sign) => `${sign}​`)
@@ -87,19 +101,32 @@ function reviews(record: StepRecordView): string[] {
     ),
   ];
   for (const review of record.reviews) {
-    const criteria = review.criteria ?? [];
-    if (criteria.length === 0) continue;
-    lines.push(
-      '',
-      `#### Acceptance criteria of ${code(review.name)}`,
-      '',
-      ...table(
-        ['Criterion', 'Status'],
-        criteria.map((criterion) => [code(criterion.id), code(criterion.status)]),
-      ),
-    );
+    lines.push(...statuses(`Acceptance criteria of ${code(review.name)}`, 'Criterion', review.criteria));
+    lines.push(...statuses(`Declared departures judged by ${code(review.name)}`, 'Departure', review.claims));
   }
   return lines;
+}
+
+/** A table of the status a review gave each item, under its title; nothing when it gave none. */
+function statuses(
+  title: string,
+  item: string,
+  given: readonly { id: string; status: string }[] | undefined,
+): string[] {
+  const rows = (given ?? []).map(({ id, status }) => [code(id), code(status)]);
+  if (rows.length === 0) return [];
+  return ['', `#### ${title}`, '', ...table([item, 'Status'], rows)];
+}
+
+/** The departures the build declared, as the host gave them to the reviews. */
+function departures(record: StepRecordView): string[] {
+  const head = ['', '### Declared departures', ''];
+  if (record.claims?.valid === false) {
+    return [...head, 'The declared departures were refused by the host: none was given to the reviews.'];
+  }
+  const rows = (record.claims?.given ?? []).map(({ id, sha256 }) => [code(id), code(sha256)]);
+  if (rows.length === 0) return [...head, 'No departure is declared.'];
+  return [...head, ...table(['Departure', 'SHA-256 of its line'], rows)];
 }
 
 function checks(record: StepRecordView): string[] {
@@ -148,6 +175,7 @@ export function pullRequestBody(record: StepRecordView, delivered: Delivered): s
     `Delivery of the step ${code(record.step)} at the commit ${code(delivered.hash)}. Outcome of the step: ${code(record.outcome)}.`,
     '',
     `Rendered by the host from [${code(`steps/${delivered.name}/record.json`)}](${recordAddress(delivered)}) of this commit alone: no text a session wrote is in it.`,
+    ...departures(record),
     ...reviews(record),
     ...checks(record),
     ...digests('Inputs', record.inputs),

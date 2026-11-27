@@ -69,7 +69,7 @@ export const pullText = (number: number, head: string, sha: string, draft = fals
   html_url: `https://github.com/${REPO}/pull/${number}`,
   state: 'open',
   draft,
-  head: { ref: head, sha },
+  head: { ref: head, sha, repo: { full_name: REPO } },
   base: { ref: DESTINATION },
 });
 
@@ -206,6 +206,18 @@ export function ghForge(world: DeliverWorld, workflow = 'gate'): GhForgeFixture 
     },
     refusesPullRequests() {
       answers('open', '', { exit: 1, stdout: 'MARKER-9c2e' });
+    },
+    answersMerged() {
+      // What GitHub answers (422) when the base holds every commit of the head.
+      answers('open', '', {
+        exit: 1,
+        stdout: JSON.stringify({
+          message: 'Validation Failed',
+          errors: [
+            { resource: 'PullRequest', code: 'custom', message: 'No commits between main and deliver/step' },
+          ],
+        }),
+      });
     },
     created: () => asked().filter((line) => line.startsWith(`api ${keyOf('open', '')}`)),
     createdArguments: () => {

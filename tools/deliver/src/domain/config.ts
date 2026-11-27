@@ -37,6 +37,11 @@ export interface DeliverConfig {
   ciAttempts: number;
   pollSeconds: number;
   ciPolls: number;
+  /**
+   * How many times the pull request is asked for again, `pollSeconds` apart, while the forge still shows its head at
+   * another commit than the delivered one: GitHub moves the head of a pull request after the push, not with it.
+   */
+  pullRequestPolls: number;
 }
 
 export interface JobDependency {

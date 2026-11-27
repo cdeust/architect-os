@@ -56,6 +56,8 @@ export interface ForgeFixture {
   hasDraft(head: string, hash: string): void;
   /** The forge refuses every new pull request. */
   refusesPullRequests(): void;
+  /** The forge answers every new pull request that the destination already holds every commit of the head. */
+  answersMerged(): void;
   /** The reruns asked, as `rerun <id>`, in order. */
   reruns(): string[];
 }

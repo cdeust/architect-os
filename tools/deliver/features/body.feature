@@ -16,6 +16,10 @@ Feature: The title and the body of the pull request a delivery opens (pure, from
 
         Rendered by the host from [`steps/step/record.json`](https://github.com/cdeust/architect-os/blob/1111111111111111111111111111111111111111/steps/step/record.json) of this commit alone: no text a session wrote is in it.
 
+        ### Declared departures
+
+        No departure is declared.
+
         ### Reviews
 
         | Review | Verdict | Findings |
@@ -62,6 +66,10 @@ Feature: The title and the body of the pull request a delivery opens (pure, from
         Delivery of the step `step` at the commit `1111111111111111111111111111111111111111`. Outcome of the step: `refused`.
 
         Rendered by the host from [`steps/step/record.json`](https://github.com/cdeust/architect-os/blob/1111111111111111111111111111111111111111/steps/step/record.json) of this commit alone: no text a session wrote is in it.
+
+        ### Declared departures
+
+        No departure is declared.
 
         ### Reviews
 
@@ -113,6 +121,10 @@ Feature: The title and the body of the pull request a delivery opens (pure, from
 
         Rendered by the host from [`steps/step/record.json`](https://github.com/cdeust/architect-os/blob/1111111111111111111111111111111111111111/steps/step/record.json) of this commit alone: no text a session wrote is in it.
 
+        ### Declared departures
+
+        No departure is declared.
+
         ### Reviews
 
         No review is recorded.
@@ -154,6 +166,8 @@ Feature: The title and the body of the pull request a delivery opens (pure, from
         | a\|b                                               |
         | a{lf}closes #1                                     |
         | CLOSED: @team #1                                   |
+        | c{zw}loses #1                                      |
+        | {rlo}@x #1                                         |
 
     Scenario Outline: "<value>" made inert
       Then "<value>" made inert is "<inert>"
@@ -173,6 +187,9 @@ Feature: The title and the body of the pull request a delivery opens (pure, from
         | prefixes                 | prefixes                         |
         | unfixed                  | unfixed                          |
         | step                     | step                             |
+        | a{rlo}b                  | a{fffd}b                         |
+        | clo{zw}ses #1            | clo{fffd}ses #{zw}1              |
+        | x{wj}y{bom}z             | x{fffd}y{fffd}z                  |
 
     Scenario Outline: the address of the record keeps each value in its segment: <case>
       Given the record of a step that passed, with one check and one review that accepted its criterion
@@ -198,3 +215,76 @@ Feature: The title and the body of the pull request a delivery opens (pure, from
         | ${name}: closes          | step | step:{zw} c{zw}loses        |
         | Deliver ${name}          | @x#1 | Deliver @{zw}x#{zw}1        |
         | ${name} and ${name}      | step | step and ${name}            |
+
+  Rule: the departures the build declared, and the status each review gave them
+
+    Scenario: two departures given to two reviews, one refuted
+      Given the record of a step whose build declared the departures "D-1, D-2", judged by "correctness" as "verified, refuted" and by "security" as "verified, not_checked"
+      When the body of its pull request is rendered for the step "step" of "cdeust/architect-os"
+      Then the body of the pull request holds:
+        """
+        ### Declared departures
+
+        | Departure | SHA-256 of its line |
+        | --- | --- |
+        | `D-1` | `4444444444444444444444444444444444444444444444444444444444444444` |
+        | `D-2` | `5555555555555555555555555555555555555555555555555555555555555555` |
+
+        ### Reviews
+
+        | Review | Verdict | Findings |
+        | --- | --- | --- |
+        | `correctness` | `accept` | 0 |
+        | `security` | `accept` | 0 |
+
+        #### Acceptance criteria of `correctness`
+
+        | Criterion | Status |
+        | --- | --- |
+        | `AC-1` | `met` |
+
+        #### Declared departures judged by `correctness`
+
+        | Departure | Status |
+        | --- | --- |
+        | `D-1` | `verified` |
+        | `D-2` | `refuted` |
+
+        #### Declared departures judged by `security`
+
+        | Departure | Status |
+        | --- | --- |
+        | `D-1` | `verified` |
+        | `D-2` | `not_checked` |
+        """
+
+    Scenario: departures the host refused as a block
+      Given the record of a step whose declared departures the host refused
+      When the body of its pull request is rendered for the step "step" of "cdeust/architect-os"
+      Then the body of the pull request holds:
+        """
+        ### Declared departures
+
+        The declared departures were refused by the host: none was given to the reviews.
+        """
+
+    Scenario: a block of departures that gives none
+      Given the record of a step whose build declared the departures "", judged by "correctness" as ""
+      When the body of its pull request is rendered for the step "step" of "cdeust/architect-os"
+      Then the body of the pull request holds:
+        """
+        ### Declared departures
+
+        No departure is declared.
+        """
+
+  Rule: the forge takes a body of at most 65 536 characters
+
+    Scenario Outline: a body of <length> characters <fits>
+      Then a body of <length> characters fits the forge: <fits>
+
+      Examples:
+        | length | fits |
+        | 0      | yes  |
+        | 65536  | yes  |
+        | 65537  | no   |

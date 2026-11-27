@@ -235,6 +235,8 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | pollSeconds    | 300                                                    |
         | ciPolls        | 1                                                      |
         | ciPolls        | 600                                                    |
+        | pullRequestPolls | 1                                                    |
+        | pullRequestPolls | 20                                                   |
         | workflow       | "Gate CI (linux)"                                      |
         | environment    | ["PATH"]                                               |
         | environment    | ["GITHUB_TOKEN","SSH_AUTH_SOCK","XDG_CONFIG_HOME","TMPDIR"] |
@@ -283,6 +285,7 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | ciAttempts     |
         | pollSeconds    |
         | ciPolls        |
+        | pullRequestPolls |
 
     Scenario Outline: a value that breaks a rule
       Given a deliver config of the base form
@@ -413,6 +416,9 @@ Feature: The descriptive file tools/deliver/deliver.json (its schema, the commit
         | pollSeconds    | 301                            | $.pollSeconds                                      |
         | ciPolls        | 0                              | $.ciPolls                                          |
         | ciPolls        | 601                            | $.ciPolls                                          |
+        | pullRequestPolls | 0                            | $.pullRequestPolls                                 |
+        | pullRequestPolls | 21                           | $.pullRequestPolls                                 |
+        | pullRequestPolls | 1.5                          | $.pullRequestPolls                                 |
 
     Scenario Outline: a label of 65 characters
       Given a deliver config of the base form

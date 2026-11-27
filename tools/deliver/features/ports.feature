@@ -493,6 +493,8 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | gh        | the open pull request is a draft         | a pull request from "deliver/step" at the commit "0000000000000000000000000000000000000021" is open as a draft on the delivery forge            | une pull request en brouillon est ouverte pour cette tête |
         | in-memory | the forge refuses it                     | the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021", and refuses every new pull request | la forge a refusé la pull request                         |
         | gh        | the forge refuses it                     | the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021", and refuses every new pull request | la forge a refusé la pull request                         |
+        | in-memory | the destination holds the commit         | the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021", and answers that the destination holds the commit | la destination contient déjà le commit livré                         |
+        | gh        | the destination holds the commit         | the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021", and answers that the destination holds the commit | la destination contient déjà le commit livré                         |
 
     Scenario: the in-memory forge keeps one pull request per head and base
       Given a delivery forge of the in-memory adapter
@@ -681,7 +683,7 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
         | runs   | 0000000000000000000000000000000000000021  | for the run          | runs        | {"workflow_runs":[{"id":1.5,"name":"gate","head_sha":"0000000000000000000000000000000000000021","event":"push","head_branch":"sentinel/gate-1a-step","status":"MARKER-9c2e"}]}      |
         | jobs   | 7       | for the run          | jobs        | {"marker":"MARKER-9c2e"}                                                                     |
         | refs   | deliver/step | for a pull request from "deliver/step" | refs | {"marker":"MARKER-9c2e"} |
-        | pulls  | deliver/step | for a pull request from "deliver/step" | pulls | [{"number":"MARKER-9c2e","html_url":"https://github.com/cdeust/architect-os/pull/1","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}}] |
+        | pulls  | deliver/step | for a pull request from "deliver/step" | pulls | [{"number":"MARKER-9c2e","html_url":"https://github.com/cdeust/architect-os/pull/1","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"main"}}] |
 
     Scenario Outline: the open pull request the forge lists is the one of the head and the base: <case>
       Given a delivery forge of the gh adapter
@@ -693,15 +695,17 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
       Examples:
         | case                                   | listed | answer | created |
-        | the smaller number of two              | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}},{"number":2,"html_url":"https://github.com/cdeust/architect-os/pull/2","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}}] | {"ok":true,"number":2,"url":"https://github.com/cdeust/architect-os/pull/2","created":false} | no |
-        | another head is not it                 | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/other","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}}] | {"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true} | one |
-        | another base is not it                 | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"feat/x"}}] | {"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true} | one |
-        | a closed one is not it                 | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"closed","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}}] | {"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true} | one |
+        | the smaller number of two              | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"main"}},{"number":2,"html_url":"https://github.com/cdeust/architect-os/pull/2","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"main"}}] | {"ok":true,"number":2,"url":"https://github.com/cdeust/architect-os/pull/2","created":false} | no |
+        | another head is not it                 | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/other","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"main"}}] | {"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true} | one |
+        | another base is not it                 | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"feat/x"}}] | {"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true} | one |
+        | a closed one is not it                 | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"closed","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"main"}}] | {"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true} | one |
+        | one of a fork is not it                | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"someone/architect-os"}},"base":{"ref":"main"}}] | {"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true} | one |
+        | one whose repository is gone is not it | [{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":null},"base":{"ref":"main"}}] | {"ok":true,"number":1,"url":"https://github.com/cdeust/architect-os/pull/1","created":true} | one |
 
     Scenario: an open pull request whose head the forge still shows at another commit is not taken, and nothing is opened
       Given a delivery forge of the gh adapter
       And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021"
-      And the gh forge answers the pulls of "deliver/step" with '[{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000022"},"base":{"ref":"main"}}]'
+      And the gh forge answers the pulls of "deliver/step" with '[{"number":5,"html_url":"https://github.com/cdeust/architect-os/pull/5","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000022","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"main"}}]'
       When I ask the gh forge for a pull request from "deliver/step"
       Then the gh forge refused the pull request because "la tête de la branche de travail n'est pas le commit livré"
       And the gh client was asked for no new pull request
@@ -715,14 +719,15 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
 
       Examples:
         | case                     | created | outcome |
-        | a draft                  | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":true,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}} | the gh forge refused the pull request because "une pull request en brouillon est ouverte pour cette tête" |
-        | another commit           | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000022"},"base":{"ref":"main"}} | the gh forge refused the pull request because "la tête de la branche de travail n'est pas le commit livré" |
-        | another head             | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/other","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
-        | another base             | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"feat/x"}} | the gh forge failed with "the forge did not answer: pull request" |
-        | one that is not open     | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"closed","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
+        | a draft                  | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":true,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"main"}} | the gh forge refused the pull request because "une pull request en brouillon est ouverte pour cette tête" |
+        | another commit           | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000022","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"main"}} | the gh forge refused the pull request because "la tête de la branche de travail n'est pas le commit livré" |
+        | another head             | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/other","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
+        | another base             | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"feat/x"}} | the gh forge failed with "the forge did not answer: pull request" |
+        | another repository of the head | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"someone/architect-os"}},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
+        | one that is not open     | {"number":4,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"closed","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
         | nothing a schema accepts | {} | the gh forge failed with "the forge did not answer: pull request" |
-        | an address that is not one | {"number":4,"html_url":"https://github.com/cdeust/architect-os/issues/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
-        | a number that is not one | {"number":0,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021"},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
+        | an address that is not one | {"number":4,"html_url":"https://github.com/cdeust/architect-os/issues/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
+        | a number that is not one | {"number":0,"html_url":"https://github.com/cdeust/architect-os/pull/4","state":"open","draft":false,"head":{"ref":"deliver/step","sha":"0000000000000000000000000000000000000021","repo":{"full_name":"cdeust/architect-os"}},"base":{"ref":"main"}} | the gh forge failed with "the forge did not answer: pull request" |
 
     Scenario: a head the forge shows at another commit: no new pull request is asked
       Given a delivery forge of the gh adapter
@@ -737,6 +742,22 @@ Feature: The ports of the delivery command (each contract, one row per adapter)
       And the gh client is ended by a signal when it is asked for a new pull request
       When I ask the gh forge for a pull request from "deliver/step"
       Then the gh forge failed with "the forge did not answer: pull request"
+
+    Scenario Outline: a refusal the client prints is read for one thing only, a destination that holds the commit: <case>
+      Given a delivery forge of the gh adapter
+      And the delivery forge sees the branch "deliver/step" at the commit "0000000000000000000000000000000000000021"
+      And the gh forge answers the open of "" with the exit code 1 and the output '<answer>'
+      When I ask the gh forge for a pull request from "deliver/step"
+      Then the gh forge refused the pull request because "<reason>"
+
+      Examples:
+        | case                               | answer                                                                                     | reason                                        |
+        | no commits between                 | {"message":"Validation Failed","errors":[{"message":"No commits between main and deliver/step"}]} | la destination contient déjà le commit livré |
+        | the second of two errors           | {"errors":[{"message":"other"},{"message":"No commits between main and x"}]}           | la destination contient déjà le commit livré |
+        | another error                      | {"message":"Validation Failed","errors":[{"message":"A pull request already exists"}]} | la forge a refusé la pull request             |
+        | the words not at the start         | {"errors":[{"message":"x No commits between main and x"}]}                               | la forge a refusé la pull request             |
+        | no list of errors                  | {"message":"No commits between main and x"}                                              | la forge a refusé la pull request             |
+        | not JSON                           | No commits between                                                                         | la forge a refusé la pull request             |
 
     Scenario: a refusal of the forge holds nothing of what the client printed
       Given a delivery forge of the gh adapter

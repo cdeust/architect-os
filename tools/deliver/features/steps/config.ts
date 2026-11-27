@@ -34,6 +34,7 @@ const base = (): Record<string, unknown> => ({
   ciAttempts: 6,
   pollSeconds: 30,
   ciPolls: 90,
+  pullRequestPolls: 6,
 });
 
 Given('a deliver config of the base form', function () {

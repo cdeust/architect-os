@@ -100,6 +100,7 @@ function configSchema(): z.ZodType<DeliverConfig> {
     ciAttempts: count(10),
     pollSeconds: count(300),
     ciPolls: count(600),
+    pullRequestPolls: count(20),
   });
   // Run relationship checks only on a successful parse. During validation of an
   // invalid child, Zod can still hold its intermediate list of dictionary entries.

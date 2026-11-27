@@ -15,7 +15,7 @@ import { pullRequestBody } from '../../src/domain/pull-request.js';
 import { runToEnd } from '../../src/infrastructure/host-process.js';
 import { stepRecord, stepRecordText } from './record-fixture.js';
 import { committedNames, hostOf, temporaryDirectory } from './fixtures.js';
-import { ghForge, REPO, type GhForgeFixture } from './gh-fixture.js';
+import { ghForge, keyOf, pullText, REPO, type GhForgeFixture } from './gh-fixture.js';
 import { gitFixture, type GitFixture } from './git-fixture.js';
 import { REPOSITORY, Given, Then, When, type DeliverWorld } from './support.js';
 
@@ -129,6 +129,32 @@ Given('the receipt of the gate of the delivery command names no destination', fu
   commandOf(this).gateDestination = false;
   writeConfig(commandOf(this));
 });
+
+Given(
+  'the scripted forge of the delivery command shows the new pull request at the parent for {int} reads',
+  function (reads: number) {
+    const { gh, git } = commandOf(this);
+    const stale = pullText(1, 'deliver/step', git.hashOf('p0'));
+    const fresh = pullText(1, 'deliver/step', git.hashOf('h1'));
+    // Each read of the list answers the stale head once, then the next answer; the last one is the delivered commit.
+    type Answer = { stdout: string; then?: Record<string, Answer> };
+    let list: Answer = { stdout: JSON.stringify([fresh]) };
+    for (let read = 1; read < reads; read++) {
+      list = { stdout: JSON.stringify([stale]), then: { [keyOf('pulls', 'deliver/step')]: list } };
+    }
+    gh.answers('open', '', {
+      stdout: JSON.stringify(stale),
+      then: { [keyOf('pulls', 'deliver/step')]: list },
+    });
+  },
+);
+
+Given(
+  'the scripted forge of the delivery command answers that the destination holds the commit',
+  function () {
+    commandOf(this).gh.answersMerged();
+  },
+);
 
 Given('a file of the delivery command worktree changes', function () {
   commandOf(this).git.touchWorktree();

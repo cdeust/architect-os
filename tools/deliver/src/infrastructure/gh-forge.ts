@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import { effectiveJobs } from '../domain/attempts.js';
-import type { CiJob, CiRun, Forge, PullRequestRequest, PullRequestResult } from '../domain/ports.js';
+import type {
+  CiJob,
+  CiRun,
+  Forge,
+  PullRequestRefusal,
+  PullRequestRequest,
+  PullRequestResult,
+} from '../domain/ports.js';
 import { closedEnvironment, runToEnd, type HostEnvironment } from './host-process.js';
 
 // The schemas are built when a call needs them, inside functions: a schema at module level is evaluated once, when the
@@ -66,7 +73,12 @@ function pullSchema() {
     html_url: z.string(),
     state: z.string(),
     draft: z.boolean(),
-    head: z.object({ ref: z.string(), sha: z.string() }),
+    head: z.object({
+      ref: z.string(),
+      sha: z.string(),
+      // Null when the repository of the head was deleted.
+      repo: z.object({ full_name: z.string() }).nullable(),
+    }),
     base: z.object({ ref: z.string() }),
   });
 }
@@ -213,7 +225,14 @@ export class GhForge implements Forge {
       [`repos/${this.repository}/pulls?${query.join('&')}&state=open&per_page=100`],
       z.array(pullSchema()),
     )
-      .filter((pull) => pull.state === 'open' && pull.head.ref === head && pull.base.ref === base)
+      // A branch of the same name in a fork is not the work branch of this repository.
+      .filter(
+        (pull) =>
+          pull.state === 'open' &&
+          pull.head.ref === head &&
+          pull.head.repo?.full_name === this.repository &&
+          pull.base.ref === base,
+      )
       .sort((a, b) => a.number - b.number)[0];
     if (open !== undefined) return this.opened(open, request, false);
     const created = this.start(
@@ -236,7 +255,7 @@ export class GhForge implements Forge {
       ],
       true,
     );
-    if (created.status !== 0) return { ok: false, reason: 'la forge a refusé la pull request' };
+    if (created.status !== 0) return { ok: false, reason: refusal(created.out) };
     return this.opened(this.parse('pull request', created.out, pullSchema()), request, true);
   }
 
@@ -245,6 +264,7 @@ export class GhForge implements Forge {
     if (
       pull.state !== 'open' ||
       pull.head.ref !== request.head ||
+      pull.head.repo?.full_name !== this.repository ||
       pull.base.ref !== request.base ||
       pull.html_url !== `https://github.com/${this.repository}/pull/${pull.number}`
     ) {
@@ -290,6 +310,23 @@ export class GhForge implements Forge {
     if (finished.status !== 0 && !refusable) throw new Error(failure(method, finished.status));
     return finished;
   }
+}
+
+/**
+ * Why the forge refused a new pull request, from the answer of the client (GitHub, « Create a pull request », 422): the
+ * destination already holds every commit of the head, merged or not, or another refusal. Nothing of the answer is kept.
+ */
+function refusal(out: string): PullRequestRefusal {
+  let json: unknown;
+  try {
+    json = JSON.parse(out);
+  } catch {
+    // Not JSON: an answer that names nothing, read as a refusal of the forge.
+  }
+  const parsed = z.object({ errors: z.array(z.object({ message: z.string() })) }).safeParse(json);
+  const merged =
+    parsed.success && parsed.data.errors.some(({ message }) => message.startsWith('No commits between '));
+  return merged ? 'la destination contient déjà le commit livré' : 'la forge a refusé la pull request';
 }
 
 /** The one message of a method; the exit code is the only thing of the program it holds. */
