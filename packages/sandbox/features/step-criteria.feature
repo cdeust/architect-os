@@ -16,7 +16,7 @@ Feature: a review gives a status for each acceptance criterion of the Step, and 
         """
       And the review session gives the structured verdict:
         """
-        {"verdict":"accept","findings":[],"not_checked":[],"criteria":[{"id":"AC-001","status":"met","evidence":[{"file":"src/a.ts","line":1,"quote":"export const a = 1;"}],"reason":"a is exported"},{"id":"AC-002","status":"met","evidence":[{"file":"src/a.ts","line":1,"quote":"const a"}],"reason":"a is a constant"}]}
+        {"verdict":"accept","findings":[],"not_checked":[],"criteria":[{"id":"AC-001","status":"met","evidence":[{"file":"src/a.ts","line":1,"quote":"export const a = 1;"}],"reason":"a is exported"},{"id":"AC-002","status":"met","evidence":[{"file":"src/a.ts","line":1,"quote":"const a"}],"reason":"a is a constant"}],"claims":[]}
         """
       When I run the step with the arguments "<folder>"
       Then the step exits with 0
@@ -43,7 +43,7 @@ Feature: a review gives a status for each acceptance criterion of the Step, and 
       And the check 1 prints "ok"
       And the review session gives the structured verdict:
         """
-        {"verdict":"accept","findings":[],"not_checked":[],"criteria":[{"id":"AC-001","status":"not_established","evidence":[],"reason":"r"}]}
+        {"verdict":"accept","findings":[],"not_checked":[],"criteria":[{"id":"AC-001","status":"not_established","evidence":[],"reason":"r"}],"claims":[]}
         """
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
@@ -89,7 +89,7 @@ Feature: a review gives a status for each acceptance criterion of the Step, and 
       And the build session writes the fixture "session.jsonl"
       And the review session gives the structured verdict:
         """
-        {"verdict":"accept","findings":[],"not_checked":[],"criteria":[{"id":"AC-001","status":"<status>","evidence":[],"reason":"no line does it"}]}
+        {"verdict":"accept","findings":[],"not_checked":[],"criteria":[{"id":"AC-001","status":"<status>","evidence":[],"reason":"no line does it"}],"claims":[]}
         """
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
@@ -115,7 +115,7 @@ Feature: a review gives a status for each acceptance criterion of the Step, and 
         """
       And the review session gives the structured verdict:
         """
-        {"verdict":"accept","findings":[],"not_checked":[],"criteria":<criteria>}
+        {"verdict":"accept","findings":[],"not_checked":[],"criteria":<criteria>,"claims":[]}
         """
       When I run the step with the arguments "<folder>"
       Then the step exits with 1
@@ -142,3 +142,4 @@ Feature: a review gives a status for each acceptance criterion of the Step, and 
         | a line past the end            | [{"id":"AC-001","status":"met","evidence":[{"file":"src/a.ts","line":2,"quote":"const a"}],"reason":"r"},{"id":"AC-002","status":"unmet","evidence":[],"reason":"r"}]                                       | "AC-001 : preuve refusée (ligne absente)"                                       |
         | a path into git                | [{"id":"AC-001","status":"met","evidence":[{"file":".git/config","line":1,"quote":"x"}],"reason":"r"},{"id":"AC-002","status":"unmet","evidence":[],"reason":"r"}]                                          | "AC-001 : preuve refusée (chemin refusé)"                                       |
         | a second proof that is wrong   | [{"id":"AC-001","status":"met","evidence":[{"file":"src/a.ts","line":1,"quote":"const a"},{"file":"src/a.ts","line":1,"quote":"nope"}],"reason":"r"},{"id":"AC-002","status":"unmet","evidence":[],"reason":"r"}] | "AC-001 : preuve refusée (citation absente de la ligne)"                        |
+        | a second criterion whose proof is wrong | [{"id":"AC-001","status":"met","evidence":[{"file":"src/a.ts","line":1,"quote":"const a"}],"reason":"r"},{"id":"AC-002","status":"met","evidence":[{"file":"src/a.ts","line":1,"quote":"const b"}],"reason":"r"}] | "AC-002 : preuve refusée (citation absente de la ligne)" |

@@ -111,6 +111,15 @@ function folderDefect(steps: string, name: string, files: ReadonlySet<string> | 
   }
   if (!isDeepStrictEqual(record.tickets, step.tickets))
     return `${name}: record.tickets differs from step.json`;
+  // Every valid verdict gives a status for each acceptance criterion of step.json, in its order, and for no other.
+  const acceptance = JSON.stringify(step.acceptance ?? []);
+  const uncovered = record.reviews.find(
+    (review) =>
+      review.verdict !== 'invalid' &&
+      JSON.stringify((review.criteria ?? []).map(({ id }) => id)) !== acceptance,
+  );
+  if (uncovered !== undefined)
+    return `${name}: the review ${uncovered.name} does not give a status for each criterion of step.json`;
   return null;
 }
 
@@ -151,12 +160,17 @@ const INPUTS = {
 };
 
 /** A folder `steps/<name>` as the host writes it. */
-function writeValid(steps: string, name: string, tickets?: StepFile['tickets']): void {
+function writeValid(steps: string, name: string, tickets?: StepFile['tickets'], reviewed = false): void {
   const folder = join(steps, name);
   mkdirSync(folder, { recursive: true });
+  const review = { name: 'quality', model: 'claude-opus-5-5', effort: 'high', limitSeconds: 900 } as const;
   const inputs = {
     ...INPUTS,
-    'step.json': `${JSON.stringify({ ...STEP_FILE, tickets }, null, 2)}\n`,
+    'step.json': `${JSON.stringify(
+      { ...STEP_FILE, tickets, ...(reviewed ? { reviews: [review], acceptance: ['AC-001'] } : {}) },
+      null,
+      2,
+    )}\n`,
   };
   const record = buildRecord({
     step: name,
@@ -178,7 +192,20 @@ function writeValid(steps: string, name: string, tickets?: StepFile['tickets']):
       },
     ],
     checks: [],
-    reviews: [],
+    ...(reviewed
+      ? {
+          claims: { valid: true, given: [{ id: 'CL-1', sha256: 'c'.repeat(64) }] },
+          reviews: [
+            {
+              name: 'quality',
+              verdict: 'accept' as const,
+              findings: 0,
+              criteria: [{ id: 'AC-001', status: 'met' as const }],
+              claims: [{ id: 'CL-1', status: 'verified' as const }],
+            },
+          ],
+        }
+      : { reviews: [] }),
     outcome: 'passed',
   });
   for (const [file, text] of Object.entries({
@@ -231,6 +258,13 @@ const copy = (world: ArchitectWorld): string => {
 Given('a copy of steps\\/ holding the valid step folder {string}', function (name: string) {
   writeValid(copy(this), name);
 });
+
+Given(
+  'a copy of steps\\/ holding the reviewed step folder {string}, whose build declared a claim',
+  function (name: string) {
+    writeValid(copy(this), name, undefined, true);
+  },
+);
 
 Given('a copy of steps\\/ holding no step folder', function () {
   copy(this);
@@ -352,6 +386,18 @@ const BROKEN: Record<string, (steps: string) => void> = {
     withRecord(steps, (parsed) => delete parsed['inputs']['brief.md']),
   'a record with the hash of another file': (steps) =>
     withRecord(steps, (parsed) => (parsed['inputs']['scout.other.md'] = 'f'.repeat(64))),
+  'a claim status removed from the review': (steps) =>
+    withRecord(steps, (parsed) => delete parsed['reviews'][0]['claims']),
+  'a claim refuted in a record that passed': (steps) =>
+    withRecord(steps, (parsed) => (parsed['reviews'][0]['claims'][0].status = 'refuted')),
+  'a criterion unmet in a record that passed': (steps) =>
+    withRecord(steps, (parsed) => (parsed['reviews'][0]['criteria'][0].status = 'unmet')),
+  'the review removed from a record that passed with a claim': (steps) =>
+    withRecord(steps, (parsed) => (parsed['reviews'] = [])),
+  'the criteria removed from the review': (steps) =>
+    withRecord(steps, (parsed) => delete parsed['reviews'][0]['criteria']),
+  'another criterion in the review': (steps) =>
+    withRecord(steps, (parsed) => (parsed['reviews'][0]['criteria'][0].id = 'AC-002')),
   'a steps/x that is a file': (steps) => writeFileSync(join(steps, 'x'), 'not a folder\n'),
   'a folder named with an upper-case letter': (steps) => renameSync(join(steps, 'demo'), join(steps, 'Demo')),
 };

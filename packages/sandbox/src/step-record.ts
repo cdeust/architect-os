@@ -56,125 +56,143 @@ export function stepRecordSchema() {
   const commit = () => z.string().regex(/^[0-9a-f]{40}$/);
   const digest = () => z.string().regex(/^[0-9a-f]{64}$/);
   const seconds = () => z.number().int().min(0);
-  return z
-    .strictObject({
-      step: z.string().regex(stepName()),
-      startedAt: z.iso.datetime(),
-      tree: z.strictObject({ commit: commit(), tree: commit(), clean: z.boolean() }),
-      inputs: keyed(/^(brief\.md|step\.json|scout\.[a-z][a-z0-9-]{0,31}\.md)$/, digest()),
-      tickets: ticketsSchema().optional(),
-      admission_sha256: digest().optional(),
-      launcher: keyed(/^(?!.*\.\.)[a-z0-9][a-z0-9./-]*$/, digest()),
-      sessions: z.array(
-        z
-          .strictObject({
-            role: z.enum(['scout', 'build', 'fresh', 'review']),
-            provider: z.enum(['anthropic', 'openai']).optional(),
-            client: z.strictObject({ version: z.string().min(1), sha256: digest() }).optional(),
-            usage: z
-              .strictObject({ inputTokens: seconds().nullable(), outputTokens: seconds().nullable() })
-              .optional(),
-            responses: z
-              .array(
-                z.strictObject({
-                  model: codexModelSchema,
-                  request: z.int().positive(),
-                  terminal: z.enum(['completed', 'failed', 'incomplete', 'interrupted']),
-                  inputTokens: seconds().nullable(),
-                  outputTokens: seconds().nullable(),
-                }),
-              )
-              .optional(),
-            name: z.string().regex(stepName()).optional(),
-            model: z.string().min(1),
-            effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']),
-            completed: z.boolean(),
-            // Les enregistrements publiés avant la conservation du code de sortie ne portent pas ce champ.
-            exitCode: z.number().int().nonnegative().optional(),
-            stopped: z.boolean(),
-            durationSeconds: seconds(),
-            costUsd: z.number().min(0).nullable(),
-            costByModel: keyed(modelName(), z.number().min(0)),
-          })
-          .refine((session) => {
-            if (session.provider !== 'openai')
-              return session.costUsd !== null && !session.client && !session.usage && !session.responses;
-            if (
-              session.role !== 'build' ||
-              !session.client ||
-              !session.usage ||
-              !session.responses ||
-              session.costUsd !== null
+  const record = z.strictObject({
+    step: z.string().regex(stepName()),
+    startedAt: z.iso.datetime(),
+    tree: z.strictObject({ commit: commit(), tree: commit(), clean: z.boolean() }),
+    inputs: keyed(/^(brief\.md|step\.json|scout\.[a-z][a-z0-9-]{0,31}\.md)$/, digest()),
+    tickets: ticketsSchema().optional(),
+    // Les écarts que la construction a déclarés (`src/build-claims.ts`), absent quand son rapport n'en porte aucun
+    // bloc : un bloc refusé (`valid` faux) n'en donne aucun ; sinon l'identifiant que l'hôte a donné à chacun, dans
+    // l'ordre, et l'empreinte de la ligne que les revues ont reçue. Jamais leur texte.
+    claims: z
+      .strictObject({
+        valid: z.boolean(),
+        given: z.array(z.strictObject({ id: z.string(), sha256: digest() })).max(20),
+      })
+      .optional(),
+    admission_sha256: digest().optional(),
+    launcher: keyed(/^(?!.*\.\.)[a-z0-9][a-z0-9./-]*$/, digest()),
+    sessions: z.array(
+      z
+        .strictObject({
+          role: z.enum(['scout', 'build', 'fresh', 'review']),
+          provider: z.enum(['anthropic', 'openai']).optional(),
+          client: z.strictObject({ version: z.string().min(1), sha256: digest() }).optional(),
+          usage: z
+            .strictObject({ inputTokens: seconds().nullable(), outputTokens: seconds().nullable() })
+            .optional(),
+          responses: z
+            .array(
+              z.strictObject({
+                model: codexModelSchema,
+                request: z.int().positive(),
+                terminal: z.enum(['completed', 'failed', 'incomplete', 'interrupted']),
+                inputTokens: seconds().nullable(),
+                outputTokens: seconds().nullable(),
+              }),
             )
-              return false;
-            return (
-              codexModelSchema.safeParse(session.model).success &&
-              session.responses.every((r, i) => r.model === session.model && r.request === i + 1) &&
-              session.usage.inputTokens === observedTokens(session.responses, 'inputTokens') &&
-              session.usage.outputTokens === observedTokens(session.responses, 'outputTokens') &&
-              (!session.completed ||
-                (session.responses.length > 0 && session.responses.every((r) => r.terminal === 'completed')))
-            );
-          }),
-      ),
-      checks: z.array(
-        z.strictObject({
-          name: z.string().regex(stepName()),
-          passed: z.boolean(),
+            .optional(),
+          name: z.string().regex(stepName()).optional(),
+          model: z.string().min(1),
+          effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']),
+          completed: z.boolean(),
+          // Les enregistrements publiés avant la conservation du code de sortie ne portent pas ce champ.
+          exitCode: z.number().int().nonnegative().optional(),
           stopped: z.boolean(),
           durationSeconds: seconds(),
-        }),
-      ),
-      // Les entrées inventées (§4) : si la configuration de l'exécuteur avait changé, si la sortie de la session a été
-      // reçue, pourquoi la phase arrête l'étape, puis l'identifiant que l'hôte a donné à chaque entrée, son issue et sa
-      // durée ; aucun texte de la session. Absent quand l'étape n'en a pas. La cohérence de ces champs entre eux et avec
-      // l'issue de l'étape est tenue plus bas (`freshConsistent`).
-      freshInputs: z
-        .strictObject({
-          runnerChanged: z.boolean(),
-          received: z.boolean(),
-          reasons: z.array(
-            z.enum([
-              'FRESH_INPUT_FAILED',
-              'FRESH_INPUT_INVALID',
-              'FRESH_OUTPUT_REFUSED',
-              'FRESH_RUNNER_CHANGED',
-              'FRESH_VALIDATOR_STOPPED',
-            ]),
-          ),
-          // L'identifiant d'une entrée est sa place : `fresh-1`, `fresh-2`, … dans l'ordre, seize au plus.
-          inputs: z
-            .array(
-              z.strictObject({
-                id: z.string(),
-                outcome: z.enum(['passed', 'failed', 'stopped', 'invalid', 'unvalidated']),
-                durationSeconds: seconds(),
-              }),
-            )
-            .max(freshInputsMax())
-            .refine((inputs) => inputs.every(({ id }, index) => id === freshInputId(index))),
+          costUsd: z.number().min(0).nullable(),
+          costByModel: keyed(modelName(), z.number().min(0)),
         })
-        .optional(),
-      reviews: z.array(
-        z.strictObject({
-          name: z.string().regex(stepName()),
-          verdict: z.enum(['accept', 'request_changes', 'invalid']),
-          findings: seconds(),
-          // Le statut de chaque critère d'acceptation qu'un verdict valide a rendu (R2) ; absent sans critère.
-          criteria: z
-            .array(
-              z.strictObject({
-                id: z.string().regex(/^AC-\d{1,9}$/),
-                status: z.enum(['met', 'unmet', 'not_established']),
-              }),
-            )
-            .min(1)
-            .optional(),
+        .refine((session) => {
+          if (session.provider !== 'openai')
+            return session.costUsd !== null && !session.client && !session.usage && !session.responses;
+          if (
+            session.role !== 'build' ||
+            !session.client ||
+            !session.usage ||
+            !session.responses ||
+            session.costUsd !== null
+          )
+            return false;
+          return (
+            codexModelSchema.safeParse(session.model).success &&
+            session.responses.every((r, i) => r.model === session.model && r.request === i + 1) &&
+            session.usage.inputTokens === observedTokens(session.responses, 'inputTokens') &&
+            session.usage.outputTokens === observedTokens(session.responses, 'outputTokens') &&
+            (!session.completed ||
+              (session.responses.length > 0 && session.responses.every((r) => r.terminal === 'completed')))
+          );
         }),
-      ),
-      outcome: z.enum(['passed', 'refused']),
-    })
-    .refine(freshConsistent);
+    ),
+    checks: z.array(
+      z.strictObject({
+        name: z.string().regex(stepName()),
+        passed: z.boolean(),
+        stopped: z.boolean(),
+        durationSeconds: seconds(),
+      }),
+    ),
+    // Les entrées inventées (§4) : si la configuration de l'exécuteur avait changé, si la sortie de la session a été
+    // reçue, pourquoi la phase arrête l'étape, puis l'identifiant que l'hôte a donné à chaque entrée, son issue et sa
+    // durée ; aucun texte de la session. Absent quand l'étape n'en a pas. La cohérence de ces champs entre eux et avec
+    // l'issue de l'étape est tenue plus bas (`freshConsistent`).
+    freshInputs: z
+      .strictObject({
+        runnerChanged: z.boolean(),
+        received: z.boolean(),
+        reasons: z.array(
+          z.enum([
+            'FRESH_INPUT_FAILED',
+            'FRESH_INPUT_INVALID',
+            'FRESH_OUTPUT_REFUSED',
+            'FRESH_RUNNER_CHANGED',
+            'FRESH_VALIDATOR_STOPPED',
+          ]),
+        ),
+        // L'identifiant d'une entrée est sa place : `fresh-1`, `fresh-2`, … dans l'ordre, seize au plus.
+        inputs: z
+          .array(
+            z.strictObject({
+              id: z.string(),
+              outcome: z.enum(['passed', 'failed', 'stopped', 'invalid', 'unvalidated']),
+              durationSeconds: seconds(),
+            }),
+          )
+          .max(freshInputsMax())
+          .refine((inputs) => inputs.every(({ id }, index) => id === freshInputId(index))),
+      })
+      .optional(),
+    reviews: z.array(
+      z.strictObject({
+        name: z.string().regex(stepName()),
+        verdict: z.enum(['accept', 'request_changes', 'invalid']),
+        findings: seconds(),
+        // Le statut de chaque critère d'acceptation qu'un verdict valide a rendu (R2) ; absent sans critère.
+        criteria: z
+          .array(
+            z.strictObject({
+              id: z.string().regex(/^AC-\d{1,9}$/),
+              status: z.enum(['met', 'unmet', 'not_established']),
+            }),
+          )
+          .min(1)
+          .optional(),
+        // Le statut de chaque écart déclaré qu'un verdict valide a rendu ; absent sans écart déclaré.
+        claims: z
+          .array(
+            z.strictObject({
+              id: z.string(),
+              status: z.enum(['verified', 'refuted', 'not_checked']),
+            }),
+          )
+          .min(1)
+          .optional(),
+      }),
+    ),
+    outcome: z.enum(['passed', 'refused']),
+  });
+  return record.refine(coherent).refine(freshConsistent);
 }
 
 /**
@@ -198,6 +216,57 @@ interface FreshRecord {
   received: boolean;
   reasons: readonly string[];
   inputs: readonly { outcome: FreshInputOutcome }[];
+}
+
+/** Les champs que `coherent` lit, typés sans passer par le schéma qui l'appelle. */
+interface Coherence {
+  readonly claims?:
+    { readonly valid: boolean; readonly given: readonly { readonly id: string }[] } | undefined;
+  readonly checks: readonly { readonly passed: boolean }[];
+  readonly reviews: readonly {
+    readonly verdict: 'accept' | 'request_changes' | 'invalid';
+    readonly criteria?: readonly { readonly id: string; readonly status: string }[] | undefined;
+    readonly claims?: readonly { readonly id: string; readonly status: string }[] | undefined;
+  }[];
+  readonly outcome: 'passed' | 'refused';
+}
+
+/** Les identifiants d'une liste de statuts, en une chaîne comparable ; une liste absente est vide. */
+const idsOf = (statuses: readonly { id: string }[] | undefined): string =>
+  JSON.stringify((statuses ?? []).map(({ id }) => id));
+
+/**
+ * Ce que l'enregistrement doit dire de lui-même, que les schémas de ses champs ne voient pas.
+ *
+ * - Les revendications sont exactement CL-1, CL-2… dans l'ordre (cette règle seule dit ce qu'est leur identifiant) ;
+ *   un bloc refusé n'en donne aucune.
+ * - Un verdict invalide ne rend aucun statut. Un verdict valide rend un statut pour chaque revendication donnée, et
+ *   tous les verdicts valides couvrent les mêmes critères : un statut retiré à la main se voit.
+ * - Une étape qui passe n'a que des contrôles passés, des verdicts `accept`, des critères `met` et des revendications
+ *   `verified`, et une revendication donnée n'y passe jamais sans revue.
+ */
+function coherent({ claims, checks, reviews, outcome }: Coherence): boolean {
+  const given = claims?.given ?? [];
+  const judged = reviews.filter((review) => review.verdict !== 'invalid');
+  return (
+    (claims?.valid !== false || given.length === 0) &&
+    given.every(({ id }, index) => id === `CL-${index + 1}`) &&
+    reviews.every(
+      (review) =>
+        review.verdict !== 'invalid' || (review.claims === undefined && review.criteria === undefined),
+    ) &&
+    judged.every((review) => idsOf(review.claims) === idsOf(given)) &&
+    new Set(judged.map((review) => idsOf(review.criteria))).size <= 1 &&
+    (outcome === 'refused' ||
+      (checks.every((check) => check.passed) &&
+        (given.length === 0 || reviews.length > 0) &&
+        reviews.every(
+          (review) =>
+            review.verdict === 'accept' &&
+            (review.criteria ?? []).every(({ status }) => status === 'met') &&
+            (review.claims ?? []).every(({ status }) => status === 'verified'),
+        )))
+  );
 }
 export type StepRecord = z.infer<ReturnType<typeof stepRecordSchema>>;
 
@@ -241,6 +310,7 @@ export interface RecordParts {
   /** Le texte lu au départ de chaque fichier d'entrée, par nom de fichier. */
   inputs: Readonly<Record<string, string>>;
   tickets?: StepFile['tickets'];
+  claims?: StepRecord['claims'];
   /** Le texte de chaque fichier du lanceur, par chemin relatif à `packages/sandbox`. */
   launcher: Readonly<Record<string, string>>;
   sessions: readonly RecordedSession[];
@@ -262,6 +332,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
     ...(parts.admission_sha256 ? { admission_sha256: parts.admission_sha256 } : {}),
     inputs: digests(parts.inputs),
     ...(parts.tickets ? { tickets: parts.tickets } : {}),
+    ...(parts.claims ? { claims: parts.claims } : {}),
     launcher: digests(parts.launcher),
     sessions: parts.sessions.map((session) => ({
       role: session.role,
