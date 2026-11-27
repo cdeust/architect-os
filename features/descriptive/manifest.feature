@@ -72,6 +72,7 @@ Feature: modules, their catalogue, their servers and the profiles of the clients
       | path                                 | value |
       | catalog.modules.1.version            | "10.20.30" |
       | catalog.modules.2.writes_tables.0    | "memories" |
+      | catalog.modules.2.reads_tables.0     | "memories" |
       | catalog.modules.1.tools.0.validator  | "verify" |
       | catalog.modules.1.tools.0.validator  | "spec-lint" |
       | catalog.modules.1.tools.0.validator  | "none" |
@@ -96,6 +97,8 @@ Feature: modules, their catalogue, their servers and the profiles of the clients
       | catalog.modules.0.calls_allowed.0       | "judge!" |
       | catalog.modules.2.writes_tables.0       | "1memory.memories" |
       | catalog.modules.2.writes_tables.0       | "memory.memories!" |
+      | catalog.modules.2.reads_tables.0        | "1memory.memories" |
+      | catalog.modules.2.reads_tables          | "memory.memories" |
       | catalog.modules.1.tools.0.name          | "1grade" |
       | catalog.modules.1.tools.0.name          | "grade!" |
       | catalog.modules.1.tools.0.input_schema  | "a./schemas/grade.in.json" |

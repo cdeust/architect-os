@@ -1088,9 +1088,9 @@ Le rejeu de Step, avec un serveur de réponses et un service d’identité simul
 - SSDLC : l'écart de séparation des tâches à la livraison est nommé ; chaque étape construite aura ses menaces avant son code ; la menace de fuite du juge externe est posée.
 - Opérationnel : les règles de portabilité sont écrites, avec les deux écarts d'aujourd'hui ; IRB sans objet.
 
-## 15. O.2 : la boucle par la gateway (conçue le 26 novembre 2026, rien de construit)
+## 15. O.2 : la boucle par la gateway (conçue le 26 novembre 2026 ; étape A construite le 27 novembre 2026)
 
-Le §14 nomme deux écarts à fermer avant l'on-premise : l'état d'une étape est un dossier du poste, hors de tout adaptateur ; l'orchestrateur est le mainteneur, dans une session, hors de tout port. Cette section décide la forme qui les ferme, et l'ordre dans lequel elle se construit. Elle ne construit rien.
+Le §14 nomme deux écarts à fermer avant l'on-premise : l'état d'une étape est un dossier du poste, hors de tout adaptateur ; l'orchestrateur est le mainteneur, dans une session, hors de tout port. Cette section décide la forme qui les ferme, et l'ordre dans lequel elle se construit. L'étape A est construite (journal §124) ; les étapes B à D ne le sont pas.
 
 ### Trois piliers
 
@@ -1104,7 +1104,7 @@ Le §14 nomme deux écarts à fermer avant l'on-premise : l'état d'une étape e
 - Ses sessions passent par le proxy d'authentification de l'hôte, qui lit l'identifiant d'abonnement du propriétaire dans son trousseau (`code-tool.ts:66`, `:166`, `auth-proxy.ts:371`), ou, pour le fournisseur OpenAI, par la construction SBX et son droit Codex (`step-tool.ts:785-788`). Leur usage va au journal `usage.jsonl` de l'hôte, pas au registre de `data`.
 - Le reçu d'admission (`ARCHITECT_OS_STEP_EVIDENCE`) n'est accepté que depuis un répertoire d'autorité de l'hôte, hors du worktree (`step-admission.ts:235-262`) : sa valeur tient à ce qu'il est émis par un autre que celui qui le consomme. Il n'a pas d'émetteur de production.
 - La gateway route un outil vers un module du catalogue (`calls_allowed`, `task-router.ts:164-181`) ou vers un worker (une sandbox par tâche, profil `worker`, répertoire de travail jetable : `process-options.ts:31`). Elle lance deux enfants natifs, et deux seulement (`native-config.ts:18`, `gateway/src/main.ts:263-267`) : `data`, qu'elle atteint pour le registre et pour les opérations qu'un module lui fait suivre (`task-router.ts:186-194`), et `broker`, qu'elle commande elle-même.
-- `data` n'a aucune table d'étape (`data/migrations/0001` à `0005`).
+- Depuis l'étape A, `npm run step` retient son état par le port `StepStore` (`packages/sandbox/src/step-store.ts`), dont l'adaptateur des fichiers (`step-store-file.ts`) écrit le dossier d'avant ; un artefact refusé par le port (taille, forme d'identifiant, schéma) reste dans un fichier privé des flux du run, `<fichier>.refused`, et l'étape s'arrête en 2 ; une entrée de l'étape qui porte une forme d'identifiant est refusée avant toute session. `data` tient les tables d'étape (`data/migrations/0006_steps.sql` : `steps`, `step_events` numérotés sous le verrou de leur étape, `step_artifacts`) et les opérations `steps.reserve`, `steps.appendEvent`, `steps.recordArtifact`, `steps.get` ; aucun adaptateur ne les appelle encore (étape D).
 - Le profil client `owner` (`topology/clients.json`) borne une tâche à 30 minutes, 200 appels et une profondeur de 4. Les sessions d'une étape publiée totalisent jusqu'à 3 999 s (`steps/runtime-1a-2`), 4 013 s avec ses contrôles ; une seule session de construction a duré 3 302 s ; sept étapes dépassent 1 500 s de sessions. Les sessions d'une phase se jouent l'une après l'autre en pratique : la somme approche la durée murale.
 
 ### Décisions
@@ -1135,6 +1135,7 @@ La v1 déplace la boucle mécanique de `npm run step` : mêmes phases, mêmes re
 | Divulgation | Un secret recopié d'un rapport de session dans `data` | Les sessions tournent sous le nettoyage de l'environnement de leurs sous-processus et sans identifiant ; `StepStore` refuse, sur chaque adaptateur et par son contrat, un artefact au-delà de sa taille bornée ou qui porte une forme d'identifiant connue : aucun chemin n'écrit un artefact sans ce refus, et l'opération `steps.recordArtifact` de `data` applique les mêmes bornes. Ce refus est une heuristique : il ne prouve pas l'absence d'un secret, il arrête les formes connues ; il refuse aussi un rapport qui cite une forme factice, et ce refus est voulu (le rapport reste dans son flux sous `run/tmp`, hors de `data`) ; les scénarios de l'étape A montrent les deux cas |
 | Déni de service | Une étape sans fin, une boucle de relances, des artefacts sans limite, une dépense hors de tout compte | Bornes du profil `step`, échéance par appel, au plus deux relances (§4) ; taille et nombre d'artefacts bornés par les schémas ; usage compté par le broker |
 | Déni de service | Une panne de la gateway ou de `workbench` au milieu d'une étape : baux, worktrees et sandboxes orphelins | Le bail est celui du noyau : il tombe avec le processus qui le tient, sans échéance à gérer ; `workbench` inscrit chaque worktree qu'il crée dans un registre à lui, sur l'hôte, sous `$ARCHITECT_OS_RUNTIME_ROOT/state/workbench/`, et au démarrage retire ceux qu'aucun bail ne tient plus : il ne lit pas `data`, qu'il n'atteint pas ; les sandboxes sont des groupes de processus détachés qui survivent à la gateway, et son registre de sandboxes vivantes n'est qu'en mémoire (`gateway/src/main.ts:245-247`) : à l'étape B, la gateway inscrit le groupe de chaque sandbox qu'elle lance dans un registre privé sur l'hôte (mêmes contrôles que `state/steps`), avec ce qui identifie le groupe (l'heure de démarrage et la commande de son chef), et, au démarrage, n'arrête par `packages/sandbox` qu'un groupe dont l'identité correspond encore : après un redémarrage ou un recyclage des identifiants, un groupe inconnu n'est jamais touché ; l'étape interrompue est reprise ou refusée, jamais continuée en silence |
+| Divulgation | Un module lit par `data` l'état d'une étape, ou une table d'un autre domaine | `DATA_OPS` déclare les tables que lit chaque opération (`reads`, vérifiées contre son SQL au chargement de la table des opérations) ; la gateway refuse (`FORBIDDEN_READ`) une opération qui lit une table hors des `reads_tables` du module, comme elle refuse une écriture hors de ses `writes_tables` (étape A) |
 | Élévation de privilège | Le module obtient git ou le système de fichiers de l'hôte | Il n'a que les opérations de `workbench` que son catalogue déclare ; une opération nouvelle est une ligne de `WORKBENCH_OPS` avec son contrat, relue comme une règle de la porte (R-6) |
 
 ### Ordre de construction
@@ -1150,7 +1151,7 @@ Chaque étape est une pull request, relue par une session qui ne l'a pas écrite
 
 ### Ce qui reste ouvert, et où cela se décide
 
-- La forme exacte des tables `steps.*` et de leurs opérations : à l'étape A, avec ses scénarios.
+- La forme exacte des tables `steps.*` et de leurs opérations : décidée à l'étape A, avec ses scénarios (journal §124).
 - Comment un worker reçoit un worktree loué au lieu d'un répertoire jetable, en lecture puis en écriture : à l'étape C, avec ses menaces propres.
 - Un équivalent, payé par un broker, de la construction par Codex : non conçu ; d'ici là elle reste locale.
 - Les bornes chiffrées du profil `step` : à l'étape D, comptées et non estimées.

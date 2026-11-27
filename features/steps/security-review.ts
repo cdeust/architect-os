@@ -657,7 +657,9 @@ const ANSWER_BREAKS: Record<string, () => string> = {
     ]),
   ),
   'holding the shape of a key of Anthropic': () =>
-    JSON.stringify({ findings: [{ ...FINDING, description: 'leak sk-ant-oat01-AbCdEfGh123456' }] }),
+    JSON.stringify({
+      findings: [{ ...FINDING, description: `leak ${['sk', 'ant', 'oat01'].join('-')}-AbCdEfGh123456` }],
+    }),
   'holding the shape of a GitHub token': () =>
     JSON.stringify({ findings: [{ ...FINDING, recommendation: 'ghs_' + 'A1b2C3d4E5f6G7h8I9j0K' }] }),
   'holding the shape of a fine-grained GitHub token': () =>
@@ -888,7 +890,7 @@ Then('the publisher leaves out a run link that is not a run of GitHub', function
 });
 
 /** A key of the answer the schema does not know, holding a credential shape and a Markdown image. */
-const TRAP = '![x](https://attacker.example/p.png) sk-ant-oat01-AAAAAAAAAAAA';
+const TRAP = `![x](https://attacker.example/p.png) ${['sk', 'ant', 'oat01'].join('-')}-AAAAAAAAAAAA`;
 
 Then('a refused answer {} reaches neither the comment nor the job summary', function (where: string) {
   const answers: Record<string, string> = {

@@ -29,6 +29,7 @@
       "agent": null,
       "egress": "none",
       "writes_tables": ["memory.memories"],
+      "reads_tables": ["memory.memories"],
       "reads_domains": ["memory"],
       "calls_allowed": [],
       "timeout_ms": 10000
@@ -62,6 +63,7 @@
       "agent": { "profile": "memory", "model_min": "haiku", "max_turns": 8, "timeout_ms": 120000 },
       "egress": "none",
       "writes_tables": [],
+      "reads_tables": [],
       "reads_domains": ["memory"],
       "calls_allowed": ["memory"],
       "timeout_ms": 120000

@@ -123,18 +123,165 @@ export function writtenTables(sql: string): string[] {
   return [...new Set([...targets].map((m) => String(m[1]).toLowerCase()))];
 }
 
-/** Refuses a table whose SQL for an operation writes other tables than the `writes` that operation declares in DATA_OPS. */
+/** A statement whose table sources the reader cannot enumerate whole: refused when the statement table loads. */
+export class SqlSourceError extends Error {
+  readonly code = 'SQL_SOURCES_UNREADABLE';
+  constructor(where: string, why: string) {
+    super(`${where}: SQL_SOURCES_UNREADABLE: ${why}`);
+    this.name = 'SqlSourceError';
+  }
+}
+
+/** The words that end the source of a FROM or a JOIN; JOIN and USING start another one, read on their own. */
+const ends = (): ReadonlySet<string> =>
+  new Set([
+    'where',
+    'group',
+    'order',
+    'limit',
+    'offset',
+    'having',
+    'window',
+    'fetch',
+    'for',
+    'returning',
+    'union',
+    'intersect',
+    'except',
+    'join',
+    'left',
+    'right',
+    'inner',
+    'full',
+    'cross',
+    'natural',
+    'on',
+    'using',
+    ')',
+    ';',
+  ]);
+
+/**
+ * The tokens of a statement, scanned in one left-to-right pass: line comments and string literals (E'' and standard) are
+ * skipped; quoted identifiers, names and single characters are kept. Block comments, dollar-quoted strings and unclosed
+ * quotes are refused with `refuse`.
+ */
+function tokens(sql: string, refuse: (why: string) => never): string[] {
+  const words: string[] = [];
+  for (const [raw] of sql.matchAll(
+    /--[^\n]*|\/\*|\$\D|\bE'(?:[^'\\]|\\.|'')*'|'(?:[^']|'')*'|"(?:[^"]|"")*"|['"]|[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)*|\S/gi,
+  )) {
+    if (raw === '/*') refuse('a block comment');
+    if (raw[0] === '$' && raw.length > 1) refuse('a dollar-quoted string');
+    if (raw === "'" || raw === '"') refuse('an unclosed quote');
+    if (raw.startsWith('--') || raw.endsWith("'")) continue;
+    words.push(raw.toLowerCase());
+  }
+  return words;
+}
+
+/** A token of `tokens` is an unquoted name (schema-qualified or not) iff it starts with a letter or underscore. */
+const isName = (word: string | undefined): word is string => word !== undefined && /^[a-z_]/.test(word);
+
+/**
+ * The tables a statement reads: the source of each FROM and JOIN, except the target of a statement-leading DELETE FROM,
+ * the operand of IS [NOT] DISTINCT FROM and the CTE names its WITH clauses define; and, when it has a RETURNING clause,
+ * the tables it writes, whose rows it returns. It fails closed: any source or construct it cannot read whole is refused
+ * with SqlSourceError, never left out (block comments, dollar-quoted strings, unclosed quotes, TABLE shorthand, commas
+ * between sources, USING that brings a table, subqueries or functions in FROM/JOIN, unreadable or unclosed WITH
+ * clauses, and WITH clauses taking the name of a table of `tables`).
+ */
+export function readTables(sql: string, tables: ReadonlySet<string>, where: string): string[] {
+  const refuse: (why: string) => never = (why) => {
+    throw new SqlSourceError(where, why);
+  };
+  const words = tokens(sql, refuse);
+  const stops = ends();
+  const defined = new Set<string>();
+  const sources: string[] = [];
+  words.forEach((word, index) => {
+    if (word === ';') defined.clear();
+    if (word === 'with') {
+      let at = index + 1;
+      if (words[at] === 'recursive') at += 1;
+      for (;;) {
+        const name = words[at];
+        if (!isName(name)) refuse('an unreadable WITH clause');
+        if (tables.has(name)) refuse(`a WITH clause takes the name of the table ${name}`);
+        defined.add(name);
+        at += 1;
+        if (words[at] !== 'as' || words[at + 1] !== '(') refuse('an unreadable WITH clause');
+        at += 2;
+        let depth = 1;
+        while (depth > 0) {
+          const next = words[at];
+          if (next === undefined) refuse('an unclosed WITH clause');
+          if (next === '(') depth += 1;
+          else if (next === ')') depth -= 1;
+          at += 1;
+        }
+        if (words[at] !== ',') break;
+        at += 1;
+      }
+    }
+    if (word === 'using' && words[index + 1] !== '(') refuse('a USING that brings a table');
+    if (word === 'table') refuse('a TABLE shorthand');
+    if (word !== 'from' && word !== 'join') return;
+    const before = words[index - 1];
+    const prev = words[index - 2];
+    if (before === 'delete' && (prev === undefined || prev === ';' || prev === '(')) return;
+    if (before === 'distinct' && (prev === 'is' || prev === 'not')) return;
+    let at = index + 1;
+    if (words[at] === 'only') at += 1;
+    const source = words[at];
+    if (source === '(') refuse(`a subquery after ${word.toUpperCase()}`);
+    if (!isName(source)) refuse(`no table after ${word.toUpperCase()}`);
+    if (words[at + 1] === '(') refuse(`a function after ${word.toUpperCase()}`);
+    at += 1;
+    if (words[at] === 'as') at += 1;
+    const alias = words[at];
+    if (isName(alias) && !stops.has(alias)) at += 1;
+    const next = words[at];
+    if (next === ',') refuse(`a comma between two sources of one ${word.toUpperCase()}`);
+    if (next !== undefined && !stops.has(next)) refuse(`an unreadable source after ${word.toUpperCase()}`);
+    if (!defined.has(source)) sources.push(source);
+  });
+  const returned = words.includes('returning') ? writtenTables(sql) : [];
+  return [...new Set([...sources, ...returned])];
+}
+
+/** The tables the contract names, written or read by an operation: a WITH clause may not take one of their names. */
+export function knownTables(): ReadonlySet<string> {
+  return new Set(DATA_OP_NAMES.flatMap((op) => [...DATA_OPS[op].writes, ...DATA_OPS[op].reads]));
+}
+
+/** The tables of `actual` against those of `declared`: equal as sets, or the error that names both. */
+function checkAccess(
+  op: DataOpName,
+  verb: 'writes' | 'reads',
+  actual: Set<string>,
+  declared: readonly string[],
+): void {
+  if (actual.size !== declared.length || declared.some((name) => !actual.has(name)))
+    throw new Error(
+      `operation ${op} ${verb} ${JSON.stringify([...actual])} but declares ${JSON.stringify(declared)} in DATA_OPS`,
+    );
+}
+
+/**
+ * Refuses a table whose SQL for an operation writes, or reads, other tables than the `writes`, or the `reads`, that
+ * operation declares in DATA_OPS.
+ */
 function checkWrites(table: StatementTable): StatementTable {
   for (const op of DATA_OP_NAMES) {
-    const written = new Set(
-      table.statements.filter((s) => s.op === op).flatMap((s) => writtenTables(s.text)),
+    const statements = table.statements.filter((s) => s.op === op);
+    checkAccess(op, 'writes', new Set(statements.flatMap((s) => writtenTables(s.text))), DATA_OPS[op].writes);
+    checkAccess(
+      op,
+      'reads',
+      new Set(statements.flatMap((s) => readTables(s.text, knownTables(), s.file))),
+      DATA_OPS[op].reads,
     );
-    const declared: readonly string[] = DATA_OPS[op].writes;
-    if (written.size !== declared.length || declared.some((name) => !written.has(name))) {
-      throw new Error(
-        `operation ${op} writes ${JSON.stringify([...written])} but declares ${JSON.stringify(declared)} in DATA_OPS`,
-      );
-    }
   }
   return table;
 }

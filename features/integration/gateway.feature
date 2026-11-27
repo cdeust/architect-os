@@ -105,3 +105,11 @@ Feature: the gateway launches its modules in their sandboxes and routes the call
     When the gateway is loaded with a catalogue where "judge" calls itself
     Then loading the gateway fails saying "judge calls itself"
     And the sandboxes launched are ""
+
+  Scenario: a module reads through data the tables of its reads_tables, and is refused one outside them
+    Given the module "memory-write" hangs until its call is cancelled
+    When "task-1" calls "memory.remember" over MCP with '{}' without waiting
+    And the module calls back the data operation "memory.search" with '{"query":"q"}' through the callback host of the gateway with "call-1"
+    Then the callback answers '[]'
+    When the module calls back the data operation "runs.get" with '{"run_id":"00000000-0000-4000-8000-000000000000"}' through the callback host of the gateway with "call-1"
+    Then the callback is refused with '{"code":"FORBIDDEN_READ","message":"memory-write may not read runs"}'

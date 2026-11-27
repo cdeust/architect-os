@@ -155,3 +155,17 @@ Then('the operations know {string}', function (op: string) {
 Then('the operations do not know {string}', function (op: string) {
   assert.equal((this.state['operations'] as DataOperations).has(op), false);
 });
+
+Then(
+  'item {int} of the answer field {string} has no field {string}',
+  function (index: number, list: string, field: string) {
+    const items = (scenario(this).answer as Record<string, Record<string, unknown>[]>)[list];
+    const item = items?.[index];
+    assert.ok(item !== undefined, `no item ${index} in ${list}`);
+    assert.equal(Object.hasOwn(item, field), false, `item ${index} of ${list} has ${field}`);
+  },
+);
+
+Given('the variable {string} holds {int} bytes in base64', function (name: string, bytes: number) {
+  scenario(this).vars[name] = Buffer.alloc(bytes, 0x61).toString('base64');
+});

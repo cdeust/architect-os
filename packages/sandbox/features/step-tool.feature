@@ -1501,3 +1501,113 @@ Feature: npm run step, one step of the orchestration loop (fake sessions, a thro
         | name | dimension |
         | independent | correctness |
         | justesse | general |
+
+  Rule: the host keeps no credential and nothing above 1 MiB in the state of a step, and loses nothing it refuses
+
+    Scenario Outline: an input of the step that holds <shape> is refused before any session
+      Given a step folder
+      And the step folder holds a step.json with a build and the scouts "files=claude-haiku-4-5"
+      And the step folder holds the questions of the scouts "files"
+      And the step folder holds the file "<file>" holding <shape>
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: STEP_INPUT_CREDENTIAL: <file> contient la forme <name>"
+      And the step stderr does not hold <shape>
+      And no session was started
+
+      Examples:
+        | file          | shape                       | name                  |
+        | brief.md      | an Anthropic API key        | anthropic-key         |
+        | scout.files.md | an OAuth token of Anthropic | anthropic-oauth-token |
+        | brief.md      | a GitHub token              | github-token          |
+
+    Scenario: a step.json that holds a credential shape is refused before any session
+      Given a step folder
+      And the step folder holds a step.json whose build model holds a GitHub token
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: STEP_INPUT_CREDENTIAL: step.json contient la forme github-token"
+      And the step stderr does not hold a GitHub token
+      And no session was started
+
+    Scenario: a build report that holds a key is not kept: the step stops in 2, publishes nothing, and the report stays in the streams
+      Given a step folder
+      And the step folder holds a step.json with a build and the reviews "quality=claude-opus-5-5"
+      And the build session writes the fixture "build-exact.jsonl" with its report replaced by an Anthropic API key
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: StepStoreError: STEP_ARTIFACT_CREDENTIAL: build.report.md contient la forme anthropic-key"
+      And the step stderr does not hold an Anthropic API key
+      And the sessions started were "code.json"
+      And nothing was published under steps/
+      And the stream file "build.report.md.refused" holds an Anthropic API key
+
+    Scenario: a build report above 1 MiB is not kept: the step stops in 2, publishes nothing, and the report stays in the streams
+      Given a step folder
+      And the step folder holds a step.json with a build and the reviews "quality=claude-opus-5-5"
+      And the build session writes the fixture "build-exact.jsonl" with its report replaced by 1048577 bytes of "a"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: StepStoreError: STEP_ARTIFACT_TOO_LARGE: build.report.md : 1048577 octets, au plus 1048576"
+      And the sessions started were "code.json"
+      And nothing was published under steps/
+      And the stream file "build.report.md.refused" holds 1048577 bytes of "a"
+
+    Scenario: a check whose output holds a token is not kept: the step stops in 2 before any review, and the output stays in the streams
+      Given a step folder
+      And the step folder holds a step.json with a build, the checks "types" and the reviews "quality=claude-sonnet-5-5"
+      And the build session writes the fixture "build-exact.jsonl"
+      And the check 1 prints, composed at run time, a GitHub token
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: StepStoreError: STEP_ARTIFACT_CREDENTIAL: check.types.json contient la forme github-token"
+      And the step stderr does not hold a GitHub token
+      And the sessions started were "code.json"
+      And nothing was published under steps/
+      And the stream file "check.types.json.refused" holds a GitHub token
+
+    Scenario: scout facts that hold a token are not kept: the step stops in 2 before the build, and the facts stay in the streams
+      Given a step folder
+      And the step folder holds a step.json with a build and the scouts "files=claude-haiku-4-5"
+      And the step folder holds the questions of the scouts "files"
+      And the scout session 1 writes the fixture "scout-facts-a.jsonl" with the note of its first fact replaced by an OAuth token of Anthropic
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: StepStoreError: STEP_ARTIFACT_CREDENTIAL: scout.files.facts.json contient la forme anthropic-oauth-token"
+      And the step stderr does not hold an OAuth token of Anthropic
+      And the sessions started were "scout.json"
+      And nothing was published under steps/
+      And the stream file "scout.files.facts.json.refused" holds an OAuth token of Anthropic
+
+    Scenario: a review verdict that holds a key is not kept: the step stops in 2, publishes nothing, and the verdict stays in the streams
+      Given a step folder
+      And the step folder holds a step.json with a build and the reviews "quality=claude-opus-5-5"
+      And the build session writes the fixture "build-exact.jsonl"
+      And the review session 1 writes the fixture "review-request-changes.jsonl" with the reason of its first finding replaced by an Anthropic API key
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: StepStoreError: STEP_ARTIFACT_CREDENTIAL: review.quality.verdict.json contient la forme anthropic-key"
+      And the step stderr does not hold an Anthropic API key
+      And the sessions started were "code.json review.json"
+      And nothing was published under steps/
+      And the stream file "review.quality.verdict.json.refused" holds an Anthropic API key
+
+    Scenario: a step whose artifacts the port keeps leaves no refused file in its streams
+      Given a step folder
+      And the step folder holds a step.json with a build, the checks "types" and the reviews "quality=claude-sonnet-5-5"
+      And the build session writes the fixture "build-exact.jsonl"
+      And the review session 1 writes the fixture "structured.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 0
+      And no stream file of the step ends in .refused
+
+    Scenario: a write that the file system refuses is not a refusal of the port: the step stops in 2 and keeps no refused file
+      Given a step folder
+      And the step folder holds a step.json with a build and the reviews "quality=claude-opus-5-5"
+      And the build session writes the fixture "build-exact.jsonl"
+      And the retained folder of the step already holds the file "build.report.md"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr contains "EEXIST"
+      And nothing was published under steps/
+      And no stream file of the step ends in .refused
