@@ -1,4 +1,4 @@
-// The end-to-end path of the Step admission receipt (journal, §123): `npm run admit` issues it for the folder Plan
+// The end-to-end path of the Step admission receipt (journal, §125): `npm run admit` issues it for the folder Plan
 // materialized, into the authority directory of a scenario home, and the production Step host reads and checks it
 // with its own subject. The sessions never start: the scenario stops the Step right after its admission.
 import assert from 'node:assert/strict';

@@ -55,12 +55,21 @@ export function stepRecordSchema() {
   const commit = () => z.string().regex(/^[0-9a-f]{40}$/);
   const digest = () => z.string().regex(/^[0-9a-f]{64}$/);
   const seconds = () => z.number().int().min(0);
-  return z.strictObject({
+  const record = z.strictObject({
     step: z.string().regex(stepName()),
     startedAt: z.iso.datetime(),
     tree: z.strictObject({ commit: commit(), tree: commit(), clean: z.boolean() }),
     inputs: keyed(/^(brief\.md|step\.json|scout\.[a-z][a-z0-9-]{0,31}\.md)$/, digest()),
     tickets: ticketsSchema().optional(),
+    // Les écarts que la construction a déclarés (`src/build-claims.ts`), absent quand son rapport n'en porte aucun
+    // bloc : un bloc refusé (`valid` faux) n'en donne aucun ; sinon l'identifiant que l'hôte a donné à chacun, dans
+    // l'ordre, et l'empreinte de la ligne que les revues ont reçue. Jamais leur texte.
+    claims: z
+      .strictObject({
+        valid: z.boolean(),
+        given: z.array(z.strictObject({ id: z.string(), sha256: digest() })).max(20),
+      })
+      .optional(),
     admission_sha256: digest().optional(),
     launcher: keyed(/^(?!.*\.\.)[a-z0-9][a-z0-9./-]*$/, digest()),
     sessions: z.array(
@@ -138,10 +147,72 @@ export function stepRecordSchema() {
           )
           .min(1)
           .optional(),
+        // Le statut de chaque écart déclaré qu'un verdict valide a rendu ; absent sans écart déclaré.
+        claims: z
+          .array(
+            z.strictObject({
+              id: z.string(),
+              status: z.enum(['verified', 'refuted', 'not_checked']),
+            }),
+          )
+          .min(1)
+          .optional(),
       }),
     ),
     outcome: z.enum(['passed', 'refused']),
   });
+  return record.refine(coherent);
+}
+
+/** Les champs que `coherent` lit, typés sans passer par le schéma qui l'appelle. */
+interface Coherence {
+  readonly claims?:
+    { readonly valid: boolean; readonly given: readonly { readonly id: string }[] } | undefined;
+  readonly checks: readonly { readonly passed: boolean }[];
+  readonly reviews: readonly {
+    readonly verdict: 'accept' | 'request_changes' | 'invalid';
+    readonly criteria?: readonly { readonly id: string; readonly status: string }[] | undefined;
+    readonly claims?: readonly { readonly id: string; readonly status: string }[] | undefined;
+  }[];
+  readonly outcome: 'passed' | 'refused';
+}
+
+/** Les identifiants d'une liste de statuts, en une chaîne comparable ; une liste absente est vide. */
+const idsOf = (statuses: readonly { id: string }[] | undefined): string =>
+  JSON.stringify((statuses ?? []).map(({ id }) => id));
+
+/**
+ * Ce que l'enregistrement doit dire de lui-même, que les schémas de ses champs ne voient pas.
+ *
+ * - Les revendications sont exactement CL-1, CL-2… dans l'ordre (cette règle seule dit ce qu'est leur identifiant) ;
+ *   un bloc refusé n'en donne aucune.
+ * - Un verdict invalide ne rend aucun statut. Un verdict valide rend un statut pour chaque revendication donnée, et
+ *   tous les verdicts valides couvrent les mêmes critères : un statut retiré à la main se voit.
+ * - Une étape qui passe n'a que des contrôles passés, des verdicts `accept`, des critères `met` et des revendications
+ *   `verified`, et une revendication donnée n'y passe jamais sans revue.
+ */
+function coherent({ claims, checks, reviews, outcome }: Coherence): boolean {
+  const given = claims?.given ?? [];
+  const judged = reviews.filter((review) => review.verdict !== 'invalid');
+  return (
+    (claims?.valid !== false || given.length === 0) &&
+    given.every(({ id }, index) => id === `CL-${index + 1}`) &&
+    reviews.every(
+      (review) =>
+        review.verdict !== 'invalid' || (review.claims === undefined && review.criteria === undefined),
+    ) &&
+    judged.every((review) => idsOf(review.claims) === idsOf(given)) &&
+    new Set(judged.map((review) => idsOf(review.criteria))).size <= 1 &&
+    (outcome === 'refused' ||
+      (checks.every((check) => check.passed) &&
+        (given.length === 0 || reviews.length > 0) &&
+        reviews.every(
+          (review) =>
+            review.verdict === 'accept' &&
+            (review.criteria ?? []).every(({ status }) => status === 'met') &&
+            (review.claims ?? []).every(({ status }) => status === 'verified'),
+        )))
+  );
 }
 export type StepRecord = z.infer<ReturnType<typeof stepRecordSchema>>;
 
@@ -185,6 +256,7 @@ export interface RecordParts {
   /** Le texte lu au départ de chaque fichier d'entrée, par nom de fichier. */
   inputs: Readonly<Record<string, string>>;
   tickets?: StepFile['tickets'];
+  claims?: StepRecord['claims'];
   /** Le texte de chaque fichier du lanceur, par chemin relatif à `packages/sandbox`. */
   launcher: Readonly<Record<string, string>>;
   sessions: readonly RecordedSession[];
@@ -205,6 +277,7 @@ export function buildRecord(parts: RecordParts): StepRecord {
     ...(parts.admission_sha256 ? { admission_sha256: parts.admission_sha256 } : {}),
     inputs: digests(parts.inputs),
     ...(parts.tickets ? { tickets: parts.tickets } : {}),
+    ...(parts.claims ? { claims: parts.claims } : {}),
     launcher: digests(parts.launcher),
     sessions: parts.sessions.map((session) => ({
       role: session.role,

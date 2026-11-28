@@ -8,6 +8,7 @@ export type GatewayErrorCode =
   | 'UNKNOWN_TASK'
   | 'FORBIDDEN_CALL'
   | 'FORBIDDEN_WRITE'
+  | 'FORBIDDEN_READ'
   | 'DEPTH_EXCEEDED'
   | 'DEADLINE_EXCEEDED'
   | 'MAX_CALLS_EXCEEDED'

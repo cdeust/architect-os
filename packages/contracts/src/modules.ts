@@ -54,6 +54,8 @@ export const ModuleManifestSchema = z
     /** none, or the domains it may reach; any egress writes to quarantine. */
     egress: z.union([z.literal('none'), z.array(z.string().min(1)).min(1)]),
     writes_tables: z.array(TableNameSchema),
+    /** The tables its data operations may read, as DATA_OPS declares them (`reads`); checked by the gateway at each one. */
+    reads_tables: z.array(TableNameSchema),
     reads_domains: z.array(z.string().min(1)),
     calls_allowed: z.array(ModuleNameSchema),
     /** The deadline of a call to it: the shortest of this and the deadline of its parent wins. */

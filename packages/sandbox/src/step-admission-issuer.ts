@@ -1,5 +1,5 @@
 // L'émetteur de production du reçu d'admission de Step (docs/design/orchestration-fable-5-2.md, §15, décision 7 ;
-// journal, §123). Il atteste ce que `requireStepAdmission` revalidera : le Plan approuvé, les octets du dossier de
+// journal, §125). Il atteste ce que `requireStepAdmission` revalidera : le Plan approuvé, les octets du dossier de
 // l'étape, l'arbre propre du worktree, les octets du lanceur, les deux revues indépendantes et les spécimens de chaque
 // rôle. Il est distinct de ses consommateurs : seul l'adaptateur d'émission de Plan l'importe (règle
 // `step-admission-issuer-only-from-the-issuing-host` de `.dependency-cruiser.cjs`) ; `npm run step` ne l'appelle
@@ -238,7 +238,7 @@ function writeNew(path: string, text: string): void {
 /**
  * Scelle un reçu : la charge est lue par le schéma même que Step applique, et l'empreinte approuvée est prise sur ce que
  * Step relira. Le reçu n'est pas signé : seul ce module le scelle, et les profils srt refusent aux sessions le
- * répertoire d'autorité (journal, §123).
+ * répertoire d'autorité (journal, §125).
  */
 function seal(value: unknown): StepAdmissionAuthority {
   const sealed = parseStepAdmissionPayload(value);

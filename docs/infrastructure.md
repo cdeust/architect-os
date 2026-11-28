@@ -15,7 +15,7 @@ Rule: no secret ever enters a worker. The worker is given `ANTHROPIC_BASE_URL` p
   - `0002_memory.sql`: `CREATE EXTENSION vector`, schema `memory`, table `memory.memories` with `embedding vector(384)` and an HNSW cosine index. The dimension must equal `EMBEDDING_DIMENSION` in `packages/contracts/src/data-ops.ts`, which rejects any other length at the API.
   - `0003_runs_immutable.sql`: a trigger refuses any update of a completed run (SQLSTATE 55000, reported as `INVALID_OPERATION`).
 - Never edit an applied migration: add a new numbered file.
-- Operations: `data/sql/<op>.sql`, listed in `data/sql/operations.json` with their parameters (the SQL of each writes exactly the tables its operation declares in `DATA_OPS.writes`), the SQLSTATEs that mean a named failure (23503 unknown run: `NOT_FOUND`; 55000: `INVALID_OPERATION`) and the shape of the answer. The data image ships `sql/` and `migrations/` (the root Dockerfile copies `data/`).
+- Operations: `data/sql/<op>.sql`, listed in `data/sql/operations.json` with their parameters (the SQL of each writes exactly the tables its operation declares in `DATA_OPS.writes`, and reads exactly those of `DATA_OPS.reads`), the SQLSTATEs that mean a named failure (23503, an unknown run or Step: `NOT_FOUND`; 23505, a row already there, such as a Step reserved twice or an artifact recorded twice: `INVALID_OPERATION`; 55000, a change refused by a trigger: `INVALID_OPERATION`) and the shape of the answer. The data image ships `sql/` and `migrations/` (the root Dockerfile copies `data/`).
 - Without `DATABASE_URL`, `data` starts with the in-memory store (non-persistent, development only).
 
 ## CI

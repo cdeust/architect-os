@@ -1,4 +1,4 @@
-// Ce que Plan apporte au reçu d'admission de Step (journal, §123) : le manifeste re-dérivé des trois sources, son
+// Ce que Plan apporte au reçu d'admission de Step (journal, §125) : le manifeste re-dérivé des trois sources, son
 // approbation, et les deux revues indépendantes d'un Plan revu. Le reste (dossier, arbre, lanceur, spécimens) est
 // vérifié par l'émetteur de `@architect-os/sandbox`.
 import { parsePlanApproval } from '@architect-os/contracts';

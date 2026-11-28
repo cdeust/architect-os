@@ -1,5 +1,5 @@
 Feature: npm run admit issues the Step admission receipt only for an approved, independently reviewed Plan
-  The issuing entry (journal, §123) re-derives the manifest from the three sources, requires a reviewed Plan, the
+  The issuing entry (journal, §125) re-derives the manifest from the three sources, requires a reviewed Plan, the
   operator's decision on that exact preview and a specimen proof, keeps the Step folder outside every checkout, then
   hands the evidence to the issuer of the sandbox package, which verifies the folder, the tree, the launcher and the
   specimens before writing anything.

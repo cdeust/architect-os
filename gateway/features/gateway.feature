@@ -2,7 +2,7 @@ Feature: the gateway routes the calls of a task to its modules, within the bound
   A client opens a task under its profile; the profile fixes its deadline, its number of calls and its depth. Each call
   of a module gets an opaque call identifier, tied to its task, its caller, its depth and its deadline (the shortest of
   the deadline of its parent and the timeout_ms of the module), invalidated at its return. A module calls back with it,
-  to a module of its calls_allowed or to a data operation whose tables are in its writes_tables: the gateway takes the
+  to a module of its calls_allowed or to a data operation whose tables are in its writes_tables and reads_tables: the gateway takes the
   task and the caller from the identifier, never from an argument. A bound reached, or the cancellation by the owner,
   ends the task: its calls in flight are cancelled and their identifiers invalidated, its token retired, its sandboxes
   stopped and its end written to the registry; nothing of it is routed afterwards, verify included. Every call and every
@@ -64,6 +64,7 @@ Feature: the gateway routes the calls of a task to its modules, within the bound
       | a tool of no module                | no module behaviour                                                                          | judge.vote    | UNKNOWN_TOOL    | no module serves judge.vote         | task-1 client judge.vote UNKNOWN_TOOL                                                 |
       | a module outside its calls_allowed | the module "judge" calls back "memory.remember" with '{}' before it answers                  | judge.grade   | FORBIDDEN_CALL  | judge may not call memory-write     | task-1 judge memory.remember FORBIDDEN_CALL, task-1 client judge.grade FORBIDDEN_CALL |
       | a table outside its writes_tables  | the module "judge" calls back the data operation "memory.insert" with '{}' before it answers | judge.grade   | FORBIDDEN_WRITE | judge may not write memory.memories | task-1 judge memory.insert FORBIDDEN_WRITE, task-1 client judge.grade FORBIDDEN_WRITE |
+      | a table it may not read            | the module "judge" calls back the data operation "runs.get" with '{}' before it answers      | judge.grade   | FORBIDDEN_READ  | judge may not read runs             | task-1 judge runs.get FORBIDDEN_READ, task-1 client judge.grade FORBIDDEN_READ        |
       | a data operation that is not one   | the module "judge" calls back the data operation "sql" with '{}' before it answers           | judge.grade   | UNKNOWN_TOOL    | no data operation sql               | task-1 judge sql UNKNOWN_TOOL, task-1 client judge.grade UNKNOWN_TOOL                 |
 
   Scenario: a call beyond the depth of the profile is refused and logged

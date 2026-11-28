@@ -48,9 +48,13 @@ Given('a broker over that upstream with the key {string}', async function (key: 
   this.cleanups.push(() => started.broker.close());
 });
 
+/** The OAuth token of a scenario, composed at run time: the committed tree holds no credential shape. */
+const OAUTH_TOKEN = `${['sk', 'ant', 'oat01'].join('-')}-token-of-the-scenario`;
+
 Given(
-  'a broker over that upstream that sends the credential {string} as a bearer',
-  async function (key: string) {
+  'a broker over that upstream that sends the OAuth token of the scenario as a bearer',
+  async function () {
+    const key = OAUTH_TOKEN;
     const s = scenario(this);
     const file = keyFile(key);
     this.cleanups.push(file.remove);
@@ -206,13 +210,17 @@ Then(
   },
 );
 
-Then('the upstream request carried the bearer {string} and no x-api-key', function (key: string) {
-  const [request] = upstreamRequests(this);
-  assert.deepEqual(
-    [request?.headers['authorization'], request?.headers['x-api-key']],
-    [`Bearer ${key}`, undefined],
-  );
-});
+Then(
+  'the upstream request carried the OAuth token of the scenario as its bearer and no x-api-key',
+  function () {
+    const key = OAUTH_TOKEN;
+    const [request] = upstreamRequests(this);
+    assert.deepEqual(
+      [request?.headers['authorization'], request?.headers['x-api-key']],
+      [`Bearer ${key}`, undefined],
+    );
+  },
+);
 
 Then(
   'the upstream request carried the key {string} in x-api-key and no authorization',

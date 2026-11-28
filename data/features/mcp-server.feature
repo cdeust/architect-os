@@ -96,7 +96,7 @@ Feature: Data MCP server (docs/design/platform-v3-srt.md, brick 1b.3)
     And the client calls "usage.append" with '{"at":"2026-11-05T10:00:01.000Z","layer":"broker","task":"t1","status":200,"model":"m1","input_tokens":6}'
     And the client calls "usage.aggregate" with '{"task":"t1"}'
     Then the MCP answer matches '[{"task":"t1","layer":"broker","model":"m1","requests":2,"input_tokens":10}]'
-    And the data process wrote "data: migrations applied: [0001_runs.sql, 0002_memory.sql, 0003_runs_immutable.sql, 0004_usage_records.sql, 0005_tasks.sql]" on its stderr
+    And the data process wrote "data: migrations applied: [0001_runs.sql, 0002_memory.sql, 0003_runs_immutable.sql, 0004_usage_records.sql, 0005_tasks.sql, 0006_steps.sql, 0007_run_events_sequence.sql]" on its stderr
     When the stdin of the data process ends
     Then the data process ends with 0
     And no connection of the data process to the database of the scenario is left

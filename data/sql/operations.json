@@ -96,6 +96,30 @@
       "file": "tasks.get.sql",
       "params": ["task"],
       "returns": "row"
+    },
+    {
+      "op": "steps.reserve",
+      "file": "steps.reserve.sql",
+      "params": ["run", "step"],
+      "returns": "row"
+    },
+    {
+      "op": "steps.appendEvent",
+      "file": "steps.append-event.sql",
+      "params": ["run", "step", "type", "phase"],
+      "returns": "row"
+    },
+    {
+      "op": "steps.recordArtifact",
+      "file": "steps.record-artifact.sql",
+      "params": ["run", "step", "kind", "name", "bytes"],
+      "returns": "row"
+    },
+    {
+      "op": "steps.get",
+      "file": "steps.get.sql",
+      "params": ["run", "step"],
+      "returns": "value"
     }
   ]
 }

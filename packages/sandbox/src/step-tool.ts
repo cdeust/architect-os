@@ -33,8 +33,10 @@ import {
 import { buildSbxStep } from './sbx-step.js';
 import { ClaudeBuilder, type Builder, type StepSession, type ToolFile } from './builder.js';
 import { measureSession, type SessionMeasure } from './measure.js';
+import { claimLine, claimsBlock, parseClaims, renderClaims, type GivenClaim } from './build-claims.js';
 import {
   blocks,
+  claimsRefusal,
   criteriaRefusal,
   parseReviewVerdict,
   renderAcceptance,
@@ -49,10 +51,19 @@ import {
   observedTokens,
   buildRecord,
   isStepName,
+  sha256,
   stepRecordSchema,
   type RecordedSession,
 } from './step-record.js';
-import { reserveStepOutputs, type StepOutputs } from './step-outputs.js';
+import { fileStepStore } from './step-store-file.js';
+import {
+  artifactFile,
+  StepStoreError,
+  type StepArtifactKind,
+  type StepRecorder,
+  type StepStore,
+} from './step-store.js';
+import { findCredential } from './credential-shapes.js';
 import { stepsFolder, type StepsFolder } from './steps-folder.js';
 import { parseTool } from './tool.js';
 import {
@@ -76,9 +87,13 @@ export interface StepDependencies {
   readonly readFile: (path: string) => string | undefined;
   /** Le texte d'un fichier du worktree où l'étape tourne, `undefined` s'il n'en est pas un (fichier ordinaire dans ce worktree). */
   readonly readSource: (path: string) => string | undefined;
+  /** Crée un fichier des flux bruts, qui ne sont pas de l'état de l'étape. */
   readonly writeFile: (path: string, content: string) => void;
-  readonly reserveOutputs: (name: string, intake: string, worktree: string) => StepOutputs;
   readonly appendFile: (path: string, content: Uint8Array) => void;
+  /** L'état retenu de l'étape : tout ce qu'elle garde passe par lui (docs/design/orchestration-fable-5-2.md, §15, A). */
+  readonly store: StepStore;
+  /** Le répertoire des flux bruts d'une étape réservée dans `store`. */
+  readonly streams: (name: string) => string;
   readonly session: StepSession;
   readonly builder: Builder;
   readonly check: StepCheck;
@@ -156,10 +171,52 @@ export function readStepFolder(
     if (question === undefined || question.trim() === '') throw new Refusal(`${file} absent ou vide`);
     return question;
   });
+  // Un texte de l'étape qui porte une forme de secret est refusé avant toute session : aucune ne sera payée pour une
+  // étape que le port refuserait de garder (docs/design/orchestration-fable-5-2.md, §15, A).
+  const texts: [string, string][] = [
+    ['step.json', raw],
+    ['brief.md', brief],
+    ...step.scouts.map(({ name }, index): [string, string] => [
+      `scout.${name}.md`,
+      questions[index] as string,
+    ]),
+  ];
+  for (const [file, text] of texts) {
+    const shape = findCredential(text);
+    if (shape !== undefined) throw new Refusal(`STEP_INPUT_CREDENTIAL: ${file} contient la forme ${shape}`);
+  }
   return { step, raw, brief, questions };
 }
 
 type PlayedSession = Awaited<ReturnType<StepSession>> & { measure: SessionMeasure };
+
+/** Où une étape écrit : son état par le port, ses flux bruts dans leur répertoire. */
+interface StepOutputs {
+  state: StepRecorder;
+  streams: string;
+}
+
+/**
+ * Garde un artefact par le port. Un artefact que le port refuse (taille, forme de secret, schéma) n'est pas perdu : son
+ * texte est écrit, tel quel, dans un fichier privé des flux bruts du run, `<fichier>.refused`, puis le refus remonte et
+ * l'étape s'arrête en 2 sans rien publier. Une erreur du système de fichiers n'est pas un refus du port : elle remonte
+ * seule.
+ */
+function retain(
+  deps: StepDependencies,
+  outputs: StepOutputs,
+  kind: StepArtifactKind,
+  name: string | undefined,
+  text: string,
+): void {
+  try {
+    outputs.state.record(kind, name, text);
+  } catch (error) {
+    if (error instanceof StepStoreError)
+      deps.writeFile(join(outputs.streams, `${artifactFile(kind, name)}.refused`), text);
+    throw error;
+  }
+}
 
 /** Le résultat structuré ne peut servir qu'après la réussite du processus et du flux. */
 function sessionSucceeded(session: PlayedSession): boolean {
@@ -170,13 +227,13 @@ function sessionSucceeded(session: PlayedSession): boolean {
 async function play(
   deps: StepDependencies,
   outputs: StepOutputs,
-  prefix: string,
+  session: { role: 'scout' | 'review'; name: string },
   tool: ToolFile,
   config: StepSessionConfig,
   extra: readonly string[],
   brief: string,
 ): Promise<PlayedSession> {
-  const streamFile = join(outputs.streams, `${prefix}.stream.jsonl`);
+  const streamFile = join(outputs.streams, `${session.role}.${session.name}.stream.jsonl`);
   deps.writeFile(streamFile, '');
   const chunks: Buffer[] = [];
   const argv = [...SESSION_ARGUMENTS, '--model', config.model, '--effort', config.effort, ...extra];
@@ -189,7 +246,7 @@ async function play(
     structuredOutput: _structured,
     ...measure
   } = measureSession(Buffer.concat(chunks).toString());
-  deps.writeFile(join(outputs.retained, `${prefix}.measure.json`), json({ ...measure, exitCode, stopped }));
+  retain(deps, outputs, `${session.role}.measure`, session.name, json({ ...measure, exitCode, stopped }));
   return { measure: { ...measure, report, structuredOutput: _structured }, exitCode, stopped };
 }
 
@@ -208,8 +265,11 @@ async function playCheck(
   const outcome = await deps.check(config.command, config.limitSeconds);
   const durationSeconds = Math.round((deps.now() - before) / 1000);
   const { exitCode, stopped, cut, output } = outcome;
-  deps.writeFile(
-    join(outputs.retained, `check.${config.name}.json`),
+  retain(
+    deps,
+    outputs,
+    'check',
+    config.name,
     json({ command: config.command, exitCode, stopped, durationSeconds, cut, output }),
   );
   return { name: config.name, command: config.command, exitCode, stopped, durationSeconds, cut, output };
@@ -230,22 +290,21 @@ async function review(
   outputs: StepOutputs,
   config: ReviewConfig,
   brief: string,
-  acceptance: readonly string[],
+  expected: Expected,
 ): Promise<ReviewOutcome> {
-  const prefix = `review.${config.name}`;
   const session = await play(
     deps,
     outputs,
-    prefix,
+    { role: 'review', name: config.name },
     'review.json',
     config,
     ['--json-schema', verdictSchema()],
     brief,
   );
   const verdict = sessionSucceeded(session)
-    ? verdictOf(session.measure.structuredOutput, acceptance, deps.readSource)
+    ? verdictOf(session.measure.structuredOutput, expected, deps.readSource)
     : invalid('la session n’a pas abouti');
-  deps.writeFile(join(outputs.retained, `${prefix}.verdict.json`), json(verdict.file));
+  retain(deps, outputs, 'review.verdict', config.name, json(verdict.file));
   return { config, verdict, ...session };
 }
 
@@ -296,11 +355,10 @@ async function scout(
   config: ScoutConfig,
   question: string,
 ): Promise<ScoutOutcome> {
-  const prefix = `scout.${config.name}`;
   const session = await play(
     deps,
     outputs,
-    prefix,
+    { role: 'scout', name: config.name },
     'scout.json',
     config,
     ['--json-schema', factsJsonSchema()],
@@ -309,7 +367,7 @@ async function scout(
   const completed = sessionSucceeded(session);
   const none = { config, ...session, completed, verified: [], rejected: 0, open: 0 };
   const writeInvalid = (why: string): ScoutOutcome => {
-    deps.writeFile(join(outputs.retained, `${prefix}.facts.json`), json({ invalid: why }));
+    retain(deps, outputs, 'scout.facts', config.name, json({ invalid: why }));
     return none;
   };
   if (!completed) return writeInvalid('la session n’a pas abouti');
@@ -319,10 +377,7 @@ async function scout(
   const parsed = factsSchemaResult(session.measure.structuredOutput);
   if (typeof parsed === 'string') return writeInvalid(parsed);
   const { verified, rejected } = verifyFacts(parsed.facts, deps.readSource);
-  deps.writeFile(
-    join(outputs.retained, `${prefix}.facts.json`),
-    json({ verified, rejected, open: parsed.open }),
-  );
+  retain(deps, outputs, 'scout.facts', config.name, json({ verified, rejected, open: parsed.open }));
   return {
     config,
     ...session,
@@ -342,10 +397,16 @@ function factsSchemaResult(output: unknown): ReturnType<typeof parseFacts> | str
   }
 }
 
+/** Ce que chaque verdict doit couvrir : les critères de l'étape, et les écarts que la construction a déclarés. */
+interface Expected {
+  readonly acceptance: readonly string[];
+  readonly claims: readonly string[];
+}
+
 /** Le verdict de la revue, ou ce qui l'invalide. */
 function verdictOf(
   output: unknown,
-  acceptance: readonly string[],
+  expected: Expected,
   read: (path: string) => string | undefined,
 ): {
   file: unknown;
@@ -353,6 +414,7 @@ function verdictOf(
   blocks: boolean;
   findings: number;
   criteria: { id: string; status: 'met' | 'unmet' | 'not_established' }[];
+  claims: { id: string; status: 'verified' | 'refuted' | 'not_checked' }[];
 } {
   if (output === undefined) return invalid('la session n’a donné aucune sortie structurée');
   let verdict: ReturnType<typeof parseReviewVerdict>;
@@ -362,7 +424,8 @@ function verdictOf(
     return invalid(issues(error as z.ZodError));
   }
   // Un verdict qui ne rend pas exactement les critères de l'étape, ou qui cite une preuve absente, est invalide.
-  const refused = criteriaRefusal(verdict, acceptance, read);
+  const refused =
+    criteriaRefusal(verdict, expected.acceptance, read) ?? claimsRefusal(verdict, expected.claims, read);
   if (refused !== undefined) return invalid(refused);
   return {
     file: verdict,
@@ -370,11 +433,33 @@ function verdictOf(
     blocks: blocks(verdict),
     findings: verdict.findings.length,
     criteria: verdict.criteria.map(({ id, status }) => ({ id, status })),
+    claims: verdict.claims.map(({ id, status }) => ({ id, status })),
   };
 }
 // Une déclaration, et non une fonction fléchée au niveau du module : un mutant statique rejoue toute la suite.
 function invalid(why: string) {
-  return { file: { invalid: why }, verdict: 'invalid' as const, blocks: true, findings: 0, criteria: [] };
+  return {
+    file: { invalid: why },
+    verdict: 'invalid' as const,
+    blocks: true,
+    findings: 0,
+    criteria: [],
+    claims: [],
+  };
+}
+
+/** Les écarts déclarés dans le rapport de la construction : aucun bloc, un bloc refusé, ou les revendications validées. */
+type Claims =
+  { state: 'absent' } | { state: 'invalid'; reason: string } | { state: 'valid'; claims: GivenClaim[] };
+
+function claimsOf(report: string): Claims {
+  const block = claimsBlock(report);
+  if (block.state !== 'found') return block;
+  try {
+    return { state: 'valid', claims: parseClaims(block.raw) };
+  } catch (error) {
+    return { state: 'invalid', reason: issues(error as z.ZodError) };
+  }
 }
 
 /**
@@ -464,7 +549,8 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       throw new Refusal('STEP_ADMISSION_REQUIRED');
     }
     deps.steps.prepare();
-    const outputs = deps.reserveOutputs(name, folder, worktree);
+    const state = deps.store.reserve(name, { intake: folder, worktree });
+    const outputs: StepOutputs = { state, streams: deps.streams(name) };
     const scoutOutcomes = await playBounded(step.scouts, step.parallel, (config, index) =>
       scout(deps, outputs, config, questions[index] as string),
     );
@@ -487,7 +573,7 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       brief,
       scoutOutcomes.flatMap(({ verified }) => verified),
     );
-    deps.writeFile(join(outputs.retained, 'build.brief.md'), forBuild);
+    retain(deps, outputs, 'build.brief', undefined, forBuild);
     const definition = parseTool(JSON.parse(launcher['code.json']!));
     const stream = join(outputs.streams, 'build.stream.jsonl');
     deps.writeFile(stream, '');
@@ -501,8 +587,11 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     });
     if (build.provider !== (step.build.provider ?? 'anthropic')) throw Error('BUILDER_PROVIDER');
     const { report, structuredOutput: _structured, ...metrics } = build.measure;
-    deps.writeFile(
-      join(outputs.retained, 'build.measure.json'),
+    retain(
+      deps,
+      outputs,
+      'build.measure',
+      undefined,
       json({
         ...metrics,
         costUsd: build.provider === 'openai' ? null : metrics.costUsd,
@@ -510,8 +599,21 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         stopped: build.stopped,
       }),
     );
-    deps.writeFile(join(outputs.retained, 'build.report.md'), report);
+    retain(deps, outputs, 'build.report', undefined, report);
     const built = sessionSucceeded(build);
+    // Le rapport d'une session qui n'a pas abouti ne donne rien ; un bloc invalide ne donne aucune revendication.
+    const claims: Claims = built ? claimsOf(report) : { state: 'absent' };
+    if (claims.state !== 'absent')
+      retain(
+        deps,
+        outputs,
+        'build.claims',
+        undefined,
+        json(claims.state === 'invalid' ? { invalid: claims.reason } : { claims: claims.claims }),
+      );
+    const given = claims.state === 'valid' ? claims.claims : [];
+    // Des écarts déclarés qu'aucune revue ne vérifierait : l'étape ne passe pas, et le dit.
+    const unreviewed = given.length > 0 && step.reviews.length === 0;
     // Les contrôles, l'un après l'autre ; le premier qui ne passe pas met fin à la phase.
     const played: CheckReport[] = [];
     if (built) {
@@ -524,14 +626,18 @@ export async function runStep(deps: StepDependencies): Promise<number> {
     const checked = played.every(passed);
     const appended = [
       ...(step.acceptance ? [renderAcceptance(step.acceptance)] : []),
+      ...(given.length > 0 ? [renderClaims(given)] : []),
       ...(played.length > 0 ? [renderChecks(played, outputBound())] : []),
     ];
     const forReviews = appended.length === 0 ? brief : `${brief.trimEnd()}\n\n${appended.join('\n')}`;
-    if (built && checked) deps.writeFile(join(outputs.retained, 'review.brief.md'), forReviews);
+    if (built && checked) retain(deps, outputs, 'review.brief', undefined, forReviews);
     const outcomes =
       built && checked
         ? await playBounded(step.reviews, step.parallel, (config) =>
-            review(deps, outputs, config, forReviews, step.acceptance ?? []),
+            review(deps, outputs, config, forReviews, {
+              acceptance: step.acceptance ?? [],
+              claims: given.map(({ id }) => id),
+            }),
           )
         : [];
     const checks = Object.fromEntries(
@@ -571,6 +677,15 @@ export async function runStep(deps: StepDependencies): Promise<number> {
       tree,
       inputs,
       tickets: step.tickets,
+      // Ni le texte ni la raison d'un refus : l'identifiant de chaque revendication et l'empreinte de la ligne citée.
+      ...(claims.state === 'absent'
+        ? {}
+        : {
+            claims: {
+              valid: claims.state === 'valid',
+              given: given.map((claim) => ({ id: claim.id, sha256: sha256(claimLine(claim)) })),
+            },
+          }),
       launcher,
       sessions: [
         ...scoutOutcomes.map((scout) => recorded('scout', scout.config, scout, scout.config.name)),
@@ -601,8 +716,12 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         verdict: verdict.verdict,
         findings: verdict.findings,
         ...(verdict.criteria.length > 0 ? { criteria: verdict.criteria } : {}),
+        ...(verdict.claims.length > 0 ? { claims: verdict.claims } : {}),
       })),
-      outcome: built && checked && !outcomes.some(({ verdict }) => verdict.blocks) ? 'passed' : 'refused',
+      outcome:
+        built && checked && !unreviewed && !outcomes.some(({ verdict }) => verdict.blocks)
+          ? 'passed'
+          : 'refused',
     });
     // Relu par son propre schéma : ce que la porte refuserait n'entre pas dans le worktree.
     deps.steps.publish(name, { ...inputs, 'record.json': json(stepRecordSchema().parse(record)) });
@@ -626,7 +745,9 @@ export async function runStep(deps: StepDependencies): Promise<number> {
         build.provider === 'openai' ? null : measures.reduce((sum, measure) => sum + measure.costUsd, 0),
       costByModel: sumByModel(measures.map((measure) => measure.costByModel)),
       record: `steps/${name}/record.json`,
+      ...(unreviewed ? { refusal: 'STEP_CLAIMS_UNREVIEWED' } : {}),
     };
+    if (unreviewed) deps.stderr.write('architect-os step: STEP_CLAIMS_UNREVIEWED\n');
     deps.stdout.write(`${JSON.stringify(summary)}\n`);
     return record.outcome === 'passed' ? 0 : 1;
   } catch (error) {
@@ -777,11 +898,13 @@ export function stepDependencies(proc: CodeProcess, buildSubscription = buildSbx
     return snapshot.dir;
   }
   const launch = codeToolSession((tool) => processDependencies(proc, isatty, tool, admittedRoot()));
+  const store = fileStepStore(proc.env);
   return {
     folderArguments: proc.argv.slice(2),
     readFile: readStepFolderFile,
     readSource: sourceReader(cwd),
-    reserveOutputs: (name, intake, worktree) => reserveStepOutputs(proc.env, name, intake, worktree),
+    store,
+    streams: (name) => store.streams(name),
     writeFile: (path, content) => writeFileSync(path, content, { flag: 'wx', mode: 0o600 }),
     appendFile: (path, content) => {
       const descriptor = openSync(path, constants.O_APPEND | constants.O_WRONLY | constants.O_NOFOLLOW);

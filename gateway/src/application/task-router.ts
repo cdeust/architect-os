@@ -183,7 +183,10 @@ export class TaskRouter {
     );
   }
 
-  /** A data operation of a module that calls back: refused when it writes a table outside its writes_tables. */
+  /**
+   * A data operation of a module that calls back: refused when it writes a table outside its writes_tables, or reads a
+   * table outside its reads_tables.
+   */
   async operate(call: string, op: string, args: Record<string, unknown>): Promise<ServiceResponse> {
     const origin = this.origin({ call });
     return this.journal(origin.task?.task, origin.subject, op, async () => {
@@ -194,6 +197,10 @@ export class TaskRouter {
       const outside = writes.filter((table) => !from.module.writes_tables.includes(table));
       if (outside.length > 0)
         throw new GatewayError('FORBIDDEN_WRITE', `${from.module.name} may not write ${String(outside)}`);
+      const reads: readonly string[] = DATA_OPS[op as DataOpName].reads;
+      const unread = reads.filter((table) => !from.module.reads_tables.includes(table));
+      if (unread.length > 0)
+        throw new GatewayError('FORBIDDEN_READ', `${from.module.name} may not read ${String(unread)}`);
       return this.data.execute(op as DataOpName, args);
     });
   }

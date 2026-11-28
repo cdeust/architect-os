@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { migrate } from '../../src/infrastructure/migrate.js';
+import { connectPostgres } from '../../src/infrastructure/pg-pool.js';
 import { DATA_OP_NAMES, DATA_OPS } from '@architect-os/contracts';
 import {
   loadStatementTable,
   SqlDataStore,
+  knownTables,
+  readTables,
+  SqlSourceError,
   writtenTables,
   type SqlExecutor,
 } from '../../src/infrastructure/sql-store.js';
@@ -30,6 +34,10 @@ const REWRITES: Record<string, (source: string) => string> = {
   'replace the content by an opening brace': () => '{',
   'append a delete of the runs': (source) => `${source};\nDELETE FROM runs WHERE false`,
   'insert into runs instead': (source) => source.replace('INSERT INTO usage_records', 'INSERT INTO runs'),
+  'read the runs and the tasks by a comma': (source) =>
+    source.replace('FROM runs WHERE', 'FROM runs, tasks WHERE'),
+  'select from the tasks too': (source) => `${source};\nSELECT 1 FROM tasks`,
+  'return nothing': (source) => source.replace(/RETURNING[\s\S]*/, ''),
   'select the 12 parameters instead': () =>
     `SELECT ${Array.from({ length: 12 }, (_, i) => `$${i + 1}`).join(', ')} AS id`,
 };
@@ -83,6 +91,10 @@ Then('loading the statement table from the copy fails', function () {
 
 Then('the statement {string} writes {string}', function (statement: string, tables: string) {
   assert.equal(writtenTables(statement.replaceAll('\\n', '\n')).join(', '), tables);
+});
+
+Then('the statement {string} reads {string}', function (statement: string, tables: string) {
+  assert.equal(readTables(statement.replaceAll('\\n', '\n'), knownTables(), 'x.sql').join(', '), tables);
 });
 
 Then('only the operation {string} writes the table {string}', function (op: string, table: string) {
@@ -188,4 +200,128 @@ Then('the migration statements include {string}', function (fragment: string) {
     statements.some((s) => s.includes(fragment)),
     true,
   );
+});
+
+When(
+  'a first append to the Step {string} of the run {string} holds its transaction open while a second one arrives',
+  async function (step: string, run: string) {
+    const connection = this.state['connection'] as SqlExecutor | undefined;
+    assert.ok(connection, 'the postgres data store must be given first');
+    const append = loadStatementTable(SQL_DIR).statements.find((s) => s.op === 'steps.appendEvent')!;
+    const store = scenario(this).store;
+    let second: Promise<unknown> | undefined;
+    const first = await connection.transaction(async (tx) => {
+      const { rows } = await tx.query(append.text, [run, step, 'phase.started', 'scouts']);
+      second = store.execute('steps.appendEvent', { run, step, type: 'phase.ended', phase: 'scouts' });
+      // The second append is on another connection of the pool: it is waiting for a lock before this one commits.
+      for (let waited = 0; ; waited += 1) {
+        const { rows: waiting } = await connection.query(
+          "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'",
+          [],
+        );
+        if ((waiting[0] as { n: number }).n > 0) break;
+        assert.ok(waited < 500, 'the second append never waited for the first');
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      return rows[0];
+    });
+    this.state['appends'] = [first, await second];
+  },
+);
+
+Then('both appends succeeded, numbered {int} and {int} in their order', function (a: number, b: number) {
+  const [first, second] = this.state['appends'] as { seq: number; type: string }[];
+  assert.deepEqual(
+    [first, second].map((event) => [event!.seq, event!.type]),
+    [
+      [a, 'phase.started'],
+      [b, 'phase.ended'],
+    ],
+  );
+});
+
+Then(
+  'the statement {string} is refused as unreadable, saying {string}',
+  function (statement: string, why: string) {
+    assert.throws(
+      () => readTables(statement.replaceAll('\\n', '\n'), knownTables(), 'x.sql'),
+      (error: unknown) =>
+        error instanceof SqlSourceError &&
+        error.name === 'SqlSourceError' &&
+        error.code === 'SQL_SOURCES_UNREADABLE' &&
+        error.message === `x.sql: SQL_SOURCES_UNREADABLE: ${why}`,
+    );
+  },
+);
+
+When(
+  'a first append to the run kept as {string} holds its transaction open while a second one arrives',
+  async function (name: string) {
+    const connection = this.state['connection'] as SqlExecutor | undefined;
+    assert.ok(connection, 'the postgres data store must be given first');
+    const data = scenario(this);
+    const run = data.vars[name]!;
+    const append = loadStatementTable(SQL_DIR).statements.find((s) => s.op === 'runs.appendEvent')!;
+    let second: Promise<unknown> | undefined;
+    const first = await connection.transaction(async (tx) => {
+      const { rows } = await tx.query(append.text, [run, 'run.created', '{}']);
+      second = data.store.execute('runs.appendEvent', { run_id: run, type: 'worker.started', payload: {} });
+      // The second append is on another connection of the pool: it is waiting for a lock before this one commits.
+      for (let waited = 0; ; waited += 1) {
+        const { rows: waiting } = await connection.query(
+          "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'",
+          [],
+        );
+        if ((waiting[0] as { n: number }).n > 0) break;
+        assert.ok(waited < 500, 'the second append never waited for the first');
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      return rows[0];
+    });
+    this.state['run appends'] = [first, await second];
+  },
+);
+
+Then('both run appends succeeded, numbered {int} and {int} in their order', function (a: number, b: number) {
+  const [first, second] = this.state['run appends'] as { seq: number; type: string }[];
+  assert.deepEqual(
+    [first, second].map((event) => [event!.seq, event!.type]),
+    [
+      [a, 'run.created'],
+      [b, 'worker.started'],
+    ],
+  );
+});
+
+Given(
+  'the postgres data store migrated up to {string} with a completed run of {int} events',
+  async function (last: string, events: number) {
+    assert.notEqual(this.databaseUrl, '', 'the @postgres hook must have created a database');
+    const connection = connectPostgres(this.databaseUrl);
+    this.cleanups.push(() => connection.end());
+    const dir = mkdtempSync(join(tmpdir(), 'migrations-'));
+    this.cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+    for (const file of readdirSync(MIGRATIONS_DIR).filter((name) => name <= last))
+      cpSync(join(MIGRATIONS_DIR, file), join(dir, file));
+    await migrate(connection, dir);
+    const { rows } = await connection.query(
+      "INSERT INTO runs (service, tool, input, status) VALUES ('s', 't', '{}', 'running') RETURNING id",
+      [],
+    );
+    const run = String(rows[0]!['id']);
+    for (let seq = 0; seq < events; seq += 1)
+      await connection.query("INSERT INTO run_events (run_id, seq, type) VALUES ($1, $2, 'run.created')", [
+        run,
+        seq,
+      ]);
+    await connection.query("UPDATE runs SET status = 'ok', completed_at = now() WHERE id = $1", [run]);
+    this.state['connection'] = connection;
+    scenario(this).vars['run'] = run;
+  },
+);
+
+When('the remaining migrations are applied', async function () {
+  const connection = this.state['connection'] as SqlExecutor;
+  await migrate(connection, MIGRATIONS_DIR);
+  scenario(this).executor = new SqlDataStore(connection, loadStatementTable(SQL_DIR));
 });

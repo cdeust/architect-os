@@ -59,7 +59,7 @@ export function runPlan(proc: PlanProcess): number {
     return refuse('PLAN_NOT_APPROVED');
   }
   // A reviewed Plan is materialized like any other: the folder starts nothing until `npm run admit` has verified its
-  // specimens and issued the receipt Step requires (journal, §123).
+  // specimens and issued the receipt Step requires (journal, §125).
   try {
     publishStepInputs(folder!, draft.manifest.step, draft.files);
   } catch {
@@ -75,7 +75,7 @@ const ADMIT_USAGE =
   'usage: admit <define> <reviewed-plan> <policy> <decision> <specimens> <step-folder> <worktree>';
 
 /**
- * `npm run admit` : émet le reçu d'admission d'une étape après avoir vérifié ce qu'il atteste (journal, §123). Une
+ * `npm run admit` : émet le reçu d'admission d'une étape après avoir vérifié ce qu'il atteste (journal, §125). Une
  * entrée distincte de `npm run step`, qui ne l'appelle jamais. Code de sortie : 0 (émis), 2 (refus nommé), 3 (erreur
  * inattendue, rien n'est attesté).
  */

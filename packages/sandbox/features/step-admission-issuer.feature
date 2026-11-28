@@ -1,5 +1,5 @@
 Feature: The production issuer writes a Step admission receipt only for what it verified
-  The issuer (journal, §123) attests the approved Plan, the bytes of the Step folder, the clean tree of the linked
+  The issuer (journal, §125) attests the approved Plan, the bytes of the Step folder, the clean tree of the linked
   worktree, the launcher bytes, both independent reviews and a specimen proof for every role. It writes one new private
   file in the host authority directory, never another, and Step revalidates it.
 
