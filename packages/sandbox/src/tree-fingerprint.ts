@@ -27,14 +27,18 @@ function hash(): RegExp {
 }
 
 /**
- * Un appel git, borné dans le temps. Il échoue (message fixe, qui nomme l'appel et ne porte rien de ce que git a
- * imprimé) s'il sort autrement que par 0 (ne pas démarrer ou dépasser sa borne n'est pas sortir par 0).
+ * Un appel git de l'hôte dans `worktree`, borné dans le temps : celui de l'empreinte, et celui du commit d'une passe
+ * (pass-repository.ts), qui n'a pas d'autre lanceur. Il échoue (message fixe, `<what> a échoué : git <appel>`, qui ne
+ * porte rien de ce que git a imprimé) s'il sort autrement que par 0 (ne pas démarrer ou dépasser sa borne n'est pas
+ * sortir par 0).
  */
-function git(
+export function hostGit(
+  what: string,
   worktree: string,
   call: readonly string[],
   environment: Readonly<Record<string, string>>,
   timeoutMs: number,
+  input?: Buffer,
 ): Buffer {
   // Les options et l'environnement de chaque git que l'hôte lance viennent d'un seul module (git-closed.ts) : aucune
   // variable de l'hôte hors de sa liste, aucune configuration de la machine.
@@ -42,11 +46,21 @@ function git(
     cwd: worktree,
     env: environment,
     timeout: timeoutMs,
+    input,
     // Les deux listes d'un arbre entier passent ici : la borne par défaut (1 Mio) arrêterait git avant sa fin.
     maxBuffer: 1 << 30,
   });
-  if (result.status !== 0) throw new Error(`l'empreinte de l'arbre a échoué : git ${call.join(' ')}`);
+  if (result.status !== 0) throw new Error(`${what} a échoué : git ${call.join(' ')}`);
   return result.stdout;
+}
+
+function git(
+  worktree: string,
+  call: readonly string[],
+  environment: Readonly<Record<string, string>>,
+  timeoutMs: number,
+): Buffer {
+  return hostGit("l'empreinte de l'arbre", worktree, call, environment, timeoutMs);
 }
 
 function gitHash(

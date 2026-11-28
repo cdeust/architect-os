@@ -277,7 +277,7 @@ Feature: the checks of a step, played by the host between the build and the revi
       And the step file "review.brief.md" is the same as the step file "brief.md"
       And the step stdout is the line:
       """
-      {"outcome":"passed","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"quality":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
+      {"outcome":"passed","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{},"reviews":{"quality":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.3270908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json","commit":"0000000000000000000000000000000000000001"}
       """
 
     Scenario: a brief with trailing blanks and no check reaches the reviews as it is
@@ -386,7 +386,7 @@ Feature: the checks of a step, played by the host between the build and the revi
       And the step file "build.brief.md" is the brief of the session 1
       And the step stdout is the line:
       """
-      {"outcome":"passed","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{"types":{"exitCode":0,"stopped":false,"durationSeconds":2,"passed":true},"lint":{"exitCode":0,"stopped":false,"durationSeconds":1,"passed":true}},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}},"beta":{"model":"claude-sonnet-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":0,"costUsd":0.125,"costByModel":{"claude-sonnet-5-5":0.125}}},"costUsd":0.9375,"costByModel":{"claude-haiku-4-5":0.0625,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.625},"record":"steps/demo/record.json"}
+      {"outcome":"passed","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{"types":{"exitCode":0,"stopped":false,"durationSeconds":2,"passed":true},"lint":{"exitCode":0,"stopped":false,"durationSeconds":1,"passed":true}},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}},"beta":{"model":"claude-sonnet-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":0,"costUsd":0.125,"costByModel":{"claude-sonnet-5-5":0.125}}},"costUsd":0.9375,"costByModel":{"claude-haiku-4-5":0.0625,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.625},"record":"steps/demo/record.json","commit":"0000000000000000000000000000000000000001"}
       """
 
     Scenario: the brief of the reviews loses its trailing blanks before the block
@@ -434,7 +434,7 @@ Feature: the checks of a step, played by the host between the build and the revi
       And the step file "check.half.json" contains "\"durationSeconds\": 2,"
       And the step stdout is the line:
       """
-      {"outcome":"passed","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{"none":{"exitCode":0,"stopped":false,"durationSeconds":0,"passed":true},"short":{"exitCode":0,"stopped":false,"durationSeconds":1,"passed":true},"half":{"exitCode":0,"stopped":false,"durationSeconds":2,"passed":true}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
+      {"outcome":"passed","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{"none":{"exitCode":0,"stopped":false,"durationSeconds":0,"passed":true},"short":{"exitCode":0,"stopped":false,"durationSeconds":1,"passed":true},"half":{"exitCode":0,"stopped":false,"durationSeconds":2,"passed":true}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json","commit":"0000000000000000000000000000000000000001"}
       """
 
   Rule: the first check that does not pass ends the phase: no other check, no review, exit 1
@@ -456,7 +456,7 @@ Feature: the checks of a step, played by the host between the build and the revi
       And the step stderr is empty
       And the step stdout is the line:
       """
-      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{"types":{"exitCode":1,"stopped":false,"durationSeconds":0,"passed":false}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
+      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{"types":{"exitCode":1,"stopped":false,"durationSeconds":0,"passed":false}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json","commit":"0000000000000000000000000000000000000001"}
       """
 
     Scenario: a check that passes, then one that fails: both are played, no review
@@ -472,7 +472,7 @@ Feature: the checks of a step, played by the host between the build and the revi
       And the step folder has no file "review.brief.md"
       And the step stdout is the line:
       """
-      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{"types":{"exitCode":0,"stopped":false,"durationSeconds":0,"passed":true},"lint":{"exitCode":2,"stopped":false,"durationSeconds":0,"passed":false}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
+      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{"types":{"exitCode":0,"stopped":false,"durationSeconds":0,"passed":true},"lint":{"exitCode":2,"stopped":false,"durationSeconds":0,"passed":false}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json","commit":"0000000000000000000000000000000000000001"}
       """
 
     Scenario: a check stopped at its limit ends the phase
@@ -487,7 +487,7 @@ Feature: the checks of a step, played by the host between the build and the revi
       And the step file "check.types.json" contains "\"stopped\": true,"
       And the step stdout is the line:
       """
-      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{"types":{"exitCode":null,"stopped":true,"durationSeconds":0,"passed":false}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
+      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{"types":{"exitCode":null,"stopped":true,"durationSeconds":0,"passed":false}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json","commit":"0000000000000000000000000000000000000001"}
       """
 
     Scenario: a check that ended on a signal without being stopped ends the phase
@@ -501,7 +501,7 @@ Feature: the checks of a step, played by the host between the build and the revi
       And the sessions started were "code.json"
       And the step stdout is the line:
       """
-      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{"types":{"exitCode":null,"stopped":false,"durationSeconds":0,"passed":false}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json"}
+      {"outcome":"refused","scouts":{},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":2,"turns":9,"durationSeconds":35,"costUsd":0.0770908,"cacheReadPerAnswer":39237,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07}},"checks":{"types":{"exitCode":null,"stopped":false,"durationSeconds":0,"passed":false}},"reviews":{},"costUsd":0.0770908,"costByModel":{"claude-haiku-4-5":0.0070908,"claude-sonnet-5-5":0.07},"record":"steps/demo/record.json","commit":"0000000000000000000000000000000000000001"}
       """
 
     Scenario: a build that did not complete plays no check
@@ -568,5 +568,5 @@ Feature: the checks of a step, played by the host between the build and the revi
       And the step file "review.brief.md" does not contain "Facts found by scouts"
       And the step stdout is the line:
       """
-      {"outcome":"passed","scouts":{"alpha":{"model":"claude-haiku-5-5","completed":true,"exitCode":0,"verified":2,"rejected":0,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}},"beta":{"model":"claude-haiku-5-5","completed":true,"exitCode":0,"verified":0,"rejected":4,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}}},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{"types":{"exitCode":0,"stopped":false,"durationSeconds":0,"passed":true}},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.9375,"costByModel":{"claude-haiku-4-5":0.0625,"claude-haiku-5-5":0.125,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.5},"record":"steps/demo/record.json"}
+      {"outcome":"passed","scouts":{"alpha":{"model":"claude-haiku-5-5","completed":true,"exitCode":0,"verified":2,"rejected":0,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}},"beta":{"model":"claude-haiku-5-5","completed":true,"exitCode":0,"verified":0,"rejected":4,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}}},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{"types":{"exitCode":0,"stopped":false,"durationSeconds":0,"passed":true}},"reviews":{"alpha":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":0,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.9375,"costByModel":{"claude-haiku-4-5":0.0625,"claude-haiku-5-5":0.125,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.5},"record":"steps/demo/record.json","commit":"0000000000000000000000000000000000000001"}
       """

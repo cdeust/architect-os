@@ -43,7 +43,7 @@ Feature: the step leaves its brief and its record in the worktree
         """
       And the step stdout is the line:
         """
-        {"outcome":"passed","scouts":{"files":{"model":"claude-haiku-5-5","completed":true,"exitCode":0,"verified":0,"rejected":2,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}}},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{"types":{"exitCode":0,"stopped":false,"durationSeconds":3,"passed":true}},"reviews":{"quality":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.875,"costByModel":{"claude-haiku-4-5":0.0625,"claude-haiku-5-5":0.0625,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.5},"record":"steps/demo/record.json"}
+        {"outcome":"passed","scouts":{"files":{"model":"claude-haiku-5-5","completed":true,"exitCode":0,"verified":0,"rejected":2,"open":1,"costUsd":0.0625,"costByModel":{"claude-haiku-5-5":0.0625}}},"build":{"completed":true,"exitCode":0,"stopped":false,"answers":1,"turns":3,"durationSeconds":12,"costUsd":0.5625,"cacheReadPerAnswer":1000,"costByModel":{"claude-haiku-4-5":0.0625,"claude-sonnet-5-5":0.5}},"checks":{"types":{"exitCode":0,"stopped":false,"durationSeconds":3,"passed":true}},"reviews":{"quality":{"model":"claude-opus-5-5","verdict":"accept","exitCode":0,"blocks":false,"findings":1,"costUsd":0.25,"costByModel":{"claude-opus-5-5":0.25}}},"costUsd":0.875,"costByModel":{"claude-haiku-4-5":0.0625,"claude-haiku-5-5":0.0625,"claude-opus-5-5":0.25,"claude-sonnet-5-5":0.5},"record":"steps/demo/record.json","commit":"0000000000000000000000000000000000000001"}
         """
 
     Scenario: the launcher files of a step with a build, a scout and a review: each tool file, its prompt and its profile, as read
@@ -82,12 +82,50 @@ Feature: the step leaves its brief and its record in the worktree
       Then the published record launcher lists exactly "code.json profiles/builder.json profiles/checker.json profiles/reviewer.json prompts/build.md prompts/review.md review.json"
       And the published record launcher holds the hash of each launcher file as the step read it
 
-    Scenario: a tree that was not clean is recorded as it is
+    Scenario: a tree that is not clean is refused before any session: its pass would not replay from the repository alone
       Given a step folder
       And the step folder holds a step.json with a build and "no review"
       And the fingerprint of the worktree is a tree that is not clean
       When I run the step with the arguments "<folder>"
-      Then the published record field "tree" is {"commit":"1111111111111111111111111111111111111111","tree":"2222222222222222222222222222222222222222","clean":false}
+      Then the step exits with 2
+      And the step stderr is "architect-os step: PASS_START_DIRTY"
+      And no session was started
+
+    Scenario Outline: a worktree whose head is <head> is refused before any session with <code>
+      Given a step folder
+      And the step folder holds a step.json with a build and "no review"
+      And <situation>
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: <code>"
+      And no session was started
+
+      Examples:
+        | head            | situation                                          | code                |
+        | detached        | the head of the worktree of the step is detached   | PASS_DETACHED_HEAD  |
+        | the branch main | the worktree of the step has the branch "main"     | PASS_BRANCH_REFUSED |
+        | off the snapshot | the fingerprint of the worktree names another commit | PASS_BRANCH_MOVED  |
+
+    Scenario: a pass whose tree changes steps/ beside its folder is published, not committed, and the step exits with 2
+      Given a step folder
+      And the step folder holds a step.json with a build and "no review"
+      And the build session writes the fixture "build-exact.jsonl"
+      And the pass of the step also changes "steps/old/record.json" of its worktree
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 2
+      And the step stderr is "architect-os step: PASS_OUTSIDE_CHANGE"
+      And the step stdout is empty
+      And the step published the folder "demo" and nothing else
+      And the work branch of the step is still at its start commit
+
+    Scenario: a pass that is refused is committed too, the next pass starting from its commit
+      Given a step folder
+      And the step folder holds a step.json with a build and "a review"
+      And the build session writes the fixture "build-exact.jsonl"
+      And the review session writes the fixture "review-request-changes.jsonl"
+      When I run the step with the arguments "<folder>"
+      Then the step exits with 1
+      And the work branch of the step is at the commit of the pass, which holds the folder "demo"
 
   Rule: a step that is refused publishes too, with the sessions and the checks that ran
 
@@ -332,6 +370,7 @@ Feature: the step leaves its brief and its record in the worktree
       And the step dependencies read the launcher file "profiles/builder.json" as the committed file
       And the step dependencies give a date that is now
       And the step dependencies fingerprint the worktree
+      And the step dependencies give the branch "w" of the worktree at its head
       And the step dependencies publish "demo" with the files "a.md" and "b.md" under steps/ of the worktree
 
     Scenario: launched from a directory below the root, the step is refused and nothing is created

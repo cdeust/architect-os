@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { CodeProcess } from '../../src/code-tool.js';
+import type { InMemoryPassRepository } from '../../src/in-memory-pass-repository.js';
 import { stepRecordSchema } from '../../src/step-record.js';
 import { stepDependencies, type StepDependencies } from '../../src/step-tool.js';
 import { stepsFolder, type StepsFolder } from '../../src/steps-folder.js';
@@ -38,8 +39,45 @@ interface RecordStep {
   publication?: Error;
   rewrites: { file: string; content: string }[];
   missing: Set<string>;
+  repository: InMemoryPassRepository;
 }
 const step = (world: SandboxWorld) => stored<RecordStep>(world, 'step');
+
+Given('the head of the worktree of the step is detached', function () {
+  step(this).repository.detach();
+});
+
+Given('the worktree of the step has the branch {string}', function (branch: string) {
+  step(this).repository.switchTo(branch);
+});
+
+Given('the fingerprint of the worktree names another commit', function () {
+  step(this).fingerprint = { commit: '1'.repeat(40), tree: 'b'.repeat(40), clean: true };
+});
+
+Given('the pass of the step also changes {string} of its worktree', function (path: string) {
+  step(this).repository.files.set(path, 'changed\n');
+});
+
+Then('the work branch of the step is still at its start commit', function () {
+  assert.equal(step(this).repository.branches.get('step/demo'), 'a'.repeat(40));
+});
+
+Then(
+  'the work branch of the step is at the commit of the pass, which holds the folder {string}',
+  function (name: string) {
+    const { repository, published } = step(this);
+    const commit = repository.branches.get('step/demo') as string;
+    const written = repository.commits.get(commit);
+    assert.equal(written?.parent, 'a'.repeat(40));
+    assert.match(written?.message ?? '', new RegExp(`^Record the pass ${name} of the loop\n`));
+    assert.equal(repository.snapshot().clean, true);
+    assert.deepEqual(
+      Object.keys(published.get(name) ?? {}).map((file) => repository.files.get(`steps/${name}/${file}`)),
+      Object.values(published.get(name) ?? {}),
+    );
+  },
+);
 
 const unescape = (text: string): string => text.replaceAll('\\n', '\n');
 
@@ -365,6 +403,11 @@ Then('the step dependencies fingerprint the worktree', function () {
     tree: git(root, 'rev-parse', 'HEAD^{tree}'),
     clean: true,
   });
+});
+
+Then('the step dependencies give the branch {string} of the worktree at its head', function (branch: string) {
+  const root = stored<string>(this, 'recordRoot');
+  assert.deepEqual(deps(this).repository.head(), { branch, commit: git(root, 'rev-parse', 'HEAD') });
 });
 
 Then(

@@ -41,6 +41,7 @@ import { repoOf } from './runner.js';
 import { parseStepFile } from '../../src/step-file.js';
 import { FileStepStore } from '../../src/step-store-file.js';
 import type { TreeFingerprint } from '../../src/tree-fingerprint.js';
+import { InMemoryPassRepository } from '../../src/in-memory-pass-repository.js';
 import {
   codeToolSession,
   launcherFiles,
@@ -127,6 +128,8 @@ interface Step {
   /** The fingerprint of the worktree, or the error its computation throws, and how many times it was asked. */
   fingerprint: TreeFingerprint | Error;
   fingerprints: number;
+  /** The repository of the worktree, where the host commits the pass; its first commit is the one of `fingerprint`. */
+  repository: InMemoryPassRepository;
   date: Date;
   publication?: Error;
   /** The files of the launcher that the step cannot read. */
@@ -173,6 +176,11 @@ const newStepFolder = (world: SandboxWorld, name: string) => {
     prepared: [],
     fingerprint: { commit: 'a'.repeat(40), tree: 'b'.repeat(40), clean: true },
     fingerprints: 0,
+    repository: new InMemoryPassRepository({
+      branch: 'step/demo',
+      commit: 'a'.repeat(40),
+      tree: 'b'.repeat(40),
+    }),
     date: new Date('2026-11-18T09:30:00.000Z'),
     rewrites: [],
     missing: new Set(),
@@ -496,7 +504,8 @@ const start = (s: Step, args: string): Promise<void> => {
     fingerprint: () => {
       s.fingerprints++;
       if (s.fingerprint instanceof Error) throw s.fingerprint;
-      return s.fingerprint;
+      // The first is the one the scenario gives; the one after the publication is the tree the folder made.
+      return s.fingerprints === 1 ? s.fingerprint : s.repository.snapshot();
     },
     readLauncher: launcherFile(s),
     admit: (subject) => {
@@ -522,8 +531,11 @@ const start = (s: Step, args: string): Promise<void> => {
       publish: (name, files) => {
         if (s.publication !== undefined) throw s.publication;
         s.published.set(name, { ...files });
+        for (const [file, text] of Object.entries(files))
+          s.repository.files.set(`steps/${name}/${file}`, text);
       },
     },
+    repository: s.repository,
     builder: s.fixtureBuilder ?? new ClaudeBuilder((...args) => deps.session(...args)),
     session: async (tool, argv, brief, limitSeconds, onOutput) => {
       s.calls.push({ tool, argv, brief, limitSeconds });
