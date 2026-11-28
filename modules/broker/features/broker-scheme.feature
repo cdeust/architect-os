@@ -5,17 +5,17 @@ Feature: where the broker sends its credential upstream (docs/design/platform-v3
 
   Scenario: a broker configured for a bearer relays the credential of its file as a bearer, and no x-api-key
     Given a fake upstream answering a JSON message
-    And a broker over that upstream that sends the credential "sk-ant-oat01-token-of-the-scenario" as a bearer
+    And a broker over that upstream that sends the OAuth token of the scenario as a bearer
     And the gateway grants the token "tok_ssssssssssssssssssssssssssssssssssss" to the task "task-s" called by "call-s"
     When the worker posts '{"model":"m","max_tokens":1}' to "/v1/messages" with the token "tok_ssssssssssssssssssssssssssssssssssss"
     Then the broker answers 200 with the body of the upstream
     And the upstream received one POST to "/v1/messages" with the body '{"model":"m","max_tokens":1}'
-    And the upstream request carried the bearer "sk-ant-oat01-token-of-the-scenario" and no x-api-key
+    And the upstream request carried the OAuth token of the scenario as its bearer and no x-api-key
 
   Scenario: a worker that presents an authorization of its own does not replace the bearer of the broker
     Given a fake upstream answering a JSON message
-    And a broker over that upstream that sends the credential "sk-ant-oat01-token-of-the-scenario" as a bearer
+    And a broker over that upstream that sends the OAuth token of the scenario as a bearer
     And the gateway grants the token "tok_tttttttttttttttttttttttttttttttttttt" to the task "task-t" called by "call-t"
     When the worker posts '{"model":"m","max_tokens":1}' to "/v1/messages" with the headers "x-api-key=tok_tttttttttttttttttttttttttttttttttttt, authorization=Bearer-of-the-worker"
     Then the broker answers 200 with the body of the upstream
-    And the upstream request carried the bearer "sk-ant-oat01-token-of-the-scenario" and no x-api-key
+    And the upstream request carried the OAuth token of the scenario as its bearer and no x-api-key

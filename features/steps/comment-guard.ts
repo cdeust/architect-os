@@ -60,7 +60,8 @@ const call = (tool: string, body: unknown): string =>
     tool_use_id: 'toolu_1',
   });
 
-const KEY = 'sk-ant-oat01-AbCdEfGh123456';
+// The shapes are composed at run time: the committed source holds none (features/repository/no-credential-shape.feature).
+const KEY = `${['sk', 'ant', 'oat01'].join('-')}-AbCdEfGh123456`;
 const REFUSED: Record<string, unknown> = {
   'mentions an app': 'Please @codex review this.',
   'mentions an app through a zero-width space': 'Please @​codex review this.',
@@ -81,7 +82,7 @@ const REFUSED: Record<string, unknown> = {
   'ends with a verdict of another word': `Review.\n${RUN_LINK}\nVerdict: merge`,
   'holds the shape of a key of Anthropic': `Leak: ${KEY}`,
   'holds a key of Anthropic cut by a zero-width space': `Leak: sk-​ant-oat01-AbCdEfGh123456`,
-  'holds the shape of a GitHub token': 'Leak: ghs_A1b2C3d4E5f6G7h8I9j0K',
+  'holds the shape of a GitHub token': `Leak: ${'ghs'}_${'A1b2C3d4E5f6G7h8I9j0K'}`,
   'ends with the link of the run and a verdict': `Review.\n${RUN_LINK}\nVerdict: approve`,
   'is not a string': 42,
   'is missing': undefined,

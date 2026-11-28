@@ -28,6 +28,7 @@ import {
 } from '../../src/pass-commit.js';
 import { gitPassRepository } from '../../src/pass-repository.js';
 import { requireStepAdmission } from '../../src/step-admission.js';
+import { FileStepStore } from '../../src/step-store-file.js';
 import { rootOf, runStep, type StepDependencies } from '../../src/step-tool.js';
 import { stepsFolder } from '../../src/steps-folder.js';
 import { fingerprintTree, type TreeFingerprint } from '../../src/tree-fingerprint.js';
@@ -386,16 +387,18 @@ async function play(world: SandboxWorld, name: string, build: (worktree: string)
   // As the dependencies of production (stepDependencies): each use of the worktree resolves it again, so that a .git
   // pointer the build rewrote is refused, whatever the git that would follow it.
   const root = (): string => rootOf(p.worktree);
+  const store = new FileStepStore(() => {
+    mkdirSync(outputs.retained, { recursive: true });
+    mkdirSync(outputs.streams, { recursive: true });
+    return outputs;
+  });
   const deps: StepDependencies = {
     folderArguments: [folder],
     readFile: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined),
     readSource: () => undefined,
     writeFile: (path, content) => writeFileSync(path, content),
-    reserveOutputs: () => {
-      mkdirSync(outputs.retained, { recursive: true });
-      mkdirSync(outputs.streams, { recursive: true });
-      return outputs;
-    },
+    store,
+    streams: () => outputs.streams,
     appendFile: (path, content) => writeFileSync(path, content, { flag: 'a' }),
     session,
     builder: new ClaudeBuilder(session),

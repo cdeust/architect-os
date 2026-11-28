@@ -87,8 +87,56 @@
         "required": ["id", "status", "evidence", "reason"],
         "additionalProperties": false
       }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^CL-\\d{1,9}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["verified", "refuted", "not_checked"]
+          },
+          "evidence": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "file": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300,
+                  "pattern": "^[^\\r\\n]*$"
+                }
+              },
+              "required": ["file", "line", "quote"],
+              "additionalProperties": false
+            }
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "status", "evidence", "reason"],
+        "additionalProperties": false
+      }
     }
   },
-  "required": ["verdict", "findings", "not_checked", "criteria"],
+  "required": ["verdict", "findings", "not_checked", "criteria", "claims"],
   "additionalProperties": false
 }

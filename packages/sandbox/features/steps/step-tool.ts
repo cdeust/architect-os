@@ -17,7 +17,7 @@ import {
 import os, { tmpdir } from 'node:os';
 import { syncBuiltinESMExports } from 'node:module';
 import fs from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { mock } from 'node:test';
 import { createHash } from 'node:crypto';
 import { PassThrough } from 'node:stream';
@@ -39,6 +39,7 @@ import { stepRecordSchema } from '../../src/step-record.js';
 import { stepsFolder } from '../../src/steps-folder.js';
 import { repoOf } from './runner.js';
 import { parseStepFile } from '../../src/step-file.js';
+import { FileStepStore } from '../../src/step-store-file.js';
 import type { TreeFingerprint } from '../../src/tree-fingerprint.js';
 import { InMemoryPassRepository } from '../../src/in-memory-pass-repository.js';
 import {
@@ -133,6 +134,8 @@ interface Step {
   publication?: Error;
   /** The files of the launcher that the step cannot read. */
   missing: Set<string>;
+  /** The files already in the retained folder when the step reserves it: a write of one fails in the system. */
+  retainedBefore?: string[];
   /** The files that the build session rewrites in the step folder while it runs. */
   rewrites: { file: string; content: string }[];
   finished: boolean;
@@ -457,16 +460,25 @@ const start = (s: Step, args: string): Promise<void> => {
   const stderr = new PassThrough();
   stdout.on('data', (chunk: Buffer) => (s.stdout += chunk.toString()));
   stderr.on('data', (chunk: Buffer) => (s.stderr += chunk.toString()));
+  // The adapter of the files over the folders of the scenario: what the step retains is read back from them.
+  const store = new FileStepStore((_name, place) => {
+    // The trees the state may not overlap are those of the step: its folder and its worktree.
+    assert.deepEqual(
+      { ...place, intake: resolve(place.intake) },
+      { intake: s.folder, worktree: '/the/worktree' },
+    );
+    mkdirSync(s.outputs.retained);
+    for (const file of s.retainedBefore ?? []) writeFileSync(join(s.outputs.retained, file), 'there before');
+    mkdirSync(s.outputs.streams);
+    return s.outputs;
+  });
   const deps: StepDependencies = {
     folderArguments: args === '' ? [] : args.split(' ').map((arg) => arg.replace('<folder>', s.folder)),
     readFile: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined),
     readSource: (path) => s.source.get(path),
     writeFile: (path, content) => writeFileSync(path, content),
-    reserveOutputs: () => {
-      mkdirSync(s.outputs.retained);
-      mkdirSync(s.outputs.streams);
-      return s.outputs;
-    },
+    store,
+    streams: (name) => store.streams(name),
     appendFile: (path, content) => writeFileSync(path, content, { flag: 'a' }),
     check: async (command, limitSeconds) => {
       s.checkCalls.push({ command, limitSeconds });
@@ -1419,3 +1431,159 @@ Then(
     assert.equal(deps.readSource(path)?.length, size);
   },
 );
+
+// The departures a build declares (src/build-claims.ts): a report that carries a claims block, and what the record keeps.
+Given('the build session reports:', function (report: string) {
+  const stream = fixture('session.jsonl').trimEnd().split('\n');
+  const result = JSON.parse(stream.pop()!) as Record<string, unknown>;
+  stream.push(JSON.stringify({ ...result, result: report }));
+  step(this).behaviours['code.json'].text = stream.join('\n') + '\n';
+});
+
+const publishedRecord = (s: Step, name: string) =>
+  JSON.parse(s.published.get(name)!['record.json']!) as Record<string, unknown>;
+
+Then('the published record of the step {string} has the claims:', function (name: string, expected: string) {
+  assert.deepEqual(publishedRecord(step(this), name)['claims'], JSON.parse(expected));
+});
+
+Then('the published record of the step {string} has no claims', function (name: string) {
+  assert.equal(Object.hasOwn(publishedRecord(step(this), name), 'claims'), false);
+});
+
+Then(
+  'the published record of the step {string} gives the claims {string}, each with the sha256 of its line in the review brief',
+  function (name: string, ids: string) {
+    const s = step(this);
+    const lines = readFileSync(stepFile(s, 'review.brief.md'), 'utf8')
+      .split('\n```json\n')[1]!
+      .split('\n```\n')[0]!
+      .split('\n');
+    assert.deepEqual(publishedRecord(s, name)['claims'], {
+      valid: true,
+      given: ids.split(' ').map((id, index) => ({
+        id,
+        sha256: createHash('sha256').update(lines[index]!).digest('hex'),
+      })),
+    });
+  },
+);
+
+Then('the step stdout contains {string}', function (text: string) {
+  assert.ok(step(this).stdout.includes(text), `${step(this).stdout} does not contain ${text}`);
+});
+
+Then(
+  'the published record of the step {string} gives the claims {string} with no review',
+  function (name: string, ids: string) {
+    const record = publishedRecord(step(this), name) as { claims: { given: { id: string }[] }; reviews: [] };
+    assert.deepEqual(
+      record.claims.given.map(({ id }) => id),
+      ids.split(' '),
+    );
+    assert.deepEqual(record.reviews, []);
+  },
+);
+
+// --- what the host refuses to keep, and keeps anyway in its streams ---------------------------------------------
+
+/** A text described by a scenario, composed at run time: the committed tree holds no credential shape. */
+function composed(description: string): string {
+  const shapes: Record<string, () => string> = {
+    'an Anthropic API key': () => `${['sk', 'ant', 'api03'].join('-')}-${'K'.repeat(24)}`,
+    'an OAuth token of Anthropic': () => `${['sk', 'ant', 'oat01'].join('-')}-${'T'.repeat(24)}`,
+    'a GitHub token': () => `${['gh', 'p'].join('')}_${'g'.repeat(36)}`,
+  };
+  const shape = shapes[description];
+  if (shape !== undefined) return shape();
+  const bytes = /^(\d+) bytes of "(.)"$/.exec(description);
+  assert.ok(bytes, `unknown composed text: ${description}`);
+  return (bytes[2] as string).repeat(Number(bytes[1]));
+}
+
+/** The lines of a fixture of a session, with its structured output or result changed by `change`. */
+function changedFixture(name: string, change: (result: Record<string, any>) => void): string {
+  return fixture(name)
+    .split('\n')
+    .map((line) => {
+      if (!line.includes('"type":"result"')) return line;
+      const result = JSON.parse(line) as Record<string, any>;
+      change(result);
+      return JSON.stringify(result);
+    })
+    .join('\n');
+}
+
+Given('the step folder holds the file {string} holding {}', function (name: string, description: string) {
+  writeFileSync(join(step(this).folder, name), `Text of the step. ${composed(description)}\n`);
+});
+
+Given('the step folder holds a step.json whose build model holds {}', function (description: string) {
+  writeFileSync(
+    join(step(this).folder, 'step.json'),
+    JSON.stringify({ build: { model: composed(description), effort: 'medium', limitSeconds: 2400 } }),
+  );
+  writeFileSync(join(step(this).folder, 'brief.md'), 'Build the thing.\n');
+});
+
+Given(
+  'the build session writes the fixture {string} with its report replaced by {}',
+  function (name: string, description: string) {
+    step(this).behaviours['code.json'].text = changedFixture(name, (result) => {
+      result['result'] = composed(description);
+    });
+  },
+);
+
+Given(
+  'the scout session {int} writes the fixture {string} with the note of its first fact replaced by {}',
+  function (n: number, name: string, description: string) {
+    behaviour(step(this), 'scout.json', n).text = changedFixture(name, (result) => {
+      result['structured_output'].facts[0].note = composed(description);
+    });
+  },
+);
+
+Given(
+  'the review session {int} writes the fixture {string} with the reason of its first finding replaced by {}',
+  function (n: number, name: string, description: string) {
+    behaviour(step(this), 'review.json', n).text = changedFixture(name, (result) => {
+      result['structured_output'].findings[0].reason = composed(description);
+    });
+  },
+);
+
+Given('the check {int} prints, composed at run time, {}', function (n: number, description: string) {
+  checkBehaviour(step(this), n).output = `npm test\n${composed(description)}\n`;
+});
+
+Then('the step stderr does not hold {}', function (description: string) {
+  assert.ok(!step(this).stderr.includes(composed(description)), 'the stderr quotes the value');
+});
+
+Then('nothing was published under steps\\/', function () {
+  assert.equal(step(this).published.size, 0);
+});
+
+Then('the stream file {string} holds {}', function (name: string, description: string) {
+  const text = readFileSync(join(step(this).outputs.streams, name), 'utf8');
+  assert.ok(text.includes(composed(description)), `${name} does not hold the refused text`);
+});
+
+Then('no stream file of the step ends in .refused', function () {
+  const s = step(this);
+  const files = existsSync(s.outputs.streams) ? readdirSync(s.outputs.streams) : [];
+  assert.deepEqual(
+    files.filter((file) => file.endsWith('.refused')),
+    [],
+  );
+});
+
+Given('the retained folder of the step already holds the file {string}', function (file: string) {
+  const s = step(this);
+  s.retainedBefore = [...(s.retainedBefore ?? []), file];
+});
+
+Then('the step stderr contains {string}', function (text: string) {
+  assert.ok(step(this).stderr.includes(text), step(this).stderr);
+});
