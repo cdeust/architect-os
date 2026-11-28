@@ -4,6 +4,7 @@
   "include": ["support", "steps", "scripts"],
   "references": [
     { "path": "../packages/contracts" },
+    { "path": "../packages/sandbox" },
     { "path": "../data" },
     { "path": "../gateway" },
     { "path": "../services/memory" },
@@ -11,6 +12,7 @@
     { "path": "../modules/memory" },
     { "path": "../tools/evidence" },
     { "path": "../tools/watch" },
-    { "path": "../tools/test-gate" }
+    { "path": "../tools/test-gate" },
+    { "path": "../tools/plan" }
   ]
 }

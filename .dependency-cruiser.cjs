@@ -123,6 +123,25 @@ module.exports = {
       to: { path: '^(node:)?child_process$', dependencyTypes: ['core'] },
     },
     {
+      name: 'step-admission-issuer-only-from-the-issuing-host',
+      comment:
+        'The production issuer of the Step admission receipt stays distinct from its consumers ' +
+        '(orchestration-fable-5-2.md, §15, decision 7): only the issuing adapter of Plan, behind `npm run admit`, ' +
+        'imports it; `npm run step`, the code tool, a worker, a module (the orchestrator included) or the workbench ' +
+        'never can: the receipt is unsigned, and the sealing lives in that module alone, so a consumer that imported ' +
+        'it could certify itself. Only the scenarios of the sandbox package, of Plan and of the root may import it.',
+      severity: 'error',
+      from: {
+        pathNot: [
+          '^tools/plan/src/infrastructure/admission\\.ts$',
+          '^packages/sandbox/features/',
+          '^tools/plan/features/',
+          '^features/',
+        ],
+      },
+      to: { path: '^packages/sandbox/src/step-admission-issuer\\.ts$' },
+    },
+    {
       name: 'sandbox-runtime-only-in-sandbox',
       comment:
         'srt (@anthropic-ai/sandbox-runtime) is reached only by packages/sandbox (platform-v3-srt.md, §6).',

@@ -153,13 +153,15 @@ Feature: Prepare and explicitly approve one step from Define v1
     And I prepare the Plan once
     Then Plan refuses with "PLAN_INPUT_INVALID" and publishes nothing
 
-  Scenario: Operator approval alone cannot materialize the paired Spec Plan
+  Scenario: Operator approval materializes the paired Spec Plan, which no receipt yet admits
     Given a recorded delivery Plan input
     And the recorded proposal carries independent Define and Plan reviews
     When I prepare the Plan once
     And the operator records an approval of the preview
     And I materialize the Plan
-    Then Plan refuses with "PLAN_SPECIMEN_EVIDENCE_REQUIRED" and publishes nothing
+    Then the reviewed Plan folder holds exactly the approved files of the preview
+    When the host runs admit with "no specimens"
+    Then admit refuses with "ADMIT_SPECIMENS_REQUIRED" before the issuer
 
   Scenario Outline: Each reviewed binding must match the independently read sources
     Given a recorded delivery Plan input

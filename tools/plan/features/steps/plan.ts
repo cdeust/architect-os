@@ -362,6 +362,14 @@ When('I materialize the Plan', function (this: World) {
   item.result = launch(['materialize', item.define, item.proposal, item.policy, item.decision, item.folder]);
   this.state['planFolder'] = item.folder;
   this.state['planManifest'] = item.preview?.manifest;
+  this.state['planSources'] = {
+    root: item.root,
+    define: item.define,
+    proposal: item.proposal,
+    policy: item.policy,
+    decision: item.decision,
+    preview: item.preview,
+  };
 });
 
 When('the Plan destination is {string}', function (this: World, choice: string) {
